@@ -170,7 +170,7 @@ function trackTaskActivity(span: TraceSpan): void {
   const taskStatus = span.attributes['builtin.task_status'];
   const taskId = span.attributes['builtin.task_id'];
 
-  if (typeof taskStatus === 'string') {
+  if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
     const id = typeof taskId === 'string' ? taskId : `anon-${entry.creates}`;
     if (!entry.tasks.has(id)) {
       entry.tasks.set(id, { statuses: new Set(), lastSpan: span });
@@ -183,9 +183,9 @@ function trackTaskActivity(span: TraceSpan): void {
 
 function scoreTask(statuses: Set<string>): number {
   // Highest status reached determines score
-  if (statuses.has('completed')) return 1.0;
-  if (statuses.has('in_progress')) return 0.5;
-  return 0.0;
+  if (statuses.has('completed')) return STATUS_SCORES.completed;
+  if (statuses.has('in_progress')) return STATUS_SCORES.in_progress;
+  return STATUS_SCORES.pending;
 }
 
 function deriveTaskCompletionPerSession(): EvalRecord[] {
@@ -193,7 +193,8 @@ function deriveTaskCompletionPerSession(): EvalRecord[] {
 
   for (const [sessionId, data] of sessionTasks) {
     if (data.creates === 0 && data.tasks.size === 0) continue;
-    const lastSpan = data.lastSpan!;
+    if (!data.lastSpan) continue;
+    const lastSpan = data.lastSpan;
 
     // Use explicit status transitions when available
     if (data.tasks.size > 0) {
