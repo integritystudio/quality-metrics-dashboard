@@ -1,0 +1,11 @@
+name = "quality-metrics-api"
+main = "worker/index.ts"
+compatibility_date = "2025-01-01"
+
+[observability]
+enabled = true
+
+[[kv_namespaces]]
+binding = "DASHBOARD"
+id = "902fc8a43e7147b486b6376c485c4506"
+preview_id = "0f4d40dd84b14e038024a9775b9be4f7"

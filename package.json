@@ -9,7 +9,11 @@
     "dev:vite": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "sync": "tsx scripts/sync-to-kv.ts",
+    "deploy:worker": "wrangler deploy",
+    "dev:worker": "wrangler dev"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",
@@ -33,6 +37,8 @@
     "tsx": "^4.19.0",
     "typescript": "^5.8.3",
     "vite": "^6.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.0.0",
+    "@cloudflare/workers-types": "^4.0.0"
   }
 }
