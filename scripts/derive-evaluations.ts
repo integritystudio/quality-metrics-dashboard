@@ -173,7 +173,7 @@ export function trackTaskActivity(span: TraceSpan): void {
   const taskId = span.attributes['builtin.task_id'];
 
   if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
-    const id = typeof taskId === 'string' ? taskId : `anon-${entry.creates}`;
+    const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;
     if (!entry.tasks.has(id)) {
       entry.tasks.set(id, { statuses: new Set(), lastSpan: span });
     }

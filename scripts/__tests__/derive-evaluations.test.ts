@@ -148,6 +148,31 @@ describe('trackTaskActivity', () => {
     expect(task.statuses).toEqual(new Set(['pending', 'in_progress', 'completed']));
   });
 
+  it('handles rapid status transitions for same task', () => {
+    // in_progress then immediately completed (no pending create first)
+    trackTaskActivity(makeSpan({
+      attributes: {
+        'builtin.tool': 'TaskUpdate',
+        'builtin.task_status': 'in_progress',
+        'builtin.task_id': 'task-rapid',
+        'session.id': 'sess-abc',
+      },
+    }));
+    trackTaskActivity(makeSpan({
+      attributes: {
+        'builtin.tool': 'TaskUpdate',
+        'builtin.task_status': 'completed',
+        'builtin.task_id': 'task-rapid',
+        'session.id': 'sess-abc',
+      },
+    }));
+
+    const data = sessionTasks.get('sess-abc')!;
+    const task = data.tasks.get('task-rapid')!;
+    expect(task.statuses).toEqual(new Set(['in_progress', 'completed']));
+    expect(scoreTask(task.statuses)).toBe(1.0);
+  });
+
   it('rejects invalid status values', () => {
     trackTaskActivity(makeSpan({
       attributes: {
@@ -163,8 +188,9 @@ describe('trackTaskActivity', () => {
     expect(data.tasks.size).toBe(0); // deleted is not in STATUS_SCORES
   });
 
-  it('assigns anonymous ID when taskId missing', () => {
+  it('assigns anonymous ID using spanId when taskId missing', () => {
     trackTaskActivity(makeSpan({
+      spanId: 'span-xyz',
       attributes: {
         'builtin.tool': 'TaskCreate',
         'builtin.task_status': 'pending',
@@ -173,7 +199,31 @@ describe('trackTaskActivity', () => {
     }));
 
     const data = sessionTasks.get('sess-abc')!;
-    expect(data.tasks.has('anon-1')).toBe(true);
+    expect(data.tasks.has('anon-span-xyz')).toBe(true);
+  });
+
+  it('creates distinct anonymous IDs for multiple creates without taskId', () => {
+    trackTaskActivity(makeSpan({
+      spanId: 'span-1',
+      attributes: {
+        'builtin.tool': 'TaskCreate',
+        'builtin.task_status': 'pending',
+        'session.id': 'sess-abc',
+      },
+    }));
+    trackTaskActivity(makeSpan({
+      spanId: 'span-2',
+      attributes: {
+        'builtin.tool': 'TaskCreate',
+        'builtin.task_status': 'pending',
+        'session.id': 'sess-abc',
+      },
+    }));
+
+    const data = sessionTasks.get('sess-abc')!;
+    expect(data.tasks.size).toBe(2);
+    expect(data.tasks.has('anon-span-1')).toBe(true);
+    expect(data.tasks.has('anon-span-2')).toBe(true);
   });
 
   it('falls back to counting when no status attributes', () => {
