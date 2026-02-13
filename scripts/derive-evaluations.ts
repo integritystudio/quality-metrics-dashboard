@@ -128,8 +128,27 @@ function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
   };
 }
 
-// Track per-session task creates/updates for task_completion proxy
-const sessionTasks = new Map<string, { creates: number; updates: number; spans: TraceSpan[] }>();
+// Track per-session task status transitions for task_completion scoring
+// Graduated: pending=0.0, in_progress=0.5, completed=1.0
+interface TaskState {
+  statuses: Set<string>;
+  lastSpan: TraceSpan;
+}
+
+interface SessionTaskData {
+  tasks: Map<string, TaskState>;  // taskId -> state
+  creates: number;   // fallback counters for old trace data
+  updates: number;
+  lastSpan: TraceSpan | null;
+}
+
+const sessionTasks = new Map<string, SessionTaskData>();
+
+const STATUS_SCORES: Record<string, number> = {
+  pending: 0.0,
+  in_progress: 0.5,
+  completed: 1.0,
+};
 
 function trackTaskActivity(span: TraceSpan): void {
   if (span.name !== 'hook:builtin-post-tool') return;
@@ -138,44 +157,83 @@ function trackTaskActivity(span: TraceSpan): void {
 
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
   if (!sessionTasks.has(sessionId)) {
-    sessionTasks.set(sessionId, { creates: 0, updates: 0, spans: [] });
+    sessionTasks.set(sessionId, { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
   }
   const entry = sessionTasks.get(sessionId)!;
+  entry.lastSpan = span;
+
+  // Always track counts for fallback
   if (tool === 'TaskCreate') entry.creates++;
   if (tool === 'TaskUpdate') entry.updates++;
-  entry.spans.push(span);
+
+  // Track explicit status transitions when available
+  const taskStatus = span.attributes['builtin.task_status'];
+  const taskId = span.attributes['builtin.task_id'];
+
+  if (typeof taskStatus === 'string') {
+    const id = typeof taskId === 'string' ? taskId : `anon-${entry.creates}`;
+    if (!entry.tasks.has(id)) {
+      entry.tasks.set(id, { statuses: new Set(), lastSpan: span });
+    }
+    const task = entry.tasks.get(id)!;
+    task.statuses.add(taskStatus);
+    task.lastSpan = span;
+  }
+}
+
+function scoreTask(statuses: Set<string>): number {
+  // Highest status reached determines score
+  if (statuses.has('completed')) return 1.0;
+  if (statuses.has('in_progress')) return 0.5;
+  return 0.0;
 }
 
 function deriveTaskCompletionPerSession(): EvalRecord[] {
   const evals: EvalRecord[] = [];
 
   for (const [sessionId, data] of sessionTasks) {
-    if (data.creates === 0) continue;
+    if (data.creates === 0 && data.tasks.size === 0) continue;
+    const lastSpan = data.lastSpan!;
 
-    // Proxy: updates >= 2x creates suggests tasks created -> started -> completed
-    // Minimum: updates >= creates suggests at least started
-    const completionRatio = Math.min(data.updates / (data.creates * 2), 1.0);
-    const lastSpan = data.spans[data.spans.length - 1];
+    // Use explicit status transitions when available
+    if (data.tasks.size > 0) {
+      const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const completed = scores.filter(s => s === 1.0).length;
+      const inProgress = scores.filter(s => s === 0.5).length;
+      const pending = scores.filter(s => s === 0.0).length;
 
-    let explanation: string;
-    if (completionRatio >= 0.9) {
-      explanation = `Session ${sessionId.slice(0, 8)}: ${data.creates} tasks created, ${data.updates} updates (high completion signal)`;
-    } else if (completionRatio >= 0.5) {
-      explanation = `Session ${sessionId.slice(0, 8)}: ${data.creates} tasks created, ${data.updates} updates (partial completion)`;
+      const parts: string[] = [];
+      if (completed > 0) parts.push(`${completed} completed`);
+      if (inProgress > 0) parts.push(`${inProgress} in_progress`);
+      if (pending > 0) parts.push(`${pending} pending`);
+
+      evals.push({
+        timestamp: hrtToISO(lastSpan.startTime),
+        evaluationName: 'task_completion',
+        scoreValue: parseFloat(avg.toFixed(4)),
+        explanation: `Session ${sessionId.slice(0, 8)}: ${data.tasks.size} tasks (${parts.join(', ')})`,
+        evaluator: 'telemetry-rule-engine',
+        evaluatorType: 'rule',
+        traceId: lastSpan.traceId,
+        sessionId,
+      });
     } else {
-      explanation = `Session ${sessionId.slice(0, 8)}: ${data.creates} tasks created, only ${data.updates} updates (low completion)`;
-    }
+      // Fallback: old trace data without builtin.task_status attributes
+      if (data.creates === 0) continue;
+      const completionRatio = Math.min(data.updates / (data.creates * 2), 1.0);
 
-    evals.push({
-      timestamp: hrtToISO(lastSpan.startTime),
-      evaluationName: 'task_completion',
-      scoreValue: parseFloat(completionRatio.toFixed(4)),
-      explanation,
-      evaluator: 'telemetry-rule-engine',
-      evaluatorType: 'rule',
-      traceId: lastSpan.traceId,
-      sessionId,
-    });
+      evals.push({
+        timestamp: hrtToISO(lastSpan.startTime),
+        evaluationName: 'task_completion',
+        scoreValue: parseFloat(completionRatio.toFixed(4)),
+        explanation: `Session ${sessionId.slice(0, 8)}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
+        evaluator: 'telemetry-rule-engine',
+        evaluatorType: 'rule',
+        traceId: lastSpan.traceId,
+        sessionId,
+      });
+    }
   }
 
   return evals;
