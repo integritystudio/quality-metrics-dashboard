@@ -11,7 +11,7 @@ import { join } from 'path';
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
 
-interface TraceSpan {
+export interface TraceSpan {
   traceId: string;
   spanId: string;
   name: string;
@@ -22,7 +22,7 @@ interface TraceSpan {
   attributes: Record<string, unknown>;
 }
 
-interface EvalRecord {
+export interface EvalRecord {
   timestamp: string;
   evaluationName: string;
   scoreValue: number;
@@ -144,13 +144,15 @@ interface SessionTaskData {
 
 const sessionTasks = new Map<string, SessionTaskData>();
 
-const STATUS_SCORES: Record<string, number> = {
+export const STATUS_SCORES: Record<string, number> = {
   pending: 0.0,
   in_progress: 0.5,
   completed: 1.0,
 };
 
-function trackTaskActivity(span: TraceSpan): void {
+export { sessionTasks };
+
+export function trackTaskActivity(span: TraceSpan): void {
   if (span.name !== 'hook:builtin-post-tool') return;
   const tool = span.attributes['builtin.tool'];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
@@ -181,14 +183,14 @@ function trackTaskActivity(span: TraceSpan): void {
   }
 }
 
-function scoreTask(statuses: Set<string>): number {
+export function scoreTask(statuses: Set<string>): number {
   // Highest status reached determines score
   if (statuses.has('completed')) return STATUS_SCORES.completed;
   if (statuses.has('in_progress')) return STATUS_SCORES.in_progress;
   return STATUS_SCORES.pending;
 }
 
-function deriveTaskCompletionPerSession(): EvalRecord[] {
+export function deriveTaskCompletionPerSession(): EvalRecord[] {
   const evals: EvalRecord[] = [];
 
   for (const [sessionId, data] of sessionTasks) {
@@ -282,70 +284,79 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
 }
 
 // Main
-const traceFiles = readdirSync(TELEMETRY_DIR)
-  .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
-  .sort();
+function main(): void {
+  const traceFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
+    .sort();
 
-console.log(`Found ${traceFiles.length} trace files in ${TELEMETRY_DIR}`);
+  console.log(`Found ${traceFiles.length} trace files in ${TELEMETRY_DIR}`);
 
-const allEvals: EvalRecord[] = [];
-let spanCount = 0;
+  const allEvals: EvalRecord[] = [];
+  let spanCount = 0;
 
-for (const file of traceFiles) {
-  const filepath = join(TELEMETRY_DIR, file);
-  const lines = readFileSync(filepath, 'utf-8').split('\n').filter(Boolean);
-  console.log(`  ${file}: ${lines.length} spans`);
+  for (const file of traceFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    const lines = readFileSync(filepath, 'utf-8').split('\n').filter(Boolean);
+    console.log(`  ${file}: ${lines.length} spans`);
 
-  for (const line of lines) {
-    let span: TraceSpan;
-    try {
-      span = JSON.parse(line);
-    } catch {
-      continue;
+    for (const line of lines) {
+      let span: TraceSpan;
+      try {
+        span = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      spanCount++;
+
+      // Derive per-span evaluations
+      const toolCorr = deriveToolCorrectness(span);
+      if (toolCorr) allEvals.push(toolCorr);
+
+      const latency = deriveEvaluationLatency(span);
+      if (latency) allEvals.push(latency);
+
+      // Track session-level aggregates
+      trackTaskActivity(span);
+      trackAgentActivity(span);
     }
-    spanCount++;
+  }
 
-    // Derive per-span evaluations
-    const toolCorr = deriveToolCorrectness(span);
-    if (toolCorr) allEvals.push(toolCorr);
+  // Derive session-level evaluations
+  allEvals.push(...deriveTaskCompletionPerSession());
+  allEvals.push(...deriveAgentCompletionPerSession());
 
-    const latency = deriveEvaluationLatency(span);
-    if (latency) allEvals.push(latency);
+  // Group evaluations by date for output files
+  const byDate = new Map<string, EvalRecord[]>();
+  for (const ev of allEvals) {
+    const date = ev.timestamp.slice(0, 10); // YYYY-MM-DD
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date)!.push(ev);
+  }
 
-    // Track session-level aggregates
-    trackTaskActivity(span);
-    trackAgentActivity(span);
+  // Write evaluation files
+  let totalWritten = 0;
+  for (const [date, evals] of byDate) {
+    const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
+    const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
+    writeFileSync(outFile, content);
+    totalWritten += evals.length;
+    console.log(`Wrote ${evals.length} evaluations to evaluations-${date}.jsonl`);
+  }
+
+  // Summary
+  const byCat = new Map<string, number>();
+  for (const ev of allEvals) {
+    byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+  }
+  console.log(`\nSummary: ${totalWritten} evaluations from ${spanCount} spans`);
+  for (const [name, count] of byCat) {
+    console.log(`  ${name}: ${count}`);
   }
 }
 
-// Derive session-level evaluations
-allEvals.push(...deriveTaskCompletionPerSession());
-allEvals.push(...deriveAgentCompletionPerSession());
-
-// Group evaluations by date for output files
-const byDate = new Map<string, EvalRecord[]>();
-for (const ev of allEvals) {
-  const date = ev.timestamp.slice(0, 10); // YYYY-MM-DD
-  if (!byDate.has(date)) byDate.set(date, []);
-  byDate.get(date)!.push(ev);
-}
-
-// Write evaluation files
-let totalWritten = 0;
-for (const [date, evals] of byDate) {
-  const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
-  const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
-  writeFileSync(outFile, content);
-  totalWritten += evals.length;
-  console.log(`Wrote ${evals.length} evaluations to evaluations-${date}.jsonl`);
-}
-
-// Summary
-const byCat = new Map<string, number>();
-for (const ev of allEvals) {
-  byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
-}
-console.log(`\nSummary: ${totalWritten} evaluations from ${spanCount} spans`);
-for (const [name, count] of byCat) {
-  console.log(`  ${name}: ${count}`);
+// Only run when executed directly (not imported as module for testing)
+const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
+  process.argv[1]?.endsWith('derive-evaluations.js');
+if (isDirectRun) {
+  main();
 }
