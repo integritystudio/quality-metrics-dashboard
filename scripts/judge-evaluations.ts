@@ -705,7 +705,13 @@ async function main() {
     // P2-14: Accurate cost estimate based on tool result presence
     const estEvals = allTurns.reduce((sum, t) =>
       sum + 2 + (t.toolResults.length > 0 ? 2 : 0), 0);
-    const estInputTokens = estEvals * 1000;
+    // B7: Estimate tokens from actual content length (~4 chars/token)
+    const estInputTokens = allTurns.reduce((sum, t) => {
+      const contentChars = t.userText.length + t.assistantText.length
+        + t.toolResults.reduce((s, r) => s + r.length, 0);
+      const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
+      return sum + Math.ceil(contentChars / 4) * evalsPerTurn;
+    }, 0);
     const estOutputTokens = estEvals * 200;
     const estCost = (estInputTokens * 0.80 + estOutputTokens * 4.0) / 1_000_000;
     console.log('\n--- Dry Run Summary ---');
