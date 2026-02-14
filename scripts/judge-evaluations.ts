@@ -36,8 +36,9 @@ export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 export const MAX_TURN_TEXT_LEN = 8000;
-export const MAX_CONTEXT_FOR_EVAL = 5;
+export const MAX_TOOL_CONTEXT_ITEMS = 5;
 export const MAX_TOOL_RESULTS_PER_TURN = 20;
+export const MAX_TURN_LIMIT = 10_000;
 
 /** Round score to 4 decimal places (B10: extract from repeated pattern) */
 export function normalizeScore(score: number): number {
@@ -273,7 +274,9 @@ async function createAnthropicProvider(): Promise<LLMProvider> {
         .map((b: { type: string; text?: string }) => b.text)
         .join('');
 
-      // Anthropic Messages API doesn't support logprobs
+      // B15: Anthropic Messages API doesn't support logprobs, so G-Eval
+      // falls back to text-parsed scores. This may cause score clustering
+      // around round numbers (0.7, 0.8) due to lack of logprob calibration.
       return { text };
     },
   };
@@ -390,7 +393,7 @@ async function evaluateTurn(
       const result = await judge.evaluateRelevance(
         turn.userText,
         turn.assistantText,
-        turn.toolResults.length > 0 ? turn.toolResults.slice(0, MAX_CONTEXT_FOR_EVAL) : [],
+        turn.toolResults.length > 0 ? turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS) : [],
       );
       evals.push({
         timestamp: turn.timestamp,
@@ -442,7 +445,7 @@ async function evaluateTurn(
         const faithResult = await judge.qagEvaluate(
           turn.userText,
           turn.assistantText,
-          turn.toolResults.slice(0, MAX_CONTEXT_FOR_EVAL),
+          turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
         );
         evals.push({
           timestamp: turn.timestamp,
@@ -466,7 +469,7 @@ async function evaluateTurn(
         const halResult = await judge.evaluateFaithfulness(
           turn.userText,
           turn.assistantText,
-          turn.toolResults.slice(0, MAX_CONTEXT_FOR_EVAL),
+          turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
         );
         // Invert: faithfulness criteria measures consistency, hallucination is the complement
         const halScore = normalizeScore(1 - halResult.score);
@@ -669,7 +672,7 @@ async function main() {
       console.error('Error: --limit must be a positive integer');
       process.exit(1);
     }
-    limit = Math.min(parsed, 10_000);
+    limit = Math.min(parsed, MAX_TURN_LIMIT);
   }
 
   // Step 1: Discover transcripts
