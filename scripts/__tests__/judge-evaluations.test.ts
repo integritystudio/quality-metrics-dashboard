@@ -9,6 +9,7 @@ import {
   extractToolResults,
   extractTurns,
   hashToScore,
+  normalizeScore,
   seedEvaluations,
   toOTelRecord,
   processBatch,
@@ -406,6 +407,25 @@ describe('extractTurns', () => {
 
     const turns = extractTurns({ path: filepath, sessionId: 's', traceId: 't' });
     expect(turns).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeScore
+// ---------------------------------------------------------------------------
+
+describe('normalizeScore', () => {
+  it('rounds to 4 decimal places', () => {
+    expect(normalizeScore(0.123456789)).toBe(0.1235);
+  });
+
+  it('preserves exact values', () => {
+    expect(normalizeScore(0.85)).toBe(0.85);
+  });
+
+  it('handles 0 and 1', () => {
+    expect(normalizeScore(0)).toBe(0);
+    expect(normalizeScore(1)).toBe(1);
   });
 });
 

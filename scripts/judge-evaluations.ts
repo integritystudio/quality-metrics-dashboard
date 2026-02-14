@@ -39,6 +39,11 @@ export const MAX_TURN_TEXT_LEN = 8000;
 export const MAX_CONTEXT_FOR_EVAL = 5;
 export const MAX_TOOL_RESULTS_PER_TURN = 20;
 
+/** Round score to 4 decimal places (B10: extract from repeated pattern) */
+export function normalizeScore(score: number): number {
+  return parseFloat(score.toFixed(4));
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -281,7 +286,7 @@ async function createAnthropicProvider(): Promise<LLMProvider> {
 export function hashToScore(input: string, min: number, max: number): number {
   const hash = createHash('sha256').update(input).digest();
   const value = hash.readUInt16BE(0) / 0xFFFF; // 0-1
-  return parseFloat((min + value * (max - min)).toFixed(4));
+  return normalizeScore(min + value * (max - min));
 }
 
 export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalRecord[] {
@@ -324,7 +329,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
     // (real LLM judge requires tool results as context, but seed is deterministic)
     {
       const halScore = hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.15);
-      const faithScore = parseFloat((1 - halScore).toFixed(4));
+      const faithScore = normalizeScore(1 - halScore);
 
       const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
       if (!existingKeys.has(faithKey)) {
@@ -390,7 +395,7 @@ async function evaluateTurn(
       evals.push({
         timestamp: turn.timestamp,
         evaluationName: 'relevance',
-        scoreValue: parseFloat(result.score.toFixed(4)),
+        scoreValue: normalizeScore(result.score),
         explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
@@ -411,7 +416,7 @@ async function evaluateTurn(
       evals.push({
         timestamp: turn.timestamp,
         evaluationName: 'coherence',
-        scoreValue: parseFloat(result.score.toFixed(4)),
+        scoreValue: normalizeScore(result.score),
         explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
@@ -442,7 +447,7 @@ async function evaluateTurn(
         evals.push({
           timestamp: turn.timestamp,
           evaluationName: 'faithfulness',
-          scoreValue: parseFloat(faithResult.score.toFixed(4)),
+          scoreValue: normalizeScore(faithResult.score),
           explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
           evaluatorType: 'llm',
@@ -464,7 +469,7 @@ async function evaluateTurn(
           turn.toolResults.slice(0, MAX_CONTEXT_FOR_EVAL),
         );
         // Invert: faithfulness criteria measures consistency, hallucination is the complement
-        const halScore = parseFloat((1 - halResult.score).toFixed(4));
+        const halScore = normalizeScore(1 - halResult.score);
         evals.push({
           timestamp: turn.timestamp,
           evaluationName: 'hallucination',
