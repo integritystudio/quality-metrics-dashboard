@@ -25,7 +25,7 @@ import type {
 } from './types.js';
 
 function DashboardPage({ period }: { period: Period }) {
-  const { data, isLoading, error } = useDashboard(period);
+  const { data, isLoading, isFetching, error } = useDashboard(period);
 
   if (isLoading && !data) return <MetricGridSkeleton />;
   if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
@@ -47,6 +47,7 @@ function DashboardPage({ period }: { period: Period }) {
 
   return (
     <>
+      {isFetching && data && <div className="refetch-indicator">Updating...</div>}
       <HealthOverview dashboard={dashboard} />
       <MetricGrid metrics={dashboard.metrics} />
       {dashboard.alerts.length > 0 && (

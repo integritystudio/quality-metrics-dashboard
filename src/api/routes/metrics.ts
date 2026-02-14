@@ -32,11 +32,11 @@ metricsRoutes.get('/metrics/:name', async (c) => {
   }
   const topNResult = TopNSchema.safeParse(c.req.query('topN'));
   if (!topNResult.success) {
-    return c.json({ error: 'Invalid topN parameter.' }, 400);
+    return c.json({ error: 'Invalid topN parameter. Must be integer 1-50.' }, 400);
   }
   const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
   if (!bucketResult.success) {
-    return c.json({ error: 'Invalid bucketCount parameter (2-20).' }, 400);
+    return c.json({ error: 'Invalid bucketCount parameter. Must be integer 2-20.' }, 400);
   }
 
   try {

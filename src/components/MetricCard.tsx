@@ -14,7 +14,7 @@ function MetricCardInner({ metric }: { metric: QualityMetricResult }) {
   const primaryValue = primaryKey === 'p50' ? values.p50 : values.avg;
 
   return (
-    <Link href={`/metrics/${name}`} className="card-link">
+    <Link href={`/metrics/${name}`} className="card-link" aria-label={`View ${displayName} metric details`}>
       <div className="card">
         <div className="metric-card-header">
           <h3>{displayName}</h3>

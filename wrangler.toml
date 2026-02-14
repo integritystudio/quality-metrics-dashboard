@@ -1,4 +1,4 @@
-name = "quality-metrics-api"
+name = "obs-toolkit-quality-metrics-api"
 main = "worker/index.ts"
 compatibility_date = "2025-01-01"
 account_id = "b3868dd0fd5c0faa7d98aa325a9c2377"
