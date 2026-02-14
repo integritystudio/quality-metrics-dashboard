@@ -7,8 +7,15 @@ import {
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 
+const PeriodSchema = z.enum(['24h', '7d', '30d']).default('7d');
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
+
+const PERIOD_MS: Record<string, number> = {
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
 
 export const metricsRoutes = new Hono();
 
@@ -19,6 +26,10 @@ metricsRoutes.get('/metrics/:name', async (c) => {
     return c.json({ error: `Unknown metric: ${name}` }, 404);
   }
 
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
   const topNResult = TopNSchema.safeParse(c.req.query('topN'));
   if (!topNResult.success) {
     return c.json({ error: 'Invalid topN parameter.' }, 400);
@@ -30,10 +41,10 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 
   try {
     const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const start = new Date(now.getTime() - (PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d']));
     const evaluations = await loadEvaluationsForMetric(
       name,
-      weekAgo.toISOString(),
+      start.toISOString(),
       now.toISOString()
     );
 

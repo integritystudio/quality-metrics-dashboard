@@ -85,8 +85,8 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
   }
 }
 
-function MetricDetailPage({ name }: { name: string }) {
-  const { data, isLoading, error } = useMetricDetail(name);
+function MetricDetailPage({ name, period }: { name: string; period: Period }) {
+  const { data, isLoading, error } = useMetricDetail(name, period);
 
   if (isLoading) {
     return (
@@ -164,7 +164,7 @@ function MetricDetailPage({ name }: { name: string }) {
 }
 
 export function App() {
-  const [period, setPeriod] = useState<Period>('7d');
+  const [period, setPeriod] = useState<Period>('30d');
 
   return (
     <Layout period={period} onPeriodChange={setPeriod}>
@@ -177,7 +177,7 @@ export function App() {
           {(params) => <RolePage role={params.roleName as RoleViewType} period={period} />}
         </Route>
         <Route path="/metrics/:metricName">
-          {(params) => <MetricDetailPage name={params.metricName} />}
+          {(params) => <MetricDetailPage name={params.metricName} period={period} />}
         </Route>
         <Route>
           <div className="empty-state">
