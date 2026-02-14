@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "populate": "tsx scripts/populate-dashboard.ts",
     "sync": "tsx scripts/sync-to-kv.ts",
     "deploy:worker": "wrangler deploy",
     "dev:worker": "wrangler dev"
