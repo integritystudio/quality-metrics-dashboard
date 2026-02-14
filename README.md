@@ -43,3 +43,17 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm test` | Vitest |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
+
+## AlephAuto Integration
+
+The populate pipeline is also available as an AlephAuto job at `~/code/jobs`, running twice daily via cron (6 AM / 6 PM):
+
+```bash
+cd ~/code/jobs
+npm run dashboard:populate             # seed (offline)
+npm run dashboard:populate:full        # real LLM judge (needs ANTHROPIC_API_KEY)
+npm run dashboard:populate:dry         # dry run preview
+npm run dashboard:populate:schedule    # start cron scheduler
+```
+
+See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
