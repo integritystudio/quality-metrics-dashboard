@@ -5,6 +5,16 @@ import path from 'path';
 export default defineConfig({
   base: '/',
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          query: ['@tanstack/react-query'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@parent': path.resolve(__dirname, '../dist'),

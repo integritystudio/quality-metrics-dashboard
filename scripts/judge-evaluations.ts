@@ -15,7 +15,7 @@
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, createReadStream, constants } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, createReadStream, statSync, constants } from 'fs';
 import { createInterface } from 'readline';
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
@@ -530,7 +530,7 @@ export async function evaluateTurn(
       }
     }
 
-    // M5: Hallucination evaluated independently via G-Eval (not 1 - faithfulness)
+    // Hallucination derived by inverting faithfulness score (1 - faithfulness)
     if (needsHal) {
       try {
         const halResult = await judge.evaluateFaithfulness(
@@ -538,7 +538,7 @@ export async function evaluateTurn(
           turn.assistantText,
           turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
         );
-        // Invert: faithfulness criteria measures consistency, hallucination is the complement
+        // Invert: faithfulness measures consistency, hallucination is the complement
         const halScore = normalizeScore(1 - halResult.score);
         evals.push({
           timestamp: turn.timestamp,
@@ -681,6 +681,18 @@ function acquireLock(): boolean {
       return false;
     }
 
+    // Also check lock age — stale if older than 1 hour regardless of PID
+    if (!stale) {
+      try {
+        const lockStat = statSync(LOCK_FILE);
+        const lockAgeMs = Date.now() - lockStat.mtimeMs;
+        if (lockAgeMs > 3_600_000) {
+          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / 60_000)}min old, treating as stale`);
+          stale = true;
+        }
+      } catch { /* stat failed, leave stale as-is */ }
+    }
+
     if (stale) {
       // Remove stale lock and re-acquire atomically (no recursive retry)
       try { unlinkSync(LOCK_FILE); } catch { /* another process may have removed it */ }
@@ -806,7 +818,10 @@ async function main() {
       return sum + Math.ceil(contentChars / 4) * evalsPerTurn;
     }, 0);
     const estOutputTokens = estEvals * 200;
-    const estCost = (estInputTokens * 0.80 + estOutputTokens * 4.0) / 1_000_000;
+    // Haiku 3.5 pricing: $0.80/1M input, $4.00/1M output
+    const HAIKU_INPUT_PER_M = 0.80;
+    const HAIKU_OUTPUT_PER_M = 4.0;
+    const estCost = (estInputTokens * HAIKU_INPUT_PER_M + estOutputTokens * HAIKU_OUTPUT_PER_M) / 1_000_000;
     console.log('\n--- Dry Run Summary ---');
     console.log(`Transcripts: ${transcripts.length}`);
     console.log(`Turns to evaluate: ${allTurns.length}`);

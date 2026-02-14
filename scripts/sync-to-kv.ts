@@ -23,7 +23,7 @@ import {
 } from '../../dist/lib/quality-metrics.js';
 import type { RoleViewType, QualityMetricConfig } from '../../dist/lib/quality-metrics.js';
 
-const NAMESPACE_ID = '902fc8a43e7147b486b6376c485c4506';
+const NAMESPACE_ID = process.env.KV_NAMESPACE_ID || '902fc8a43e7147b486b6376c485c4506';
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -51,9 +51,14 @@ function kvBulkPut(entries: KVEntry[]): void {
       }
       return;
     }
-    execFileSync('npx', ['wrangler', 'kv', 'bulk', 'put', tmpFile, '--namespace-id', NAMESPACE_ID, '--remote'], {
-      stdio: ['ignore', 'inherit', 'inherit'],
-    });
+    try {
+      execFileSync('npx', ['wrangler', 'kv', 'bulk', 'put', tmpFile, '--namespace-id', NAMESPACE_ID, '--remote'], {
+        stdio: ['ignore', 'inherit', 'inherit'],
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Wrangler KV bulk put failed for ${entries.length} entries. Ensure wrangler is installed and authenticated. Error: ${msg}`);
+    }
     for (const e of entries) {
       console.log(`PUT ${e.key} (${e.value.length} bytes)`);
     }
@@ -74,11 +79,15 @@ async function main(): Promise<void> {
 
     const start = new Date(now.getTime() - ms);
     const dates = { start: start.toISOString(), end: now.toISOString() };
+    const QUERY_LIMIT = 10_000;
     const evals = await backend.queryEvaluations({
       startDate: dates.start,
       endDate: dates.end,
-      limit: 10000,
+      limit: QUERY_LIMIT,
     });
+    if (evals.length === QUERY_LIMIT) {
+      console.warn(`[sync-to-kv] Query returned ${QUERY_LIMIT} results for period ${period} — data may be truncated`);
+    }
 
     const grouped = new Map<string, typeof evals>();
     for (const ev of evals) {

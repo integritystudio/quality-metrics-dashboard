@@ -6,7 +6,7 @@ import { metricsRoutes } from './routes/metrics.js';
 
 const app = new Hono();
 
-app.use('/*', cors({ origin: 'http://localhost:5173' }));
+app.use('/*', cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 
 app.route('/api', dashboardRoutes);
 app.route('/api', metricsRoutes);

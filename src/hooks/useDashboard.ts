@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 export function useDashboard(period: Period, role?: RoleViewType) {
   return useQuery<QualityDashboardSummary | RoleView>({

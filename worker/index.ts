@@ -10,6 +10,11 @@ app.use('/*', cors({
   allowMethods: ['GET'],
 }));
 
+app.use('/api/*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'public, max-age=300');
+});
+
 app.get('/api/dashboard', async (c) => {
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
