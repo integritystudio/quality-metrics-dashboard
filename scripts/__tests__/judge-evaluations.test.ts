@@ -12,12 +12,16 @@ import {
   normalizeScore,
   isCanaryTurn,
   seedEvaluations,
+  evaluateTurn,
+  evalFailures,
   toOTelRecord,
   processBatch,
   type TranscriptInfo,
   type Turn,
   type EvalRecord,
 } from '../judge-evaluations.js';
+import { LLMJudge } from '../../../src/lib/llm-judge-config.js';
+import type { LLMProvider } from '../../../src/lib/llm-as-judge.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -649,5 +653,126 @@ describe('processBatch', () => {
     });
 
     expect(maxConcurrent).toBeLessThanOrEqual(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluateTurn (B14)
+// ---------------------------------------------------------------------------
+
+// G-Eval makes 2 calls: (1) step generation, (2) evaluation scoring (1-5 scale).
+// QAG makes 2 calls: (1) statement extraction (JSON array), (2) verdict per statement.
+function createMockLLM(gEvalScore = 4): LLMProvider {
+  return {
+    async generate(prompt: string) {
+      // G-Eval step generation prompt contains "Generate detailed"
+      if (prompt.includes('Generate detailed')) {
+        return { text: '1. Check quality\n2. Assess completeness' };
+      }
+      // QAG statement extraction
+      if (prompt.includes('statements') || prompt.includes('claims')) {
+        return { text: JSON.stringify(['The response is correct.']) };
+      }
+      // QAG verdict
+      if (prompt.includes('verdict') || prompt.includes('supported')) {
+        return { text: 'yes' };
+      }
+      // G-Eval scoring — return just the score digit
+      return { text: String(gEvalScore) };
+    },
+  };
+}
+
+function createFailingLLM(failKeyword: string): LLMProvider {
+  return {
+    async generate(prompt: string) {
+      if (prompt.toLowerCase().includes(failKeyword.toLowerCase())) {
+        throw new Error(`Mock ${failKeyword} failure`);
+      }
+      if (prompt.includes('Generate detailed')) {
+        return { text: '1. Check quality\n2. Assess completeness' };
+      }
+      if (prompt.includes('statements') || prompt.includes('claims')) {
+        return { text: JSON.stringify(['The response is correct.']) };
+      }
+      if (prompt.includes('verdict') || prompt.includes('supported')) {
+        return { text: 'yes' };
+      }
+      return { text: '4' };
+    },
+  };
+}
+
+describe('evaluateTurn', () => {
+  beforeEach(() => {
+    // Reset failure tracking
+    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+  });
+
+  it('evaluates relevance and coherence for turns without tool results', async () => {
+    const llm = createMockLLM(4);
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: [] });
+
+    const evals = await evaluateTurn(judge, turn, new Set());
+
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('relevance');
+    expect(names).toContain('coherence');
+    expect(names).not.toContain('faithfulness');
+    expect(names).not.toContain('hallucination');
+    expect(names).not.toContain('tool_correctness');
+  });
+
+  it('evaluates all 5 metrics for turns with tool results', async () => {
+    const llm = createMockLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: ['file contents here'] });
+
+    const evals = await evaluateTurn(judge, turn, new Set());
+
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('relevance');
+    expect(names).toContain('coherence');
+    expect(names).toContain('faithfulness');
+    expect(names).toContain('hallucination');
+    expect(names).toContain('tool_correctness');
+  });
+
+  it('skips already-evaluated metrics via existingKeys', async () => {
+    const llm = createMockLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn();
+    const turnKey = turn.timestamp.slice(0, 19);
+    const existingKeys = new Set([
+      `${turn.sessionId}:relevance:${turnKey}`,
+      `${turn.sessionId}:coherence:${turnKey}`,
+    ]);
+
+    const evals = await evaluateTurn(judge, turn, existingKeys);
+    expect(evals).toHaveLength(0);
+  });
+
+  it('tracks failures in evalFailures on metric error', async () => {
+    const llm = createFailingLLM('relevant');
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: [] });
+
+    const evals = await evaluateTurn(judge, turn, new Set());
+
+    // Relevance should fail, coherence should succeed
+    expect(evalFailures['relevance']).toBe(1);
+    expect(evals.some(e => e.evaluationName === 'coherence')).toBe(true);
+  });
+
+  it('sets evaluatorType to llm for all results', async () => {
+    const llm = createMockLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: ['ctx'] });
+
+    const evals = await evaluateTurn(judge, turn, new Set());
+    for (const ev of evals) {
+      expect(ev.evaluatorType).toBe('llm');
+    }
   });
 });

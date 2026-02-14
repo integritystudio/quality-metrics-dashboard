@@ -440,7 +440,7 @@ function trackFailure(metric: string): void {
   evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
 }
 
-async function evaluateTurn(
+export async function evaluateTurn(
   judge: LLMJudge,
   turn: Turn,
   existingKeys: Set<string>,
