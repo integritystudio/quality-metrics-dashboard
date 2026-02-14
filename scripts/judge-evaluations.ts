@@ -189,14 +189,19 @@ export function extractToolResults(content: unknown): string[] {
     .filter(Boolean);
 }
 
-export function extractTurns(info: TranscriptInfo): Turn[] {
-  const lines = readFileSync(info.path, 'utf-8').split('\n').filter(Boolean);
+export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
+  // H1: Stream line-by-line to avoid loading entire transcript into memory
+  const rl = createInterface({
+    input: createReadStream(info.path, 'utf-8'),
+    crlfDelay: Infinity,
+  });
   const turns: Turn[] = [];
 
   let pendingUser: { text: string; timestamp: string } | null = null;
   const accumulatedToolResults: string[] = [];
 
-  for (const line of lines) {
+  for await (const line of rl) {
+    if (!line) continue;
     let entry: Record<string, unknown>;
     try {
       entry = JSON.parse(line);
@@ -777,7 +782,7 @@ async function main() {
   console.log('Extracting turns...');
   let allTurns: Turn[] = [];
   for (const info of transcripts) {
-    const turns = extractTurns(info);
+    const turns = await extractTurns(info);
     allTurns.push(...turns);
   }
   console.log(`Extracted ${allTurns.length} conversation turns`);

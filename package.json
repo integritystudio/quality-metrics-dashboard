@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:scripts": "vitest run --config /dev/null --dir scripts/__tests__",
     "typecheck": "tsc --noEmit",
     "populate": "tsx scripts/populate-dashboard.ts",
     "sync": "tsx scripts/sync-to-kv.ts",

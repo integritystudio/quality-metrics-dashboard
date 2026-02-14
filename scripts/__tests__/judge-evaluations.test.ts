@@ -228,7 +228,7 @@ describe('extractTurns', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('extracts user/assistant turn pairs', () => {
+  it('extracts user/assistant turn pairs', async () => {
     const filepath = writeTranscript([
       {
         type: 'user',
@@ -245,7 +245,7 @@ describe('extractTurns', () => {
     ]);
 
     const info: TranscriptInfo = { path: filepath, sessionId: 'sess-1', traceId: 'trace-1' };
-    const turns = extractTurns(info);
+    const turns = await extractTurns(info);
 
     expect(turns).toHaveLength(1);
     expect(turns[0].userText).toBe('Fix the bug');
@@ -253,7 +253,7 @@ describe('extractTurns', () => {
     expect(turns[0].sessionId).toBe('sess-1');
   });
 
-  it('skips system prompts', () => {
+  it('skips system prompts', async () => {
     const filepath = writeTranscript([
       {
         type: 'user',
@@ -269,11 +269,11 @@ describe('extractTurns', () => {
       },
     ]);
 
-    const turns = extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(0);
   });
 
-  it('skips tool-result-only user messages', () => {
+  it('skips tool-result-only user messages', async () => {
     const filepath = writeTranscript([
       {
         type: 'user',
@@ -289,11 +289,11 @@ describe('extractTurns', () => {
       },
     ]);
 
-    const turns = extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(0);
   });
 
-  it('accumulates tool results from preceding messages', () => {
+  it('accumulates tool results from preceding messages', async () => {
     const filepath = writeTranscript([
       {
         type: 'user',
@@ -315,12 +315,12 @@ describe('extractTurns', () => {
       },
     ]);
 
-    const turns = extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(1);
     expect(turns[0].toolResults).toContain('tool output 1');
   });
 
-  it('clears tool results between turns (M4)', () => {
+  it('clears tool results between turns (M4)', async () => {
     const filepath = writeTranscript([
       {
         type: 'user',
@@ -354,13 +354,13 @@ describe('extractTurns', () => {
       },
     ]);
 
-    const turns = extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(2);
     expect(turns[0].toolResults).toContain('tool output from turn 1');
     expect(turns[1].toolResults).toHaveLength(0); // Should not leak from turn 1
   });
 
-  it('skips progress and file-history-snapshot entries', () => {
+  it('skips progress and file-history-snapshot entries', async () => {
     const filepath = writeTranscript([
       { type: 'progress', message: null },
       { type: 'file-history-snapshot', files: {} },
@@ -378,11 +378,11 @@ describe('extractTurns', () => {
       },
     ]);
 
-    const turns = extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(1);
   });
 
-  it('truncates long text to MAX_TURN_TEXT_LEN', () => {
+  it('truncates long text to MAX_TURN_TEXT_LEN', async () => {
     const longText = 'x'.repeat(10000);
     const filepath = writeTranscript([
       {
@@ -399,18 +399,18 @@ describe('extractTurns', () => {
       },
     ]);
 
-    const turns = extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns[0].userText.length).toBe(8000);
     expect(turns[0].assistantText.length).toBe(8000);
   });
 
-  it('handles malformed JSON lines gracefully', () => {
+  it('handles malformed JSON lines gracefully', async () => {
     const dir = join(tmpDir, 'transcripts');
     mkdirSync(dir, { recursive: true });
     const filepath = join(dir, 'bad.jsonl');
     writeFileSync(filepath, 'not json\n{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Hello"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:00Z"}\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:05Z"}\n');
 
-    const turns = extractTurns({ path: filepath, sessionId: 's', traceId: 't' });
+    const turns = await extractTurns({ path: filepath, sessionId: 's', traceId: 't' });
     expect(turns).toHaveLength(1);
   });
 });
