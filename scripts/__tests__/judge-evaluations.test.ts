@@ -314,6 +314,46 @@ describe('extractTurns', () => {
     expect(turns[0].toolResults).toContain('tool output 1');
   });
 
+  it('clears tool results between turns (M4)', () => {
+    const filepath = writeTranscript([
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output from turn 1' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'First question' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:05Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:10Z',
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Second question' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:15Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:20Z',
+      },
+    ]);
+
+    const turns = extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    expect(turns).toHaveLength(2);
+    expect(turns[0].toolResults).toContain('tool output from turn 1');
+    expect(turns[1].toolResults).toHaveLength(0); // Should not leak from turn 1
+  });
+
   it('skips progress and file-history-snapshot entries', () => {
     const filepath = writeTranscript([
       { type: 'progress', message: null },
@@ -415,14 +455,15 @@ describe('seedEvaluations', () => {
     expect(names).toContain('coherence');
   });
 
-  it('generates faithfulness and hallucination only when tool results exist', () => {
+  it('generates faithfulness and hallucination for all turns in seed mode', () => {
     const turnNoTools = makeTurn({ toolResults: [] });
     const turnWithTools = makeTurn({ toolResults: ['some tool output'] });
 
     const evalsNoTools = seedEvaluations([turnNoTools], new Set());
     const evalsWithTools = seedEvaluations([turnWithTools], new Set());
 
-    expect(evalsNoTools.map(e => e.evaluationName)).not.toContain('faithfulness');
+    expect(evalsNoTools.map(e => e.evaluationName)).toContain('faithfulness');
+    expect(evalsNoTools.map(e => e.evaluationName)).toContain('hallucination');
     expect(evalsWithTools.map(e => e.evaluationName)).toContain('faithfulness');
     expect(evalsWithTools.map(e => e.evaluationName)).toContain('hallucination');
   });
@@ -433,6 +474,8 @@ describe('seedEvaluations', () => {
     const existingKeys = new Set([
       `${turn.sessionId}:relevance:${turnKey}`,
       `${turn.sessionId}:coherence:${turnKey}`,
+      `${turn.sessionId}:faithfulness:${turnKey}`,
+      `${turn.sessionId}:hallucination:${turnKey}`,
     ]);
 
     const evals = seedEvaluations([turn], existingKeys);
@@ -440,7 +483,7 @@ describe('seedEvaluations', () => {
   });
 
   it('hallucination + faithfulness scores are complementary', () => {
-    const turn = makeTurn({ toolResults: ['context'] });
+    const turn = makeTurn();
     const evals = seedEvaluations([turn], new Set());
 
     const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
@@ -448,10 +491,10 @@ describe('seedEvaluations', () => {
     expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
   });
 
-  it('sets evaluatorType to llm for all seed evals', () => {
+  it('sets evaluatorType to seed for all seed evals', () => {
     const evals = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
     for (const ev of evals) {
-      expect(ev.evaluatorType).toBe('llm');
+      expect(ev.evaluatorType).toBe('seed');
     }
   });
 
@@ -467,16 +510,16 @@ describe('seedEvaluations', () => {
 
     for (const ev of evals) {
       if (ev.evaluationName === 'relevance') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.55);
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.95);
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70);
+        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
       }
       if (ev.evaluationName === 'coherence') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.60);
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.98);
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.75);
+        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
       }
       if (ev.evaluationName === 'hallucination') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.02);
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.25);
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.0);
+        expect(ev.scoreValue).toBeLessThanOrEqual(0.15);
       }
     }
   });

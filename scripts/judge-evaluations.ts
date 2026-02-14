@@ -20,7 +20,7 @@ import { createInterface } from 'readline';
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
 import type { LLMProvider } from '../../src/lib/llm-as-judge.js';
-import { qagEvaluate, sanitizeForPrompt } from '../../src/lib/llm-as-judge.js';
+import { sanitizeForPrompt } from '../../src/lib/llm-as-judge.js';
 import {
   LLMJudge,
   RELEVANCE_CRITERIA,
@@ -210,9 +210,12 @@ export function extractTurns(info: TranscriptInfo): Turn[] {
       const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : null;
       if (!timestamp) continue;
 
+      // P0-1: Sanitize text before LLM evaluation to mitigate prompt injection
+      const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
+      if (!sanitizedUser.trim()) continue; // H2: skip if sanitization removed all content
+
       pendingUser = {
-        // P0-1: Sanitize text before LLM evaluation to mitigate prompt injection
-        text: sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN),
+        text: sanitizedUser,
         timestamp,
       };
     }
@@ -232,6 +235,7 @@ export function extractTurns(info: TranscriptInfo): Turn[] {
       });
 
       pendingUser = null;
+      accumulatedToolResults.length = 0; // M4: clear for next turn
     }
   }
 
@@ -242,10 +246,9 @@ export function extractTurns(info: TranscriptInfo): Turn[] {
 // Anthropic LLM Provider
 // ============================================================================
 
-function createAnthropicProvider(): LLMProvider {
+async function createAnthropicProvider(): Promise<LLMProvider> {
   // Dynamic import to avoid requiring @anthropic-ai/sdk when using --seed
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Anthropic = require('@anthropic-ai/sdk').default;
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const client = new Anthropic();
 
   return {
@@ -287,39 +290,40 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
   for (const turn of turns) {
     const turnKey = turn.timestamp.slice(0, 19);
 
-    // Relevance: most assistant turns are relevant (0.55-0.95)
+    // Relevance: realistic range for code assistant turns (0.70-1.0)
     const relKey = `${turn.sessionId}:relevance:${turnKey}`;
     if (!existingKeys.has(relKey)) {
       evals.push({
         timestamp: turn.timestamp,
         evaluationName: 'relevance',
-        scoreValue: hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.55, 0.95),
+        scoreValue: hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
         explanation: `Relevance (seeded) for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
-        evaluatorType: 'llm',
+        evaluatorType: 'seed',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
       });
     }
 
-    // Coherence: generally high for code assistants (0.60-0.98)
+    // Coherence: realistic range (0.75-1.0)
     const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
     if (!existingKeys.has(cohKey)) {
       evals.push({
         timestamp: turn.timestamp,
         evaluationName: 'coherence',
-        scoreValue: hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.60, 0.98),
+        scoreValue: hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
         explanation: `Coherence (seeded) for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
-        evaluatorType: 'llm',
+        evaluatorType: 'seed',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
       });
     }
 
-    // Faithfulness + Hallucination: only when tool results exist as context
-    if (turn.toolResults.length > 0) {
-      const halScore = hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.02, 0.25);
+    // Faithfulness + Hallucination: seed mode always generates these
+    // (real LLM judge requires tool results as context, but seed is deterministic)
+    {
+      const halScore = hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.15);
       const faithScore = parseFloat((1 - halScore).toFixed(4));
 
       const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
@@ -330,7 +334,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
           scoreValue: faithScore,
           explanation: `Faithfulness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
-          evaluatorType: 'llm',
+          evaluatorType: 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });
@@ -344,7 +348,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
           scoreValue: halScore,
           explanation: `Hallucination (seeded) for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
-          evaluatorType: 'llm',
+          evaluatorType: 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });
@@ -368,7 +372,6 @@ function trackFailure(metric: string): void {
 
 async function evaluateTurn(
   judge: LLMJudge,
-  llm: LLMProvider,
   turn: Turn,
   existingKeys: Set<string>,
 ): Promise<EvalRecord[]> {
@@ -388,7 +391,7 @@ async function evaluateTurn(
         timestamp: turn.timestamp,
         evaluationName: 'relevance',
         scoreValue: parseFloat(result.score.toFixed(4)),
-        explanation: `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
         traceId: turn.traceId,
@@ -409,7 +412,7 @@ async function evaluateTurn(
         timestamp: turn.timestamp,
         evaluationName: 'coherence',
         scoreValue: parseFloat(result.score.toFixed(4)),
-        explanation: `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
         traceId: turn.traceId,
@@ -428,45 +431,53 @@ async function evaluateTurn(
     const needsFaith = !existingKeys.has(faithKey);
     const needsHal = !existingKeys.has(halKey);
 
-    if (needsFaith || needsHal) {
+    // M2: Use judge.qagEvaluate() for retry support; M5: evaluate independently
+    if (needsFaith) {
       try {
-        const faithScore = await qagEvaluate(
-          llm,
+        const faithResult = await judge.qagEvaluate(
           turn.userText,
           turn.assistantText,
           turn.toolResults.slice(0, MAX_CONTEXT_FOR_EVAL),
-          { timeoutMs: 60_000 },
         );
-        const halScore = parseFloat((1 - faithScore).toFixed(4));
-
-        if (needsFaith) {
-          evals.push({
-            timestamp: turn.timestamp,
-            evaluationName: 'faithfulness',
-            scoreValue: parseFloat(faithScore.toFixed(4)),
-            explanation: `Faithfulness: ${faithScore.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
-            evaluator: 'llm-judge',
-            evaluatorType: 'llm',
-            traceId: turn.traceId,
-            sessionId: turn.sessionId,
-          });
-        }
-
-        if (needsHal) {
-          evals.push({
-            timestamp: turn.timestamp,
-            evaluationName: 'hallucination',
-            scoreValue: halScore,
-            explanation: `Hallucination: ${halScore.toFixed(2)} (1 - faithfulness ${faithScore.toFixed(2)}) for session ${turn.sessionId.slice(0, 8)}`,
-            evaluator: 'llm-judge',
-            evaluatorType: 'llm',
-            traceId: turn.traceId,
-            sessionId: turn.sessionId,
-          });
-        }
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'faithfulness',
+          scoreValue: parseFloat(faithResult.score.toFixed(4)),
+          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
       } catch (err) {
         trackFailure('faithfulness');
-        console.warn(`  [faithfulness/hallucination] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+        console.warn(`  [faithfulness] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+      }
+    }
+
+    // M5: Hallucination evaluated independently via G-Eval (not 1 - faithfulness)
+    if (needsHal) {
+      try {
+        const halResult = await judge.evaluateFaithfulness(
+          turn.userText,
+          turn.assistantText,
+          turn.toolResults.slice(0, MAX_CONTEXT_FOR_EVAL),
+        );
+        // Invert: faithfulness criteria measures consistency, hallucination is the complement
+        const halScore = parseFloat((1 - halResult.score).toFixed(4));
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'hallucination',
+          scoreValue: halScore,
+          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('hallucination');
+        console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
       }
     }
   }
@@ -519,7 +530,8 @@ function loadExistingKeys(): Set<string> {
       const attrs = typeof record.attributes === 'object' && record.attributes !== null
         ? record.attributes as Record<string, unknown> : undefined;
       if (!attrs) continue;
-      if (attrs['gen_ai.evaluation.evaluator.type'] !== 'llm') continue;
+      const evalType = attrs['gen_ai.evaluation.evaluator.type'];
+      if (evalType !== 'llm' && evalType !== 'seed') continue;
 
       const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
       const metricName = typeof attrs['gen_ai.evaluation.name'] === 'string' ? attrs['gen_ai.evaluation.name'] : '';
@@ -549,27 +561,39 @@ function acquireLock(): boolean {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
     // Lock file exists — check if owning process is still alive
+    let stale = false;
     try {
       const lockContent = readFileSync(LOCK_FILE, 'utf-8').trim();
       const lockPid = parseInt(lockContent, 10);
       if (isNaN(lockPid) || lockPid <= 0) {
-        // Malformed lock file — remove and retry once
-        unlinkSync(LOCK_FILE);
-        return acquireLock();
-      }
-      try {
-        process.kill(lockPid, 0);
-        return false; // Process alive, lock held
-      } catch (killErr) {
-        // EPERM = process exists but we can't signal it — lock is valid
-        if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
-        // Process dead — stale lock, remove and retry
-        unlinkSync(LOCK_FILE);
-        return acquireLock();
+        stale = true;
+      } else {
+        try {
+          process.kill(lockPid, 0);
+          return false; // Process alive, lock held
+        } catch (killErr) {
+          // EPERM = process exists but we can't signal it — lock is valid
+          if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
+          stale = true; // Process dead — stale lock
+        }
       }
     } catch {
       return false;
     }
+
+    if (stale) {
+      // Remove stale lock and re-acquire atomically (no recursive retry)
+      try { unlinkSync(LOCK_FILE); } catch { /* another process may have removed it */ }
+      try {
+        const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+        writeFileSync(fd, String(process.pid));
+        closeSync(fd);
+        return true;
+      } catch {
+        return false; // Another process won the race
+      }
+    }
+    return false;
   }
 }
 
@@ -716,7 +740,7 @@ async function main() {
       console.log(`\nSeeding evaluations for ${allTurns.length} turns...`);
       flatEvals = seedEvaluations(allTurns, existingKeys);
     } else {
-      const llm = createAnthropicProvider();
+      const llm = await createAnthropicProvider();
       const judge = new LLMJudge(llm, {
         timeoutMs: 60_000,
         maxRetries: 2,
@@ -734,7 +758,7 @@ async function main() {
         allTurns,
         CONCURRENCY,
         BATCH_DELAY_MS,
-        (turn) => evaluateTurn(judge, llm, turn, existingKeys),
+        (turn) => evaluateTurn(judge, turn, existingKeys),
       );
 
       flatEvals = allEvals.flat();
