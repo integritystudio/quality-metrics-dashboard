@@ -609,6 +609,12 @@ function releaseLock(): void {
   try { unlinkSync(LOCK_FILE); } catch { /* ignore */ }
 }
 
+/** B12: Safe exit that always attempts lock cleanup */
+function safeExit(code: number): never {
+  releaseLock();
+  process.exit(code);
+}
+
 function writeEvaluations(evals: EvalRecord[]): void {
   // Group by date
   const byDate = new Map<string, EvalRecord[]>();
@@ -811,6 +817,6 @@ const isDirectRun = process.argv[1]?.endsWith('judge-evaluations.ts') ||
 if (isDirectRun) {
   main().catch(err => {
     console.error('Fatal error:', err);
-    process.exit(1);
+    safeExit(1);
   });
 }
