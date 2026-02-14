@@ -302,20 +302,31 @@ export function hashToScore(input: string, min: number, max: number): number {
   return normalizeScore(min + value * (max - min));
 }
 
+/** B6: Deterministic canary check — ~2% of turns get intentionally low scores */
+export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
+  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
+}
+
 export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalRecord[] {
   const evals: EvalRecord[] = [];
 
   for (const turn of turns) {
     const turnKey = turn.timestamp.slice(0, 19);
+    const canary = isCanaryTurn(turn.sessionId, turnKey);
 
     // Relevance: realistic range for code assistant turns (0.70-1.0)
+    // B6: Canary turns get low scores (0.10-0.35) to test alerting
     const relKey = `${turn.sessionId}:relevance:${turnKey}`;
     if (!existingKeys.has(relKey)) {
       evals.push({
         timestamp: turn.timestamp,
         evaluationName: 'relevance',
-        scoreValue: hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
-        explanation: `Relevance (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+        scoreValue: canary
+          ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
+          : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
+        explanation: canary
+          ? `Relevance (canary) for session ${turn.sessionId.slice(0, 8)}`
+          : `Relevance (seeded) for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'seed',
         traceId: turn.traceId,
@@ -324,13 +335,18 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
     }
 
     // Coherence: realistic range (0.75-1.0)
+    // B6: Canary turns get low scores (0.15-0.40) to test alerting
     const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
     if (!existingKeys.has(cohKey)) {
       evals.push({
         timestamp: turn.timestamp,
         evaluationName: 'coherence',
-        scoreValue: hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-        explanation: `Coherence (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+        scoreValue: canary
+          ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
+          : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+        explanation: canary
+          ? `Coherence (canary) for session ${turn.sessionId.slice(0, 8)}`
+          : `Coherence (seeded) for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'seed',
         traceId: turn.traceId,
@@ -340,8 +356,11 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
 
     // Faithfulness + Hallucination: seed mode always generates these
     // (real LLM judge requires tool results as context, but seed is deterministic)
+    // B6: Canary turns get high hallucination (0.50-0.80)
     {
-      const halScore = hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.15);
+      const halScore = canary
+        ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
+        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.15);
       const faithScore = normalizeScore(1 - halScore);
 
       const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
@@ -350,7 +369,9 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
           timestamp: turn.timestamp,
           evaluationName: 'faithfulness',
           scoreValue: faithScore,
-          explanation: `Faithfulness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+          explanation: canary
+            ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, 8)}`
+            : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
           evaluatorType: 'seed',
           traceId: turn.traceId,
@@ -364,7 +385,9 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
           timestamp: turn.timestamp,
           evaluationName: 'hallucination',
           scoreValue: halScore,
-          explanation: `Hallucination (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+          explanation: canary
+            ? `Hallucination (canary) for session ${turn.sessionId.slice(0, 8)}`
+            : `Hallucination (seeded) for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
           evaluatorType: 'seed',
           traceId: turn.traceId,

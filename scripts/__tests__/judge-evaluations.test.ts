@@ -10,6 +10,7 @@ import {
   extractTurns,
   hashToScore,
   normalizeScore,
+  isCanaryTurn,
   seedEvaluations,
   toOTelRecord,
   processBatch,
@@ -518,7 +519,7 @@ describe('seedEvaluations', () => {
     }
   });
 
-  it('scores are within expected ranges', () => {
+  it('non-canary scores are within expected ranges', () => {
     const turns = Array.from({ length: 20 }, (_, i) =>
       makeTurn({
         sessionId: `session-${i}`,
@@ -529,6 +530,9 @@ describe('seedEvaluations', () => {
     const evals = seedEvaluations(turns, new Set());
 
     for (const ev of evals) {
+      const turnKey = ev.timestamp.slice(0, 19);
+      if (isCanaryTurn(ev.sessionId, turnKey)) continue; // canaries have different ranges
+
       if (ev.evaluationName === 'relevance') {
         expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70);
         expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
@@ -540,6 +544,29 @@ describe('seedEvaluations', () => {
       if (ev.evaluationName === 'hallucination') {
         expect(ev.scoreValue).toBeGreaterThanOrEqual(0.0);
         expect(ev.scoreValue).toBeLessThanOrEqual(0.15);
+      }
+    }
+  });
+
+  it('canary turns get intentionally low scores (B6)', () => {
+    // Generate enough turns to likely hit a canary (~2% rate)
+    const turns = Array.from({ length: 200 }, (_, i) =>
+      makeTurn({
+        sessionId: `canary-test-${i}`,
+        timestamp: `2026-02-09T01:${String(i % 60).padStart(2, '0')}:${String(Math.floor(i / 60)).padStart(2, '0')}.000Z`,
+        toolResults: ['ctx'],
+      })
+    );
+    const evals = seedEvaluations(turns, new Set());
+    const canaryEvals = evals.filter(e => e.explanation.includes('(canary)'));
+
+    expect(canaryEvals.length).toBeGreaterThan(0);
+    for (const ev of canaryEvals) {
+      if (ev.evaluationName === 'relevance') {
+        expect(ev.scoreValue).toBeLessThanOrEqual(0.35);
+      }
+      if (ev.evaluationName === 'hallucination') {
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.50);
       }
     }
   });
