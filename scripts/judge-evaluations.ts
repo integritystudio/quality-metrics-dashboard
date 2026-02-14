@@ -21,11 +21,19 @@ import { createHash } from 'crypto';
 import { join, basename } from 'path';
 import type { LLMProvider } from '../../src/lib/llm-as-judge.js';
 import { sanitizeForPrompt } from '../../src/lib/llm-as-judge.js';
+import type { GEvalConfig } from '../../src/lib/llm-as-judge.js';
 import {
   LLMJudge,
   RELEVANCE_CRITERIA,
   COHERENCE_CRITERIA,
 } from '../../src/lib/llm-judge-config.js';
+
+/** B9: Tool correctness criteria — evaluates whether tool usage was appropriate */
+export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
+  name: 'tool_correctness',
+  criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
+  evaluationParams: ['input', 'output', 'context'],
+};
 
 // ============================================================================
 // Constants
@@ -395,6 +403,27 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
         });
       }
     }
+
+    // B9: Tool correctness (only meaningful when tool results exist)
+    if (turn.toolResults.length > 0) {
+      const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+      if (!existingKeys.has(tcKey)) {
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'tool_correctness',
+          scoreValue: canary
+            ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
+            : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+          explanation: canary
+            ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, 8)}`
+            : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'seed',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      }
+    }
   }
 
   return evals;
@@ -519,6 +548,31 @@ async function evaluateTurn(
       } catch (err) {
         trackFailure('hallucination');
         console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+      }
+    }
+
+    // B9: Tool correctness — evaluates tool selection, arguments, and result usage
+    const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+    if (!existingKeys.has(tcKey)) {
+      try {
+        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, {
+          input: turn.userText,
+          output: turn.assistantText,
+          context: turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
+        });
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'tool_correctness',
+          scoreValue: normalizeScore(tcResult.score),
+          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('tool_correctness');
+        console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
       }
     }
   }
@@ -736,8 +790,9 @@ async function main() {
 
   if (dryRun) {
     // P2-14: Accurate cost estimate based on tool result presence
+    // 2 base evals (relevance, coherence) + 3 with tools (faithfulness, hallucination, tool_correctness)
     const estEvals = allTurns.reduce((sum, t) =>
-      sum + 2 + (t.toolResults.length > 0 ? 2 : 0), 0);
+      sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
     // B7: Estimate tokens from actual content length (~4 chars/token)
     const estInputTokens = allTurns.reduce((sum, t) => {
       const contentChars = t.userText.length + t.assistantText.length

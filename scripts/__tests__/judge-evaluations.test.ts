@@ -476,7 +476,7 @@ describe('seedEvaluations', () => {
     expect(names).toContain('coherence');
   });
 
-  it('generates faithfulness and hallucination for all turns in seed mode', () => {
+  it('generates faithfulness, hallucination, and tool_correctness in seed mode', () => {
     const turnNoTools = makeTurn({ toolResults: [] });
     const turnWithTools = makeTurn({ toolResults: ['some tool output'] });
 
@@ -485,8 +485,11 @@ describe('seedEvaluations', () => {
 
     expect(evalsNoTools.map(e => e.evaluationName)).toContain('faithfulness');
     expect(evalsNoTools.map(e => e.evaluationName)).toContain('hallucination');
+    // tool_correctness only generated when tool results exist
+    expect(evalsNoTools.map(e => e.evaluationName)).not.toContain('tool_correctness');
     expect(evalsWithTools.map(e => e.evaluationName)).toContain('faithfulness');
     expect(evalsWithTools.map(e => e.evaluationName)).toContain('hallucination');
+    expect(evalsWithTools.map(e => e.evaluationName)).toContain('tool_correctness');
   });
 
   it('skips evaluations that exist in the dedup set', () => {
