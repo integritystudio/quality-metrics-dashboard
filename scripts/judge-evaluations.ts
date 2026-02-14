@@ -130,6 +130,23 @@ async function discoverTranscripts(): Promise<TranscriptInfo[]> {
 // Turn Extraction
 // ============================================================================
 
+/** B8: Discriminated union for transcript content blocks */
+export interface TextBlock { type: 'text'; text: string }
+export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
+export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
+export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
+
+function isContentBlock(value: unknown): value is ContentBlock {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return obj.type === 'text' || obj.type === 'tool_result' || obj.type === 'tool_use';
+}
+
+function asContentBlocks(content: unknown): ContentBlock[] {
+  if (!Array.isArray(content)) return [];
+  return content.filter(isContentBlock);
+}
+
 export function isSystemPrompt(text: string): boolean {
   if (typeof text !== 'string') return false;
   const trimmed = text.trimStart();
@@ -138,35 +155,28 @@ export function isSystemPrompt(text: string): boolean {
 
 export function isToolResultOnly(content: unknown): boolean {
   if (!Array.isArray(content)) return false;
-  return content.length > 0 && content.every(
-    (c: Record<string, unknown>) => c.type === 'tool_result'
-  );
+  const blocks = asContentBlocks(content);
+  return blocks.length > 0 && blocks.every(b => b.type === 'tool_result');
 }
 
 export function extractTextFromContent(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .filter((c: Record<string, unknown>) => c.type === 'text')
-    .map((c: Record<string, unknown>) => typeof c.text === 'string' ? c.text : '')
+  return asContentBlocks(content)
+    .filter((b): b is TextBlock => b.type === 'text')
+    .map(b => b.text)
     .join('\n')
     .trim();
 }
 
 export function extractToolResults(content: unknown): string[] {
-  if (!Array.isArray(content)) return [];
-  return content
-    .filter((c: Record<string, unknown>) => c.type === 'tool_result')
-    .map((c: Record<string, unknown>) => {
-      const inner = c.content;
-      if (typeof inner === 'string') return inner;
-      if (Array.isArray(inner)) {
-        return inner
-          .filter((i: Record<string, unknown>) => i.type === 'text')
-          .map((i: Record<string, unknown>) => typeof i.text === 'string' ? i.text : '')
-          .join('\n');
-      }
-      return '';
+  return asContentBlocks(content)
+    .filter((b): b is ToolResultBlock => b.type === 'tool_result')
+    .map(b => {
+      if (typeof b.content === 'string') return b.content;
+      return b.content
+        .filter((inner): inner is TextBlock => inner.type === 'text')
+        .map(inner => inner.text)
+        .join('\n');
     })
     .filter(Boolean);
 }
