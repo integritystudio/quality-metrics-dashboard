@@ -170,13 +170,9 @@ function RouteErrorFallback({ error, resetErrorBoundary }: { error: Error; reset
     <div className="error-state">
       <h2>Something went wrong</h2>
       <p>{error.message}</p>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button onClick={resetErrorBoundary} style={{ padding: '6px 16px', cursor: 'pointer' }}>
-          Try again
-        </button>
-        <Link href="/" style={{ padding: '6px 16px', cursor: 'pointer' }}>
-          Back to dashboard
-        </Link>
+      <div className="error-actions">
+        <button onClick={resetErrorBoundary}>Try again</button>
+        <Link href="/">Back to dashboard</Link>
       </div>
     </div>
   );

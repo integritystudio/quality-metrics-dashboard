@@ -398,6 +398,17 @@ body {
   color: var(--status-critical);
   margin-bottom: 8px;
 }
+.error-state .error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: center;
+}
+.error-state .error-actions button,
+.error-state .error-actions a {
+  padding: 6px 16px;
+  cursor: pointer;
+}
 
 /* Section headings */
 .section-heading {
