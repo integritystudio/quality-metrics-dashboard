@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Route, Switch, Link } from 'wouter';
+import { Route, Switch, Link, useLocation } from 'wouter';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { HealthOverview } from './components/HealthOverview.js';
@@ -164,21 +165,49 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   );
 }
 
+function RouteErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="error-state">
+      <h2>Something went wrong</h2>
+      <p>{error.message}</p>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button onClick={resetErrorBoundary} style={{ padding: '6px 16px', cursor: 'pointer' }}>
+          Try again
+        </button>
+        <Link href="/" style={{ padding: '6px 16px', cursor: 'pointer' }}>
+          Back to dashboard
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [period, setPeriod] = useState<Period>('30d');
+  const [location] = useLocation();
 
   return (
     <Layout period={period} onPeriodChange={setPeriod}>
       <RoleSelector />
       <Switch>
         <Route path="/">
-          <DashboardPage period={period} />
+          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+            <DashboardPage period={period} />
+          </ErrorBoundary>
         </Route>
         <Route path="/role/:roleName">
-          {(params) => <RolePage role={params.roleName as RoleViewType} period={period} />}
+          {(params) => (
+            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+              <RolePage role={params.roleName as RoleViewType} period={period} />
+            </ErrorBoundary>
+          )}
         </Route>
         <Route path="/metrics/:metricName">
-          {(params) => <MetricDetailPage name={params.metricName} period={period} />}
+          {(params) => (
+            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+              <MetricDetailPage name={params.metricName} period={period} />
+            </ErrorBoundary>
+          )}
         </Route>
         <Route>
           <div className="empty-state">
