@@ -473,7 +473,7 @@ describe('hashToScore', () => {
 describe('seedEvaluations', () => {
   it('generates relevance and coherence for all turns', () => {
     const turns = [makeTurn()];
-    const evals = seedEvaluations(turns, new Set());
+    const { evals } = seedEvaluations(turns, new Set());
 
     const names = evals.map(e => e.evaluationName);
     expect(names).toContain('relevance');
@@ -484,8 +484,8 @@ describe('seedEvaluations', () => {
     const turnNoTools = makeTurn({ toolResults: [] });
     const turnWithTools = makeTurn({ toolResults: ['some tool output'] });
 
-    const evalsNoTools = seedEvaluations([turnNoTools], new Set());
-    const evalsWithTools = seedEvaluations([turnWithTools], new Set());
+    const { evals: evalsNoTools } = seedEvaluations([turnNoTools], new Set());
+    const { evals: evalsWithTools } = seedEvaluations([turnWithTools], new Set());
 
     expect(evalsNoTools.map(e => e.evaluationName)).toContain('faithfulness');
     expect(evalsNoTools.map(e => e.evaluationName)).toContain('hallucination');
@@ -506,23 +506,23 @@ describe('seedEvaluations', () => {
       `${turn.sessionId}:hallucination:${turnKey}`,
     ]);
 
-    const evals = seedEvaluations([turn], existingKeys);
+    const { evals } = seedEvaluations([turn], existingKeys);
     expect(evals).toHaveLength(0);
   });
 
   it('hallucination + faithfulness scores are complementary', () => {
     const turn = makeTurn();
-    const evals = seedEvaluations([turn], new Set());
+    const { evals } = seedEvaluations([turn], new Set());
 
     const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
     const hal = evals.find(e => e.evaluationName === 'hallucination')!;
     expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
   });
 
-  it('sets evaluatorType to seed for all seed evals', () => {
-    const evals = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
+  it('sets evaluatorType to seed or canary for seed evals', () => {
+    const { evals } = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
     for (const ev of evals) {
-      expect(ev.evaluatorType).toBe('seed');
+      expect(['seed', 'canary']).toContain(ev.evaluatorType);
     }
   });
 
@@ -534,7 +534,7 @@ describe('seedEvaluations', () => {
         toolResults: ['ctx'],
       })
     );
-    const evals = seedEvaluations(turns, new Set());
+    const { evals } = seedEvaluations(turns, new Set());
 
     for (const ev of evals) {
       const turnKey = ev.timestamp.slice(0, 19);
@@ -564,7 +564,7 @@ describe('seedEvaluations', () => {
         toolResults: ['ctx'],
       })
     );
-    const evals = seedEvaluations(turns, new Set());
+    const { evals } = seedEvaluations(turns, new Set());
     const canaryEvals = evals.filter(e => e.explanation.includes('(canary)'));
 
     expect(canaryEvals.length).toBeGreaterThan(0);

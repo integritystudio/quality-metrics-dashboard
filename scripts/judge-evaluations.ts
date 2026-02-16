@@ -320,15 +320,21 @@ export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
   return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
 }
 
-export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalRecord[] {
+export interface SeedResult {
+  evals: EvalRecord[];
+  canaryCount: number;
+}
+
+export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
   const evals: EvalRecord[] = [];
+  let canaryCount = 0;
 
   for (const turn of turns) {
     const turnKey = turn.timestamp.slice(0, 19);
     const canary = isCanaryTurn(turn.sessionId, turnKey);
+    if (canary) canaryCount++;
 
     // Relevance: realistic range for code assistant turns (0.70-1.0)
-    // B6: Canary turns get low scores (0.10-0.35) to test alerting
     const relKey = `${turn.sessionId}:relevance:${turnKey}`;
     if (!existingKeys.has(relKey)) {
       evals.push({
@@ -341,14 +347,13 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
           ? `Relevance (canary) for session ${turn.sessionId.slice(0, 8)}`
           : `Relevance (seeded) for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
-        evaluatorType: 'seed',
+        evaluatorType: canary ? 'canary' : 'seed',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
       });
     }
 
     // Coherence: realistic range (0.75-1.0)
-    // B6: Canary turns get low scores (0.15-0.40) to test alerting
     const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
     if (!existingKeys.has(cohKey)) {
       evals.push({
@@ -361,15 +366,13 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
           ? `Coherence (canary) for session ${turn.sessionId.slice(0, 8)}`
           : `Coherence (seeded) for session ${turn.sessionId.slice(0, 8)}`,
         evaluator: 'llm-judge',
-        evaluatorType: 'seed',
+        evaluatorType: canary ? 'canary' : 'seed',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
       });
     }
 
-    // Faithfulness + Hallucination: seed mode always generates these
-    // (real LLM judge requires tool results as context, but seed is deterministic)
-    // B6: Canary turns get high hallucination (0.50-0.80)
+    // Faithfulness + Hallucination
     {
       const halScore = canary
         ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
@@ -386,7 +389,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
             ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, 8)}`
             : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
-          evaluatorType: 'seed',
+          evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });
@@ -402,7 +405,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
             ? `Hallucination (canary) for session ${turn.sessionId.slice(0, 8)}`
             : `Hallucination (seeded) for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
-          evaluatorType: 'seed',
+          evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });
@@ -423,7 +426,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
             ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, 8)}`
             : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
           evaluator: 'llm-judge',
-          evaluatorType: 'seed',
+          evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });
@@ -431,7 +434,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): EvalR
     }
   }
 
-  return evals;
+  return { evals, canaryCount };
 }
 
 // ============================================================================
@@ -866,7 +869,11 @@ async function main() {
     if (seed) {
       // Seed mode: generate deterministic scores from turn content, no API calls
       console.log(`\nSeeding evaluations for ${allTurns.length} turns...`);
-      flatEvals = seedEvaluations(allTurns, existingKeys);
+      const seedResult = seedEvaluations(allTurns, existingKeys);
+      flatEvals = seedResult.evals;
+      if (seedResult.canaryCount > 0) {
+        console.log(`  Canary turns: ${seedResult.canaryCount}`);
+      }
     } else {
       const llm = await createAnthropicProvider();
       const judge = new LLMJudge(llm, {
