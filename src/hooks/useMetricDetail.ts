@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { MetricDetailResult, Period } from '../types.js';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 export function useMetricDetail(name: string | undefined, period: Period = '30d') {
   return useQuery<MetricDetailResult>({

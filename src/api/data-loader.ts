@@ -15,7 +15,7 @@ export async function loadEvaluationsByMetric(
   end: string
 ): Promise<Map<string, EvaluationResult[]>> {
   const be = getBackend();
-  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: 10000 });
+  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: 100_000 });
   const grouped = new Map<string, EvaluationResult[]>();
   for (const ev of evals) {
     const name = ev.evaluationName;

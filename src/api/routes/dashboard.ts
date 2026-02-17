@@ -6,6 +6,7 @@ import {
   QUALITY_METRICS,
 } from '../../../../dist/lib/quality-metrics.js';
 import type { RoleViewType } from '../../../../dist/lib/quality-metrics.js';
+import { computeCQI } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
 
@@ -41,13 +42,17 @@ dashboardRoutes.get('/dashboard', async (c) => {
     const dates = computePeriodDates(period);
     const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
     const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
+    const cqi = computeCQI(dashboard.metrics);
 
     if (role) {
       const view = computeRoleView(dashboard, role as RoleViewType);
+      if (role === 'executive') {
+        return c.json({ ...view, cqi });
+      }
       return c.json(view);
     }
 
-    return c.json(dashboard);
+    return c.json({ ...dashboard, cqi });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, 500);
   }

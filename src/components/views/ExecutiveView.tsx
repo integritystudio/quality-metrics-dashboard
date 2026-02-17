@@ -1,7 +1,12 @@
-import type { ExecutiveView as ExecutiveViewType } from '../../types.js';
+import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from '../../types.js';
 import { StatusBadge } from '../Indicators.js';
+import { CQIHero } from '../CQIHero.js';
 
-export function ExecutiveView({ data }: { data: ExecutiveViewType }) {
+interface ExtendedExecutiveView extends ExecutiveViewType {
+  cqi?: CompositeQualityIndex;
+}
+
+export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (
     <div>
       <div className={`health-banner ${data.overallStatus}`}>
@@ -40,6 +45,12 @@ export function ExecutiveView({ data }: { data: ExecutiveViewType }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {data.cqi && (
+        <div className="view-section">
+          <CQIHero cqi={data.cqi} />
         </div>
       )}
 

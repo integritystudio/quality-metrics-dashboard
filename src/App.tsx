@@ -10,11 +10,14 @@ import { SLATable } from './components/SLATable.js';
 import { ScoreHistogram } from './components/ScoreHistogram.js';
 import { EvaluationDetail } from './components/EvaluationDetail.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
+import { TrendChart } from './components/TrendChart.js';
+import { CorrelationsPage } from './pages/CorrelationsPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
 import { useDashboard } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
+import { RoleProvider } from './contexts/RoleContext.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -23,6 +26,7 @@ import type {
   OperatorView as OperatorViewType,
   AuditorView as AuditorViewType,
   MetricDetailResult,
+  MetricDynamics,
 } from './types.js';
 
 function DashboardPage({ period }: { period: Period }) {
@@ -141,6 +145,19 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
         </div>
       </div>
 
+      <div className="view-section">
+        <h3 className="section-heading">Trend</h3>
+        <div className="card">
+          <TrendChart
+            trend={detail.trend}
+            dynamics={(detail as MetricDetailResult & { dynamics?: MetricDynamics }).dynamics}
+            warningThreshold={detail.alerts.find(a => a.severity === 'warning')?.threshold}
+            criticalThreshold={detail.alerts.find(a => a.severity === 'critical')?.threshold}
+            metricName={detail.displayName}
+          />
+        </div>
+      </div>
+
       {detail.alerts.length > 0 && (
         <div className="view-section">
           <h3 className="section-heading">Alerts</h3>
@@ -183,6 +200,7 @@ export function App() {
   const [location] = useLocation();
 
   return (
+    <RoleProvider>
     <Layout period={period} onPeriodChange={setPeriod}>
       <RoleSelector />
       <Switch>
@@ -205,6 +223,11 @@ export function App() {
             </ErrorBoundary>
           )}
         </Route>
+        <Route path="/correlations">
+          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+            <CorrelationsPage />
+          </ErrorBoundary>
+        </Route>
         <Route>
           <div className="empty-state">
             <h2>Page Not Found</h2>
@@ -213,5 +236,6 @@ export function App() {
         </Route>
       </Switch>
     </Layout>
+    </RoleProvider>
   );
 }

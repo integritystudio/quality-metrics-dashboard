@@ -1,0 +1,91 @@
+import { scoreColorBand, type ScoreColorBand } from '../../../dist/lib/quality-feature-engineering.js';
+import type { CompositeQualityIndex, CQIContribution } from '../../../dist/lib/quality-feature-engineering.js';
+
+const SCORE_COLORS: Record<ScoreColorBand, string> = {
+  excellent: '#26d97f',
+  good: '#34d399',
+  adequate: '#e5a00d',
+  poor: '#f97316',
+  failing: '#f04438',
+};
+
+function segmentColor(contribution: CQIContribution): string {
+  const band = scoreColorBand(contribution.rawScore, 'maximize');
+  return SCORE_COLORS[band];
+}
+
+export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
+  const displayValue = (cqi.value * 100).toFixed(1);
+  const overallBand = scoreColorBand(cqi.value, 'maximize');
+
+  return (
+    <div
+      role="region"
+      aria-label={`Composite Quality Index: ${displayValue}`}
+      className="card"
+      style={{ padding: 24, textAlign: 'center' }}
+    >
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
+        Composite Quality Index
+      </div>
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 36,
+          fontWeight: 700,
+          color: SCORE_COLORS[overallBand],
+          lineHeight: 1.2,
+        }}
+      >
+        {displayValue}
+      </div>
+
+      {cqi.contributions.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            height: 8,
+            borderRadius: 4,
+            overflow: 'hidden',
+            marginTop: 16,
+          }}
+        >
+          {cqi.contributions.map((c) => (
+            <div
+              key={c.metric}
+              title={`${c.metric}: ${c.rawScore.toFixed(2)} (weight ${(c.weight * 100).toFixed(0)}%)`}
+              style={{
+                flex: c.weight,
+                backgroundColor: segmentColor(c),
+                minWidth: 2,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Screen reader breakdown table */}
+      <table style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
+        <caption>CQI Metric Breakdown</caption>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Raw Score</th>
+            <th>Weight</th>
+            <th>Contribution</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cqi.contributions.map((c) => (
+            <tr key={c.metric}>
+              <td>{c.metric}</td>
+              <td>{c.rawScore.toFixed(2)}</td>
+              <td>{(c.weight * 100).toFixed(0)}%</td>
+              <td>{c.contribution.toFixed(3)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

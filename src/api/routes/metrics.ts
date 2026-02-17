@@ -2,8 +2,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import {
   computeMetricDetail,
+  computeAggregations,
   getQualityMetric,
 } from '../../../../dist/lib/quality-metrics.js';
+import { computeMetricDynamics } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 
@@ -41,19 +43,41 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 
   try {
     const now = new Date();
-    const start = new Date(now.getTime() - (PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d']));
-    const evaluations = await loadEvaluationsForMetric(
-      name,
-      start.toISOString(),
-      now.toISOString()
-    );
+    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
+    const start = new Date(now.getTime() - periodMs);
+    const prevStart = new Date(start.getTime() - periodMs);
+
+    const [evaluations, prevEvaluations] = await Promise.all([
+      loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
+      loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
+    ]);
+
+    // Compute previous-period aggregations for trend calculation
+    const previousValues = prevEvaluations.length > 0
+      ? computeAggregations(
+          prevEvaluations
+            .map(e => e.scoreValue)
+            .filter((v): v is number => v != null && Number.isFinite(v)),
+          config.aggregations,
+        )
+      : undefined;
 
     const detail = computeMetricDetail(evaluations, config, {
       topN: topNResult.data,
       bucketCount: bucketResult.data,
+      previousValues,
     });
 
-    return c.json(detail);
+    let dynamics = undefined;
+    if (detail.trend) {
+      dynamics = computeMetricDynamics(
+        detail.trend,
+        undefined,
+        periodResult.data === '24h' ? 1 : 24,
+      );
+    }
+
+    return c.json({ ...detail, dynamics });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, 500);
   }

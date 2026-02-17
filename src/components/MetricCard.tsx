@@ -2,6 +2,8 @@ import { memo } from 'react';
 import { Link } from 'wouter';
 import type { QualityMetricResult } from '../types.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
+import { ScoreBadge } from './ScoreBadge.js';
+import { inferScoreDirection } from '../../../dist/lib/quality-feature-engineering.js';
 
 function formatValue(val: number | null | undefined): string {
   if (val === null || val === undefined) return 'N/A';
@@ -22,7 +24,12 @@ function MetricCardInner({ metric }: { metric: QualityMetricResult }) {
         </div>
         <div className="metric-values">
           <div className="primary">
-            {formatValue(primaryValue)}
+            <ScoreBadge
+              score={primaryValue ?? null}
+              metricName={name}
+              direction={inferScoreDirection(alerts?.[0]?.direction)}
+              label={formatValue(primaryValue)}
+            />
             {trend && <> <TrendIndicator trend={trend} /></>}
           </div>
           <div className="secondary">

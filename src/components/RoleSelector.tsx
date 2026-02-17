@@ -6,6 +6,7 @@ const TABS: Array<{ path: string; label: string; role?: RoleViewType }> = [
   { path: '/role/executive', label: 'Executive', role: 'executive' },
   { path: '/role/operator', label: 'Operator', role: 'operator' },
   { path: '/role/auditor', label: 'Auditor', role: 'auditor' },
+  { path: '/correlations', label: 'Correlations' },
 ];
 
 export function RoleSelector() {
