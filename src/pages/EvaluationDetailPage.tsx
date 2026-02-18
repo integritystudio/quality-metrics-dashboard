@@ -3,6 +3,7 @@ import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
 import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
 
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
   const { data: evaluations, isLoading, error } = useTraceEvaluations(traceId);
@@ -63,8 +64,8 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
               />
               <span style={{ fontSize: 14, fontWeight: 500 }}>{ev.evaluationName}</span>
             </div>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {(() => { const d = new Date(ev.timestamp); return isNaN(d.getTime()) ? ev.timestamp : d.toLocaleString(); })()}
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title={new Date(ev.timestamp).toLocaleString()}>
+              {formatTimestamp(ev.timestamp)}
             </span>
           </div>
 
