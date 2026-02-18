@@ -6,6 +6,8 @@ import { metricsRoutes } from './routes/metrics.js';
 import { correlationRoutes } from './routes/correlations.js';
 import { evaluationRoutes } from './routes/evaluations.js';
 import { trendRoutes } from './routes/trends.js';
+import { coverageRoutes } from './routes/coverage.js';
+import { pipelineRoutes } from './routes/pipeline.js';
 
 const app = new Hono();
 
@@ -16,6 +18,8 @@ app.route('/api', metricsRoutes);
 app.route('/api', correlationRoutes);
 app.route('/api', evaluationRoutes);
 app.route('/api', trendRoutes);
+app.route('/api', coverageRoutes);
+app.route('/api', pipelineRoutes);
 
 const port = 3001;
 console.log(`API server listening on http://127.0.0.1:${port}`);

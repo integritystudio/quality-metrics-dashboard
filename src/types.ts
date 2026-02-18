@@ -19,6 +19,7 @@ export type {
 
 export type { EvaluationResult } from '../../dist/backends/index.js';
 export type { CompositeQualityIndex, CQIContribution, MetricDynamics, CorrelationFeature } from '../../dist/lib/quality-feature-engineering.js';
+export type { PipelineResult, PipelineStage, PipelineDropoff, CoverageHeatmap, CoverageCell, CoverageGap, CoverageStatus } from '../../dist/lib/quality-metrics.js';
 
 export type Period = '24h' | '7d' | '30d';
 
