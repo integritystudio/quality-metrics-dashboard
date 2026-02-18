@@ -39,6 +39,13 @@ export async function loadEvaluationsForMetric(
   });
 }
 
+export async function loadEvaluationsByTraceId(
+  traceId: string
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  return be.queryEvaluations({ traceId, limit: 1000 });
+}
+
 export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
   const be = getBackend();
   const health = await be.healthCheck();

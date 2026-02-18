@@ -4,6 +4,8 @@ import { serve } from '@hono/node-server';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { correlationRoutes } from './routes/correlations.js';
+import { evaluationRoutes } from './routes/evaluations.js';
+import { trendRoutes } from './routes/trends.js';
 
 const app = new Hono();
 
@@ -12,6 +14,8 @@ app.use('/*', cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' 
 app.route('/api', dashboardRoutes);
 app.route('/api', metricsRoutes);
 app.route('/api', correlationRoutes);
+app.route('/api', evaluationRoutes);
+app.route('/api', trendRoutes);
 
 const port = 3001;
 console.log(`API server listening on http://127.0.0.1:${port}`);

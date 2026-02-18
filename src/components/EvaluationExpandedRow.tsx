@@ -1,3 +1,4 @@
+import { Link } from 'wouter';
 import { scoreColorBand, type ScoreColorBand } from '../lib/quality-utils.js';
 import type { EvalRow } from './EvaluationTable.js';
 
@@ -140,7 +141,15 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
         </div>
       )}
 
-      {!hasDetail && (
+      {row.traceId && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          <Link href={`/evaluations/trace/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
+            View full evaluation detail &rarr;
+          </Link>
+        </div>
+      )}
+
+      {!hasDetail && !row.traceId && (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
           No additional detail available.
         </div>

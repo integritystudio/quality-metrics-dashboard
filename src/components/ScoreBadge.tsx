@@ -5,6 +5,10 @@ interface ScoreBadgeProps {
   metricName: string;
   direction?: ScoreDirection;
   label?: string;
+  evaluator?: string;
+  evaluatorType?: string;
+  explanation?: string;
+  traceId?: string;
 }
 
 const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
@@ -25,7 +29,60 @@ const SCORE_SHAPES: Record<ScoreColorBand | 'no_data', string> = {
   no_data: '\u25CB',    // ○
 };
 
-export function ScoreBadge({ score, metricName, direction = 'maximize', label }: ScoreBadgeProps) {
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+
+function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
+  score: number;
+  label?: string;
+  evaluator?: string;
+  evaluatorType?: string;
+  explanation?: string;
+  traceId?: string;
+}) {
+  return (
+    <div className="score-badge-tooltip" role="tooltip">
+      <div className="tooltip-row">
+        <span>Score</span>
+        <span style={{ fontFamily: 'var(--font-mono)' }}>{score.toFixed(4)}</span>
+      </div>
+      {label && (
+        <div className="tooltip-row">
+          <span>Label</span>
+          <span>{label}</span>
+        </div>
+      )}
+      {evaluator && (
+        <div className="tooltip-row">
+          <span>Evaluator</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{evaluator}</span>
+        </div>
+      )}
+      {evaluatorType && (
+        <div className="tooltip-row">
+          <span>Type</span>
+          <span>{evaluatorType}</span>
+        </div>
+      )}
+      {explanation && (
+        <div className="tooltip-row" style={{ flexDirection: 'column', gap: 2 }}>
+          <span>Explanation</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{truncate(explanation, 120)}</span>
+        </div>
+      )}
+      {traceId && (
+        <a href={`/evaluations/trace/${traceId}`} className="tooltip-link">
+          View full explanation &rarr;
+        </a>
+      )}
+    </div>
+  );
+}
+
+export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId }: ScoreBadgeProps) {
+  const hasTooltip = evaluator || evaluatorType || explanation || traceId;
+
   if (score === null) {
     return (
       <span
@@ -42,12 +99,28 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label }:
   const shape = SCORE_SHAPES[band];
   const directionHint = direction === 'minimize' ? 'lower is better' : 'higher is better';
 
-  return (
+  const badge = (
     <span
       style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color }}
       aria-label={`Score: ${score}, ${band} (${directionHint})`}
     >
       {shape} {label ?? score.toFixed(2)}
+    </span>
+  );
+
+  if (!hasTooltip) return badge;
+
+  return (
+    <span className="score-badge-wrapper" tabIndex={0}>
+      {badge}
+      <Tooltip
+        score={score}
+        label={label}
+        evaluator={evaluator}
+        evaluatorType={evaluatorType}
+        explanation={explanation}
+        traceId={traceId}
+      />
     </span>
   );
 }

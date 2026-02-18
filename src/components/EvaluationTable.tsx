@@ -20,6 +20,7 @@ import {
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { ScoreBadge } from './ScoreBadge.js';
 
 export interface EvalRow {
   score: number;
@@ -112,12 +113,17 @@ const columns = [
   columnHelper.accessor('score', {
     header: 'Score',
     cell: (info) => {
-      const v = info.getValue();
-      const band = scoreColorBand(v, 'maximize');
+      const row = info.row.original;
       return (
-        <span style={{ color: SCORE_COLORS[band], fontWeight: 600 }}>
-          {v.toFixed(4)}
-        </span>
+        <ScoreBadge
+          score={info.getValue()}
+          metricName="score"
+          label={info.getValue().toFixed(4)}
+          evaluator={row.evaluator}
+          evaluatorType={row.evaluatorType}
+          explanation={row.explanation}
+          traceId={row.traceId}
+        />
       );
     },
     sortingFn: 'basic',

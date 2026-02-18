@@ -12,6 +12,7 @@ import { EvaluationDetail } from './components/EvaluationDetail.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
 import { TrendChart } from './components/TrendChart.js';
 import { CorrelationsPage } from './pages/CorrelationsPage.js';
+import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
@@ -220,6 +221,13 @@ export function App() {
           {(params) => (
             <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
               <MetricDetailPage name={params.metricName} period={period} />
+            </ErrorBoundary>
+          )}
+        </Route>
+        <Route path="/evaluations/trace/:traceId">
+          {(params) => (
+            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+              <EvaluationDetailPage traceId={params.traceId} />
             </ErrorBoundary>
           )}
         </Route>
