@@ -98,18 +98,9 @@ trendRoutes.get('/trends/:name', async (c) => {
       const count = scores.length;
 
       // Compute previous bucket aggregations for trend
-      let previousValues: Record<string, number> | undefined;
-      if (idx > 0 && buckets[idx - 1].scores.length > 0) {
-        const raw = computeAggregations(
-          buckets[idx - 1].scores,
-          config.aggregations,
-        );
-        const filtered: Record<string, number> = {};
-        for (const [k, v] of Object.entries(raw)) {
-          if (v != null) filtered[k] = v;
-        }
-        previousValues = Object.keys(filtered).length > 0 ? filtered : undefined;
-      }
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
 
       // Compute metric detail for trend
       const detail = scores.length > 0
