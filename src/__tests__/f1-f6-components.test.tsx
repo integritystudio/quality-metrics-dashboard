@@ -5,7 +5,7 @@ import { CQIHero } from '../components/CQIHero.js';
 import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
 import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
 import type { CompositeQualityIndex } from '../types.js';
-import type { CorrelationFeature } from '../../../dist/lib/quality-feature-engineering.js';
+import type { CorrelationFeature } from '../types.js';
 
 afterEach(cleanup);
 
@@ -146,6 +146,49 @@ describe('EvaluationTable', () => {
     const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
     const sortableHeaders = container.querySelectorAll('th[aria-sort]');
     expect(sortableHeaders.length).toBeGreaterThan(0);
+  });
+
+  it('renders expand toggle on each row', () => {
+    render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const expandBtns = screen.getAllByLabelText('Expand row');
+    expect(expandBtns).toHaveLength(3);
+  });
+
+  it('expands row on click to show full detail', () => {
+    const rows: EvalRow[] = [{
+      score: 0.95,
+      label: 'excellent',
+      explanation: 'A very detailed explanation that should be fully visible when expanded',
+      evaluator: 'judge-1',
+      timestamp: '2026-02-17T00:00:00Z',
+      evaluatorType: 'llm',
+      traceId: 'abc-123',
+      sessionId: 'sess-456',
+    }];
+    const { container } = render(<EvaluationTable evaluations={rows} />);
+    const expandBtn = screen.getByLabelText('Expand row');
+    fireEvent.click(expandBtn);
+    expect(container.textContent).toContain('Evaluator Type');
+    expect(container.textContent).toContain('llm');
+    expect(container.textContent).toContain('abc-123');
+    expect(container.textContent).toContain('sess-456');
+  });
+
+  it('collapses row on second click', () => {
+    const rows: EvalRow[] = [{
+      score: 0.95,
+      label: 'excellent',
+      explanation: 'Detail text',
+      evaluatorType: 'llm',
+      traceId: 'abc-123',
+    }];
+    const { container } = render(<EvaluationTable evaluations={rows} />);
+    const expandBtn = screen.getByLabelText('Expand row');
+    fireEvent.click(expandBtn);
+    expect(container.textContent).toContain('Evaluator Type');
+    const collapseBtn = screen.getByLabelText('Collapse row');
+    fireEvent.click(collapseBtn);
+    expect(container.textContent).not.toContain('Evaluator Type');
   });
 });
 

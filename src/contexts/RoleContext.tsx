@@ -4,7 +4,7 @@ import {
   getRoleFeatureConfig,
   type FeatureRoleType,
   type RoleFeatureConfig,
-} from '../../../dist/lib/quality-feature-engineering.js';
+} from '../lib/quality-utils.js';
 
 const VALID_ROLES = new Set<FeatureRoleType>(['executive', 'operator', 'auditor']);
 

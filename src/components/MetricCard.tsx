@@ -3,7 +3,7 @@ import { Link } from 'wouter';
 import type { QualityMetricResult } from '../types.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
 import { ScoreBadge } from './ScoreBadge.js';
-import { inferScoreDirection } from '../../../dist/lib/quality-feature-engineering.js';
+import { inferScoreDirection } from '../lib/quality-utils.js';
 
 function formatValue(val: number | null | undefined): string {
   if (val === null || val === undefined) return 'N/A';

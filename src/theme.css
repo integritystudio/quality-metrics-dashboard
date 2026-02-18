@@ -285,6 +285,16 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.eval-table tbody tr:hover {
+  background: var(--bg-elevated);
+}
+.eval-table .eval-row-expanded {
+  background: var(--bg-elevated);
+}
+.eval-table .eval-expanded-panel td {
+  padding: 0 10px 10px;
+  border-bottom: 1px solid var(--border);
+}
 
 /* Tabs / Role selector */
 .tab-nav {

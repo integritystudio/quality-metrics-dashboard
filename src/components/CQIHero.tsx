@@ -1,5 +1,5 @@
-import { scoreColorBand, type ScoreColorBand } from '../../../dist/lib/quality-feature-engineering.js';
-import type { CompositeQualityIndex, CQIContribution } from '../../../dist/lib/quality-feature-engineering.js';
+import { scoreColorBand, type ScoreColorBand } from '../lib/quality-utils.js';
+import type { CompositeQualityIndex, CQIContribution } from '../types.js';
 
 const SCORE_COLORS: Record<ScoreColorBand, string> = {
   excellent: '#26d97f',

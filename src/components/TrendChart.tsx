@@ -8,7 +8,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
-import type { MetricDynamics } from '../../../dist/lib/quality-feature-engineering.js';
+import type { MetricDynamics } from '../types.js';
 import type { MetricTrend } from '../types.js';
 
 interface TrendChartProps {

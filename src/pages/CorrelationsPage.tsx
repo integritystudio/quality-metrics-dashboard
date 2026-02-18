@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
-import type { CorrelationFeature } from '../../../dist/lib/quality-feature-engineering.js';
+import type { CorrelationFeature } from '../types.js';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
 

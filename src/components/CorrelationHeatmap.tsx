@@ -1,6 +1,6 @@
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import type { CorrelationFeature } from '../../../dist/lib/quality-feature-engineering.js';
+import type { CorrelationFeature } from '../types.js';
 
 interface CorrelationHeatmapProps {
   correlations: CorrelationFeature[];

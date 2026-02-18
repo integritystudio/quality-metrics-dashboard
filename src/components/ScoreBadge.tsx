@@ -1,4 +1,4 @@
-import { scoreColorBand, type ScoreColorBand, type ScoreDirection } from '../../../dist/lib/quality-feature-engineering.js';
+import { scoreColorBand, type ScoreColorBand, type ScoreDirection } from '../lib/quality-utils.js';
 
 interface ScoreBadgeProps {
   score: number | null;

@@ -175,7 +175,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
       <div className="view-section">
         <h3 className="section-heading">Evaluations</h3>
         <div className="card">
-          <EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} />
+          <EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} metricName={name} period={period} />
         </div>
       </div>
     </div>

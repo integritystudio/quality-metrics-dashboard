@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import {
   createColumnHelper,
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
+  getExpandedRowModel,
   flexRender,
   type SortingState,
   type ColumnFiltersState,
+  type ExpandedState,
   type SortingFn,
   type FilterFn,
 } from '@tanstack/react-table';
@@ -16,7 +18,8 @@ import {
   ordinalToCategory,
   scoreColorBand,
   type LabelFilterCategory,
-} from '../../../dist/lib/quality-feature-engineering.js';
+} from '../lib/quality-utils.js';
+import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
 
 export interface EvalRow {
   score: number;
@@ -25,6 +28,13 @@ export interface EvalRow {
   timestamp?: string;
   evaluator?: string;
   label?: string;
+  evaluatorType?: string;
+  spanId?: string;
+  sessionId?: string;
+  agentName?: string;
+  trajectoryLength?: number;
+  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
+  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
 }
 
 const SCORE_COLORS: Record<string, string> = {
@@ -59,6 +69,7 @@ function truncate(text: string, max: number): string {
 
 function formatTimestamp(ts: string): string {
   const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts || '-';
   const now = Date.now();
   const diffMs = now - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
@@ -74,6 +85,30 @@ function formatTimestamp(ts: string): string {
 const columnHelper = createColumnHelper<EvalRow>();
 
 const columns = [
+  columnHelper.display({
+    id: 'expand',
+    header: '',
+    cell: ({ row }) => (
+      <button
+        type="button"
+        onClick={row.getToggleExpandedHandler()}
+        aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '2px 6px',
+          fontSize: 12,
+          color: 'var(--text-secondary)',
+          transition: 'transform 0.15s',
+          transform: row.getIsExpanded() ? 'rotate(90deg)' : 'rotate(0deg)',
+        }}
+      >
+        &#9654;
+      </button>
+    ),
+    size: 32,
+  }),
   columnHelper.accessor('score', {
     header: 'Score',
     cell: (info) => {
@@ -174,16 +209,20 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [activeCategories, setActiveCategories] = useState<LabelFilterCategory[]>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   const table = useReactTable({
     data: evaluations,
     columns,
-    state: { sorting, columnFilters },
+    state: { sorting, columnFilters, expanded },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: () => true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
   });
 
   const toggleCategory = (cat: LabelFilterCategory) => {
@@ -257,17 +296,26 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
+            <Fragment key={row.id}>
+              <tr className={row.getIsExpanded() ? 'eval-row-expanded' : ''}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+              {row.getIsExpanded() && (
+                <tr className="eval-expanded-panel">
+                  <td colSpan={row.getVisibleCells().length}>
+                    <EvaluationExpandedRow row={row.original} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
           {table.getRowModel().rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>
+              <td colSpan={table.getVisibleLeafColumns().length} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>
                 No evaluations match the current filter.
               </td>
             </tr>
