@@ -86,7 +86,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
               <td>{stage.displayName}</td>
               <td>{stage.entryCount}</td>
               <td>{stage.exitCount}</td>
-              <td>{dropoffs[idx]?.dropoffPercent.toFixed(1)}%</td>
+              <td>{dropoffs[idx] != null ? `${dropoffs[idx].dropoffPercent.toFixed(1)}%` : '\u2014'}</td>
             </tr>
           ))}
         </tbody>

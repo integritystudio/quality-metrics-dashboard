@@ -1,5 +1,5 @@
-import { memo, useState } from 'react';
-import type { CoverageCell, CoverageGap } from '../types.js';
+import { memo, useState, useMemo } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
 
 interface CoverageGridProps {
   metrics: string[];
@@ -9,7 +9,7 @@ interface CoverageGridProps {
   overallCoveragePercent: number;
 }
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS: Record<CoverageStatus, string> = {
   covered: 'var(--score-good, #0072B2)',
   partial: 'var(--score-fair, #E69F00)',
   missing: 'var(--score-poor, #D55E00)',
@@ -24,14 +24,16 @@ function truncateId(id: string, max = 10): string {
 function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
   const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
 
+  const cellMap = useMemo(() => {
+    const map = new Map<string, CoverageCell>();
+    for (const cell of cells) {
+      map.set(`${cell.metric}|${cell.input}`, cell);
+    }
+    return map;
+  }, [cells]);
+
   if (metrics.length === 0 || inputs.length === 0) {
     return <p>No coverage data available.</p>;
-  }
-
-  // Build lookup for O(1) cell access
-  const cellMap = new Map<string, CoverageCell>();
-  for (const cell of cells) {
-    cellMap.set(`${cell.metric}|${cell.input}`, cell);
   }
 
   // Limit displayed inputs to avoid huge grids
@@ -76,24 +78,26 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           }}
         >
           {/* Header row */}
-          <div role="columnheader" style={{ fontSize: 11, fontWeight: 600 }} />
-          {displayInputs.map(input => (
-            <div
-              key={input}
-              role="columnheader"
-              title={input}
-              style={{
-                fontSize: 9,
-                writingMode: 'vertical-lr',
-                textAlign: 'end',
-                overflow: 'hidden',
-                maxHeight: 60,
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {truncateId(input, 8)}
-            </div>
-          ))}
+          <div role="row" style={{ display: 'contents' }}>
+            <div role="columnheader" style={{ fontSize: 11, fontWeight: 600 }} />
+            {displayInputs.map(input => (
+              <div
+                key={input}
+                role="columnheader"
+                title={input}
+                style={{
+                  fontSize: 9,
+                  writingMode: 'vertical-lr',
+                  textAlign: 'end',
+                  overflow: 'hidden',
+                  maxHeight: 60,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {truncateId(input, 8)}
+              </div>
+            ))}
+          </div>
 
           {/* Data rows */}
           {metrics.map(metric => (
