@@ -1,5 +1,5 @@
 import {
-  LineChart,
+  ComposedChart,
   Line,
   XAxis,
   YAxis,
@@ -22,14 +22,13 @@ const COLORS = {
   grid: '#30363d',
   text: '#8b949e',
   tooltip: '#161b22',
+  background: '#0d1117',
 };
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, spanDays: number): string {
   const d = new Date(iso);
-  const now = new Date();
-  const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
-  if (diffDays < 1) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit' });
+  if (spanDays <= 1) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (spanDays <= 7) return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit' });
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
@@ -42,8 +41,11 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
     );
   }
 
+  const spanMs = new Date(data[data.length - 1].endTime).getTime() - new Date(data[0].startTime).getTime();
+  const spanDays = spanMs / (1000 * 60 * 60 * 24);
+
   const chartData = data.map((bucket) => ({
-    time: formatTime(bucket.startTime),
+    time: formatTime(bucket.startTime, spanDays),
     avg: bucket.avg,
     p10: bucket.percentiles?.p10 ?? null,
     p50: bucket.percentiles?.p50 ?? null,
@@ -69,7 +71,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   return (
     <div aria-label={`Time series trend for ${metricName}`}>
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 16 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 16 }}>
           <CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
@@ -109,7 +111,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
             type="monotone"
             dataKey="p10"
             stroke="none"
-            fill="#0d1117"
+            fill={COLORS.background}
             connectNulls
           />
           {/* P50 line */}
@@ -132,7 +134,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
             activeDot={{ r: 5 }}
             connectNulls
           />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
       <div style={{ display: 'flex', gap: 16, justifyContent: 'center', fontSize: 11, color: COLORS.text, marginTop: 4 }}>
         <span><span style={{ color: COLORS.line }}>&#9473;</span> avg</span>
