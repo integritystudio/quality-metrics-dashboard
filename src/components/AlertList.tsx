@@ -95,8 +95,8 @@ export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
     <ul className="alert-list">
       {sorted.map((alert, i) =>
         alert.isCompound
-          ? <CompoundAlertCard key={i} alert={alert} />
-          : <SimpleAlertItem key={i} alert={alert} />
+          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
+          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
       )}
     </ul>
   );
