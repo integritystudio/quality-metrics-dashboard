@@ -1,0 +1,37 @@
+import { useQuery } from '@tanstack/react-query';
+import type { Period } from '../types.js';
+
+const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
+
+export interface TrendBucket {
+  startTime: string;
+  endTime: string;
+  count: number;
+  avg: number | null;
+  percentiles: { p10: number; p25: number; p50: number; p75: number; p90: number } | null;
+  trend: { direction: string; percentChange: number } | null;
+  dynamics: { velocity: number; acceleration: number; projectedBreachTime?: string } | null;
+}
+
+export interface TrendResponse {
+  metric: string;
+  period: string;
+  bucketCount: number;
+  totalEvaluations: number;
+  overallPercentiles: { p10: number; p25: number; p50: number; p75: number; p90: number } | null;
+  trendData: TrendBucket[];
+}
+
+export function useTrend(metricName: string, period: Period, buckets = 7) {
+  return useQuery<TrendResponse>({
+    queryKey: ['trend', metricName, period, buckets],
+    queryFn: async () => {
+      const params = new URLSearchParams({ period, buckets: String(buckets) });
+      const res = await fetch(`${API_BASE}/api/trends/${encodeURIComponent(metricName)}?${params}`);
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 25_000,
+    retry: 2,
+  });
+}
