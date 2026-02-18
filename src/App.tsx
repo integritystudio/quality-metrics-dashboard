@@ -11,13 +11,17 @@ import { ScoreHistogram } from './components/ScoreHistogram.js';
 import { EvaluationDetail } from './components/EvaluationDetail.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
 import { TrendChart } from './components/TrendChart.js';
+import { TrendSeries } from './components/TrendSeries.js';
 import { CorrelationsPage } from './pages/CorrelationsPage.js';
+import { CoveragePage } from './pages/CoveragePage.js';
+import { PipelinePage } from './pages/PipelinePage.js';
 import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
 import { useDashboard } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
+import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import type {
   Period,
@@ -94,6 +98,7 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
 
 function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   const { data, isLoading, error } = useMetricDetail(name, period);
+  const { data: trendData } = useTrend(name, period, 10);
 
   if (isLoading) {
     return (
@@ -158,6 +163,15 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           />
         </div>
       </div>
+
+      {trendData && trendData.trendData.length > 0 && (
+        <div className="view-section">
+          <h3 className="section-heading">Time Series ({trendData.totalEvaluations} evaluations)</h3>
+          <div className="card">
+            <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
+          </div>
+        </div>
+      )}
 
       {detail.alerts.length > 0 && (
         <div className="view-section">
@@ -234,6 +248,16 @@ export function App() {
         <Route path="/correlations">
           <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
             <CorrelationsPage />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/coverage">
+          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+            <CoveragePage period={period} />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/pipeline">
+          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+            <PipelinePage period={period} />
           </ErrorBoundary>
         </Route>
         <Route>

@@ -9,9 +9,11 @@ interface SparklineProps {
   height?: number;
   /** Stroke color (CSS var or hex) */
   color?: string;
+  /** Accessible label for the sparkline */
+  label?: string;
 }
 
-function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-secondary)' }: SparklineProps) {
+function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-secondary)', label }: SparklineProps) {
   const values = data.filter((v): v is number => v !== null && Number.isFinite(v));
   if (values.length < 2) return null;
 
@@ -19,15 +21,16 @@ function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-sec
   const max = Math.max(...values);
   const range = max - min || 1;
   const pad = 2;
+  const xDenom = data.length > 1 ? data.length - 1 : 1;
 
   const points = data
     .map((v, i) => {
       if (v === null || !Number.isFinite(v)) return null;
-      const x = pad + (i / (data.length - 1)) * (width - pad * 2);
+      const x = pad + (i / xDenom) * (width - pad * 2);
       const y = pad + (1 - (v - min) / range) * (height - pad * 2);
       return `${x},${y}`;
     })
-    .filter(Boolean)
+    .filter((p): p is string => p !== null)
     .join(' ');
 
   return (
@@ -36,7 +39,7 @@ function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-sec
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="Score trend sparkline"
+      aria-label={label ?? 'Score trend sparkline'}
       style={{ display: 'block' }}
     >
       <polyline
