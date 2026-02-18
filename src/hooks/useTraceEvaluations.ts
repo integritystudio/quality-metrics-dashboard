@@ -7,7 +7,7 @@ export function useTraceEvaluations(traceId: string | undefined) {
   return useQuery<EvaluationResult[]>({
     queryKey: ['trace-evaluations', traceId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/evaluations/trace/${traceId}`);
+      const res = await fetch(`${API_BASE}/api/evaluations/trace/${encodeURIComponent(traceId!)}`);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
       return data.evaluations;

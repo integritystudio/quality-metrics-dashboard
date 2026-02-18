@@ -433,6 +433,14 @@ body {
   margin-top: 32px;
 }
 
+.section-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
 /* View sections */
 .view-section {
   margin-bottom: 32px;

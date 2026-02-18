@@ -1,4 +1,5 @@
-import { scoreColorBand, type ScoreColorBand, type ScoreDirection } from '../lib/quality-utils.js';
+import { Link } from 'wouter';
+import { scoreColorBand, truncateText, SCORE_COLORS, type ScoreColorBand, type ScoreDirection } from '../lib/quality-utils.js';
 
 interface ScoreBadgeProps {
   score: number | null;
@@ -11,15 +12,6 @@ interface ScoreBadgeProps {
   traceId?: string;
 }
 
-const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-  no_data: '#6b7280',
-};
-
 const SCORE_SHAPES: Record<ScoreColorBand | 'no_data', string> = {
   excellent: '\u25CF',  // ●
   good: '\u25CF',       // ●
@@ -28,10 +20,6 @@ const SCORE_SHAPES: Record<ScoreColorBand | 'no_data', string> = {
   failing: '\u25A0',    // ■
   no_data: '\u25CB',    // ○
 };
-
-function truncate(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + '...' : text;
-}
 
 function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
   score: number;
@@ -68,13 +56,13 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
       {explanation && (
         <div className="tooltip-row" style={{ flexDirection: 'column', gap: 2 }}>
           <span>Explanation</span>
-          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{truncate(explanation, 120)}</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{truncateText(explanation, 120)}</span>
         </div>
       )}
       {traceId && (
-        <a href={`/evaluations/trace/${traceId}`} className="tooltip-link">
+        <Link href={`/evaluations/trace/${traceId}`} className="tooltip-link">
           View full explanation &rarr;
-        </a>
+        </Link>
       )}
     </div>
   );

@@ -43,7 +43,14 @@ export async function loadEvaluationsByTraceId(
   traceId: string
 ): Promise<EvaluationResult[]> {
   const be = getBackend();
-  return be.queryEvaluations({ traceId, limit: 1000 });
+  const now = new Date();
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  return be.queryEvaluations({
+    traceId,
+    startDate: ninetyDaysAgo.toISOString(),
+    endDate: now.toISOString(),
+    limit: 1000,
+  });
 }
 
 export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {

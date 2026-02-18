@@ -1,24 +1,10 @@
+import type { CSSProperties } from 'react';
 import { Link } from 'wouter';
-import { scoreColorBand, type ScoreColorBand } from '../lib/quality-utils.js';
+import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
 import type { EvalRow } from './EvaluationTable.js';
 
-const BAND_COLORS: Record<ScoreColorBand, string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-};
 
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  marginBottom: 4,
-};
-
-const chipBaseStyle: React.CSSProperties = {
+const chipBaseStyle: CSSProperties = {
   display: 'inline-block',
   padding: '2px 8px',
   borderRadius: 10,
@@ -30,7 +16,7 @@ function MetaItem({ label, value }: { label: string; value?: string | number }) 
   if (value == null) return null;
   return (
     <div style={{ minWidth: 120 }}>
-      <div style={sectionLabelStyle}>{label}</div>
+      <div className="section-label">{label}</div>
       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginTop: 2, wordBreak: 'break-all' }}>
         {value}
       </div>
@@ -44,10 +30,9 @@ export function StepScoreChip({ step, score, explanation }: {
   explanation?: string;
 }) {
   const band = scoreColorBand(score, 'maximize');
-  const color = BAND_COLORS[band];
+  const color = SCORE_COLORS[band];
   return (
     <span
-      key={`${step}`}
       title={explanation ?? `Step ${step}: ${score.toFixed(2)}`}
       style={{ ...chipBaseStyle, backgroundColor: `${color}20`, color }}
     >
@@ -67,7 +52,6 @@ export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score
   const color = ok ? '#26d97f' : '#f04438';
   return (
     <span
-      key={`${toolName}-${index}`}
       title={`tool: ${toolCorrect ? 'correct' : 'wrong'}, args: ${argsCorrect ? 'correct' : 'wrong'}, score: ${score.toFixed(2)}`}
       style={{ ...chipBaseStyle, backgroundColor: `${color}20`, color }}
     >
@@ -99,7 +83,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
     }}>
       {row.explanation && (
         <div style={{ marginBottom: 12 }}>
-          <div style={sectionLabelStyle}>Explanation</div>
+          <div className="section-label">Explanation</div>
           <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
             {row.explanation}
           </div>
@@ -114,7 +98,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
 
       {row.stepScores && row.stepScores.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ ...sectionLabelStyle, marginBottom: 6 }}>Step Scores</div>
+          <div className="section-label" style={{ marginBottom: 6 }}>Step Scores</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {row.stepScores.map(s => (
               <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
@@ -125,7 +109,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
 
       {row.toolVerifications && row.toolVerifications.length > 0 && (
         <div>
-          <div style={{ ...sectionLabelStyle, marginBottom: 6 }}>Tool Verifications</div>
+          <div className="section-label" style={{ marginBottom: 6 }}>Tool Verifications</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {row.toolVerifications.map((tv, i) => (
               <ToolVerificationChip

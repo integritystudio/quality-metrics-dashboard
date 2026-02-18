@@ -4,14 +4,6 @@ import { ScoreBadge } from '../components/ScoreBadge.js';
 import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
 import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  marginBottom: 4,
-};
-
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
   const { data: evaluations, isLoading, error } = useTraceEvaluations(traceId);
 
@@ -60,8 +52,8 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
         </div>
       </div>
 
-      {evaluations.map((ev, i) => (
-        <div key={i} className="eval-detail-card card">
+      {evaluations.map((ev) => (
+        <div key={`${ev.evaluationName}-${ev.timestamp}`} className="eval-detail-card card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <ScoreBadge
@@ -72,7 +64,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
               <span style={{ fontSize: 14, fontWeight: 500 }}>{ev.evaluationName}</span>
             </div>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {new Date(ev.timestamp).toLocaleString()}
+              {(() => { const d = new Date(ev.timestamp); return isNaN(d.getTime()) ? ev.timestamp : d.toLocaleString(); })()}
             </span>
           </div>
 
@@ -85,7 +77,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
 
           {ev.stepScores && ev.stepScores.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div style={sectionLabelStyle}>Step Scores</div>
+              <div className="section-label">Step Scores</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                 {ev.stepScores.map(s => (
                   <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
@@ -96,7 +88,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
 
           {ev.sessionId && (
             <div style={{ marginTop: 12 }}>
-              <div style={sectionLabelStyle}>Provenance</div>
+              <div className="section-label">Provenance</div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
                 Session: {ev.sessionId}
                 {ev.spanId && <> &middot; Span: {ev.spanId}</>}

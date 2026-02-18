@@ -22,7 +22,7 @@ function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
 function ThresholdBar({ actual, threshold, direction }: {
   actual: number;
   threshold: number;
-  direction: string;
+  direction: 'above' | 'below';
 }) {
   const max = Math.max(actual, threshold) * 1.2 || 1;
   const actualPct = Math.min((actual / max) * 100, 100);

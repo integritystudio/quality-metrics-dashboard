@@ -16,7 +16,7 @@ import {
 import {
   labelToOrdinal,
   ordinalToCategory,
-  scoreColorBand,
+  truncateText,
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
@@ -38,14 +38,6 @@ export interface EvalRow {
   toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
 }
 
-const SCORE_COLORS: Record<string, string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-};
-
 const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
   Pass: '#26d97f',
   Review: '#e5a00d',
@@ -63,10 +55,6 @@ const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterC
   const category = ordinalToCategory(labelToOrdinal(row.original.label ?? 'unknown').ordinal);
   return filterValue.includes(category);
 };
-
-function truncate(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + '...' : text;
-}
 
 function formatTimestamp(ts: string): string {
   const d = new Date(ts);
@@ -181,7 +169,7 @@ const columns = [
       const text = info.getValue() ?? '-';
       return (
         <span className="explanation" title={text}>
-          {truncate(text, 60)}
+          {truncateText(text, 60)}
         </span>
       );
     },

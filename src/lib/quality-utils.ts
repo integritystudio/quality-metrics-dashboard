@@ -35,6 +35,21 @@ export interface RoleFeatureConfig {
   maxWorstEvaluations: number;
 }
 
+// -- Shared helpers ---------------------------------------------------------
+
+export function truncateText(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+
+export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
+  excellent: '#26d97f',
+  good: '#34d399',
+  adequate: '#e5a00d',
+  poor: '#f97316',
+  failing: '#f04438',
+  no_data: '#6b7280',
+};
+
 // -- scoreColorBand ---------------------------------------------------------
 
 export function scoreColorBand(

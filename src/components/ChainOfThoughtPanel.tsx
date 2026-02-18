@@ -5,19 +5,11 @@ interface ChainOfThoughtPanelProps {
   scoreUnit?: string;
 }
 
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  marginBottom: 4,
-};
-
 function MetaItem({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
     <div style={{ minWidth: 120 }}>
-      <div style={sectionLabelStyle}>{label}</div>
+      <div className="section-label">{label}</div>
       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginTop: 2 }}>
         {value}
       </div>

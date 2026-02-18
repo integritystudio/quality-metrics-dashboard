@@ -172,7 +172,8 @@ vi.mock('../hooks/useTraceEvaluations.js', () => ({
 describe('EvaluationDetailPage', () => {
   it('renders evaluation cards when data is available', async () => {
     const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
-    (useTraceEvaluations as ReturnType<typeof vi.fn>).mockReturnValue({
+    // @ts-expect-error -- partial mock: only fields consumed by component
+    vi.mocked(useTraceEvaluations).mockReturnValue({
       data: [
         {
           timestamp: '2026-02-17T12:00:00Z',
@@ -212,7 +213,8 @@ describe('EvaluationDetailPage', () => {
 
   it('renders loading state', async () => {
     const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
-    (useTraceEvaluations as ReturnType<typeof vi.fn>).mockReturnValue({
+    // @ts-expect-error -- partial mock: only fields consumed by component
+    vi.mocked(useTraceEvaluations).mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
@@ -225,7 +227,8 @@ describe('EvaluationDetailPage', () => {
 
   it('renders empty state when no evaluations', async () => {
     const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
-    (useTraceEvaluations as ReturnType<typeof vi.fn>).mockReturnValue({
+    // @ts-expect-error -- partial mock: only fields consumed by component
+    vi.mocked(useTraceEvaluations).mockReturnValue({
       data: [],
       isLoading: false,
       error: null,
