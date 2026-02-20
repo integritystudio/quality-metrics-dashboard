@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
-import type { CorrelationFeature } from '../types.js';
+import type { CorrelationFeature, Period } from '../types.js';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
@@ -10,11 +10,11 @@ interface CorrelationsResponse {
   metrics: string[];
 }
 
-export function CorrelationsPage() {
+export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
   const { data, isLoading, error } = useQuery<CorrelationsResponse>({
-    queryKey: ['correlations'],
+    queryKey: ['correlations', period],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/correlations`);
+      const res = await fetch(`${API_BASE}/api/correlations?period=${period}`);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },

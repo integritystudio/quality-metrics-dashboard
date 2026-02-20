@@ -246,7 +246,7 @@ export function App() {
         </Route>
         <Route path="/correlations">
           <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-            <CorrelationsPage />
+            <CorrelationsPage period={period} />
           </ErrorBoundary>
         </Route>
         <Route path="/coverage">
