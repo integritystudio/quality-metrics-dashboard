@@ -15,6 +15,7 @@ const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
 const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
 const OffsetSchema = z.coerce.number().int().min(0).default(0);
 const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
+const ScoreLabelSchema = z.string().max(100).optional();
 
 const PERIOD_MS: Record<string, number> = {
   '24h': 24 * 60 * 60 * 1000,
@@ -109,7 +110,11 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   if (!sortByResult.success) {
     return c.json({ error: 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.' }, 400);
   }
-  const scoreLabel = c.req.query('scoreLabel') || undefined;
+  const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
+  if (!scoreLabelResult.success) {
+    return c.json({ error: 'Invalid scoreLabel. Max 100 characters.' }, 400);
+  }
+  const scoreLabel = scoreLabelResult.data;
 
   try {
     const now = new Date();

@@ -25,8 +25,8 @@ function ThresholdBar({ actual, threshold, direction }: {
   direction: 'above' | 'below';
 }) {
   const max = Math.max(actual, threshold) * 1.2 || 1;
-  const actualPct = Math.min((actual / max) * 100, 100);
-  const thresholdPct = Math.min((threshold / max) * 100, 100);
+  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
+  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
   const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
 
   return (

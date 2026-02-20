@@ -16,8 +16,8 @@ export function SLATable({ slas }: { slas: SLAComplianceResult[] }) {
         </tr>
       </thead>
       <tbody>
-        {slas.map((sla, i) => (
-          <tr key={i}>
+        {slas.map((sla) => (
+          <tr key={`${sla.sla.metric}-${sla.sla.aggregation}`}>
             <td>{sla.sla.metric} ({sla.sla.aggregation})</td>
             <td style={{ fontFamily: 'var(--font-mono)' }}>
               {sla.sla.direction === 'above' ? '>=' : '<='} {sla.sla.target.toFixed(4)}

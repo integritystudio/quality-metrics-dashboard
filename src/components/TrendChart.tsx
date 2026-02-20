@@ -35,6 +35,7 @@ function formatValue(v: number): string {
 
 function formatBreachTime(iso: string): string {
   const hours = (new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60);
+  if (hours <= 0) return 'threshold exceeded';
   if (hours < 1) return `${Math.round(hours * 60)}m`;
   if (hours < 48) return `${hours.toFixed(1)}h`;
   return `${(hours / 24).toFixed(1)}d`;
@@ -77,6 +78,9 @@ export function TrendChart({
   const allValues = data.flatMap((d) => [d.value, d.projected].filter((v): v is number => v != null));
   if (warningThreshold != null) allValues.push(warningThreshold);
   if (criticalThreshold != null) allValues.push(criticalThreshold);
+  if (allValues.length === 0) {
+    return <div style={{ color: COLORS.text, padding: 16, textAlign: 'center' }}>Insufficient data</div>;
+  }
   const yMin = Math.min(...allValues);
   const yMax = Math.max(...allValues);
   const yPad = (yMax - yMin) * 0.15 || 0.05;
