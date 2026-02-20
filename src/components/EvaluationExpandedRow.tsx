@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { Link } from 'wouter';
 import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import { MetaItem } from './MetaItem.js';
 import type { EvalRow } from './EvaluationTable.js';
 
 
@@ -11,18 +12,6 @@ const chipBaseStyle: CSSProperties = {
   fontSize: 11,
   fontFamily: 'var(--font-mono)',
 };
-
-function MetaItem({ label, value }: { label: string; value?: string | number }) {
-  if (value == null) return null;
-  return (
-    <div style={{ minWidth: 120 }}>
-      <div className="section-label">{label}</div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginTop: 2, wordBreak: 'break-all' }}>
-        {value}
-      </div>
-    </div>
-  );
-}
 
 export function StepScoreChip({ step, score, explanation }: {
   step: string | number;

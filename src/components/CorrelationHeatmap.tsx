@@ -144,13 +144,6 @@ export function CorrelationHeatmap({ correlations, metrics }: CorrelationHeatmap
         </div>
       ))}
 
-      {/* Keyframe animation for toxic combo pulse */}
-      <style>{`
-        @keyframes toxicPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(240, 68, 56, 0.4); }
-          50% { box-shadow: 0 0 6px 2px rgba(240, 68, 56, 0.6); }
-        }
-      `}</style>
     </div>
   );
 }

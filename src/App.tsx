@@ -40,8 +40,8 @@ function DashboardPage({ period }: { period: Period }) {
   if (isLoading && !data) return <MetricGridSkeleton />;
   if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
 
-  const dashboard = data as QualityDashboardSummary;
-  if (!dashboard?.metrics) return <MetricGridSkeleton />;
+  if (!data || ('role' in data)) return <MetricGridSkeleton />;
+  const dashboard = data;
 
   if (dashboard.overallStatus === 'no_data') {
     return (
@@ -81,16 +81,15 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
 
   if (isLoading && !data) return <MetricGridSkeleton />;
   if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
-  if (!data) return <MetricGridSkeleton />;
+  if (!data || !('role' in data)) return <MetricGridSkeleton />;
 
-  const typed = data as ExecutiveViewType | OperatorViewType | AuditorViewType;
-  switch (typed.role) {
+  switch (data.role) {
     case 'executive':
-      return <ExecutiveView data={typed} />;
+      return <ExecutiveView data={data} />;
     case 'operator':
-      return <OperatorView data={typed} />;
+      return <OperatorView data={data} />;
     case 'auditor':
-      return <AuditorView data={typed} />;
+      return <AuditorView data={data} />;
     default:
       return null;
   }
@@ -117,8 +116,8 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
     );
   }
 
-  const detail = data as MetricDetailResult;
-  if (!detail) return null;
+  if (!data) return null;
+  const detail = data;
 
   return (
     <div>
