@@ -17,6 +17,7 @@ import { CorrelationsPage } from './pages/CorrelationsPage.js';
 import { CoveragePage } from './pages/CoveragePage.js';
 import { PipelinePage } from './pages/PipelinePage.js';
 import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
+import { CompliancePage } from './pages/CompliancePage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
@@ -274,6 +275,11 @@ export function App() {
         <Route path="/pipeline">
           <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
             <PipelinePage period={period} />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/compliance">
+          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+            <CompliancePage period={period} />
           </ErrorBoundary>
         </Route>
         <Route>
