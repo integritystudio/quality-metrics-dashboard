@@ -12,7 +12,7 @@ export function ShortcutOverlay() {
   }
 
   return (
-    <div className="shortcut-overlay-backdrop" onClick={toggleOverlay} role="dialog" aria-label="Keyboard shortcuts">
+    <div className="shortcut-overlay-backdrop" onClick={toggleOverlay} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
       <div className="shortcut-overlay" onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{ fontSize: 16, margin: 0 }}>Keyboard Shortcuts</h2>

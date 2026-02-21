@@ -28,7 +28,9 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   if (!data) return null;
 
   const { evaluation } = data;
-  const agentNames = [...new Set(evaluation.turns.map(t => t.agentName ?? 'unknown'))];
+  const turns = evaluation.turns ?? [];
+  const handoffs = evaluation.handoffs ?? [];
+  const agentNames = [...new Set(turns.map(t => t.agentName ?? 'unknown'))];
 
   return (
     <div>
@@ -41,7 +43,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             {sessionId}
           </span>
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {evaluation.totalTurns} turn{evaluation.totalTurns !== 1 ? 's' : ''} &middot; {agentNames.length} agent{agentNames.length !== 1 ? 's' : ''}
+            {turns.length} turn{turns.length !== 1 ? 's' : ''} &middot; {agentNames.length} agent{agentNames.length !== 1 ? 's' : ''}
           </span>
         </div>
       </div>
@@ -74,16 +76,16 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
       <div className="view-section">
         <h3 className="section-heading">Turn Timeline</h3>
         <div className="card">
-          <TurnTimeline turns={evaluation.turns} agentNames={agentNames} />
+          <TurnTimeline turns={turns} agentNames={agentNames} />
         </div>
       </div>
 
       {/* Handoffs */}
-      {evaluation.handoffs.length > 0 && (
+      {handoffs.length > 0 && (
         <div className="view-section">
           <h3 className="section-heading">Handoffs</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {evaluation.handoffs.map((h, i) => (
+            {handoffs.map((h, i) => (
               <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${i}`} handoff={h} />
             ))}
           </div>

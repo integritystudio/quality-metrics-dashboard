@@ -35,7 +35,17 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
     <div ref={containerRef} style={{ display: 'flex', width: '100%', minHeight: 300 }}>
       <div style={{ width: `${splitPct}%`, overflow: 'auto' }}>{left}</div>
       <div
+        role="separator"
+        aria-valuenow={Math.round(splitPct)}
+        aria-valuemin={minPct}
+        aria-valuemax={maxPct}
+        aria-label="Resize panes"
+        tabIndex={0}
         onMouseDown={onMouseDown}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') { e.preventDefault(); setSplitPct(p => Math.max(minPct, p - 2)); }
+          if (e.key === 'ArrowRight') { e.preventDefault(); setSplitPct(p => Math.min(maxPct, p + 2)); }
+        }}
         style={{
           width: 6,
           cursor: 'col-resize',

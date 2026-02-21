@@ -40,9 +40,10 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     // Compute multi-agent evaluation
     const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
 
-    // Load evaluations from first trace
-    const firstTraceId = [...traceIds][0];
-    const evaluations = firstTraceId ? await loadEvaluationsByTraceId(firstTraceId) : [];
+    // Load evaluations from all traces in the session
+    const evaluations = (
+      await Promise.all([...traceIds].map(id => loadEvaluationsByTraceId(id)))
+    ).flat();
 
     return c.json({
       sessionId,

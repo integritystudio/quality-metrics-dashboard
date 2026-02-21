@@ -43,7 +43,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
     }
   }
 
-  const maxDuration = Math.max(...data.spans.map(s => s.durationMs ?? 0), 1);
+  const maxDuration = data.spans.reduce((max, s) => Math.max(max, s.durationMs ?? 0), 1);
 
   return (
     <div>

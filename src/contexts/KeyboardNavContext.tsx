@@ -18,10 +18,13 @@ const KeyboardNavContext = createContext<KeyboardNavContextValue | null>(null);
 
 export function useShortcut(key: string, description: string, scope: string, action: () => void) {
   const ctx = useContext(KeyboardNavContext);
+  const actionRef = useRef(action);
+  actionRef.current = action;
+  const stableAction = useCallback(() => actionRef.current(), []);
   useEffect(() => {
     if (!ctx) return;
-    return ctx.register(key, description, scope, action);
-  }, [ctx, key, description, scope, action]);
+    return ctx.register(key, description, scope, stableAction);
+  }, [ctx, key, description, scope, stableAction]);
 }
 
 export function useKeyboardNav() {
@@ -100,7 +103,10 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
     }
 
     document.addEventListener('keydown', handleKeydown);
-    return () => document.removeEventListener('keydown', handleKeydown);
+    return () => {
+      document.removeEventListener('keydown', handleKeydown);
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    };
   }, [overlayOpen]);
 
   return (
