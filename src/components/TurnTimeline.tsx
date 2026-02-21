@@ -1,0 +1,82 @@
+import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import type { TurnLevelResult } from '../types.js';
+
+const AGENT_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#06b6d4'];
+
+function agentColor(agentName: string, agentNames: string[]): string {
+  const idx = agentNames.indexOf(agentName);
+  return AGENT_COLORS[idx % AGENT_COLORS.length];
+}
+
+interface TurnTimelineProps {
+  turns: TurnLevelResult[];
+  agentNames: string[];
+}
+
+export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
+  if (turns.length === 0) {
+    return <div style={{ padding: 16, color: 'var(--text-muted)' }}>No turns to display.</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '8px 0' }}>
+      {turns.map((turn) => {
+        const agent = turn.agentName ?? 'unknown';
+        const color = agentColor(agent, agentNames);
+        const band = scoreColorBand(turn.relevance);
+        const bandColor = SCORE_COLORS[band];
+
+        return (
+          <div
+            key={turn.turnIndex}
+            style={{
+              minWidth: 120,
+              padding: 12,
+              borderRadius: 8,
+              border: `2px solid ${color}`,
+              background: 'var(--bg-elevated)',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color, textTransform: 'uppercase' }}>{agent}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>#{turn.turnIndex}</span>
+            </div>
+
+            {/* Relevance bar */}
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>Relevance</div>
+              <div style={{ height: 6, background: 'var(--bg-secondary)', borderRadius: 3 }}>
+                <div style={{
+                  height: 6,
+                  width: `${turn.relevance * 100}%`,
+                  background: bandColor,
+                  borderRadius: 3,
+                }} />
+              </div>
+            </div>
+
+            {/* Task progress bar */}
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>Progress</div>
+              <div style={{ height: 6, background: 'var(--bg-secondary)', borderRadius: 3 }}>
+                <div style={{
+                  height: 6,
+                  width: `${turn.taskProgress * 100}%`,
+                  background: 'var(--status-healthy)',
+                  borderRadius: 3,
+                }} />
+              </div>
+            </div>
+
+            {turn.hasError && (
+              <div style={{ fontSize: 10, color: 'var(--status-critical)', fontWeight: 600, marginTop: 4 }}>
+                Error
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

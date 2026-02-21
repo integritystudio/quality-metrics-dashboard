@@ -10,6 +10,7 @@ import { coverageRoutes } from './routes/coverage.js';
 import { pipelineRoutes } from './routes/pipeline.js';
 import { complianceRoutes } from './routes/compliance.js';
 import { traceRoutes } from './routes/traces.js';
+import { agentRoutes } from './routes/agents.js';
 
 const app = new Hono();
 
@@ -24,6 +25,7 @@ app.route('/api', coverageRoutes);
 app.route('/api', pipelineRoutes);
 app.route('/api', complianceRoutes);
 app.route('/api', traceRoutes);
+app.route('/api', agentRoutes);
 
 const port = 3001;
 console.log(`API server listening on http://127.0.0.1:${port}`);

@@ -19,6 +19,7 @@ import { PipelinePage } from './pages/PipelinePage.js';
 import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { CompliancePage } from './pages/CompliancePage.js';
 import { TraceDetailPage } from './pages/TraceDetailPage.js';
+import { AgentSessionPage } from './pages/AgentSessionPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
@@ -287,6 +288,13 @@ export function App() {
           {(params) => (
             <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
               <TraceDetailPage traceId={params.traceId} />
+            </ErrorBoundary>
+          )}
+        </Route>
+        <Route path="/agents/:sessionId">
+          {(params) => (
+            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+              <AgentSessionPage sessionId={params.sessionId} />
             </ErrorBoundary>
           )}
         </Route>
