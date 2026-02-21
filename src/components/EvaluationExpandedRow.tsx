@@ -115,9 +115,12 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       )}
 
       {row.traceId && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 16 }}>
           <Link href={`/evaluations/trace/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
             View full evaluation detail &rarr;
+          </Link>
+          <Link href={`/traces/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
+            View trace spans &rarr;
           </Link>
         </div>
       )}
