@@ -43,7 +43,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             {sessionId}
           </span>
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {turns.length} turn{turns.length !== 1 ? 's' : ''} &middot; {agentNames.length} agent{agentNames.length !== 1 ? 's' : ''}
+            {evaluation.totalTurns} turn{evaluation.totalTurns !== 1 ? 's' : ''} &middot; {agentNames.length} agent{agentNames.length !== 1 ? 's' : ''}
           </span>
         </div>
       </div>

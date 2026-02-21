@@ -36,6 +36,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
       <div style={{ width: `${splitPct}%`, overflow: 'auto' }}>{left}</div>
       <div
         role="separator"
+        aria-orientation="vertical"
         aria-valuenow={Math.round(splitPct)}
         aria-valuemin={minPct}
         aria-valuemax={maxPct}

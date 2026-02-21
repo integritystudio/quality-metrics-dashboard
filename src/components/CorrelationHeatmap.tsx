@@ -22,10 +22,27 @@ function shortName(metric: string): string {
   return SHORT_NAMES[metric] ?? metric.slice(0, 6);
 }
 
-/** Returns black or white text for contrast against a background color */
+/**
+ * Returns black or white text for WCAG 4.5:1 contrast against the
+ * interpolateRdYlGn background color for a given pearsonR value.
+ * Uses relative luminance per WCAG 2.1 contrast ratio formula.
+ */
 function contrastText(pearsonR: number): string {
-  // Middle range values have lighter background; extreme values are dark
-  return Math.abs(pearsonR) > 0.5 ? '#fff' : '#111';
+  const bg = colorScale(pearsonR);
+  // Parse "rgb(r, g, b)" string from d3
+  const m = bg.match(/(\d+)/g);
+  if (!m || m.length < 3) return '#111';
+  const [r, g, b] = m.map(Number);
+  // sRGB relative luminance (WCAG 2.1)
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  // WCAG contrast ratio: (L1 + 0.05) / (L2 + 0.05)
+  // White text (#fff, L=1.0) needs ratio >= 4.5 → L_bg <= ~0.18
+  // Black text (#111, L≈0.012) needs ratio >= 4.5 → L_bg >= ~0.10
+  return L > 0.18 ? '#111' : '#fff';
 }
 
 const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);

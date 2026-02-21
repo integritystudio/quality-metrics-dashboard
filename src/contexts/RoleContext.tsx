@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useRoute } from 'wouter';
 import {
   getRoleFeatureConfig,
@@ -24,6 +24,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     roleName && VALID_ROLES.has(roleName as FeatureRoleType)
       ? (roleName as FeatureRoleType)
       : 'executive';
+
+  useEffect(() => {
+    if (roleName && !VALID_ROLES.has(roleName as FeatureRoleType)) {
+      console.warn(`[RoleProvider] Unknown role "${roleName}", falling back to "executive". Valid roles: ${[...VALID_ROLES].join(', ')}`);
+    }
+  }, [roleName]);
 
   const value = useMemo<RoleContextValue>(() => {
     const config = getRoleFeatureConfig(role);
