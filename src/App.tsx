@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Route, Switch, Link, useLocation } from 'wouter';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
+import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
 import { HealthOverview } from './components/HealthOverview.js';
 import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
 import { AlertList } from './components/AlertList.js';
@@ -209,12 +210,28 @@ function RouteErrorFallback({ error, resetErrorBoundary }: { error: Error; reset
   );
 }
 
+function GlobalShortcuts({ setPeriod, navigate }: {
+  setPeriod: (p: Period) => void;
+  navigate: (path: string) => void;
+}) {
+  useShortcut('1', 'Switch to 24h', 'Period', useCallback(() => setPeriod('24h'), [setPeriod]));
+  useShortcut('2', 'Switch to 7d', 'Period', useCallback(() => setPeriod('7d'), [setPeriod]));
+  useShortcut('3', 'Switch to 30d', 'Period', useCallback(() => setPeriod('30d'), [setPeriod]));
+  useShortcut('g h', 'Go to home', 'Navigation', useCallback(() => navigate('/'), [navigate]));
+  useShortcut('g c', 'Go to correlations', 'Navigation', useCallback(() => navigate('/correlations'), [navigate]));
+  useShortcut('g p', 'Go to pipeline', 'Navigation', useCallback(() => navigate('/pipeline'), [navigate]));
+  useShortcut('g v', 'Go to coverage', 'Navigation', useCallback(() => navigate('/coverage'), [navigate]));
+  return null;
+}
+
 export function App() {
   const [period, setPeriod] = useState<Period>('30d');
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
 
   return (
+    <KeyboardNavProvider>
     <RoleProvider>
+    <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
     <Layout period={period} onPeriodChange={setPeriod}>
       <RoleSelector />
       <Switch>
@@ -268,5 +285,6 @@ export function App() {
       </Switch>
     </Layout>
     </RoleProvider>
+    </KeyboardNavProvider>
   );
 }

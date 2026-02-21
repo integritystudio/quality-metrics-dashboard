@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Period } from '../types.js';
+import { ShortcutOverlay } from './ShortcutOverlay.js';
 
 const PERIODS: Period[] = ['24h', '7d', '30d'];
 
@@ -29,6 +30,7 @@ export function Layout({
         </div>
       </div>
       {children}
+      <ShortcutOverlay />
     </div>
   );
 }
