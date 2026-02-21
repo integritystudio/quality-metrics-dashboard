@@ -5,6 +5,7 @@ import type { CorrelationFeature } from '../types.js';
 interface CorrelationHeatmapProps {
   correlations: CorrelationFeature[];
   metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) => void;
 }
 
 const SHORT_NAMES: Record<string, string> = {
@@ -39,7 +40,7 @@ function lookupCorrelation(
   );
 }
 
-export function CorrelationHeatmap({ correlations, metrics }: CorrelationHeatmapProps) {
+export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
   const n = metrics.length;
   const cols = n + 1;
 
@@ -122,7 +123,9 @@ export function CorrelationHeatmap({ correlations, metrics }: CorrelationHeatmap
                 role="cell"
                 aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(2)}`}
                 title={tooltip}
+                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
                 style={{
+                  cursor: !isDiag && onCellClick ? 'pointer' : 'default',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
