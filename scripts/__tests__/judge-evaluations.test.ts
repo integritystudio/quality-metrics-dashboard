@@ -550,7 +550,7 @@ describe('seedEvaluations', () => {
       }
       if (ev.evaluationName === 'hallucination') {
         expect(ev.scoreValue).toBeGreaterThanOrEqual(0.0);
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.15);
+        expect(ev.scoreValue).toBeLessThanOrEqual(0.09);
       }
     }
   });

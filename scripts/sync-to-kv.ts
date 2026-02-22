@@ -89,8 +89,13 @@ async function main(): Promise<void> {
       console.warn(`[sync-to-kv] Query returned ${QUERY_LIMIT} results for period ${period} — data may be truncated`);
     }
 
-    const grouped = new Map<string, typeof evals>();
-    for (const ev of evals) {
+    // Filter out canary evaluations (intentionally degraded scores for testing)
+    const filtered = evals.filter(ev =>
+      !('evaluatorType' in ev && (ev as Record<string, unknown>).evaluatorType === 'canary'),
+    );
+
+    const grouped = new Map<string, typeof filtered>();
+    for (const ev of filtered) {
       const name = ev.evaluationName;
       if (!grouped.has(name)) grouped.set(name, []);
       grouped.get(name)!.push(ev);
@@ -112,12 +117,15 @@ async function main(): Promise<void> {
   for (const name of metricNames) {
     const config = getQualityMetric(name);
     if (!config) continue;
-    const evals = await backend.queryEvaluations({
+    const rawEvals = await backend.queryEvaluations({
       startDate: weekAgo.toISOString(),
       endDate: now.toISOString(),
       evaluationName: name,
       limit: 10000,
     });
+    const evals = rawEvals.filter(ev =>
+      !('evaluatorType' in ev && (ev as Record<string, unknown>).evaluatorType === 'canary'),
+    );
     if (evals.length === 0) continue;
     const detail = computeMetricDetail(evals, config as QualityMetricConfig, {
       topN: 5,

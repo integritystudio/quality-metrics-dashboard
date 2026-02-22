@@ -44,7 +44,7 @@ export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 export const MAX_TURN_TEXT_LEN = 8000;
-export const MAX_TOOL_CONTEXT_ITEMS = 5;
+export const MAX_TOOL_CONTEXT_ITEMS = 10;
 export const MAX_TOOL_RESULTS_PER_TURN = 20;
 export const MAX_TURN_LIMIT = 10_000;
 
@@ -376,7 +376,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
     {
       const halScore = canary
         ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
-        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.15);
+        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.09);
       const faithScore = normalizeScore(1 - halScore);
 
       const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
