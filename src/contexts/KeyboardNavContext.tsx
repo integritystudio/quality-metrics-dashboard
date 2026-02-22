@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 interface Shortcut {
   key: string;
@@ -18,13 +18,14 @@ const KeyboardNavContext = createContext<KeyboardNavContextValue | null>(null);
 
 export function useShortcut(key: string, description: string, scope: string, action: () => void) {
   const ctx = useContext(KeyboardNavContext);
+  const register = ctx?.register;
   const actionRef = useRef(action);
   actionRef.current = action;
   const stableAction = useCallback(() => actionRef.current(), []);
   useEffect(() => {
-    if (!ctx) return;
-    return ctx.register(key, description, scope, stableAction);
-  }, [ctx, key, description, scope, stableAction]);
+    if (!register) return;
+    return register(key, description, scope, stableAction);
+  }, [register, key, description, scope, stableAction]);
 }
 
 export function useKeyboardNav() {
@@ -109,8 +110,13 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
     };
   }, [overlayOpen]);
 
+  const value = useMemo<KeyboardNavContextValue>(
+    () => ({ shortcuts, register, overlayOpen, toggleOverlay }),
+    [shortcuts, register, overlayOpen, toggleOverlay],
+  );
+
   return (
-    <KeyboardNavContext.Provider value={{ shortcuts, register, overlayOpen, toggleOverlay }}>
+    <KeyboardNavContext.Provider value={value}>
       {children}
     </KeyboardNavContext.Provider>
   );
