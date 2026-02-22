@@ -1,9 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent, within, act } from '@testing-library/react';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { CQIHero } from '../components/CQIHero.js';
 import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
 import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
+import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
 import type { CompositeQualityIndex } from '../types.js';
 import type { CorrelationFeature } from '../types.js';
 
@@ -272,6 +273,80 @@ describe('CorrelationHeatmap', () => {
     const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
     const toxicCells = container.querySelectorAll('[style*="2px solid"]');
     expect(toxicCells.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KeyboardNavContext — regression tests for infinite re-render fix
+// ---------------------------------------------------------------------------
+
+function ShortcutConsumer({ shortcutKey, desc }: { shortcutKey: string; desc: string }) {
+  const action = vi.fn();
+  useShortcut(shortcutKey, desc, 'test', action);
+  return <div data-testid="consumer">{desc}</div>;
+}
+
+describe('KeyboardNavProvider', () => {
+  it('renders children without infinite loop', () => {
+    const { getByTestId } = render(
+      <KeyboardNavProvider>
+        <ShortcutConsumer shortcutKey="h" desc="Go home" />
+      </KeyboardNavProvider>,
+    );
+    expect(getByTestId('consumer')).toBeInTheDocument();
+  });
+
+  it('registers multiple shortcuts without loop', () => {
+    const { getAllByTestId } = render(
+      <KeyboardNavProvider>
+        <ShortcutConsumer shortcutKey="h" desc="Go home" />
+        <ShortcutConsumer shortcutKey="s" desc="Search" />
+        <ShortcutConsumer shortcutKey="?" desc="Help" />
+      </KeyboardNavProvider>,
+    );
+    expect(getAllByTestId('consumer')).toHaveLength(3);
+  });
+
+  it('useKeyboardNav throws outside provider', () => {
+    function Orphan() {
+      useKeyboardNav();
+      return null;
+    }
+    expect(() => render(<Orphan />)).toThrow('useKeyboardNav must be used within KeyboardNavProvider');
+  });
+
+  it('fires shortcut action on keydown', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('x', 'Test action', 'test', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => {
+      fireEvent.keyDown(document, { key: 'x' });
+    });
+    expect(action).toHaveBeenCalledOnce();
+  });
+
+  it('toggles overlay on ? key', () => {
+    function OverlayReader() {
+      const { overlayOpen } = useKeyboardNav();
+      return <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>;
+    }
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+    act(() => {
+      fireEvent.keyDown(document, { key: '?' });
+    });
+    expect(screen.getByTestId('overlay').textContent).toBe('open');
   });
 });
 
