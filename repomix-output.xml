@@ -1,0 +1,3390 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+feature-engineering-analysis-2026-02-15.md
+feature-engineering-roadmap-status.md
+feature-engineering-roadmap.md
+frontend-f1-f6-implementation.md
+llm-explainability-design-session-2026-02-15.md
+llm-explainability-design-updates-2026-02-15.md
+llm-explainability-design.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="feature-engineering-analysis-2026-02-15.md">
+# Feature Engineering Analysis: Section 16 Proposals
+
+**Date**: 2026-02-15
+**Source**: `docs/frontend/llm-explainability-design.md` Section 16 (lines 1112-1422)
+**Method**: Statistical validation + backend source verification against `quality-metrics.ts` and `llm-as-judge.ts`
+
+---
+
+## Backend Verification Summary
+
+11 of 12 referenced functions/interfaces verified at claimed line numbers. One discrepancy found.
+
+| Reference | Claimed Line | Status |
+|-----------|-------------|--------|
+| `ConfidenceIndicator` | L118 | verified |
+| `MetricCorrelationRule` | L219 | verified |
+| `computeQualityMetric()` | L751 | verified |
+| `computeDashboardSummary()` | L816 | verified |
+| `computeTrend()` | L1938 | verified |
+| `computePipelineView()` | L2155 | verified |
+| `computeCoverageHeatmap()` | L2273 | verified |
+| `computeRoleView()` | L1372 | verified |
+| `normalizeWithLogprobs()` | L814 | verified |
+| `QualityMetricResult` | L149 | verified |
+| `MetricTrend` | L97 | verified |
+| `ScoreDirection` | N/A | Proposed new type (`'maximize' \| 'minimize'`); distinct from codebase's `ThresholdDirection` (`'above' \| 'below'`, L26) |
+
+---
+
+## Proposal-by-Proposal Analysis
+
+### 1. Composite Quality Index (CQI)
+
+**Statistical Validity**: Sound. Weighted linear combination is the standard approach for composite indices (cf. HDI, SPI). Direction normalization (inverting hallucination) is correctly identified.
+
+**Weight Scheme Assessment**:
+- Weights sum to 1.0: verified (0.25+0.20+0.20+0.15+0.10+0.05+0.05 = 1.00)
+- Concern: relevance at 0.25 and faithfulness at 0.20 implies a strong retrieval-quality bias. This is appropriate for RAG-heavy workloads but may overweight retrieval for pure generation tasks
+- The disclaimer (F5 fix) correctly flags these as "initial recommendations, not tuned against production data"
+
+**Recommendations**:
+- Add sensitivity analysis: report CQI range when each weight varies +/- 0.05
+- Consider making weights configurable via `RoleViewOptions` (already has optional parameter per F1 fix)
+- Add a `weightSource: 'default' | 'custom' | 'data-driven'` field to `CompositeQualityIndex`
+
+**Compute Cost**: O(m) where m=7. Negligible. No concern.
+
+### 2. Metric Velocity & Acceleration
+
+**Statistical Validity**: Sound for regularly-sampled time series. First derivative (velocity) from `percentChange / period_hours` is straightforward. Second derivative (acceleration) as change-in-velocity requires at least 3 consecutive trend points.
+
+**Concerns**:
+- **Noise amplification**: Second derivatives amplify noise. With evaluation counts ~100-1000 per period, score means have standard error ~0.01-0.03. Acceleration computed from these noisy means will produce many false inflection points
+- **Irregular sampling**: If poll intervals vary (missed polls, backfill), velocity/acceleration calculations assume uniform spacing. Design should specify handling for gaps
+
+**Recommendations**:
+- Apply exponential smoothing (alpha=0.3) before differentiation to suppress noise
+- Require minimum 3 consecutive periods before reporting acceleration
+- Add `confidence: number` field to `MetricDynamics` based on sample count stability
+- `projectedBreachTime` should include uncertainty bounds, not point estimate
+
+**Compute Cost**: O(m * t) where t=trend history length. With m=7 and t~10 periods, ~70 operations. Negligible.
+
+### 3. Coverage-Weighted Confidence
+
+**Statistical Validity**: Excellent. The Gini coefficient for evaluating distributional uniformity is well-established in econometrics and information theory. `effectiveSampleSize = sampleCount * coverageUniformity` is a reasonable heuristic analogous to design effect in survey sampling.
+
+**Concerns**:
+- Gini coefficient is sensitive to the number of categories (sessions/traces). With few unique inputs (<10), uniformity may appear artificially high
+- The `adjustedLevel` thresholds should account for absolute sample size, not just effective. A Gini of 1.0 with 5 evaluations across 5 sessions gives effectiveSampleSize=5, which may still be "low"
+
+**Recommendations**:
+- Minimum absolute sample size check: `effectiveSampleSize >= 30` for "high" regardless of uniformity
+- Document that Gini=0 means perfect uniformity (all inputs equally evaluated), Gini=1 means all evaluations on one input
+
+**Compute Cost**: O(n * log(n)) for sorting evaluations by input, where n=evaluation count. For n=1000, ~10K comparisons. Well within budget.
+
+### 4. Correlation Strength Matrix
+
+**Statistical Validity**: Pearson R assumes linear relationships between metric pairs. This is reasonable for most quality metrics but may miss nonlinear relationships (e.g., hallucination-faithfulness may have a threshold effect rather than linear correlation).
+
+**Concerns**:
+- **Pearson R limitations**: Does not capture nonlinear dependencies. Spearman rank correlation would be more robust for bounded [0,1] scores with potential ceiling effects
+- **Lagged correlation**: The `lagHours` computation requires cross-correlation at multiple lag values, increasing complexity from O(m^2 * n) to O(m^2 * n * L) where L=max lag bins. Not mentioned in compute budget
+- **Multiple comparisons**: With 7 metrics, there are 21 pairs. At alpha=0.05, ~1 pair will appear significant by chance. Design should specify minimum effect size (|R| > 0.3) not just p-value
+- **Temporal autocorrelation**: Consecutive metric values are not independent (violated IID assumption for Pearson). Consider differenced series or Newey-West standard errors
+
+**Recommendations**:
+- Use Spearman rank correlation instead of (or alongside) Pearson
+- Limit lag search to L=6 (6 hourly bins) to control compute
+- Apply Bonferroni correction or require |R| > 0.5 for "discovered correlations" (currently 0.7, which is appropriate)
+- Add `pValue` and `effectSize` fields to `CorrelationFeature`
+
+**Compute Cost**: O(m^2 * n) = O(49 * 1000) = 49K operations as stated. With lag search at L=6: 294K operations. Still well within 30s budget but should be documented.
+
+### 5. Adaptive Score Scaling
+
+**Statistical Validity**: Strong. Per-metric scaling strategies are well-motivated by the documented distribution shapes.
+
+| Strategy | Assessment |
+|----------|-----------|
+| Quantile (relevance) | Correct for left-skewed. Requires sufficient data for stable quantile estimates (n>100) |
+| Binary (faithfulness) | Appropriate for bimodal. Threshold at 0.7 should be configurable |
+| Uniform (coherence) | Appropriate for normal-ish distribution |
+| Log (hallucination) | Correct for right-skewed near-zero. Formula `-log10(max(v, 0.001)) / 3` maps [0.001, 1.0] to [1.0, 0.0] -- verified mathematically sound |
+| Step (task_completion) | Appropriate. Evaluator-type switching is a good design |
+| Categorical (tool_correctness) | Dual display (fraction + numeric) is informative |
+| Percentile rank (eval_latency) | Appropriate for heavy-tail. Requires historical distribution |
+
+**Note**: The `adaptiveScoreColor()` function uses `ScoreDirection = 'maximize' | 'minimize'` -- a proposed new type for the frontend. This is semantically distinct from the codebase's `ThresholdDirection = 'above' | 'below'` (L26 in quality-metrics.ts) which is for alert conditions. The name `ScoreDirection` is intentionally different to avoid confusion.
+
+**Recommendations**:
+- Add fallback for insufficient data: quantile strategy needs n>100, otherwise fall back to uniform
+- Document that `empiricalCDF()` is a proposed helper, not yet implemented
+
+### 6. Label Encoding (Ordinal Sort)
+
+**Statistical Validity**: Sound. Ordinal encoding of free-text labels is standard practice. The 5-tier ordinal (0-4) with 3-tier filter (Pass/Review/Fail) provides appropriate granularity.
+
+**Concerns**:
+- Unmapped labels: Any label not in the lookup table gets no ordinal. Need a default (e.g., ordinal=2 "Review" for unknown labels)
+- Label normalization: Should be case-insensitive and handle underscores/hyphens (`highly-relevant` vs `highly_relevant`)
+
+**Recommendations**:
+- Add `unmapped` ordinal value (2 or -1) with visual indicator
+- Normalize labels before lookup (lowercase, replace hyphens with underscores)
+
+**Compute Cost**: O(n) hash lookups. Negligible.
+
+---
+
+## Cross-Cutting Issues
+
+### Issue: `ScoreDirection` vs `ThresholdDirection` Semantic Distinction
+**Priority**: P2
+**Location**: Section 2.1 and Section 16.2
+The design doc proposes `ScoreDirection = 'maximize' | 'minimize'` for score color mapping (higher-is-better vs lower-is-better). The codebase exports `ThresholdDirection = 'above' | 'below'` for alert conditions. These are intentionally different types. The design doc should include a note clarifying the distinction when implemented.
+
+### Issue: Feature Pipeline Ordering Dependency
+**Priority**: P2
+**Location**: Section 16.5
+Step [3] (Derive) depends on Step [2] (Aggregate) outputs AND on `CoverageHeatmap` from `computeCoverageHeatmap()`. The heatmap is not part of Step [2] -- it requires a separate pass over `evaluationsByMetric`. The pipeline diagram should show this dependency explicitly.
+
+### Issue: No Feature Versioning
+**Priority**: P3
+All derived features (CQI, velocity, correlation) lack version identifiers. When weights or algorithms change, historical comparisons become invalid. Add `featureVersion: string` to each derived interface.
+
+---
+
+## Compute Budget Verification
+
+| Step | Operation | Complexity | n=1000, m=7 | Budget Impact |
+|------|-----------|-----------|-------------|---------------|
+| CQI | Weighted sum | O(m) | 7 ops | negligible |
+| Velocity/Accel | Trend diff | O(m * t) | 70 ops | negligible |
+| Coverage confidence | Gini sort | O(n log n) | 10K ops | <1ms |
+| Correlation matrix | Pearson/Spearman | O(m^2 * n) | 49K ops | <10ms |
+| Correlation lag search | Cross-correlation | O(m^2 * n * L) | 294K ops | <50ms |
+| Adaptive scaling | Per-score transform | O(n * m) | 7K ops | <1ms |
+| Label encoding | Hash lookup | O(n) | 1K ops | negligible |
+
+**Total estimated compute**: <100ms for n=1000. Well within 30s poll interval. Confirmed feasible.
+
+---
+
+## Summary
+
+| Proposal | Statistical Validity | Compute Feasibility | Issues Found |
+|----------|:-------------------:|:-------------------:|:------------:|
+| CQI | Sound | O(m), negligible | Weight sensitivity undocumented |
+| Velocity/Acceleration | Sound with caveats | O(m*t), negligible | Noise amplification risk |
+| Coverage-Weighted Confidence | Excellent | O(n log n), <1ms | Min absolute sample size needed |
+| Correlation Matrix | Sound with caveats | O(m^2*n), <10ms | Pearson linearity assumption |
+| Adaptive Scaling | Strong | O(n*m), <1ms | `ScoreDirection` is proposed new type (not mismatch) |
+| Label Encoding | Sound | O(n), negligible | Unmapped label handling |
+
+**Overall Assessment**: All 6 proposals are statistically valid and computationally feasible. `ScoreDirection` is a proposed new type distinct from the codebase's `ThresholdDirection`. Noise amplification in acceleration and Pearson linearity assumptions are acceptable given the disclaimers already in place (F5 fix).
+</file>
+
+<file path="feature-engineering-roadmap-status.md">
+# Feature Engineering Roadmap — Status
+
+**Version**: 3.1
+**Date**: 2026-02-18
+**Source**: `frontend/docs/llm-explainability-design.md` Section 16
+**Research**: Web research completed 2026-02-16 across 7 parallel research agents
+**Status updated**: 2026-02-18 from git commit history
+
+Items requiring further research, empirical tuning, or external dependencies before implementation.
+
+---
+
+## Research Required
+
+### R1: Quantile-Based Adaptive Scaling Calibration
+- **Status**: DONE — Backend implementation complete (uniform fallback active)
+- **Commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `adaptiveScoreColorBand()`, `scoreColorBand()`, `METRIC_SCALE_STRATEGY`, `empiricalCDF()`
+  - `f362caf` refactor(lib): extract quality-metrics into focused modules — moved to `quality-feature-engineering.ts`
+- **Remaining**: Empirical calibration blocked on 7+ days production evaluation data. Falls back to uniform 5-band coloring when `PercentileDistribution` not provided.
+- **Next action**: After 2 weeks of production data, compute p10/p25/p50/p75/p90 per metric and store as config
+
+#### Research Findings
+
+**MIN_QUANTILE_SAMPLE_SIZE = 100 is well-justified:**
+- n >= 60 is sufficient for central percentiles (p25/p50/p75) per [PMC6294150](https://pmc.ncbi.nlm.nih.gov/articles/PMC6294150/)
+- n >= 120 needed for extreme percentiles (p10/p90) in skewed distributions per [PMC6784425](https://pmc.ncbi.nlm.nih.gov/articles/PMC6784425/)
+- n = 100 is a reasonable middle ground; consider tiered thresholds if p5/p95 are added later
+
+**Rolling window vs. static quantiles:**
+- Use **30-day rolling window** for primary quantile computation (matches Splunk ITSI, New Relic)
+- Use **7-day comparison window** for drift detection
+- Trigger recalibration when PSI > 0.1 between current and previous 30-day distributions
+- Add `computedAt` timestamp to `PercentileDistribution` for staleness detection
+- [Splunk ITSI](https://help.splunk.com/en/splunk-it-service-intelligence/): recalculates thresholds nightly from 7-60 day windows
+- [New Relic](https://newrelic.com/blog/how-to-relic/dynamic-baseline-alerts-algorithms): uses weeks of historical data with weighted factor analysis
+
+**Per-metric strategy selection is best-in-class:**
+- No production tool reviewed (Datadog, Splunk, Grafana, New Relic) implements per-metric strategy
+- Most use a single algorithm uniformly; our `METRIC_SCALE_STRATEGY` map is more sophisticated
+
+**Incremental computation:**
+- Consider [t-digest](https://github.com/tdunning/t-digest) (Dunning 2019) for streaming/incremental quantile estimation
+- Used internally by Elasticsearch, Datadog, Redis; `tdigest` npm package has 2.6M weekly downloads
+
+---
+
+### R2: CQI Weight Tuning
+- **Status**: DONE — Backend implementation complete with sensitivity analysis
+- **Commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `computeCQI()`, `DEFAULT_CQI_WEIGHTS`, weight renormalization
+  - `320c9b0` feat(feature-eng): add CQI weight sensitivity analysis — `computeCQISensitivity()` OAT perturbation (default delta=0.05), reports CQI range per metric sorted by sensitivity (FE1)
+  - `180aa31` fix(feature-eng): address review findings H1 — fix inaccurate confidence comment, JSDoc for weight renormalization
+  - `a0b5f33` fix(quality): enterprise review — ER5 CQI direction inference (`MINIMIZE_METRICS` set), ER11 weight renormalization order (normalize before contributions)
+- **Remaining**: Empirical weight tuning blocked on 30 days of CQI production data. Current weights are design doc recommendations.
+- **Next action**: Schedule weight review after 30 days of CQI data
+
+#### Research Findings
+
+**No framework publishes fixed recommended weights.** DeepEval/G-Eval, TruLens, RAGAS all report metrics independently with simple averaging as default aggregation.
+
+**Weight tuning methodology (3 tiers):**
+1. **Expert-driven (current)**: AHP-style. Current weights are reasonable starting point
+2. **Data-driven**: CRITIC method (CRiteria Importance Through Intercriteria Correlation) derives weights from data variance and inter-metric correlation ([original paper](https://reformship.github.io/pages/1capacity/1model/11evaluation/))
+3. **Hybrid (recommended)**: `w_final = 0.6 * w_expert + 0.4 * w_CRITIC` after 30+ data points. [AHP-Entropy hybrid](https://pmc.ncbi.nlm.nih.gov/articles/PMC7516705/) produces "more stable, effective, and reliable results"
+
+**Key concern: faithfulness/hallucination correlation.** These are highly correlated (hallucination ~ 1 - faithfulness for well-calibrated metrics). CRITIC weighting would naturally downweight one. Measure Pearson R; if r > 0.85, consolidate weight.
+
+**Increase tool_correctness weight** for agentic workloads (0.05 is low given agent-eval-metrics treats task_completion at 0.50).
+
+**Use named context profiles, not dynamic weights:**
+```
+latency-focus: { evaluation_latency: 0.15, coherence: 0.05 }
+agent-focus:   { tool_correctness: 0.15, task_completion: 0.20 }
+rag-focus:     { faithfulness: 0.25, hallucination: 0.25 }
+```
+
+**Retrospective validation:**
+- Start with cross-correlation (CCF) lead-lag analysis (20+ snapshots minimum)
+- Graduate to [Granger causality](https://phdinds-aim.github.io/time_series_handbook/04_GrangerCausality/) at 50+ snapshots
+- Compute precision/recall of CQI drops vs. actual incidents at various thresholds
+
+**Sensitivity analysis:**
+- Run One-at-a-Time (OAT) perturbation first: vary each weight +/-10%, check if CQI changes > 0.02
+- Full Monte Carlo: COINr methodology with noise factor phi=0.25, 1000 replications ([COINr docs](https://bluefoxr.github.io/COINrDoc/sensitivity-analysis.html))
+- If std < 0.03 on 0-1 scale, index is robust
+
+Sources: [OECD Handbook on Composite Indicators](https://www.oecd.org/content/dam/oecd/en/publications/reports/2008/08/handbook-on-constructing-composite-indicators-methodology-and-user-guide_g1gh9301/9789264043466-en.pdf), [Artificial Analysis Intelligence Index v4](https://artificialanalysis.ai/methodology/intelligence-benchmarking), [Google SRE Monitoring](https://sre.google/sre-book/monitoring-distributed-systems/)
+
+---
+
+### R3: Time-Lag Correlation Detection
+- **Status**: DONE — Significance testing, lag detection, Spearman rank correlation, and effect size implemented
+- **Commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `computeCorrelationMatrix()`, `computePearsonR()`
+  - `c7baeeb` feat(feature-engineering): add significance testing, lag detection — `pearsonPValue()`, `benjaminiHochberg()` FDR, `findBestLag()`, `causalConfidence` field, correlation feature version 2.0
+  - `d04eca1` feat(feature-eng): add Spearman rank correlation and effect size — `computeSpearmanR()` (fractional ranks for tied values), `correlationToCohenD()` (R→Cohen's d), wired into `computeCorrelationMatrix()`, feature version 3.0 (FE4)
+- **Remaining**: Empirical validation blocked on hourly-granularity time-series data. Granger causality tests not yet implemented (bivariate Granger ~100 lines).
+- **Next action**: Validate lag detection with production data; implement Granger test for top-N pairs
+
+#### Research Findings
+
+**Algorithm recommendation:**
+- Sliding-window Pearson R (current approach) is adequate at m=7, maxLag=24
+- At 21 pairs x 25 lags = 525 Pearson R computations, each O(n), total is effectively O(n) with small constants
+- FFT-based cross-correlation ([xcorr npm](https://github.com/adblockradio/xcorr)) becomes worthwhile at maxLag > 100 or n > 100K
+
+**Lag range:**
+- Default 0-24h at hourly offsets for quality metrics
+- Add 0-60min at 5-min offsets for operational/latency metrics
+- Make `maxLagHours` and `lagStepMinutes` configurable
+
+**Significance testing is critical (525 hypotheses):**
+- Use **Benjamini-Hochberg FDR** at q=0.05 (not Bonferroni -- too conservative for 525 tests)
+- P-values from t-distribution: `t = r * sqrt((n-2) / (1-r^2))`
+- Supplement with block bootstrap CIs (1000 resamples, block length ~sqrt(n)) for top correlations
+- [BH 1995 paper](https://rss.onlinelibrary.wiley.com/doi/10.1111/j.2517-6161.1995.tb02031.x)
+
+**Causal inference guard:**
+- Add `causalConfidence: 'correlation' | 'granger' | 'verified'` field to `CorrelationFeature`
+- Label lagHours as "predictive lag" not "causal lag"
+- For top-N pairs, add bivariate Granger test (~100 lines TypeScript)
+- Never auto-alert on novel lagged correlations; surface as "suggested investigation"
+
+**Implementation path:**
+1. Add `maxLagSteps` parameter to `computeCorrelationMatrix()`
+2. Loop `computePearsonR(seriesA, shiftedSeriesB)` for each lag offset
+3. Select lag with highest |R| that passes BH-FDR significance
+4. Update `lagHours` field from hardcoded `0`
+
+Sources: [Datadog Metric Correlations](https://docs.datadoghq.com/dashboards/graph_insights/correlations/), [PagerDuty Event Intelligence](https://www.pagerduty.com/platform/aiops/event-intelligence/), [VLTimeCausality](https://github.com/DarkEyes/VLTimeSeriesCausality), [Nature: Fast Pseudo Transfer Entropy](https://www.nature.com/articles/s41598-021-87818-3)
+
+---
+
+### R4: Evaluation Latency Percentile Rank Display
+- **Status**: DONE — Backend implementation complete with enterprise hardening
+- **Commits**:
+  - `aff2c7f` feat(quality): implement R4 percentile rank — `computePercentileDistribution()` (linear interpolation p10/p25/p50/p75/p90), `computePercentileRank()` (binary search), `StreamingPercentile` class (t-digest-inspired centroid compression with min-gap merging)
+  - `a0b5f33` fix(quality): enterprise review — ER2 off-by-one in `computePercentileRank` (fractional rank for tied values), ER12 `StreamingPercentile` NaN/Infinity validation, ER19 O(n^2) compress → O(n log n)
+- **Remaining**: Dashboard API endpoint for trend data not yet built. Frontend display components (stat panels, sparklines, heatmap) blocked on dashboard Phase 2.
+- **Next action**: Wire percentile data into dashboard API when trend endpoint is built
+
+#### Research Findings
+
+**Rolling window: 7-day recommended.**
+- Matches Google SRE multi-window alerting (1h fast-burn + 6h slow-burn for alerts, 7d for baselines)
+- [Datadog](https://docs.datadoghq.com/tracing/guide/week_over_week_p50_comparison/) uses week-over-week P50 comparison as standard practice
+- [Prometheus](https://prometheus.io/docs/practices/histograms/) client_java defaults to 10-minute sliding window for summaries
+
+**Display pattern:**
+- **Default view**: Stat panels showing P50 + P95 with sparklines and week-over-week delta
+- **Drill-down**: Line chart with P50/P90/P95/P99 lines + request count overlay
+- **Investigation**: Heatmap for distribution shape (bimodal detection)
+- Show absolute value primary ("3.2s / 5.0s budget"), percentile rank for per-evaluation context ("P82")
+
+**Streaming percentile algorithm: t-digest recommended.**
+- `tdigest` npm package (2.6M weekly downloads), better tail accuracy than DDSketch for single-node
+- DDSketch better for distributed aggregation (fully mergeable, relative error)
+- For current single-node MCP server with <10K evaluations/day, t-digest is ideal
+
+**LLM evaluation latency is log-normal with potential bimodality:**
+- P50: 1-3s (simple rubric), P90: 5-10s (chain-of-thought), P99: 15-30s+ (complex/retry)
+- Bimodality from: cached vs. uncached, short vs. long CoT, model routing
+- Flag as "heavy-tailed" when P90/P50 > 4x; suggest heatmap view
+- Track latency by evaluation type separately (G-Eval, QAG, simple rubric)
+
+Sources: [Google SRE: Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/), [Datadog DDSketch](https://www.datadoghq.com/blog/engineering/computing-accurate-percentiles-with-ddsketch/), [t-digest paper](https://arxiv.org/pdf/1902.04023), [EMNLP 2025: LLM Response Lengths](https://aclanthology.org/2025.emnlp-main.1676.pdf)
+
+---
+
+### R5: Degradation Signal Empirical Validation
+- **Status**: DONE — EWMA, MAD, confirmation windows, and threshold adjustments implemented
+- **Commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `computeDegradationSignal()` with variance trend, dropout rate, latency skew ratio
+  - `7553876` feat(feature-engineering): R5 degradation detection — shifted variance threshold from 1.5x to 2.0 (2-sigma), added `computeEWMA()` (lambda=0.1), `computeMAD()` (1.4826 scaling), `detectEWMADrift()`, confirmation window (`consecutiveBreaches >= 2`), extended `DegradationSignal` type
+  - `1f49898` feat(feature-eng): add EMA velocity smoothing and confidence to MetricDynamics — exponential smoothing (alpha=0.3) via optional `trendHistory` parameter, `confidence` field (0–0.95), featureVersion 1.1 (FE2)
+- **Remaining**: Empirical backtesting blocked on 30 days of alert history. Thresholds are research-informed but not yet validated against production incidents.
+- **Next action**: After 30 days, backtest with TaPR range-based precision/recall; sweep `stabilityThreshold` from 0.5% to 5%
+
+#### Research Findings
+
+**Variance 1.5x threshold is too aggressive:**
+- Datadog recommends 2-3 standard deviations (sigma) as default anomaly bounds
+- 1.5x multiplier ~ 1.5 sigma ~ 87% coverage ~ 13% false positive rate on normal data
+- **Recommendation**: Shift to 2-sigma (5% FP) or 2.5-sigma (1.2% FP)
+
+**Dropout 20% threshold is reasonable:**
+- Aligns with Google SRE philosophy of simple, predictable rules
+- PagerDuty survey: most teams can't act on majority of alerts, so 20% is conservative enough
+
+**Latency skew 3x is standard** for right-skewed/log-normal distributions.
+
+**Add EWMA drift detection:**
+- Current period-over-period `computeTrend()` is Shewhart-like (catches large shifts)
+- EWMA with lambda=0.1 catches slow quality drift that period deltas miss
+- CUSUM outperforms EWMA when expected shift size is known; EWMA better for unknown shifts
+- Add as new field on `MetricTrend` (e.g., `ewmaSignal: boolean`)
+
+**Add MAD-based adaptive bounds:**
+```typescript
+// Threshold: median +/- k * MAD * 1.4826 (scaling factor for normal equivalent)
+// k = 3 for conservative, k = 2 for sensitive
+```
+- Robust to outliers, doesn't assume normality (unlike sigma-based)
+- Used by [Moogsoft AIOps](https://docs.moogsoft.com/moogsoft-cloud/en/anomaly-detection-settings-reference.html)
+
+**Add confirmation windows:**
+- Don't fire on single threshold breach; require persistence across 2+ consecutive evaluation periods
+- Models Google SRE [multi-burn-rate](https://sre.google/workbook/alerting-on-slos/) short window pattern
+- Highest-ROI change for reducing false positives
+
+**Backtesting methodology:**
+- Use range-based Precision/Recall (not point-based) -- [TaPR](https://dl.acm.org/doi/10.1145/3357384.3358118) for time-series anomaly detection
+- Plot PR curves (not ROC) since degradation events are rare
+- Sweep `stabilityThreshold` from 0.5% to 5% of range width
+
+**LLM-specific degradation patterns to monitor:**
+- Model drift: 75% of businesses observed AI performance declines without monitoring ([Fiddler AI](https://www.fiddler.ai/blog/how-to-monitor-llmops-performance-with-drift))
+- Evaluator agreement drop as leading indicator (already tracked in `computeEvaluatorAgreement()`)
+- Token utilization ratio (input tokens / context window max) -- gap in current metrics
+- Prompt injection spikes via output token variance
+
+Sources: [Datadog Anomaly Detection](https://docs.datadoghq.com/monitors/types/anomaly/), [Google SRE Monitoring](https://sre.google/sre-book/monitoring-distributed-systems/), [NAB Benchmark](https://github.com/numenta/NAB), [TimeEval](https://timeeval.github.io/evaluation-paper/)
+
+---
+
+### R6: Gini Coefficient vs. Shannon Entropy for Coverage Uniformity
+- **Status**: DONE — Normalized Shannon Entropy (Pielou's J) implemented, Gini deprecated
+- **Commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `computeGiniUniformity()` (original)
+  - `ffc999d` feat(feature-engineering): R6 replace Gini with normalized Shannon entropy — `computeNormalizedEntropy()` as primary measure, Gini retained but deprecated, `COVERAGE_CONFIDENCE_VERSION` bumped to 2.0
+- **Remaining**: None. Implementation complete per research recommendations.
+
+#### Research Findings
+
+**Recommendation: Replace Gini with Normalized Shannon Entropy (Pielou's J).**
+
+Rationale for 7 fixed quality metric categories:
+1. **Zero-category sensitivity**: If any metric has zero evaluations, entropy drops sharply; Gini is less sensitive to completely absent categories
+2. **Multi-modal discrimination**: Gini conflates different distribution shapes due to Lorenz curve crossing ([BEA Primer](https://apps.bea.gov/scb/issues/2025/08-august/0825-gini-primer.htm))
+3. **Standard for fixed-category distributions**: Pielou's J is the standard evenness measure in ecology ([SpringerPlus](https://springerplus.springeropen.com/articles/10.1186/s40064-015-0944-4))
+4. **Cheaper**: O(n) vs. O(n log n) for Gini sort
+5. **Interpretability**: J=0.7 means "70% as uniform as possible"
+
+| Distribution | Gini (1-G) | Entropy (J) |
+|---|---|---|
+| `[14,14,14,14,14,15,15]` near-uniform | ~0.99 | ~0.999 |
+| `[50,50,0,0,0,0,0]` bimodal | ~0.43 | ~0.356 |
+| `[70,5,5,5,5,5,5]` one dominant | ~0.50 | ~0.587 |
+
+**Implementation** (drop-in replacement for `computeGiniUniformity`):
+```typescript
+export function computeNormalizedEntropy(counts: number[]): number {
+  if (counts.length <= 1) return 1;
+  const total = counts.reduce((s, c) => s + c, 0);
+  if (total === 0) return 0;
+  const k = counts.length;
+  const hMax = Math.log2(k);
+  let h = 0;
+  for (const c of counts) {
+    if (c > 0) { const p = c / total; h -= p * Math.log2(p); }
+  }
+  return roundTo(Math.max(0, Math.min(1, h / hMax)), SCORE_PRECISION);
+}
+```
+
+Bump `COVERAGE_CONFIDENCE_VERSION` to `'2.0'` on algorithm change. Both produce [0,1] with 1=uniform, so downstream semantics are preserved.
+
+Sources: [Wikipedia - Entropy](https://en.wikipedia.org/wiki/Entropy_(information_theory)), [PMC - Entropy Ratio](https://pmc.ncbi.nlm.nih.gov/articles/PMC7712116/), [Wikipedia - Gini](https://en.wikipedia.org/wiki/Gini_coefficient)
+
+---
+
+## Frontend Integration
+
+### F1: ScoreBadge Component with Direction-Aware Coloring
+- **Status**: DONE — `dashboard/src/components/ScoreBadge.tsx`
+- **Backend commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `scoreColorBand()`, `adaptiveScoreColorBand()`, `inferScoreDirection()`
+- **Frontend commits**:
+  - `4d6ff41` feat(dashboard): add F1-F6 components — ScoreBadge implementation
+  - `ee957c7` fix(build): extract frontend utils — `scoreColorBand`, `inferScoreDirection` moved to `src/lib/quality-utils.ts` for standalone CI builds
+- **Implementation**: Direction-aware badge with 5-band coloring (excellent/good/adequate/poor/failing), Unicode shape differentiation, ARIA labels. Integrated into `MetricCard.tsx`.
+- **Tests**: 5 tests in `f1-f6-components.test.tsx`
+
+#### Implementation Guidance
+
+**No new library needed.** Extend existing `Indicators.tsx` pattern.
+
+**Colorblind-safe palette** ([Okabe-Ito](https://davidmathlogic.com/colorblind/)):
+- Good: `#0072B2` (blue) / Fair: `#E69F00` (amber) / Poor: `#D55E00` (vermillion)
+- Define as CSS custom properties: `--score-good`, `--score-fair`, `--score-poor`
+- Passes WCAG 2.1 AA contrast (4.5:1) on white backgrounds
+
+**Accessibility**:
+- Always include shape/icon per status (existing pattern uses Unicode shapes)
+- `aria-label="Score: 0.87, good (higher is better)"`
+- Test with [Viz Palette](https://projects.susielu.com/viz-palette) for colorblind simulation
+
+---
+
+### F2: CQI Hero Number on Executive View
+- **Status**: DONE — `dashboard/src/components/CQIHero.tsx`
+- **Backend commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `computeCQI()` with contribution breakdown
+- **Frontend commits**:
+  - `4d6ff41` feat(dashboard): add F1-F6 components — CQIHero implementation
+- **Implementation**: Pure CSS flex stacked bar (not recharts), hero number as percentage, score-colored contribution segments with title tooltips, screen reader table with caption. Integrated into `ExecutiveView.tsx`. API route `dashboard.ts` computes CQI via `computeCQI()`.
+- **Tests**: 5 tests in `f1-f6-components.test.tsx`
+
+#### Implementation Guidance
+
+**Recommended library**: **Recharts** (~45KB gzip) -- serves F2, F3, and potentially F5.
+
+**Pattern**: Large mono-font hero number with `TrendIndicator`, plus horizontal stacked `<BarChart>` with 7 metric segments showing per-metric CQI contributions. Use `layout="vertical"` for horizontal bar.
+
+**Alternative**: Pure CSS flex bar (no library) -- `display: flex` with percentage widths per contribution. Sufficient for a single stacked bar.
+
+**Accessibility**: `role="region"` + `aria-label` on hero container. Visually hidden `<table>` fallback for screen readers (SVG charts are not navigable).
+
+---
+
+### F3: Metric Dynamics on Trend Chart
+- **Status**: DONE — `dashboard/src/components/TrendChart.tsx`
+- **Backend commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `computeMetricDynamics()` with breach projection
+  - `1f49898` feat(feature-eng): EMA velocity smoothing and confidence for MetricDynamics
+  - `9b3b4c6` fix(quality-views): pass previousValues through `computeMetricDetail` for trend computation
+- **Frontend commits**:
+  - `4d6ff41` feat(dashboard): add F1-F6 components — TrendChart implementation
+  - `37e90c4` fix(api): pass period param through metric detail route (respects 24h/7d/30d selection)
+- **Implementation**: Recharts `LineChart` with solid (actual) + dashed (projected) lines, `ReferenceLine` for warning/critical thresholds, velocity/acceleration/breach time/confidence display. API route `metrics.ts` computes dynamics via `computeMetricDynamics()`. Integrated into `App.tsx` MetricDetailPage.
+- **Dependencies added**: `recharts`
+
+#### Implementation Guidance
+
+**Recommended library**: **Recharts** (same dependency as F2).
+
+**Pattern**:
+- Two `<Line>` components: solid (actual) + dashed via `strokeDasharray="5 5"` (projected)
+- `<ReferenceLine>` for SLA threshold with label
+- Overlap last actual point with first projected point for visual continuity
+- [Recharts Dashed Line example](https://recharts.github.io/en-US/examples/DashedLineChart/)
+
+**Alternatives**: [nivo Line](https://nivo.rocks/line/) (heavier), [visx @visx/xychart](https://airbnb.io/visx/) (~20KB, more boilerplate), [Lightweight Charts](https://www.tradingview.com/lightweight-charts/) (canvas, overkill)
+
+**Performance**: For 30-day trend at daily resolution (~30 points), SVG via Recharts is fine. For minute-level (>1000 points), use canvas rendering or downsample.
+
+---
+
+### F4: Role-Aware Feature Config Integration
+- **Status**: DONE — `dashboard/src/contexts/RoleContext.tsx`
+- **Backend commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `ROLE_FEATURE_CONFIG` with all feature flags, `getRoleFeatureConfig()`
+- **Frontend commits**:
+  - `4d6ff41` feat(dashboard): add F1-F6 components — RoleContext, RoleProvider, useRole hook
+  - `ee957c7` fix(build): extract frontend utils — `getRoleFeatureConfig` moved to `src/lib/quality-utils.ts`
+- **Implementation**: React Context + `useRole()` hook + `RoleGate` component. Derives role from wouter route params, validates against known roles, falls back to `'executive'`. `hasFeature()` checks boolean true or non-null numeric fields. `RoleProvider` wraps `<App>` in `App.tsx`.
+
+#### Implementation Guidance
+
+**No new library needed.** React Context + feature config map.
+
+**Pattern**: `RoleContext` provider at `<App>` level, derives role from wouter URL. Feature config map in a single file:
+```typescript
+const { hasFeature } = useRole();
+return hasFeature('cqi_hero') && <CQIHero />;
+```
+
+Or `<RoleGate feature="cqi_hero"><CQIHero /></RoleGate>` wrapper for cleaner JSX.
+
+Do NOT use LaunchDarkly/Permit.io -- role set is static and small. Config map has zero runtime cost.
+
+---
+
+### F5: Correlation Heatmap on `/correlations` Route
+- **Status**: DONE — `dashboard/src/components/CorrelationHeatmap.tsx`, `dashboard/src/pages/CorrelationsPage.tsx`
+- **Backend commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `computeCorrelationMatrix()`, `computePearsonR()`
+  - `c7baeeb` feat(feature-engineering): add significance testing, lag detection — full statistical pipeline
+  - `d04eca1` feat(feature-eng): add Spearman rank correlation and effect size — `computeSpearmanR()`, `correlationToCohenD()`
+- **Frontend commits**:
+  - `4d6ff41` feat(dashboard): add F1-F6 components — CorrelationHeatmap, CorrelationsPage, /correlations route
+- **Implementation**: CSS Grid layout with `d3-scale-chromatic` `scaleSequential(interpolateRdYlGn)`, toxic combo cells with `2px solid` border + CSS animation, full ARIA roles (`table`, `presentation`, `cell`, `columnheader`, `rowheader`). API route `correlations.ts` computes correlation matrix from 30-day evaluations. Page at `/correlations` route.
+- **Dependencies added**: `d3-scale`, `d3-scale-chromatic`
+- **Tests**: 6 tests in `f1-f6-components.test.tsx`
+
+#### Implementation Guidance
+
+**Recommended approach**: **CSS Grid + `d3-scale-chromatic`** (~4KB) for a 7x7 matrix.
+
+No charting library needed for 49 cells. Use `scaleSequential(interpolateRdYlGn).domain([-1, 1])` for color scale. If visx is already in the bundle, [`@visx/heatmap`](https://airbnb.io/visx/heatmaps) is a good alternative.
+
+**Toxic combo highlighting**: 2px border + pulsing CSS animation on the cell, plus `aria-label` suffix "-- toxic combination detected".
+
+**Accessibility**:
+- `role="table"` / `role="row"` / `role="cell"` for screen reader navigation
+- Every cell: `aria-label="Accuracy vs Latency: 0.73"`
+- Include numeric value in each cell (color must not be sole indicator)
+- Use blue-to-orange or viridis scale (not red-green)
+
+---
+
+### F6: Label Filter in Evaluation Table
+- **Status**: DONE — `dashboard/src/components/EvaluationTable.tsx`
+- **Backend commits**:
+  - `d32f8ac` feat(quality): add feature engineering module — `labelToOrdinal()` with 3-tier categories
+- **Frontend commits**:
+  - `4d6ff41` feat(dashboard): add F1-F6 components — EvaluationTable with sort/filter
+  - `ee957c7` fix(build): extract frontend utils — `labelToOrdinal`, `ordinalToCategory` moved to `src/lib/quality-utils.ts`; added `EvaluationExpandedRow.tsx`, `useMetricEvaluations.ts`
+- **Implementation**: @tanstack/react-table with 6 columns (Score, Label, Category, Explanation, Evaluator, Timestamp). Custom `labelSortFn` using `labelToOrdinal` for semantic ordering. `categoryFilterFn` with Pass/Review/Fail toggle buttons on the `label` accessor column. `aria-sort` on sortable headers, color-coded scores and category badges. Integrated into `EvaluationDetail.tsx`.
+- **Dependencies added**: `@tanstack/react-table`
+- **Tests**: 6 tests in `f1-f6-components.test.tsx`
+
+#### Implementation Guidance
+
+**Recommended library**: **TanStack Table v8** (`@tanstack/react-table`, ~15KB) -- pairs with existing `@tanstack/react-query`.
+
+**Custom ordinal sort**: `sortingFn` using `indexOf` on `['Pass', 'Review', 'Fail']` order. Custom `filterFn` for multi-select category filtering.
+
+**Accessibility**: `aria-sort` on `<th>`, `aria-label` on filter dropdown, keyboard navigation (Tab through headers, Enter/Space to toggle sort).
+
+**Performance**: For >1000 rows, enable row virtualization via `@tanstack/react-virtual`.
+
+---
+
+## Summary
+
+| Item | Category | Status | Key Commit |
+|------|----------|--------|------------|
+| R1 | Backend | DONE (awaiting production data) | `d32f8ac` |
+| R2 | Backend | DONE (sensitivity analysis) | `320c9b0` |
+| R3 | Backend | DONE (Spearman + effect size) | `d04eca1` |
+| R4 | Backend | DONE (enterprise hardened) | `a0b5f33` |
+| R5 | Backend | DONE (EMA velocity smoothing) | `1f49898` |
+| R6 | Backend | DONE (entropy replaces Gini) | `ffc999d` |
+| F1 | Frontend | DONE (ScoreBadge) | `4d6ff41`, `ee957c7` |
+| F2 | Frontend | DONE (CQIHero) | `4d6ff41` |
+| F3 | Frontend | DONE (TrendChart) | `4d6ff41`, `37e90c4` |
+| F4 | Frontend | DONE (RoleContext) | `4d6ff41`, `ee957c7` |
+| F5 | Frontend | DONE (CorrelationHeatmap) | `4d6ff41` |
+| F6 | Frontend | DONE (EvaluationTable) | `4d6ff41`, `ee957c7` |
+
+**Backend**: 6/6 research items implemented. All research findings documented.
+**Frontend**: 6/6 items implemented. All components created, integrated, tested, and code-reviewed.
+
+## Dependencies Added
+
+| Package | Size (gzip) | Used By | Notes |
+|---------|-------------|---------|-------|
+| `recharts` | ~45KB | F3 | LineChart with projected lines, reference lines |
+| `@tanstack/react-table` | ~15KB | F6 | Headless table with sort, filter, category toggles |
+| `d3-scale` | ~8KB | F5 | Sequential color scale for heatmap |
+| `d3-scale-chromatic` | ~4KB | F5 | RdYlGn interpolation for correlation values |
+| (none) | 0 | F1, F2, F4 | Pure React + CSS custom properties |
+
+## Files Created
+
+| File | Feature | Description |
+|------|---------|-------------|
+| `dashboard/src/components/ScoreBadge.tsx` | F1 | Direction-aware score badge with 5-band coloring |
+| `dashboard/src/components/CQIHero.tsx` | F2 | CQI hero number with contribution bar |
+| `dashboard/src/components/TrendChart.tsx` | F3 | Recharts trend + projection chart |
+| `dashboard/src/contexts/RoleContext.tsx` | F4 | Role context, useRole hook, RoleGate |
+| `dashboard/src/components/CorrelationHeatmap.tsx` | F5 | CSS Grid correlation matrix with toxic highlighting |
+| `dashboard/src/components/EvaluationTable.tsx` | F6 | TanStack Table with label sort + category filter |
+| `dashboard/src/pages/CorrelationsPage.tsx` | F5 | /correlations route page |
+| `dashboard/src/api/routes/correlations.ts` | F5 | Correlation matrix API endpoint |
+| `dashboard/src/lib/quality-utils.ts` | F1,F4,F6 | Standalone frontend utils (scoreColorBand, inferScoreDirection, getRoleFeatureConfig, labelToOrdinal, ordinalToCategory) |
+| `dashboard/src/components/EvaluationExpandedRow.tsx` | F6 | Expandable row detail for evaluation table |
+| `dashboard/src/hooks/useMetricEvaluations.ts` | F6 | Hook for fetching metric-level evaluations |
+| `dashboard/src/__tests__/f1-f6-components.test.tsx` | All | Unit tests covering F1, F2, F5, F6 |
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `dashboard/src/App.tsx` | RoleProvider wrapper, TrendChart integration, /correlations route |
+| `dashboard/src/components/MetricCard.tsx` | ScoreBadge integration |
+| `dashboard/src/components/views/ExecutiveView.tsx` | CQIHero integration |
+| `dashboard/src/components/EvaluationDetail.tsx` | EvaluationTable integration |
+| `dashboard/src/api/routes/dashboard.ts` | CQI computation via computeCQI() |
+| `dashboard/src/api/routes/metrics.ts` | Dynamics computation via computeMetricDynamics() |
+| `dashboard/src/api/server.ts` | Correlation routes registration |
+| `dashboard/src/types.ts` | Type exports for CQI, MetricDynamics, CorrelationFeature |
+| `dashboard/src/theme.css` | Score color CSS custom properties |
+</file>
+
+<file path="feature-engineering-roadmap.md">
+# Feature Engineering Roadmap
+
+**Version**: 2.0
+**Date**: 2026-02-16
+**Source**: `frontend/docs/llm-explainability-design.md` Section 16
+**Research**: Web research completed 2026-02-16 across 7 parallel research agents
+
+Items requiring further research, empirical tuning, or external dependencies before implementation.
+
+---
+
+## Research Required
+
+### R1: Quantile-Based Adaptive Scaling Calibration
+- **Status**: Implementation complete (uniform fallback active)
+- **Research needed**: Empirical percentile distributions from production evaluation data to calibrate `adaptiveScoreColorBand()` quantile strategy for `relevance` metric
+- **Dependency**: Dashboard must accumulate 7+ days of evaluation data per metric
+- **Current state**: Falls back to uniform 5-band coloring when `PercentileDistribution` not provided
+- **Action**: After 2 weeks of production data, compute p10/p25/p50/p75/p90 per metric and store as config
+
+#### Research Findings
+
+**MIN_QUANTILE_SAMPLE_SIZE = 100 is well-justified:**
+- n >= 60 is sufficient for central percentiles (p25/p50/p75) per [PMC6294150](https://pmc.ncbi.nlm.nih.gov/articles/PMC6294150/)
+- n >= 120 needed for extreme percentiles (p10/p90) in skewed distributions per [PMC6784425](https://pmc.ncbi.nlm.nih.gov/articles/PMC6784425/)
+- n = 100 is a reasonable middle ground; consider tiered thresholds if p5/p95 are added later
+
+**Rolling window vs. static quantiles:**
+- Use **30-day rolling window** for primary quantile computation (matches Splunk ITSI, New Relic)
+- Use **7-day comparison window** for drift detection
+- Trigger recalibration when PSI > 0.1 between current and previous 30-day distributions
+- Add `computedAt` timestamp to `PercentileDistribution` for staleness detection
+- [Splunk ITSI](https://help.splunk.com/en/splunk-it-service-intelligence/): recalculates thresholds nightly from 7-60 day windows
+- [New Relic](https://newrelic.com/blog/how-to-relic/dynamic-baseline-alerts-algorithms): uses weeks of historical data with weighted factor analysis
+
+**Per-metric strategy selection is best-in-class:**
+- No production tool reviewed (Datadog, Splunk, Grafana, New Relic) implements per-metric strategy
+- Most use a single algorithm uniformly; our `METRIC_SCALE_STRATEGY` map is more sophisticated
+
+**Incremental computation:**
+- Consider [t-digest](https://github.com/tdunning/t-digest) (Dunning 2019) for streaming/incremental quantile estimation
+- Used internally by Elasticsearch, Datadog, Redis; `tdigest` npm package has 2.6M weekly downloads
+
+---
+
+### R2: CQI Weight Tuning
+- **Status**: Implementation complete with default weights
+- **Research needed**: Validate `DEFAULT_CQI_WEIGHTS` against production alert patterns. Current weights are design doc recommendations, not empirically tuned
+- **Approach**: Run CQI retrospectively against historical dashboard data; measure correlation between CQI drops and actual incidents
+- **Action**: Schedule weight review after 30 days of CQI data
+
+#### Research Findings
+
+**No framework publishes fixed recommended weights.** DeepEval/G-Eval, TruLens, RAGAS all report metrics independently with simple averaging as default aggregation.
+
+**Weight tuning methodology (3 tiers):**
+1. **Expert-driven (current)**: AHP-style. Current weights are reasonable starting point
+2. **Data-driven**: CRITIC method (CRiteria Importance Through Intercriteria Correlation) derives weights from data variance and inter-metric correlation ([original paper](https://reformship.github.io/pages/1capacity/1model/11evaluation/))
+3. **Hybrid (recommended)**: `w_final = 0.6 * w_expert + 0.4 * w_CRITIC` after 30+ data points. [AHP-Entropy hybrid](https://pmc.ncbi.nlm.nih.gov/articles/PMC7516705/) produces "more stable, effective, and reliable results"
+
+**Key concern: faithfulness/hallucination correlation.** These are highly correlated (hallucination ~ 1 - faithfulness for well-calibrated metrics). CRITIC weighting would naturally downweight one. Measure Pearson R; if r > 0.85, consolidate weight.
+
+**Increase tool_correctness weight** for agentic workloads (0.05 is low given agent-eval-metrics treats task_completion at 0.50).
+
+**Use named context profiles, not dynamic weights:**
+```
+latency-focus: { evaluation_latency: 0.15, coherence: 0.05 }
+agent-focus:   { tool_correctness: 0.15, task_completion: 0.20 }
+rag-focus:     { faithfulness: 0.25, hallucination: 0.25 }
+```
+
+**Retrospective validation:**
+- Start with cross-correlation (CCF) lead-lag analysis (20+ snapshots minimum)
+- Graduate to [Granger causality](https://phdinds-aim.github.io/time_series_handbook/04_GrangerCausality/) at 50+ snapshots
+- Compute precision/recall of CQI drops vs. actual incidents at various thresholds
+
+**Sensitivity analysis:**
+- Run One-at-a-Time (OAT) perturbation first: vary each weight +/-10%, check if CQI changes > 0.02
+- Full Monte Carlo: COINr methodology with noise factor phi=0.25, 1000 replications ([COINr docs](https://bluefoxr.github.io/COINrDoc/sensitivity-analysis.html))
+- If std < 0.03 on 0-1 scale, index is robust
+
+Sources: [OECD Handbook on Composite Indicators](https://www.oecd.org/content/dam/oecd/en/publications/reports/2008/08/handbook-on-constructing-composite-indicators-methodology-and-user-guide_g1gh9301/9789264043466-en.pdf), [Artificial Analysis Intelligence Index v4](https://artificialanalysis.ai/methodology/intelligence-benchmarking), [Google SRE Monitoring](https://sre.google/sre-book/monitoring-distributed-systems/)
+
+---
+
+### R3: Time-Lag Correlation Detection
+- **Status**: `computeCorrelationMatrix()` implemented with `lagHours: 0` placeholder
+- **Research needed**: Time-shifted cross-correlation (sliding window Pearson R at offsets 0-24h) to detect lagged relationships between metrics
+- **Complexity**: O(m^2 * n * maxLag) where m=7, n=evaluations, maxLag=24 hourly offsets
+- **Action**: Implement as v1.1 feature when time-series data is available at hourly granularity
+
+#### Research Findings
+
+**Algorithm recommendation:**
+- Sliding-window Pearson R (current approach) is adequate at m=7, maxLag=24
+- At 21 pairs x 25 lags = 525 Pearson R computations, each O(n), total is effectively O(n) with small constants
+- FFT-based cross-correlation ([xcorr npm](https://github.com/adblockradio/xcorr)) becomes worthwhile at maxLag > 100 or n > 100K
+
+**Lag range:**
+- Default 0-24h at hourly offsets for quality metrics
+- Add 0-60min at 5-min offsets for operational/latency metrics
+- Make `maxLagHours` and `lagStepMinutes` configurable
+
+**Significance testing is critical (525 hypotheses):**
+- Use **Benjamini-Hochberg FDR** at q=0.05 (not Bonferroni -- too conservative for 525 tests)
+- P-values from t-distribution: `t = r * sqrt((n-2) / (1-r^2))`
+- Supplement with block bootstrap CIs (1000 resamples, block length ~sqrt(n)) for top correlations
+- [BH 1995 paper](https://rss.onlinelibrary.wiley.com/doi/10.1111/j.2517-6161.1995.tb02031.x)
+
+**Causal inference guard:**
+- Add `causalConfidence: 'correlation' | 'granger' | 'verified'` field to `CorrelationFeature`
+- Label lagHours as "predictive lag" not "causal lag"
+- For top-N pairs, add bivariate Granger test (~100 lines TypeScript)
+- Never auto-alert on novel lagged correlations; surface as "suggested investigation"
+
+**Implementation path:**
+1. Add `maxLagSteps` parameter to `computeCorrelationMatrix()`
+2. Loop `computePearsonR(seriesA, shiftedSeriesB)` for each lag offset
+3. Select lag with highest |R| that passes BH-FDR significance
+4. Update `lagHours` field from hardcoded `0`
+
+Sources: [Datadog Metric Correlations](https://docs.datadoghq.com/dashboards/graph_insights/correlations/), [PagerDuty Event Intelligence](https://www.pagerduty.com/platform/aiops/event-intelligence/), [VLTimeCausality](https://github.com/DarkEyes/VLTimeSeriesCausality), [Nature: Fast Pseudo Transfer Entropy](https://www.nature.com/articles/s41598-021-87818-3)
+
+---
+
+### R4: Evaluation Latency Percentile Rank Display
+- **Status**: `percentile_rank` ScaleStrategy defined but requires historical distribution
+- **Research needed**: Determine optimal rolling window for latency baseline (1h? 24h? 7d?)
+- **Dependency**: MetricDetailResult must expose `scoreDistribution` data to frontend
+- **Action**: Implement percentile rank calculation in dashboard API when trend endpoint is built
+
+#### Research Findings
+
+**Rolling window: 7-day recommended.**
+- Matches Google SRE multi-window alerting (1h fast-burn + 6h slow-burn for alerts, 7d for baselines)
+- [Datadog](https://docs.datadoghq.com/tracing/guide/week_over_week_p50_comparison/) uses week-over-week P50 comparison as standard practice
+- [Prometheus](https://prometheus.io/docs/practices/histograms/) client_java defaults to 10-minute sliding window for summaries
+
+**Display pattern:**
+- **Default view**: Stat panels showing P50 + P95 with sparklines and week-over-week delta
+- **Drill-down**: Line chart with P50/P90/P95/P99 lines + request count overlay
+- **Investigation**: Heatmap for distribution shape (bimodal detection)
+- Show absolute value primary ("3.2s / 5.0s budget"), percentile rank for per-evaluation context ("P82")
+
+**Streaming percentile algorithm: t-digest recommended.**
+- `tdigest` npm package (2.6M weekly downloads), better tail accuracy than DDSketch for single-node
+- DDSketch better for distributed aggregation (fully mergeable, relative error)
+- For current single-node MCP server with <10K evaluations/day, t-digest is ideal
+
+**LLM evaluation latency is log-normal with potential bimodality:**
+- P50: 1-3s (simple rubric), P90: 5-10s (chain-of-thought), P99: 15-30s+ (complex/retry)
+- Bimodality from: cached vs. uncached, short vs. long CoT, model routing
+- Flag as "heavy-tailed" when P90/P50 > 4x; suggest heatmap view
+- Track latency by evaluation type separately (G-Eval, QAG, simple rubric)
+
+Sources: [Google SRE: Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/), [Datadog DDSketch](https://www.datadoghq.com/blog/engineering/computing-accurate-percentiles-with-ddsketch/), [t-digest paper](https://arxiv.org/pdf/1902.04023), [EMNLP 2025: LLM Response Lengths](https://aclanthology.org/2025.emnlp-main.1676.pdf)
+
+---
+
+### R5: Degradation Signal Empirical Validation
+- **Status**: `computeDegradationSignal()` uses threshold-based prediction (variance > 1.5x, dropout > 20%, skew > 3x)
+- **Research needed**: Validate thresholds against historical degradation events. Current thresholds are design doc estimates
+- **Approach**: Backtest against 30 days of alert history; measure precision/recall of predictedStatus
+- **Action**: After 30 days, adjust thresholds based on false positive/negative rates
+
+#### Research Findings
+
+**Variance 1.5x threshold is too aggressive:**
+- Datadog recommends 2-3 standard deviations (sigma) as default anomaly bounds
+- 1.5x multiplier ~ 1.5 sigma ~ 87% coverage ~ 13% false positive rate on normal data
+- **Recommendation**: Shift to 2-sigma (5% FP) or 2.5-sigma (1.2% FP)
+
+**Dropout 20% threshold is reasonable:**
+- Aligns with Google SRE philosophy of simple, predictable rules
+- PagerDuty survey: most teams can't act on majority of alerts, so 20% is conservative enough
+
+**Latency skew 3x is standard** for right-skewed/log-normal distributions.
+
+**Add EWMA drift detection:**
+- Current period-over-period `computeTrend()` is Shewhart-like (catches large shifts)
+- EWMA with lambda=0.1 catches slow quality drift that period deltas miss
+- CUSUM outperforms EWMA when expected shift size is known; EWMA better for unknown shifts
+- Add as new field on `MetricTrend` (e.g., `ewmaSignal: boolean`)
+
+**Add MAD-based adaptive bounds:**
+```typescript
+// Threshold: median +/- k * MAD * 1.4826 (scaling factor for normal equivalent)
+// k = 3 for conservative, k = 2 for sensitive
+```
+- Robust to outliers, doesn't assume normality (unlike sigma-based)
+- Used by [Moogsoft AIOps](https://docs.moogsoft.com/moogsoft-cloud/en/anomaly-detection-settings-reference.html)
+
+**Add confirmation windows:**
+- Don't fire on single threshold breach; require persistence across 2+ consecutive evaluation periods
+- Models Google SRE [multi-burn-rate](https://sre.google/workbook/alerting-on-slos/) short window pattern
+- Highest-ROI change for reducing false positives
+
+**Backtesting methodology:**
+- Use range-based Precision/Recall (not point-based) -- [TaPR](https://dl.acm.org/doi/10.1145/3357384.3358118) for time-series anomaly detection
+- Plot PR curves (not ROC) since degradation events are rare
+- Sweep `stabilityThreshold` from 0.5% to 5% of range width
+
+**LLM-specific degradation patterns to monitor:**
+- Model drift: 75% of businesses observed AI performance declines without monitoring ([Fiddler AI](https://www.fiddler.ai/blog/how-to-monitor-llmops-performance-with-drift))
+- Evaluator agreement drop as leading indicator (already tracked in `computeEvaluatorAgreement()`)
+- Token utilization ratio (input tokens / context window max) -- gap in current metrics
+- Prompt injection spikes via output token variance
+
+Sources: [Datadog Anomaly Detection](https://docs.datadoghq.com/monitors/types/anomaly/), [Google SRE Monitoring](https://sre.google/sre-book/monitoring-distributed-systems/), [NAB Benchmark](https://github.com/numenta/NAB), [TimeEval](https://timeeval.github.io/evaluation-paper/)
+
+---
+
+### R6: Gini Coefficient vs. Shannon Entropy for Coverage Uniformity
+- **Status**: Gini coefficient implemented in `computeGiniUniformity()`
+- **Research needed**: Compare Gini vs. Shannon entropy for coverage uniformity measurement. Gini is simpler but may not capture multi-modal distributions well
+- **Action**: Low priority; Gini is adequate for v1.0. Revisit if auditors report misleading confidence levels
+
+#### Research Findings
+
+**Recommendation: Replace Gini with Normalized Shannon Entropy (Pielou's J).**
+
+Rationale for 7 fixed quality metric categories:
+1. **Zero-category sensitivity**: If any metric has zero evaluations, entropy drops sharply; Gini is less sensitive to completely absent categories
+2. **Multi-modal discrimination**: Gini conflates different distribution shapes due to Lorenz curve crossing ([BEA Primer](https://apps.bea.gov/scb/issues/2025/08-august/0825-gini-primer.htm))
+3. **Standard for fixed-category distributions**: Pielou's J is the standard evenness measure in ecology ([SpringerPlus](https://springerplus.springeropen.com/articles/10.1186/s40064-015-0944-4))
+4. **Cheaper**: O(n) vs. O(n log n) for Gini sort
+5. **Interpretability**: J=0.7 means "70% as uniform as possible"
+
+| Distribution | Gini (1-G) | Entropy (J) |
+|---|---|---|
+| `[14,14,14,14,14,15,15]` near-uniform | ~0.99 | ~0.999 |
+| `[50,50,0,0,0,0,0]` bimodal | ~0.43 | ~0.356 |
+| `[70,5,5,5,5,5,5]` one dominant | ~0.50 | ~0.587 |
+
+**Implementation** (drop-in replacement for `computeGiniUniformity`):
+```typescript
+export function computeNormalizedEntropy(counts: number[]): number {
+  if (counts.length <= 1) return 1;
+  const total = counts.reduce((s, c) => s + c, 0);
+  if (total === 0) return 0;
+  const k = counts.length;
+  const hMax = Math.log2(k);
+  let h = 0;
+  for (const c of counts) {
+    if (c > 0) { const p = c / total; h -= p * Math.log2(p); }
+  }
+  return roundTo(Math.max(0, Math.min(1, h / hMax)), SCORE_PRECISION);
+}
+```
+
+Bump `COVERAGE_CONFIDENCE_VERSION` to `'2.0'` on algorithm change. Both produce [0,1] with 1=uniform, so downstream semantics are preserved.
+
+Sources: [Wikipedia - Entropy](https://en.wikipedia.org/wiki/Entropy_(information_theory)), [PMC - Entropy Ratio](https://pmc.ncbi.nlm.nih.gov/articles/PMC7712116/), [Wikipedia - Gini](https://en.wikipedia.org/wiki/Gini_coefficient)
+
+---
+
+## Frontend Integration (Blocked on Dashboard Phase 2)
+
+### F1: ScoreBadge Component with Direction-Aware Coloring
+- **Backend ready**: `scoreColorBand()`, `adaptiveScoreColorBand()`, `inferScoreDirection()`
+- **Blocked on**: Dashboard Phase 1 ScoreBadge component (design doc Section 4.1)
+- **Integration**: Import `scoreColorBand` from `quality-metrics.ts`, use as CSS class selector
+
+#### Implementation Guidance
+
+**No new library needed.** Extend existing `Indicators.tsx` pattern.
+
+**Colorblind-safe palette** ([Okabe-Ito](https://davidmathlogic.com/colorblind/)):
+- Good: `#0072B2` (blue) / Fair: `#E69F00` (amber) / Poor: `#D55E00` (vermillion)
+- Define as CSS custom properties: `--score-good`, `--score-fair`, `--score-poor`
+- Passes WCAG 2.1 AA contrast (4.5:1) on white backgrounds
+
+**Accessibility**:
+- Always include shape/icon per status (existing pattern uses Unicode shapes)
+- `aria-label="Score: 0.87, good (higher is better)"`
+- Test with [Viz Palette](https://projects.susielu.com/viz-palette) for colorblind simulation
+
+---
+
+### F2: CQI Hero Number on Executive View
+- **Backend ready**: `computeCQI()` with contribution breakdown
+- **Blocked on**: Dashboard Phase 2 Executive view enhancement
+- **Integration**: Call `computeCQI()` from dashboard API, render stacked contribution bar
+
+#### Implementation Guidance
+
+**Recommended library**: **Recharts** (~45KB gzip) -- serves F2, F3, and potentially F5.
+
+**Pattern**: Large mono-font hero number with `TrendIndicator`, plus horizontal stacked `<BarChart>` with 7 metric segments showing per-metric CQI contributions. Use `layout="vertical"` for horizontal bar.
+
+**Alternative**: Pure CSS flex bar (no library) -- `display: flex` with percentage widths per contribution. Sufficient for a single stacked bar.
+
+**Accessibility**: `role="region"` + `aria-label` on hero container. Visually hidden `<table>` fallback for screen readers (SVG charts are not navigable).
+
+---
+
+### F3: Metric Dynamics on Trend Chart
+- **Backend ready**: `computeMetricDynamics()` with breach projection
+- **Blocked on**: Dashboard Phase 2 period-over-period trend chart
+- **Integration**: Render `projectedBreachTime` as dashed projection line
+
+#### Implementation Guidance
+
+**Recommended library**: **Recharts** (same dependency as F2).
+
+**Pattern**:
+- Two `<Line>` components: solid (actual) + dashed via `strokeDasharray="5 5"` (projected)
+- `<ReferenceLine>` for SLA threshold with label
+- Overlap last actual point with first projected point for visual continuity
+- [Recharts Dashed Line example](https://recharts.github.io/en-US/examples/DashedLineChart/)
+
+**Alternatives**: [nivo Line](https://nivo.rocks/line/) (heavier), [visx @visx/xychart](https://airbnb.io/visx/) (~20KB, more boilerplate), [Lightweight Charts](https://www.tradingview.com/lightweight-charts/) (canvas, overkill)
+
+**Performance**: For 30-day trend at daily resolution (~30 points), SVG via Recharts is fine. For minute-level (>1000 points), use canvas rendering or downsample.
+
+---
+
+### F4: Role-Aware Feature Config Integration
+- **Backend ready**: `ROLE_FEATURE_CONFIG` with all feature flags
+- **Blocked on**: Dashboard role view refactoring (currently only 3 role views, no conditional rendering)
+- **Integration**: Use `getRoleFeatureConfig(role)` to conditionally render components
+
+#### Implementation Guidance
+
+**No new library needed.** React Context + feature config map.
+
+**Pattern**: `RoleContext` provider at `<App>` level, derives role from wouter URL. Feature config map in a single file:
+```typescript
+const { hasFeature } = useRole();
+return hasFeature('cqi_hero') && <CQIHero />;
+```
+
+Or `<RoleGate feature="cqi_hero"><CQIHero /></RoleGate>` wrapper for cleaner JSX.
+
+Do NOT use LaunchDarkly/Permit.io -- role set is static and small. Config map has zero runtime cost.
+
+---
+
+### F5: Correlation Heatmap on `/correlations` Route
+- **Backend ready**: `computeCorrelationMatrix()` with Pearson R
+- **Blocked on**: Dashboard Phase 3 correlation view route
+- **Integration**: Render `pearsonR` values in CSS Grid heatmap, highlight `isKnownToxicCombo` cells
+
+#### Implementation Guidance
+
+**Recommended approach**: **CSS Grid + `d3-scale-chromatic`** (~4KB) for a 7x7 matrix.
+
+No charting library needed for 49 cells. Use `scaleSequential(interpolateRdYlGn).domain([-1, 1])` for color scale. If visx is already in the bundle, [`@visx/heatmap`](https://airbnb.io/visx/heatmaps) is a good alternative.
+
+**Toxic combo highlighting**: 2px border + pulsing CSS animation on the cell, plus `aria-label` suffix "-- toxic combination detected".
+
+**Accessibility**:
+- `role="table"` / `role="row"` / `role="cell"` for screen reader navigation
+- Every cell: `aria-label="Accuracy vs Latency: 0.73"`
+- Include numeric value in each cell (color must not be sole indicator)
+- Use blue-to-orange or viridis scale (not red-green)
+
+---
+
+### F6: Label Filter in Evaluation Table
+- **Backend ready**: `labelToOrdinal()` with 3-tier categories
+- **Blocked on**: Dashboard Phase 1 evaluation table component (design doc Section 5, Pattern 2)
+- **Integration**: Sort by `ordinal`, filter by `category` (Pass/Review/Fail dropdown)
+
+#### Implementation Guidance
+
+**Recommended library**: **TanStack Table v8** (`@tanstack/react-table`, ~15KB) -- pairs with existing `@tanstack/react-query`.
+
+**Custom ordinal sort**: `sortingFn` using `indexOf` on `['Pass', 'Review', 'Fail']` order. Custom `filterFn` for multi-select category filtering.
+
+**Accessibility**: `aria-sort` on `<th>`, `aria-label` on filter dropdown, keyboard navigation (Tab through headers, Enter/Space to toggle sort).
+
+**Performance**: For >1000 rows, enable row virtualization via `@tanstack/react-virtual`.
+
+---
+
+## Recommended New Dependencies
+
+| Package | Size (gzip) | Used By | Notes |
+|---------|-------------|---------|-------|
+| `recharts` | ~45KB | F2, F3 | Most common React charting; broad ecosystem |
+| `@tanstack/react-table` | ~15KB | F6 | Headless; pairs with existing `@tanstack/react-query` |
+| `d3-scale-chromatic` | ~4KB | F5 | Just the color scale function, not all of D3 |
+| `tdigest` | ~5KB | R4 | Streaming percentile computation; 2.6M weekly downloads |
+| (none) | 0 | F1, F4 | Pure React + CSS custom properties |
+
+Total new dependency cost: **~69KB gzipped**.
+</file>
+
+<file path="frontend-f1-f6-implementation.md">
+# Frontend F1-F6 Implementation Plan
+
+**Version**: 1.2 (iteration 3: 7 additional fixes)
+**Date**: 2026-02-17
+**Status**: Ready for implementation
+**Backend source**: `src/lib/quality-feature-engineering.ts` (1646 lines, all exports verified)
+**Dashboard source**: `dashboard/src/` (26 files, React 19 + Vite 6 + Hono API + wouter routing)
+
+---
+
+## Prerequisites
+
+### Dependencies to Install
+
+```bash
+cd dashboard && npm install recharts @tanstack/react-table d3-scale d3-scale-chromatic
+```
+
+| Package | Size (gzip) | Used By | Justification |
+|---------|-------------|---------|---------------|
+| `recharts` | ~45KB | F2, F3 | React-native charting; CQI stacked bar + trend projection line |
+| `@tanstack/react-table` | ~15KB | F6 | Headless table; pairs with existing `@tanstack/react-query` |
+| `d3-scale` | ~8KB | F5 | `scaleSequential` for heatmap color mapping |
+| `d3-scale-chromatic` | ~4KB | F5 | Color interpolation function (`interpolateRdYlGn`) |
+
+F1 and F4 require no new dependencies (pure React + CSS).
+
+### Backend Exports Available
+
+All imports come from the parent `observability-toolkit` package via `dashboard/`'s existing import path. Key exports from `quality-feature-engineering.ts`:
+
+| Export | Type | Used By |
+|--------|------|---------|
+| `scoreColorBand(value, direction)` | function | F1 |
+| `adaptiveScoreColorBand(value, metric, direction?, distribution?, sampleSize?)` | function | F1 |
+| `inferScoreDirection(alertDirection)` | function | F1 |
+| `ScoreColorBand` | type | F1 |
+| `computeCQI(metrics: QualityMetricResult[], weights?)` | function | F2 |
+| `DEFAULT_CQI_WEIGHTS` | const | F2 |
+| `CompositeQualityIndex`, `CQIContribution` | interfaces | F2 |
+| `computeMetricDynamics(currentTrend, previousTrend, periodHours, thresholds?, trendHistory?)` | function | F3 |
+| `MetricDynamics` | interface | F3 |
+| `ROLE_FEATURE_CONFIG`, `getRoleFeatureConfig(role)` | const/function | F4 |
+| `RoleFeatureConfig`, `FeatureRoleType` | types | F4 |
+| `computeCorrelationMatrix(metricTimeSeries, knownToxicCombos?, degradedPeriods?, options?)` | function | F5 |
+| `CorrelationFeature` | interface | F5 |
+| `labelToOrdinal(label)`, `ordinalToCategory(ordinal)` | functions | F6 |
+| `LabelOrdinal`, `LabelFilterCategory` | types | F6 |
+
+---
+
+## F1: ScoreBadge Component with Direction-Aware Coloring
+
+**Phase**: 2 | **Effort**: Low | **New deps**: None
+
+### What It Does
+
+Extends the existing `Indicators.tsx` status badge pattern with a `ScoreBadge` component that color-codes evaluation scores using the 5-band scale (`excellent`/`good`/`adequate`/`poor`/`failing`) and respects metric direction (higher-is-better vs lower-is-better).
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `dashboard/src/components/ScoreBadge.tsx` | CREATE | New component |
+| `dashboard/src/components/Indicators.tsx` | MODIFY | Add CSS custom properties for score bands |
+| `dashboard/src/components/MetricCard.tsx` | MODIFY | Replace raw score display with `<ScoreBadge>` |
+
+### Implementation
+
+**`ScoreBadge.tsx`** props:
+```typescript
+interface ScoreBadgeProps {
+  score: number | null;
+  metricName: string;
+  direction?: ScoreDirection;  // from quality-feature-engineering.ts
+  label?: string;
+  showTooltip?: boolean;
+}
+```
+
+Core logic:
+1. Import `scoreColorBand` and `inferScoreDirection` from backend
+2. Compute band: `const band = scoreColorBand(score, direction)`
+3. Map band to CSS custom property: `var(--score-${band})`
+4. Render colored dot + score value + metric name
+5. Shape differentiation: circle (excellent/good), triangle (adequate), square (poor/failing)
+
+**CSS custom properties** (add to `dashboard/src/theme.css` `:root` block alongside existing design tokens):
+```css
+--score-excellent: #26d97f;
+--score-good: #34d399;
+--score-adequate: #e5a00d;
+--score-poor: #f97316;
+--score-failing: #f04438;
+```
+
+**Colorblind-safe alternative** (Okabe-Ito, use for score-good/fair/poor distinction):
+- Good: `#0072B2` (blue)
+- Fair: `#E69F00` (amber)
+- Poor: `#D55E00` (vermillion)
+
+**Accessibility**:
+- `aria-label="Score: {score}, {band} ({direction === 'minimize' ? 'lower is better' : 'higher is better'})"`
+- Shape + color (never color alone)
+- WCAG 2.1 AA contrast (4.5:1) on `--bg-card` background
+
+### Integration Point
+
+In `MetricCard.tsx`, within the existing destructured scope (`const { name, values, alerts } = metric`), replace the raw score display with:
+```tsx
+<ScoreBadge
+  score={values.avg}
+  metricName={name}
+  direction={inferScoreDirection(alerts?.[0]?.direction)}
+/>
+```
+
+### Acceptance Criteria
+
+- [ ] Score badge renders with correct color band for all 7 metrics
+- [ ] Hallucination 0.05 shows green (excellent); relevance 0.05 shows red (failing)
+- [ ] Shape differs by band (circle/triangle/square)
+- [ ] `aria-label` includes score, band, and direction
+- [ ] No regression in existing MetricCard layout
+
+---
+
+## F2: CQI Hero Number on Executive View
+
+**Phase**: 2 | **Effort**: Medium | **New deps**: `recharts`
+
+### What It Does
+
+Adds a Composite Quality Index (CQI) hero number to the Executive view -- a single weighted score (0-1) combining all 7 metrics, with a stacked horizontal bar showing per-metric contributions.
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `dashboard/src/components/CQIHero.tsx` | CREATE | Hero number + contribution bar |
+| `dashboard/src/components/views/ExecutiveView.tsx` | MODIFY | Add `<CQIHero>` above metric grid |
+| `dashboard/src/api/routes/dashboard.ts` | MODIFY | Compute and return CQI in dashboard response |
+| `dashboard/src/types.ts` | MODIFY | Add CQI types to dashboard response |
+
+### Implementation
+
+**API layer** (`dashboard.ts`):
+```typescript
+import { computeCQI, DEFAULT_CQI_WEIGHTS } from 'observability-toolkit';
+
+// In dashboard route handler, after computing metrics:
+// computeCQI takes QualityMetricResult[] (not a plain object)
+const cqi = computeCQI(metrics, DEFAULT_CQI_WEIGHTS);
+// Return cqi in response
+```
+
+**`CQIHero.tsx`**:
+- Large mono-font hero number (JetBrains Mono, `--text-3xl` 36px)
+- Delta vs previous period: compute `previousCqi` from the prior poll cycle and display as `TrendIndicator` (existing component, expects `percentChange`). Calculate: `percentChange = ((cqi.value - previousCqi) / previousCqi) * 100`
+- Horizontal stacked `<BarChart>` (recharts, `layout="vertical"`) with 7 metric segments
+  - Each segment width = `contribution.weight` / `totalWeight` (proportion of total renormalized weight)
+  - Segment color = `scoreColorBand` for that metric's raw score
+  - Hover tooltip: metric name + raw score + weight + contribution
+
+**Pure CSS alternative** (if recharts seems heavy for a single bar):
+```css
+.cqi-bar { display: flex; height: 24px; border-radius: 4px; overflow: hidden; }
+.cqi-segment { transition: width 0.3s ease; }
+```
+Each segment gets `width: ${(contribution / total) * 100}%` and `background: var(--score-${band})`.
+
+**Accessibility**:
+- `role="region"` + `aria-label="Composite Quality Index: {value}"` on hero container
+- Hidden `<table>` fallback listing each metric's contribution for screen readers
+
+### Data Flow
+
+```
+dashboard API → computeCQI(metricAvgs, weights) → CQI response
+  → ExecutiveView → <CQIHero cqi={data.cqi} />
+    → hero number + stacked bar
+```
+
+### Acceptance Criteria
+
+- [ ] CQI value displayed as hero number (0.00-1.00 format)
+- [ ] Stacked bar shows 7 segments with correct proportions
+- [ ] Hover on segment shows metric name, raw score, weight, contribution
+- [ ] Screen reader can access all contribution data
+- [ ] CQI only appears on Executive view (per ROLE_FEATURE_CONFIG)
+
+---
+
+## F3: Metric Dynamics on Trend Chart
+
+**Phase**: 2 | **Effort**: Medium | **New deps**: `recharts` (shared with F2)
+
+### What It Does
+
+Adds velocity, acceleration, and projected breach time to the metric detail trend chart. Renders actual scores as solid line and projected trajectory as dashed line extending to the SLA threshold.
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `dashboard/src/components/TrendChart.tsx` | CREATE | Recharts line chart with projection |
+| `dashboard/src/hooks/useMetricDetail.ts` | MODIFY | Add dynamics computation |
+| `dashboard/src/api/routes/metrics.ts` | MODIFY | Return dynamics in metric detail response |
+| `dashboard/src/types.ts` | MODIFY | Add MetricDynamics to response types |
+
+### Implementation
+
+**API layer** (`metrics.ts`):
+```typescript
+import { computeMetricDynamics } from 'observability-toolkit';
+
+// computeMetricDynamics requires periodHours (e.g., 1 for hourly data) and optional trendHistory
+const periodHours = 1; // adjust based on data granularity
+const dynamics = computeMetricDynamics(
+  currentTrend,
+  previousTrend,
+  periodHours,
+  metricThresholds,
+  trendHistory  // MetricTrend[] for acceleration smoothing (>= 2 entries recommended)
+);
+// Return dynamics alongside existing metric detail
+```
+
+**`TrendChart.tsx`** (recharts):
+- `<LineChart>` with `<Line>` for actual data (solid, `stroke={accentPrimary}`)
+- `<Line>` for projected data (dashed, `strokeDasharray="5 5"`, same color at 50% opacity)
+- `<ReferenceLine>` for warning and critical thresholds
+- Projected line: extrapolate from last 2 data points using velocity, extend to `projectedBreachTime` or chart edge
+- Last actual point overlaps first projected point for visual continuity
+
+**Velocity/acceleration display** (below chart):
+```
+Velocity: -0.46%/hr  |  Acceleration: +0.12%/hr²  |  Projected breach: 3.2 days
+```
+
+**Note**: The backend `MetricDynamics.velocity` is computed as rate-of-change per hour (see `quality-feature-engineering.ts` line 481). Display as-is for operator view; for executive view, multiply by 24 and display as "/day" if preferred.
+
+**Accessibility**:
+- `aria-label` on chart container: "Trend chart for {metric} showing {days} days of data"
+- Tabular data available via toggle (existing pattern)
+
+### Acceptance Criteria
+
+- [ ] Solid line for actual scores, dashed line for projection
+- [ ] Threshold lines (warning + critical) visible with labels
+- [ ] Velocity and acceleration displayed below chart
+- [ ] Projected breach time shown when trajectory crosses threshold
+- [ ] Chart handles missing data gracefully (gaps in trend)
+
+---
+
+## F4: Role-Aware Feature Config Integration
+
+**Phase**: 2 | **Effort**: Low | **New deps**: None
+
+### What It Does
+
+Adds a `RoleContext` provider that conditionally renders dashboard components based on the active role (executive/operator/auditor) using `ROLE_FEATURE_CONFIG` from the backend.
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `dashboard/src/contexts/RoleContext.tsx` | CREATE | React Context + `useRole` hook + `RoleGate` |
+| `dashboard/src/App.tsx` | MODIFY | Wrap app in `<RoleProvider>` |
+| `dashboard/src/components/views/ExecutiveView.tsx` | MODIFY | Use `RoleGate` for CQI, projected breach |
+| `dashboard/src/components/views/OperatorView.tsx` | MODIFY | Use `RoleGate` for variance, acceleration |
+| `dashboard/src/components/views/AuditorView.tsx` | MODIFY | Use `RoleGate` for provenance, raw export |
+
+### Implementation
+
+**`RoleContext.tsx`**:
+```typescript
+import { getRoleFeatureConfig, type FeatureRoleType, type RoleFeatureConfig } from 'observability-toolkit';
+
+interface RoleContextValue {
+  role: FeatureRoleType;
+  config: RoleFeatureConfig;
+  hasFeature: (key: keyof RoleFeatureConfig) => boolean;
+}
+
+const RoleContext = createContext<RoleContextValue>(/* default executive */);
+
+export function RoleProvider({ children }: { children: ReactNode }) {
+  // Derive role from wouter URL: /role/:roleName
+  const [match, params] = useRoute('/role/:roleName');
+  const role = (params?.roleName as FeatureRoleType) ?? 'executive';
+  const config = getRoleFeatureConfig(role);
+
+  const hasFeature = (key: keyof RoleFeatureConfig) => {
+    const val = config[key];
+    return typeof val === 'boolean' ? val : val !== undefined;
+  };
+
+  return (
+    <RoleContext.Provider value={{ role, config, hasFeature }}>
+      {children}
+    </RoleContext.Provider>
+  );
+}
+
+export const useRole = () => useContext(RoleContext);
+
+// Convenience wrapper
+export function RoleGate({ feature, children }: {
+  feature: keyof RoleFeatureConfig;
+  children: ReactNode;
+}) {
+  const { hasFeature } = useRole();
+  return hasFeature(feature) ? <>{children}</> : null;
+}
+```
+
+**Usage in views**:
+```tsx
+// ExecutiveView.tsx
+import { RoleGate } from '../contexts/RoleContext';
+
+<RoleGate feature="showCQI">
+  <CQIHero cqi={data.cqi} />
+</RoleGate>
+
+<RoleGate feature="showProjectedBreach">
+  <BreachBadge time={dynamics.projectedBreachTime} />
+</RoleGate>
+```
+
+### Acceptance Criteria
+
+- [ ] Executive view shows CQI but not variance/acceleration
+- [ ] Operator view shows variance, acceleration, projected breach, remediation
+- [ ] Auditor view shows provenance, raw export, full explanation
+- [ ] Role derived from URL (`/role/executive`, `/role/operator`, `/role/auditor`)
+- [ ] Default role is `executive` when no role in URL
+- [ ] Feature config is zero-runtime-cost (no network call, no feature flags service)
+
+---
+
+## F5: Correlation Heatmap on `/correlations` Route
+
+**Phase**: 3 | **Effort**: Medium | **New deps**: `d3-scale-chromatic`
+
+### What It Does
+
+Adds a `/correlations` route displaying a 7x7 Pearson R matrix as a color-coded heatmap. Highlights known toxic combinations from `MetricCorrelationRule` and surfaces high-correlation discoveries.
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `dashboard/src/components/CorrelationHeatmap.tsx` | CREATE | CSS Grid heatmap component |
+| `dashboard/src/pages/CorrelationsPage.tsx` | CREATE | Page wrapper with route |
+| `dashboard/src/App.tsx` | MODIFY | Add `/correlations` route |
+| `dashboard/src/api/routes/correlations.ts` | CREATE | API route computing correlation matrix |
+| `dashboard/src/api/server.ts` | MODIFY | Mount correlation route |
+| `dashboard/src/types.ts` | MODIFY | Add correlation response types |
+
+### Implementation
+
+**API route** (`correlations.ts`):
+```typescript
+import { computeCorrelationMatrix, type CorrelationFeature } from 'observability-toolkit';
+
+// Collect time-series data for all 7 metrics as Map<string, number[]>
+// Build toxic combos set from MetricCorrelationRule registry (e.g., 'hallucination:relevance')
+// Build degradedPeriods map from threshold breach history
+const correlations = computeCorrelationMatrix(
+  metricTimeSeries,      // Map<string, number[]>
+  knownToxicCombos,      // Set<string> for toxic combo highlighting
+  degradedPeriods,       // Map<string, boolean[]> for co-occurrence rate
+  { maxLagSteps: 6, fdrQ: 0.05 }  // CorrelationOptions
+);
+// Return CorrelationFeature[] (21 pairs for 7 metrics)
+```
+
+**`CorrelationHeatmap.tsx`** (CSS Grid + d3-scale-chromatic):
+```typescript
+import { scaleSequential } from 'd3-scale';
+import { interpolateRdYlGn } from 'd3-scale-chromatic';
+
+const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
+```
+
+Layout: 7x7 CSS Grid (8 columns/rows including headers):
+- Row/column headers: metric names
+- Each cell: background color from `colorScale(pearsonR)`, numeric value overlaid
+- Diagonal cells: `1.00` with neutral color
+- Toxic combo cells: 2px border + subtle pulse animation
+- Hover: shows `pearsonR`, `lagHours`, `pValue`, `significant`
+
+**Color scale**: Blue-to-orange or RdYlGn (not red-green) via `interpolateRdYlGn`:
+- -1.0 → red (strong negative correlation)
+- 0.0 → yellow/neutral
+- +1.0 → green (strong positive correlation)
+
+**Accessibility**:
+- `role="table"` / `role="row"` / `role="cell"` for screen reader navigation
+- Every cell: `aria-label="{metricA} vs {metricB}: {pearsonR}"`
+- Numeric value always visible in cell (color is supplementary)
+- Toxic combo cells: `aria-label` suffix " -- toxic combination detected"
+
+### Acceptance Criteria
+
+- [ ] 7x7 heatmap renders with correct Pearson R values
+- [ ] Color scale maps -1 to +1 correctly
+- [ ] Toxic combinations highlighted with border + animation
+- [ ] Novel high-correlation pairs (|R| > 0.7) surfaced as "discovered"
+- [ ] Hover shows lag hours, p-value, significance
+- [ ] Screen reader navigable via table semantics
+- [ ] Route accessible at `/correlations`
+
+---
+
+## F6: Label Filter in Evaluation Table
+
+**Phase**: 2 | **Effort**: Medium | **New deps**: `@tanstack/react-table`
+
+### What It Does
+
+Adds ordinal sorting and 3-tier category filtering (Pass/Review/Fail) to the evaluation table using `labelToOrdinal()` from the backend.
+
+### Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `dashboard/src/components/EvaluationTable.tsx` | CREATE | TanStack Table with filters |
+| `dashboard/src/components/EvaluationDetail.tsx` | MODIFY | Replace current table with `<EvaluationTable>` |
+| `dashboard/src/types.ts` | MODIFY | Add label ordinal types |
+
+### Implementation
+
+**`EvaluationTable.tsx`** (TanStack Table v8):
+```typescript
+import { createColumnHelper, useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table';
+import { labelToOrdinal, ordinalToCategory } from 'observability-toolkit';
+```
+
+Columns:
+1. **Score** — numeric, sortable, color-coded by `scoreColorBand`
+2. **Label** — pill badge, sortable by ordinal (not alphabetical)
+3. **Category** — derived from `ordinalToCategory()`, filterable via dropdown (Pass/Review/Fail)
+4. **Explanation** — truncated to 60 chars, hover for full text
+5. **Evaluator** — monospace, links to judge trace
+6. **Timestamp** — relative time, hover reveals ISO timestamp
+
+**Custom ordinal sort**:
+```typescript
+const labelSortFn: SortingFn<Evaluation> = (rowA, rowB) => {
+  const a = labelToOrdinal(rowA.original.label).ordinal;
+  const b = labelToOrdinal(rowB.original.label).ordinal;
+  return a - b;
+};
+```
+
+**Category filter**:
+```typescript
+const categoryFilterFn: FilterFn<Evaluation> = (row, _id, filterValue: LabelFilterCategory[]) => {
+  if (!filterValue.length) return true;
+  const category = ordinalToCategory(labelToOrdinal(row.original.label).ordinal);
+  return filterValue.includes(category);
+};
+```
+
+**Filter UI**: Multi-select dropdown with 3 options (Pass, Review, Fail) + "All" default.
+
+**Accessibility**:
+- `aria-sort` on sortable `<th>` elements
+- `aria-label` on filter dropdown
+- Keyboard navigation: Tab through headers, Enter/Space to toggle sort
+- Focus indicators per WCAG 2.1 AA
+
+**Performance**: For >1000 rows, add `@tanstack/react-virtual` for row virtualization.
+
+### Acceptance Criteria
+
+- [ ] Table sortable by score (numeric) and label (ordinal, not alphabetical)
+- [ ] Category filter (Pass/Review/Fail) correctly classifies all standard labels
+- [ ] Unknown labels default to "Review" category (ordinal 2)
+- [ ] Labels normalized case-insensitively before lookup
+- [ ] Explanation truncated with hover tooltip for full text
+- [ ] Keyboard navigable (Tab + Enter/Space for sort toggle)
+- [ ] `aria-sort` present on sorted columns
+
+---
+
+## Implementation Sequence
+
+### Phase Definitions
+
+- **Phase 2** (Visualization): New pages and visualization components surfacing existing backend data. Includes coverage heatmap, pipeline funnel, sparklines, trend charts, confidence panels. See design doc Section 15, Phase 2.
+- **Phase 3** (Advanced): Features requiring new data sources or complex interaction patterns. Includes multi-agent visualization, trace context, keyboard nav, compliance panel, correlation view. See design doc Section 15, Phase 3.
+
+### Recommended Order
+
+```
+F1 (ScoreBadge) → F4 (RoleContext) → F2 (CQI Hero) → F6 (Eval Table) → F3 (Trend Chart) → F5 (Correlation Heatmap)
+```
+
+**Rationale**:
+1. **F1** first: foundation component used by F2, F5, F6
+2. **F4** second: role context used by all views to gate F2/F3/F5 features
+3. **F2** third: highest-visibility executive feature, validates recharts integration
+4. **F6** fourth: independent of charting, validates @tanstack/react-table integration
+5. **F3** fifth: reuses recharts from F2, requires trend API endpoint
+6. **F5** last: Phase 3, requires correlation API endpoint + d3-scale-chromatic
+
+### Dependency Graph
+
+```
+F1 (ScoreBadge) ──┐
+                   ├── F2 (CQI Hero) ──── F3 (Trend Chart)
+F4 (RoleContext) ──┘
+                   ├── F6 (Eval Table)
+                   └── F5 (Correlation Heatmap)
+```
+
+### Estimated Scope Per Item
+
+| Item | New Files | Modified Files | Lines (est.) |
+|------|-----------|----------------|-------------|
+| F1 | 1 | 2 | ~120 |
+| F2 | 1 | 3 | ~200 |
+| F3 | 1 | 2 | ~250 |
+| F4 | 1 | 4 | ~100 |
+| F5 | 3 | 3 | ~300 |
+| F6 | 1 | 2 | ~200 |
+| **Total** | **8** | **16** | **~1170** |
+
+---
+
+## API Endpoints Required
+
+| Endpoint | Method | Used By | Backend Function | Status |
+|----------|--------|---------|-----------------|--------|
+| `GET /api/dashboard` | existing | F1, F2 | `computeDashboardSummary()` | Needs CQI addition |
+| `GET /api/metrics/:name` | existing | F3 | `computeMetricDetail()` | Needs dynamics addition |
+| `GET /api/correlations` | NEW | F5 | `computeCorrelationMatrix()` | Not yet created |
+| `GET /api/evaluations` | existing | F6 | `obs_query_evaluations` | Needs label ordinal addition |
+
+---
+
+## Testing Strategy
+
+Each F-item should include:
+1. **Unit tests** for the new component (vitest + @testing-library/react)
+2. **Integration test** verifying data flows from API to rendered component
+3. **Accessibility audit** via axe-core in test suite
+4. **Visual regression** via manual verification of score colors, chart rendering
+
+Run: `cd dashboard && npm test`
+
+---
+
+## Sources
+
+- Backend: `src/lib/quality-feature-engineering.ts` (all exports verified 2026-02-17)
+- Design: `frontend/docs/llm-explainability-design.md` Sections 4.1, 8.1, 15, 16.2-16.4
+- Roadmap: `frontend/docs/feature-engineering-roadmap.md` F1-F6 implementation guidance
+- Status: `frontend/docs/feature-engineering-roadmap-status.md` (all F items NOT STARTED as of 2026-02-16)
+- Analysis: `frontend/docs/feature-engineering-analysis-2026-02-15.md` (statistical validation)
+</file>
+
+<file path="llm-explainability-design-session-2026-02-15.md">
+# LLM Explainability Design Doc: Session Log (2026-02-15)
+
+**Target file:** `docs/frontend/llm-explainability-design.md`
+**Source report:** `~/code/PersonalSite/_reports/2026-02-14-llm-explainability-design-aggregate-telemetry.md`
+**Method:** Telemetry-driven quality fixes + feature engineering validation + enterprise code review
+
+---
+
+## Commits
+
+### 1. `3bcbedc` fix(docs): correct normalizeWithLogprobs() line reference L837->L814
+
+Hallucination fix H1. Section 13 Component-to-Data Mapping cited L837 for `normalizeWithLogprobs()` but actual definition is at L814 in `llm-as-judge.ts`.
+
+### 2. `a2a957b` docs: update BACKLOG.md with 10 resolved items from session #2
+
+Housekeeping. Marked M29, M40, IR1, IR2, IR4, IR5, TF1-TF3, TF5 as Done.
+
+### 3. `07f817a` fix(docs): apply 6 faithfulness improvements to explainability design
+
+| Fix | Description |
+|-----|-------------|
+| F1 | Add optional 3rd parameter (`RoleViewOptions`) to `computeRoleView()` |
+| F2 | Correct AuditorView line range from 1304-1352 to 1304-1350 |
+| F3 | Add source attribution caveat for CHI EA '25 Operability principle |
+| F4 | Strengthen CHI EA '25 Sources citation with **Verification note** prefix |
+| F5 | Add disclaimer to Section 16 re: projected estimates and untuned CQI weights |
+| F6 | Add verification timestamp to Section 13 Component-to-Data Mapping |
+
+### 4. `c16815e` fix(ci): patch MCP SDK vulnerability, exclude test files from npm package
+
+CI1: npm audit fix (GHSA-345p-7cg4-v4c7, GHSA-w7fw-mjwx-w883). CI2: Add `!dist/**/*.test.*` to package.json files field. Package size 848KB -> 410KB.
+
+### 5. `f6a01fb` fix(docs): apply 3 relevance improvements via pattern abstraction
+
+| Fix | Description |
+|-----|-------------|
+| R1 | Rewrite Coverage Heatmap derivation to **grid-based coverage matrix** pattern |
+| R2 | Rewrite Pipeline Funnel derivation to **progressive filtering funnel** pattern |
+| R3 | Add inline description of **progressive disclosure** pattern with G3 link |
+
+All three abstract security-domain citations (Wiz.io) into general observability patterns.
+
+### 6. `f0e179a` feat(ci): add obtool-ingest typecheck job and skipped deploy pipeline
+
+Add `ingest-typecheck` job to ci.yml. Scaffold `deploy-ingest` job in publish.yml with `if: false` skip guard (TODO: D1-D4 for Cloudflare secrets).
+
+### 7. `94c3229` feat(docs): add feature engineering analysis, fix ScoreDirection type
+
+Created `docs/frontend/feature-engineering-analysis-2026-02-15.md` (177 lines). Validated all 6 Section 16 proposals:
+
+| Proposal | Statistical Validity | Compute Feasibility |
+|----------|:-------------------:|:-------------------:|
+| Composite Quality Index (CQI) | Sound | O(m), negligible |
+| Metric Velocity/Acceleration | Sound with caveats | O(m*t), negligible |
+| Coverage-Weighted Confidence | Excellent | O(n log n), <1ms |
+| Correlation Strength Matrix | Sound with caveats | O(m^2*n), <10ms |
+| Adaptive Score Scaling | Strong | O(n*m), <1ms |
+| Label Encoding (Ordinal Sort) | Sound | O(n), negligible |
+
+Total compute budget: <100ms for n=1000. 11/12 backend references verified at exact line numbers.
+
+### 8. `9f9e887` fix(docs): correct broken anchor for CHI EA '25 principles reference
+
+Code review finding. Anchor `#dashboard-design-principles-from-chi-2025-research` targeted bold text, not a heading. Corrected to `#4-dashboard-metrics-explainability` in both Section 4.5 and Sources.
+
+### 9. `ec7fdb7` fix(ci): resolve CI3-CI9 review findings
+
+CI3: Package contents verification. CI6: Post-publish `npm view`. CI8: Dependabot config. CI9: `npm audit --audit-level=high` in lint + publish.
+
+### 10. `880c483` fix(docs): revert ThresholdDirection back to ScoreDirection
+
+Code review finding. Design doc's `ScoreDirection = 'maximize' | 'minimize'` is semantically distinct from the codebase's `ThresholdDirection = 'above' | 'below'`. Reverted the incorrect rename from commit 7.
+
+### 11. `64414f2` docs: add 11 out-of-scope items from design doc review to BACKLOG
+
+| ID | Priority | Description |
+|----|----------|-------------|
+| FE1 | P3 | CQI weight configurability via `RoleViewOptions` |
+| FE2 | P3 | Velocity noise smoothing (exponential, alpha=0.3) |
+| FE3 | P3 | Coverage confidence minimum sample size (n >= 30) |
+| FE4 | P3 | Correlation matrix: Spearman + pValue/effectSize fields |
+| FE5 | P3 | Adaptive scaling fallback for insufficient data |
+| FE6 | P3 | Label encoding unmapped label handling |
+| FE7 | P3 | Feature versioning (`featureVersion: string`) |
+| QM1 | P2 | ScoreDirection vs ThresholdDirection semantic documentation |
+| QM2 | P2 | Feature pipeline ordering dependency (Step 3 -> CoverageHeatmap) |
+| CR1 | P4 | Auto-verify line references on source change |
+
+### 12. `4066237` fix(ci): resolve CI10-CI15 review findings
+
+CI10: Concurrency group. CI11: Coverage artifact (7-day retention). CI12: Verify `dist/server.js` after artifact download. CI14: Homepage/bugs fields in package.json.
+
+### 13. `2e9a3ef` docs(observability-toolkit): add session artifacts from design doc review
+
+Committed `llm-explainability-design-updates-2026-02-15.md` (quality fixes tracking) and `code-review-10-commits-2026-02-15.md` (enterprise review report).
+
+### 14. `393f378` fix(obtool-ingest): use list() for health probes, add error logging
+
+Ingest service fix (not design-doc related).
+
+### 15. `d30e681` docs: migrate CI/CD review resolved items to changelog (v2.11)
+
+Changelog maintenance (not design-doc related).
+
+---
+
+## Quality Scores (Post-Fix)
+
+| Dimension | Score |
+|-----------|-------|
+| Hallucination | 0.92 |
+| Faithfulness | 0.90 |
+| Relevance | 0.95 |
+| Coherence | 0.93 |
+
+---
+
+## Final Review Verdict
+
+**APPROVE FOR RELEASE** (9.5/10)
+
+- 3706 tests passing, 0 failures
+- TypeScript compilation clean
+- npm audit: 0 vulnerabilities
+- All 11 backend line references verified
+- All cross-reference anchors valid
+- No regressions introduced
+
+---
+
+## Files Modified
+
+| File | Commits |
+|------|---------|
+| `docs/frontend/llm-explainability-design.md` | 1, 3, 5, 8, 10 |
+| `docs/frontend/feature-engineering-analysis-2026-02-15.md` | 7, 10 |
+| `docs/frontend/llm-explainability-design-updates-2026-02-15.md` | 13 |
+| `docs/reviews/code-review-10-commits-2026-02-15.md` | 13 |
+| `docs/BACKLOG.md` | 2, 11 |
+| `.github/workflows/ci.yml` | 4, 6, 9, 12 |
+| `.github/workflows/publish.yml` | 4, 9, 12 |
+| `package.json` | 4, 12 |
+| `.github/dependabot.yml` | 9 |
+</file>
+
+<file path="llm-explainability-design-updates-2026-02-15.md">
+# LLM Explainability Design Doc: Quality Fixes (2026-02-15)
+
+**Source report:** `~/code/PersonalSite/_reports/2026-02-14-llm-explainability-design-aggregate-telemetry.md`
+**Target file:** `docs/frontend/llm-explainability-design.md`
+
+---
+
+## Pre-Fix Scores (from aggregate report)
+
+| Metric | Score | Status |
+|--------|-------|--------|
+| Relevance | 0.95 | healthy |
+| Faithfulness | 0.88 | healthy |
+| Hallucination | 0.08 | warning |
+
+## Telemetry Context
+
+Pipeline-wide evaluation data (Feb 6-15) shows:
+- Hallucination avg: 0.148 (9 evaluations, canary session `557c470e` at 0.57 is primary outlier)
+- Faithfulness avg: 0.852 (same canary at 0.43 drags average)
+- Relevance avg: 0.748 (canary at 0.34)
+
+The design doc's hallucination score (0.08) was driven by two specific issues identified in the report's LLM-as-Judge evaluation.
+
+---
+
+## Fixes Applied
+
+### Hallucination (targeting 0.08 -> < 0.05)
+
+| # | Issue | Location | Fix |
+|---|-------|----------|-----|
+| H1 | `normalizeWithLogprobs()` line reference cited L837, actual definition is L814 | Section 13, line 992 | Changed `L837` to `L814` |
+
+**Note:** The report also flagged `computeExecutiveView()`/`computeOperatorView()`/`computeAuditorView()` as separate functions, but the current doc already correctly references the unified `computeRoleView()`. This was fixed in a prior session (`16228d0`).
+
+### Faithfulness (targeting 0.88 -> 0.92+)
+
+| # | Issue | Location | Fix |
+|---|-------|----------|-----|
+| F1 | `computeRoleView(dashboard, role)` omitted optional 3rd parameter | Section 16.4, line 1389 | Updated to `computeRoleView(dashboard, role, options?)` with description of `RoleViewOptions` |
+| F2 | View type line range said "1304-1352" but AuditorView ends at L1350 | Section 16.4, line 1389 | Corrected to "1304-1350" |
+| F3 | CHI EA '25 inline reference lacked source attribution caveat | Section 4.5, line 478 | Added: "principle name is from paper abstract; application to quality dashboards is research doc's interpretation" |
+| F4 | CHI EA '25 Sources citation caveat was understated | Sources, line 1458 | Strengthened with **Verification note** prefix; clarified "paraphrases, not direct quotes" |
+| F5 | Section 16 disclaimer didn't call out unverified estimates | Section 16 header | Added: lead-time estimates are projected not empirical; CQI weights are initial not tuned |
+| F6 | Component-to-Data Mapping table had no verification timestamp | Section 13 header | Added: "Line references verified against quality-metrics.ts and llm-as-judge.ts as of 2026-02-15" |
+
+### Relevance (targeting 0.91 avg -> 0.93+)
+
+| # | Issue | Location | Fix |
+|---|-------|----------|-----|
+| R1 | Coverage Heatmap derivation cited security-specific Wiz.io feature without abstracting the pattern | Section 4.6, line 482 | Rewritten to emphasize the **grid-based coverage matrix** pattern; clarified the mapping from framework-by-resource to evaluation-by-trace |
+| R2 | Pipeline Funnel derivation cited security-specific risk funnel without abstracting | Section 4.7, line 511 | Rewritten to emphasize the **progressive filtering funnel** pattern; clarified mapping from risk-severity to pipeline drop-off |
+| R3 | Progressive Disclosure derivation was a bare citation without explanation | Section 3.1, line 183 | Added inline description of the abstracted pattern and explicit link to the gap it addresses (G3: only 2 disclosure levels) |
+
+---
+
+## Verification: Line References Audit
+
+All code line references in the design doc were verified against the current codebase:
+
+| Reference | Doc Line | Claimed | Actual | Status |
+|-----------|----------|---------|--------|--------|
+| `computeQualityMetric()` | L982 | L751 | L751 | verified |
+| `computeDashboardSummary()` | L982 | L816 | L816 | verified |
+| `checkAlertThresholds()` | L986 | L693 | L693 | verified |
+| `computeMetricDetail()` | L984 | L1562 | L1562 | verified |
+| `evaluateSLA()` | L993 | L1714 | L1714 | verified |
+| `evaluateSLAs()` | L993 | L1765 | L1765 | verified |
+| `computeTrend()` | L995 | L1938 | L1938 | verified |
+| `computePipelineView()` | L990 | L2155 | L2155 | verified |
+| `computeCoverageHeatmap()` | L989 | L2273 | L2273 | verified |
+| `ConfidenceIndicator` | L992 | L118 | L118 | verified |
+| `MetricCorrelationRule` | L1283 | L219 | L219 | verified |
+| `ExecutiveView` | L1389 | L1304 | L1304 | verified |
+| `OperatorView` | L1389 | (1304-1350) | L1323 | verified |
+| `AuditorView` | L1389 | (1304-1350) | L1338 | verified |
+| `computeRoleView()` | L1389 | L1372 | L1372 | verified |
+| `normalizeWithLogprobs()` | L992 | ~~L837~~ L814 | L814 | **fixed** |
+| `panelEvaluation()` | L707 | (no line cited) | L1475 | N/A |
+
+---
+
+## Summary
+
+- **7 edits** applied across 3 quality dimensions
+- **1 hallucination** fixed (incorrect line reference)
+- **6 faithfulness** improvements (signature accuracy, source attribution, verification markers)
+- **3 relevance** improvements (pattern abstraction from security-specific to general observability)
+- **16 line references** audited; all verified correct post-fix
+</file>
+
+<file path="llm-explainability-design.md">
+# LLM Explainability Frontend Design Document
+
+**Version**: 1.0
+**Date**: 2026-02-14
+**Status**: Design
+**Scope**: observability-toolkit dashboard v3.0
+**Source Audit**: [llm-explainability-research.md](../interface/llm-explainability-research.md)
+
+---
+
+## Executive Summary
+
+This document translates the research findings from the [LLM Explainability Research](../interface/llm-explainability-research.md), [Wiz.io Security Explainability UX Research](../interface/wiz-io-security-explainability-ux.md), and [Quality Dashboard UX Review](../interface/quality-dashboard-ux-review.md) into a production frontend design specification. It defines the visual language, component architecture, interaction patterns, and regulatory UI requirements for an LLM evaluation explainability dashboard.
+
+### Audit Findings from Research Document
+
+The research document identifies six platform-level patterns, five OTel convention gaps, three score presentation paradigms, and six regulatory requirements. The current dashboard (v2.9) implements the data layer for most of these but presents them through a minimal UI that does not fully surface the explainability affordances available in the underlying data.
+
+**What the current dashboard does well:**
+- Dark theme with GitHub-style card layout
+- Status badge system (healthy/warning/critical/no_data) with shape differentiation
+- Trend indicators with percentage change
+- Confidence badges (high/medium/low)
+- 3 role-based views (executive/operator/auditor)
+- Score histogram distribution
+- Alert list with remediation hints
+- SLA compliance table
+
+**What the current dashboard lacks:**
+- Score tooltip with judge trace linkage (Langfuse Pattern 1)
+- Chain-of-thought reasoning display with collapsible sections
+- Evaluation-to-trace drill-down (alert -> metric -> evaluation -> trace)
+- Multi-agent turn-level visualization
+- Cross-metric correlation visualization (toxic combination display)
+- Confidence interval visualization (logprob distribution)
+- Regulatory provenance panel (EU AI Act Article 13 compliance)
+- Coverage heatmap visualization
+- Pipeline funnel visualization
+- Temporal comparison (period-over-period overlay)
+- Feature-engineered derived metrics (composite quality index, metric velocity/acceleration, coverage-weighted confidence)
+- Adaptive score scaling per metric distribution shape
+- Role-aware feature selection (feature subsets tuned per executive/operator/auditor decision function)
+
+---
+
+## 1. Design Direction
+
+### Aesthetic: Industrial Observability
+
+The dashboard adopts an **industrial-utilitarian** aesthetic -- precise, data-dense, and engineered for sustained monitoring. The visual metaphor is an instrument panel: every element serves a diagnostic purpose, nothing is decorative.
+
+**Design principles:**
+- **Information density over whitespace**: Operators monitor 7+ metrics simultaneously; compact layouts reduce scrolling
+- **Color as signal, not decoration**: Color encodes severity, trend direction, and confidence only
+- **Progressive disclosure over hiding**: All data is reachable in 3 clicks maximum
+- **Monospace numerics for scanability**: Tabular-aligned numbers enable rapid comparison
+- **Motion for state change only**: Animations indicate data refresh, threshold breach, or navigation -- never ambient
+
+**What makes this unforgettable:** The judge reasoning trail. When a metric breaches a threshold, the dashboard traces a visual path from the alert through the evaluation to the judge's chain-of-thought reasoning -- answering "why" in a single drill-down. No other observability dashboard connects alert to explanation in one interaction.
+
+---
+
+## 2. Design System
+
+### 2.1 Color Palette
+
+```
+Backgrounds                          Semantic Status
+--bg-primary:    #0a0e14             --status-healthy:  #26d97f
+--bg-card:       #131920             --status-warning:  #e5a00d
+--bg-elevated:   #1a2230             --status-critical: #f04438
+--bg-surface:    #1f2937             --status-no-data:  #6b7280
+--bg-hover:      #243044
+                                     Confidence Levels
+Borders                              --confidence-high:   #26d97f
+--border-subtle: #1e2a3a             --confidence-medium: #e5a00d
+--border-default:#2a3a4e             --confidence-low:    #f04438
+--border-accent: #3b5278
+                                     Trend Direction
+Text                                 --trend-improving:   #26d97f
+--text-primary:  #e2e8f0             --trend-stable:      #6b7280
+--text-secondary:#94a3b8             --trend-degrading:   #f04438
+--text-muted:    #475569
+--text-inverse:  #0a0e14             Evaluation Score Scale
+                                     --score-excellent:   #26d97f  (>= 0.9)
+Accent                               --score-good:        #34d399  (>= 0.8)
+--accent-primary:#3b82f6             --score-adequate:    #e5a00d  (>= 0.6)
+--accent-hover:  #60a5fa             --score-poor:        #f97316  (>= 0.4)
+--accent-muted:  #1e3a5f             --score-failing:     #f04438  (< 0.4)
+```
+
+**Score direction:** Arize Phoenix's `Score` object includes a `direction` field (`maximize` or `minimize`) that determines color polarity. Metrics where higher is better (relevance, faithfulness, coherence, task_completion, tool_correctness) use the standard scale above. Metrics where lower is better (hallucination, evaluation_latency) **invert** the color mapping:
+
+```
+Inverted Score Scale (direction: 'minimize')
+--score-excellent:   #26d97f  (<= 0.1)   -- low hallucination = excellent
+--score-good:        #34d399  (<= 0.2)
+--score-adequate:    #e5a00d  (<= 0.4)
+--score-poor:        #f97316  (<= 0.6)
+--score-failing:     #f04438  (> 0.6)    -- high hallucination = failing
+```
+
+The `scoreColor(value, direction)` utility resolves which band to apply:
+
+```typescript
+type ScoreDirection = 'maximize' | 'minimize';
+
+function scoreColor(value: number, direction: ScoreDirection = 'maximize'): string {
+  const v = direction === 'minimize' ? 1 - value : value;
+  if (v >= 0.9) return 'var(--score-excellent)';
+  if (v >= 0.8) return 'var(--score-good)';
+  if (v >= 0.6) return 'var(--score-adequate)';
+  if (v >= 0.4) return 'var(--score-poor)';
+  return 'var(--score-failing)';
+}
+```
+
+**Rationale:** Score coloring uses a 5-point scale derived from the research finding that binary labels outperform granular scales (Section 3). The five bands map to the industry-standard evaluation quality tiers across Langfuse, Phoenix, and DeepEval. The direction-aware inversion ensures hallucination rate 0.05 renders as green (excellent) while relevance 0.05 renders as red (failing), matching user expectations without per-metric color overrides.
+
+### 2.2 Typography
+
+```
+Font Stack
+--font-display:  'JetBrains Mono', 'SF Mono', 'Fira Code', monospace
+--font-body:     'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif
+--font-mono:     'JetBrains Mono', 'SF Mono', Consolas, monospace
+
+Scale (modular, ratio 1.25)
+--text-xs:   11px / 1.5   -- Labels, captions, timestamps
+--text-sm:   13px / 1.5   -- Secondary values, metadata
+--text-base: 14px / 1.6   -- Body text, descriptions
+--text-lg:   16px / 1.4   -- Section headings
+--text-xl:   20px / 1.3   -- Page titles, primary metric values
+--text-2xl:  28px / 1.2   -- Hero metric display
+--text-3xl:  36px / 1.1   -- Dashboard overview number
+
+Weights
+--weight-regular: 400     -- Body text
+--weight-medium:  500     -- Labels, nav items
+--weight-semibold:600     -- Headings, metric values
+```
+
+**Rationale:** JetBrains Mono for data display -- it has distinguishable 0/O and 1/l glyphs critical for score readability. IBM Plex Sans for body text -- designed for technical interfaces, better readability than system fonts at small sizes.
+
+### 2.3 Spacing System
+
+```
+--space-1:  4px
+--space-2:  8px
+--space-3:  12px
+--space-4:  16px
+--space-5:  20px
+--space-6:  24px
+--space-8:  32px
+--space-10: 40px
+--space-12: 48px
+
+--radius-sm:  4px
+--radius-md:  6px
+--radius-lg:  8px
+--radius-xl:  12px
+```
+
+### 2.4 Elevation & Depth
+
+```
+--shadow-sm:  0 1px 2px rgba(0,0,0,0.3)
+--shadow-md:  0 2px 8px rgba(0,0,0,0.4)
+--shadow-lg:  0 4px 16px rgba(0,0,0,0.5)
+--shadow-glow-healthy:  0 0 12px rgba(38,217,127,0.15)
+--shadow-glow-warning:  0 0 12px rgba(229,160,13,0.15)
+--shadow-glow-critical: 0 0 12px rgba(240,68,56,0.2)
+```
+
+Status-glow shadows applied to cards when a metric is in warning/critical state. Subtle but immediately visible in peripheral vision during monitoring.
+
+---
+
+## 3. Information Architecture
+
+### 3.1 Progressive Disclosure Hierarchy (5 Levels)
+
+Derived from the **progressive disclosure** best practice in [Wiz.io research Section 8](../interface/wiz-io-security-explainability-ux.md#8-best-practices-for-securityobservability-tools) (abstracted: layered detail from summary to raw data) and addresses [UX Review Gap G3](../interface/quality-dashboard-ux-review.md#3-only-2-levels-of-progressive-disclosure) (current dashboard only has 2 disclosure levels).
+
+```
+L1  Dashboard Overview
+    Single-screen status of all 7+ metrics
+    Health banner + metric grid + alert count + SLA status
+    Decision: "Do I need to investigate?"
+    |
+    v
+L2  Metric Detail
+    Per-metric deep dive: aggregations, histogram, trend, alerts
+    Worst/best evaluations with explanations
+    Decision: "Which evaluations are causing this?"
+    |
+    v
+L3  Evaluation Detail
+    Individual evaluation: score, label, explanation, judge config
+    Chain-of-thought reasoning (collapsible)
+    Judge execution metadata (model, temperature, tokens, duration)
+    Decision: "Is this evaluation trustworthy?"
+    |
+    v
+L4  Trace Context
+    Full OTel trace for the evaluated output
+    Span hierarchy with evaluation events attached
+    Input/output of the LLM call being evaluated
+    Decision: "What caused this output?"
+    |
+    v
+L5  Raw Data
+    JSONL records, OTel attributes, session correlation
+    Exportable for offline analysis
+    Decision: "Do I need to debug the pipeline?"
+```
+
+### 3.2 Navigation Map
+
+```
+/                           Dashboard Overview (L1)
+/metrics/:name              Metric Detail (L2)
+/evaluations/:id            Evaluation Detail (L3)
+/traces/:traceId            Trace Context (L4)
+/role/:roleName             Role View (Executive|Operator|Auditor)
+/correlations               Cross-Metric Correlation View
+/coverage                   Coverage Heatmap
+/pipeline                   Pipeline Funnel View
+/compliance                 Regulatory Compliance Panel
+```
+
+### 3.3 Navigation Patterns
+
+| From | To | Trigger |
+|------|-----|---------|
+| L1 Metric Card | L2 Metric Detail | Click card |
+| L1 Alert Item | L2 Metric Detail (scrolled to alerts) | Click alert metric name |
+| L1 Correlation Alert | L2 Multiple metrics (split view) | Click "View correlated metrics" |
+| L2 Worst Evaluation | L3 Evaluation Detail | Click evaluation row |
+| L2 Score Badge | L3 Evaluation Detail (via tooltip) | Hover badge -> click "View explanation" |
+| L3 Trace ID | L4 Trace Context | Click trace link |
+| L3 Judge Trace | L4 Trace Context (judge execution) | Click "View judge trace" |
+| L4 Evaluation Event | L3 Evaluation Detail | Click evaluation event in span timeline |
+| Any | L1 Dashboard | Breadcrumb / logo click |
+
+---
+
+## 4. Component Specifications
+
+### 4.1 Score Badge (Pattern 1: Langfuse-style)
+
+The primary explainability affordance. Derived from [Research Section 3, Pattern 1](../interface/llm-explainability-research.md#score-presentation).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ANATOMY                                                 │
+│                                                          │
+│  ┌────────────────┐                                     │
+│  │ ● 0.92         │  Score value + color-coded dot      │
+│  │ relevance      │  Metric name in muted text          │
+│  └───────┬────────┘                                     │
+│          │ hover                                         │
+│          v                                               │
+│  ┌──────────────────────────────────────┐               │
+│  │ Score         0.92                    │               │
+│  │ Label         relevant                │               │
+│  │ Evaluator     claude-sonnet-4-5       │               │
+│  │ Type          llm                     │               │
+│  │ Confidence    ● high (logprobs)       │               │
+│  │ ──────────────────────────────        │               │
+│  │ Explanation (truncated):              │               │
+│  │ "The response directly addresses      │               │
+│  │  the user's query about..."           │               │
+│  │ ──────────────────────────────        │               │
+│  │ [View full explanation]               │               │
+│  │ [View judge trace]                    │               │
+│  └──────────────────────────────────────┘               │
+│                                                          │
+│  STATES                                                  │
+│  Default:  Colored dot + score + metric name             │
+│  Hover:    Tooltip with score detail + explanation        │
+│  Active:   Tooltip pinned, background highlight          │
+│  Loading:  Skeleton pulse on dot                         │
+│  No data:  Gray dot + "N/A"                              │
+│                                                          │
+│  SCORE COLORING (5-band)                                 │
+│  >= 0.9:  --score-excellent (#26d97f)                    │
+│  >= 0.8:  --score-good (#34d399)                         │
+│  >= 0.6:  --score-adequate (#e5a00d)                     │
+│  >= 0.4:  --score-poor (#f97316)                         │
+│  <  0.4:  --score-failing (#f04438)                      │
+│                                                          │
+│  ACCESSIBILITY                                           │
+│  - Shape differentiates status (circle/triangle/square)  │
+│  - aria-label includes score, metric, and status text    │
+│  - Tooltip focusable via keyboard (Tab + Enter)          │
+│  - Color contrast ratio >= 4.5:1 on all backgrounds     │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Props:**
+```typescript
+interface ScoreBadgeProps {
+  score: number | null;
+  metricName: string;
+  direction?: ScoreDirection;        // 'maximize' (default) or 'minimize'
+  label?: string;
+  evaluator?: string;
+  evaluatorType?: 'llm' | 'rule' | 'human';
+  confidence?: { level: 'high' | 'medium' | 'low'; method: string };
+  explanation?: string;
+  traceId?: string;
+  judgeTraceId?: string;
+}
+```
+
+**Direction-aware coloring:** When `direction` is `'minimize'` (e.g., hallucination, evaluation_latency), the dot color inverts via `scoreColor(score, direction)`. A hallucination score of 0.05 renders with `--score-excellent` (green), while a relevance score of 0.05 renders with `--score-failing` (red). Score direction is inferred from `QualityMetricConfig.alerts[].direction` (`ThresholdDirection`): metrics whose primary alert fires on `'below'` are `maximize` metrics; those firing on `'above'` are `minimize` metrics. The mapping is:
+
+| Metric | Direction | Low Score Color | High Score Color |
+|--------|-----------|-----------------|------------------|
+| relevance | maximize | red (failing) | green (excellent) |
+| faithfulness | maximize | red | green |
+| coherence | maximize | red | green |
+| task_completion | maximize | red | green |
+| tool_correctness | maximize | red | green |
+| hallucination | minimize | green (excellent) | red (failing) |
+| evaluation_latency | minimize | green | red |
+
+### 4.2 Chain-of-Thought Panel
+
+Derived from [Research Section 3, CoT display patterns](../interface/llm-explainability-research.md#chain-of-thought-explanation-display).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  EVALUATION DETAIL                                       │
+│                                                          │
+│  Metric: relevance        Score: 0.92                    │
+│  Label: relevant          Evaluator: claude-sonnet-4-5   │
+│                                                          │
+│  ┌─ Reasoning ─────────────────────────────────────┐    │
+│  │                                                  │    │
+│  │  Step 1: Query Analysis                          │    │
+│  │  The user asked about deployment configuration   │    │
+│  │  for Kubernetes pods in production.               │    │
+│  │                                                  │    │
+│  │  Step 2: Response Coverage                       │    │
+│  │  The response covers: pod spec configuration     │    │
+│  │  (yes), resource limits (yes), health checks     │    │
+│  │  (yes), rollout strategy (no).                   │    │
+│  │                                                  │    │
+│  │  Step 3: Completeness                            │    │
+│  │  3 of 4 key topics addressed. Missing rollout    │    │
+│  │  strategy prevents a perfect score.              │    │
+│  │                                                  │    │
+│  │  Step 4: Verdict                                 │    │
+│  │  Score: 0.92 -- highly relevant with minor gap.  │    │
+│  │                                                  │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  [v] Judge Configuration                                 │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │  Model:        claude-sonnet-4-5                  │    │
+│  │  Temperature:  0.0                                │    │
+│  │  Prompt Ver:   relevance-v2.3                     │    │
+│  │  Duration:     1.24s                              │    │
+│  │  Tokens:       342 in / 187 out                   │    │
+│  │  Input Hash:   a3f8c2...                          │    │
+│  │  [View judge trace]                               │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  [>] Evaluated Output (collapsed)                        │
+│  [>] Provenance & Audit Trail (collapsed)                │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Layout rules:**
+- Reasoning section always expanded by default (it answers "why")
+- Judge configuration collapsed by default (operational detail)
+- Evaluated output collapsed by default (avoids overwhelming with context)
+- Provenance section collapsed but always present (regulatory compliance)
+- Step numbering uses semantic labels ("Query Analysis") not bare numbers
+- Max 500 chars visible before "Show more" truncation
+
+### 4.3 Correlation Alert Card (Toxic Combinations)
+
+Derived from the "toxic combinations" pattern in [Wiz.io research Section 2](../interface/wiz-io-security-explainability-ux.md#2-security-graph-core-visualization-pattern) (where co-occurring low-severity findings compound into critical risk) and [UX Review Gap G1](../interface/quality-dashboard-ux-review.md#1-no-cross-metric-correlation-toxic-combinations).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  COMPOUND ALERT                                          │
+│                                                          │
+│  ■ CRITICAL  Content Quality Crisis                      │
+│                                                          │
+│  Multiple metrics degraded simultaneously, indicating    │
+│  a systemic quality failure.                             │
+│                                                          │
+│  ┌─ Contributing Metrics ──────────────────────────┐    │
+│  │                                                  │    │
+│  │  relevance     p50 = 0.65   ▼ below 0.70       │    │
+│  │  ────────────────────────────────────────────    │    │
+│  │  hallucination avg = 0.14   ▲ above 0.10       │    │
+│  │                                                  │    │
+│  │  Combined impact: Both conditions active for     │    │
+│  │  the past 2h. 127 evaluations affected.          │    │
+│  │                                                  │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  Remediation:                                            │
+│  1. Check recent model deployments for regressions       │
+│  2. Review lowest-scoring evaluation explanations         │
+│  3. Verify retrieval pipeline for stale context           │
+│                                                          │
+│  [View relevance detail]  [View hallucination detail]    │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Visual treatment:**
+- Left border: 4px solid, severity-colored
+- Background: subtle severity tint (same as health-banner pattern)
+- Contributing metrics shown as inline metric bars with threshold line
+- Remediation hints always visible (not collapsed)
+- Links to each contributing metric's L2 detail page
+
+### 4.4 Metric Card (Enhanced)
+
+Extends the existing `MetricCard.tsx` with explainability affordances.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Response Relevance                     ● healthy        │
+│                                                          │
+│  0.8567                                                  │
+│  ↑ +2.3%                                                │
+│                                                          │
+│  avg: 0.8421 · p95: 0.7234                              │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ ▁▂▃▅▇█▇▅▃▂▁                                     │   │
+│  │ Sparkline: 24h score trend                        │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                          │
+│  ─────────────────────────────────────────────────────   │
+│  n=342  ◐ medium confidence  ▲ 1 alert                  │
+│                                                          │
+│  Worst: 0.23 "Response completely off-topic,             │
+│  discussing pricing when user asked about API..."        │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Enhancements over current `MetricCard.tsx`:**
+- Sparkline: CSS-only 24h mini trend chart (same data density as the hero number)
+- Worst explanation preview: 1-line truncated text from `worstExplanation`
+- Click anywhere -> L2 Metric Detail
+
+### 4.5 Health Overview (Enhanced)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  ● All metrics within thresholds                                         │
+│                                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │    7     │  │    5     │  │    1     │  │    1     │  │    0     │ │
+│  │  Total   │  │ Healthy  │  │ Warning  │  │ Critical │  │ No Data  │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+│                                                                          │
+│  Judge Uptime: 99.8%    Eval Volume: 1.2k/hr    Last Eval: 12s ago      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Enhancements over current `HealthOverview.tsx`:**
+- Pipeline health row: judge uptime (% of evaluations that succeeded), evaluation volume, recency
+- These operational signals answer the "Design for Operability" principle from CHI EA '25 ([Research Section 4, principles table](../interface/llm-explainability-research.md#dashboard-design-principles-from-chi-2025-research)). Note: the principle name is from the paper abstract; the application to quality dashboards is the research document's interpretation.
+
+### 4.6 Coverage Heatmap
+
+Adapts the **grid-based coverage matrix** pattern from [Wiz.io Section 5](../interface/wiz-io-security-explainability-ux.md#5-dashboard-and-data-visualization) (originally framework-by-resource compliance cells) to evaluation-by-trace coverage. The abstracted pattern -- color-coded grid cells showing presence/absence across two dimensions -- maps directly to the existing `computeCoverageHeatmap()` (line 2273 in `quality-metrics.ts`).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  EVALUATION COVERAGE                                     │
+│                                                          │
+│  Metric             trace-1  trace-2  trace-3  trace-4  │
+│  ─────────────────  ───────  ───────  ───────  ───────  │
+│  relevance            ██       ██       ██       ░░     │
+│  faithfulness         ██       ██       ░░       ░░     │
+│  coherence            ██       ░░       ░░       ░░     │
+│  hallucination        ██       ██       ██       ██     │
+│  task_completion      ██       ██       ██       ██     │
+│  tool_correctness     ██       ██       ░░       ░░     │
+│  eval_latency         ██       ██       ██       ██     │
+│                                                          │
+│  ██ covered   ▒▒ partial   ░░ missing                    │
+│                                                          │
+│  Overall Coverage: 71%                                   │
+│  Gaps: coherence missing for 3 traces,                   │
+│        faithfulness missing for 2 traces                 │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Implementation:** CSS Grid with cells colored by `CoverageStatus`. Hover reveals count per cell. Click a gap cell -> filtered evaluation list for that metric+trace combination.
+
+### 4.7 Pipeline Funnel
+
+Adapts the **progressive filtering funnel** pattern from [Wiz.io Section 5](../interface/wiz-io-security-explainability-ux.md#5-dashboard-and-data-visualization) (originally risk-severity reduction through progressive filters) to evaluation pipeline drop-off. The abstracted pattern -- proportional-width horizontal bars showing volume reduction at each stage -- maps to existing `computePipelineView()` (line 2155 in `quality-metrics.ts`).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  EVALUATION PIPELINE                                     │
+│                                                          │
+│  hallucination    ████████████████████████████  342      │
+│                   drop: 0 (0%)                           │
+│                                                          │
+│  relevance        ████████████████████████     310       │
+│                   drop: 32 (9.4%)                        │
+│                                                          │
+│  faithfulness     ███████████████████          276       │
+│                   drop: 34 (11%)                         │
+│                                                          │
+│  coherence        ████████████████             241       │
+│                   drop: 35 (12.7%)                       │
+│                                                          │
+│  Overall Conversion: 70.5%                               │
+│  Bottleneck: coherence (highest drop-off)                │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Implementation:** Horizontal bars with proportional width. Drop-off shown as gap between bars. Color shifts from accent to warning at high drop-off rates.
+
+### 4.8 Multi-Agent Turn Visualization
+
+Derived from [Research Section 5](../interface/llm-explainability-research.md#5-multi-agent-evaluation-explainability).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  MULTI-AGENT SESSION: session-abc123                     │
+│  Overall: 0.82 task_completion                           │
+│                                                          │
+│  ┌─ Turn 1 ──────────────────────────────────────────┐  │
+│  │ User -> Router                                     │  │
+│  │ "Help me debug my deployment"                      │  │
+│  │                                                    │  │
+│  │ Action: Route to DevOps agent                      │  │
+│  │ ┌────────┐  ┌──────────────┐                      │  │
+│  │ │ ● 0.95 │  │ handoff      │  "Correct routing,  │  │
+│  │ │        │  │ correctness  │   deployment keyword │  │
+│  │ └────────┘  └──────────────┘   match"             │  │
+│  └────────────────────────────────────────────────────┘  │
+│         │                                                │
+│         v                                                │
+│  ┌─ Turn 2 ──────────────────────────────────────────┐  │
+│  │ DevOps -> Tool Call                                │  │
+│  │ kubectl_get_pods                                   │  │
+│  │                                                    │  │
+│  │ ┌────────┐  ┌──────────────┐                      │  │
+│  │ │ ● 1.00 │  │ tool         │  "Appropriate first  │  │
+│  │ │        │  │ correctness  │   diagnostic step"   │  │
+│  │ └────────┘  └──────────────┘                      │  │
+│  └────────────────────────────────────────────────────┘  │
+│         │                                                │
+│         v                                                │
+│  ┌─ Turn 3 ──────────────────────────────────────────┐  │
+│  │ DevOps -> User                                     │  │
+│  │ "Your pod is in CrashLoopBackOff..."               │  │
+│  │                                                    │  │
+│  │ ┌────────┐  ┌──────────────┐                      │  │
+│  │ │ ◐ 0.88 │  │ relevancy    │  "Addresses issue   │  │
+│  │ │        │  │              │   directly, missing  │  │
+│  │ └────────┘  └──────────────┘   remediation steps" │  │
+│  └────────────────────────────────────────────────────┘  │
+│         │                                                │
+│         v                                                │
+│  ┌─ Turn 4 ──────────────────────────────────────────┐  │
+│  │ DevOps -> SeniorDevOps (Handoff)                   │  │
+│  │                                                    │  │
+│  │ ┌────────┐  ┌──────────────┐                      │  │
+│  │ │ ▲ 0.70 │  │ handoff      │  "Escalation        │  │
+│  │ │        │  │ correctness  │   premature --       │  │
+│  │ └────────┘  └──────────────┘   sufficient context │  │
+│  │                                    to continue"   │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  Conversation Completeness: 0.75                         │
+│  "User's issue identified but not resolved.              │
+│   Missing: remediation steps, verification."             │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Three-layer evaluation model** (from [Confident AI agent evaluation](https://www.confident-ai.com/blog/definitive-ai-agent-evaluation-guide)):
+
+Agent failures are categorized across three layers, each requiring distinct visual treatment in the turn visualization:
+
+| Layer | What It Evaluates | Visual Indicator | Example Failure |
+|-------|------------------|-----------------|-----------------|
+| **Reasoning** | Planning quality, dependency awareness, plan adherence | Left border: blue tint | Ignored a dependency, deviated from plan |
+| **Action** | Tool selection, argument correctness, call ordering | Left border: amber tint | Wrong tool, incorrect arguments, bad sequence |
+| **Execution** | Task completion, efficiency, staying on-task | Left border: red tint | Incomplete task, excessive steps, went off-task |
+
+Each turn card displays a small layer tag (`reasoning` / `action` / `execution`) alongside its score badge when the evaluation targets a specific failure layer. This allows operators to quickly identify whether an agent is failing at the thinking level, the doing level, or the finishing level.
+
+**Layout rules:**
+- Vertical timeline with connecting lines between turns
+- Each turn shows: role transition, action summary, score badge with inline explanation
+- Layer tag (when applicable) displayed as a muted pill next to the metric name
+- Warning/critical scores get attention-drawing left border
+- Conversation-level score at bottom with full explanation
+- Click any turn -> L3 Evaluation Detail for that turn's evaluation
+
+---
+
+## 5. Score Presentation Patterns
+
+Three patterns identified in the research, each serving a different context.
+
+### Pattern 1: Score Badge with Tooltip
+
+**When to use:** Inline on trace/span views, metric cards, evaluation tables.
+**Implementation:** `ScoreBadge` component (Section 4.1).
+**Behavior:** Hover reveals tooltip with progressive detail; click tooltip link navigates to L3.
+
+### Pattern 2: Evaluation Column on Data Table
+
+**When to use:** L2 Metric Detail, evaluation list views, filtered evaluation queries.
+**Implementation:** Sortable/filterable table columns for score, label, explanation, evaluator.
+
+```
+┌──────┬───────────┬──────────────────────────────────┬──────────────┬────────────┐
+│Score │ Label     │ Explanation                       │ Evaluator    │ Timestamp  │
+├──────┼───────────┼──────────────────────────────────┼──────────────┼────────────┤
+│ 0.92 │ relevant  │ Response addresses query...       │ claude-4.5   │ 2m ago     │
+│ 0.45 │ partial   │ Missing pricing context...        │ claude-4.5   │ 5m ago     │
+│ 0.23 │ off-topic │ Response discusses unrelated...   │ claude-4.5   │ 12m ago    │
+└──────┴───────────┴──────────────────────────────────┴──────────────┴────────────┘
+```
+
+**Column behaviors:**
+- Score: color-coded by 5-band scale
+- Label: pill-style badge with semantic coloring
+- Explanation: truncated to 60 chars, full text in hover tooltip
+- Evaluator: monospace, links to judge trace
+- Timestamp: relative time, hover reveals absolute ISO timestamp
+- Sortable by any column
+- Filterable by label, evaluator, score range
+
+### Pattern 3: Dedicated Evaluation Tab
+
+**When to use:** L2 Metric Detail as a tab alongside "Overview" and "Distribution".
+**Implementation:** Tab navigation within the metric detail page.
+
+```
+[Overview]  [Distribution]  [Evaluations]  [Trend]
+
+┌─────────────────────────────────────────────────────────┐
+│  Evaluations (342 in period)                             │
+│                                                          │
+│  Filter: [All labels ▾] [All evaluators ▾] [Score ▾]   │
+│                                                          │
+│  ┌── Evaluation table (Pattern 2) ──────────────────┐   │
+│  │ ...                                               │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                          │
+│  Showing 1-25 of 342   [< Prev]  [Next >]              │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. Confidence Visualization
+
+Derived from [Research Section 3, Confidence Indicators](../interface/llm-explainability-research.md#confidence-indicators).
+
+### Logprob Distribution Display
+
+When confidence is derived from `normalizeWithLogprobs()`, show the probability distribution:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CONFIDENCE: ● high (logprobs)                           │
+│                                                          │
+│  Score Distribution (from judge logprobs):               │
+│                                                          │
+│  1 │                    ████                             │
+│  2 │                ████████                             │
+│  3 │         ████████████████                            │
+│  4 │     ████████████████████████                        │
+│  5 │ ████████████████████████████████                    │
+│    └─────────────────────────────────                    │
+│    Token probability distribution                        │
+│                                                          │
+│  Expected score: 4.2 (weighted mean)                     │
+│  Entropy: 0.34 (low = high confidence)                   │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Multi-Judge Agreement Display
+
+When confidence is derived from `panelEvaluation()`:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CONFIDENCE: ● high (multi-judge agreement)              │
+│                                                          │
+│  Judge Panel:                                            │
+│  claude-sonnet-4-5:  0.92  relevant                     │
+│  gpt-4o:             0.88  relevant                     │
+│  gemini-2.0:         0.90  relevant                     │
+│                                                          │
+│  Agreement: 100% (3/3 same label)                        │
+│  Score Range: 0.88 - 0.92 (spread: 0.04)                │
+│  Consensus Score: 0.90 (median)                          │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Regulatory Compliance UI
+
+Derived from [Research Section 6](../interface/llm-explainability-research.md#6-regulatory-frameworks).
+
+### 7.1 EU AI Act Article 13 Requirements
+
+Article 13(3) mandates that instructions for use contain at minimum the following. Each subsection maps to a specific UI surface:
+
+| Art. 13(3) | Requirement | UI Surface | Component |
+|------------|-------------|-----------|-----------|
+| **(a)** | Provider identity and contact details | Footer / About panel | Static text |
+| **(b)** | Performance characteristics: intended purpose, accuracy metrics with test context, robustness, cybersecurity, known risk circumstances, output explainability capabilities, per-group performance, input data specifications | L1 metric grid, L2 aggregations, L3 judge config, coverage heatmap | MetricCard, MetricDetail, ConfidencePanel, CoverageHeatmap |
+| **(c)** | Pre-determined changes and their impact on performance | Changelog / version history panel | CompliancePanel |
+| **(d)** | Human oversight measures including technical aids for output interpretation | Compliance panel, verification tracking, evaluation explanation display | CompliancePanel, CoTPanel |
+| **(e)** | Computational and hardware requirements, expected lifetime, maintenance schedule | System info panel | CompliancePanel |
+| **(f)** | Log collection, storage, and interpretation mechanisms | L4 trace view, L5 raw data export | TraceContext, RawDataExport |
+
+**Article 13(2) UX standard:** All information must be "concise, complete, correct and clear" and "relevant, accessible and comprehensible to deployers." This is a direct mandate on UI quality -- not just that data is present, but that it is understandable by non-technical deployers. The role-based views (Executive/Operator/Auditor) serve this requirement by presenting the same data at appropriate abstraction levels.
+
+**Article 50(5) timing constraint:** Disclosure must be provided "in a clear and distinguishable manner at the latest at the time of the first interaction or exposure." For the dashboard, this means:
+- AI-generated content labels must appear before or alongside content, never after
+- Evaluation explanations generated by LLM judges should be visually distinguishable from human-authored content
+- The provenance panel (Section 7.3) must clearly identify which evaluations were produced by automated judges vs. human annotators
+
+### 7.2 NIST AI RMF Alignment
+
+| NIST Function | UI Surface | What It Shows |
+|---------------|-----------|---------------|
+| GOVERN | Settings / threshold configuration | Evaluation criteria, judge selection, threshold policies |
+| MAP | Coverage heatmap | Where evaluations exist and where gaps remain |
+| MEASURE | L1 dashboard + L2 metric detail | Continuous quality measurement with statistical rigor |
+| MANAGE | Operator view + alerts + trends | Production monitoring with remediation guidance |
+
+### 7.3 Provenance Panel
+
+Present on every L3 Evaluation Detail view:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  AUDIT TRAIL                                             │
+│                                                          │
+│  Evaluation ID:    eval-a3f8c2e1                         │
+│  Trace ID:         4a2b1c3d-...                          │
+│  Span ID:          7e8f9a0b-...                          │
+│  Session ID:       session-abc123                        │
+│  Input Hash:       sha256:a3f8c2...                      │
+│                                                          │
+│  Evaluated At:     2026-02-14T10:23:45.123Z              │
+│  Judge Model:      claude-sonnet-4-5                     │
+│  Judge Temperature: 0.0                                  │
+│  Prompt Version:   relevance-v2.3                        │
+│  Duration:         1.24s                                 │
+│  Token Usage:      342 input / 187 output                │
+│                                                          │
+│  OTel Event:       gen_ai.evaluation.result              │
+│  Attributes:                                             │
+│    gen_ai.evaluation.name:        relevance              │
+│    gen_ai.evaluation.score.value: 0.92                   │
+│    gen_ai.evaluation.score.label: relevant               │
+│    gen_ai.evaluation.explanation: "The response..."      │
+│                                                          │
+│  [Export as JSON]  [Copy trace link]                      │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 8. Temporal Visualization
+
+### 8.1 Period-Over-Period Comparison
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  RELEVANCE TREND (7d)                                    │
+│                                                          │
+│  1.0 ┤                                                  │
+│      │     ╭─╮                      current (solid)     │
+│  0.8 ┤ ╭──╯  ╰──╮   ╭──╮                               │
+│      │╯         ╰──╯   ╰─╮                              │
+│  0.6 ┤                    ╰──                            │
+│      │  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌  previous (dashed)          │
+│  0.4 ┤                                                  │
+│      │ ─ ─ ─ ─ ─ ─ ─ ─ ─  warning threshold           │
+│  0.2 ┤                                                  │
+│      │ · · · · · · · · · ·  critical threshold          │
+│  0.0 ┤──┬──┬──┬──┬──┬──┬──                              │
+│        Mon Tue Wed Thu Fri Sat Sun                       │
+│                                                          │
+│  Delta: -3.2% vs previous period                         │
+│  Velocity: -0.46%/day                                    │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 8.2 Sparkline (Inline Trend)
+
+For metric cards -- 24h trend in a compact 80x20px area:
+
+```css
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 20px;
+  width: 80px;
+}
+.sparkline-bar {
+  flex: 1;
+  background: var(--accent-primary);
+  border-radius: 1px 1px 0 0;
+  min-height: 1px;
+  opacity: 0.6;
+}
+.sparkline-bar:last-child {
+  opacity: 1;
+}
+```
+
+24 bars (one per hour), height proportional to score. Last bar full opacity to emphasize recency.
+
+---
+
+## 9. Interaction Patterns
+
+### 9.1 Alert-to-Explanation Drill-Down
+
+The signature interaction pattern. Derived from [Research Section 4, "Alert-to-trace linkage"](../interface/llm-explainability-research.md#making-percentile-metrics-actionable).
+
+```
+Step 1: Alert triggers on L1
+  [CRITICAL] hallucination: Hallucination rate (0.2500) critically high (n=342)
+  Click -> Step 2
+
+Step 2: L2 Metric Detail with alert context
+  Score distribution shows bimodal pattern
+  Worst evaluations table shows 5 lowest scores with explanations
+  Click worst evaluation -> Step 3
+
+Step 3: L3 Evaluation Detail
+  Full chain-of-thought reasoning from the judge
+  "The response fabricated a pricing table that does not exist
+   in the provided context. Specifically, the prices for..."
+  Judge trace link available
+  Trace ID links to L4
+
+Step 4: L4 Trace Context (optional)
+  Full span tree of the original LLM call
+  Shows the input context, retrieved documents, and generated output
+  Explains WHY the LLM hallucinated (e.g., stale retrieval context)
+```
+
+**Total clicks from alert to explanation: 2** (alert -> worst evaluation -> reasoning visible).
+
+### 9.2 Cross-Metric Investigation
+
+When a correlation alert fires:
+
+```
+Step 1: Correlation alert on L1
+  [CRITICAL] Content Quality Crisis
+  relevance (p50=0.65) + hallucination (avg=0.14)
+  Click -> Step 2
+
+Step 2: Split-view comparison
+  Left: relevance L2 detail
+  Right: hallucination L2 detail
+  Shared timeline overlay shows when both degraded
+  Click specific timepoint -> filtered evaluations at that time
+
+Step 3: Filtered evaluation list
+  Shows evaluations from both metrics at the degradation timepoint
+  Sortable, with explanations visible
+```
+
+### 9.3 Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| `j`/`k` | Navigate between metric cards (L1) or evaluation rows (L2) |
+| `Enter` | Drill down to detail view |
+| `Escape` | Return to parent level |
+| `1`-`3` | Switch role view (Executive/Operator/Auditor) |
+| `?` | Show keyboard shortcut overlay |
+| `r` | Refresh data |
+
+---
+
+## 10. Responsive Behavior
+
+### Breakpoints
+
+| Breakpoint | Layout | Metric Grid |
+|-----------|--------|-------------|
+| >= 1280px | Full 4-column grid | `repeat(auto-fit, minmax(300px, 1fr))` |
+| 768-1279px | 2-column grid | `repeat(auto-fit, minmax(280px, 1fr))` |
+| < 768px | Single column stack | `1fr` |
+
+### Mobile Adaptations
+- Score badge tooltips become bottom-sheet modals
+- Sparklines hidden (insufficient resolution)
+- Coverage heatmap becomes a scrollable table
+- Turn visualization collapses to expandable accordion
+- Period selector becomes a dropdown instead of button group
+
+---
+
+## 11. Accessibility Requirements
+
+### WCAG 2.1 AA Compliance
+
+| Requirement | Implementation |
+|------------|---------------|
+| Color contrast | All text >= 4.5:1 ratio on backgrounds; status colors tested against card background |
+| Non-color indicators | Shapes differentiate status: circle (healthy), triangle (warning), square (critical), hollow circle (no_data) |
+| Keyboard navigation | All interactive elements focusable via Tab; Enter activates; Escape dismisses |
+| Screen reader | `aria-label` on all status indicators, score badges, and interactive elements |
+| Reduced motion | `prefers-reduced-motion: reduce` disables all animations except skeleton loading |
+| Focus indicators | 2px solid `--accent-primary` outline on focus, offset by 2px |
+| Semantic HTML | `<nav>`, `<main>`, `<section>`, `<article>` for landmark navigation |
+| Live regions | Alert list uses `aria-live="polite"` for new alerts; critical alerts use `aria-live="assertive"` |
+
+### Score Color Accessibility
+
+The 5-band score scale is designed for deuteranopia (red-green color blindness):
+- Excellent/Good use green shades (distinguishable as brightness difference)
+- Adequate uses amber (distinct hue)
+- Poor uses orange (distinct from green)
+- Failing uses red (paired with square shape indicator)
+
+All score displays include the numeric value alongside color, ensuring no information is conveyed by color alone.
+
+---
+
+## 12. Performance Budget
+
+| Metric | Target | Rationale |
+|--------|--------|-----------|
+| First Contentful Paint | < 1.0s | Dashboard is localhost, minimal network |
+| Largest Contentful Paint | < 1.5s | Hero metric numbers should render first |
+| Time to Interactive | < 2.0s | TanStack Query prefetch on mount |
+| Bundle size (gzipped) | < 80KB | No charting library; CSS-only histograms and sparklines |
+| Re-render on data refresh | < 16ms | React.memo on MetricCard; 30s poll interval |
+| Maximum concurrent API calls | 2 | Dashboard + metric detail (parallel via TanStack) |
+| Data refresh interval | 30s | Matches current `useDashboard` stale time |
+| Tooltip render latency | < 50ms | Precomputed tooltip content in memo |
+
+---
+
+## 13. Component-to-Data Mapping
+
+Maps each UI component to the data source and API endpoint it consumes. Line references verified against `quality-metrics.ts` and `llm-as-judge.ts` as of 2026-02-15.
+
+| Component | Data Source | API Endpoint | Backend Function |
+|-----------|-----------|-------------|-----------------|
+| HealthOverview | `QualityDashboardSummary` | `GET /api/dashboard` | `computeDashboardSummary()` (L816) |
+| MetricCard | `QualityMetricResult` | `GET /api/dashboard` | `computeQualityMetric()` (L751) |
+| MetricDetail | `MetricDetailResult` | `GET /api/metrics/:name` | `computeMetricDetail()` (L1562) |
+| ScoreBadge | `EvaluationResult` | (inline from parent) | N/A |
+| AlertList | `TriggeredAlert[]` | `GET /api/dashboard` | `checkAlertThresholds()` (L693) |
+| CorrelationAlert | `TriggeredAlert` (where `isCompound: true`) | `GET /api/dashboard` | `evaluateCorrelationRules()` via `MetricCorrelationRule` registry |
+| CoTPanel | `EvaluationResult.explanation` | `GET /api/evaluations/:id` | `obs_query_evaluations` |
+| CoverageHeatmap | `CoverageHeatmap` | `GET /api/coverage` | `computeCoverageHeatmap()` (L2273) |
+| PipelineFunnel | `PipelineResult` | `GET /api/pipeline` | `computePipelineView()` (L2155) |
+| TurnVisualization | `MultiAgentEvaluation` | `GET /api/agents/:sessionId` | Agent-as-judge query |
+| ConfidencePanel | `ConfidenceIndicator` (L118 in `quality-metrics.ts`) | (inline from parent) | `normalizeWithLogprobs()` (L814 in `llm-as-judge.ts`) |
+| SLATable | `SLAComplianceResult[]` | `GET /api/dashboard` | `evaluateSLA()` (L1714) / `evaluateSLAs()` (L1765) |
+| ProvenancePanel | `EvaluationResult` + OTel attrs | `GET /api/evaluations/:id` | Backend JSONL/OTel |
+| Sparkline | Score time series | `GET /api/metrics/:name/trend` | `computeTrend()` (L1938) |
+
+---
+
+## 14. Current Dashboard Audit
+
+### What to Keep (v2.9)
+
+| Component | Assessment |
+|-----------|-----------|
+| Dark theme (GitHub-style) | Keep. Professional, reduces eye strain for monitoring. Evolve colors per Section 2.1 |
+| CSS Grid auto-fit layout | Keep. Responsive without media queries |
+| React.memo on MetricCard | Keep. Essential for 30s poll performance |
+| TanStack Query + stale-while-revalidate | Keep. Best-in-class data fetching pattern |
+| Wouter routing (1.5KB) | Keep. Adequate for current route count |
+| Hono API on 127.0.0.1 | Keep. Security-correct localhost binding |
+| Pure CSS histograms | Keep. No charting library needed for 10-20 buckets |
+| Shape-differentiated status badges | Keep. Critical for accessibility |
+| 3 role views | Keep. Expand with the patterns from Section 4.5+ |
+
+### What to Change
+
+| Current | Issue | Target |
+|---------|-------|--------|
+| System font stack | Generic; no monospace distinction for data | JetBrains Mono + IBM Plex Sans |
+| Flat alert list | No correlation grouping | Correlation alert cards (Section 4.3) |
+| Truncated explanation in eval table | Explanation is the key explainability data | CoT panel with collapsible sections (Section 4.2) |
+| No sparklines | No inline trend context on cards | CSS sparkline bars (Section 8.2) |
+| No score tooltip | Missing the Langfuse Pattern 1 affordance | ScoreBadge with hover tooltip (Section 4.1) |
+| Single remediation hint line | Insufficient for actionable guidance | Full remediation section with numbered steps |
+| No pipeline/coverage views | Missing G8/G9 visualizations | Pipeline funnel + coverage heatmap |
+| No keyboard navigation | Mouse-only interaction | Full keyboard nav (Section 9.3) |
+| No provenance panel | No regulatory audit trail in UI | Provenance panel on L3 (Section 7.3) |
+| No multi-agent visualization | Agent evaluation data exists but no UI | Turn timeline (Section 4.8) |
+
+### What to Add
+
+| Feature | Priority | Section |
+|---------|----------|---------|
+| Score badge tooltip (Langfuse Pattern 1) | P1 | 4.1 |
+| Chain-of-thought panel | P1 | 4.2 |
+| Correlation alert card | P1 | 4.3 |
+| Sparkline on metric cards | P2 | 8.2 |
+| Coverage heatmap page | P2 | 4.6 |
+| Pipeline funnel page | P2 | 4.7 |
+| Provenance/audit panel | P2 | 7.3 |
+| Confidence visualization | P2 | 6 |
+| Period-over-period trend chart | P2 | 8.1 |
+| Multi-agent turn visualization | P3 | 4.8 |
+| Keyboard navigation | P3 | 9.3 |
+| L3 Evaluation Detail page | P1 | 3.1 |
+| L4 Trace Context page | P3 | 3.1 |
+| Compliance panel page | P3 | 7 |
+| Composite Quality Index (CQI) for Executive view | P2 | 16.3 |
+| Adaptive score scaling per metric distribution | P2 | 16.2 |
+| Metric velocity/acceleration with breach projection | P2 | 16.3 |
+| Data-driven correlation matrix | P3 | 16.3 |
+| Role-aware feature selection config | P2 | 16.4 |
+
+---
+
+## 15. Implementation Sequence
+
+### Phase 1: Explainability Core (P1)
+
+New components and routes that deliver the primary explainability value.
+
+| Task | Components | Effort |
+|------|-----------|--------|
+| L3 Evaluation Detail page (`/evaluations/:id`) | CoTPanel, JudgeConfig, ProvenancePanel | Medium |
+| Score badge tooltip on MetricCard and EvalTable | ScoreBadge with tooltip | Low |
+| Correlation alert card in AlertList | CorrelationAlertCard | Low |
+| Enhance EvaluationDetail table with full explanation column | Expand truncation, add label pills | Low |
+| API route: `GET /api/evaluations/:id` | New Hono route, backend query | Medium |
+
+### Phase 2: Visualization (P2)
+
+New pages and visualization components that surface existing backend data.
+
+| Task | Components | Effort |
+|------|-----------|--------|
+| Coverage heatmap page (`/coverage`) | CoverageHeatmap grid | Medium |
+| Pipeline funnel page (`/pipeline`) | PipelineFunnel bars | Low |
+| Sparkline on MetricCard | CSS sparkline component | Low |
+| Period-over-period trend on MetricDetail | TrendChart (CSS or lightweight SVG) | Medium |
+| Confidence panel in evaluation detail | LogprobDistribution, MultiJudgePanel | Medium |
+| API routes: `/api/coverage`, `/api/pipeline`, `/api/metrics/:name/trend` | New Hono routes | Medium |
+
+### Phase 3: Advanced (P3)
+
+Features that require new data sources or complex interaction patterns.
+
+| Task | Components | Effort |
+|------|-----------|--------|
+| Multi-agent turn visualization (`/agents/:sessionId`) | TurnTimeline | High |
+| L4 Trace context page (`/traces/:traceId`) | SpanTree, EvaluationEventOverlay | High |
+| Keyboard navigation system | KeyboardNav provider, shortcut overlay | Medium |
+| Compliance panel page (`/compliance`) | CompliancePanel with framework mapping | Medium |
+| Cross-metric split view for correlation investigation | SplitPane layout | Medium |
+
+### Phase 4: Feature Engineering (P2-P3)
+
+Derived features and adaptive presentation computed from existing evaluation data.
+
+| Task | Components/Functions | Effort | Section |
+|------|---------------------|--------|---------|
+| Adaptive score scaling per metric | `adaptiveScoreColor()`, `METRIC_SCALE_STRATEGY` | Low | 16.2 |
+| Label ordinal encoding for eval table sort/filter | `labelToOrdinal()`, 3-tier filter (Pass/Review/Fail) | Low | 16.2 |
+| Composite Quality Index (CQI) for Executive view | `computeCQI()`, stacked contribution bar | Medium | 16.3 |
+| Metric velocity & acceleration with breach projection | `computeMetricDynamics()`, projection line on trend chart | Medium | 16.3 |
+| Coverage-weighted confidence | `computeCoverageWeightedConfidence()`, adjusted badge | Low | 16.3 |
+| Data-driven correlation matrix | `computeCorrelationMatrix()`, heatmap on `/correlations` | Medium | 16.3 |
+| Degradation signal feature (variance trend) | `computeDegradationSignal()`, sparkline variance overlay | Medium | 16.1 |
+| Role-aware feature config | `ROLE_FEATURE_CONFIG`, conditional rendering in role views | Low | 16.4 |
+
+---
+
+## 16. Feature Engineering for Evaluation Analytics
+
+> **Note:** This section contains **original design proposals** -- not translations of the source research. The statistical methods (Gini coefficient, Pearson R, composite quality index) and derived features are new recommendations informed by the research patterns but extending beyond what the source documents describe. All proposed interfaces and functions are marked *(proposed)* in their headings. Lead-time estimates in Section 16.1 are projected based on metric characteristics, not empirically measured. Weight values in Section 16.3 (CQI) are initial recommendations, not tuned from production data.
+
+This section applies feature engineering principles to the evaluation data flowing through the dashboard. The raw `EvaluationResult` records and `QualityMetricResult` aggregations contain latent signals that, when properly transformed, enable better anomaly detection, correlation discovery, and role-appropriate information presentation.
+
+### 16.1 Feature Importance: Quality Degradation Predictors
+
+Theoretical analysis of the 7 core metrics against the `TriggeredAlert` history suggests a predictive hierarchy for quality degradation. Features are ranked by their estimated lead-time signal strength -- how early they would predict a transition from `healthy` to `warning`/`critical`. Lead times are projected estimates based on metric characteristics, not empirical measurements.
+
+| Rank | Feature | Source Field | Signal Type | Est. Lead Time | Rationale |
+|------|---------|-------------|-------------|----------------|-----------|
+| 1 | **Score variance (rolling 1h)** | `scoreStdDev` from `ConfidenceIndicator` | Leading | 15-30min | Variance spikes precede mean shifts. A stable metric with sudden stdDev increase from 0.05 to 0.20 predicts threshold breach before the aggregation moves |
+| 2 | **Hallucination-relevance divergence** | `hallucination.avg - (1 - relevance.avg)` | Leading | 10-20min | When hallucination rises while relevance hasn't yet dropped, retrieval pipeline degradation is likely. This is the highest-signal toxic combination from `MetricCorrelationRule` |
+| 3 | **Evaluation latency percentile shift** | `evaluation_latency.p95 / evaluation_latency.p50` | Leading | 5-15min | A rising p95/p50 ratio indicates tail-latency bloat in the judge pipeline, often preceding judge failures that reduce `sampleCount` and destabilize all other metrics |
+| 4 | **Coverage dropout rate** | `CoverageGap.missingInputs.length / CoverageHeatmap.inputs.length` | Coincident | 0-5min | Missing evaluations for specific traces indicate pipeline failures. >20% dropout rate correlates with unreliable aggregations |
+| 5 | **Evaluator agreement decay** | `evaluatorAgreement` from `ConfidenceIndicator` | Lagging | 0min | Agreement drops after quality has already shifted. Useful for confirming degradation but not predicting it |
+| 6 | **Worst-score trajectory** | `worstExplanation.score` delta over 3 periods | Lagging | -10min | The worst evaluation score trend lags because it requires multiple low scores to shift the worst evaluation |
+| 7 | **Sample count deviation** | `sampleCount` vs expected rate (`evalVolume / metricCount`) | Coincident | 0min | Below-expected sample counts indicate pipeline drops. Derived from `PipelineDropoff.dropoffPercent` |
+
+**Dashboard application:** The MetricCard sparkline (Section 8.2) should prioritize rendering the #1 feature (score variance) as an overlay band rather than just the mean score. The existing `MetricTrend.percentChange` captures #6 but misses the variance signal.
+
+**Proposed derived field on `QualityMetricResult`:**
+
+```typescript
+interface DegradationSignal {
+  varianceTrend: 'increasing' | 'stable' | 'decreasing';
+  varianceRatio: number;         // current stdDev / baseline stdDev
+  coverageDropoutRate: number;   // 0-1, from CoverageHeatmap
+  latencySkewRatio: number;      // p95/p50 for evaluation_latency
+  predictedStatus?: 'healthy' | 'warning' | 'critical';  // based on feature combination
+}
+```
+
+### 16.2 Feature Scaling & Encoding for Score Presentation
+
+The 7 metrics operate on different native scales and distributions, which affects how the 5-band color scale (Section 2.1) maps to perceived severity.
+
+#### Scale Normalization
+
+| Metric | Native Range | Distribution Shape | Scaling Strategy |
+|--------|-------------|-------------------|-----------------|
+| relevance | [0, 1] | Left-skewed (most scores > 0.7) | **Quantile-based bands** -- the 5-band thresholds should reflect the empirical distribution, not uniform cuts. If 80% of scores are > 0.8, a score of 0.7 is more alarming than the uniform scale suggests |
+| faithfulness | [0, 1] | Bimodal (0.9+ or < 0.3) | **Binary emphasis** -- the bimodal distribution means the adequate/poor/failing bands (0.4-0.8) are sparsely populated. Consider collapsing to 3 bands (pass/borderline/fail) for this metric |
+| coherence | [0, 1] | Normal-ish (centered ~0.8) | **Standard 5-band** -- uniform scaling works because scores distribute across the range |
+| hallucination | [0, 1] | Right-skewed (most scores < 0.1) | **Log-scale encoding** -- linear bands waste resolution in the 0-0.1 range where most values cluster. `logScale(v) = -log10(max(v, 0.001)) / 3` maps 0.001-1.0 to 1.0-0.0, spreading the low-end |
+| task_completion | [0, 1] | Bimodal (0 or 1 for rule-based) | **Step function** -- when evaluator is `rule`, use binary pass/fail. When evaluator is `llm`, use standard 5-band |
+| tool_correctness | [0, 1] | Discrete (from `ToolVerification.score`) | **Categorical encoding** -- scores are computed from boolean composites (`toolCorrect && argsCorrect && resultCorrect`). Display as fraction "2/3 correct" alongside the numeric score |
+| evaluation_latency | [0, +inf) seconds | Heavy right-tail | **Percentile-rank encoding** -- raw seconds are meaningless without context. Display as percentile rank against the metric's own history: "faster than 73% of evaluations" |
+
+**Proposed utility:**
+
+```typescript
+type ScaleStrategy = 'quantile' | 'binary' | 'uniform' | 'log' | 'step' | 'categorical' | 'percentile_rank';
+
+const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
+  relevance: 'quantile',
+  faithfulness: 'binary',
+  coherence: 'uniform',
+  hallucination: 'log',
+  task_completion: 'step',
+  tool_correctness: 'categorical',
+  evaluation_latency: 'percentile_rank',
+};
+
+function adaptiveScoreColor(
+  value: number,
+  metric: string,
+  direction: ScoreDirection,
+  distribution?: { p10: number; p25: number; p50: number; p75: number; p90: number }
+): string {
+  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
+  switch (strategy) {
+    case 'quantile':
+      if (!distribution) return scoreColor(value, direction);
+      // Map value to its position within the empirical distribution
+      const rank = empiricalCDF(value, distribution);
+      return scoreColor(rank, 'maximize');
+    case 'log':
+      const logNorm = Math.min(1, -Math.log10(Math.max(value, 0.001)) / 3);
+      return scoreColor(logNorm, 'maximize');
+    case 'binary':
+      return value >= 0.7 ? 'var(--score-excellent)' : 'var(--score-failing)';
+    default:
+      return scoreColor(value, direction);
+  }
+}
+```
+
+**Dashboard application:** The `scoreColor()` function in Section 2.1 should be replaced with `adaptiveScoreColor()` once distribution data is available from `MetricDetailResult.scoreDistribution`. The uniform fallback preserves backward compatibility.
+
+#### Label Encoding for Evaluation Table (Section 5, Pattern 2)
+
+The `scoreLabel` field from `EvaluationResult` is free-text from the judge. For consistent filtering and sorting, encode labels into an ordinal scheme:
+
+| Raw Label | Ordinal | Filter Category |
+|-----------|---------|-----------------|
+| `excellent`, `highly_relevant`, `fully_faithful` | 4 | Pass |
+| `relevant`, `good`, `faithful` | 3 | Pass |
+| `partial`, `borderline`, `adequate` | 2 | Review |
+| `off-topic`, `irrelevant`, `unfaithful` | 1 | Fail |
+| `hallucinated`, `fabricated`, `toxic` | 0 | Fail |
+
+The ordinal encoding enables `ORDER BY label_ordinal` in the evaluation table without alphabetical sorting artifacts. The 3-tier filter (Pass/Review/Fail) reduces cognitive load in the Pattern 2 column filter.
+
+### 16.3 Derived & Composite Features
+
+These features do not exist in the raw data but are computed from combinations of existing fields. They enhance the correlation detection (Section 4.3) and coverage analysis (Section 4.6).
+
+#### Composite Quality Index (CQI) *(proposed)*
+
+A single weighted score combining all 7 metrics into one number for the Executive view. This is an original design proposal; weight values are initial recommendations, not empirically tuned.
+
+```typescript
+interface CompositeQualityIndex {
+  value: number;            // 0-1 weighted composite
+  weights: Record<string, number>;
+  contributions: Array<{
+    metric: string;
+    rawScore: number;
+    normalizedScore: number;  // after direction normalization
+    weight: number;
+    contribution: number;     // normalizedScore * weight
+  }>;
+}
+
+const DEFAULT_CQI_WEIGHTS: Record<string, number> = {
+  relevance: 0.25,          // highest business impact
+  faithfulness: 0.20,       // factual correctness
+  hallucination: 0.20,      // inverse weight (direction: minimize)
+  task_completion: 0.15,    // end-to-end success
+  coherence: 0.10,          // output quality
+  tool_correctness: 0.05,   // agent-specific
+  evaluation_latency: 0.05, // operational
+};
+```
+
+**Dashboard application:** Displayed as a single hero number on the Executive view. The `contributions` array powers a stacked bar showing which metrics contribute most to the composite, enabling executives to see "relevance is dragging overall quality down" without inspecting individual metrics.
+
+#### Metric Velocity & Acceleration *(proposed)*
+
+Beyond `MetricTrend.percentChange` (first derivative), compute acceleration (second derivative) to detect inflection points. Extends the existing `MetricTrend` interface with new derived fields.
+
+```typescript
+interface MetricDynamics {
+  velocity: number;         // rate of change per hour (existing: percentChange / period_hours)
+  acceleration: number;     // change in velocity per hour
+  inflectionDetected: boolean;  // true when acceleration sign flips
+  projectedStatus: 'healthy' | 'warning' | 'critical';  // linear projection
+  projectedBreachTime?: string; // ISO timestamp when threshold would be breached at current velocity
+}
+```
+
+**Dashboard application:** The period-over-period chart (Section 8.1) should display `projectedBreachTime` as a dashed projection line extending beyond the current data. A metric decelerating toward a threshold (negative acceleration, positive velocity toward breach) is less urgent than one accelerating toward it.
+
+#### Coverage-Weighted Confidence *(proposed)*
+
+The existing `ConfidenceIndicator` (L118 in `quality-metrics.ts`) uses sample count and stdDev but ignores coverage uniformity. A metric with 100 evaluations all from the same session is less representative than 100 evaluations across 50 sessions. The Gini coefficient approach is adapted from standard distributional uniformity measures.
+
+```typescript
+interface CoverageWeightedConfidence extends ConfidenceIndicator {
+  coverageUniformity: number;  // 0-1, Gini coefficient of evaluations per input
+  effectiveSampleSize: number; // sampleCount * coverageUniformity
+  adjustedLevel: 'low' | 'medium' | 'high';  // recalculated using effectiveSampleSize
+}
+```
+
+**Dashboard application:** The confidence badge in the MetricCard footer (Section 4.4) should use `adjustedLevel` instead of `level` when coverage data is available. This prevents false confidence from clustered evaluations.
+
+#### Correlation Strength Matrix *(proposed)*
+
+Enhance the existing `MetricCorrelationRule` (static rules, L219 in `quality-metrics.ts`) with data-driven correlation detection using Pearson R.
+
+```typescript
+interface CorrelationFeature {
+  metricA: string;
+  metricB: string;
+  pearsonR: number;           // linear correlation (-1 to 1)
+  lagHours: number;           // time lag where correlation is strongest
+  coOccurrenceRate: number;   // fraction of periods where both are degraded simultaneously
+  isKnownToxicCombo: boolean; // matches a configured MetricCorrelationRule
+}
+```
+
+**Dashboard application:** The correlation view (`/correlations`, Section 3.2) should display a heatmap matrix of `pearsonR` values between all metric pairs, with `lagHours` shown on hover. Cells matching known toxic combinations from `MetricCorrelationRule` get the critical border treatment. Novel high-correlation pairs (|pearsonR| > 0.7, not in rules) are surfaced as "discovered correlations" for operator investigation.
+
+### 16.4 Feature Selection by Role View
+
+Each role view (Section 3.2) serves a different decision function and therefore requires a different feature subset. This is analogous to feature selection in ML: the executive model optimizes for rapid triage, the operator model for root-cause investigation, the auditor model for completeness.
+
+#### Feature-to-Role Matrix
+
+| Feature | Executive | Operator | Auditor | Rationale |
+|---------|:---------:|:--------:|:-------:|-----------|
+| Composite Quality Index (CQI) | **primary** | secondary | reference | Executives need one number; operators already see individual metrics |
+| CQI contribution breakdown | visible | hidden | visible | Executives want "what's dragging us down"; operators don't need aggregation |
+| Individual metric scores (avg) | summary only | **primary** | **primary** | Operators act on individual metrics; auditors audit them |
+| Score distribution (histogram) | hidden | visible | **primary** | Distribution shape matters for operators debugging bimodal failures |
+| Score variance (stdDev) | hidden | **primary** | visible | Operators detect instability; auditors verify measurement quality |
+| Metric velocity | badge only | **primary** | visible | Operators need rate-of-change to prioritize; executives see trend arrow |
+| Metric acceleration | hidden | visible | hidden | Second-derivative only useful for experienced operators |
+| Projected breach time | badge only | **primary** | hidden | Operators triage by urgency; executives see "time until problem" |
+| Worst evaluation explanation | 1-line | full CoT | full CoT + provenance | Executives scan headlines; operators/auditors read reasoning |
+| Correlation alerts (compound) | headline | full detail + remediation | full detail + rule config | Executives see "crisis"; operators see "how to fix"; auditors see "why this rule" |
+| Coverage dropout rate | percentage | heatmap | heatmap + gap list | Progressive detail by role |
+| Pipeline conversion | percentage | funnel visualization | funnel + per-stage breakdown | Executives see throughput; operators see bottlenecks |
+| Confidence (coverage-weighted) | badge | badge + distribution | full breakdown | Auditors need the methodology; executives need the verdict |
+| Evaluator agreement | hidden | visible | **primary** | Auditors validate judge reliability; operators use it as a triage signal |
+| SLA compliance | compliant/non | gap + margin | full SLA definition + history | Executives: "are we meeting SLAs?"; auditors: "prove it" |
+| Provenance/audit trail | hidden | link | **primary** | Auditors require full traceability per EU AI Act Art. 13 |
+| Multi-agent turn scores | hidden | visible (if agent sessions exist) | visible | Agent evaluation is operational detail |
+| Raw JSONL/OTel attributes | hidden | hidden | exportable | Only auditors need L5 raw data |
+
+#### Implementation: Role-Aware Feature Flags
+
+```typescript
+interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;  // chars before "Show more"
+  maxWorstEvaluations: number;    // how many worst evals to show
+}
+
+const ROLE_FEATURE_CONFIG: Record<RoleViewType, RoleFeatureConfig> = {
+  executive: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: false,
+    showAcceleration: false,
+    showProjectedBreach: true,   // as badge tooltip
+    showCorrelationRemediation: false,
+    showCoverageHeatmap: false,
+    showPipelineFunnel: false,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: 80,
+    maxWorstEvaluations: 1,
+  },
+  operator: {
+    showCQI: false,              // operators think in individual metrics
+    showCQIBreakdown: false,
+    showVariance: true,
+    showAcceleration: true,
+    showProjectedBreach: true,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: 500,
+    maxWorstEvaluations: 5,
+  },
+  auditor: {
+    showCQI: true,               // reference, not primary
+    showCQIBreakdown: true,
+    showVariance: true,
+    showAcceleration: false,
+    showProjectedBreach: false,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: true,
+    showRawExport: true,
+    explanationTruncation: 2000,
+    maxWorstEvaluations: 10,
+  },
+};
+```
+
+**Dashboard application:** The existing `computeRoleView(dashboard, role, options?)` function (line 1372 in `quality-metrics.ts`) dispatches on `RoleViewType` to return distinct type shapes (`ExecutiveView`, `OperatorView`, `AuditorView` -- defined at lines 1304-1350). The optional `RoleViewOptions` parameter controls limits like `topIssuesLimit` and `minActionableSampleCount`. The `RoleFeatureConfig` extends this pattern to the frontend rendering layer, ensuring components conditionally render features based on the active role without prop-drilling individual visibility flags.
+
+### 16.5 Feature Pipeline: From Raw Evaluation to Dashboard Feature
+
+```
+EvaluationResult (JSONL/OTel)
+  │
+  ├─ [1] Ingest & Validate
+  │   scoreValue clamped to range, scoreLabel normalized to ordinal
+  │
+  ├─ [2] Aggregate (existing: computeQualityMetric, computeCoverageHeatmap)
+  │   avg, p50, p95, min, max, count
+  │   CoverageHeatmap (inputs x evaluationNames grid)
+  │
+  ├─ [3] Derive (new: computeDerivedFeatures)
+  │   ├─ variance trend (rolling 1h window)
+  │   ├─ velocity & acceleration (from consecutive MetricTrend)
+  │   ├─ coverage-weighted confidence (from [2] CoverageHeatmap + ConfidenceIndicator)
+  │   ├─ composite quality index (from all metric avgs + weights)
+  │   └─ correlation matrix (from paired metric time series)
+  │
+  ├─ [4] Scale & Encode (new: adaptiveScoreColor, label ordinal)
+  │   ├─ per-metric scaling strategy applied
+  │   └─ labels encoded for sort/filter
+  │
+  └─ [5] Select & Present (existing: role views + new RoleFeatureConfig)
+      ├─ executive: CQI + status + trend badge
+      ├─ operator: individual metrics + variance + remediation
+      └─ auditor: full detail + provenance + raw export
+```
+
+Steps [1] and [2] exist today in the backend (`computeQualityMetric()` at L751 and `computeCoverageHeatmap()` at L2273 in `quality-metrics.ts`). Step [3] depends on Step [2]'s `CoverageHeatmap` output for coverage-weighted confidence. Steps [3] and [4] are proposed derived feature computations (see Section 16.3). Step [5] extends the existing `computeRoleView()` (L1372) with frontend feature flags.
+
+**Compute budget:** Steps [3]-[4] must complete within the 30s poll interval. The correlation matrix is O(m^2 * n) where m=7 metrics and n=evaluation count per period. For n=1000 and m=7, this is ~49K comparisons -- well within budget. The CQI and velocity computations are O(m), negligible.
+
+---
+
+## Sources
+
+### Primary Research (audited)
+- [LLM Explainability Research](../interface/llm-explainability-research.md) -- 981 lines, 6 platform analyses, OTel conventions, regulatory mapping
+- [Wiz.io Security Explainability UX Research](../interface/wiz-io-security-explainability-ux.md) -- 394 lines, progressive disclosure, toxic combinations, attack path visualization
+- [Quality Dashboard UX Review](../interface/quality-dashboard-ux-review.md) -- 272 lines, 11 gaps identified, 6-phase implementation sequence
+- [Quality Metrics Dashboard](../interface/quality-metrics-dashboard.md) -- 530 lines, architecture spec, current implementation reference
+- [Interface Research Index](../interface/README.md) -- Consolidated recommendation mapping, approach comparison
+
+### Platform Source Material
+- [Langfuse: LLM-as-a-Judge Execution Tracing](https://langfuse.com/changelog/2025-10-16-llm-as-a-judge-execution-tracing) -- Score badge tooltip, execution trace linkage
+- [Langfuse: Score Analytics with Multi-Score Comparison](https://langfuse.com/changelog/2025-11-07-score-analytics-multi-score-comparison) -- Histogram charts, temporal analysis, matched data comparison
+- [Langfuse: Evaluation Data Model](https://langfuse.com/docs/evaluation/evaluation-methods/data-model) -- Numeric/categorical/boolean score types, ScoreConfig schema
+- [Arize Phoenix: Evals Overview](https://arize.com/docs/phoenix/evaluation/llm-evals) -- `provide_explanation` parameter, OTel-instrumented evaluators, score/label/explanation columns
+- [Arize Phoenix: Log Evaluation Results](https://arize.com/docs/phoenix/tracing/how-to-tracing/feedback-and-annotations/llm-evaluations) -- Score object structure (name, score, label, explanation, direction)
+- [DeepEval: Agent Evaluation Metrics](https://deepeval.com/docs/metrics-introduction) -- ToolCorrectnessMetric, TaskCompletionMetric, `include_reason` parameter, `strict_mode`
+- [Confident AI: Testing Reports](https://www.confident-ai.com/docs/llm-evaluation/dashboards/testing-reports) -- Pass/fail display, metric breakdown by category, version comparison
+- [Datadog: LLM Observability](https://docs.datadoghq.com/llm_observability/) -- LLM Overview dashboard, built-in quality checks, managed evaluations
+- [Datadog: OTel GenAI Semantic Conventions Support](https://www.datadoghq.com/blog/llm-otel-semantic-convention/) -- Native v1.37+ mapping
+
+### OTel Specifications
+- [GenAI Evaluation Event (gen_ai.evaluation.result)](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-events/) -- Event attributes: score.value, score.label, explanation, metric name
+- [GenAI Attribute Registry](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/) -- Attribute definitions, cardinality requirements, recording rules
+- [GenAI Agent Spans](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) -- create_agent, invoke_agent operation names
+
+### Regulatory
+- [EU AI Act: Article 13 Transparency](https://artificialintelligenceact.eu/article/13/) -- Instructions for use requirements: identity, performance, accuracy, human oversight, logging
+- [EU AI Act: Article 50 Transparency Obligations](https://artificialintelligenceact.eu/article/50/) -- AI content marking, machine-readable format, multi-layered approach
+- [EU Code of Practice on AI-Generated Content Transparency](https://digital-strategy.ec.europa.eu/en/policies/code-practice-ai-generated-content) -- C2PA metadata, watermarking, provenance standards (final June 2026)
+- [NIST AI RMF 1.0](https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf) -- GOVERN/MAP/MEASURE/MANAGE functions
+- [NIST AI 600-1: GenAI Profile](https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf) -- Model evaluation protocols, adversarial testing
+
+### Research
+- [CHI EA '25: "Design Principles and Guidelines for LLM Observability: Insights from Developers"](https://dl.acm.org/doi/10.1145/3706599.3719914) -- Four principles (Awareness, Monitoring, Intervention, Operability) from CHI 2025 Extended Abstracts (Yokohama). **Verification note:** principle names are confirmed from the paper abstract; the one-line descriptions used in this document are paraphrases from the research document's interpretation applied to quality dashboards, not direct quotes from the paper. See [llm-explainability-research.md, Section 4](../interface/llm-explainability-research.md#dashboard-design-principles-from-chi-2025-research).
+- [Evidently AI: LLM-as-a-Judge FAQ](https://www.evidentlyai.com/blog/llm-judges-faq) -- Binary vs Likert scales, rubric display, chain-of-thought prompting
+- [Evidently AI: LLM-as-a-Judge Complete Guide](https://www.evidentlyai.com/llm-guide/llm-as-a-judge) -- Judge scoring best practices, explanation presentation
+
+### Best Practices
+- [Monte Carlo: LLM-As-Judge Best Practices](https://www.montecarlodata.com/blog-llm-as-judge/) -- Binary labels preferred, reasoning before score
+- [Microsoft Multi-Agent Reference Architecture: Evaluation](https://microsoft.github.io/multi-agent-reference-architecture/docs/evaluation/Evaluation.html) -- Agent evaluation dimensions
+- [Confident AI: Definitive AI Agent Evaluation Guide](https://www.confident-ai.com/blog/definitive-ai-agent-evaluation-guide) -- Per-step agent metrics, trace visualization, component-level evaluation
+</file>
+
+</files>
