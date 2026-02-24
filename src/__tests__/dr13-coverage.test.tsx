@@ -23,11 +23,12 @@ afterEach(cleanup);
 
 function makeTrend(overrides: Partial<MetricTrend> = {}): MetricTrend {
   return {
-    direction: 'up',
+    direction: 'improving',
     delta: 0.05,
     previousValue: 0.80,
     currentValue: 0.85,
-    percentageChange: 6.25,
+    percentChange: 6.25,
+    aggregation: 'avg',
     ...overrides,
   };
 }
@@ -328,11 +329,12 @@ function makeMetricResult(name: string, displayName: string, status: 'healthy' |
 describe('AuditorView', () => {
   function makeAuditorData() {
     return {
+      role: 'auditor' as const,
       totalEvaluationCount: 150,
       metrics: [makeMetricResult('relevance', 'Relevance')],
       alerts: [
         { severity: 'warning' as const, message: 'Relevance degrading', aggregation: 'avg' as const,
-          threshold: 0.8, actualValue: 0.79, direction: 'below' as const },
+          threshold: 0.8, actualValue: 0.79, direction: 'below' as const, metricName: 'relevance' },
       ],
       timestamp: '2026-02-22T12:00:00Z',
       slaCompliance: [],
@@ -380,6 +382,7 @@ describe('AuditorView', () => {
 describe('ExecutiveView', () => {
   function makeExecutiveData() {
     return {
+      role: 'executive' as const,
       overallStatus: 'healthy' as const,
       summary: { totalMetrics: 7, healthyMetrics: 6, warningMetrics: 1, criticalMetrics: 0, noDataMetrics: 0 },
       topIssues: [
@@ -389,7 +392,7 @@ describe('ExecutiveView', () => {
         { name: 'relevance', displayName: 'Relevance', status: 'healthy' },
         { name: 'hallucination', displayName: 'Hallucination Rate', status: 'warning' },
       ],
-      alertCounts: { warning: 1, critical: 0 },
+      alertCounts: { warning: 1, critical: 0, info: 0 },
     };
   }
 
@@ -442,15 +445,16 @@ describe('ExecutiveView', () => {
 
 describe('OperatorView', () => {
   function makeTrendForOperator(): MetricTrend {
-    return { direction: 'down', delta: -0.05, previousValue: 0.85, currentValue: 0.80, percentageChange: -5.88 };
+    return { direction: 'degrading', delta: -0.05, previousValue: 0.85, currentValue: 0.80, percentChange: -5.88, aggregation: 'avg' };
   }
 
   function makeOperatorData() {
     return {
+      role: 'operator' as const,
       overallStatus: 'warning' as const,
       prioritizedAlerts: [
-        { severity: 'warning' as const, message: 'Relevance below threshold', aggregation: 'avg',
-          threshold: 0.8, actualValue: 0.75, direction: 'below' as const },
+        { severity: 'warning' as const, message: 'Relevance below threshold', aggregation: 'avg' as const,
+          threshold: 0.8, actualValue: 0.75, direction: 'below' as const, metricName: 'relevance' },
       ],
       degradingTrends: [
         { metricName: 'relevance', trend: makeTrendForOperator() },
@@ -487,8 +491,8 @@ describe('OperatorView', () => {
     const data = {
       ...makeOperatorData(),
       prioritizedAlerts: [
-        { severity: 'warning' as const, message: 'Alert 1', aggregation: 'avg', threshold: 0.8, actualValue: 0.75, direction: 'below' as const },
-        { severity: 'critical' as const, message: 'Alert 2', aggregation: 'avg', threshold: 0.5, actualValue: 0.3, direction: 'below' as const },
+        { severity: 'warning' as const, message: 'Alert 1', aggregation: 'avg' as const, threshold: 0.8, actualValue: 0.75, direction: 'below' as const, metricName: 'relevance' },
+        { severity: 'critical' as const, message: 'Alert 2', aggregation: 'avg' as const, threshold: 0.5, actualValue: 0.3, direction: 'below' as const, metricName: 'faithfulness' },
       ],
     };
     render(<OperatorView data={data} />);
