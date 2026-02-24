@@ -2,7 +2,7 @@
  * DR13: Test coverage for TrendChart, TrendSeries, Sparkline, role views, API route validation.
  * Resolves backlog item DR13.
  */
-import { describe, it, expect, afterEach, vi, beforeAll } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { Sparkline } from '../components/Sparkline.js';
 import { TrendChart } from '../components/TrendChart.js';
@@ -13,18 +13,7 @@ import { OperatorView } from '../components/views/OperatorView.js';
 import type { MetricTrend, MetricDynamics } from '../types.js';
 import type { TrendBucket } from '../hooks/useTrend.js';
 
-// ---------------------------------------------------------------------------
-// Recharts uses ResizeObserver — provide a minimal stub for jsdom
-// ---------------------------------------------------------------------------
-beforeAll(() => {
-  if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
-    (window as unknown as Record<string, unknown>).ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-  }
-});
+// Note: ResizeObserver stub is installed globally in setup.ts
 
 afterEach(cleanup);
 
@@ -141,7 +130,18 @@ describe('Sparkline', () => {
 // TrendChart
 // ---------------------------------------------------------------------------
 
+// Pinned epoch for all time-relative assertions in this describe block
+const PINNED_NOW = new Date('2026-02-22T12:00:00.000Z');
+
 describe('TrendChart', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(PINNED_NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders empty state when no trend provided', () => {
     render(<TrendChart metricName="relevance" />);
     expect(screen.getByText('No trend data available')).toBeInTheDocument();
@@ -175,8 +175,8 @@ describe('TrendChart', () => {
   });
 
   it('shows breach time when projectedBreachTime is provided', () => {
-    // Project breach ~25h from now
-    const futureIso = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
+    // Project breach 25h from pinned now — renders as "25.0h"
+    const futureIso = new Date(PINNED_NOW.getTime() + 25 * 60 * 60 * 1000).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: futureIso,
@@ -184,13 +184,11 @@ describe('TrendChart', () => {
     });
     render(<TrendChart trend={makeTrend()} dynamics={dynamics} metricName="relevance" />);
     expect(screen.getByText('Breach in:')).toBeInTheDocument();
-    // 25h should render as "25.0h"
-    const breachSpan = screen.getByText(/h$/);
-    expect(breachSpan).toBeInTheDocument();
+    expect(screen.getByText('25.0h')).toBeInTheDocument();
   });
 
   it('shows "threshold exceeded" for breach in the past', () => {
-    const pastIso = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+    const pastIso = new Date(PINNED_NOW.getTime() - 1 * 60 * 60 * 1000).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: pastIso,
@@ -201,25 +199,27 @@ describe('TrendChart', () => {
   });
 
   it('shows breach in minutes for sub-1h breach', () => {
-    const futureIso = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    // 30 minutes from pinned now → "30m"
+    const futureIso = new Date(PINNED_NOW.getTime() + 30 * 60 * 1000).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: futureIso,
       projectedStatus: 'warning',
     });
     render(<TrendChart trend={makeTrend()} dynamics={dynamics} metricName="relevance" />);
-    expect(screen.getByText(/m$/)).toBeInTheDocument();
+    expect(screen.getByText('30m')).toBeInTheDocument();
   });
 
   it('shows breach in days for 2d+ breach', () => {
-    const futureIso = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    // 3 days from pinned now → "3.0d"
+    const futureIso = new Date(PINNED_NOW.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: futureIso,
       projectedStatus: 'warning',
     });
     render(<TrendChart trend={makeTrend()} dynamics={dynamics} metricName="relevance" />);
-    expect(screen.getByText(/d$/)).toBeInTheDocument();
+    expect(screen.getByText('3.0d')).toBeInTheDocument();
   });
 
   it('shows confidence percentage', () => {
@@ -228,10 +228,14 @@ describe('TrendChart', () => {
     expect(screen.getByText('75%')).toBeInTheDocument();
   });
 
-  // Y-domain: chart should not crash with equal previousValue and currentValue
-  it('renders without error when previous and current values are equal (flat trend)', () => {
+  // Y-domain: when previousValue === currentValue, yPad falls back to 0.05 (TrendChart.tsx:86)
+  // This must render the chart container, not the "Insufficient data" fallback
+  it('renders chart (not empty state) when previous and current values are equal (flat trend)', () => {
     const flatTrend = makeTrend({ previousValue: 0.8, currentValue: 0.8, delta: 0 });
-    expect(() => render(<TrendChart trend={flatTrend} metricName="relevance" />)).not.toThrow();
+    render(<TrendChart trend={flatTrend} metricName="relevance" />);
+    expect(screen.getByLabelText('Trend chart for relevance')).toBeInTheDocument();
+    expect(screen.queryByText('No trend data available')).toBeNull();
+    expect(screen.queryByText('Insufficient data')).toBeNull();
   });
 
   // Y-domain: chart handles threshold values in domain calculation
@@ -523,6 +527,12 @@ vi.mock('../data-loader.js', async () => ({
 }));
 
 describe('trends API route validation', () => {
+  // ESM caches the module — trendRoutes is a singleton across all loadTrendRoutes() calls.
+  // Reset mock call counts after each test; implementations are preserved by vi.clearAllMocks().
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   async function loadTrendRoutes() {
     const { trendRoutes } = await import('../api/routes/trends.js');
     return trendRoutes;
