@@ -38,6 +38,31 @@ app.get('/api/metrics/:name', async (c) => {
   return c.json(data);
 });
 
+app.get('/api/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const data = await c.env.DASHBOARD.get(`trend:${name}:${period}`, 'json');
+  if (!data) return c.json({ error: `No trend data for metric: ${name}` }, 404);
+  return c.json(data);
+});
+
+app.get('/api/evaluations/trace/:traceId', async (c) => {
+  const traceId = c.req.param('traceId');
+  const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
+  if (!data) return c.json({ evaluations: [] });
+  return c.json(data);
+});
+
+app.get('/api/traces/:traceId', async (c) => {
+  const traceId = c.req.param('traceId');
+  const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
+  if (!data) return c.json({ error: `No trace data for: ${traceId}` }, 404);
+  return c.json(data);
+});
+
 app.get('/api/health', async (c) => {
   const lastSync = await c.env.DASHBOARD.get('meta:lastSync');
   return c.json({
