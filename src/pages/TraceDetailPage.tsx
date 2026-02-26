@@ -24,13 +24,16 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
     );
   }
 
-  if (!data || data.spans.length === 0) {
+  if (!data || (data.spans.length === 0 && data.evaluations.length === 0)) {
     return (
       <div>
         <Link href="/" className="back-link">&larr; Back to dashboard</Link>
         <div className="empty-state">
           <h2>No Trace Data</h2>
-          <p>No spans found for trace <code>{traceId}</code></p>
+          <p>No spans or evaluations found for trace <code>{traceId}</code></p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8 }}>
+            Trace data may not have been synced yet. Try again after the next sync cycle.
+          </p>
         </div>
       </div>
     );
@@ -70,12 +73,22 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
         </div>
       )}
 
-      <div className="view-section">
-        <h3 className="section-heading">Span Hierarchy</h3>
-        <div className="card">
-          <SpanTree spans={data.spans} evalsBySpan={evalsBySpan} maxDuration={maxDuration} />
+      {data.spans.length > 0 && (
+        <div className="view-section">
+          <h3 className="section-heading">Span Hierarchy</h3>
+          <div className="card">
+            <SpanTree spans={data.spans} evalsBySpan={evalsBySpan} maxDuration={maxDuration} />
+          </div>
         </div>
-      </div>
+      )}
+
+      {data.spans.length === 0 && data.evaluations.length > 0 && (
+        <div className="view-section">
+          <div className="card" style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>
+            Span data not yet available for this trace. Evaluations are shown above.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

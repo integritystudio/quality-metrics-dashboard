@@ -24,7 +24,11 @@ export function useTrace(traceId: string | undefined) {
     queryKey: ['trace', traceId],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId!)}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      if (!res.ok) {
+        // Worker returns 404 with JSON body when trace not in KV — return empty data
+        if (res.status === 404) return { traceId: traceId!, spans: [], evaluations: [] };
+        throw new Error(`API error: ${res.status}`);
+      }
       return res.json();
     },
     enabled: !!traceId,

@@ -75,13 +75,24 @@ export async function loadEvaluationsByTraceIds(
 }
 
 export async function loadTracesByTraceId(traceId: string) {
-  const result = await queryTracesTool({ traceId, limit: 500 });
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const result = await queryTracesTool({
+    traceId,
+    startDate: thirtyDaysAgo.toISOString().split('T')[0],
+    endDate: now.toISOString().split('T')[0],
+    limit: 500,
+  });
   return result.traces;
 }
 
 export async function loadTracesBySessionId(sessionId: string) {
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const result = await queryTracesTool({
     attributeFilter: { 'session.id': sessionId },
+    startDate: thirtyDaysAgo.toISOString().split('T')[0],
+    endDate: now.toISOString().split('T')[0],
     limit: 500,
   });
   return result.traces;
