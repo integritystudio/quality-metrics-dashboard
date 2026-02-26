@@ -55,6 +55,25 @@ export async function loadEvaluationsByTraceId(
   });
 }
 
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]> {
+  if (traceIds.length === 0) return [];
+  const be = getBackend();
+  const now = new Date();
+  const start = startDate ?? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const end = endDate ?? now.toISOString();
+  const allEvals = await be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    limit: 10000,
+  });
+  const idSet = new Set(traceIds);
+  return allEvals.filter(e => e.traceId && idSet.has(e.traceId));
+}
+
 export async function loadTracesByTraceId(traceId: string) {
   const result = await queryTracesTool({ traceId, limit: 500 });
   return result.traces;
@@ -81,6 +100,45 @@ export async function loadVerifications(opts: {
     endDate: opts.endDate ?? now.toISOString(),
     sessionId: opts.sessionId,
     limit: opts.limit ?? 1000,
+  });
+}
+
+/** Convert ISO timestamp or date string to YYYY-MM-DD */
+function toDateOnly(d: string): string {
+  return d.split('T')[0];
+}
+
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
+  const now = new Date();
+  const start = startDate ? toDateOnly(startDate)
+    : toDateOnly(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  const end = endDate ? toDateOnly(endDate) : toDateOnly(now.toISOString());
+  const result = await queryLogs({
+    sessionId,
+    startDate: start,
+    endDate: end,
+    limit: 1000,
+  });
+  return result.logs;
+}
+
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const now = new Date();
+  return be.queryEvaluations({
+    sessionId,
+    startDate: startDate ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    endDate: endDate ?? now.toISOString(),
+    limit: 10000,
   });
 }
 

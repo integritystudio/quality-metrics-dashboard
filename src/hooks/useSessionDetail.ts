@@ -26,6 +26,15 @@ export interface TokenSnapshot {
   model: string;
 }
 
+export interface TokenTotals {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+  messages: number;
+  models: Record<string, number>;
+}
+
 export interface AgentStat {
   agentName: string;
   invocations: number;
@@ -43,7 +52,6 @@ export interface GitCommit {
   subject: string;
   body: string;
   files: string;
-  raw: string;
 }
 
 export interface CodeStructureEntry {
@@ -56,40 +64,71 @@ export interface CodeStructureEntry {
   tool: string;
 }
 
-export interface SpanError {
-  spanName: string;
-  tool?: string;
-  filePath?: string;
-  statusMessage?: string;
-}
-
 export interface AlertSummary {
   totalFired: number;
   stopEvents: number;
 }
 
+export interface DataSources {
+  traces: { count: number; traceIds: number };
+  logs: { count: number };
+  evaluations: { count: number };
+  total: number;
+}
+
+export interface Timespan {
+  start: string;
+  end: string;
+  durationHours: number;
+}
+
+export interface HookLatency {
+  count: number;
+  avg: number;
+  p50: number;
+  p95: number;
+  max: number;
+}
+
+export interface EvaluationBreakdownEntry {
+  name: string;
+  count: number;
+  avg: number | null;
+  min: number | null;
+  max: number | null;
+}
+
 export interface SessionDetailResponse {
   sessionId: string;
-  sessionInfo: SessionInfo;
-  spans: Array<{
-    traceId: string;
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-  }>;
+  dataSources: DataSources;
+  timespan: Timespan | null;
+  sessionInfo: SessionInfo | null;
+  tokenTotals: TokenTotals;
+  tokenProgression: TokenSnapshot[];
   toolUsage: Record<string, number>;
   mcpUsage: Record<string, number>;
+  spanBreakdown: Record<string, number>;
+  hookLatency: Record<string, HookLatency>;
+  errors: {
+    byCategory: Record<string, number>;
+    details: Array<{
+      spanName: string;
+      tool?: string;
+      errorType?: string;
+      filePath?: string;
+    }>;
+  };
   agentActivity: AgentStat[];
   fileAccess: FileAccessEntry[];
   gitCommits: GitCommit[];
-  tokenProgression: TokenSnapshot[];
-  spanBreakdown: Record<string, number>;
   alertSummary: AlertSummary;
   codeStructure: CodeStructureEntry[];
-  errors: SpanError[];
-  evaluation: MultiAgentEvaluation;
+  evaluationBreakdown: EvaluationBreakdownEntry[];
+  logSummary: {
+    bySeverity: Record<string, number>;
+    logs: unknown[];
+  };
+  multiAgentEvaluation: MultiAgentEvaluation;
   evaluations: EvaluationResult[];
 }
 

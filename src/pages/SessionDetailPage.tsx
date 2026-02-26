@@ -239,10 +239,19 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   if (!data) return null;
 
   const {
-    sessionInfo, toolUsage, mcpUsage, agentActivity, fileAccess,
-    gitCommits, tokenProgression, spanBreakdown, alertSummary,
-    codeStructure, errors, evaluation, evaluations, spans,
+    dataSources, timespan, sessionInfo, tokenTotals, toolUsage, mcpUsage,
+    agentActivity, fileAccess, gitCommits, tokenProgression, spanBreakdown,
+    hookLatency, alertSummary, codeStructure, errors, evaluationBreakdown,
+    multiAgentEvaluation, evaluations,
   } = data;
+
+  const si = sessionInfo ?? {
+    projectName: 'unknown', workingDirectory: '', gitRepository: '', gitBranch: '',
+    nodeVersion: '', resumeCount: 0, initialMessageCount: 0, initialContextTokens: 0,
+    finalMessageCount: 0, taskCount: 0, uncommittedAtStart: 0,
+  };
+  const spanCount = dataSources.traces.count;
+  const errorDetails = errors.details;
 
   // Derive computed values
   const totalToolCalls = Object.values(toolUsage).reduce((a, b) => a + b, 0);
@@ -261,15 +270,17 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const failedEvals = evaluations.filter(e =>
     (e.scoreLabel ?? '').toLowerCase() === 'fail'
   );
-  const hasIssues = alertSummary.totalFired > 0 || errors.length > 0 ||
+  const errorCount = errorDetails.length;
+  const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
     hallucinationEvals.length > 0 || failedEvals.length > 0;
-  const issueHealth: SectionProps['health'] = errors.length > 0 || hallucinationEvals.length > 0
+  const issueHealth: SectionProps['health'] = errorCount > 0 || hallucinationEvals.length > 0
     ? 'crit'
     : alertSummary.totalFired > 0 || failedEvals.length > 0
     ? 'warn'
     : 'ok';
 
   // Score interpretation
+  const evaluation = multiAgentEvaluation;
   const handoffScore = evaluation.handoffScore ?? 0;
   const avgRelevance = evaluation.avgTurnRelevance ?? 0;
   const completeness = evaluation.conversationCompleteness ?? 0;
@@ -310,14 +321,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               wordBreak: 'break-all',
             }}>{sessionId}</div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)' }}>
-              <span>{sessionInfo.projectName}</span>
-              {sessionInfo.gitRepository && (
+              <span>{si.projectName}</span>
+              {si.gitRepository && (
                 <span style={{ color: 'var(--text-muted)' }}>
-                  {sessionInfo.gitRepository}
-                  {sessionInfo.gitBranch ? ` · ${sessionInfo.gitBranch}` : ''}
+                  {si.gitRepository}
+                  {si.gitBranch ? ` · ${si.gitBranch}` : ''}
                 </span>
               )}
-              {sessionInfo.resumeCount > 1 && (
+              {si.resumeCount > 1 && (
                 <span style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 10,
@@ -326,7 +337,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   padding: '2px 8px',
                   borderRadius: 10,
                   letterSpacing: '0.05em',
-                }}>RESUMED ×{sessionInfo.resumeCount}</span>
+                }}>RESUMED ×{si.resumeCount}</span>
               )}
               {models.map(m => (
                 <span key={m} style={{
@@ -356,7 +367,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         rowGap: 12,
         marginBottom: 2,
       }}>
-        <Stat label="Spans" value={spans.length} />
+        <Stat label="Spans" value={spanCount} />
         <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
         <Stat label="Tool calls" value={totalToolCalls} />
         <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
@@ -366,7 +377,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
         <Stat label="Alerts fired" value={alertSummary.totalFired} color={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
         <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
-        <Stat label="Errors" value={errors.length} color={errors.length > 0 ? 'var(--status-critical)' : undefined} />
+        <Stat label="Errors" value={errorCount} color={errorCount > 0 ? 'var(--status-critical)' : undefined} />
         <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
         {maxTokenSnapshot && (
           <Stat label="Messages" value={maxTokenSnapshot.messages} />
@@ -384,7 +395,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         title="Issues & Anomalies"
         badge={hasIssues ? `${[
           alertSummary.totalFired > 0 && `${alertSummary.totalFired} alerts`,
-          errors.length > 0 && `${errors.length} errors`,
+          errorCount > 0 && `${errorCount} errors`,
           hallucinationEvals.length > 0 && `${hallucinationEvals.length} hallucinations`,
           failedEvals.length > 0 && `${failedEvals.length} failures`,
         ].filter(Boolean).join(' · ')}` : 'clean'}
@@ -406,19 +417,19 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           </IssueCallout>
         )}
 
-        {errors.length > 0 && (
-          <IssueCallout severity="critical" title={`${errors.length} error span${errors.length !== 1 ? 's' : ''}`}>
+        {errorCount > 0 && (
+          <IssueCallout severity="critical" title={`${errorCount} error span${errorCount !== 1 ? 's' : ''}`}>
             <div style={{ marginBottom: 8 }}>Tool invocations or agent calls that reported errors:</div>
-            {errors.slice(0, 10).map((e, i) => (
+            {errorDetails.slice(0, 10).map((e, i) => (
               <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginBottom: 4 }}>
                 <span style={{ color: 'var(--status-critical)' }}>✗</span>{' '}
                 {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
-                {e.statusMessage && <span style={{ color: 'var(--text-muted)' }}> — {e.statusMessage}</span>}
+                {e.errorType && e.errorType !== 'unknown' && <span style={{ color: 'var(--text-muted)' }}> — {e.errorType}</span>}
               </div>
             ))}
-            {errors.length > 10 && (
+            {errorCount > 10 && (
               <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 4 }}>
-                +{errors.length - 10} more
+                +{errorCount - 10} more
               </div>
             )}
           </IssueCallout>
@@ -708,7 +719,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       {/* ── Span Breakdown ── */}
       <Section
         title="Span Breakdown"
-        badge={`${spans.length} total · ${Object.keys(spanBreakdown).length} types`}
+        badge={`${spanCount} total · ${Object.keys(spanBreakdown).length} types`}
         health="neutral"
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 32px' }}>

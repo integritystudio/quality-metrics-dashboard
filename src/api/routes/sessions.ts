@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
-import { loadEvaluationsByTraceId } from '../data-loader.js';
+import {
+  loadEvaluationsBySessionId,
+  loadLogsBySessionId,
+} from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
+import type { EvaluationResult, TraceSpan, StepScore } from '../../../../dist/backends/index.js';
 
 export const sessionRoutes = new Hono();
 
@@ -11,14 +14,21 @@ function attr<T>(span: { attributes?: Record<string, unknown> }, key: string): T
   return span.attributes?.[key] as T | undefined;
 }
 
-/** Load spans for a session over a 90-day window (avoids today-only default). */
-async function loadSessionSpans(sessionId: string) {
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.ceil(sorted.length * p / 100) - 1;
+  return sorted[Math.max(0, idx)];
+}
+
+/** Load spans for a session, defaulting to 30-day window. */
+async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
   const now = new Date();
-  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const end = endDate ?? now.toISOString().split('T')[0];
+  const start = startDate ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const result = await queryTraces({
     attributeFilter: { 'session.id': sessionId },
-    startDate: ninetyDaysAgo.toISOString().split('T')[0],
-    endDate: now.toISOString().split('T')[0],
+    startDate: start,
+    endDate: end,
     limit: 1000,
   });
   return result.traces;
@@ -26,35 +36,77 @@ async function loadSessionSpans(sessionId: string) {
 
 /**
  * GET /api/sessions/:sessionId
- * Full session detail: tool usage, token progression, commits, alerts, code quality, evaluations.
+ *
+ * Returns structured session data from all available telemetry sources:
+ * traces, logs, and evaluations — queried in parallel by sessionId.
  */
 sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!sessionId) return c.json({ error: 'sessionId required' }, 400);
+  const startDate = c.req.query('startDate');
+  const endDate = c.req.query('endDate');
 
   try {
-    const spans = await loadSessionSpans(sessionId);
+    // Query all 3 data sources in parallel
+    const [spans, logs, evaluations] = await Promise.all([
+      loadSessionSpans(sessionId, startDate, endDate),
+      loadLogsBySessionId(sessionId, startDate, endDate),
+      loadEvaluationsBySessionId(sessionId, startDate, endDate),
+    ]);
 
-    // Session info from session-start spans
+    // ---- Data Sources Inventory ----
+    const traceIds = new Set<string>();
+    for (const s of spans) {
+      if (s.traceId) traceIds.add(s.traceId);
+    }
+    const dataSources = {
+      traces: { count: spans.length, traceIds: traceIds.size },
+      logs: { count: logs.length },
+      evaluations: { count: evaluations.length },
+      total: spans.length + logs.length + evaluations.length,
+    };
+
+    // ---- Session Timespan (from evaluation timestamps — trace query strips time fields) ----
+    let tsMin = Infinity;
+    let tsMax = -Infinity;
+    for (const ev of evaluations) {
+      const t = new Date(ev.timestamp).getTime();
+      if (t < tsMin) tsMin = t;
+      if (t > tsMax) tsMax = t;
+    }
+    for (const l of logs) {
+      const t = new Date((l as { timestamp?: string }).timestamp ?? '').getTime();
+      if (!isNaN(t)) {
+        if (t < tsMin) tsMin = t;
+        if (t > tsMax) tsMax = t;
+      }
+    }
+    const timespan = tsMin < Infinity ? {
+      start: new Date(tsMin).toISOString(),
+      end: new Date(tsMax).toISOString(),
+      durationHours: +((tsMax - tsMin) / 3_600_000).toFixed(1),
+    } : null;
+
+    // ---- Session Info from session-start spans ----
     const sessionStarts = spans.filter(s => attr<string>(s, 'hook.name') === 'session-start');
     const first = sessionStarts[0];
     const last = sessionStarts[sessionStarts.length - 1] ?? first;
-    const sessionInfo = {
+    const sessionInfo = first ? {
       projectName: attr<string>(first, 'project.name') ?? 'unknown',
       workingDirectory: attr<string>(first, 'working.directory') ?? '',
       gitRepository: attr<string>(first, 'git.repository') ?? '',
       gitBranch: attr<string>(first, 'git.branch') ?? '',
       nodeVersion: attr<string>(first, 'node.version') ?? '',
       resumeCount: sessionStarts.length,
-      initialMessageCount: (attr<number>(first, 'context.message_count') ?? 0),
-      initialContextTokens: (attr<number>(first, 'context.estimated_tokens') ?? 0),
-      finalMessageCount: (attr<number>(last, 'context.message_count') ?? 0),
+      initialMessageCount: attr<number>(first, 'context.message_count') ?? 0,
+      initialContextTokens: attr<number>(first, 'context.estimated_tokens') ?? 0,
+      finalMessageCount: attr<number>(last, 'context.message_count') ?? 0,
       taskCount: attr<number>(first, 'tasks.active') ?? 0,
       uncommittedAtStart: attr<number>(first, 'git.uncommitted') ?? 0,
-    };
+    } : null;
 
-    // Token progression from stop-event token-metrics-extraction spans
-    const tokenSpans = spans
+    // ---- Token Progression ----
+    const tokenProgression = spans
       .filter(s => attr<string>(s, 'hook.name') === 'token-metrics-extraction')
       .map(s => ({
         messages: attr<number>(s, 'tokens.messages') ?? 0,
@@ -66,7 +118,21 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }))
       .sort((a, b) => a.messages - b.messages);
 
-    // Tool usage from builtin-post-tool spans
+    // ---- Token Totals ----
+    const tokenTotals = {
+      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
+      models: {} as Record<string, number>,
+    };
+    for (const t of tokenProgression) {
+      tokenTotals.input += t.inputTokens;
+      tokenTotals.output += t.outputTokens;
+      tokenTotals.cacheRead += t.cacheRead;
+      tokenTotals.cacheCreation += t.cacheCreation;
+      tokenTotals.messages += t.messages;
+      if (t.model) tokenTotals.models[t.model] = (tokenTotals.models[t.model] ?? 0) + 1;
+    }
+
+    // ---- Tool Usage ----
     const toolUsage: Record<string, number> = {};
     for (const s of spans) {
       if (attr<string>(s, 'hook.type') === 'builtin' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
@@ -75,7 +141,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
     }
 
-    // MCP usage from mcp-post-tool spans
+    // ---- MCP Usage ----
     const mcpUsage: Record<string, number> = {};
     for (const s of spans) {
       if (attr<string>(s, 'hook.type') === 'mcp' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
@@ -84,7 +150,55 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
     }
 
-    // Agent activity from agent-post-tool spans
+    // ---- Span Breakdown + Hook Latency ----
+    const spanBreakdown: Record<string, number> = {};
+    const hookDurations: Record<string, number[]> = {};
+    for (const s of spans) {
+      spanBreakdown[s.name] = (spanBreakdown[s.name] ?? 0) + 1;
+      const ms = s.durationMs ?? 0;
+      if (ms > 0) {
+        if (!hookDurations[s.name]) hookDurations[s.name] = [];
+        hookDurations[s.name].push(ms);
+      }
+    }
+    const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
+    for (const [name, durations] of Object.entries(hookDurations)) {
+      const sorted = durations.sort((a, b) => a - b);
+      hookLatency[name] = {
+        count: sorted.length,
+        avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(1),
+        p50: +percentile(sorted, 50).toFixed(1),
+        p95: +percentile(sorted, 95).toFixed(1),
+        max: +sorted[sorted.length - 1].toFixed(1),
+      };
+    }
+
+    // ---- Error Categorization ----
+    const errorsByCategory: Record<string, number> = {};
+    const errorDetails: Array<{
+      spanName: string;
+      tool?: string;
+      errorType?: string;
+      filePath?: string;
+    }> = [];
+    for (const s of spans) {
+      const hasError = attr<boolean>(s, 'builtin.has_error') === true
+        || attr<boolean>(s, 'agent.has_error') === true
+        || s.status?.code === 2;
+      if (!hasError) continue;
+      const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
+      const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
+      const key = `${tool} -> ${errType}`;
+      errorsByCategory[key] = (errorsByCategory[key] ?? 0) + 1;
+      errorDetails.push({
+        spanName: s.name,
+        tool,
+        errorType: errType,
+        filePath: attr<string>(s, 'builtin.file_path'),
+      });
+    }
+
+    // ---- Agent Activity ----
     const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
     for (const s of spans) {
       if (attr<string>(s, 'hook.name') === 'agent-post-tool') {
@@ -104,7 +218,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
     }));
 
-    // File access from builtin file_path attribute
+    // ---- File Access ----
     const fileCount: Record<string, number> = {};
     for (const s of spans) {
       const fp = attr<string>(s, 'builtin.file_path');
@@ -115,29 +229,28 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 30);
 
-    // Git commits from post-commit-review spans
+    // ---- Git Commits ----
     const gitCommits = spans
       .filter(s => attr<string>(s, 'hook.name') === 'post-commit-review')
       .map(s => {
         const raw = attr<string>(s, 'git.command') ?? '';
         const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
         const files = filesMatch ? filesMatch[1].trim() : '';
-        // Extract heredoc commit message
         const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
         const fullMessage = msgMatch ? msgMatch[1] : '';
         const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, 80);
         const body = fullMessage ? fullMessage.split('\n').slice(2).join('\n').trim() : '';
-        return { subject, body, files, raw };
+        return { subject, body, files };
       });
 
-    // Alert summary from telemetry-alert-evaluation spans
+    // ---- Alert Summary ----
     const alertSpans = spans.filter(s => attr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
     const alertSummary = {
       totalFired: alertSpans.reduce((sum, s) => sum + (attr<number>(s, 'alerts.triggered_count') ?? 0), 0),
       stopEvents: alertSpans.length,
     };
 
-    // Code structure from code-structure spans
+    // ---- Code Structure ----
     const codeStructure = spans
       .filter(s => attr<string>(s, 'hook.name') === 'code-structure')
       .map(s => ({
@@ -150,33 +263,39 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         tool: attr<string>(s, 'code.structure.tool') ?? '',
       }));
 
-    // Span breakdown by name
-    const spanBreakdown: Record<string, number> = {};
-    for (const s of spans) {
-      spanBreakdown[s.name] = (spanBreakdown[s.name] ?? 0) + 1;
+    // ---- Evaluation Breakdown (from direct sessionId query) ----
+    const evalByName: Record<string, { count: number; scores: number[] }> = {};
+    for (const ev of evaluations) {
+      const name = ev.evaluationName;
+      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
+      evalByName[name].count++;
+      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+        evalByName[name].scores.push(ev.scoreValue);
+      }
+    }
+    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
+      const sorted = d.scores.sort((a, b) => a - b);
+      return {
+        name,
+        count: d.count,
+        avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3) : null,
+        min: sorted.length > 0 ? +sorted[0].toFixed(3) : null,
+        max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(3) : null,
+      };
+    });
+
+    // ---- Log Summary ----
+    const logBySeverity: Record<string, number> = {};
+    for (const l of logs) {
+      const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
+      logBySeverity[sev] = (logBySeverity[sev] ?? 0) + 1;
     }
 
-    // Error spans
-    const errors = spans
-      .filter(s =>
-        s.status?.code === 2 ||
-        attr<boolean>(s, 'builtin.has_error') === true ||
-        attr<boolean>(s, 'agent.has_error') === true
-      )
-      .map(s => ({
-        spanName: s.name,
-        tool: attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type'),
-        filePath: attr<string>(s, 'builtin.file_path'),
-        statusMessage: s.status?.message,
-      }));
-
-    // Multi-agent evaluation
+    // ---- Multi-agent Evaluation ----
     const agentMapForEval = new Map<number, string>();
-    const traceIds = new Set<string>();
     spans.forEach((span, i) => {
       const agent = span.attributes?.['agent.name'] as string | undefined;
       if (agent) agentMapForEval.set(i, agent);
-      if (span.traceId) traceIds.add(span.traceId);
     });
     const stepScores: StepScore[] = spans.map((span, i) => ({
       step: i,
@@ -185,29 +304,28 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         : (span.status?.code === 2 ? 0 : 1),
       explanation: span.name,
     }));
-    const evaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
-
-    const evalBatches: Awaited<ReturnType<typeof loadEvaluationsByTraceId>>[] = [];
-    for (const id of traceIds) {
-      evalBatches.push(await loadEvaluationsByTraceId(id));
-    }
-    const evaluations = evalBatches.flat();
+    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
 
     return c.json({
       sessionId,
+      dataSources,
+      timespan,
       sessionInfo,
-      spans,
+      tokenTotals,
+      tokenProgression,
       toolUsage,
       mcpUsage,
+      spanBreakdown,
+      hookLatency,
+      errors: { byCategory: errorsByCategory, details: errorDetails },
       agentActivity,
       fileAccess,
       gitCommits,
-      tokenProgression: tokenSpans,
-      spanBreakdown,
       alertSummary,
       codeStructure,
-      errors,
-      evaluation,
+      evaluationBreakdown,
+      logSummary: { bySeverity: logBySeverity, logs },
+      multiAgentEvaluation,
       evaluations,
     });
   } catch (err) {
