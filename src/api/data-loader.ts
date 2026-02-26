@@ -12,6 +12,11 @@ function getBackend(): MultiDirectoryBackend {
   return backend;
 }
 
+/** Convert ISO timestamp or date string to YYYY-MM-DD */
+function toDateOnly(d: string): string {
+  return d.split('T')[0];
+}
+
 export async function loadEvaluationsByMetric(
   start: string,
   end: string
@@ -42,15 +47,16 @@ export async function loadEvaluationsForMetric(
 }
 
 export async function loadEvaluationsByTraceId(
-  traceId: string
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
 ): Promise<EvaluationResult[]> {
   const be = getBackend();
   const now = new Date();
-  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
   return be.queryEvaluations({
     traceId,
-    startDate: ninetyDaysAgo.toISOString(),
-    endDate: now.toISOString(),
+    startDate: startDate ?? new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    endDate: endDate ?? now.toISOString(),
     limit: 1000,
   });
 }
@@ -74,28 +80,59 @@ export async function loadEvaluationsByTraceIds(
   return allEvals.filter(e => e.traceId && idSet.has(e.traceId));
 }
 
-export async function loadTracesByTraceId(traceId: string) {
+export async function loadTracesByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+) {
   const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const start = startDate ? toDateOnly(startDate)
+    : toDateOnly(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  const end = endDate ? toDateOnly(endDate) : toDateOnly(now.toISOString());
   const result = await queryTracesTool({
     traceId,
-    startDate: thirtyDaysAgo.toISOString().split('T')[0],
-    endDate: now.toISOString().split('T')[0],
+    startDate: start,
+    endDate: end,
     limit: 500,
   });
   return result.traces;
 }
 
-export async function loadTracesBySessionId(sessionId: string) {
+export async function loadTracesBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+) {
   const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const start = startDate ? toDateOnly(startDate)
+    : toDateOnly(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  const end = endDate ? toDateOnly(endDate) : toDateOnly(now.toISOString());
   const result = await queryTracesTool({
     attributeFilter: { 'session.id': sessionId },
-    startDate: thirtyDaysAgo.toISOString().split('T')[0],
-    endDate: now.toISOString().split('T')[0],
+    startDate: start,
+    endDate: end,
     limit: 500,
   });
   return result.traces;
+}
+
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
+  const now = new Date();
+  const start = startDate ? toDateOnly(startDate)
+    : toDateOnly(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString());
+  const end = endDate ? toDateOnly(endDate) : toDateOnly(now.toISOString());
+  const result = await queryLogs({
+    traceId,
+    startDate: start,
+    endDate: end,
+    limit: 1000,
+  });
+  return result.logs;
 }
 
 export async function loadVerifications(opts: {
@@ -112,11 +149,6 @@ export async function loadVerifications(opts: {
     sessionId: opts.sessionId,
     limit: opts.limit ?? 1000,
   });
-}
-
-/** Convert ISO timestamp or date string to YYYY-MM-DD */
-function toDateOnly(d: string): string {
-  return d.split('T')[0];
 }
 
 export async function loadLogsBySessionId(

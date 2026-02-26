@@ -114,18 +114,26 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
         </div>
       )}
 
-      {row.traceId && (
+      {(row.traceId || row.sessionId) && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 16 }}>
-          <Link href={`/evaluations/trace/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
-            View full evaluation detail &rarr;
-          </Link>
-          <Link href={`/traces/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
-            View trace spans &rarr;
-          </Link>
+          {row.traceId && (
+            <Link href={`/evaluations/trace/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
+              View full evaluation detail &rarr;
+            </Link>
+          )}
+          {row.sessionId ? (
+            <Link href={`/sessions/${row.sessionId}`} className="back-link" style={{ marginBottom: 0 }}>
+              View trace spans &rarr;
+            </Link>
+          ) : row.traceId ? (
+            <Link href={`/traces/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
+              View trace spans &rarr;
+            </Link>
+          ) : null}
         </div>
       )}
 
-      {!hasDetail && !row.traceId && (
+      {!hasDetail && !row.traceId && !row.sessionId && (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
           No additional detail available.
         </div>

@@ -17,7 +17,7 @@ npm run dev          # Vite + Hono API on :3001
 |------|--------|--------|
 | 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion |
 | 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination |
-| 3. Sync | `sync-to-kv.ts` | Aggregates + uploads to Cloudflare KV |
+| 3. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta > metrics > trends > traces) |
 
 ```bash
 npm run populate -- --seed          # offline (synthetic judge scores)
@@ -39,7 +39,7 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run dev` | Vite dev server + Hono API |
 | `npm run build` | Production Vite build |
 | `npm run populate` | Full data pipeline (derive + judge + sync) |
-| `npm run sync` | KV sync only |
+| `npm run sync` | KV sync only (`--budget=450` default, `--budget=5000` for bulk) |
 | `npm test` | Vitest |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
@@ -57,3 +57,20 @@ npm run dashboard:populate:schedule    # start cron scheduler
 ```
 
 See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
+
+## Production Deployment
+
+```bash
+npm run build                          # Build frontend
+npm run deploy:worker                  # Deploy API worker
+npx wrangler pages deploy dist \
+  --project-name=integritystudio-ai    # Deploy frontend to Pages
+npx tsx scripts/sync-to-kv.ts \
+  --budget=5000                        # Bulk sync to KV (default 450)
+```
+
+**KV sync notes:**
+- Delta sync with content-hash state file (`scripts/.kv-sync-state.json`)
+- Priority: meta/dashboard > metrics > trends > traces
+- Cloudflare free tier has daily write limits; multiple runs needed for full sync
+- Traces are lowest priority — may need `--budget=5000` and multiple passes

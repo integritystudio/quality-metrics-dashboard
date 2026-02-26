@@ -283,7 +283,7 @@ async function main(): Promise<void> {
   const allEvals = await backend.queryEvaluations({
     startDate: thirtyDaysAgo.toISOString(),
     endDate: now.toISOString(),
-    limit: 10000,
+    limit: 100000,
   });
   const evalsByTrace = new Map<string, EvaluationResult[]>();
   for (const ev of allEvals) {
