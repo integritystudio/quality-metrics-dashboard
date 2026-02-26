@@ -6,7 +6,7 @@
  * in the format expected by the observability-toolkit backend.
  */
 
-import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
@@ -333,20 +333,47 @@ function main(): void {
     byDate.get(date)!.push(ev);
   }
 
-  // Write evaluation files
+  // Write evaluation files, preserving existing non-rule (LLM judge) evaluations
+  const RULE_EVALUATOR = 'telemetry-rule-engine';
   let totalWritten = 0;
+  let preservedCount = 0;
   for (const [date, evals] of byDate) {
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
-    const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
+
+    // Read existing evaluations and keep any that weren't produced by derive (e.g. LLM judge)
+    let preserved: string[] = [];
+    if (existsSync(outFile)) {
+      const existingLines = readFileSync(outFile, 'utf-8').split('\n').filter(Boolean);
+      for (const line of existingLines) {
+        try {
+          const rec = JSON.parse(line);
+          const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'] ?? rec.evaluator;
+          if (evaluator !== RULE_EVALUATOR) {
+            preserved.push(line);
+          }
+        } catch {
+          // keep unparseable lines as-is
+          preserved.push(line);
+        }
+      }
+    }
+
+    const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
+    const content = [...ruleLines, ...preserved].join('\n') + '\n';
     writeFileSync(outFile, content);
-    totalWritten += evals.length;
-    console.log(`Wrote ${evals.length} evaluations to evaluations-${date}.jsonl`);
+    totalWritten += evals.length + preserved.length;
+    preservedCount += preserved.length;
+    const preserveNote = preserved.length > 0 ? ` (preserved ${preserved.length} judge evals)` : '';
+    console.log(`Wrote ${evals.length} evaluations to evaluations-${date}.jsonl${preserveNote}`);
   }
 
   // Summary
   const byCat = new Map<string, number>();
   for (const ev of allEvals) {
     byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+  }
+  if (preservedCount > 0) {
+    console.log(`\nPreserved ${preservedCount} existing LLM judge evaluations across all files`);
   }
   console.log(`\nSummary: ${totalWritten} evaluations from ${spanCount} spans`);
   for (const [name, count] of byCat) {
