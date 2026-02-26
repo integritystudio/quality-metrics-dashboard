@@ -33,5 +33,13 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/__tests__/setup.ts'],
     exclude: ['node_modules/**', 'scripts/__tests__/**'],
+    server: {
+      deps: {
+        // Parent dist/ imports are mocked via vi.mock() in tests.
+        // Mark external so vite doesn't fail resolving them in CI
+        // where the parent repo isn't built.
+        external: [/\.\.\/\.\.\/\.\.\/\.\.\/dist/],
+      },
+    },
   },
 });
