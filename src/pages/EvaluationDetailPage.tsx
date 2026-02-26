@@ -2,6 +2,7 @@ import { Link } from 'wouter';
 import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
+import { ProvenancePanel } from '../components/ProvenancePanel.js';
 import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
 
@@ -50,6 +51,9 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             {evaluations.length} evaluation{evaluations.length !== 1 ? 's' : ''}
           </span>
+          <Link href={`/traces/${traceId}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>
+            View trace &rarr;
+          </Link>
         </div>
       </div>
 
@@ -87,16 +91,25 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
             </div>
           )}
 
-          {ev.sessionId && (
-            <div style={{ marginTop: 12 }}>
-              <div className="section-label">Provenance</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                Session: {ev.sessionId}
-                {ev.spanId && <> &middot; Span: {ev.spanId}</>}
-                {ev.agentName && <> &middot; Agent: {ev.agentName}</>}
-              </div>
+          <details style={{ marginTop: 12 }}>
+            <summary className="cot-summary">Provenance &amp; Audit Trail</summary>
+            <div style={{ paddingTop: 8 }}>
+              <ProvenancePanel
+                evaluationName={ev.evaluationName}
+                scoreValue={ev.scoreValue}
+                scoreLabel={ev.scoreLabel}
+                traceId={ev.traceId ?? traceId}
+                spanId={ev.spanId}
+                sessionId={ev.sessionId}
+                timestamp={ev.timestamp}
+                evaluator={ev.evaluator}
+                evaluatorType={ev.evaluatorType}
+                scoreUnit={ev.scoreUnit}
+                agentName={ev.agentName}
+                rawData={ev as unknown as Record<string, unknown>}
+              />
             </div>
-          )}
+          </details>
         </div>
       ))}
     </div>

@@ -6,6 +6,7 @@ import {
   QUALITY_METRICS,
 } from '../../../../dist/lib/quality-metrics.js';
 import type { RoleViewType } from '../../../../dist/lib/quality-metrics.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
@@ -22,6 +23,33 @@ function computePeriodDates(period: string): { start: string; end: string } {
   };
   const start = new Date(now.getTime() - (ms[period] ?? ms['7d']));
   return { start: start.toISOString(), end: now.toISOString() };
+}
+
+/** Bucket evaluations into N time bins and return avg scores per bucket */
+function computeSparklineData(
+  evaluations: EvaluationResult[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): (number | null)[] {
+  const range = endMs - startMs;
+  if (range <= 0 || evaluations.length === 0) return [];
+
+  const bucketWidth = range / buckets;
+  const sums = new Array(buckets).fill(0);
+  const counts = new Array(buckets).fill(0);
+
+  for (const ev of evaluations) {
+    if (ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+    const ts = new Date(ev.timestamp).getTime();
+    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
+    if (idx >= 0) {
+      sums[idx] += ev.scoreValue;
+      counts[idx]++;
+    }
+  }
+
+  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
 }
 
 export const dashboardRoutes = new Hono();
@@ -44,15 +72,23 @@ dashboardRoutes.get('/dashboard', async (c) => {
     const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
     const cqi = computeCQI(dashboard.metrics);
 
+    // Compute sparkline data (24 time buckets per metric)
+    const startMs = new Date(dates.start).getTime();
+    const endMs = new Date(dates.end).getTime();
+    const sparklines: Record<string, (number | null)[]> = {};
+    for (const [metricName, evals] of evaluationsByMetric) {
+      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, 24);
+    }
+
     if (role) {
       const view = computeRoleView(dashboard, role as RoleViewType);
       if (role === 'executive') {
-        return c.json({ ...view, cqi });
+        return c.json({ ...view, cqi, sparklines });
       }
-      return c.json(view);
+      return c.json({ ...view, sparklines });
     }
 
-    return c.json({ ...dashboard, cqi });
+    return c.json({ ...dashboard, cqi, sparklines });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, 500);
   }

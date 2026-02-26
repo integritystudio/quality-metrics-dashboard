@@ -13,6 +13,7 @@ import { EvaluationDetail } from './components/EvaluationDetail.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
 import { TrendChart } from './components/TrendChart.js';
 import { TrendSeries } from './components/TrendSeries.js';
+import { ConfidencePanel } from './components/ConfidencePanel.js';
 import { CorrelationsPage } from './pages/CorrelationsPage.js';
 import { CoveragePage } from './pages/CoveragePage.js';
 import { PipelinePage } from './pages/PipelinePage.js';
@@ -20,6 +21,7 @@ import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { CompliancePage } from './pages/CompliancePage.js';
 import { TraceDetailPage } from './pages/TraceDetailPage.js';
 import { AgentSessionPage } from './pages/AgentSessionPage.js';
+import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
@@ -46,6 +48,7 @@ function DashboardPage({ period }: { period: Period }) {
 
   if (!data || ('role' in data)) return <MetricGridSkeleton />;
   const dashboard = data;
+  const sparklines = (data as QualityDashboardSummary & { sparklines?: Record<string, (number | null)[]> }).sparklines;
 
   if (dashboard.overallStatus === 'no_data') {
     return (
@@ -63,7 +66,7 @@ function DashboardPage({ period }: { period: Period }) {
     <>
       {isFetching && data && <div className="refetch-indicator">Updating...</div>}
       <HealthOverview dashboard={dashboard} />
-      <MetricGrid metrics={dashboard.metrics} />
+      <MetricGrid metrics={dashboard.metrics} sparklines={sparklines} />
       {dashboard.alerts.length > 0 && (
         <div className="view-section">
           <h3 className="section-heading">Active Alerts</h3>
@@ -153,6 +156,15 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           <ConfidenceBadge confidence={detail.confidence} />
         </div>
       </div>
+
+      {detail.confidence && (
+        <div className="view-section">
+          <h3 className="section-heading">Confidence Analysis</h3>
+          <div className="card">
+            <ConfidencePanel confidence={detail.confidence} />
+          </div>
+        </div>
+      )}
 
       <div className="view-section">
         <h3 className="section-heading">Trend</h3>
@@ -295,6 +307,13 @@ export function App() {
           {(params) => (
             <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
               <AgentSessionPage sessionId={params.sessionId} />
+            </ErrorBoundary>
+          )}
+        </Route>
+        <Route path="/sessions/:sessionId">
+          {(params) => (
+            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+              <SessionDetailPage sessionId={params.sessionId} />
             </ErrorBoundary>
           )}
         </Route>

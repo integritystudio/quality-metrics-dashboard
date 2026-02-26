@@ -1,19 +1,88 @@
 import type { QualityDashboardSummary } from '../types.js';
 import { StatusBadge } from './Indicators.js';
 
+interface PipelineHealth {
+  evalVolume: number;
+  lastEvalAge: string | null;
+  evalRate: string;
+}
+
+function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth {
+  let totalSamples = 0;
+  let latestTs: string | null = null;
+
+  for (const m of dashboard.metrics) {
+    totalSamples += m.sampleCount;
+  }
+
+  // Find most recent evaluation timestamp from worst explanations
+  for (const m of dashboard.metrics) {
+    const worst = (m as QualityDashboardSummary['metrics'][number] & { worstExplanation?: { timestamp?: string } }).worstExplanation;
+    if (worst?.timestamp) {
+      if (!latestTs || worst.timestamp > latestTs) latestTs = worst.timestamp;
+    }
+  }
+
+  let lastEvalAge: string | null = null;
+  if (latestTs) {
+    const diffMs = Date.now() - new Date(latestTs).getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) lastEvalAge = `${diffSec}s ago`;
+    else if (diffSec < 3600) lastEvalAge = `${Math.floor(diffSec / 60)}m ago`;
+    else if (diffSec < 86400) lastEvalAge = `${Math.floor(diffSec / 3600)}h ago`;
+    else lastEvalAge = `${Math.floor(diffSec / 86400)}d ago`;
+  }
+
+  // Compute rate based on period
+  const period = dashboard.metrics[0]?.period;
+  let periodHours = 168; // default 7d
+  if (period) {
+    const diffMs = new Date(period.end).getTime() - new Date(period.start).getTime();
+    periodHours = Math.max(1, diffMs / (60 * 60 * 1000));
+  }
+  const perHour = totalSamples / periodHours;
+  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(1)}k/hr`
+    : perHour >= 1 ? `${perHour.toFixed(0)}/hr`
+    : `${(perHour * 24).toFixed(1)}/day`;
+
+  return { evalVolume: totalSamples, lastEvalAge, evalRate };
+}
+
+function formatVolume(n: number): string {
+  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
 export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSummary }) {
   const { overallStatus, summary } = dashboard;
+  const pipeline = computePipelineHealth(dashboard);
 
   return (
     <div className={`health-banner ${overallStatus}`}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <StatusBadge status={overallStatus} />
-        <span style={{ fontSize: 14 }}>
-          {overallStatus === 'healthy' && 'All metrics within thresholds'}
-          {overallStatus === 'warning' && 'Some metrics need attention'}
-          {overallStatus === 'critical' && 'Critical issues detected'}
-          {overallStatus === 'no_data' && 'No evaluation data available'}
-        </span>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <StatusBadge status={overallStatus} />
+          <span style={{ fontSize: 14 }}>
+            {overallStatus === 'healthy' && 'All metrics within thresholds'}
+            {overallStatus === 'warning' && 'Some metrics need attention'}
+            {overallStatus === 'critical' && 'Critical issues detected'}
+            {overallStatus === 'no_data' && 'No evaluation data available'}
+          </span>
+        </div>
+        <div className="pipeline-stats">
+          <div className="pipeline-stat">
+            Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
+          </div>
+          <div className="pipeline-stat">
+            Rate: <span className="stat-value">{pipeline.evalRate}</span>
+          </div>
+          {pipeline.lastEvalAge && (
+            <div className="pipeline-stat">
+              Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
+            </div>
+          )}
+        </div>
       </div>
       <div className="summary-counts">
         <div className="summary-count">

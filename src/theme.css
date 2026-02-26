@@ -1,23 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
 :root {
-  --bg-primary: #0d1117;
-  --bg-card: #161b22;
-  --bg-elevated: #21262d;
-  --border: #30363d;
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted: #484f58;
-  --status-healthy: #3fb950;
-  --status-warning: #d29922;
-  --status-critical: #f85149;
-  --status-no-data: #8b949e;
-  --accent: #58a6ff;
-  --radius: 8px;
-  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  /* Backgrounds */
+  --bg-primary: #0a0e14;
+  --bg-card: #131920;
+  --bg-elevated: #1a2230;
+  --bg-surface: #1f2937;
+  --bg-hover: #243044;
+
+  /* Borders */
+  --border: #2a3a4e;
+  --border-subtle: #1e2a3a;
+  --border-accent: #3b5278;
+
+  /* Text */
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+
+  /* Status */
+  --status-healthy: #26d97f;
+  --status-warning: #e5a00d;
+  --status-critical: #f04438;
+  --status-no-data: #6b7280;
+
+  /* Accent */
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-muted: #1e3a5f;
+
+  /* Scores */
   --score-excellent: #26d97f;
   --score-good: #34d399;
   --score-adequate: #e5a00d;
   --score-poor: #f97316;
   --score-failing: #f04438;
+
+  /* Typography */
+  --font-display: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
+  --shadow-glow-healthy: 0 0 12px rgba(38,217,127,0.15);
+  --shadow-glow-warning: 0 0 12px rgba(229,160,13,0.15);
+  --shadow-glow-critical: 0 0 12px rgba(240,68,56,0.2);
 }
 
 * {
@@ -27,11 +72,19 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.6;
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .container {
@@ -48,14 +101,18 @@ body {
 
 .card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
 }
 
 .card:hover {
-  border-color: var(--text-muted);
+  border-color: var(--border);
 }
+
+.card.glow-warning { box-shadow: var(--shadow-glow-warning); }
+.card.glow-critical { box-shadow: var(--shadow-glow-critical); }
 
 .card-link {
   text-decoration: none;
@@ -624,4 +681,141 @@ details[open] > .cot-summary::before {
   background: var(--text-primary);
   border-radius: 1px;
   transform: translateX(-1px);
+}
+
+/* Pipeline health stats in HealthOverview */
+.pipeline-stats {
+  display: flex;
+  gap: var(--space-6);
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.pipeline-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.pipeline-stat .stat-value {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Worst explanation preview on MetricCard */
+.metric-worst {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.metric-worst .worst-score {
+  color: var(--score-failing);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* Provenance panel */
+.provenance-panel {
+  font-size: 13px;
+}
+.provenance-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.provenance-grid .prov-label {
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  white-space: nowrap;
+}
+.provenance-grid .prov-value {
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.provenance-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.provenance-actions button {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+.provenance-actions button:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-accent);
+}
+
+/* Confidence panel */
+.confidence-panel {
+  font-size: 13px;
+}
+.confidence-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.confidence-method {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.agreement-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-1) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.agreement-grid .ag-header {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-body);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.agreement-summary {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.agreement-summary .summary-value {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+.variance-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.variance-bar-track {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-surface);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.variance-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
