@@ -57,6 +57,8 @@ type KVEntry = { key: string; value: string };
 
 const KV_BATCH_SIZE = 9_500; // wrangler limit is 10,000 per bulk put
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
+/** Stores last computed coverage object so early-return path can refresh lastChecked. */
+const COVERAGE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-coverage.json');
 const QUERY_LIMIT = 10_000;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
@@ -101,6 +103,21 @@ function loadSyncState(): SyncState {
 
 function saveSyncState(state: SyncState): void {
   writeFileSync(STATE_FILE, JSON.stringify(state));
+}
+
+type CoverageData = Record<string, unknown>;
+
+function loadLastCoverage(): CoverageData | null {
+  if (!existsSync(COVERAGE_FILE)) return null;
+  try {
+    return JSON.parse(readFileSync(COVERAGE_FILE, 'utf-8')) as CoverageData;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastCoverage(coverage: CoverageData): void {
+  writeFileSync(COVERAGE_FILE, JSON.stringify(coverage));
 }
 
 function hashValue(value: string): string {
@@ -466,6 +483,14 @@ async function main(): Promise<void> {
       prevState['meta:lastSync'] = hashValue(metaEntry.value);
       saveSyncState(prevState);
     }
+    // L1: Refresh lastChecked in coverage so consumers can distinguish stale data from a fresh no-op run.
+    // Stable coverage numbers haven't changed; only lastChecked is updated.
+    const prevCoverage = loadLastCoverage();
+    if (prevCoverage) {
+      const refreshed: CoverageData = { ...prevCoverage, lastChecked: now.toISOString() };
+      kvBulkPut([{ key: 'meta:syncCoverage', value: JSON.stringify(refreshed) }]);
+      saveLastCoverage(refreshed);
+    }
     console.log('No changes to sync');
     return;
   }
@@ -541,16 +566,25 @@ async function main(): Promise<void> {
     runsRemaining: traceBudget > 0
       ? Math.ceil(Math.max(0, traceChanged.length - traceBudget) / traceBudget)
       : (traceChanged.length > 0 ? null : 0),
+    // timestamp: when stable coverage numbers were last computed/changed (not updated on no-op runs)
     timestamp: now.toISOString(),
+    // lastChecked: when sync last ran regardless of whether data changed (refreshed even on no-op runs)
+    lastChecked: now.toISOString(),
   };
+  // N3: Exclude lastChecked (and timestamp) from the change-detection hash so a new timestamp alone
+  // does not burn a KV write every run. Only the stable numeric fields gate whether we write.
+  const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
+  const coverageHash = hashValue(JSON.stringify(stableCoverage));
   const coverageEntry: KVEntry = { key: 'meta:syncCoverage', value: JSON.stringify(coverage) };
-  if (newState['meta:syncCoverage'] !== hashValue(coverageEntry.value)) {
+  if (newState['meta:syncCoverage'] !== coverageHash) {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
-      newState['meta:syncCoverage'] = hashValue(coverageEntry.value);
+      newState['meta:syncCoverage'] = coverageHash;
       saveSyncState(newState);
     }
   }
+  // L1: Persist coverage data so the early-return path can refresh lastChecked without recomputing.
+  saveLastCoverage(coverage);
 
   const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
   const actualDeferred = deferred + limitDeferred;
