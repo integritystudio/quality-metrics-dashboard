@@ -105,7 +105,17 @@ function saveSyncState(state: SyncState): void {
   writeFileSync(STATE_FILE, JSON.stringify(state));
 }
 
-type CoverageData = Record<string, unknown>;
+interface CoverageData {
+  totalTraces: number;
+  syncedTraces: number;
+  coveragePercent: number;
+  referencedCoverage: number;
+  runsRemaining: number | null;
+  /** When stable coverage numbers were last computed/changed. */
+  timestamp: string;
+  /** When sync last ran, regardless of whether data changed. Refreshed on every run. */
+  lastChecked: string;
+}
 
 function loadLastCoverage(): CoverageData | null {
   if (!existsSync(COVERAGE_FILE)) return null;
@@ -483,13 +493,12 @@ async function main(): Promise<void> {
       prevState['meta:lastSync'] = hashValue(metaEntry.value);
       saveSyncState(prevState);
     }
-    // L1: Refresh lastChecked in coverage so consumers can distinguish stale data from a fresh no-op run.
-    // Stable coverage numbers haven't changed; only lastChecked is updated.
+    // L1: Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
+    // KV consumers can use meta:lastSync (written above) to see when sync last ran; updating
+    // meta:syncCoverage in KV here would burn 1 write per no-op run without changing stable data.
     const prevCoverage = loadLastCoverage();
     if (prevCoverage) {
-      const refreshed: CoverageData = { ...prevCoverage, lastChecked: now.toISOString() };
-      kvBulkPut([{ key: 'meta:syncCoverage', value: JSON.stringify(refreshed) }]);
-      saveLastCoverage(refreshed);
+      saveLastCoverage({ ...prevCoverage, lastChecked: now.toISOString() });
     }
     console.log('No changes to sync');
     return;
