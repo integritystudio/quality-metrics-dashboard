@@ -56,6 +56,7 @@ type KVEntry = { key: string; value: string };
 
 const KV_BATCH_SIZE = 9_500; // wrangler limit is 10,000 per bulk put
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
+const QUERY_LIMIT = 10_000;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
@@ -176,7 +177,7 @@ export function prioritizeTraces(
   referencedTraceIds: Set<string>,
 ): KVEntry[] {
   const now = Date.now();
-  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const thirtyDaysMs = PERIOD_MS['30d'];
 
   // Group entries by traceId (each trace has 2 entries: evaluations:trace:X and trace:X)
   const traceGroups = new Map<string, KVEntry[]>();
@@ -237,6 +238,10 @@ export function prioritizeTraces(
 
 async function main(): Promise<void> {
   const backend = new MultiDirectoryBackend(undefined, true);
+  if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
+    console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${MIN_TRACE_BUDGET + 10}); high-priority entries may be skipped`);
+  }
+
   const now = new Date();
   const entries: KVEntry[] = [];
 
@@ -247,7 +252,6 @@ async function main(): Promise<void> {
 
     const start = new Date(now.getTime() - ms);
     const dates = { start: start.toISOString(), end: now.toISOString() };
-    const QUERY_LIMIT = 10_000;
     const evals = await backend.queryEvaluations({
       startDate: dates.start,
       endDate: dates.end,
