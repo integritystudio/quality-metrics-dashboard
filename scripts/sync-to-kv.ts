@@ -28,12 +28,15 @@ import {
   getQualityMetric,
   QUALITY_METRICS,
 } from '../../dist/lib/quality-metrics.js';
+import { computeCoverageHeatmap, computePipelineView } from '../../dist/lib/quality-visualization.js';
 import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../dist/lib/quality-metrics.js';
-import type { EvaluationResult } from '../../dist/backends/index.js';
+import type { EvaluationResult, StepScore } from '../../dist/backends/index.js';
 import {
   computePercentileDistribution,
   computeMetricDynamics,
+  computeCorrelationMatrix,
 } from '../../dist/lib/quality-feature-engineering.js';
+import { computeMultiAgentEvaluation } from '../../dist/lib/quality-multi-agent.js';
 
 const NAMESPACE_ID = process.env.KV_NAMESPACE_ID || '902fc8a43e7147b486b6376c485c4506';
 
@@ -59,7 +62,7 @@ const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
 /** Stores last computed coverage object so early-return path can refresh lastChecked. */
 const COVERAGE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-coverage.json');
-const QUERY_LIMIT = 10_000;
+const QUERY_LIMIT = 200_000;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
@@ -266,6 +269,280 @@ export function prioritizeTraces(
   return result;
 }
 
+// ---- Session detail pre-computation (mirrors src/api/routes/sessions.ts) ----
+
+function spanAttr<T>(span: { attributes?: Record<string, unknown> }, key: string): T | undefined {
+  return span.attributes?.[key] as T | undefined;
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.ceil(sorted.length * p / 100) - 1;
+  return sorted[Math.max(0, idx)];
+}
+
+function computeSessionDetail(
+  sessionId: string,
+  spans: Array<{ name: string; traceId?: string; durationMs?: number; status?: { code?: number }; attributes?: Record<string, unknown> }>,
+  evaluations: EvaluationResult[],
+) {
+  // Data sources inventory
+  const traceIdSet = new Set<string>();
+  for (const s of spans) {
+    if (s.traceId) traceIdSet.add(s.traceId);
+  }
+  const dataSources = {
+    traces: { count: spans.length, traceIds: traceIdSet.size },
+    logs: { count: 0 },
+    evaluations: { count: evaluations.length },
+    total: spans.length + evaluations.length,
+  };
+
+  // Timespan (from evaluation timestamps)
+  let tsMin = Infinity;
+  let tsMax = -Infinity;
+  for (const ev of evaluations) {
+    const t = new Date(ev.timestamp).getTime();
+    if (t < tsMin) tsMin = t;
+    if (t > tsMax) tsMax = t;
+  }
+  const timespan = tsMin < Infinity ? {
+    start: new Date(tsMin).toISOString(),
+    end: new Date(tsMax).toISOString(),
+    durationHours: +((tsMax - tsMin) / 3_600_000).toFixed(1),
+  } : null;
+
+  // Session info from session-start spans
+  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === 'session-start');
+  const first = sessionStarts[0];
+  const last = sessionStarts[sessionStarts.length - 1] ?? first;
+  const sessionInfo = first ? {
+    projectName: spanAttr<string>(first, 'project.name') ?? 'unknown',
+    workingDirectory: spanAttr<string>(first, 'working.directory') ?? '',
+    gitRepository: spanAttr<string>(first, 'git.repository') ?? '',
+    gitBranch: spanAttr<string>(first, 'git.branch') ?? '',
+    nodeVersion: spanAttr<string>(first, 'node.version') ?? '',
+    resumeCount: sessionStarts.length,
+    initialMessageCount: spanAttr<number>(first, 'context.message_count') ?? 0,
+    initialContextTokens: spanAttr<number>(first, 'context.estimated_tokens') ?? 0,
+    finalMessageCount: spanAttr<number>(last, 'context.message_count') ?? 0,
+    taskCount: spanAttr<number>(first, 'tasks.active') ?? 0,
+    uncommittedAtStart: spanAttr<number>(first, 'git.uncommitted') ?? 0,
+  } : null;
+
+  // Token progression
+  const tokenProgression = spans
+    .filter(s => spanAttr<string>(s, 'hook.name') === 'token-metrics-extraction')
+    .map(s => ({
+      messages: spanAttr<number>(s, 'tokens.messages') ?? 0,
+      inputTokens: spanAttr<number>(s, 'tokens.input') ?? 0,
+      outputTokens: spanAttr<number>(s, 'tokens.output') ?? 0,
+      cacheRead: spanAttr<number>(s, 'tokens.cache_read') ?? 0,
+      cacheCreation: spanAttr<number>(s, 'tokens.cache_creation') ?? 0,
+      model: spanAttr<string>(s, 'tokens.model') ?? '',
+    }))
+    .sort((a, b) => a.messages - b.messages);
+
+  // Token totals
+  const tokenTotals = {
+    input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
+    models: {} as Record<string, number>,
+  };
+  for (const t of tokenProgression) {
+    tokenTotals.input += t.inputTokens;
+    tokenTotals.output += t.outputTokens;
+    tokenTotals.cacheRead += t.cacheRead;
+    tokenTotals.cacheCreation += t.cacheCreation;
+    tokenTotals.messages += t.messages;
+    if (t.model) tokenTotals.models[t.model] = (tokenTotals.models[t.model] ?? 0) + 1;
+  }
+
+  // Tool usage
+  const toolUsage: Record<string, number> = {};
+  for (const s of spans) {
+    if (spanAttr<string>(s, 'hook.type') === 'builtin' && spanAttr<string>(s, 'hook.trigger') === 'PostToolUse') {
+      const tool = spanAttr<string>(s, 'builtin.tool') ?? 'unknown';
+      toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
+    }
+  }
+
+  // MCP usage
+  const mcpUsage: Record<string, number> = {};
+  for (const s of spans) {
+    if (spanAttr<string>(s, 'hook.type') === 'mcp' && spanAttr<string>(s, 'hook.trigger') === 'PostToolUse') {
+      const tool = spanAttr<string>(s, 'mcp.tool') ?? 'unknown';
+      mcpUsage[tool] = (mcpUsage[tool] ?? 0) + 1;
+    }
+  }
+
+  // Span breakdown + hook latency
+  const spanBreakdown: Record<string, number> = {};
+  const hookDurations: Record<string, number[]> = {};
+  for (const s of spans) {
+    spanBreakdown[s.name] = (spanBreakdown[s.name] ?? 0) + 1;
+    const ms = s.durationMs ?? 0;
+    if (ms > 0) {
+      if (!hookDurations[s.name]) hookDurations[s.name] = [];
+      hookDurations[s.name].push(ms);
+    }
+  }
+  const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
+  for (const [name, durations] of Object.entries(hookDurations)) {
+    const sorted = durations.sort((a, b) => a - b);
+    hookLatency[name] = {
+      count: sorted.length,
+      avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(1),
+      p50: +percentile(sorted, 50).toFixed(1),
+      p95: +percentile(sorted, 95).toFixed(1),
+      max: +sorted[sorted.length - 1].toFixed(1),
+    };
+  }
+
+  // Error categorization
+  const errorsByCategory: Record<string, number> = {};
+  const errorDetails: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
+  for (const s of spans) {
+    const hasError = spanAttr<boolean>(s, 'builtin.has_error') === true
+      || spanAttr<boolean>(s, 'agent.has_error') === true
+      || s.status?.code === 2;
+    if (!hasError) continue;
+    const tool = spanAttr<string>(s, 'builtin.tool') ?? spanAttr<string>(s, 'agent.type') ?? 'unknown';
+    const errType = spanAttr<string>(s, 'builtin.error_type') ?? 'unknown';
+    const key = `${tool} -> ${errType}`;
+    errorsByCategory[key] = (errorsByCategory[key] ?? 0) + 1;
+    errorDetails.push({
+      spanName: s.name,
+      tool,
+      errorType: errType,
+      filePath: spanAttr<string>(s, 'builtin.file_path'),
+    });
+  }
+
+  // Agent activity
+  const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
+  for (const s of spans) {
+    if (spanAttr<string>(s, 'hook.name') === 'agent-post-tool') {
+      const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
+      if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
+      agentAcc[name].invocations++;
+      if (spanAttr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
+      if (spanAttr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
+      agentAcc[name].totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
+    }
+  }
+  const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
+    agentName,
+    invocations: d.invocations,
+    errors: d.errors,
+    hasRateLimit: d.hasRateLimit,
+    avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+  }));
+
+  // File access (top 30)
+  const fileCount: Record<string, number> = {};
+  for (const s of spans) {
+    const fp = spanAttr<string>(s, 'builtin.file_path');
+    if (fp) fileCount[fp] = (fileCount[fp] ?? 0) + 1;
+  }
+  const fileAccess = Object.entries(fileCount)
+    .map(([path, count]) => ({ path, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 30);
+
+  // Git commits
+  const gitCommits = spans
+    .filter(s => spanAttr<string>(s, 'hook.name') === 'post-commit-review')
+    .map(s => {
+      const raw = spanAttr<string>(s, 'git.command') ?? '';
+      const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
+      const files = filesMatch ? filesMatch[1].trim() : '';
+      const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
+      const fullMessage = msgMatch ? msgMatch[1] : '';
+      const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, 80);
+      const body = fullMessage ? fullMessage.split('\n').slice(2).join('\n').trim() : '';
+      return { subject, body, files };
+    });
+
+  // Alert summary
+  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
+  const alertSummary = {
+    totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr<number>(s, 'alerts.triggered_count') ?? 0), 0),
+    stopEvents: alertSpans.length,
+  };
+
+  // Code structure
+  const codeStructure = spans
+    .filter(s => spanAttr<string>(s, 'hook.name') === 'code-structure')
+    .map(s => ({
+      file: spanAttr<string>(s, 'code.structure.file') ?? '',
+      lines: spanAttr<number>(s, 'code.structure.lines') ?? 0,
+      exports: spanAttr<number>(s, 'code.structure.exports') ?? 0,
+      functions: spanAttr<number>(s, 'code.structure.functions') ?? 0,
+      hasTypes: spanAttr<boolean>(s, 'code.structure.has_types') ?? false,
+      score: spanAttr<number>(s, 'code.structure.score') ?? 0,
+      tool: spanAttr<string>(s, 'code.structure.tool') ?? '',
+    }));
+
+  // Evaluation breakdown
+  const evalByName: Record<string, { count: number; scores: number[] }> = {};
+  for (const ev of evaluations) {
+    const name = ev.evaluationName;
+    if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
+    evalByName[name].count++;
+    if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+      evalByName[name].scores.push(ev.scoreValue);
+    }
+  }
+  const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
+    const sorted = d.scores.sort((a, b) => a - b);
+    return {
+      name,
+      count: d.count,
+      avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3) : null,
+      min: sorted.length > 0 ? +sorted[0].toFixed(3) : null,
+      max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(3) : null,
+    };
+  });
+
+  // Multi-agent evaluation
+  const agentMapForEval = new Map<number, string>();
+  spans.forEach((span, i) => {
+    const agent = span.attributes?.['agent.name'] as string | undefined;
+    if (agent) agentMapForEval.set(i, agent);
+  });
+  const stepScores: StepScore[] = spans.map((span, i) => ({
+    step: i,
+    score: typeof span.attributes?.['evaluation.score'] === 'number'
+      ? span.attributes['evaluation.score'] as number
+      : (span.status?.code === 2 ? 0 : 1),
+    explanation: span.name,
+  }));
+  const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
+
+  return {
+    sessionId,
+    dataSources,
+    timespan,
+    sessionInfo,
+    tokenTotals,
+    tokenProgression,
+    toolUsage,
+    mcpUsage,
+    spanBreakdown,
+    hookLatency,
+    errors: { byCategory: errorsByCategory, details: errorDetails },
+    agentActivity,
+    fileAccess,
+    gitCommits,
+    alertSummary,
+    codeStructure,
+    evaluationBreakdown,
+    logSummary: { bySeverity: {} as Record<string, number>, logs: [] },
+    multiAgentEvaluation,
+    evaluations,
+  };
+}
+
 async function main(): Promise<void> {
   const backend = new MultiDirectoryBackend(undefined, true);
   if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
@@ -310,6 +587,35 @@ async function main(): Promise<void> {
       const view = computeRoleView(dashboard, role);
       entries.push({ key: `dashboard:${period}:${role}`, value: JSON.stringify(view) });
     }
+
+    // Correlations
+    const metricTimeSeries = new Map<string, number[]>();
+    const corrMetricNames: string[] = [];
+    for (const [name, metricEvals] of grouped) {
+      metricTimeSeries.set(name, metricEvals.filter(e => e.scoreValue != null).map(e => e.scoreValue!));
+      corrMetricNames.push(name);
+    }
+    const correlations = computeCorrelationMatrix(metricTimeSeries);
+    entries.push({
+      key: `correlations:${period}`,
+      value: JSON.stringify({ correlations, metrics: corrMetricNames }),
+    });
+
+    // Coverage (both inputKey variants)
+    for (const inputKey of ['traceId', 'sessionId'] as const) {
+      const heatmap = computeCoverageHeatmap(grouped, { inputKey });
+      entries.push({
+        key: `coverage:${period}:${inputKey}`,
+        value: JSON.stringify({ period, ...heatmap }),
+      });
+    }
+
+    // Pipeline
+    const pipeline = computePipelineView(grouped, dashboard);
+    entries.push({
+      key: `pipeline:${period}`,
+      value: JSON.stringify({ period, ...pipeline }),
+    });
   }
 
   // Metric details (7d window)
@@ -323,7 +629,7 @@ async function main(): Promise<void> {
       startDate: weekAgo.toISOString(),
       endDate: now.toISOString(),
       evaluationName: name,
-      limit: 10000,
+      limit: QUERY_LIMIT,
     });
     const evals = rawEvals.filter(ev =>
       !('evaluatorType' in ev && (ev as Record<string, unknown>).evaluatorType === 'canary'),
@@ -366,7 +672,7 @@ async function main(): Promise<void> {
         startDate: start.toISOString(),
         endDate: now.toISOString(),
         evaluationName: name,
-        limit: 10000,
+        limit: QUERY_LIMIT,
       });
       const evaluations = rawEvals.filter(ev =>
         !('evaluatorType' in ev && (ev as Record<string, unknown>).evaluatorType === 'canary'),
@@ -477,7 +783,44 @@ async function main(): Promise<void> {
   }
   console.log(`Computed ${traceEntries.length} trace KV entries`);
 
-  const allEntries = [...entries, ...traceEntries];
+  // ---- Pre-compute session detail data ----
+  // Group spans by session.id attribute
+  type Span = (typeof allSpans)[number];
+  const spansBySession = new Map<string, Span[]>();
+  for (const span of allSpans) {
+    const sid = (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
+    if (!sid) continue;
+    if (!spansBySession.has(sid)) spansBySession.set(sid, []);
+    spansBySession.get(sid)!.push(span);
+  }
+
+  // Build traceId → sessionId mapping, then group evaluations by session
+  const traceToSession = new Map<string, string>();
+  for (const span of allSpans) {
+    const sid = (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
+    if (sid && span.traceId) traceToSession.set(span.traceId, sid);
+  }
+  const evalsBySession = new Map<string, EvaluationResult[]>();
+  for (const ev of allEvals) {
+    if (!ev.traceId) continue;
+    const sid = traceToSession.get(ev.traceId);
+    if (!sid) continue;
+    if (!evalsBySession.has(sid)) evalsBySession.set(sid, []);
+    evalsBySession.get(sid)!.push(ev);
+  }
+
+  const sessionEntries: KVEntry[] = [];
+  for (const [sessionId, sessionSpans] of spansBySession) {
+    const evaluations = evalsBySession.get(sessionId) ?? [];
+    const detail = computeSessionDetail(sessionId, sessionSpans, evaluations);
+    sessionEntries.push({
+      key: `session:${sessionId}`,
+      value: JSON.stringify(detail),
+    });
+  }
+  console.log(`Computed ${sessionEntries.length} session KV entries`);
+
+  const allEntries = [...entries, ...sessionEntries, ...traceEntries];
   const totalComputed = allEntries.length;
 
   // ---- Delta sync: skip unchanged entries ----
