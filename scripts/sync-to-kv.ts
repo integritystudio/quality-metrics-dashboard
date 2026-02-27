@@ -42,7 +42,8 @@ const dryRun = args.includes('--dry-run');
 const daysFlag = args.find(a => a.startsWith('--days='));
 const maxDays = daysFlag ? parseInt(daysFlag.split('=')[1], 10) : 30;
 const budgetFlag = args.find(a => a.startsWith('--budget='));
-const WRITE_BUDGET = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 450;
+const parsedBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 450;
+const WRITE_BUDGET = Number.isFinite(parsedBudget) && parsedBudget > 0 ? parsedBudget : 450;
 
 const PERIODS = ['24h', '7d', '30d'] as const;
 const ROLES: RoleViewType[] = ['executive', 'operator', 'auditor'];
@@ -532,7 +533,8 @@ async function main(): Promise<void> {
     referencedCoverage: referencedTraceIds.size > 0
       ? Math.round(syncedReferencedCount / referencedTraceIds.size * 10000) / 100
       : 100,
-    runsToComplete: traceBudget > 0
+    // runsRemaining: additional runs after this one needed to drain the trace backlog
+    runsRemaining: traceBudget > 0
       ? Math.ceil(Math.max(0, traceChanged.length - traceBudget) / traceBudget)
       : (traceChanged.length > 0 ? null : 0),
     timestamp: now.toISOString(),
