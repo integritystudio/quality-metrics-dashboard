@@ -237,5 +237,6 @@ describe('EvaluationDetailPage', () => {
     const { EvaluationDetailPage } = await import('../pages/EvaluationDetailPage.js');
     const { container } = render(<EvaluationDetailPage traceId="trace-123" />);
     expect(container.textContent).toContain('No Evaluations Found');
+    expect(container.textContent).toContain('may not have been synced yet');
   });
 });
