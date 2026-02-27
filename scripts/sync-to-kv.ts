@@ -295,6 +295,10 @@ function spanAttr<T>(span: { attributes?: Record<string, unknown> }, key: string
   return span.attributes?.[key] as T | undefined;
 }
 
+function spanSessionId(span: { attributes?: Record<string, unknown> }): string | undefined {
+  return (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.ceil(sorted.length * p / 100) - 1;
@@ -842,7 +846,7 @@ async function main(): Promise<void> {
   const spansBySession = new Map<string, Span[]>();
   const traceToSession = new Map<string, string>();
   for (const span of allSpans) {
-    const sid = (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
+    const sid = spanSessionId(span);
     if (!sid) continue;
     if (!spansBySession.has(sid)) spansBySession.set(sid, []);
     spansBySession.get(sid)!.push(span);
