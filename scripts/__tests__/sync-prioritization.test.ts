@@ -191,11 +191,11 @@ describe('budget allocation', () => {
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
 
-    // budget=449, highPriorityBudget = min(10, 349) = 10, traceBudget = 439
+    // budget=449, highPriorityBudget = min(10, 349) = 10, rawTraceBudget = 439, traceBudget = 438 (rounded to even)
     expect(highCount).toBe(10);
-    expect(traceCount).toBe(439);
-    // changed=10+1000=1010, toWrite=449, deferred=561
-    expect(deferred).toBe(561);
+    expect(traceCount).toBe(438);
+    // changed=10+1000=1010, toWrite=448, deferred=562
+    expect(deferred).toBe(562);
   });
 
   it('handles zero changed traces gracefully', () => {
@@ -213,13 +213,13 @@ describe('budget allocation', () => {
 
     const { toWrite } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 50);
 
-    // budget=49, highPriorityBudget = max(0, min(10, 49-100)) = 0, traceBudget = 49
+    // budget=49, highPriorityBudget = max(0, min(10, 49-100)) = 0, rawTraceBudget = 49, traceBudget = 48 (rounded to even)
     // NOTE: when budget < MIN_TRACE_BUDGET, all slots go to traces; high-priority items receive nothing.
     // This is acceptable because budget < 100 only occurs with an explicit --budget override.
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
     expect(highCount).toBe(0);
-    expect(traceCount).toBe(49);
+    expect(traceCount).toBe(48);
   });
 });
 

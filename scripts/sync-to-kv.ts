@@ -80,7 +80,9 @@ export function computeBudgetAllocation(
 ): BudgetAllocation {
   const budget = writeBudget - 1; // reserve 1 for meta:lastSync
   const highPriorityBudget = Math.max(0, Math.min(highPriorityCount, budget - MIN_TRACE_BUDGET));
-  const traceBudget = Math.max(0, budget - highPriorityBudget);
+  const rawTraceBudget = Math.max(0, budget - highPriorityBudget);
+  // Round down to even so trace entry pairs (evaluations:trace:X + trace:X) are never split.
+  const traceBudget = rawTraceBudget - (rawTraceBudget % 2);
   return { highPriorityBudget, traceBudget };
 }
 
