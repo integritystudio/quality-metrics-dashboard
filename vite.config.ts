@@ -28,7 +28,7 @@ function parentDistStub(): Plugin {
 }
 
 export default defineConfig({
-  base: '/',
+  base: process.env.VITE_BASE_URL || '/',
   plugins: [
     react(),
     ...(process.env.VITEST ? [parentDistStub()] : []),

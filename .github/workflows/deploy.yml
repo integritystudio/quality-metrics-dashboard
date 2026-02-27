@@ -41,7 +41,7 @@ jobs:
       - run: npm ci
       - name: Build with API URL from Doppler
         run: |
-          VITE_API_URL=$(doppler secrets get VITE_API_URL_DASHBOARD --plain) npm run build
+          VITE_API_URL=$(doppler secrets get VITE_API_URL_DASHBOARD --plain) VITE_BASE_URL=/quality-metrics-dashboard/ npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - uses: actions/upload-pages-artifact@v3

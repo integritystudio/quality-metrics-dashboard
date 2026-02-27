@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Route, Switch, Link, useLocation } from 'wouter';
+import { Route, Switch, Link, useLocation, Router } from 'wouter';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
@@ -239,11 +239,14 @@ function GlobalShortcuts({ setPeriod, navigate }: {
   return null;
 }
 
+const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '') || '';
+
 export function App() {
   const [period, setPeriod] = useState<Period>('30d');
   const [location, navigate] = useLocation();
 
   return (
+    <Router base={BASE_PATH}>
     <KeyboardNavProvider>
     <RoleProvider>
     <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
@@ -327,5 +330,6 @@ export function App() {
     </Layout>
     </RoleProvider>
     </KeyboardNavProvider>
+    </Router>
   );
 }
