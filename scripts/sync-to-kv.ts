@@ -57,6 +57,16 @@ type KVEntry = { key: string; value: string };
 const KV_BATCH_SIZE = 9_500; // wrangler limit is 10,000 per bulk put
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
 
+/** Minimum budget reserved for trace writes regardless of higher-priority entries */
+const MIN_TRACE_BUDGET = 100;
+
+/** Trace priority weights */
+const TRACE_PRIORITY_WEIGHTS = {
+  worstScore: 0.5,   // lower score = higher priority
+  recency: 0.3,      // newer = higher priority
+  referencedByWorst: 0.2,  // linked from metric detail cards
+} as const;
+
 // ---- Delta sync state ----
 
 type SyncState = Record<string, string>; // key → sha256(value)
@@ -129,6 +139,87 @@ function kvBulkPut(entries: KVEntry[]): number {
   return written;
 }
 
+// ---- Evaluation-weighted trace prioritization ----
+
+function extractTraceId(key: string): string | null {
+  if (key.startsWith('evaluations:trace:')) return key.slice('evaluations:trace:'.length);
+  if (key.startsWith('trace:')) return key.slice('trace:'.length);
+  return null;
+}
+
+interface TracePriorityScore {
+  traceId: string;
+  priority: number;
+  worstScore: number;
+  latestTimestamp: number;
+  isReferencedByWorst: boolean;
+}
+
+export function prioritizeTraces(
+  traceEntries: KVEntry[],
+  evalsByTrace: Map<string, EvaluationResult[]>,
+  referencedTraceIds: Set<string>,
+): KVEntry[] {
+  const now = Date.now();
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
+  // Group entries by traceId (each trace has 2 entries: evaluations:trace:X and trace:X)
+  const traceGroups = new Map<string, KVEntry[]>();
+  for (const entry of traceEntries) {
+    const traceId = extractTraceId(entry.key);
+    if (!traceId) {
+      console.warn(`[prioritizeTraces] Unexpected key format, skipping: ${entry.key}`);
+      continue;
+    }
+    if (!traceGroups.has(traceId)) traceGroups.set(traceId, []);
+    traceGroups.get(traceId)!.push(entry);
+  }
+
+  // Score each trace
+  const scored: TracePriorityScore[] = [];
+  for (const [traceId] of traceGroups) {
+    const evals = evalsByTrace.get(traceId) ?? [];
+
+    const scores = evals
+      .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
+      .map(e => e.scoreValue!);
+    const worstScore = scores.length > 0
+      ? scores.reduce((min, v) => v < min ? v : min, Infinity)
+      : 1.0; // unevaluated traces get lowest priority
+
+    const timestamps = evals.map(e => new Date(e.timestamp).getTime()).filter(Number.isFinite);
+    const latestTimestamp = timestamps.length > 0
+      ? timestamps.reduce((max, v) => v > max ? v : max, timestamps[0]!)
+      : 0;
+
+    const isReferencedByWorst = referencedTraceIds.has(traceId);
+
+    // Composite priority (higher = sync first)
+    const scoreComponent = (1 - worstScore) * TRACE_PRIORITY_WEIGHTS.worstScore;
+    const recencyComponent = (latestTimestamp > 0
+      ? Math.max(0, 1 - (now - latestTimestamp) / thirtyDaysMs)
+      : 0) * TRACE_PRIORITY_WEIGHTS.recency;
+    const referencedComponent = (isReferencedByWorst ? 1 : 0) * TRACE_PRIORITY_WEIGHTS.referencedByWorst;
+
+    scored.push({
+      traceId,
+      priority: scoreComponent + recencyComponent + referencedComponent,
+      worstScore,
+      latestTimestamp,
+      isReferencedByWorst,
+    });
+  }
+
+  scored.sort((a, b) => b.priority - a.priority);
+
+  const result: KVEntry[] = [];
+  for (const { traceId } of scored) {
+    const group = traceGroups.get(traceId);
+    if (group) result.push(...group);
+  }
+  return result;
+}
+
 async function main(): Promise<void> {
   const backend = new MultiDirectoryBackend(undefined, true);
   const now = new Date();
@@ -195,6 +286,21 @@ async function main(): Promise<void> {
     });
     entries.push({ key: `metric:${name}`, value: JSON.stringify(detail) });
   }
+
+  // Collect trace IDs referenced by metric detail worstEvaluations
+  const referencedTraceIds = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.key.startsWith('metric:')) continue;
+    try {
+      const detail = JSON.parse(entry.value) as {
+        worstEvaluations?: Array<{ traceId?: string }>;
+      };
+      for (const w of detail.worstEvaluations ?? []) {
+        if (w.traceId) referencedTraceIds.add(w.traceId);
+      }
+    } catch { /* skip malformed */ }
+  }
+  console.log(`Collected ${referencedTraceIds.size} trace IDs referenced by metric cards`);
 
   // Trend data per metric × period (10 buckets)
   const TREND_BUCKETS = 10;
@@ -350,16 +456,35 @@ async function main(): Promise<void> {
     if (e.key.startsWith('trend:')) return 2;
     return 3; // traces
   };
-  changed.sort((a, b) => prioritize(a) - prioritize(b));
 
-  // ---- Budget enforcement ----
-  // +1 for meta:lastSync
-  const budget = WRITE_BUDGET - 1;
-  const toWrite = changed.slice(0, budget);
-  const deferred = changed.length - toWrite.length;
+  // ---- Budget enforcement with trace reservation ----
+  const budget = WRITE_BUDGET - 1; // reserve 1 for meta:lastSync
 
-  // Always include lastSync
-  toWrite.push({ key: 'meta:lastSync', value: JSON.stringify(now.toISOString()) });
+  // Phase 1: separate changed entries into tiers
+  const highPriority = changed.filter(e => prioritize(e) < 3);
+  const traceChanged = changed.filter(e => prioritize(e) === 3);
+
+  // Phase 2: allocate budget with trace reservation
+  const highPriorityBudget = Math.max(0, Math.min(highPriority.length, budget - MIN_TRACE_BUDGET));
+  const traceBudget = Math.max(0, budget - highPriorityBudget);
+
+  // Phase 3: prioritize traces by evaluation quality
+  const prioritizedTraces = prioritizeTraces(traceChanged, evalsByTrace, referencedTraceIds);
+
+  const toWrite: KVEntry[] = [
+    ...highPriority.slice(0, highPriorityBudget),
+    ...prioritizedTraces.slice(0, traceBudget),
+    { key: 'meta:lastSync', value: JSON.stringify(now.toISOString()) },
+  ];
+  const deferred = changed.length - (toWrite.length - 1); // -1 excludes meta:lastSync
+
+  const referencedInBatch = new Set(
+    toWrite
+      .map(e => extractTraceId(e.key))
+      .filter((id): id is string => id != null && referencedTraceIds.has(id)),
+  ).size;
+  console.log(`Trace budget: ${traceBudget}/${traceChanged.length} changed traces`);
+  console.log(`Referenced traces in this batch: ${referencedInBatch}/${referencedTraceIds.size}`);
 
   if (deferred > 0) {
     console.log(`Budget ${WRITE_BUDGET}: writing ${toWrite.length} entries, deferring ${deferred} to next run`);
@@ -380,7 +505,7 @@ async function main(): Promise<void> {
   }
   saveSyncState(newState);
 
-  console.log(`Sync complete: wrote ${written}/${totalComputed} entries (${totalComputed - written} deferred)`);
+  console.log(`Sync complete: wrote ${written} entries (${deferred} deferred, ${totalComputed} total computed)`);
 }
 
 main().catch((err) => {
