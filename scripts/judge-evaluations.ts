@@ -35,6 +35,25 @@ export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   evaluationParams: ['input', 'output', 'context'],
 };
 
+/** Tool correctness sub-criteria for structured evaluation */
+export const TOOL_SELECTION_CRITERIA: GEvalConfig = {
+  name: 'tool_selection',
+  criteria: 'Evaluate whether the assistant selected the appropriate tools for the given task. Were the chosen tools the best fit for the user request? Were unnecessary tools avoided? Were any required tools missing that should have been used?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+
+export const TOOL_ARGUMENTS_CRITERIA: GEvalConfig = {
+  name: 'tool_arguments',
+  criteria: 'Evaluate whether the tool arguments provided by the assistant were correct and appropriate. Were all required parameters provided with accurate values? Were parameter formats and types correct? Were optional parameters used effectively when beneficial?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+
+export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
+  name: 'tool_integration',
+  criteria: 'Evaluate whether tool results were properly incorporated into the assistant response. Were results accurately reflected without distortion? Was relevant information extracted and presented clearly? Were errors or unexpected results handled appropriately?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -559,15 +578,16 @@ export async function evaluateTurn(
       }
     }
 
-    // B9: Tool correctness — evaluates tool selection, arguments, and result usage
+    // B9: Tool correctness — composite + structured sub-criteria
     const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
     if (!existingKeys.has(tcKey)) {
+      const tcTestCase = {
+        input: turn.userText,
+        output: turn.assistantText,
+        context: turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
+      };
       try {
-        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, {
-          input: turn.userText,
-          output: turn.assistantText,
-          context: turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
-        });
+        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
         evals.push({
           timestamp: turn.timestamp,
           evaluationName: 'tool_correctness',
@@ -581,6 +601,34 @@ export async function evaluateTurn(
       } catch (err) {
         trackFailure('tool_correctness');
         console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+      }
+
+      // Structured sub-criteria: selection, arguments, integration
+      const subCriteria = [
+        { config: TOOL_SELECTION_CRITERIA, name: 'tool_selection' },
+        { config: TOOL_ARGUMENTS_CRITERIA, name: 'tool_arguments' },
+        { config: TOOL_INTEGRATION_CRITERIA, name: 'tool_integration' },
+      ] as const;
+
+      for (const { config, name } of subCriteria) {
+        const subKey = `${turn.sessionId}:${name}:${turnKey}`;
+        if (existingKeys.has(subKey)) continue;
+        try {
+          const result = await judge.gEval(config, tcTestCase);
+          evals.push({
+            timestamp: turn.timestamp,
+            evaluationName: name,
+            scoreValue: normalizeScore(result.score),
+            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+            evaluator: 'llm-judge',
+            evaluatorType: 'llm',
+            traceId: turn.traceId,
+            sessionId: turn.sessionId,
+          });
+        } catch (err) {
+          trackFailure(name);
+          console.warn(`  [${name}] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+        }
       }
     }
   }

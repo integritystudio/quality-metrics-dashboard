@@ -1,6 +1,13 @@
 import { useCallback } from 'react';
 import { Link } from 'wouter';
 
+interface EvaluatorTypeCounts {
+  rule: number;
+  llm: number;
+  seed: number;
+  canary: number;
+}
+
 interface ProvenancePanelProps {
   evaluationName: string;
   scoreValue?: number;
@@ -15,6 +22,8 @@ interface ProvenancePanelProps {
   agentName?: string;
   /** Raw evaluation object for JSON export */
   rawData?: Record<string, unknown>;
+  /** Evaluator type breakdown counts */
+  evaluatorTypeCounts?: EvaluatorTypeCounts;
 }
 
 export function ProvenancePanel(props: ProvenancePanelProps) {
@@ -22,7 +31,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
     evaluationName, scoreValue, scoreLabel,
     traceId, spanId, sessionId, timestamp,
     evaluator, evaluatorType, scoreUnit,
-    agentName, rawData,
+    agentName, rawData, evaluatorTypeCounts,
   } = props;
 
   const handleExportJson = useCallback(() => {
@@ -89,6 +98,34 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
           </div>
         ) : null)}
       </div>
+      {evaluatorTypeCounts && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
+          {(Object.entries(evaluatorTypeCounts) as Array<[keyof EvaluatorTypeCounts, number]>)
+            .filter(([, count]) => count > 0)
+            .map(([type, count]) => (
+              <span
+                key={type}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '2px 8px',
+                  borderRadius: 12,
+                  fontSize: 11,
+                  fontFamily: 'var(--font-mono)',
+                  background: 'var(--surface, #1a1a2e)',
+                  border: '1px solid var(--border, #2a2a3e)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {type}
+                <span style={{ fontWeight: 700, color: 'var(--text-primary, #e0e0e0)' }}>
+                  {count}
+                </span>
+              </span>
+            ))}
+        </div>
+      )}
       <div className="provenance-actions">
         <button type="button" onClick={handleExportJson}>
           Export as JSON
