@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from 'child_process';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -124,7 +124,7 @@ function kvBulkPut(entries: KVEntry[]): number {
     const batchLabel = entries.length > KV_BATCH_SIZE
       ? ` (batch ${Math.floor(i / KV_BATCH_SIZE) + 1}/${Math.ceil(entries.length / KV_BATCH_SIZE)})`
       : '';
-    const tmpFile = join(tmpdir(), `kv-sync-${Date.now()}-${i}.json`);
+    const tmpFile = join(tmpdir(), `kv-sync-${Date.now()}-${randomBytes(4).toString('hex')}-${i}.json`);
     try {
       writeFileSync(tmpFile, JSON.stringify(batch));
       if (dryRun) {
