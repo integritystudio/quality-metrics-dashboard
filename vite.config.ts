@@ -1,10 +1,38 @@
 import { defineConfig } from 'vite';
+import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const PARENT_DIST_RE = /\.\.\/\.\.\/\.\.(?:\/\.\.)*\/dist\//;
+
+/**
+ * Vitest plugin: stub parent dist/ imports so tests pass in CI
+ * where the parent monorepo isn't built. vi.mock() provides
+ * implementations; this just prevents vite:import-analysis errors.
+ */
+function parentDistStub(): Plugin {
+  return {
+    name: 'parent-dist-stub',
+    enforce: 'pre',
+    resolveId(source) {
+      if (PARENT_DIST_RE.test(source)) {
+        return '\0' + source.replace(/^(?:\.\.\/)+/, '');
+      }
+    },
+    load(id) {
+      if (id.startsWith('\0dist/')) {
+        return 'export {};';
+      }
+    },
+  };
+}
+
 export default defineConfig({
   base: '/',
-  plugins: [react()],
+  plugins: [
+    react(),
+    ...(process.env.VITEST ? [parentDistStub()] : []),
+  ],
   build: {
     rollupOptions: {
       output: {
@@ -33,13 +61,5 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/__tests__/setup.ts'],
     exclude: ['node_modules/**', 'scripts/__tests__/**'],
-    server: {
-      deps: {
-        // Parent dist/ imports are mocked via vi.mock() in tests.
-        // Mark external so vite doesn't fail resolving them in CI
-        // where the parent repo isn't built.
-        external: [/\.\.\/\.\.\/\.\.\/\.\.\/dist/],
-      },
-    },
   },
 });

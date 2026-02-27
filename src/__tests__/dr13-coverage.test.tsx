@@ -526,7 +526,7 @@ vi.mock('../../../../dist/lib/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: vi.fn((e: unknown) => String(e)),
 }));
 
-vi.mock('../data-loader.js', async () => ({
+vi.mock('../api/data-loader.js', async () => ({
   loadEvaluationsForMetric: vi.fn(async () => []),
 }));
 
