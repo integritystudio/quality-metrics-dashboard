@@ -34,6 +34,9 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
         <div className="empty-state">
           <h2>No Evaluations Found</h2>
           <p>No evaluations found for trace <code>{traceId}</code></p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8 }}>
+            Evaluation data may not have been synced yet. Try again after the next sync cycle.
+          </p>
         </div>
       </div>
     );

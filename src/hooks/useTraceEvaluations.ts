@@ -8,7 +8,11 @@ export function useTraceEvaluations(traceId: string | undefined) {
     queryKey: ['trace-evaluations', traceId],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/api/evaluations/trace/${encodeURIComponent(traceId!)}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      if (!res.ok) {
+        // Worker returns 404 when evaluation data not yet synced to KV — return empty
+        if (res.status === 404) return [];
+        throw new Error(`API error: ${res.status}`);
+      }
       const data = await res.json();
       return data.evaluations;
     },
