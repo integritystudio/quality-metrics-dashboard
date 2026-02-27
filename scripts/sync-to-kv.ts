@@ -521,6 +521,8 @@ async function main(): Promise<void> {
   saveSyncState(newState);
 
   // ---- Sync coverage metrics ----
+  // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
+  // It may over-count if a prior wrangler write failed silently.
   const syncedTraceKeys = Object.keys(newState).filter(k => k.startsWith('trace:'));
   const syncedReferencedCount = syncedTraceKeys
     .filter(k => referencedTraceIds.has(k.slice('trace:'.length))).length;
