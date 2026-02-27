@@ -5,3 +5,4 @@ dist/
 .wrangler/
 repomix-output.xml
 .kv-sync-state.json
+worker-configuration.d.ts

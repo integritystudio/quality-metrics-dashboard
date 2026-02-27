@@ -848,12 +848,13 @@ async function main(): Promise<void> {
   }
 
   // ---- Priority bucketing ----
-  // Order: meta/dashboard/role → metrics → trends → traces
+  // Order: meta/dashboard/role → metrics/correlations/coverage/pipeline → trends/sessions → traces
   const prioritize = (e: KVEntry): number => {
     if (e.key.startsWith('meta:') || e.key.startsWith('dashboard:')) return 0;
-    if (e.key.startsWith('metric:')) return 1;
-    if (e.key.startsWith('trend:')) return 2;
-    return 3; // traces
+    if (e.key.startsWith('metric:') || e.key.startsWith('correlations:')
+      || e.key.startsWith('coverage:') || e.key.startsWith('pipeline:')) return 1;
+    if (e.key.startsWith('trend:') || e.key.startsWith('session:')) return 2;
+    return 3; // traces + evaluations:trace
   };
 
   // ---- Budget enforcement with trace reservation ----

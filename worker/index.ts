@@ -63,6 +63,82 @@ app.get('/api/traces/:traceId', async (c) => {
   return c.json(data);
 });
 
+app.get('/api/correlations', async (c) => {
+  const period = c.req.query('period') ?? '30d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const data = await c.env.DASHBOARD.get(`correlations:${period}`, 'json');
+  if (!data) return c.json({ correlations: [], metrics: [] });
+  return c.json(data);
+});
+
+app.get('/api/coverage', async (c) => {
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const inputKey = c.req.query('inputKey') ?? 'traceId';
+  if (!['traceId', 'sessionId'].includes(inputKey)) {
+    return c.json({ error: 'Invalid inputKey. Must be traceId or sessionId.' }, 400);
+  }
+  const data = await c.env.DASHBOARD.get(`coverage:${period}:${inputKey}`, 'json');
+  if (!data) return c.json({ period, metrics: [], inputs: [], heatmap: [] });
+  return c.json(data);
+});
+
+app.get('/api/pipeline', async (c) => {
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const data = await c.env.DASHBOARD.get(`pipeline:${period}`, 'json');
+  if (!data) return c.json({ period, stages: [], totalEvaluations: 0 });
+  return c.json(data);
+});
+
+app.get('/api/sessions/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
+  if (!data) return c.json({ error: `No session data for: ${sessionId}` }, 404);
+  return c.json(data);
+});
+
+app.get('/api/agents/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json') as Record<string, unknown> | null;
+  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, 404);
+  return c.json({
+    sessionId,
+    spans: [],
+    evaluation: session['multiAgentEvaluation'] ?? null,
+    evaluations: session['evaluations'] ?? [],
+    agentMap: {},
+  });
+});
+
+app.get('/api/compliance/sla', async (c) => {
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
+  if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
+  return c.json({
+    period,
+    results: (dashboard['slaCompliance'] as unknown[]) ?? [],
+    noSLAsConfigured: !dashboard['slaCompliance'] || (dashboard['slaCompliance'] as unknown[]).length === 0,
+  });
+});
+
+app.get('/api/compliance/verifications', async (c) => {
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  return c.json({ period, count: 0, verifications: [] });
+});
+
 app.get('/api/health', async (c) => {
   const lastSync = await c.env.DASHBOARD.get('meta:lastSync');
   return c.json({
