@@ -754,7 +754,10 @@ describe('evaluateTurn', () => {
   });
 
   it('tracks failures in evalFailures on metric error', async () => {
-    const llm = createFailingLLM('relevant');
+    // Use "evaluating: relevance" to only match relevance prompts —
+    // "relevant" also appears in the shared score anchoring text
+    // ("irrelevant") which would cause coherence to also fail.
+    const llm = createFailingLLM('evaluating: relevance');
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
     const turn = makeTurn({ toolResults: [] });
 
