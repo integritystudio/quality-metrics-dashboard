@@ -214,14 +214,18 @@ export function prioritizeTraces(
 
   // Group entries by traceId (each trace has 2 entries: evaluations:trace:X and trace:X)
   const traceGroups = new Map<string, KVEntry[]>();
+  let skippedCount = 0;
   for (const entry of traceEntries) {
     const traceId = extractTraceId(entry.key);
     if (!traceId) {
-      console.warn(`[prioritizeTraces] Unexpected key format, skipping: ${entry.key}`);
+      skippedCount++;
       continue;
     }
     if (!traceGroups.has(traceId)) traceGroups.set(traceId, []);
     traceGroups.get(traceId)!.push(entry);
+  }
+  if (skippedCount > 0) {
+    console.warn(`[prioritizeTraces] Skipped ${skippedCount} entries with non-trace key format`);
   }
 
   // Score each trace
@@ -847,19 +851,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  // ---- Priority bucketing ----
-  // Order: meta/dashboard/role → metrics/correlations/coverage/pipeline → trends/sessions → traces
-  const prioritize = (e: KVEntry): number => {
-    if (e.key.startsWith('meta:') || e.key.startsWith('dashboard:')) return 0;
-    if (e.key.startsWith('metric:') || e.key.startsWith('correlations:')
-      || e.key.startsWith('coverage:') || e.key.startsWith('pipeline:')) return 1;
-    if (e.key.startsWith('trend:') || e.key.startsWith('session:')) return 2;
-    return 3; // traces + evaluations:trace
-  };
-
   // ---- Budget enforcement with trace reservation ----
-  const highPriority = changed.filter(e => prioritize(e) < 3);
-  const traceChanged = changed.filter(e => prioritize(e) === 3);
+  const isTraceKey = (e: KVEntry) =>
+    e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:');
+  const highPriority = changed.filter(e => !isTraceKey(e));
+  const traceChanged = changed.filter(isTraceKey);
   const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, WRITE_BUDGET);
 
   // Phase 3: prioritize traces by evaluation quality
