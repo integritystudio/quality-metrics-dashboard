@@ -500,12 +500,41 @@ async function main(): Promise<void> {
   // Prune keys from state that no longer exist in computed set
   const computedKeys = new Set(allEntries.map(e => e.key));
   computedKeys.add('meta:lastSync');
+  computedKeys.add('meta:syncCoverage');
   for (const key of Object.keys(newState)) {
     if (!computedKeys.has(key)) delete newState[key];
   }
   saveSyncState(newState);
 
-  console.log(`Sync complete: wrote ${written} entries (${deferred} deferred, ${totalComputed} total computed)`);
+  // ---- Sync coverage metrics ----
+  const syncedTraceKeys = Object.keys(newState).filter(k => k.startsWith('trace:'));
+  const syncedReferencedCount = syncedTraceKeys
+    .filter(k => referencedTraceIds.has(k.slice('trace:'.length))).length;
+  const coverage = {
+    totalTraces: traceIds.length,
+    syncedTraces: syncedTraceKeys.length,
+    coveragePercent: traceIds.length > 0
+      ? Math.round(syncedTraceKeys.length / traceIds.length * 10000) / 100
+      : 100,
+    referencedCoverage: referencedTraceIds.size > 0
+      ? Math.round(syncedReferencedCount / referencedTraceIds.size * 10000) / 100
+      : 100,
+    runsToComplete: traceBudget > 0
+      ? Math.ceil(Math.max(0, traceChanged.length - traceBudget) / traceBudget)
+      : 0,
+    timestamp: now.toISOString(),
+  };
+  const coverageEntry: KVEntry = { key: 'meta:syncCoverage', value: JSON.stringify(coverage) };
+  if (prevState['meta:syncCoverage'] !== hashValue(coverageEntry.value)) {
+    const coverageWritten = kvBulkPut([coverageEntry]);
+    if (coverageWritten > 0) {
+      newState['meta:syncCoverage'] = hashValue(coverageEntry.value);
+      saveSyncState(newState);
+    }
+  }
+
+  const actualDeferred = deferred + (toWrite.length - written);
+  console.log(`Sync complete: wrote ${written} entries (${actualDeferred} deferred, ${totalComputed} total computed)`);
 }
 
 main().catch((err) => {
