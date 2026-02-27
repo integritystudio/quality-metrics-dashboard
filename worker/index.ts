@@ -117,6 +117,19 @@ app.get('/api/agents/:sessionId', async (c) => {
   });
 });
 
+app.get('/api/agent', async (c) => {
+  const data = await c.env.DASHBOARD.get('meta:agents', 'json');
+  if (!data) return c.json([]);
+  return c.json(data);
+});
+
+app.get('/api/agent/:agentId', async (c) => {
+  const agentId = c.req.param('agentId');
+  const data = await c.env.DASHBOARD.get(`agent:${agentId}`, 'json');
+  if (!data) return c.json({ error: `No data for agent: ${agentId}` }, 404);
+  return c.json(data);
+});
+
 app.get('/api/compliance/sla', async (c) => {
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {

@@ -38,12 +38,15 @@ import {
 } from '../../dist/lib/quality-feature-engineering.js';
 import { computeMultiAgentEvaluation } from '../../dist/lib/quality-multi-agent.js';
 
-const NAMESPACE_ID = process.env.KV_NAMESPACE_ID || '902fc8a43e7147b486b6376c485c4506';
+const NAMESPACE_ID = process.env.KV_NAMESPACE_ID;
+if (!NAMESPACE_ID) throw new Error('KV_NAMESPACE_ID env var is required');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const daysFlag = args.find(a => a.startsWith('--days='));
-const maxDays = daysFlag ? parseInt(daysFlag.split('=')[1], 10) : 30;
+const rawDays = daysFlag ? parseInt(daysFlag.split('=')[1], 10) : 30;
+const maxDays = Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 30;
+const MAX_DAYS_MS = maxDays * 24 * 60 * 60 * 1000;
 const budgetFlag = args.find(a => a.startsWith('--budget='));
 const parsedBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 450;
 const WRITE_BUDGET = Number.isFinite(parsedBudget) && parsedBudget > 0 ? parsedBudget : 450;
@@ -57,6 +60,11 @@ const PERIOD_MS: Record<string, number> = {
 };
 
 type KVEntry = { key: string; value: string };
+
+/** Filter out canary evaluations (intentionally degraded scores for testing). */
+function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
+  return evals.filter(ev => (ev as Record<string, unknown>).evaluatorType !== 'canary');
+}
 
 const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
@@ -242,7 +250,7 @@ export function prioritizeTraces(
 
     const timestamps = evals.map(e => new Date(e.timestamp).getTime()).filter(Number.isFinite);
     const latestTimestamp = timestamps.length > 0
-      ? timestamps.reduce((max, v) => v > max ? v : max, timestamps[0]!)
+      ? timestamps.reduce((max, v) => v > max ? v : max, 0)
       : 0;
 
     const isReferencedByWorst = referencedTraceIds.has(traceId);
@@ -275,6 +283,14 @@ export function prioritizeTraces(
 
 // ---- Session detail pre-computation (mirrors src/api/routes/sessions.ts) ----
 
+type SessionSpan = {
+  name: string;
+  traceId?: string;
+  durationMs?: number;
+  status?: { code?: number };
+  attributes?: Record<string, unknown>;
+};
+
 function spanAttr<T>(span: { attributes?: Record<string, unknown> }, key: string): T | undefined {
   return span.attributes?.[key] as T | undefined;
 }
@@ -285,24 +301,20 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-function computeSessionDetail(
-  sessionId: string,
-  spans: Array<{ name: string; traceId?: string; durationMs?: number; status?: { code?: number }; attributes?: Record<string, unknown> }>,
-  evaluations: EvaluationResult[],
-) {
-  // Data sources inventory
+function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[]) {
   const traceIdSet = new Set<string>();
   for (const s of spans) {
     if (s.traceId) traceIdSet.add(s.traceId);
   }
-  const dataSources = {
+  return {
     traces: { count: spans.length, traceIds: traceIdSet.size },
     logs: { count: 0 },
     evaluations: { count: evaluations.length },
     total: spans.length + evaluations.length,
   };
+}
 
-  // Timespan (from evaluation timestamps)
+function computeTimespan(evaluations: EvaluationResult[]) {
   let tsMin = Infinity;
   let tsMax = -Infinity;
   for (const ev of evaluations) {
@@ -310,17 +322,18 @@ function computeSessionDetail(
     if (t < tsMin) tsMin = t;
     if (t > tsMax) tsMax = t;
   }
-  const timespan = tsMin < Infinity ? {
+  return tsMin < Infinity ? {
     start: new Date(tsMin).toISOString(),
     end: new Date(tsMax).toISOString(),
     durationHours: +((tsMax - tsMin) / 3_600_000).toFixed(1),
   } : null;
+}
 
-  // Session info from session-start spans
+function computeSessionInfo(spans: SessionSpan[]) {
   const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === 'session-start');
   const first = sessionStarts[0];
   const last = sessionStarts[sessionStarts.length - 1] ?? first;
-  const sessionInfo = first ? {
+  return first ? {
     projectName: spanAttr<string>(first, 'project.name') ?? 'unknown',
     workingDirectory: spanAttr<string>(first, 'working.directory') ?? '',
     gitRepository: spanAttr<string>(first, 'git.repository') ?? '',
@@ -333,8 +346,9 @@ function computeSessionDetail(
     taskCount: spanAttr<number>(first, 'tasks.active') ?? 0,
     uncommittedAtStart: spanAttr<number>(first, 'git.uncommitted') ?? 0,
   } : null;
+}
 
-  // Token progression
+function computeTokenMetrics(spans: SessionSpan[]) {
   const tokenProgression = spans
     .filter(s => spanAttr<string>(s, 'hook.name') === 'token-metrics-extraction')
     .map(s => ({
@@ -347,7 +361,6 @@ function computeSessionDetail(
     }))
     .sort((a, b) => a.messages - b.messages);
 
-  // Token totals
   const tokenTotals = {
     input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
     models: {} as Record<string, number>,
@@ -360,26 +373,28 @@ function computeSessionDetail(
     tokenTotals.messages += t.messages;
     if (t.model) tokenTotals.models[t.model] = (tokenTotals.models[t.model] ?? 0) + 1;
   }
+  return { tokenProgression, tokenTotals };
+}
 
-  // Tool usage
+function computeUsageCounts(spans: SessionSpan[]) {
   const toolUsage: Record<string, number> = {};
-  for (const s of spans) {
-    if (spanAttr<string>(s, 'hook.type') === 'builtin' && spanAttr<string>(s, 'hook.trigger') === 'PostToolUse') {
-      const tool = spanAttr<string>(s, 'builtin.tool') ?? 'unknown';
-      toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
-    }
-  }
-
-  // MCP usage
   const mcpUsage: Record<string, number> = {};
   for (const s of spans) {
-    if (spanAttr<string>(s, 'hook.type') === 'mcp' && spanAttr<string>(s, 'hook.trigger') === 'PostToolUse') {
+    const trigger = spanAttr<string>(s, 'hook.trigger');
+    if (trigger !== 'PostToolUse') continue;
+    const type = spanAttr<string>(s, 'hook.type');
+    if (type === 'builtin') {
+      const tool = spanAttr<string>(s, 'builtin.tool') ?? 'unknown';
+      toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
+    } else if (type === 'mcp') {
       const tool = spanAttr<string>(s, 'mcp.tool') ?? 'unknown';
       mcpUsage[tool] = (mcpUsage[tool] ?? 0) + 1;
     }
   }
+  return { toolUsage, mcpUsage };
+}
 
-  // Span breakdown + hook latency
+function computeSpanLatency(spans: SessionSpan[]) {
   const spanBreakdown: Record<string, number> = {};
   const hookDurations: Record<string, number[]> = {};
   for (const s of spans) {
@@ -401,10 +416,12 @@ function computeSessionDetail(
       max: +sorted[sorted.length - 1].toFixed(1),
     };
   }
+  return { spanBreakdown, hookLatency };
+}
 
-  // Error categorization
-  const errorsByCategory: Record<string, number> = {};
-  const errorDetails: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
+function computeErrorSummary(spans: SessionSpan[]) {
+  const byCategory: Record<string, number> = {};
+  const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
   for (const s of spans) {
     const hasError = spanAttr<boolean>(s, 'builtin.has_error') === true
       || spanAttr<boolean>(s, 'agent.has_error') === true
@@ -413,34 +430,94 @@ function computeSessionDetail(
     const tool = spanAttr<string>(s, 'builtin.tool') ?? spanAttr<string>(s, 'agent.type') ?? 'unknown';
     const errType = spanAttr<string>(s, 'builtin.error_type') ?? 'unknown';
     const key = `${tool} -> ${errType}`;
-    errorsByCategory[key] = (errorsByCategory[key] ?? 0) + 1;
-    errorDetails.push({
+    byCategory[key] = (byCategory[key] ?? 0) + 1;
+    details.push({
       spanName: s.name,
       tool,
       errorType: errType,
       filePath: spanAttr<string>(s, 'builtin.file_path'),
     });
   }
+  return { byCategory, details };
+}
 
-  // Agent activity
-  const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
+function computeAgentActivity(spans: SessionSpan[]) {
+  const acc: Record<string, {
+    invocations: number; errors: number; hasRateLimit: boolean; rateLimitEvents: number;
+    totalOutputSize: number; durations: number[]; truncatedCount: number; emptyCount: number;
+  }> = {};
   for (const s of spans) {
     if (spanAttr<string>(s, 'hook.name') === 'agent-post-tool') {
       const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
-      if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
-      agentAcc[name].invocations++;
-      if (spanAttr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
-      if (spanAttr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
-      agentAcc[name].totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
+      if (!acc[name]) acc[name] = {
+        invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
+        totalOutputSize: 0, durations: [], truncatedCount: 0, emptyCount: 0,
+      };
+      const a = acc[name];
+      a.invocations++;
+      if (spanAttr<boolean>(s, 'agent.has_error')) a.errors++;
+      if (spanAttr<boolean>(s, 'agent.has_rate_limit')) {
+        a.hasRateLimit = true;
+        a.rateLimitEvents++;
+      }
+      a.totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
+      const dur = s.durationMs ?? 0;
+      if (dur > 0) a.durations.push(dur);
+      if (spanAttr<boolean>(s, 'agent.output.truncated')) a.truncatedCount++;
+      if (spanAttr<boolean>(s, 'agent.output.empty')) a.emptyCount++;
     }
   }
-  const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
+  return Object.entries(acc).map(([agentName, d]) => ({
     agentName,
     invocations: d.invocations,
     errors: d.errors,
     hasRateLimit: d.hasRateLimit,
+    rateLimitEvents: d.rateLimitEvents,
     avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+    avgDurationMs: d.durations.length > 0
+      ? Math.round(d.durations.reduce((a, b) => a + b, 0) / d.durations.length)
+      : 0,
+    truncatedCount: d.truncatedCount,
+    emptyCount: d.emptyCount,
   }));
+}
+
+function computeEvalBreakdown(evaluations: EvaluationResult[]) {
+  const evalByName: Record<string, { count: number; scores: number[] }> = {};
+  for (const ev of evaluations) {
+    const name = ev.evaluationName;
+    if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
+    evalByName[name].count++;
+    if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+      evalByName[name].scores.push(ev.scoreValue);
+    }
+  }
+  return Object.entries(evalByName).map(([name, d]) => {
+    const sorted = d.scores.sort((a, b) => a - b);
+    return {
+      name,
+      count: d.count,
+      avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3) : null,
+      min: sorted.length > 0 ? +sorted[0].toFixed(3) : null,
+      max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(3) : null,
+    };
+  });
+}
+
+function computeSessionDetail(
+  sessionId: string,
+  spans: SessionSpan[],
+  evaluations: EvaluationResult[],
+) {
+  const dataSources = computeDataSources(spans, evaluations);
+  const timespan = computeTimespan(evaluations);
+  const sessionInfo = computeSessionInfo(spans);
+  const { tokenProgression, tokenTotals } = computeTokenMetrics(spans);
+  const { toolUsage, mcpUsage } = computeUsageCounts(spans);
+  const { spanBreakdown, hookLatency } = computeSpanLatency(spans);
+  const errors = computeErrorSummary(spans);
+  const agentActivity = computeAgentActivity(spans);
+  const evaluationBreakdown = computeEvalBreakdown(evaluations);
 
   // File access (top 30)
   const fileCount: Record<string, number> = {};
@@ -487,27 +564,6 @@ function computeSessionDetail(
       tool: spanAttr<string>(s, 'code.structure.tool') ?? '',
     }));
 
-  // Evaluation breakdown
-  const evalByName: Record<string, { count: number; scores: number[] }> = {};
-  for (const ev of evaluations) {
-    const name = ev.evaluationName;
-    if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
-    evalByName[name].count++;
-    if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-      evalByName[name].scores.push(ev.scoreValue);
-    }
-  }
-  const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
-    const sorted = d.scores.sort((a, b) => a - b);
-    return {
-      name,
-      count: d.count,
-      avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3) : null,
-      min: sorted.length > 0 ? +sorted[0].toFixed(3) : null,
-      max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(3) : null,
-    };
-  });
-
   // Multi-agent evaluation
   const agentMapForEval = new Map<number, string>();
   spans.forEach((span, i) => {
@@ -534,7 +590,7 @@ function computeSessionDetail(
     mcpUsage,
     spanBreakdown,
     hookLatency,
-    errors: { byCategory: errorsByCategory, details: errorDetails },
+    errors,
     agentActivity,
     fileAccess,
     gitCommits,
@@ -556,10 +612,13 @@ async function main(): Promise<void> {
   const now = new Date();
   const entries: KVEntry[] = [];
 
+  // Cache grouped evals per period for reuse in trend loop
+  const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
+
   // Dashboard summaries and role views per period
   for (const period of PERIODS) {
     const ms = PERIOD_MS[period];
-    if (ms > maxDays * 24 * 60 * 60 * 1000) continue;
+    if (ms > MAX_DAYS_MS) continue;
 
     const start = new Date(now.getTime() - ms);
     const dates = { start: start.toISOString(), end: now.toISOString() };
@@ -572,10 +631,7 @@ async function main(): Promise<void> {
       console.warn(`[sync-to-kv] Query returned ${QUERY_LIMIT} results for period ${period} — data may be truncated`);
     }
 
-    // Filter out canary evaluations (intentionally degraded scores for testing)
-    const filtered = evals.filter(ev =>
-      !('evaluatorType' in ev && (ev as Record<string, unknown>).evaluatorType === 'canary'),
-    );
+    const filtered = filterCanary(evals);
 
     const grouped = new Map<string, typeof filtered>();
     for (const ev of filtered) {
@@ -583,6 +639,7 @@ async function main(): Promise<void> {
       if (!grouped.has(name)) grouped.set(name, []);
       grouped.get(name)!.push(ev);
     }
+    groupedByPeriod.set(period, grouped);
 
     const dashboard = computeDashboardSummary(grouped, undefined, dates);
     entries.push({ key: `dashboard:${period}`, value: JSON.stringify(dashboard) });
@@ -635,9 +692,7 @@ async function main(): Promise<void> {
       evaluationName: name,
       limit: QUERY_LIMIT,
     });
-    const evals = rawEvals.filter(ev =>
-      !('evaluatorType' in ev && (ev as Record<string, unknown>).evaluatorType === 'canary'),
-    );
+    const evals = filterCanary(rawEvals);
     if (evals.length === 0) continue;
     const detail = computeMetricDetail(evals, config as QualityMetricConfig, {
       topN: 5,
@@ -661,26 +716,20 @@ async function main(): Promise<void> {
   }
   console.log(`Collected ${referencedTraceIds.size} trace IDs referenced by metric cards`);
 
-  // Trend data per metric × period (10 buckets)
+  // Trend data per metric × period (10 buckets) — reuses cached grouped evals
   const TREND_BUCKETS = 10;
   for (const period of PERIODS) {
     const ms = PERIOD_MS[period];
-    if (ms > maxDays * 24 * 60 * 60 * 1000) continue;
+    if (ms > MAX_DAYS_MS) continue;
+    const cached = groupedByPeriod.get(period);
+    if (!cached) continue;
     const start = new Date(now.getTime() - ms);
     const bucketMs = ms / TREND_BUCKETS;
 
     for (const name of metricNames) {
       const config = getQualityMetric(name);
       if (!config) continue;
-      const rawEvals = await backend.queryEvaluations({
-        startDate: start.toISOString(),
-        endDate: now.toISOString(),
-        evaluationName: name,
-        limit: QUERY_LIMIT,
-      });
-      const evaluations = rawEvals.filter(ev =>
-        !('evaluatorType' in ev && (ev as Record<string, unknown>).evaluatorType === 'canary'),
-      );
+      const evaluations = cached.get(name) ?? [];
 
       const timeBuckets: Array<{ startTime: string; endTime: string; scores: number[]; evals: EvaluationResult[] }> = [];
       for (let i = 0; i < TREND_BUCKETS; i++) {
@@ -744,11 +793,11 @@ async function main(): Promise<void> {
   }
 
   // Per-trace evaluations and spans
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - PERIOD_MS['30d']);
   const allEvals = await backend.queryEvaluations({
     startDate: thirtyDaysAgo.toISOString(),
     endDate: now.toISOString(),
-    limit: 100000,
+    limit: QUERY_LIMIT,
   });
   const evalsByTrace = new Map<string, EvaluationResult[]>();
   for (const ev of allEvals) {
@@ -788,21 +837,16 @@ async function main(): Promise<void> {
   console.log(`Computed ${traceEntries.length} trace KV entries`);
 
   // ---- Pre-compute session detail data ----
-  // Group spans by session.id attribute
+  // Single pass: group spans by session and build traceId → sessionId mapping
   type Span = (typeof allSpans)[number];
   const spansBySession = new Map<string, Span[]>();
+  const traceToSession = new Map<string, string>();
   for (const span of allSpans) {
     const sid = (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
     if (!sid) continue;
     if (!spansBySession.has(sid)) spansBySession.set(sid, []);
     spansBySession.get(sid)!.push(span);
-  }
-
-  // Build traceId → sessionId mapping, then group evaluations by session
-  const traceToSession = new Map<string, string>();
-  for (const span of allSpans) {
-    const sid = (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
-    if (sid && span.traceId) traceToSession.set(span.traceId, sid);
+    if (span.traceId) traceToSession.set(span.traceId, sid);
   }
   const evalsBySession = new Map<string, EvaluationResult[]>();
   for (const ev of allEvals) {
@@ -813,6 +857,17 @@ async function main(): Promise<void> {
     evalsBySession.get(sid)!.push(ev);
   }
 
+  // Cross-session agent accumulator
+  type AgentAccumulator = {
+    totalInvocations: number; totalErrors: number; rateLimitEvents: number;
+    totalOutputSize: number; durations: number[]; truncatedCount: number; emptyCount: number;
+    sessions: Array<{
+      sessionId: string; invocations: number; errors: number; hasRateLimit: boolean;
+      avgDurationMs: number; date: string | null; project: string | null;
+    }>;
+  };
+  const agentCrossSession = new Map<string, AgentAccumulator>();
+
   const sessionEntries: KVEntry[] = [];
   for (const [sessionId, sessionSpans] of spansBySession) {
     const evaluations = evalsBySession.get(sessionId) ?? [];
@@ -821,10 +876,95 @@ async function main(): Promise<void> {
       key: `session:${sessionId}`,
       value: JSON.stringify(detail),
     });
+
+    // Accumulate agent cross-session stats from detail
+    for (const ag of detail.agentActivity) {
+      let acc = agentCrossSession.get(ag.agentName);
+      if (!acc) {
+        acc = {
+          totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
+          totalOutputSize: 0, durations: [], truncatedCount: 0, emptyCount: 0, sessions: [],
+        };
+        agentCrossSession.set(ag.agentName, acc);
+      }
+      acc.totalInvocations += ag.invocations;
+      acc.totalErrors += ag.errors;
+      acc.rateLimitEvents += ag.rateLimitEvents;
+      acc.totalOutputSize += ag.avgOutputSize * ag.invocations;
+      acc.truncatedCount += ag.truncatedCount;
+      acc.emptyCount += ag.emptyCount;
+      // Reconstruct per-invocation durations from session avg (approximation)
+      if (ag.avgDurationMs > 0) {
+        for (let i = 0; i < ag.invocations; i++) acc.durations.push(ag.avgDurationMs);
+      }
+      acc.sessions.push({
+        sessionId,
+        invocations: ag.invocations,
+        errors: ag.errors,
+        hasRateLimit: ag.hasRateLimit,
+        avgDurationMs: ag.avgDurationMs,
+        date: detail.timespan?.start ?? null,
+        project: detail.sessionInfo?.projectName ?? null,
+      });
+    }
   }
   console.log(`Computed ${sessionEntries.length} session KV entries`);
 
-  const allEntries = [...entries, ...sessionEntries, ...traceEntries];
+  // Build agent KV entries
+  const agentEntries: KVEntry[] = [];
+  const agentSummaryList: Array<{
+    agentName: string; totalSessions: number; totalInvocations: number;
+    errorRate: number; lastSeen: string | null;
+  }> = [];
+  const computedAt = now.toISOString();
+
+  for (const [agentName, acc] of agentCrossSession) {
+    // Sort sessions by date descending, take last 20
+    acc.sessions.sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return b.date.localeCompare(a.date);
+    });
+    const lastSeen = acc.sessions[0]?.date ?? null;
+    const sessions = acc.sessions.slice(0, 20);
+    const sortedDurations = acc.durations.sort((a, b) => a - b);
+
+    const detail = {
+      agentName,
+      totalSessions: acc.sessions.length,
+      totalInvocations: acc.totalInvocations,
+      totalErrors: acc.totalErrors,
+      errorRate: acc.totalInvocations > 0 ? +(acc.totalErrors / acc.totalInvocations).toFixed(4) : 0,
+      rateLimitEvents: acc.rateLimitEvents,
+      avgOutputSize: acc.totalInvocations > 0 ? Math.round(acc.totalOutputSize / acc.totalInvocations) : 0,
+      avgDurationMs: sortedDurations.length > 0
+        ? Math.round(sortedDurations.reduce((a, b) => a + b, 0) / sortedDurations.length)
+        : 0,
+      p95DurationMs: sortedDurations.length > 0 ? Math.round(percentile(sortedDurations, 95)) : 0,
+      truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(4) : 0,
+      emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(4) : 0,
+      lastSeen,
+      computedAt,
+      sessions,
+    };
+
+    agentEntries.push({ key: `agent:${agentName}`, value: JSON.stringify(detail) });
+    agentSummaryList.push({
+      agentName,
+      totalSessions: acc.sessions.length,
+      totalInvocations: acc.totalInvocations,
+      errorRate: detail.errorRate,
+      lastSeen,
+    });
+  }
+
+  // Sort agent list by invocations descending
+  agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
+  agentEntries.push({ key: 'meta:agents', value: JSON.stringify(agentSummaryList) });
+  console.log(`Computed ${agentEntries.length - 1} agent KV entries + meta:agents`);
+
+  const allEntries = [...entries, ...sessionEntries, ...traceEntries, ...agentEntries];
   const totalComputed = allEntries.length;
 
   // ---- Delta sync: skip unchanged entries ----
