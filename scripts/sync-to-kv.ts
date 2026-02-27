@@ -55,7 +55,7 @@ const PERIOD_MS: Record<string, number> = {
 
 type KVEntry = { key: string; value: string };
 
-const KV_BATCH_SIZE = 9_500; // wrangler limit is 10,000 per bulk put
+const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
 /** Stores last computed coverage object so early-return path can refresh lastChecked. */
 const COVERAGE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-coverage.json');
