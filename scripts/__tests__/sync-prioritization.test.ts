@@ -1,14 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { prioritizeTraces } from '../sync-to-kv.js';
+import { prioritizeTraces, computeBudgetAllocation, MIN_TRACE_BUDGET } from '../sync-to-kv.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 
 type KVEntry = { key: string; value: string };
 
-const MIN_TRACE_BUDGET = 100;
-
 /**
- * Replicates the two-phase budget allocation from sync-to-kv main().
- * Extracted here so budget logic is testable without running the full pipeline.
+ * Thin wrapper around the exported computeBudgetAllocation + prioritizeTraces
+ * to test the full allocation pipeline without running the sync main().
  */
 function allocateBudget(
   highPriority: KVEntry[],
@@ -17,9 +15,7 @@ function allocateBudget(
   referencedTraceIds: Set<string>,
   writeBudget: number,
 ): { toWrite: KVEntry[]; deferred: number } {
-  const budget = writeBudget - 1; // reserve 1 for meta:lastSync
-  const highPriorityBudget = Math.max(0, Math.min(highPriority.length, budget - MIN_TRACE_BUDGET));
-  const traceBudget = Math.max(0, budget - highPriorityBudget);
+  const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, writeBudget);
   const prioritizedTraces = prioritizeTraces(traceChanged, evalsByTrace, referencedTraceIds);
   const toWrite = [
     ...highPriority.slice(0, highPriorityBudget),
@@ -165,7 +161,7 @@ describe('budget allocation', () => {
     for (let i = 0; i < count; i++) {
       const id = `t-${i}`;
       entries.push(...makeTraceEntries(id));
-      evalsByTrace.set(id, [makeEval(id, Math.random())]);
+      evalsByTrace.set(id, [makeEval(id, (i % 10) / 10)]);
     }
     return { entries, evalsByTrace };
   }
@@ -174,7 +170,7 @@ describe('budget allocation', () => {
     const highPriority = makeHighPriorityEntries(400);
     const { entries: traceEntries, evalsByTrace } = makeTracePool(200);
 
-    const { toWrite } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 450);
 
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
@@ -182,13 +178,15 @@ describe('budget allocation', () => {
     // budget=449, highPriorityBudget = min(400, 449-100) = 349, traceBudget = 100
     expect(highCount).toBe(349);
     expect(traceCount).toBe(100);
+    // changed=400+400=800, toWrite=449, deferred=351
+    expect(deferred).toBe(351);
   });
 
   it('gives full remaining budget to traces when high-priority is small', () => {
     const highPriority = makeHighPriorityEntries(10);
     const { entries: traceEntries, evalsByTrace } = makeTracePool(500);
 
-    const { toWrite } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 450);
 
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
@@ -196,6 +194,8 @@ describe('budget allocation', () => {
     // budget=449, highPriorityBudget = min(10, 349) = 10, traceBudget = 439
     expect(highCount).toBe(10);
     expect(traceCount).toBe(439);
+    // changed=10+1000=1010, toWrite=449, deferred=561
+    expect(deferred).toBe(561);
   });
 
   it('handles zero changed traces gracefully', () => {
@@ -214,6 +214,8 @@ describe('budget allocation', () => {
     const { toWrite } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 50);
 
     // budget=49, highPriorityBudget = max(0, min(10, 49-100)) = 0, traceBudget = 49
+    // NOTE: when budget < MIN_TRACE_BUDGET, all slots go to traces; high-priority items receive nothing.
+    // This is acceptable because budget < 100 only occurs with an explicit --budget override.
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
     expect(highCount).toBe(0);
@@ -221,8 +223,8 @@ describe('budget allocation', () => {
   });
 });
 
-describe('sync-to-kv trace prioritization integration', () => {
-  it('syncs worstEvaluation-referenced traces before random traces', () => {
+describe('prioritizeTraces: referenced trace prioritization', () => {
+  it('ranks referenced traces before unreferenced traces with similar scores', () => {
     const referencedId = 'trace-worst-ref';
     const randomIds = Array.from({ length: 50 }, (_, i) => `trace-rand-${i}`);
 
@@ -241,10 +243,10 @@ describe('sync-to-kv trace prioritization integration', () => {
 
     const referencedTraceIds = new Set([referencedId]);
 
-    // Budget allows only 20 entries (10 traces worth)
-    const budget = 21; // -1 for meta = 20 entry budget
+    // Slice to 20 entries (10 traces worth) to verify referenced trace makes the cut
+    const maxEntries = 20;
     const prioritized = prioritizeTraces(allEntries, evalsByTrace, referencedTraceIds);
-    const batch = prioritized.slice(0, budget - 1);
+    const batch = prioritized.slice(0, maxEntries);
 
     // Referenced trace should be in the batch despite its higher (worse priority) score
     const batchTraceIds = new Set(

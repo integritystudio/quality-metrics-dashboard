@@ -58,7 +58,7 @@ const KV_BATCH_SIZE = 9_500; // wrangler limit is 10,000 per bulk put
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
-const MIN_TRACE_BUDGET = 100;
+export const MIN_TRACE_BUDGET = 100;
 
 /** Trace priority weights */
 const TRACE_PRIORITY_WEIGHTS = {
@@ -66,6 +66,21 @@ const TRACE_PRIORITY_WEIGHTS = {
   recency: 0.3,      // newer = higher priority
   referencedByWorst: 0.2,  // linked from metric detail cards
 } as const;
+
+export interface BudgetAllocation {
+  highPriorityBudget: number;
+  traceBudget: number;
+}
+
+export function computeBudgetAllocation(
+  highPriorityCount: number,
+  writeBudget: number,
+): BudgetAllocation {
+  const budget = writeBudget - 1; // reserve 1 for meta:lastSync
+  const highPriorityBudget = Math.max(0, Math.min(highPriorityCount, budget - MIN_TRACE_BUDGET));
+  const traceBudget = Math.max(0, budget - highPriorityBudget);
+  return { highPriorityBudget, traceBudget };
+}
 
 // ---- Delta sync state ----
 
@@ -458,15 +473,9 @@ async function main(): Promise<void> {
   };
 
   // ---- Budget enforcement with trace reservation ----
-  const budget = WRITE_BUDGET - 1; // reserve 1 for meta:lastSync
-
-  // Phase 1: separate changed entries into tiers
   const highPriority = changed.filter(e => prioritize(e) < 3);
   const traceChanged = changed.filter(e => prioritize(e) === 3);
-
-  // Phase 2: allocate budget with trace reservation
-  const highPriorityBudget = Math.max(0, Math.min(highPriority.length, budget - MIN_TRACE_BUDGET));
-  const traceBudget = Math.max(0, budget - highPriorityBudget);
+  const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, WRITE_BUDGET);
 
   // Phase 3: prioritize traces by evaluation quality
   const prioritizedTraces = prioritizeTraces(traceChanged, evalsByTrace, referencedTraceIds);
@@ -521,11 +530,11 @@ async function main(): Promise<void> {
       : 100,
     runsToComplete: traceBudget > 0
       ? Math.ceil(Math.max(0, traceChanged.length - traceBudget) / traceBudget)
-      : 0,
+      : (traceChanged.length > 0 ? null : 0),
     timestamp: now.toISOString(),
   };
   const coverageEntry: KVEntry = { key: 'meta:syncCoverage', value: JSON.stringify(coverage) };
-  if (prevState['meta:syncCoverage'] !== hashValue(coverageEntry.value)) {
+  if (newState['meta:syncCoverage'] !== hashValue(coverageEntry.value)) {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
       newState['meta:syncCoverage'] = hashValue(coverageEntry.value);
@@ -533,7 +542,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const actualDeferred = deferred + (toWrite.length - written);
+  const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
+  const actualDeferred = deferred + limitDeferred;
   console.log(`Sync complete: wrote ${written} entries (${actualDeferred} deferred, ${totalComputed} total computed)`);
 }
 
