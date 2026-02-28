@@ -21,6 +21,7 @@ import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { CompliancePage } from './pages/CompliancePage.js';
 import { TraceDetailPage } from './pages/TraceDetailPage.js';
 import { AgentSessionPage } from './pages/AgentSessionPage.js';
+import { AgentsPage } from './pages/AgentsPage.js';
 import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
@@ -236,6 +237,7 @@ function GlobalShortcuts({ setPeriod, navigate }: {
   useShortcut('g c', 'Go to correlations', 'Navigation', useCallback(() => navigate('/correlations'), [navigate]));
   useShortcut('g p', 'Go to pipeline', 'Navigation', useCallback(() => navigate('/pipeline'), [navigate]));
   useShortcut('g v', 'Go to coverage', 'Navigation', useCallback(() => navigate('/coverage'), [navigate]));
+  useShortcut('g a', 'Go to agents', 'Navigation', useCallback(() => navigate('/agents'), [navigate]));
   return null;
 }
 
@@ -297,6 +299,11 @@ export function App() {
         <Route path="/compliance">
           <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
             <CompliancePage period={period} />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/agents">
+          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+            <AgentsPage period={period} />
           </ErrorBoundary>
         </Route>
         <Route path="/traces/:traceId">
