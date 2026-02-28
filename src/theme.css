@@ -46,6 +46,7 @@
   --space-1: 4px;
   --space-1-5: 6px;
   --space-2: 8px;
+  --space-2-5: 10px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
@@ -375,7 +376,7 @@ body {
 }
 .eval-table th,
 .eval-table td {
-  padding: var(--space-1-5) 10px;
+  padding: var(--space-1-5) var(--space-2-5);
 }
 .eval-table th {
   text-align: left;
@@ -401,7 +402,7 @@ body {
   background: var(--bg-elevated);
 }
 .eval-table .eval-expanded-panel td {
-  padding: 0 10px 10px;
+  padding: 0 var(--space-2-5) var(--space-2-5);
 }
 
 /* Tabs / Role selector */
@@ -594,7 +595,7 @@ body {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px var(--space-3);
+  padding: var(--space-2-5) var(--space-3);
   min-width: 200px;
   max-width: 300px;
   z-index: 20;
