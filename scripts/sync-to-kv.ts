@@ -9,7 +9,7 @@
  * Rate-limited to stay under Cloudflare free-tier KV write limits
  * (1,000 writes/day). Uses content-hash delta sync to skip unchanged
  * entries and a per-run budget (default 450) with priority ordering:
- *   meta/dashboard > metrics > trends > traces
+ *   meta/dashboard/agent > metrics > trends > traces
  *
  * Usage: tsx scripts/sync-to-kv.ts [--days=30] [--dry-run] [--budget=450]
  */
@@ -464,7 +464,20 @@ function computeErrorSummary(spans: SessionSpan[]) {
   return { byCategory, details };
 }
 
-function computeAgentActivity(spans: SessionSpan[]) {
+interface AgentActivityEntry {
+  agentName: string;
+  invocations: number;
+  errors: number;
+  hasRateLimit: boolean;
+  rateLimitEvents: number;
+  totalOutputSize: number;
+  avgOutputSize: number;
+  avgDurationMs: number;
+  truncatedCount: number;
+  emptyCount: number;
+}
+
+function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
   const acc: Record<string, {
     invocations: number; errors: number; hasRateLimit: boolean; rateLimitEvents: number;
     totalOutputSize: number; durations: number[]; truncatedCount: number; emptyCount: number;
@@ -496,6 +509,7 @@ function computeAgentActivity(spans: SessionSpan[]) {
     errors: d.errors,
     hasRateLimit: d.hasRateLimit,
     rateLimitEvents: d.rateLimitEvents,
+    totalOutputSize: d.totalOutputSize,
     avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
     avgDurationMs: Math.round(arrayAvg(d.durations) ?? 0),
     truncatedCount: d.truncatedCount,
@@ -908,7 +922,7 @@ async function main(): Promise<void> {
       acc.totalInvocations += ag.invocations;
       acc.totalErrors += ag.errors;
       acc.rateLimitEvents += ag.rateLimitEvents;
-      acc.totalOutputSize += ag.avgOutputSize * ag.invocations;
+      acc.totalOutputSize += ag.totalOutputSize;
       acc.truncatedCount += ag.truncatedCount;
       acc.emptyCount += ag.emptyCount;
       // One duration entry per session (weighted avg computed from sum + totalInvocations)
