@@ -62,6 +62,7 @@ const PERIOD_MS: Record<string, number> = {
 };
 
 const MAX_SESSION_DURATIONS = 10_000;
+const MAX_AGENT_SESSIONS = 100;
 
 const HOOK_NAMES = {
   SESSION_START: 'session-start',
@@ -489,6 +490,8 @@ interface AgentAccumulator {
   sessionDurations: number[];
   truncatedCount: number;
   emptyCount: number;
+  totalSessionCount: number;
+  lastSeenDate: string | null;
   sessions: Array<{
     sessionId: string;
     invocations: number;
@@ -935,7 +938,8 @@ async function main(): Promise<void> {
         acc = {
           totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
           totalOutputSize: 0, weightedDurationSum: 0, sessionDurations: [],
-          truncatedCount: 0, emptyCount: 0, sessions: [],
+          truncatedCount: 0, emptyCount: 0,
+          totalSessionCount: 0, lastSeenDate: null, sessions: [],
         };
         agentCrossSession.set(ag.agentName, acc);
       }
@@ -952,15 +956,22 @@ async function main(): Promise<void> {
           acc.sessionDurations.push(ag.avgDurationMs);
         }
       }
-      acc.sessions.push({
-        sessionId,
-        invocations: ag.invocations,
-        errors: ag.errors,
-        hasRateLimit: ag.hasRateLimit,
-        avgDurationMs: ag.avgDurationMs,
-        date: detail.timespan?.start ?? null,
-        project: detail.sessionInfo?.projectName ?? null,
-      });
+      const sessionDate = detail.timespan?.start ?? null;
+      acc.totalSessionCount++;
+      if (sessionDate && (!acc.lastSeenDate || sessionDate > acc.lastSeenDate)) {
+        acc.lastSeenDate = sessionDate;
+      }
+      if (acc.sessions.length < MAX_AGENT_SESSIONS) {
+        acc.sessions.push({
+          sessionId,
+          invocations: ag.invocations,
+          errors: ag.errors,
+          hasRateLimit: ag.hasRateLimit,
+          avgDurationMs: ag.avgDurationMs,
+          date: sessionDate,
+          project: detail.sessionInfo?.projectName ?? null,
+        });
+      }
     }
   }
   console.log(`Computed ${sessionEntries.length} session KV entries`);
@@ -975,16 +986,17 @@ async function main(): Promise<void> {
 
   for (const [agentName, acc] of agentCrossSession) {
     // Sort sessions by date descending, take last 20
-    acc.sessions.sort((a, b) => {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return b.date.localeCompare(a.date);
-    });
-    const lastSeen = acc.sessions[0]?.date ?? null;
-    const totalSessions = acc.sessions.length;
-    const sessions = acc.sessions.slice(0, 20);
-    const sortedSessionDurations = acc.sessionDurations.sort((a, b) => a - b);
+    const sessions = acc.sessions
+      .sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return b.date.localeCompare(a.date);
+      })
+      .slice(0, 20);
+    const lastSeen = acc.lastSeenDate;
+    const totalSessions = acc.totalSessionCount;
+    const sortedSessionDurations = acc.sessionDurations.slice().sort((a, b) => a - b);
 
     const detail = {
       agentName,
