@@ -477,17 +477,39 @@ interface AgentActivityEntry {
   emptyCount: number;
 }
 
+interface AgentAccumulator {
+  totalInvocations: number;
+  totalErrors: number;
+  rateLimitEvents: number;
+  totalOutputSize: number;
+  weightedDurationSum: number;
+  sessionDurations: number[];
+  truncatedCount: number;
+  emptyCount: number;
+  sessions: Array<{
+    sessionId: string;
+    invocations: number;
+    errors: number;
+    hasRateLimit: boolean;
+    avgDurationMs: number;
+    date: string | null;
+    project: string | null;
+  }>;
+}
+
 function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
   const acc: Record<string, {
     invocations: number; errors: number; hasRateLimit: boolean; rateLimitEvents: number;
-    totalOutputSize: number; durations: number[]; truncatedCount: number; emptyCount: number;
+    totalOutputSize: number; durationSum: number; durationCount: number;
+    truncatedCount: number; emptyCount: number;
   }> = {};
   for (const s of spans) {
     if (spanAttr<string>(s, 'hook.name') === HOOK_NAMES.AGENT_POST_TOOL) {
       const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
       if (!acc[name]) acc[name] = {
         invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
-        totalOutputSize: 0, durations: [], truncatedCount: 0, emptyCount: 0,
+        totalOutputSize: 0, durationSum: 0, durationCount: 0,
+        truncatedCount: 0, emptyCount: 0,
       };
       const a = acc[name];
       a.invocations++;
@@ -498,7 +520,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
       }
       a.totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
       const dur = s.durationMs ?? 0;
-      if (dur > 0) a.durations.push(dur);
+      if (dur > 0) { a.durationSum += dur; a.durationCount++; }
       if (spanAttr<boolean>(s, 'agent.output.truncated')) a.truncatedCount++;
       if (spanAttr<boolean>(s, 'agent.output.empty')) a.emptyCount++;
     }
@@ -511,7 +533,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
     rateLimitEvents: d.rateLimitEvents,
     totalOutputSize: d.totalOutputSize,
     avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-    avgDurationMs: Math.round(arrayAvg(d.durations) ?? 0),
+    avgDurationMs: d.durationCount > 0 ? Math.round(d.durationSum / d.durationCount) : 0,
     truncatedCount: d.truncatedCount,
     emptyCount: d.emptyCount,
   }));
@@ -887,16 +909,6 @@ async function main(): Promise<void> {
     pushToGroup(evalsBySession, sid, ev);
   }
 
-  // Cross-session agent accumulator
-  type AgentAccumulator = {
-    totalInvocations: number; totalErrors: number; rateLimitEvents: number;
-    totalOutputSize: number; weightedDurationSum: number; sessionDurations: number[];
-    truncatedCount: number; emptyCount: number;
-    sessions: Array<{
-      sessionId: string; invocations: number; errors: number; hasRateLimit: boolean;
-      avgDurationMs: number; date: string | null; project: string | null;
-    }>;
-  };
   const agentCrossSession = new Map<string, AgentAccumulator>();
 
   const sessionEntries: KVEntry[] = [];
@@ -905,7 +917,12 @@ async function main(): Promise<void> {
     const detail = computeSessionDetail(sessionId, sessionSpans, evaluations);
     sessionEntries.push({
       key: `session:${sessionId}`,
-      value: JSON.stringify(detail),
+      value: JSON.stringify({
+        ...detail,
+        agentActivity: detail.agentActivity.map(
+          ({ totalOutputSize: _, ...rest }) => rest,
+        ),
+      }),
     });
 
     // Accumulate agent cross-session stats from detail
