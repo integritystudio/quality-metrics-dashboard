@@ -90,6 +90,7 @@
   --font-size-sm: 13px;
   --font-size-base: 14px;
   --font-size-md: 16px;
+  --font-size-page-heading: 18px;
   --font-size-lg: 20px;
   --font-size-xl: 24px;
   --font-size-2xl: 28px;
@@ -874,9 +875,9 @@ details[open] > .cot-summary::before {
   color: var(--text-secondary);
 }
 
-/* Page-level h2 headings (18px, between --font-size-md and --font-size-lg) */
+/* Page-level h2 headings */
 .page-heading {
-  font-size: 18px;
+  font-size: var(--font-size-page-heading);
 }
 
 /* Empty card state — card with muted placeholder text */
