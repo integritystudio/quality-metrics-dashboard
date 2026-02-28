@@ -42,13 +42,18 @@
   --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 
   /* Spacing */
+  --space-half: 2px;
   --space-1: 4px;
+  --space-1-5: 6px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+
+  /* Layout */
+  --layout-max-width: 1280px;
 
   /* Status tints (bg + border pairs) */
   --bg-status-healthy: #0d1f12;
@@ -70,7 +75,6 @@
   --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 8px;
-  --radius-xl: 12px;
   --radius-pill: 12px;
 
   /* Font sizes */
@@ -116,7 +120,7 @@ body {
 }
 
 .dashboard-container {
-  max-width: 1280px;
+  max-width: var(--layout-max-width);
   margin: 0 auto;
   padding: 24px;
 }
@@ -186,7 +190,7 @@ body {
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   font-size: var(--font-size-xs);
   font-weight: 500;
   padding: 2px 8px;
@@ -311,7 +315,7 @@ body {
 .histogram {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--space-half);
   height: 120px;
   padding: 8px 0;
 }
@@ -462,7 +466,7 @@ body {
 /* Empty state */
 .empty-state {
   text-align: center;
-  padding: 64px 24px;
+  padding: 64px var(--space-6);
   color: var(--text-secondary);
 }
 .empty-state h2 {
@@ -690,7 +694,7 @@ details[open] > .cot-summary::before {
 }
 .remediation-list {
   margin-top: 8px;
-  padding-left: 20px;
+  padding-left: var(--space-5);
   font-size: var(--font-size-xs);
   color: var(--accent);
 }
