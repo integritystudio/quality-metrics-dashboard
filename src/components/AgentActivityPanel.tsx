@@ -326,7 +326,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             letterSpacing: '0.5px',
                             marginBottom: 6,
                           }}>
-                            Traces ({agent.traceIds.length})
+                            Traces ({agent.traceIdsTotal ?? agent.traceIds.length})
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {agent.traceIds.map(tid => (
