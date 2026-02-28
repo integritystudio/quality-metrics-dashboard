@@ -41,15 +41,17 @@ import { computeMultiAgentEvaluation } from '../../dist/lib/quality-multi-agent.
 const NAMESPACE_ID = process.env.KV_NAMESPACE_ID;
 if (!NAMESPACE_ID) throw new Error('KV_NAMESPACE_ID env var is required');
 
+function parseIntArg(args: string[], flag: string, defaultValue: number): number {
+  const match = args.find(a => a.startsWith(`--${flag}=`));
+  const parsed = match ? parseInt(match.split('=')[1], 10) : defaultValue;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
-const daysFlag = args.find(a => a.startsWith('--days='));
-const rawDays = daysFlag ? parseInt(daysFlag.split('=')[1], 10) : 30;
-const maxDays = Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 30;
+const maxDays = parseIntArg(args, 'days', 30);
 const MAX_DAYS_MS = maxDays * 24 * 60 * 60 * 1000;
-const budgetFlag = args.find(a => a.startsWith('--budget='));
-const parsedBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 450;
-const WRITE_BUDGET = Number.isFinite(parsedBudget) && parsedBudget > 0 ? parsedBudget : 450;
+const WRITE_BUDGET = parseIntArg(args, 'budget', 450);
 
 const PERIODS = ['24h', '7d', '30d'] as const;
 const ROLES: RoleViewType[] = ['executive', 'operator', 'auditor'];
@@ -58,6 +60,15 @@ const PERIOD_MS: Record<string, number> = {
   '7d': 7 * 24 * 60 * 60 * 1000,
   '30d': 30 * 24 * 60 * 60 * 1000,
 };
+
+const HOOK_NAMES = {
+  SESSION_START: 'session-start',
+  TOKEN_METRICS: 'token-metrics-extraction',
+  AGENT_POST_TOOL: 'agent-post-tool',
+  POST_COMMIT_REVIEW: 'post-commit-review',
+  ALERT_EVALUATION: 'telemetry-alert-evaluation',
+  CODE_STRUCTURE: 'code-structure',
+} as const;
 
 type KVEntry = { key: string; value: string };
 
@@ -103,13 +114,14 @@ export function computeBudgetAllocation(
 
 type SyncState = Record<string, string>; // key → sha256(value)
 
+function loadJsonFile<T>(path: string, fallback: T): T {
+  if (!existsSync(path)) return fallback;
+  try { return JSON.parse(readFileSync(path, 'utf-8')) as T; }
+  catch { return fallback; }
+}
+
 function loadSyncState(): SyncState {
-  if (!existsSync(STATE_FILE)) return {};
-  try {
-    return JSON.parse(readFileSync(STATE_FILE, 'utf-8'));
-  } catch {
-    return {};
-  }
+  return loadJsonFile(STATE_FILE, {} as SyncState);
 }
 
 function saveSyncState(state: SyncState): void {
@@ -129,12 +141,7 @@ interface CoverageData {
 }
 
 function loadLastCoverage(): CoverageData | null {
-  if (!existsSync(COVERAGE_FILE)) return null;
-  try {
-    return JSON.parse(readFileSync(COVERAGE_FILE, 'utf-8')) as CoverageData;
-  } catch {
-    return null;
-  }
+  return loadJsonFile<CoverageData | null>(COVERAGE_FILE, null);
 }
 
 function saveLastCoverage(coverage: CoverageData): void {
@@ -229,8 +236,7 @@ export function prioritizeTraces(
       skippedCount++;
       continue;
     }
-    if (!traceGroups.has(traceId)) traceGroups.set(traceId, []);
-    traceGroups.get(traceId)!.push(entry);
+    pushToGroup(traceGroups, traceId, entry);
   }
   if (skippedCount > 0) {
     console.warn(`[prioritizeTraces] Skipped ${skippedCount} entries with non-trace key format`);
@@ -242,8 +248,8 @@ export function prioritizeTraces(
     const evals = evalsByTrace.get(traceId) ?? [];
 
     const scores = evals
-      .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
-      .map(e => e.scoreValue!);
+      .filter(e => isValidScore(e.scoreValue))
+      .map(e => e.scoreValue);
     const worstScore = scores.length > 0
       ? scores.reduce((min, v) => v < min ? v : min, Infinity)
       : 1.0; // unevaluated traces get lowest priority
@@ -299,6 +305,19 @@ function spanSessionId(span: { attributes?: Record<string, unknown> }): string |
   return (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
 }
 
+function isValidScore(v: number | null | undefined): v is number {
+  return v != null && Number.isFinite(v);
+}
+
+function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
+  if (!map.has(key)) map.set(key, []);
+  map.get(key)!.push(value);
+}
+
+function arrayAvg(nums: number[]): number | null {
+  return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.ceil(sorted.length * p / 100) - 1;
@@ -334,7 +353,7 @@ function computeTimespan(evaluations: EvaluationResult[]) {
 }
 
 function computeSessionInfo(spans: SessionSpan[]) {
-  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === 'session-start');
+  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.SESSION_START);
   const first = sessionStarts[0];
   const last = sessionStarts[sessionStarts.length - 1] ?? first;
   return first ? {
@@ -354,7 +373,7 @@ function computeSessionInfo(spans: SessionSpan[]) {
 
 function computeTokenMetrics(spans: SessionSpan[]) {
   const tokenProgression = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === 'token-metrics-extraction')
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.TOKEN_METRICS)
     .map(s => ({
       messages: spanAttr<number>(s, 'tokens.messages') ?? 0,
       inputTokens: spanAttr<number>(s, 'tokens.input') ?? 0,
@@ -414,7 +433,7 @@ function computeSpanLatency(spans: SessionSpan[]) {
     const sorted = durations.sort((a, b) => a - b);
     hookLatency[name] = {
       count: sorted.length,
-      avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(1),
+      avg: +(arrayAvg(sorted)!).toFixed(1),
       p50: +percentile(sorted, 50).toFixed(1),
       p95: +percentile(sorted, 95).toFixed(1),
       max: +sorted[sorted.length - 1].toFixed(1),
@@ -451,7 +470,7 @@ function computeAgentActivity(spans: SessionSpan[]) {
     totalOutputSize: number; durations: number[]; truncatedCount: number; emptyCount: number;
   }> = {};
   for (const s of spans) {
-    if (spanAttr<string>(s, 'hook.name') === 'agent-post-tool') {
+    if (spanAttr<string>(s, 'hook.name') === HOOK_NAMES.AGENT_POST_TOOL) {
       const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
       if (!acc[name]) acc[name] = {
         invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
@@ -478,9 +497,7 @@ function computeAgentActivity(spans: SessionSpan[]) {
     hasRateLimit: d.hasRateLimit,
     rateLimitEvents: d.rateLimitEvents,
     avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-    avgDurationMs: d.durations.length > 0
-      ? Math.round(d.durations.reduce((a, b) => a + b, 0) / d.durations.length)
-      : 0,
+    avgDurationMs: Math.round(arrayAvg(d.durations) ?? 0),
     truncatedCount: d.truncatedCount,
     emptyCount: d.emptyCount,
   }));
@@ -492,16 +509,17 @@ function computeEvalBreakdown(evaluations: EvaluationResult[]) {
     const name = ev.evaluationName;
     if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
     evalByName[name].count++;
-    if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+    if (isValidScore(ev.scoreValue)) {
       evalByName[name].scores.push(ev.scoreValue);
     }
   }
   return Object.entries(evalByName).map(([name, d]) => {
     const sorted = d.scores.sort((a, b) => a - b);
+    const avg = arrayAvg(sorted);
     return {
       name,
       count: d.count,
-      avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3) : null,
+      avg: avg != null ? +avg.toFixed(3) : null,
       min: sorted.length > 0 ? +sorted[0].toFixed(3) : null,
       max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(3) : null,
     };
@@ -536,7 +554,7 @@ function computeSessionDetail(
 
   // Git commits
   const gitCommits = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === 'post-commit-review')
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.POST_COMMIT_REVIEW)
     .map(s => {
       const raw = spanAttr<string>(s, 'git.command') ?? '';
       const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
@@ -549,7 +567,7 @@ function computeSessionDetail(
     });
 
   // Alert summary
-  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
+  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.ALERT_EVALUATION);
   const alertSummary = {
     totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr<number>(s, 'alerts.triggered_count') ?? 0), 0),
     stopEvents: alertSpans.length,
@@ -557,7 +575,7 @@ function computeSessionDetail(
 
   // Code structure
   const codeStructure = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === 'code-structure')
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.CODE_STRUCTURE)
     .map(s => ({
       file: spanAttr<string>(s, 'code.structure.file') ?? '',
       lines: spanAttr<number>(s, 'code.structure.lines') ?? 0,
@@ -571,14 +589,13 @@ function computeSessionDetail(
   // Multi-agent evaluation
   const agentMapForEval = new Map<number, string>();
   spans.forEach((span, i) => {
-    const agent = span.attributes?.['agent.name'] as string | undefined;
+    const agent = spanAttr<string>(span, 'agent.name');
     if (agent) agentMapForEval.set(i, agent);
   });
   const stepScores: StepScore[] = spans.map((span, i) => ({
     step: i,
-    score: typeof span.attributes?.['evaluation.score'] === 'number'
-      ? span.attributes['evaluation.score'] as number
-      : (span.status?.code === 2 ? 0 : 1),
+    score: spanAttr<number>(span, 'evaluation.score')
+      ?? (span.status?.code === 2 ? 0 : 1),
     explanation: span.name,
   }));
   const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
@@ -640,8 +657,7 @@ async function main(): Promise<void> {
     const grouped = new Map<string, typeof filtered>();
     for (const ev of filtered) {
       const name = ev.evaluationName;
-      if (!grouped.has(name)) grouped.set(name, []);
-      grouped.get(name)!.push(ev);
+      pushToGroup(grouped, name, ev);
     }
     groupedByPeriod.set(period, grouped);
 
@@ -657,7 +673,7 @@ async function main(): Promise<void> {
     const metricTimeSeries = new Map<string, number[]>();
     const corrMetricNames: string[] = [];
     for (const [name, metricEvals] of grouped) {
-      metricTimeSeries.set(name, metricEvals.filter(e => e.scoreValue != null).map(e => e.scoreValue!));
+      metricTimeSeries.set(name, metricEvals.filter(e => isValidScore(e.scoreValue)).map(e => e.scoreValue));
       corrMetricNames.push(name);
     }
     const correlations = computeCorrelationMatrix(metricTimeSeries);
@@ -780,7 +796,7 @@ async function main(): Promise<void> {
 
       const allScores = evaluations
         .map(e => e.scoreValue)
-        .filter((v): v is number => v != null && Number.isFinite(v));
+        .filter(isValidScore);
 
       entries.push({
         key: `trend:${name}:${period}`,
@@ -806,8 +822,7 @@ async function main(): Promise<void> {
   const evalsByTrace = new Map<string, EvaluationResult[]>();
   for (const ev of allEvals) {
     if (!ev.traceId) continue;
-    if (!evalsByTrace.has(ev.traceId)) evalsByTrace.set(ev.traceId, []);
-    evalsByTrace.get(ev.traceId)!.push(ev);
+    pushToGroup(evalsByTrace, ev.traceId, ev);
   }
   const traceIds = [...evalsByTrace.keys()];
   console.log(`Found ${traceIds.length} unique traces with evaluations`);
@@ -821,8 +836,7 @@ async function main(): Promise<void> {
   const spansByTrace = new Map<string, typeof allSpans>();
   for (const span of allSpans) {
     if (!span.traceId) continue;
-    if (!spansByTrace.has(span.traceId)) spansByTrace.set(span.traceId, []);
-    spansByTrace.get(span.traceId)!.push(span);
+    pushToGroup(spansByTrace, span.traceId, span);
   }
 
   const traceEntries: KVEntry[] = [];
@@ -848,8 +862,7 @@ async function main(): Promise<void> {
   for (const span of allSpans) {
     const sid = spanSessionId(span);
     if (!sid) continue;
-    if (!spansBySession.has(sid)) spansBySession.set(sid, []);
-    spansBySession.get(sid)!.push(span);
+    pushToGroup(spansBySession, sid, span);
     if (span.traceId) traceToSession.set(span.traceId, sid);
   }
   const evalsBySession = new Map<string, EvaluationResult[]>();
@@ -857,8 +870,7 @@ async function main(): Promise<void> {
     if (!ev.traceId) continue;
     const sid = traceToSession.get(ev.traceId);
     if (!sid) continue;
-    if (!evalsBySession.has(sid)) evalsBySession.set(sid, []);
-    evalsBySession.get(sid)!.push(ev);
+    pushToGroup(evalsBySession, sid, ev);
   }
 
   // Cross-session agent accumulator
