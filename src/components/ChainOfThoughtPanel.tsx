@@ -7,8 +7,7 @@ interface ChainOfThoughtPanelProps {
   scoreUnit?: string;
 }
 
-export function ChainOfThoughtPanel({ explanation, evaluator, evaluatorType, scoreUnit }: ChainOfThoughtPanelProps) {
-  const hasConfig = evaluator || evaluatorType || scoreUnit;
+export function ChainOfThoughtPanel({ explanation, evaluator }: ChainOfThoughtPanelProps) {
 
   return (
     <div className="cot-panel">
@@ -18,17 +17,12 @@ export function ChainOfThoughtPanel({ explanation, evaluator, evaluatorType, sco
           <div className="cot-content">{explanation}</div>
         </details>
       )}
-      {hasConfig && (
-        <details>
-          <summary className="cot-summary">Judge Configuration</summary>
-          <div className="cot-content" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-            <MetaItem label="Evaluator" value={evaluator} />
-            <MetaItem label="Evaluator Type" value={evaluatorType} />
-            <MetaItem label="Score Unit" value={scoreUnit} />
-          </div>
-        </details>
+      {evaluator && (
+        <div className="cot-content">
+          <MetaItem label="Evaluator" value={evaluator} />
+        </div>
       )}
-      {!explanation && !hasConfig && (
+      {!explanation && !evaluator && (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
           No chain-of-thought data available.
         </div>

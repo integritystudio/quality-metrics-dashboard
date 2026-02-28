@@ -2,10 +2,27 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { computeCoverageHeatmap } from '../../../../dist/lib/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 
 const PeriodSchema = z.enum(['24h', '7d', '30d']).default('7d');
 const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+
+/** Filter out rule-based per-span evaluations; they have incompatible
+ *  traceId granularity that inflates the coverage input universe.
+ *  Keeps LLM judge evals (evaluatorType 'llm', undefined for seed/canary). */
+function filterJudgeEvaluations(
+  byMetric: Map<string, EvaluationResult[]>,
+): Map<string, EvaluationResult[]> {
+  const filtered = new Map<string, EvaluationResult[]>();
+  for (const [metric, evals] of byMetric) {
+    const judgeEvals = evals.filter(e => e.evaluatorType !== 'rule');
+    if (judgeEvals.length > 0) {
+      filtered.set(metric, judgeEvals);
+    }
+  }
+  return filtered;
+}
 
 const PERIOD_MS: Record<string, number> = {
   '24h': 24 * 60 * 60 * 1000,
@@ -39,10 +56,11 @@ coverageRoutes.get('/coverage', async (c) => {
     const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
     const start = new Date(now.getTime() - periodMs);
 
-    const evaluationsByMetric = await loadEvaluationsByMetric(
+    const allEvaluations = await loadEvaluationsByMetric(
       start.toISOString(),
       now.toISOString(),
     );
+    const evaluationsByMetric = filterJudgeEvaluations(allEvaluations);
 
     const heatmap = computeCoverageHeatmap(evaluationsByMetric, {
       inputKey: inputKeyResult.data,

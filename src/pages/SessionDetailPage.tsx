@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { useSessionDetail } from '../hooks/useSessionDetail.js';
+import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import type { EvaluationResult } from '../types.js';
@@ -228,10 +228,42 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   }
 
   if (error) {
+    const isNotSynced = error instanceof SessionNotFoundError;
     return (
       <div>
         <Link href="/" className="back-link">&larr; Back to dashboard</Link>
-        <div className="error-state"><h2>Failed to load session</h2><p>{error.message}</p></div>
+        {isNotSynced ? (
+          <div className="card" style={{ padding: '32px 24px', textAlign: 'center' }}>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--status-warning)',
+              marginBottom: 8,
+            }}>Session Not Yet Available</div>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              lineHeight: 1.6,
+              maxWidth: 480,
+              margin: '0 auto',
+            }}>
+              This session has not been synced to the dashboard KV store yet.
+              Data is synced periodically &mdash; check back after the next pipeline run.
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              marginTop: 12,
+              wordBreak: 'break-all',
+            }}>{sessionId}</div>
+          </div>
+        ) : (
+          <div className="error-state"><h2>Failed to load session</h2><p>{error.message}</p></div>
+        )}
       </div>
     );
   }

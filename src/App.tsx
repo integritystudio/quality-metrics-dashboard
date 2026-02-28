@@ -182,7 +182,17 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
 
       {trendData && trendData.trendData.length > 0 && (
         <div className="view-section">
-          <h3 className="section-heading">Time Series ({trendData.totalEvaluations} evaluations)</h3>
+          <h3 className="section-heading">
+            Time Series ({trendData.totalEvaluations} evaluations)
+            {trendData.narrowed && (
+              <span style={{
+                fontSize: 11,
+                fontWeight: 400,
+                color: 'var(--text-muted)',
+                marginLeft: 8,
+              }}>auto-narrowed to data range</span>
+            )}
+          </h3>
           <div className="card">
             <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
           </div>

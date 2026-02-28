@@ -54,10 +54,24 @@ trendRoutes.get('/trends/:name', async (c) => {
     const period = periodResult.data;
     const bucketCount = bucketsResult.data;
     const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const bucketMs = periodMs / bucketCount;
+    const periodStart = new Date(now.getTime() - periodMs);
 
-    const evaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+
+    // Determine actual data range — auto-narrow if data is concentrated
+    const timestamps = evaluations
+      .map(e => new Date(e.timestamp).getTime())
+      .filter(Number.isFinite);
+    const dataMin = timestamps.length > 0 ? Math.min(...timestamps) : periodStart.getTime();
+    const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
+    const dataSpan = dataMax - dataMin;
+    const CONCENTRATION_THRESHOLD = 0.2;
+    const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * 0.1, 60_000) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
 
     // Group evaluations into time buckets
     const buckets: Array<{
@@ -88,7 +102,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     }
 
     // Compute per-bucket aggregations and trends
-    const periodHours = periodMs / (bucketCount * 3600000);
+    const periodHours = rangeMs / (bucketCount * 3600000);
     let previousTrend: MetricTrend | undefined;
 
     const trendData = buckets.map((bucket, idx) => {
@@ -151,6 +165,7 @@ trendRoutes.get('/trends/:name', async (c) => {
       totalEvaluations: allScores.length,
       overallPercentiles,
       trendData,
+      narrowed,
     });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, 500);

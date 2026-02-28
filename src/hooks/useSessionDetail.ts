@@ -132,16 +132,25 @@ export interface SessionDetailResponse {
   evaluations: EvaluationResult[];
 }
 
+export class SessionNotFoundError extends Error {
+  constructor(sessionId: string) {
+    super(`Session ${sessionId} has not been synced to the dashboard yet.`);
+    this.name = 'SessionNotFoundError';
+  }
+}
+
 export function useSessionDetail(sessionId: string | undefined) {
   return useQuery<SessionDetailResponse>({
     queryKey: ['session-detail', sessionId],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`);
+      if (res.status === 404) throw new SessionNotFoundError(sessionId!);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
     enabled: !!sessionId,
     staleTime: 30_000,
-    retry: 2,
+    retry: (failureCount, error) =>
+      error instanceof SessionNotFoundError ? false : failureCount < 2,
   });
 }

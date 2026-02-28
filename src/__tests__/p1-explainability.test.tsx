@@ -69,7 +69,7 @@ describe('ChainOfThoughtPanel', () => {
     expect(details!.textContent).toContain('The model output is coherent');
   });
 
-  it('renders judge config in collapsed details', () => {
+  it('renders evaluator inline without expandable config', () => {
     const { container } = render(
       <ChainOfThoughtPanel
         evaluator="claude-3.5-sonnet"
@@ -77,12 +77,8 @@ describe('ChainOfThoughtPanel', () => {
         scoreUnit="ratio_0_1"
       />
     );
-    const allDetails = container.querySelectorAll('details');
-    expect(allDetails.length).toBeGreaterThanOrEqual(1);
-    const configDetails = allDetails[allDetails.length - 1];
-    expect(configDetails.textContent).toContain('claude-3.5-sonnet');
-    expect(configDetails.textContent).toContain('llm');
-    expect(configDetails.textContent).toContain('ratio_0_1');
+    expect(container.querySelectorAll('details').length).toBe(0);
+    expect(container.textContent).toContain('claude-3.5-sonnet');
   });
 
   it('renders fallback when no data available', () => {
@@ -169,33 +165,43 @@ vi.mock('../hooks/useTraceEvaluations.js', () => ({
   useTraceEvaluations: vi.fn(),
 }));
 
+const mockEvalData = [
+  {
+    timestamp: '2026-02-17T12:00:00Z',
+    evaluationName: 'relevance',
+    scoreValue: 0.92,
+    scoreLabel: 'excellent',
+    explanation: 'Highly relevant response',
+    evaluator: 'gpt-4o',
+    evaluatorType: 'llm' as const,
+    traceId: 'trace-123',
+  },
+  {
+    timestamp: '2026-02-17T12:00:00Z',
+    evaluationName: 'coherence',
+    scoreValue: 0.78,
+    scoreLabel: 'good',
+    explanation: 'Mostly coherent',
+    evaluator: 'gpt-4o',
+    evaluatorType: 'llm' as const,
+    traceId: 'trace-123',
+  },
+];
+
 describe('EvaluationDetailPage', () => {
+  const originalSearch = window.location.search;
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, search: originalSearch },
+      writable: true,
+    });
+  });
+
   it('renders evaluation cards when data is available', async () => {
     const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
     // @ts-expect-error -- partial mock: only fields consumed by component
     vi.mocked(useTraceEvaluations).mockReturnValue({
-      data: [
-        {
-          timestamp: '2026-02-17T12:00:00Z',
-          evaluationName: 'relevance',
-          scoreValue: 0.92,
-          scoreLabel: 'excellent',
-          explanation: 'Highly relevant response',
-          evaluator: 'gpt-4o',
-          evaluatorType: 'llm',
-          traceId: 'trace-123',
-        },
-        {
-          timestamp: '2026-02-17T12:00:00Z',
-          evaluationName: 'coherence',
-          scoreValue: 0.78,
-          scoreLabel: 'good',
-          explanation: 'Mostly coherent',
-          evaluator: 'gpt-4o',
-          evaluatorType: 'llm',
-          traceId: 'trace-123',
-        },
-      ],
+      data: mockEvalData,
       isLoading: false,
       error: null,
     });
@@ -209,6 +215,29 @@ describe('EvaluationDetailPage', () => {
     expect(container.textContent).toContain('coherence');
     const cards = container.querySelectorAll('.eval-detail-card');
     expect(cards.length).toBe(2);
+  });
+
+  it('filters by metric query param', async () => {
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, search: '?metric=relevance' },
+      writable: true,
+    });
+
+    const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
+    // @ts-expect-error -- partial mock: only fields consumed by component
+    vi.mocked(useTraceEvaluations).mockReturnValue({
+      data: mockEvalData,
+      isLoading: false,
+      error: null,
+    });
+
+    const { EvaluationDetailPage } = await import('../pages/EvaluationDetailPage.js');
+    const { container } = render(<EvaluationDetailPage traceId="trace-123" />);
+
+    expect(container.textContent).toContain('relevance Evaluations');
+    expect(container.textContent).toContain('View all evaluations');
+    const cards = container.querySelectorAll('.eval-detail-card');
+    expect(cards.length).toBe(1);
   });
 
   it('renders loading state', async () => {

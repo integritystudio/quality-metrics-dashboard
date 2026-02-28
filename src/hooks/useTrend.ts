@@ -28,6 +28,7 @@ export interface TrendResponse {
   totalEvaluations: number;
   overallPercentiles: PercentileSnapshot | null;
   trendData: TrendBucket[];
+  narrowed?: boolean;
 }
 
 export function useTrend(metricName: string, period: Period, buckets = 7) {

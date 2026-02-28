@@ -68,7 +68,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
         <div className="view-section">
           <h3 className="section-heading">Evaluation Summary</h3>
           <div className="card" style={{ padding: 16 }}>
-            <EvaluationEventOverlay evaluations={data.evaluations} />
+            <EvaluationEventOverlay evaluations={data.evaluations} traceId={traceId} />
           </div>
         </div>
       )}

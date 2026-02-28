@@ -7,7 +7,13 @@ import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
 
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
-  const { data: evaluations, isLoading, error } = useTraceEvaluations(traceId);
+  const { data: allEvaluations, isLoading, error } = useTraceEvaluations(traceId);
+
+  const metricFilter = new URLSearchParams(window.location.search).get('metric');
+
+  const evaluations = metricFilter && allEvaluations
+    ? allEvaluations.filter(ev => ev.evaluationName === metricFilter)
+    : allEvaluations;
 
   if (isLoading) {
     return (
@@ -42,11 +48,15 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
     );
   }
 
+  const heading = metricFilter
+    ? `${metricFilter} Evaluations`
+    : 'Trace Evaluations';
+
   return (
     <div>
       <Link href="/" className="back-link">&larr; Back to dashboard</Link>
       <div className="eval-detail-header">
-        <h2 style={{ fontSize: 18 }}>Trace Evaluations</h2>
+        <h2 style={{ fontSize: 18 }}>{heading}</h2>
         <div className="eval-detail-meta">
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>
             {traceId}
@@ -57,6 +67,14 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
           <Link href={`/traces/${traceId}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>
             View trace &rarr;
           </Link>
+          {metricFilter && (
+            <Link
+              href={`/evaluations/trace/${traceId}`}
+              style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}
+            >
+              View all evaluations
+            </Link>
+          )}
         </div>
       </div>
 
@@ -94,7 +112,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
             </div>
           )}
 
-          <details style={{ marginTop: 12 }}>
+          <details open style={{ marginTop: 12 }}>
             <summary className="cot-summary">Provenance &amp; Audit Trail</summary>
             <div style={{ paddingTop: 8 }}>
               <ProvenancePanel

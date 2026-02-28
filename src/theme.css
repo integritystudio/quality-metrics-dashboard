@@ -626,6 +626,10 @@ details[open] > .cot-summary::before {
   margin-bottom: 16px;
 }
 
+.eval-summary-card:hover {
+  border-color: var(--accent) !important;
+}
+
 /* Compound alert card */
 .alert-compound {
   border-left-width: 4px;
