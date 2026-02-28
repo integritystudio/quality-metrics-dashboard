@@ -132,7 +132,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
       <Link href="/" className="back-link">&larr; Back to dashboard</Link>
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="metric-card-header">
-          <h2 style={{ fontSize: 18 }}>{detail.displayName}</h2>
+          <h2 className="page-heading">{detail.displayName}</h2>
           <StatusBadge status={detail.status} />
         </div>
         <div style={{ display: 'flex', gap: 32, marginTop: 12, flexWrap: 'wrap' }}>

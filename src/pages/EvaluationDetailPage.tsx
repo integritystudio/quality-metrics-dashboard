@@ -6,12 +6,13 @@ import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { PageShell } from '../components/PageShell.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
-import { Link } from 'wouter';
+import { Link, useSearch } from 'wouter';
 
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
   const { data: allEvaluations, isLoading, error } = useTraceEvaluations(traceId);
 
-  const metricFilter = new URLSearchParams(window.location.search).get('metric');
+  const search = useSearch();
+  const metricFilter = new URLSearchParams(search).get('metric');
 
   const evaluations = metricFilter && allEvaluations
     ? allEvaluations.filter(ev => ev.evaluationName === metricFilter)

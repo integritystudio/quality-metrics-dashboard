@@ -1,13 +1,5 @@
-import { scoreColorBand, type ScoreColorBand } from '../lib/quality-utils.js';
+import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
 import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-
-const SCORE_COLORS: Record<ScoreColorBand, string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-};
 
 function segmentColor(contribution: CQIContribution): string {
   const band = scoreColorBand(contribution.rawScore, 'maximize');

@@ -173,8 +173,6 @@ export function getRoleFeatureConfig(role: FeatureRoleType): RoleFeatureConfig {
   return ROLE_FEATURE_CONFIG[role];
 }
 
-// -- Timestamp formatting ---------------------------------------------------
-
 // -- Path/byte formatters ---------------------------------------------------
 
 export function shortPath(fullPath: string): string {
