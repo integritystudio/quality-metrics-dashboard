@@ -248,8 +248,8 @@ export function prioritizeTraces(
     const evals = evalsByTrace.get(traceId) ?? [];
 
     const scores = evals
-      .filter(e => isValidScore(e.scoreValue))
-      .map(e => e.scoreValue);
+      .map(e => e.scoreValue)
+      .filter(isValidScore);
     const worstScore = scores.length > 0
       ? scores.reduce((min, v) => v < min ? v : min, Infinity)
       : 1.0; // unevaluated traces get lowest priority
@@ -433,7 +433,7 @@ function computeSpanLatency(spans: SessionSpan[]) {
     const sorted = durations.sort((a, b) => a - b);
     hookLatency[name] = {
       count: sorted.length,
-      avg: +(arrayAvg(sorted)!).toFixed(1),
+      avg: +(arrayAvg(sorted) ?? 0).toFixed(1),
       p50: +percentile(sorted, 50).toFixed(1),
       p95: +percentile(sorted, 95).toFixed(1),
       max: +sorted[sorted.length - 1].toFixed(1),
@@ -673,7 +673,7 @@ async function main(): Promise<void> {
     const metricTimeSeries = new Map<string, number[]>();
     const corrMetricNames: string[] = [];
     for (const [name, metricEvals] of grouped) {
-      metricTimeSeries.set(name, metricEvals.filter(e => isValidScore(e.scoreValue)).map(e => e.scoreValue));
+      metricTimeSeries.set(name, metricEvals.map(e => e.scoreValue).filter(isValidScore));
       corrMetricNames.push(name);
     }
     const correlations = computeCorrelationMatrix(metricTimeSeries);
@@ -760,7 +760,7 @@ async function main(): Promise<void> {
       for (const ev of evaluations) {
         const ts = new Date(ev.timestamp).getTime();
         const idx = Math.min(Math.floor((ts - start.getTime()) / bucketMs), TREND_BUCKETS - 1);
-        if (idx >= 0 && ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+        if (idx >= 0 && isValidScore(ev.scoreValue)) {
           timeBuckets[idx].scores.push(ev.scoreValue);
           timeBuckets[idx].evals.push(ev);
         }
