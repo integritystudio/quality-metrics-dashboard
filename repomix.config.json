@@ -1,38 +1,36 @@
-json
 {
- "$schema": "https://repomix.com/schemas/latest/schema.json",
-  },
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
   "docs": {
-    "output.filepath": "docs/repomix/docs.xml,"
+    "output.filepath": "docs/repomix/docs.xml",
     "enabled": true,
     "keep_signatures": true,
     "keep_interfaces": true,
     "keep_docstrings": true,
-    "output.git.includeLogs: 20,
-    "output.parsableStyle"
-  }
+    "output.git.includeLogs": 20,
+    "output.parsableStyle": true
+  },
   "ignore": {
     "patterns": ["tmp/", "*.log", "dist/"],
-    "ignore.useDefaultPatterns": true,
-  }
+    "ignore.useDefaultPatterns": true
+  },
   "security": {
-    "output.filepath: "/",
+    "output.filepath": "/",
     "checkSecrets": true,
-    "security.enableSecurityCheck" : true,
-  }
-  "full" {
-
-    "output.filepath": '/',
+    "security.enableSecurityCheck": true
+  },
+  "full": {
+    "output.filepath": "/",
     "compress": false,
-    "patterns": ["tmp/", "*.log", "dist/"], "include": ["src/**/*"],
-    "output.showLineNumbers": true,
-
-  }
-  "review" {
-    "output.filepath": "docs/repomix/debug.xml"
-    "sortByChanges":
+    "patterns": ["tmp/", "*.log", "dist/"],
+    "include": ["src/**/*"],
+    "output.showLineNumbers": true
+  },
+  "review": {
+    "output.filepath": "docs/repomix/debug.xml",
+    "sortByChanges": true,
     "MaxByTime": true,
     "includeDiffs": true,
     "includeLogs": true,
     "includeLogsCount": 50
+  }
 }
