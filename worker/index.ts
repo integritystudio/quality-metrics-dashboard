@@ -104,6 +104,22 @@ app.get('/api/sessions/:sessionId', async (c) => {
   return c.json(data);
 });
 
+app.get('/api/agents', async (c) => {
+  const data = await c.env.DASHBOARD.get('meta:agents', 'json');
+  if (!data) return c.json([]);
+  return c.json(data);
+});
+
+app.get('/api/agents/detail/:agentId', async (c) => {
+  const agentId = c.req.param('agentId');
+  if (!agentId || agentId.length > 200 || !/^[\w:.-]+$/.test(agentId)) {
+    return c.json({ error: 'Invalid agentId' }, 400);
+  }
+  const data = await c.env.DASHBOARD.get(`agent:${agentId}`, 'json');
+  if (!data) return c.json({ error: `No data for agent: ${agentId}` }, 404);
+  return c.json(data);
+});
+
 app.get('/api/agents/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
   const session = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json') as Record<string, unknown> | null;
@@ -115,19 +131,6 @@ app.get('/api/agents/:sessionId', async (c) => {
     evaluations: session['evaluations'] ?? [],
     agentMap: {},
   });
-});
-
-app.get('/api/agent', async (c) => {
-  const data = await c.env.DASHBOARD.get('meta:agents', 'json');
-  if (!data) return c.json([]);
-  return c.json(data);
-});
-
-app.get('/api/agent/:agentId', async (c) => {
-  const agentId = c.req.param('agentId');
-  const data = await c.env.DASHBOARD.get(`agent:${agentId}`, 'json');
-  if (!data) return c.json({ error: `No data for agent: ${agentId}` }, 404);
-  return c.json(data);
 });
 
 app.get('/api/compliance/sla', async (c) => {

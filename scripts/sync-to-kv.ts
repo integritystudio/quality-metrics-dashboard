@@ -864,7 +864,8 @@ async function main(): Promise<void> {
   // Cross-session agent accumulator
   type AgentAccumulator = {
     totalInvocations: number; totalErrors: number; rateLimitEvents: number;
-    totalOutputSize: number; durations: number[]; truncatedCount: number; emptyCount: number;
+    totalOutputSize: number; weightedDurationSum: number; sessionDurations: number[];
+    truncatedCount: number; emptyCount: number;
     sessions: Array<{
       sessionId: string; invocations: number; errors: number; hasRateLimit: boolean;
       avgDurationMs: number; date: string | null; project: string | null;
@@ -887,7 +888,8 @@ async function main(): Promise<void> {
       if (!acc) {
         acc = {
           totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
-          totalOutputSize: 0, durations: [], truncatedCount: 0, emptyCount: 0, sessions: [],
+          totalOutputSize: 0, weightedDurationSum: 0, sessionDurations: [],
+          truncatedCount: 0, emptyCount: 0, sessions: [],
         };
         agentCrossSession.set(ag.agentName, acc);
       }
@@ -897,9 +899,10 @@ async function main(): Promise<void> {
       acc.totalOutputSize += ag.avgOutputSize * ag.invocations;
       acc.truncatedCount += ag.truncatedCount;
       acc.emptyCount += ag.emptyCount;
-      // Reconstruct per-invocation durations from session avg (approximation)
+      // One duration entry per session (weighted avg computed from sum + totalInvocations)
       if (ag.avgDurationMs > 0) {
-        for (let i = 0; i < ag.invocations; i++) acc.durations.push(ag.avgDurationMs);
+        acc.weightedDurationSum += ag.avgDurationMs * ag.invocations;
+        acc.sessionDurations.push(ag.avgDurationMs);
       }
       acc.sessions.push({
         sessionId,
@@ -931,21 +934,22 @@ async function main(): Promise<void> {
       return b.date.localeCompare(a.date);
     });
     const lastSeen = acc.sessions[0]?.date ?? null;
+    const totalSessions = acc.sessions.length;
     const sessions = acc.sessions.slice(0, 20);
-    const sortedDurations = acc.durations.sort((a, b) => a - b);
+    const sortedSessionDurations = acc.sessionDurations.sort((a, b) => a - b);
 
     const detail = {
       agentName,
-      totalSessions: acc.sessions.length,
+      totalSessions,
       totalInvocations: acc.totalInvocations,
       totalErrors: acc.totalErrors,
       errorRate: acc.totalInvocations > 0 ? +(acc.totalErrors / acc.totalInvocations).toFixed(4) : 0,
       rateLimitEvents: acc.rateLimitEvents,
       avgOutputSize: acc.totalInvocations > 0 ? Math.round(acc.totalOutputSize / acc.totalInvocations) : 0,
-      avgDurationMs: sortedDurations.length > 0
-        ? Math.round(sortedDurations.reduce((a, b) => a + b, 0) / sortedDurations.length)
+      avgDurationMs: acc.totalInvocations > 0
+        ? Math.round(acc.weightedDurationSum / acc.totalInvocations)
         : 0,
-      p95DurationMs: sortedDurations.length > 0 ? Math.round(percentile(sortedDurations, 95)) : 0,
+      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(percentile(sortedSessionDurations, 95)) : 0,
       truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(4) : 0,
       emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(4) : 0,
       lastSeen,
@@ -956,7 +960,7 @@ async function main(): Promise<void> {
     agentEntries.push({ key: `agent:${agentName}`, value: JSON.stringify(detail) });
     agentSummaryList.push({
       agentName,
-      totalSessions: acc.sessions.length,
+      totalSessions,
       totalInvocations: acc.totalInvocations,
       errorRate: detail.errorRate,
       lastSeen,
