@@ -86,6 +86,7 @@
   --label-letter-spacing: 0.5px;
 
   /* Transitions */
+  --transition-fast: 0.15s ease;
   --transition-bar: width 0.3s ease;
 
   /* Shadows */
@@ -101,6 +102,16 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* Shared uppercase label pattern */
+.summary-count .label,
+.sla-table th,
+.section-label,
+.cot-summary,
+.agreement-grid .ag-header {
+  text-transform: uppercase;
+  letter-spacing: var(--label-letter-spacing);
 }
 
 body {
@@ -182,8 +193,6 @@ body {
 .summary-count .label {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: var(--label-letter-spacing);
 }
 
 /* Status badges */
@@ -304,8 +313,6 @@ body {
   color: var(--text-secondary);
   font-weight: 500;
   font-size: var(--label-font-size);
-  text-transform: uppercase;
-  letter-spacing: var(--label-letter-spacing);
 }
 .sla-table td {
   padding: var(--space-2) var(--space-3);
@@ -339,7 +346,7 @@ body {
   border: 1px solid var(--border);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: var(--label-font-size);
   white-space: nowrap;
   z-index: 10;
 }
@@ -349,7 +356,7 @@ body {
 .histogram-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--label-font-size);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
@@ -360,15 +367,17 @@ body {
   border-collapse: collapse;
   font-size: var(--font-size-sm);
 }
+.eval-table th,
+.eval-table td {
+  padding: var(--space-1-5) 10px;
+}
 .eval-table th {
   text-align: left;
-  padding: var(--space-1-5) 10px;
   color: var(--text-secondary);
   font-weight: 500;
   font-size: var(--font-size-xs);
 }
 .eval-table td {
-  padding: var(--space-1-5) 10px;
   font-family: var(--font-mono);
 }
 .eval-table .explanation {
@@ -406,7 +415,7 @@ body {
   font-size: 14px;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 .tab-btn:hover {
   color: var(--text-primary);
@@ -530,8 +539,6 @@ body {
 .section-label {
   font-size: var(--label-font-size);
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--label-letter-spacing);
   margin-bottom: var(--space-1);
 }
 
@@ -587,7 +594,7 @@ body {
   z-index: 20;
   font-size: var(--font-size-xs);
   white-space: normal;
-  animation: fade-in 0.15s ease-in-out;
+  animation: fade-in var(--transition-fast);
 }
 .score-badge-wrapper:hover .score-badge-tooltip,
 .score-badge-wrapper:focus-within .score-badge-tooltip {
@@ -625,8 +632,6 @@ body {
   color: var(--text-secondary);
   cursor: pointer;
   padding: var(--space-1) 0;
-  text-transform: uppercase;
-  letter-spacing: var(--label-letter-spacing);
   list-style: none;
 }
 .cot-summary::-webkit-details-marker {
@@ -637,7 +642,7 @@ body {
   display: inline-block;
   margin-right: var(--space-1-5);
   font-size: 9px;
-  transition: transform 0.15s;
+  transition: transform var(--transition-fast);
 }
 details[open] > .cot-summary::before {
   transform: rotate(90deg);
@@ -750,7 +755,7 @@ details[open] > .cot-summary::before {
 
 /* Worst explanation preview on MetricCard */
 .metric-worst {
-  font-size: 11px;
+  font-size: var(--label-font-size);
   color: var(--text-muted);
   margin-top: var(--space-2);
   line-height: 1.4;
@@ -815,7 +820,7 @@ details[open] > .cot-summary::before {
   margin-bottom: var(--space-3);
 }
 .confidence-method {
-  font-size: 11px;
+  font-size: var(--label-font-size);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
@@ -829,8 +834,6 @@ details[open] > .cot-summary::before {
 .agreement-grid .ag-header {
   color: var(--text-muted);
   font-size: var(--label-font-size);
-  text-transform: uppercase;
-  letter-spacing: var(--label-letter-spacing);
   font-family: var(--font-body);
   padding-bottom: var(--space-1);
   border-bottom: 1px solid var(--border-subtle);
