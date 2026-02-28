@@ -78,8 +78,14 @@
   --radius-pill: 12px;
 
   /* Font sizes */
+  --font-size-2xs: 9px;
   --font-size-xs: 12px;
   --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 28px;
 
   /* Label typography */
   --label-font-size: 11px;
@@ -119,7 +125,7 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -186,7 +192,7 @@ body {
   text-align: center;
 }
 .summary-count .value {
-  font-size: 24px;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   font-family: var(--font-mono);
 }
@@ -236,7 +242,7 @@ body {
   margin-bottom: var(--space-3);
 }
 .metric-card-header h3 {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
 }
 
@@ -245,7 +251,7 @@ body {
   font-size: var(--font-size-sm);
 }
 .metric-values .primary {
-  font-size: 28px;
+  font-size: var(--font-size-2xl);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -279,7 +285,7 @@ body {
 .alert-item.critical { border-left-color: var(--status-critical); }
 .alert-item.warning { border-left-color: var(--status-warning); }
 .alert-item .alert-message {
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 .alert-item .alert-meta {
   font-size: var(--font-size-xs);
@@ -305,7 +311,7 @@ body {
 .sla-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 .sla-table th {
   text-align: left;
@@ -412,7 +418,7 @@ body {
   color: var(--text-secondary);
   padding: var(--space-2) var(--space-4);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   transition: color var(--transition-fast), border-color var(--transition-fast);
@@ -456,7 +462,7 @@ body {
   margin-bottom: var(--space-6);
 }
 .header h1 {
-  font-size: 20px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
 }
 
@@ -530,7 +536,7 @@ body {
 
 /* Section headings */
 .section-heading {
-  font-size: 16px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   margin-bottom: var(--space-4);
   margin-top: var(--space-8);
@@ -641,7 +647,7 @@ body {
   content: '\25B6';
   display: inline-block;
   margin-right: var(--space-1-5);
-  font-size: 9px;
+  font-size: var(--font-size-2xs);
   transition: transform var(--transition-fast);
 }
 details[open] > .cot-summary::before {
