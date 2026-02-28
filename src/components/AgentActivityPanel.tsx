@@ -43,15 +43,13 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
   );
 
   const toggleSort = useCallback((key: SortKey) => {
-    setSort(prev => {
-      if (prev === key) {
-        setAsc(v => !v);
-        return prev;
-      }
+    if (key === sort) {
+      setAsc(v => !v);
+    } else {
+      setSort(key);
       setAsc(false);
-      return key;
-    });
-  }, []);
+    }
+  }, [sort]);
 
   if (agents.length === 0) {
     return (
@@ -309,6 +307,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             {agent.sessionIds.length === 0 && (
                               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>none</span>
                             )}
+                            {/* sessionCount === total unique sessions; sessionIds is capped at 50 */}
                             {agent.sessionIdsTruncated && (
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                                 +{agent.sessionCount - agent.sessionIds.length} more
@@ -349,7 +348,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             )}
                             {agent.traceIdsTruncated && (
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                +more
+                                +{agent.traceIdsTotal - agent.traceIds.length} more
                               </span>
                             )}
                           </div>

@@ -12,11 +12,13 @@ export const agentRoutes = new Hono();
  * Returns aggregate agent stats across all sessions for the given period.
  */
 const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
+const MAX_IDS = 50;
+const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
 agentRoutes.get('/agents', async (c) => {
   const periodParam = c.req.query('period') ?? '30d';
   const periodDays = VALID_PERIODS[periodParam];
-  if (!periodDays) {
+  if (periodDays === undefined) {
     return c.json({ error: `Invalid period: ${periodParam}. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, 400);
   }
   const now = new Date();
@@ -76,7 +78,8 @@ agentRoutes.get('/agents', async (c) => {
         if (!traceToAgents.has(span.traceId)) traceToAgents.set(span.traceId, new Set());
         traceToAgents.get(span.traceId)!.add(name);
       }
-      const src = (span.attributes?.['agent.source_type'] as string | undefined) ?? 'unknown';
+      const rawSrc = (span.attributes?.['agent.source_type'] as string | undefined) ?? 'unknown';
+      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
       acc[name].sourceTypes[src] = (acc[name].sourceTypes[src] ?? 0) + 1;
     }
 
@@ -96,8 +99,6 @@ agentRoutes.get('/agents', async (c) => {
         agentEvalAcc[agent][ev.evaluationName].push(ev.scoreValue);
       }
     }
-
-    const MAX_IDS = 50;
 
     const agents = Object.entries(acc).map(([agentName, d]) => {
       // Compute evaluation summary for this agent
@@ -123,9 +124,10 @@ agentRoutes.get('/agents', async (c) => {
         errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(3) : 0,
         rateLimitCount: d.rateLimitCount,
         avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-        sessionCount: d.sessions.size,
+        sessionCount: d.sessions.size,  // total unique sessions (invariant: >= sessionIds.length)
         sessionIds: allSessionIds.slice(0, MAX_IDS),
         sessionIdsTruncated: allSessionIds.length > MAX_IDS,
+        traceIdsTotal: allTraceIdsList.length,
         traceIds: allTraceIdsList.slice(0, MAX_IDS),
         traceIdsTruncated: allTraceIdsList.length > MAX_IDS,
         sourceTypes: d.sourceTypes,

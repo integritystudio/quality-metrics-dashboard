@@ -20,6 +20,7 @@ export interface AgentStat {
   sessionCount: number;
   sessionIds: string[];
   sessionIdsTruncated: boolean;
+  traceIdsTotal: number;
   traceIds: string[];
   traceIdsTruncated: boolean;
   sourceTypes: Record<string, number>;
@@ -34,6 +35,7 @@ interface AgentStatsResponse {
   agents: AgentStat[];
 }
 
+/** Shallow shape check — validates envelope fields only, not individual AgentStat elements. */
 function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResponse {
   if (!data || typeof data !== 'object') throw new Error('Invalid response shape');
   const obj = data as Record<string, unknown>;
