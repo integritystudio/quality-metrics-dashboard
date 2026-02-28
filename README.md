@@ -78,6 +78,67 @@ See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
 | `GET /api/compliance/verifications` | Human verifications (`?period=7d`) |
 | `GET /api/health` | Health check + last sync timestamp |
 
+## Project Structure (99,603 tokens)
+
+```
+src/
+├── App.tsx                          4,178
+├── main.tsx                           334
+├── theme.css                        8,047
+├── types.ts                           341
+├── api/                            19,490
+│   ├── data-loader.ts               2,243
+│   ├── server.ts                      439
+│   └── routes/                     16,808
+│       ├── agents.ts                2,598
+│       ├── compliance.ts              815
+│       ├── correlations.ts            519
+│       ├── coverage.ts                876
+│       ├── dashboard.ts             1,332
+│       ├── evaluations.ts             246
+│       ├── metrics.ts               2,075
+│       ├── pipeline.ts                562
+│       ├── quality.ts                 709
+│       ├── sessions.ts             4,406
+│       ├── traces.ts                  280
+│       └── trends.ts               2,390
+├── components/                     41,237
+│   ├── views/                       2,461
+│   ├── AgentActivityPanel.tsx       5,323
+│   ├── EvaluationTable.tsx          3,165
+│   ├── TrendChart.tsx               2,125
+│   ├── CorrelationHeatmap.tsx       1,919
+│   ├── CoverageGrid.tsx            1,946
+│   ├── TrendSeries.tsx              1,634
+│   ├── EvaluationExpandedRow.tsx    1,675
+│   ├── ConfidencePanel.tsx          1,590
+│   ├── ProvenancePanel.tsx          1,567
+│   ├── SpanTree.tsx                 1,536
+│   ├── HealthOverview.tsx           1,406
+│   ├── ScoreBadge.tsx               1,231
+│   ├── AlertList.tsx                1,192
+│   ├── PipelineFunnel.tsx           1,096
+│   └── ... (20 more components)
+├── contexts/                        1,973
+│   ├── KeyboardNavContext.tsx        1,330
+│   └── RoleContext.tsx                643
+├── hooks/                           5,548
+│   ├── useSessionDetail.ts          1,320
+│   ├── useQualityLive.ts              674
+│   ├── useAgentStats.ts               548
+│   └── ... (10 more hooks)
+├── lib/                             2,358
+│   ├── quality-utils.ts             2,298
+│   ├── api.ts                          33
+│   └── constants.ts                    27
+└── pages/                          16,086
+    ├── SessionDetailPage.tsx        9,648
+    ├── EvaluationDetailPage.tsx     1,413
+    ├── AgentSessionPage.tsx         1,036
+    ├── CompliancePage.tsx             987
+    └── ... (5 more pages)
+```
+
 ## Production Deployment
 
 ```bash
