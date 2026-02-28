@@ -69,6 +69,7 @@
   --accent-alpha-20: rgba(59, 130, 246, 0.2);
 
   /* Critical alpha */
+  --critical-alpha-20: rgba(240, 68, 56, 0.2);
   --critical-alpha-40: rgba(240, 68, 56, 0.4);
   --critical-alpha-60: rgba(240, 68, 56, 0.6);
 
@@ -102,7 +103,7 @@
   --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
   --shadow-glow-healthy: 0 0 12px rgba(38,217,127,0.15);
   --shadow-glow-warning: 0 0 12px rgba(229,160,13,0.15);
-  --shadow-glow-critical: 0 0 12px rgba(240,68,56,0.2);
+  --shadow-glow-critical: 0 0 12px var(--critical-alpha-20);
 }
 
 * {
