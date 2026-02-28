@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceId, loadEvaluationsByTraceIds } from '../data-loader.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 
@@ -13,13 +13,14 @@ export const agentRoutes = new Hono();
  */
 const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
 const MAX_IDS = 50;
+// 'unknown' = attribute absent on span (explicit default); 'other' = unrecognized value (clamped)
 const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
 agentRoutes.get('/agents', async (c) => {
   const periodParam = c.req.query('period') ?? '30d';
   const periodDays = VALID_PERIODS[periodParam];
   if (periodDays === undefined) {
-    return c.json({ error: `Invalid period: ${periodParam}. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, 400);
+    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, 400);
   }
   const now = new Date();
   const endDate = now.toISOString().split('T')[0];
@@ -176,12 +177,8 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     // Compute multi-agent evaluation
     const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
 
-    // Load evaluations from all traces in the session (sequential to avoid unbounded I/O)
-    const evalBatches = [];
-    for (const id of traceIds) {
-      evalBatches.push(await loadEvaluationsByTraceId(id));
-    }
-    const evaluations = evalBatches.flat();
+    // Bulk-load evaluations for all traces in the session
+    const evaluations = await loadEvaluationsByTraceIds([...traceIds]);
 
     return c.json({
       sessionId,

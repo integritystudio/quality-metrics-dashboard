@@ -20,7 +20,7 @@ export interface AgentStat {
   sessionCount: number;
   sessionIds: string[];
   sessionIdsTruncated: boolean;
-  traceIdsTotal: number;
+  traceIdsTotal?: number;
   traceIds: string[];
   traceIdsTruncated: boolean;
   sourceTypes: Record<string, number>;

@@ -42,6 +42,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
     [agents],
   );
 
+  // React 18+ batches both setState calls in event handlers atomically
   const toggleSort = useCallback((key: SortKey) => {
     if (key === sort) {
       setAsc(v => !v);
@@ -348,7 +349,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             )}
                             {agent.traceIdsTruncated && (
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                +{agent.traceIdsTotal - agent.traceIds.length} more
+                                +{(agent.traceIdsTotal ?? 0) - agent.traceIds.length} more
                               </span>
                             )}
                           </div>

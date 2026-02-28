@@ -17,7 +17,7 @@ npm run dev          # Vite + Hono API on :3001
 |------|--------|--------|
 | 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion |
 | 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination |
-| 3. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta > metrics > trends > traces) |
+| 3. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
 npm run populate -- --seed          # offline (synthetic judge scores)
@@ -58,6 +58,26 @@ npm run dashboard:populate:schedule    # start cron scheduler
 
 See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
 
+## API Routes (Worker)
+
+| Route | Description |
+|-------|-------------|
+| `GET /api/dashboard` | Dashboard summary (`?period=7d&role=executive`) |
+| `GET /api/metrics/:name` | Metric detail |
+| `GET /api/trends/:name` | Metric trend data (`?period=7d`) |
+| `GET /api/evaluations/trace/:traceId` | Evaluations for a trace |
+| `GET /api/traces/:traceId` | Trace spans + evaluations |
+| `GET /api/correlations` | Metric correlation matrix (`?period=30d`) |
+| `GET /api/coverage` | Evaluation coverage heatmap (`?period=7d&inputKey=traceId`) |
+| `GET /api/pipeline` | Populate pipeline status (`?period=7d`) |
+| `GET /api/sessions/:sessionId` | Session detail |
+| `GET /api/agents` | Cross-session agent list (all agents, sorted by invocations) |
+| `GET /api/agents/detail/:agentId` | Cross-session agent stats (RED metrics, output quality, last 20 sessions) |
+| `GET /api/agents/:sessionId` | Per-session agent activity |
+| `GET /api/compliance/sla` | SLA compliance (`?period=7d`) |
+| `GET /api/compliance/verifications` | Human verifications (`?period=7d`) |
+| `GET /api/health` | Health check + last sync timestamp |
+
 ## Production Deployment
 
 ```bash
@@ -71,6 +91,6 @@ npx tsx scripts/sync-to-kv.ts \
 
 **KV sync notes:**
 - Delta sync with content-hash state file (`scripts/.kv-sync-state.json`)
-- Priority: meta/dashboard > metrics > trends > traces
+- Priority: meta/dashboard/agent > metrics > trends > traces
 - Cloudflare free tier has daily write limits; multiple runs needed for full sync
 - Traces are lowest priority — may need `--budget=5000` and multiple passes
