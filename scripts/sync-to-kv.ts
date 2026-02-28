@@ -38,8 +38,18 @@ import {
 } from '../../dist/lib/quality-feature-engineering.js';
 import { computeMultiAgentEvaluation } from '../../dist/lib/quality-multi-agent.js';
 
-const NAMESPACE_ID = process.env.KV_NAMESPACE_ID;
-if (!NAMESPACE_ID) throw new Error('KV_NAMESPACE_ID env var is required');
+function resolveNamespaceId(): string {
+  if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
+  // Fall back to wrangler.toml kv_namespaces[0].id
+  const tomlPath = join(import.meta.dirname ?? '.', '..', 'wrangler.toml');
+  if (existsSync(tomlPath)) {
+    const toml = readFileSync(tomlPath, 'utf8');
+    const match = toml.match(/\[\[kv_namespaces\]\][\s\S]*?^id\s*=\s*"([^"]+)"/m);
+    if (match) return match[1];
+  }
+  throw new Error('KV_NAMESPACE_ID env var not set and could not resolve from wrangler.toml');
+}
+const NAMESPACE_ID = resolveNamespaceId();
 
 function parseIntArg(args: string[], flag: string, defaultValue: number): number {
   const match = args.find(a => a.startsWith(`--${flag}=`));
@@ -724,14 +734,14 @@ async function main(): Promise<void> {
       value: JSON.stringify({ correlations, metrics: corrMetricNames }),
     });
 
-    // Coverage (both inputKey variants)
-    for (const inputKey of ['traceId', 'sessionId'] as const) {
-      const heatmap = computeCoverageHeatmap(grouped, { inputKey });
-      entries.push({
-        key: `coverage:${period}:${inputKey}`,
-        value: JSON.stringify({ period, ...heatmap }),
-      });
-    }
+    // TODO: Re-enable coverage heatmaps once values are capped to stay under KV 25 MB limit
+    // for (const inputKey of ['traceId', 'sessionId'] as const) {
+    //   const heatmap = computeCoverageHeatmap(grouped, { inputKey });
+    //   entries.push({
+    //     key: `coverage:${period}:${inputKey}`,
+    //     value: JSON.stringify({ period, ...heatmap }),
+    //   });
+    // }
 
     // Pipeline
     const pipeline = computePipelineView(grouped, dashboard);
