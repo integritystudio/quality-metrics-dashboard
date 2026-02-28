@@ -61,6 +61,8 @@ const PERIOD_MS: Record<string, number> = {
   '30d': 30 * 24 * 60 * 60 * 1000,
 };
 
+const MAX_SESSION_DURATIONS = 10_000;
+
 const HOOK_NAMES = {
   SESSION_START: 'session-start',
   TOKEN_METRICS: 'token-metrics-extraction',
@@ -477,6 +479,7 @@ interface AgentActivityEntry {
   emptyCount: number;
 }
 
+/** In-memory cross-session accumulator for a single agent. Never serialized directly. */
 interface AgentAccumulator {
   totalInvocations: number;
   totalErrors: number;
@@ -942,10 +945,12 @@ async function main(): Promise<void> {
       acc.totalOutputSize += ag.totalOutputSize;
       acc.truncatedCount += ag.truncatedCount;
       acc.emptyCount += ag.emptyCount;
-      // One duration entry per session (weighted avg computed from sum + totalInvocations)
+      // One duration entry per session; capped to bound memory for p95 computation
       if (ag.avgDurationMs > 0) {
         acc.weightedDurationSum += ag.avgDurationMs * ag.invocations;
-        acc.sessionDurations.push(ag.avgDurationMs);
+        if (acc.sessionDurations.length < MAX_SESSION_DURATIONS) {
+          acc.sessionDurations.push(ag.avgDurationMs);
+        }
       }
       acc.sessions.push({
         sessionId,
