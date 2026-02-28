@@ -287,7 +287,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             letterSpacing: '0.5px',
                             marginBottom: 6,
                           }}>
-                            Sessions ({agent.sessionIds.length})
+                            Sessions ({agent.sessionCount})
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {agent.sessionIds.map(sid => (
