@@ -61,6 +61,12 @@ export async function loadEvaluationsByTraceId(
   });
 }
 
+/**
+ * Loads evaluations matching any of the given traceIds.
+ * NOTE: O(all_evals) — fetches all evaluations for the date range then
+ * filters in memory because the backend lacks a multi-traceId query.
+ * Callers should keep date ranges narrow to limit the scan cost.
+ */
 export async function loadEvaluationsByTraceIds(
   traceIds: string[],
   startDate?: string,

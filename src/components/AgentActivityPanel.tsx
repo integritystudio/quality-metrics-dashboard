@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
@@ -7,16 +7,14 @@ import { Sparkline } from './Sparkline.js';
 const AGENT_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
 const COLUMN_COUNT = 7;
+const ERROR_RATE_WARNING_THRESHOLD = 0.1;
+const RATE_LIMIT_BADGE_BG = '#1f1a0d';
 
 type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
 
-function agentColor(name: string, allNames: string[]): string {
-  return AGENT_COLORS[allNames.indexOf(name) % AGENT_COLORS.length];
-}
-
 function errorRateColor(rate: number): string {
   if (rate === 0) return 'var(--status-healthy)';
-  if (rate < 0.1) return 'var(--status-warning)';
+  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
   return 'var(--status-critical)';
 }
 
@@ -39,6 +37,22 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
   const [asc, setAsc] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const colorIndex = useMemo(
+    () => new Map(agents.map((a, i) => [a.agentName, AGENT_COLORS[i % AGENT_COLORS.length]])),
+    [agents],
+  );
+
+  const toggleSort = useCallback((key: SortKey) => {
+    setSort(prev => {
+      if (prev === key) {
+        setAsc(v => !v);
+        return prev;
+      }
+      setAsc(false);
+      return key;
+    });
+  }, []);
+
   if (agents.length === 0) {
     return (
       <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -47,22 +61,12 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
     );
   }
 
-  const allNames = agents.map(a => a.agentName);
   const maxInvocations = Math.max(...agents.map(a => a.invocations), 1);
 
   const sorted = [...agents].sort((a, b) => {
     const diff = a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0;
     return asc ? diff : -diff;
   });
-
-  function toggleSort(key: SortKey) {
-    if (sort === key) {
-      setAsc(v => !v);
-    } else {
-      setSort(key);
-      setAsc(false);
-    }
-  }
 
   const sortIndicator = (key: SortKey) =>
     sort === key ? (asc ? ' \u2191' : ' \u2193') : '';
@@ -91,7 +95,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
         </thead>
         <tbody>
           {sorted.map((agent) => {
-            const color = agentColor(agent.agentName, allNames);
+            const color = colorIndex.get(agent.agentName) ?? AGENT_COLORS[0];
             const errColor = errorRateColor(agent.errorRate);
             const invPct = (agent.invocations / maxInvocations) * 100;
             const topSource = Object.entries(agent.sourceTypes).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -99,9 +103,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
             const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
 
             return (
-              <>
+              <Fragment key={agent.agentName}>
                 <tr
-                  key={agent.agentName}
                   className={isExpanded ? 'eval-row-expanded' : ''}
                   style={{ verticalAlign: 'middle', cursor: hasLinks ? 'pointer' : undefined }}
                   onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
@@ -196,7 +199,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         fontFamily: 'var(--font-mono)',
                         fontSize: 11,
                         color: 'var(--status-warning)',
-                        background: '#1f1a0d',
+                        background: RATE_LIMIT_BADGE_BG,
                         padding: '1px 6px',
                         borderRadius: 10,
                       }}>
@@ -225,7 +228,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                 {/* Expanded row: eval summary + sessions + traces */}
                 {isExpanded && (
-                  <tr key={`${agent.agentName}-detail`} className="eval-expanded-panel">
+                  <tr className="eval-expanded-panel">
                     <td colSpan={COLUMN_COUNT} style={{ padding: '0 10px 10px', borderBottom: '1px solid var(--border)' }}>
                       {/* Evaluation summary */}
                       <EvalSummaryRow evalSummary={agent.evalSummary} />
@@ -255,7 +258,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               data={agent.dailyCounts}
                               width={160}
                               height={28}
-                              color={agentColor(agent.agentName, allNames)}
+                              color={colorIndex.get(agent.agentName) ?? AGENT_COLORS[0]}
                               label={`Daily invocations for ${agent.agentName}`}
                             />
                             <span style={{
@@ -306,6 +309,11 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             {agent.sessionIds.length === 0 && (
                               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>none</span>
                             )}
+                            {agent.sessionIdsTruncated && (
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                +{agent.sessionCount - agent.sessionIds.length} more
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -339,13 +347,18 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             {agent.traceIds.length === 0 && (
                               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>none</span>
                             )}
+                            {agent.traceIdsTruncated && (
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                +more
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             );
           })}
         </tbody>
@@ -474,7 +487,7 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
           value: totalInvocations > 0 ? `${overallErrorRate.toFixed(1)}%` : '\u2014',
           color: overallErrorRate === 0
             ? 'var(--status-healthy)'
-            : overallErrorRate < 10
+            : overallErrorRate < ERROR_RATE_WARNING_THRESHOLD * 100
               ? 'var(--status-warning)'
               : 'var(--status-critical)',
         },

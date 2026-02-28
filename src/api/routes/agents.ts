@@ -11,9 +11,14 @@ export const agentRoutes = new Hono();
  * GET /api/agents?period=30d
  * Returns aggregate agent stats across all sessions for the given period.
  */
+const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
+
 agentRoutes.get('/agents', async (c) => {
   const periodParam = c.req.query('period') ?? '30d';
-  const periodDays = periodParam === '24h' ? 1 : periodParam === '7d' ? 7 : 30;
+  const periodDays = VALID_PERIODS[periodParam];
+  if (!periodDays) {
+    return c.json({ error: `Invalid period: ${periodParam}. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, 400);
+  }
   const now = new Date();
   const endDate = now.toISOString().split('T')[0];
   const startDate = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -34,7 +39,7 @@ agentRoutes.get('/agents', async (c) => {
     }
     const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
 
-    // Phase 1: aggregate agent stats from spans
+    // Phase 1: aggregate agent stats from spans (prototype-safe accumulators)
     const acc: Record<string, {
       invocations: number;
       errors: number;
@@ -44,7 +49,7 @@ agentRoutes.get('/agents', async (c) => {
       traceIds: Set<string>;
       sourceTypes: Record<string, number>;
       dailyCounts: number[];
-    }> = {};
+    }> = Object.create(null);
 
     // Build traceId -> agent names mapping for evaluation join
     const traceToAgents = new Map<string, Set<string>>();
@@ -52,7 +57,7 @@ agentRoutes.get('/agents', async (c) => {
     for (const span of result.traces) {
       const name = (span.attributes?.['gen_ai.agent.name'] as string | undefined) ?? 'unknown';
       if (!acc[name]) {
-        acc[name] = { invocations: 0, errors: 0, rateLimitCount: 0, totalOutputSize: 0, sessions: new Set(), traceIds: new Set(), sourceTypes: {}, dailyCounts: new Array(periodDays).fill(0) };
+        acc[name] = { invocations: 0, errors: 0, rateLimitCount: 0, totalOutputSize: 0, sessions: new Set(), traceIds: new Set(), sourceTypes: Object.create(null), dailyCounts: new Array(periodDays).fill(0) };
       }
       acc[name].invocations++;
       // Bucket into daily counts
@@ -79,25 +84,27 @@ agentRoutes.get('/agents', async (c) => {
     const allTraceIds = [...traceToAgents.keys()];
     const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
 
-    // Accumulate per-agent evaluation scores by metric name
-    const agentEvalAcc: Record<string, Record<string, number[]>> = {};
+    // Accumulate per-agent evaluation scores by metric name (prototype-safe)
+    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
     for (const ev of evaluations) {
       if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
       const agentNames = traceToAgents.get(ev.traceId);
       if (!agentNames) continue;
       for (const agent of agentNames) {
-        if (!agentEvalAcc[agent]) agentEvalAcc[agent] = {};
+        if (!agentEvalAcc[agent]) agentEvalAcc[agent] = Object.create(null);
         if (!agentEvalAcc[agent][ev.evaluationName]) agentEvalAcc[agent][ev.evaluationName] = [];
         agentEvalAcc[agent][ev.evaluationName].push(ev.scoreValue);
       }
     }
+
+    const MAX_IDS = 50;
 
     const agents = Object.entries(acc).map(([agentName, d]) => {
       // Compute evaluation summary for this agent
       const evalMetrics = agentEvalAcc[agentName] ?? {};
       const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
       for (const [metric, scores] of Object.entries(evalMetrics)) {
-        const sorted = scores.sort((a, b) => a - b);
+        const sorted = [...scores].sort((a, b) => a - b);
         evalSummary[metric] = {
           avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3),
           min: +sorted[0].toFixed(3),
@@ -105,6 +112,9 @@ agentRoutes.get('/agents', async (c) => {
           count: sorted.length,
         };
       }
+
+      const allSessionIds = [...d.sessions];
+      const allTraceIdsList = [...d.traceIds];
 
       return {
         agentName,
@@ -114,8 +124,10 @@ agentRoutes.get('/agents', async (c) => {
         rateLimitCount: d.rateLimitCount,
         avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
         sessionCount: d.sessions.size,
-        sessionIds: [...d.sessions],
-        traceIds: [...d.traceIds],
+        sessionIds: allSessionIds.slice(0, MAX_IDS),
+        sessionIdsTruncated: allSessionIds.length > MAX_IDS,
+        traceIds: allTraceIdsList.slice(0, MAX_IDS),
+        traceIdsTruncated: allTraceIdsList.length > MAX_IDS,
         sourceTypes: d.sourceTypes,
         dailyCounts: d.dailyCounts,
         evalSummary,

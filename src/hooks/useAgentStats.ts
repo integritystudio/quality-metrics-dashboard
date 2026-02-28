@@ -19,7 +19,9 @@ export interface AgentStat {
   avgOutputSize: number;
   sessionCount: number;
   sessionIds: string[];
+  sessionIdsTruncated: boolean;
   traceIds: string[];
+  traceIdsTruncated: boolean;
   sourceTypes: Record<string, number>;
   dailyCounts: number[];
   evalSummary: Record<string, EvalMetricSummary>;
@@ -32,13 +34,23 @@ interface AgentStatsResponse {
   agents: AgentStat[];
 }
 
+function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResponse {
+  if (!data || typeof data !== 'object') throw new Error('Invalid response shape');
+  const obj = data as Record<string, unknown>;
+  if (typeof obj.period !== 'string' || !Array.isArray(obj.agents)) {
+    throw new Error('Invalid response: missing period or agents');
+  }
+}
+
 export function useAgentStats(period: Period) {
   return useQuery<AgentStatsResponse>({
     queryKey: ['agent-stats', period],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/api/agents?period=${encodeURIComponent(period)}`);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
+      const data: unknown = await res.json();
+      assertAgentStatsResponse(data);
+      return data;
     },
     staleTime: 60_000,
     retry: 2,
