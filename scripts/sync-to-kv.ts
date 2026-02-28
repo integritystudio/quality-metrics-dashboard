@@ -956,21 +956,36 @@ async function main(): Promise<void> {
           acc.sessionDurations.push(ag.avgDurationMs);
         }
       }
+      // sessionDate is always ISO 8601 UTC (from toISOString()), so
+      // lexicographic comparison is equivalent to chronological ordering.
       const sessionDate = detail.timespan?.start ?? null;
       acc.totalSessionCount++;
       if (sessionDate && (!acc.lastSeenDate || sessionDate > acc.lastSeenDate)) {
         acc.lastSeenDate = sessionDate;
       }
+      const entry = {
+        sessionId,
+        invocations: ag.invocations,
+        errors: ag.errors,
+        hasRateLimit: ag.hasRateLimit,
+        avgDurationMs: ag.avgDurationMs,
+        date: sessionDate,
+        project: detail.sessionInfo?.projectName ?? null,
+      };
       if (acc.sessions.length < MAX_AGENT_SESSIONS) {
-        acc.sessions.push({
-          sessionId,
-          invocations: ag.invocations,
-          errors: ag.errors,
-          hasRateLimit: ag.hasRateLimit,
-          avgDurationMs: ag.avgDurationMs,
-          date: sessionDate,
-          project: detail.sessionInfo?.projectName ?? null,
-        });
+        acc.sessions.push(entry);
+      } else if (sessionDate) {
+        // Evict oldest to keep the most recent sessions in the buffer
+        let oldestIdx = 0;
+        for (let i = 1; i < acc.sessions.length; i++) {
+          const d = acc.sessions[i].date;
+          const oldest = acc.sessions[oldestIdx].date;
+          if (!oldest || (d && d < oldest)) oldestIdx = i;
+        }
+        const oldestDate = acc.sessions[oldestIdx].date;
+        if (!oldestDate || sessionDate > oldestDate) {
+          acc.sessions[oldestIdx] = entry;
+        }
       }
     }
   }
@@ -987,6 +1002,7 @@ async function main(): Promise<void> {
   for (const [agentName, acc] of agentCrossSession) {
     // Sort sessions by date descending, take last 20
     const sessions = acc.sessions
+      .slice()
       .sort((a, b) => {
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
