@@ -21,12 +21,12 @@ export function CompliancePage({ period }: { period: Period }) {
           <SLATable slas={slaData.results} />
         )}
         {slaData && slaData.noSLAsConfigured && (
-          <div className="card" style={{ padding: 16, color: 'var(--text-muted)' }}>
+          <div className="card card--empty">
             No SLAs configured. Define SLAs in your quality metrics configuration.
           </div>
         )}
         {slaData && !slaData.noSLAsConfigured && slaData.results.length === 0 && (
-          <div className="card" style={{ padding: 16, color: 'var(--text-muted)' }}>
+          <div className="card card--empty">
             All SLAs are compliant for the selected period.
           </div>
         )}
@@ -68,7 +68,7 @@ export function CompliancePage({ period }: { period: Period }) {
           </div>
         )}
         {verData && verData.verifications.length === 0 && (
-          <div className="card" style={{ padding: 16, color: 'var(--text-muted)' }}>
+          <div className="card card--empty">
             No verification events for the selected period.
           </div>
         )}

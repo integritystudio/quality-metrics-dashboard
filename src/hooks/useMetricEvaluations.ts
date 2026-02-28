@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EvalRow } from '../components/EvaluationTable.js';
 import type { Period } from '../types.js';
-
-const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
+import { API_BASE } from '../lib/api.js';
 
 interface EvaluationsResponse {
   rows: EvalRow[];

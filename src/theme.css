@@ -29,15 +29,14 @@
   --accent-hover: #60a5fa;
   --accent-muted: #1e3a5f;
 
-  /* Scores */
-  --score-excellent: #26d97f;
+  /* Scores (alias shared values to status tokens) */
+  --score-excellent: var(--status-healthy);
   --score-good: #34d399;
-  --score-adequate: #e5a00d;
+  --score-adequate: var(--status-warning);
   --score-poor: #f97316;
-  --score-failing: #f04438;
+  --score-failing: var(--status-critical);
 
   /* Typography */
-  --font-display: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 
@@ -86,6 +85,7 @@
 
   /* Font sizes */
   --font-size-2xs: 9px;
+  --font-size-label: 11px;
   --font-size-xs: 12px;
   --font-size-sm: 13px;
   --font-size-base: 14px;
@@ -95,7 +95,7 @@
   --font-size-2xl: 28px;
 
   /* Label typography */
-  --label-font-size: 11px;
+  --label-font-size: var(--font-size-label);
   --label-letter-spacing: 0.5px;
 
   /* Transitions */
@@ -127,11 +127,46 @@
   letter-spacing: var(--label-letter-spacing);
 }
 
-/* Shared accent link hover */
+/* Shared accent link base + hover */
+.back-link,
+.tooltip-link,
+.alert-metric-link {
+  color: var(--accent);
+  text-decoration: none;
+}
 .back-link:hover,
 .tooltip-link:hover,
 .alert-metric-link:hover {
   text-decoration: underline;
+}
+
+/* Shared text truncation */
+.eval-table .explanation,
+.metric-worst {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Shared flex row */
+.health-banner,
+.metric-card-header,
+.metric-footer,
+.header,
+.pipeline-stat,
+.confidence-header,
+.variance-bar {
+  display: flex;
+  align-items: center;
+}
+
+/* Shared inline-flex row */
+.status-badge,
+.trend,
+.back-link,
+.score-badge-wrapper {
+  display: inline-flex;
+  align-items: center;
 }
 
 body {
@@ -188,8 +223,6 @@ body {
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius);
   margin-bottom: var(--space-6);
-  display: flex;
-  align-items: center;
   justify-content: space-between;
 }
 .health-banner.healthy { background: var(--bg-status-healthy); border: 1px solid var(--border-status-healthy); }
@@ -217,8 +250,6 @@ body {
 
 /* Status badges */
 .status-badge {
-  display: inline-flex;
-  align-items: center;
   gap: var(--space-1-5);
   font-size: var(--font-size-xs);
   font-weight: 500;
@@ -232,8 +263,6 @@ body {
 
 /* Trend indicator */
 .trend {
-  display: inline-flex;
-  align-items: center;
   gap: var(--space-1);
   font-size: var(--font-size-sm);
   font-family: var(--font-mono);
@@ -250,9 +279,7 @@ body {
 
 /* Metric card */
 .metric-card-header {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
   margin-bottom: var(--space-3);
 }
 .metric-card-header h3 {
@@ -286,9 +313,7 @@ body {
 }
 
 .metric-footer {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
   border-top-color: var(--border);
 }
 
@@ -339,12 +364,12 @@ body {
   border-collapse: collapse;
   font-size: var(--font-size-base);
 }
-.sla-table th {
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--label-font-size);
-}
+.sla-table th,
 .sla-table td {
   padding: var(--space-2) var(--space-3);
+}
+.sla-table th {
+  font-size: var(--label-font-size);
 }
 
 /* Histogram */
@@ -358,21 +383,32 @@ body {
 .histogram-bar {
   flex: 1;
   background: var(--accent);
-  border-radius: 2px 2px 0 0;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   min-height: 2px;
   position: relative;
 }
 .histogram-bar:hover {
   opacity: 0.8;
 }
-.histogram-bar .tooltip {
-  display: none;
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+/* Shared elevated surface */
+.histogram-bar .tooltip,
+.score-badge-tooltip,
+.refetch-indicator {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
+}
+
+/* Shared tooltip popup base */
+.histogram-bar .tooltip,
+.score-badge-tooltip {
+  display: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.histogram-bar .tooltip {
+  bottom: 100%;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--label-font-size);
@@ -410,9 +446,6 @@ body {
   font-family: inherit;
   color: var(--text-secondary);
   max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .eval-table tbody tr:hover,
 .eval-table .eval-row-expanded {
@@ -475,9 +508,7 @@ body {
 
 /* Header */
 .header {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
   margin-bottom: var(--space-6);
 }
 .header h1 {
@@ -517,11 +548,7 @@ body {
 
 /* Back link */
 .back-link {
-  color: var(--accent);
-  text-decoration: none;
   font-size: var(--font-size-sm);
-  display: inline-flex;
-  align-items: center;
   gap: var(--space-1);
   margin-bottom: var(--space-4);
 }
@@ -580,8 +607,6 @@ body {
   position: fixed;
   top: var(--space-4);
   right: var(--space-4);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius);
   font-size: var(--font-size-sm);
@@ -603,18 +628,10 @@ body {
 /* Score badge tooltip */
 .score-badge-wrapper {
   position: relative;
-  display: inline-flex;
-  align-items: center;
   cursor: default;
 }
 .score-badge-tooltip {
-  display: none;
-  position: absolute;
   bottom: calc(100% + var(--space-2));
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-2-5) var(--space-3);
   min-width: 200px;
@@ -643,8 +660,6 @@ body {
   margin-top: var(--space-2);
   padding-top: var(--space-1-5);
   border-top: 1px solid var(--border);
-  color: var(--accent);
-  text-decoration: none;
   font-size: var(--font-size-xs);
 }
 
@@ -710,8 +725,6 @@ details[open] > .cot-summary::before {
   margin-top: var(--space-2);
 }
 .alert-metric-link {
-  color: var(--accent);
-  text-decoration: none;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   padding: var(--space-half) var(--space-2);
@@ -752,7 +765,7 @@ details[open] > .cot-summary::before {
   width: 2px;
   height: 12px;
   background: var(--text-primary);
-  border-radius: 1px;
+  border-radius: calc(var(--radius-xs) / 2);
   transform: translateX(-1px);
 }
 
@@ -762,8 +775,6 @@ details[open] > .cot-summary::before {
   gap: var(--space-6);
 }
 .pipeline-stat {
-  display: flex;
-  align-items: center;
   gap: var(--space-1);
 }
 .pipeline-stat .stat-value {
@@ -776,9 +787,6 @@ details[open] > .cot-summary::before {
 .metric-worst {
   margin-top: var(--space-2);
   line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .metric-worst .worst-score {
   color: var(--score-failing);
@@ -830,8 +838,6 @@ details[open] > .cot-summary::before {
 
 /* Confidence panel */
 .confidence-header {
-  display: flex;
-  align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -851,8 +857,6 @@ details[open] > .cot-summary::before {
   color: var(--text-primary);
 }
 .variance-bar {
-  display: flex;
-  align-items: center;
   gap: var(--space-2);
 }
 .variance-bar-track {
@@ -861,4 +865,22 @@ details[open] > .cot-summary::before {
   background: var(--bg-surface);
   border-radius: var(--radius-xs);
   overflow: hidden;
+}
+
+/* Monospace ID chip — use for traceId/sessionId spans */
+.id-chip {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* Page-level h2 headings (18px, between --font-size-md and --font-size-lg) */
+.page-heading {
+  font-size: 18px;
+}
+
+/* Empty card state — card with muted placeholder text */
+.card--empty {
+  padding: var(--space-4);
+  color: var(--text-muted);
 }

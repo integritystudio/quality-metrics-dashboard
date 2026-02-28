@@ -175,6 +175,21 @@ export function getRoleFeatureConfig(role: FeatureRoleType): RoleFeatureConfig {
 
 // -- Timestamp formatting ---------------------------------------------------
 
+// -- Path/byte formatters ---------------------------------------------------
+
+export function shortPath(fullPath: string): string {
+  const parts = fullPath.replace(/\\/g, '/').split('/');
+  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
+}
+
+export function fmtBytes(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+// -- Timestamp formatting ---------------------------------------------------
+
 export function formatTimestamp(ts: string): string {
   const d = new Date(ts);
   if (isNaN(d.getTime())) return ts || '-';

@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Period, CoverageHeatmap } from '../types.js';
-
-const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
+import { API_BASE } from '../lib/api.js';
 
 export type CoverageResponse = CoverageHeatmap & { period: string };
 

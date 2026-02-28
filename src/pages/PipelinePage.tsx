@@ -1,9 +1,8 @@
-import { Link } from 'wouter';
 import { PipelineFunnel } from '../components/PipelineFunnel.js';
 import { usePipeline } from '../hooks/usePipeline.js';
+import { PageShell } from '../components/PageShell.js';
+import { LLM_SAMPLE_RATE } from '../lib/constants.js';
 import type { Period } from '../types.js';
-
-const LLM_SAMPLE_RATE = 10;
 
 function T2SamplingStage() {
   return (
@@ -48,22 +47,21 @@ function T2SamplingStage() {
 export function PipelinePage({ period }: { period: Period }) {
   const { data, isLoading, error } = usePipeline(period);
 
-  if (isLoading) return <div className="card skeleton" style={{ height: 300 }} />;
-  if (error) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
-  if (!data) return null;
-
   return (
-    <div>
-      <Link href="/" className="back-link">&larr; Back to dashboard</Link>
-      <h2 style={{ fontSize: 18, marginBottom: 16 }}>Evaluation Pipeline</h2>
-      <div className="card">
-        <PipelineFunnel
-          stages={data.stages}
-          dropoffs={data.dropoffs}
-          overallConversionPercent={data.overallConversionPercent}
-        />
-        <T2SamplingStage />
-      </div>
-    </div>
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
+      {data && (
+        <>
+          <h2 className="page-heading" style={{ marginBottom: 16 }}>Evaluation Pipeline</h2>
+          <div className="card">
+            <PipelineFunnel
+              stages={data.stages}
+              dropoffs={data.dropoffs}
+              overallConversionPercent={data.overallConversionPercent}
+            />
+            <T2SamplingStage />
+          </div>
+        </>
+      )}
+    </PageShell>
   );
 }

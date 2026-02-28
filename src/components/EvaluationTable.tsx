@@ -1,4 +1,5 @@
 import { useState, Fragment } from 'react';
+import type { EvaluationResult } from '../types.js';
 import {
   createColumnHelper,
   useReactTable,
@@ -184,6 +185,24 @@ const columns = [
     sortingFn: 'datetime',
   }),
 ];
+
+export function evalToRow(e: EvaluationResult): EvalRow {
+  return {
+    score: typeof e.scoreValue === 'number' ? e.scoreValue : 0,
+    explanation: e.explanation,
+    traceId: e.traceId,
+    timestamp: e.timestamp,
+    evaluator: e.evaluator,
+    label: e.scoreLabel,
+    evaluatorType: e.evaluatorType,
+    spanId: e.spanId,
+    sessionId: e.sessionId,
+    agentName: e.agentName,
+    trajectoryLength: e.trajectoryLength,
+    stepScores: e.stepScores as EvalRow['stepScores'],
+    toolVerifications: e.toolVerifications as EvalRow['toolVerifications'],
+  };
+}
 
 export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
   const [sorting, setSorting] = useState<SortingState>([]);

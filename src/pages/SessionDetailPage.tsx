@@ -1,46 +1,9 @@
 import { type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
-import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
+import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
-import type { EvaluationResult } from '../types.js';
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function shortPath(fullPath: string): string {
-  const parts = fullPath.replace(/\\/g, '/').split('/');
-  return parts.length > 3 ? `…/${parts.slice(-3).join('/')}` : fullPath;
-}
-
-function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
-function evalToRow(e: EvaluationResult): EvalRow {
-  return {
-    score: typeof e.scoreValue === 'number' ? e.scoreValue : 0,
-    explanation: e.explanation,
-    traceId: e.traceId,
-    timestamp: e.timestamp,
-    evaluator: e.evaluator,
-    label: e.scoreLabel,
-    evaluatorType: e.evaluatorType,
-    spanId: e.spanId,
-    sessionId: e.sessionId,
-    agentName: e.agentName,
-    trajectoryLength: e.trajectoryLength,
-    stepScores: e.stepScores as EvalRow['stepScores'],
-    toolVerifications: e.toolVerifications as EvalRow['toolVerifications'],
-  };
-}
-
-function scoreColor(s: number): string {
-  if (s >= 0.85) return 'var(--status-healthy)';
-  if (s >= 0.65) return 'var(--status-warning)';
-  return 'var(--status-critical)';
-}
+import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes } from '../lib/quality-utils.js';
 
 // ─── Section accordion ──────────────────────────────────────────────────────
 
@@ -737,7 +700,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.exports}</td>
                     <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.functions}</td>
                     <td style={{ padding: '5px 10px', textAlign: 'center' }}>{f.hasTypes ? '✓' : '·'}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 600, color: scoreColor(f.score) }}>
+                    <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 600, color: SCORE_COLORS[scoreColorBand(f.score)] }}>
                       {f.score.toFixed(2)}
                     </td>
                   </tr>
