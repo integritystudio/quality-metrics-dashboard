@@ -62,12 +62,20 @@
   --accent-alpha-10: rgba(59, 130, 246, 0.1);
   --accent-alpha-20: rgba(59, 130, 246, 0.2);
 
+  /* Critical alpha */
+  --critical-alpha-40: rgba(240, 68, 56, 0.4);
+  --critical-alpha-60: rgba(240, 68, 56, 0.6);
+
   /* Radii */
   --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
   --radius-pill: 12px;
+
+  /* Font sizes */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
 
   /* Label typography */
   --label-font-size: 11px;
@@ -168,7 +176,7 @@ body {
   font-family: var(--font-mono);
 }
 .summary-count .label {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: var(--label-letter-spacing);
@@ -179,7 +187,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
@@ -194,7 +202,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-family: var(--font-mono);
 }
 .trend.improving { color: var(--status-healthy); }
@@ -203,7 +211,7 @@ body {
 
 /* Confidence badge */
 .confidence {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 
@@ -221,7 +229,7 @@ body {
 
 .metric-values {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 .metric-values .primary {
   font-size: 28px;
@@ -240,7 +248,7 @@ body {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 
@@ -261,12 +269,12 @@ body {
   font-size: 14px;
 }
 .alert-item .alert-meta {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   margin-top: 4px;
 }
 .alert-item .remediation {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--accent);
   margin-top: 4px;
 }
@@ -346,14 +354,14 @@ body {
 .eval-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 .eval-table th {
   text-align: left;
   padding: 6px 10px;
   color: var(--text-secondary);
   font-weight: 500;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 .eval-table td {
   padding: 6px 10px;
@@ -419,7 +427,7 @@ body {
   padding: 4px 12px;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-family: var(--font-body);
 }
 .period-btn.active {
@@ -466,14 +474,14 @@ body {
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 
 /* Back link */
 .back-link {
   color: var(--accent);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -537,7 +545,7 @@ body {
   border: 1px solid var(--border);
   padding: 8px 16px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
   z-index: 1000;
   animation: fade-in 0.2s ease-in-out;
@@ -549,8 +557,8 @@ body {
 }
 
 @keyframes toxicPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(240, 68, 56, 0.4); }
-  50% { box-shadow: 0 0 6px 2px rgba(240, 68, 56, 0.6); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--critical-alpha-40); }
+  50% { box-shadow: 0 0 6px 2px var(--critical-alpha-60); }
 }
 
 /* Score badge tooltip */
@@ -573,7 +581,7 @@ body {
   min-width: 200px;
   max-width: 300px;
   z-index: 20;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   white-space: normal;
   animation: fade-in 0.15s ease-in-out;
 }
@@ -598,7 +606,7 @@ body {
   border-top: 1px solid var(--border);
   color: var(--accent);
   text-decoration: none;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 .tooltip-link:hover {
   text-decoration: underline;
@@ -609,7 +617,7 @@ body {
   margin-top: 4px;
 }
 .cot-summary {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   cursor: pointer;
   padding: 4px 0;
@@ -631,7 +639,7 @@ details[open] > .cot-summary::before {
   transform: rotate(90deg);
 }
 .cot-content {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
   line-height: 1.6;
   padding: 8px 0 4px;
@@ -670,7 +678,7 @@ details[open] > .cot-summary::before {
 .alert-metric-link {
   color: var(--accent);
   text-decoration: none;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
@@ -683,7 +691,7 @@ details[open] > .cot-summary::before {
 .remediation-list {
   margin-top: 8px;
   padding-left: 20px;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--accent);
 }
 .remediation-list li {
@@ -701,12 +709,10 @@ details[open] > .cot-summary::before {
 .threshold-bar-fill,
 .variance-bar-fill {
   height: 100%;
-  border-radius: 2px;
   transition: var(--transition-bar);
 }
-.threshold-bar-fill {
-  border-radius: 3px;
-}
+.threshold-bar-fill { border-radius: 3px; }
+.variance-bar-fill  { border-radius: 2px; }
 .threshold-bar-marker {
   position: absolute;
   top: -3px;
@@ -724,7 +730,7 @@ details[open] > .cot-summary::before {
   padding-top: var(--space-3);
   margin-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 .pipeline-stat {
@@ -756,14 +762,14 @@ details[open] > .cot-summary::before {
 
 /* Provenance panel */
 .provenance-panel {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 .provenance-grid {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: var(--space-1) var(--space-4);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 .provenance-grid .prov-label {
   color: var(--text-secondary);
@@ -785,7 +791,7 @@ details[open] > .cot-summary::before {
   color: var(--accent);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   cursor: pointer;
   font-family: var(--font-body);
 }
@@ -796,7 +802,7 @@ details[open] > .cot-summary::before {
 
 /* Confidence panel */
 .confidence-panel {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 .confidence-header {
   display: flex;
@@ -814,7 +820,7 @@ details[open] > .cot-summary::before {
   grid-template-columns: 1fr auto auto;
   gap: var(--space-1) var(--space-4);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 .agreement-grid .ag-header {
   color: var(--text-muted);
@@ -829,7 +835,7 @@ details[open] > .cot-summary::before {
   margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 .agreement-summary .summary-value {
