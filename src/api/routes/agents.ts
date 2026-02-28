@@ -31,7 +31,7 @@ agentRoutes.get('/agents', async (c) => {
       attributeFilter: { 'hook.name': 'agent-post-tool' },
       startDate,
       endDate,
-      limit: 5000,
+      limit: 1000,
     });
 
     // Build date bucket keys for the period (YYYY-MM-DD strings)

@@ -242,8 +242,15 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
   return evals;
 }
 
-// Derive agent completion rate as a bonus metric
-const sessionAgents = new Map<string, { pre: number; post: number; spans: TraceSpan[] }>();
+// Derive agent completion rate and handoff correctness
+interface AgentSessionData {
+  pre: number;
+  post: number;
+  spans: TraceSpan[];
+  /** Ordered agent names per post-tool span, used for handoff detection */
+  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
+}
+const sessionAgents = new Map<string, AgentSessionData>();
 
 function trackAgentActivity(span: TraceSpan): void {
   const isPre = span.name === 'hook:agent-pre-tool';
@@ -252,11 +259,16 @@ function trackAgentActivity(span: TraceSpan): void {
 
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
   if (!sessionAgents.has(sessionId)) {
-    sessionAgents.set(sessionId, { pre: 0, post: 0, spans: [] });
+    sessionAgents.set(sessionId, { pre: 0, post: 0, spans: [], agentSequence: [] });
   }
   const entry = sessionAgents.get(sessionId)!;
   if (isPre) entry.pre++;
-  if (isPost) entry.post++;
+  if (isPost) {
+    entry.post++;
+    const agentName = String(span.attributes['gen_ai.agent.name'] ?? 'unknown');
+    const score = span.status?.code === 2 ? 0 : 1; // status 2 = ERROR in OTel
+    entry.agentSequence.push({ agentName, score, span });
+  }
   entry.spans.push(span);
 }
 
@@ -273,6 +285,56 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
       evaluationName: 'task_completion',
       scoreValue: parseFloat(rate.toFixed(4)),
       explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, 8)}`,
+      evaluator: 'telemetry-rule-engine',
+      evaluatorType: 'rule',
+      traceId: lastSpan.traceId,
+      sessionId,
+    });
+  }
+
+  return evals;
+}
+
+/** Minimum distinct agents required to detect handoffs */
+const MIN_HANDOFF_AGENTS = 2;
+/** Minimum score for handoff target correctness (step score >= threshold) */
+const HANDOFF_CORRECT_THRESHOLD = 0.5;
+/** Minimum score for context preservation (step score >= threshold) */
+const HANDOFF_CONTEXT_THRESHOLD = 0.7;
+
+function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
+  const evals: EvalRecord[] = [];
+
+  for (const [sessionId, data] of sessionAgents) {
+    if (data.agentSequence.length < MIN_HANDOFF_AGENTS) continue;
+
+    // Check for >= 2 distinct agent names
+    const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
+    if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
+
+    // Detect handoffs: consecutive spans with different agent names
+    const handoffScores: number[] = [];
+    for (let i = 1; i < data.agentSequence.length; i++) {
+      const prev = data.agentSequence[i - 1];
+      const curr = data.agentSequence[i];
+      if (curr.agentName !== prev.agentName) {
+        handoffScores.push(curr.score);
+      }
+    }
+
+    if (handoffScores.length === 0) continue;
+
+    const avgScore = handoffScores.reduce((a, b) => a + b, 0) / handoffScores.length;
+    const correct = handoffScores.filter(s => s >= HANDOFF_CORRECT_THRESHOLD).length;
+    const preserved = handoffScores.filter(s => s >= HANDOFF_CONTEXT_THRESHOLD).length;
+    const lastSpan = data.agentSequence[data.agentSequence.length - 1].span;
+
+    evals.push({
+      timestamp: hrtToISO(lastSpan.startTime),
+      evaluationName: 'handoff_correctness',
+      scoreValue: parseFloat(avgScore.toFixed(4)),
+      scoreUnit: 'ratio_0_1',
+      explanation: `Session ${sessionId.slice(0, 8)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
       evaluator: 'telemetry-rule-engine',
       evaluatorType: 'rule',
       traceId: lastSpan.traceId,
@@ -324,6 +386,7 @@ function main(): void {
   // Derive session-level evaluations
   allEvals.push(...deriveTaskCompletionPerSession());
   allEvals.push(...deriveAgentCompletionPerSession());
+  allEvals.push(...deriveHandoffCorrectnessPerSession());
 
   // Group evaluations by date for output files
   const byDate = new Map<string, EvalRecord[]>();

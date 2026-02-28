@@ -106,13 +106,48 @@ export interface EvalRecord {
 // Transcript Discovery
 // ============================================================================
 
+const HOME = process.env.HOME ?? '';
+
+/**
+ * Alternate directories where session transcripts may exist.
+ * Checked in order when a log-referenced path is missing, and scanned
+ * directly to discover transcripts not referenced in logs at all.
+ */
+const TRANSCRIPT_DIRS = [
+  join(HOME, '.claude', 'projects'),
+  join(HOME, 'claude-tool-use', 'projects'),
+  join(HOME, '.claude-history', 'projects'),
+  // Root-level slug dirs (transcripts stored outside projects/ subdirectory)
+  join(HOME, 'claude-tool-use'),
+  join(HOME, '.claude-history'),
+];
+
+/** Try to resolve a missing transcript path by checking alternate directories */
+function resolveTranscriptPath(originalPath: string): string | null {
+  if (existsSync(originalPath)) return originalPath;
+
+  // Extract the slug/sessionId.jsonl suffix after the projects/ directory
+  const projectsIdx = originalPath.indexOf('/projects/');
+  if (projectsIdx === -1) return null;
+  const suffix = originalPath.slice(projectsIdx + '/projects/'.length);
+
+  for (const dir of TRANSCRIPT_DIRS) {
+    const candidate = join(dir, suffix);
+    if (candidate !== originalPath && existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** Discover transcripts from telemetry logs (primary) and directory scan (fallback) */
 async function discoverTranscripts(): Promise<TranscriptInfo[]> {
+  // Track by sessionId (UUID) to deduplicate across sources
+  const seen = new Set<string>();
+  const transcripts: TranscriptInfo[] = [];
+
+  // Phase 1: Log-based discovery (has traceId correlation)
   const logFiles = readdirSync(TELEMETRY_DIR)
     .filter(f => f.startsWith('logs-') && f.endsWith('.jsonl'))
     .sort();
-
-  const seen = new Set<string>();
-  const transcripts: TranscriptInfo[] = [];
 
   for (const file of logFiles) {
     const filepath = join(TELEMETRY_DIR, file);
@@ -137,17 +172,54 @@ async function discoverTranscripts(): Promise<TranscriptInfo[]> {
       if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
 
       const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
-      if (!tPath || seen.has(tPath)) continue;
+      if (!tPath) continue;
 
-      if (!existsSync(tPath)) continue;
-
-      seen.add(tPath);
-      // Session ID is the UUID filename (without .jsonl)
       const sessionId = basename(tPath, '.jsonl');
-      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
+      if (seen.has(sessionId)) continue;
 
-      transcripts.push({ path: tPath, sessionId, traceId });
+      const resolved = resolveTranscriptPath(tPath);
+      if (!resolved) continue;
+
+      seen.add(sessionId);
+      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
+      transcripts.push({ path: resolved, sessionId, traceId });
     }
+  }
+
+  const logCount = transcripts.length;
+
+  // Phase 2: Directory scan for transcripts not referenced in logs
+  for (const dir of TRANSCRIPT_DIRS) {
+    if (!existsSync(dir)) continue;
+    let slugDirs: string[];
+    try {
+      slugDirs = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const slug of slugDirs) {
+      const slugPath = join(dir, slug);
+      let files: string[];
+      try {
+        files = readdirSync(slugPath);
+      } catch {
+        continue;
+      }
+      for (const f of files) {
+        if (!f.endsWith('.jsonl')) continue;
+        const sessionId = basename(f, '.jsonl');
+        // Skip non-UUID filenames (memory files, etc.)
+        if (!/^[0-9a-f]{8}-/.test(sessionId)) continue;
+        if (seen.has(sessionId)) continue;
+        seen.add(sessionId);
+        transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
+      }
+    }
+  }
+
+  const scanCount = transcripts.length - logCount;
+  if (scanCount > 0) {
+    console.log(`  Log-referenced: ${logCount}, directory scan: ${scanCount}`);
   }
 
   return transcripts;
