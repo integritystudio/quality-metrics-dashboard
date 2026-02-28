@@ -122,13 +122,13 @@ body {
 .dashboard-container {
   max-width: var(--layout-max-width);
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--space-6);
 }
 
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .card {
@@ -154,9 +154,9 @@ body {
 
 /* Health banner */
 .health-banner {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-radius: var(--radius);
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -168,7 +168,7 @@ body {
 
 .summary-counts {
   display: flex;
-  gap: 24px;
+  gap: var(--space-6);
 }
 
 .summary-count {
@@ -193,7 +193,7 @@ body {
   gap: var(--space-1-5);
   font-size: var(--font-size-xs);
   font-weight: 500;
-  padding: 2px 8px;
+  padding: var(--space-half) var(--space-2);
   border-radius: var(--radius-pill);
 }
 .status-badge.healthy { color: var(--status-healthy); background: var(--bg-status-healthy); }
@@ -205,7 +205,7 @@ body {
 .trend {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: var(--font-size-sm);
   font-family: var(--font-mono);
 }
@@ -224,7 +224,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 .metric-card-header h3 {
   font-size: 14px;
@@ -242,15 +242,15 @@ body {
 }
 .metric-values .secondary {
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .metric-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border);
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
@@ -261,10 +261,10 @@ body {
   list-style: none;
 }
 .alert-item {
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   border-left: 3px solid;
   background: var(--bg-card);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   border-radius: 0 var(--radius) var(--radius) 0;
 }
 .alert-item.critical { border-left-color: var(--status-critical); }
@@ -275,12 +275,12 @@ body {
 .alert-item .alert-meta {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 .alert-item .remediation {
   font-size: var(--font-size-xs);
   color: var(--accent);
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 /* Shared table cell borders */
@@ -300,7 +300,7 @@ body {
 }
 .sla-table th {
   text-align: left;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   color: var(--text-secondary);
   font-weight: 500;
   font-size: var(--label-font-size);
@@ -308,7 +308,7 @@ body {
   letter-spacing: var(--label-letter-spacing);
 }
 .sla-table td {
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
 }
 
 /* Histogram */
@@ -317,7 +317,7 @@ body {
   align-items: flex-end;
   gap: var(--space-half);
   height: 120px;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 .histogram-bar {
   flex: 1;
@@ -337,7 +337,7 @@ body {
   transform: translateX(-50%);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   font-size: 11px;
   white-space: nowrap;
@@ -362,13 +362,13 @@ body {
 }
 .eval-table th {
   text-align: left;
-  padding: 6px 10px;
+  padding: var(--space-1-5) 10px;
   color: var(--text-secondary);
   font-weight: 500;
   font-size: var(--font-size-xs);
 }
 .eval-table td {
-  padding: 6px 10px;
+  padding: var(--space-1-5) 10px;
   font-family: var(--font-mono);
 }
 .eval-table .explanation {
@@ -392,8 +392,8 @@ body {
 /* Tabs / Role selector */
 .tab-nav {
   display: flex;
-  gap: 4px;
-  margin-bottom: 24px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
   border-bottom: 1px solid var(--border);
   padding-bottom: 0;
 }
@@ -401,7 +401,7 @@ body {
   background: none;
   border: none;
   color: var(--text-secondary);
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   cursor: pointer;
   font-size: 14px;
   border-bottom: 2px solid transparent;
@@ -419,16 +419,16 @@ body {
 /* Period selector */
 .period-selector {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--space-1);
   background: var(--bg-elevated);
   border-radius: var(--radius);
-  padding: 2px;
+  padding: var(--space-half);
 }
 .period-btn {
   background: none;
   border: none;
   color: var(--text-secondary);
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius);
   cursor: pointer;
   font-size: var(--font-size-sm);
@@ -444,7 +444,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .header h1 {
   font-size: 20px;
@@ -471,11 +471,11 @@ body {
 }
 .empty-state h2 {
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .empty-state code {
   background: var(--bg-elevated);
-  padding: 2px 6px;
+  padding: var(--space-half) var(--space-1-5);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
@@ -488,8 +488,8 @@ body {
   font-size: var(--font-size-sm);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
 }
 .back-link:hover {
   text-decoration: underline;
@@ -500,22 +500,22 @@ body {
   background: var(--bg-status-critical);
   border: 1px solid var(--border-status-critical);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: var(--space-6);
   text-align: center;
 }
 .error-state h2 {
   color: var(--status-critical);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 .error-state .error-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
   justify-content: center;
 }
 .error-state .error-actions button,
 .error-state .error-actions a {
-  padding: 6px 16px;
+  padding: var(--space-1-5) var(--space-4);
   cursor: pointer;
 }
 
@@ -523,8 +523,8 @@ body {
 .section-heading {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
-  margin-top: 32px;
+  margin-bottom: var(--space-4);
+  margin-top: var(--space-8);
 }
 
 .section-label {
@@ -532,22 +532,22 @@ body {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: var(--label-letter-spacing);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 /* View sections */
 .view-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-8);
 }
 
 /* Refetch indicator */
 .refetch-indicator {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  top: var(--space-4);
+  right: var(--space-4);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius);
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
@@ -581,7 +581,7 @@ body {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   min-width: 200px;
   max-width: 300px;
   z-index: 20;
@@ -596,8 +596,8 @@ body {
 .tooltip-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 2px 0;
+  gap: var(--space-3);
+  padding: var(--space-half) 0;
   color: var(--text-primary);
 }
 .tooltip-row span:first-child {
@@ -605,8 +605,8 @@ body {
 }
 .tooltip-link {
   display: block;
-  margin-top: 8px;
-  padding-top: 6px;
+  margin-top: var(--space-2);
+  padding-top: var(--space-1-5);
   border-top: 1px solid var(--border);
   color: var(--accent);
   text-decoration: none;
@@ -618,13 +618,13 @@ body {
 
 /* Chain of thought panel */
 .cot-panel {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 .cot-summary {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
   text-transform: uppercase;
   letter-spacing: var(--label-letter-spacing);
   list-style: none;
@@ -635,7 +635,7 @@ body {
 .cot-summary::before {
   content: '\25B6';
   display: inline-block;
-  margin-right: 6px;
+  margin-right: var(--space-1-5);
   font-size: 9px;
   transition: transform 0.15s;
 }
@@ -646,21 +646,21 @@ details[open] > .cot-summary::before {
   font-size: var(--font-size-sm);
   color: var(--text-primary);
   line-height: 1.6;
-  padding: 8px 0 4px;
+  padding: var(--space-2) 0 var(--space-1);
 }
 
 /* Evaluation detail page */
 .eval-detail-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .eval-detail-meta {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
   align-items: center;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 .eval-detail-card {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .eval-summary-card.card:hover {
@@ -675,16 +675,16 @@ details[open] > .cot-summary::before {
 .alert-related {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 .alert-metric-link {
   color: var(--accent);
   text-decoration: none;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
-  padding: 2px 8px;
+  padding: var(--space-half) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--accent-alpha-10);
 }
@@ -693,20 +693,20 @@ details[open] > .cot-summary::before {
   background: var(--accent-alpha-20);
 }
 .remediation-list {
-  margin-top: 8px;
+  margin-top: var(--space-2);
   padding-left: var(--space-5);
   font-size: var(--font-size-xs);
   color: var(--accent);
 }
 .remediation-list li {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 .threshold-bar {
   position: relative;
   height: 6px;
   background: var(--bg-card);
   border-radius: 3px;
-  margin-top: 8px;
+  margin-top: var(--space-2);
   overflow: visible;
 }
 /* Shared animated bar fill */
