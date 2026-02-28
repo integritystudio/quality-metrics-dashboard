@@ -963,7 +963,7 @@ async function main(): Promise<void> {
       if (sessionDate && (!acc.lastSeenDate || sessionDate > acc.lastSeenDate)) {
         acc.lastSeenDate = sessionDate;
       }
-      const entry = {
+      const entry: AgentAccumulator['sessions'][number] = {
         sessionId,
         invocations: ag.invocations,
         errors: ag.errors,
@@ -1007,7 +1007,7 @@ async function main(): Promise<void> {
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
         if (!b.date) return -1;
-        return b.date.localeCompare(a.date);
+        return b.date < a.date ? -1 : b.date > a.date ? 1 : 0;
       })
       .slice(0, 20);
     const lastSeen = acc.lastSeenDate;
