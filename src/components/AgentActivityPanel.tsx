@@ -8,7 +8,7 @@ const AGENT_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#0
 
 const COLUMN_COUNT = 7;
 const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-const RATE_LIMIT_BADGE_BG = '#1f1a0d';
+const RATE_LIMIT_BADGE_BG = 'var(--bg-status-warning)';
 
 type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
 

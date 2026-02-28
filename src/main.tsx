@@ -14,7 +14,7 @@ const queryClient = new QueryClient({
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
-    <div className="container">
+    <div className="dashboard-container">
       <div className="error-state">
         <h2>Something went wrong</h2>
         <p>{error.message}</p>

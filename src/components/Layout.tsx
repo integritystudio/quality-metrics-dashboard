@@ -14,7 +14,7 @@ export function Layout({
   children: ReactNode;
 }) {
   return (
-    <div className="container">
+    <div className="dashboard-container">
       <div className="header">
         <h1>Quality Metrics</h1>
         <div className="period-selector">
