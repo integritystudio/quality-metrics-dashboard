@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Period, CoverageHeatmap } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
 
 export type CoverageResponse = CoverageHeatmap & { period: string };
 
@@ -13,7 +13,7 @@ export function useCoverage(period: Period, inputKey: 'traceId' | 'sessionId' = 
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
-    staleTime: 25_000,
+    staleTime: STALE_TIME.DEFAULT,
     retry: 2,
   });
 }

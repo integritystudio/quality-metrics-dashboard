@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { API_BASE } from '../lib/api.js';
-
-const POLL_INTERVAL_MS = 30_000;
+import { API_BASE, POLL_INTERVAL_MS } from '../lib/constants.js';
 
 interface LiveMetric {
   name: string;

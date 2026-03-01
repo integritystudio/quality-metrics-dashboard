@@ -1,5 +1,19 @@
 import { z } from 'zod';
 
+/** Named error identifiers for custom error classes. */
+export const enum ErrorName {
+  SessionNotFound = 'SessionNotFoundError',
+}
+
+/** Reusable error messages for response validation. */
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+}
+
+/** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
+export const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
+
 /** Percentage of events sampled for T2 LLM evaluation. */
 export const LLM_SAMPLE_RATE = 10;
 
@@ -27,8 +41,17 @@ export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d':
 /** Zod-compatible tuple of valid period keys, derived from VALID_PERIODS. */
 export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
 
+/** Zod enum for period values, derived from VALID_PERIODS keys. */
+export const PeriodEnum = z.enum(PERIOD_KEYS);
+
+/** Default client-side period for list/evaluation queries. */
+export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
+
+/** Default client-side period for metric detail views (wider window). */
+export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
+
 /** Shared Zod schema for period query param validation (default: '7d'). */
-export const PeriodSchema = z.enum(PERIOD_KEYS).default('7d');
+export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -48,6 +71,30 @@ export const LIVE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** Max evaluations returned by the live quality endpoint. */
 export const EVAL_LIMIT = 100;
+
+/** React Query staleTime tiers (ms). */
+export const STALE_TIME = {
+  /** Standard data queries (metrics, trends, coverage, compliance, pipeline, evaluations). */
+  DEFAULT: 25_000,
+  /** Entity detail views (session, trace, agent session). */
+  DETAIL: 30_000,
+  /** Slow-changing aggregate stats (agent stats). */
+  AGGREGATE: 60_000,
+} as const;
+
+/** Polling / refetch interval for live and dashboard queries (ms). */
+export const POLL_INTERVAL_MS = 30_000;
+
+/** Exponential backoff base and cap for retry delays (ms). */
+export const RETRY_DELAY_BASE = 1_000;
+export const RETRY_DELAY_CAP = 30_000;
+
+/** Default query params for metric detail endpoint. */
+export const DEFAULT_TOP_N = 5;
+export const DEFAULT_BUCKET_COUNT = 10;
+
+/** Default page size for paginated evaluation queries. */
+export const DEFAULT_PAGE_LIMIT = 50;
 
 /** Shared Recharts color palette for TrendChart and TrendSeries. */
 export const CHART_COLORS = {

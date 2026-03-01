@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { SLAComplianceResult, HumanVerificationEvent, Period } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
 
 interface SLAResponse {
   results: SLAComplianceResult[];
@@ -20,7 +20,7 @@ export function useComplianceSLA(period: Period) {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
-    staleTime: 25_000,
+    staleTime: STALE_TIME.DEFAULT,
     retry: 2,
   });
 }
@@ -33,7 +33,7 @@ export function useComplianceVerifications(period: Period) {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
-    staleTime: 25_000,
+    staleTime: STALE_TIME.DEFAULT,
     retry: 2,
   });
 }

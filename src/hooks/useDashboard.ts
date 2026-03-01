@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME, POLL_INTERVAL_MS, RETRY_DELAY_BASE, RETRY_DELAY_CAP } from '../lib/constants.js';
 
 export function useDashboard(period: Period, role?: RoleViewType) {
   return useQuery<QualityDashboardSummary | RoleView>({
@@ -12,9 +12,9 @@ export function useDashboard(period: Period, role?: RoleViewType) {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
-    refetchInterval: 30_000,
-    staleTime: 25_000,
+    refetchInterval: POLL_INTERVAL_MS,
+    staleTime: STALE_TIME.DEFAULT,
     retry: 3,
-    retryDelay: (i) => Math.min(1000 * 2 ** i, 30_000),
+    retryDelay: (i) => Math.min(RETRY_DELAY_BASE * 2 ** i, RETRY_DELAY_CAP),
   });
 }

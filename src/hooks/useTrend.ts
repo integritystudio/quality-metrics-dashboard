@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Period, MetricTrend, MetricDynamics } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
 
 export interface PercentileSnapshot {
   p10: number;
@@ -40,7 +40,7 @@ export function useTrend(metricName: string, period: Period, buckets = 7) {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
-    staleTime: 25_000,
+    staleTime: STALE_TIME.DEFAULT,
     retry: 2,
   });
 }

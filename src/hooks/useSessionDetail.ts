@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME, ErrorName } from '../lib/constants.js';
 
 export interface SessionInfo {
   projectName: string;
@@ -134,7 +134,7 @@ export interface SessionDetailResponse {
 export class SessionNotFoundError extends Error {
   constructor(sessionId: string) {
     super(`Session ${sessionId} has not been synced to the dashboard yet.`);
-    this.name = 'SessionNotFoundError';
+    this.name = ErrorName.SessionNotFound;
   }
 }
 
@@ -148,7 +148,7 @@ export function useSessionDetail(sessionId: string | undefined) {
       return res.json();
     },
     enabled: !!sessionId,
-    staleTime: 30_000,
+    staleTime: STALE_TIME.DETAIL,
     retry: (failureCount, error) =>
       error instanceof SessionNotFoundError ? false : failureCount < 2,
   });

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Period } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME, ErrorMessage } from '../lib/constants.js';
 
 export interface EvalMetricSummary {
   avg: number;
@@ -36,10 +36,10 @@ interface AgentStatsResponse {
 
 /** Shallow shape check — validates envelope fields only, not individual AgentStat elements. */
 function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResponse {
-  if (!data || typeof data !== 'object') throw new Error('Invalid response shape');
+  if (!data || typeof data !== 'object') throw new Error(ErrorMessage.InvalidResponseShape);
   const obj = data as Record<string, unknown>;
   if (typeof obj.period !== 'string' || !Array.isArray(obj.agents)) {
-    throw new Error('Invalid response: missing period or agents');
+    throw new Error(ErrorMessage.MissingPeriodOrAgents);
   }
 }
 
@@ -53,7 +53,7 @@ export function useAgentStats(period: Period) {
       assertAgentStatsResponse(data);
       return data;
     },
-    staleTime: 60_000,
+    staleTime: STALE_TIME.AGGREGATE,
     retry: 2,
   });
 }

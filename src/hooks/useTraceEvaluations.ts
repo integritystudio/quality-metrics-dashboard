@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
 
 export function useTraceEvaluations(traceId: string | undefined) {
   return useQuery<EvaluationResult[]>({
@@ -13,7 +13,7 @@ export function useTraceEvaluations(traceId: string | undefined) {
       return (data.evaluations ?? []) as EvaluationResult[];
     },
     enabled: !!traceId,
-    staleTime: 25_000,
+    staleTime: STALE_TIME.DEFAULT,
     retry: 2,
   });
 }

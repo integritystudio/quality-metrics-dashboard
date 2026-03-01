@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Period, PipelineResult } from '../types.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
 
 export type PipelineResponse = PipelineResult & { period: string };
 
@@ -13,7 +13,7 @@ export function usePipeline(period: Period) {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
-    staleTime: 25_000,
+    staleTime: STALE_TIME.DEFAULT,
     retry: 2,
   });
 }

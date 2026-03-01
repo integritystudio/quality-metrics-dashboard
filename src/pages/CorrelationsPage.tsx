@@ -4,7 +4,7 @@ import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
 import { SplitPane } from '../components/SplitPane.js';
 import { MetricCompare } from '../components/MetricCompare.js';
 import { PageShell } from '../components/PageShell.js';
-import { API_BASE } from '../lib/api.js';
+import { API_BASE } from '../lib/constants.js';
 import type { CorrelationFeature, Period } from '../types.js';
 
 interface CorrelationsResponse {
