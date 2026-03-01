@@ -15,7 +15,7 @@ export function useQualityLive(): UseQualityLiveResult {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const cancelled = false;
+    let cancelled = false;
 
     async function fetchLive() {
       try {

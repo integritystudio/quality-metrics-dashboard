@@ -23,7 +23,7 @@ qualityRoutes.get('/quality/live', async (c) => {
 
     const metrics: LiveMetric[] = [];
     const sessionIds = new Set<string>();
-    const latestTimestamp = '';
+    let latestTimestamp = '';
 
     for (const [name, evals] of evaluationsByMetric) {
       // Take last EVAL_LIMIT records, sorted by timestamp desc
