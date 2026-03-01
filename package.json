@@ -14,6 +14,9 @@
     "typecheck": "tsc --noEmit",
     "populate": "tsx scripts/populate-dashboard.ts",
     "sync": "tsx scripts/sync-to-kv.ts",
+    "filetree": "tsx scripts/generate-token-tree.ts && tsx scripts/update-readme-tree.ts",
+    "filetree:generate": "tsx scripts/generate-token-tree.ts",
+    "filetree:readme": "tsx scripts/update-readme-tree.ts",
     "deploy:worker": "wrangler deploy",
     "dev:worker": "wrangler dev"
   },

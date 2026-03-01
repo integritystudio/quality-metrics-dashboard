@@ -78,65 +78,57 @@ See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
 | `GET /api/compliance/verifications` | Human verifications (`?period=7d`) |
 | `GET /api/health` | Health check + last sync timestamp |
 
-## Project Structure (98,844 tokens)
+## Project Structure (98,587 tokens)
 
 ```
-src/
-├── App.tsx                          4,178
-├── main.tsx                           334
-├── theme.css                        8,201
-├── types.ts                           341
-├── api/                            19,490
-│   ├── data-loader.ts               2,243
-│   ├── server.ts                      439
-│   └── routes/                     16,808
-│       ├── agents.ts                2,598
-│       ├── compliance.ts              815
-│       ├── correlations.ts            519
-│       ├── coverage.ts                876
-│       ├── dashboard.ts             1,332
-│       ├── evaluations.ts             246
-│       ├── metrics.ts               2,075
-│       ├── pipeline.ts                562
-│       ├── quality.ts                 709
-│       ├── sessions.ts             4,406
-│       ├── traces.ts                  280
-│       └── trends.ts               2,390
-├── components/                     41,306
-│   ├── views/                       1,911
-│   ├── AgentActivityPanel.tsx       5,173
-│   ├── EvaluationTable.tsx          3,107
-│   ├── TrendChart.tsx               2,087
-│   ├── CorrelationHeatmap.tsx       1,919
-│   ├── CoverageGrid.tsx            1,892
-│   ├── EvaluationExpandedRow.tsx    1,676
-│   ├── TrendSeries.tsx              1,616
-│   ├── ConfidencePanel.tsx          1,590
-│   ├── ProvenancePanel.tsx          1,546
-│   ├── SpanTree.tsx                 1,536
-│   ├── HealthOverview.tsx           1,277
-│   ├── ScoreBadge.tsx               1,203
-│   ├── AlertList.tsx                1,192
-│   ├── PipelineFunnel.tsx           1,096
-│   └── ... (22 more components)
-├── contexts/                        1,973
-│   ├── KeyboardNavContext.tsx        1,330
-│   └── RoleContext.tsx                643
-├── hooks/                           5,548
-│   ├── useSessionDetail.ts          1,320
-│   ├── useQualityLive.ts              674
-│   ├── useAgentStats.ts               548
-│   └── ... (10 more hooks)
-├── lib/                             2,707
-│   ├── quality-utils.ts             2,454
-│   ├── constants.ts                   220
-│   └── api.ts                          33
-└── pages/                          14,755
-    ├── SessionDetailPage.tsx        8,495
-    ├── EvaluationDetailPage.tsx     1,392
-    ├── CompliancePage.tsx             987
-    ├── AgentSessionPage.tsx           879
-    └── ... (5 more pages)
+└── src/ (98,587 tokens)
+    ├── App.tsx (4,178 tokens)
+    ├── main.tsx (334 tokens)
+    ├── theme.css (8,372 tokens)
+    ├── types.ts (341 tokens)
+    ├── vite-env.d.ts (11 tokens)
+    ├── api/ (18,734 tokens)
+    │   ├── data-loader.ts (2,243 tokens)
+    │   ├── server.ts (439 tokens)
+    │   └── routes/ (16,052 tokens)
+    │       ├── agents.ts (2,481 tokens)
+    │       ├── dashboard.ts (1,317 tokens)
+    │       ├── metrics.ts (1,981 tokens)
+    │       ├── sessions.ts (4,406 tokens)
+    │       ├── trends.ts (2,293 tokens)
+    │       └── ... (7 more)
+    ├── components/ (41,289 tokens)
+    │   ├── AgentActivityPanel.tsx (5,165 tokens)
+    │   ├── CorrelationHeatmap.tsx (1,919 tokens)
+    │   ├── CoverageGrid.tsx (1,892 tokens)
+    │   ├── EvaluationTable.tsx (3,107 tokens)
+    │   ├── TrendChart.tsx (2,087 tokens)
+    │   ├── ... (34 more)
+    │   └── views/ (1,911 tokens)
+    │       ├── AuditorView.tsx (418 tokens)
+    │       ├── ExecutiveView.tsx (894 tokens)
+    │       └── OperatorView.tsx (599 tokens)
+    ├── contexts/ (1,973 tokens)
+    │   ├── KeyboardNavContext.tsx (1,330 tokens)
+    │   └── RoleContext.tsx (643 tokens)
+    ├── hooks/ (5,548 tokens)
+    │   ├── useAgentStats.ts (548 tokens)
+    │   ├── useMetricEvaluations.ts (418 tokens)
+    │   ├── useQualityLive.ts (674 tokens)
+    │   ├── useSessionDetail.ts (1,320 tokens)
+    │   ├── useTrend.ts (428 tokens)
+    │   └── ... (8 more)
+    ├── lib/ (3,272 tokens)
+    │   ├── api.ts (33 tokens)
+    │   ├── constants.ts (785 tokens)
+    │   └── quality-utils.ts (2,454 tokens)
+    └── pages/ (14,535 tokens)
+        ├── AgentSessionPage.tsx (879 tokens)
+        ├── CompliancePage.tsx (987 tokens)
+        ├── EvaluationDetailPage.tsx (1,392 tokens)
+        ├── SessionDetailPage.tsx (8,275 tokens)
+        ├── TraceDetailPage.tsx (862 tokens)
+        └── ... (4 more)
 ```
 
 ## Production Deployment
