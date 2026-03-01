@@ -1,9 +1,11 @@
 import { type ReactNode } from 'react';
 
+export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
+
 export interface SectionProps {
   title: string;
   badge?: string;
-  health?: 'ok' | 'warn' | 'crit' | 'neutral';
+  health?: SectionHealth;
   defaultOpen?: boolean;
   children: ReactNode;
 }

@@ -5,7 +5,7 @@ import { EvaluationTable, evalToRow, type EvalRow } from '../components/Evaluati
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
-import { Section, type SectionProps } from '../components/Section.js';
+import { Section, type SectionHealth } from '../components/Section.js';
 import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
 
 // ─── Stat chip ───────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ function FreqBarGrid({ entries, max, color }: {
 }) {
   return (
     <div style={FREQ_GRID_STYLE}>
-      {entries
+      {[...entries]
         .sort((a, b) => b[1] - a[1])
         .map(([key, count]) => (
           <FreqBar key={key} label={key} count={count} max={max} color={color} />
@@ -168,7 +168,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
   if (isNotSynced) {
     return (
-      <PageShell isLoading={false} error={null}>
+      <div>
+        <Link href="/" className="back-link">&larr; Back to dashboard</Link>
         <div className="card" style={{ padding: '32px 24px', textAlign: 'center' }}>
           <div style={{
             fontFamily: 'var(--font-mono)',
@@ -197,7 +198,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             wordBreak: 'break-all',
           }}>{sessionId}</div>
         </div>
-      </PageShell>
+      </div>
     );
   }
 
@@ -238,7 +239,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const errorCount = errorDetails.length;
   const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
     hallucinationEvals.length > 0 || failedEvals.length > 0;
-  const issueHealth: SectionProps['health'] = errorCount > 0 || hallucinationEvals.length > 0
+  const issueHealth: SectionHealth = errorCount > 0 || hallucinationEvals.length > 0
     ? 'crit'
     : alertSummary.totalFired > 0 || failedEvals.length > 0
     ? 'warn'
@@ -343,12 +344,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <Stat label="Alerts fired" value={alertSummary.totalFired} color={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
         <div style={VITALS_DIVIDER_STYLE} />
         <Stat label="Errors" value={errorCount} color={errorCount > 0 ? 'var(--status-critical)' : undefined} />
-        <div style={VITALS_DIVIDER_STYLE} />
-        {maxTokenSnapshot && (
-          <Stat label="Messages" value={maxTokenSnapshot.messages} />
-        )}
         {maxTokenSnapshot && (
           <>
+            <div style={VITALS_DIVIDER_STYLE} />
+            <Stat label="Messages" value={maxTokenSnapshot.messages} />
             <div style={VITALS_DIVIDER_STYLE} />
             <Stat label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
           </>

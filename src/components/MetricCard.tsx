@@ -4,7 +4,7 @@ import type { QualityMetricResult, WorstExplanation } from '../types.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
 import { ScoreBadge } from './ScoreBadge.js';
 import { Sparkline } from './Sparkline.js';
-import { inferScoreDirection, truncateText } from '../lib/quality-utils.js';
+import { inferScoreDirection, truncateText, plural } from '../lib/quality-utils.js';
 
 function formatValue(val: number | null | undefined): string {
   if (val === null || val === undefined) return 'N/A';
@@ -58,7 +58,7 @@ function MetricCardInner({ metric, sparklineData }: {
           <span>n={sampleCount} <ConfidenceBadge confidence={confidence} /></span>
           {alerts.length > 0 && (
             <span style={{ color: 'var(--status-warning)' }}>
-              {'\u25B2'} {alerts.length} alert{alerts.length > 1 ? 's' : ''}
+              {'\u25B2'} {plural(alerts.length, 'alert')}
             </span>
           )}
         </div>
