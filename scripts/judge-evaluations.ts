@@ -24,8 +24,6 @@ import { sanitizeForPrompt } from '../../src/lib/llm-as-judge.js';
 import type { GEvalConfig } from '../../src/lib/llm-as-judge.js';
 import {
   LLMJudge,
-  RELEVANCE_CRITERIA,
-  COHERENCE_CRITERIA,
 } from '../../src/lib/llm-judge-config.js';
 
 /** B9: Tool correctness criteria — evaluates whether tool usage was appropriate */
@@ -139,7 +137,7 @@ function resolveTranscriptPath(originalPath: string): string | null {
 }
 
 /** Discover transcripts from telemetry logs (primary) and directory scan (fallback) */
-async function discoverTranscripts(): Promise<TranscriptInfo[]> {
+async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   // Track by sessionId (UUID) to deduplicate across sources
   const seen = new Set<string>();
   const transcripts: TranscriptInfo[] = [];
@@ -218,8 +216,7 @@ async function discoverTranscripts(): Promise<TranscriptInfo[]> {
   }
 
   const scanCount = transcripts.length - logCount;
-  if (scanCount > 0) {
-  }
+  if (scanCount > 0) { /* scan results logged externally */ }
 
   return transcripts;
 }
@@ -732,7 +729,7 @@ export function toOTelRecord(ev: EvalRecord): object {
 // Deduplication
 // ============================================================================
 
-function loadExistingKeys(): Set<string> {
+function _loadExistingKeys(): Set<string> {
   const keys = new Set<string>();
   const evalFiles = readdirSync(TELEMETRY_DIR)
     .filter(f => f.startsWith('evaluations-') && f.endsWith('.jsonl'));
@@ -853,6 +850,7 @@ function writeEvaluations(evals: EvalRecord[]): void {
   for (const [date, records] of byDate) {
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
     const content = records.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
+    appendFileSync(outFile, content);
   }
 }
 
@@ -906,15 +904,14 @@ async function main() {
   }
 
 
-  let allTurns: Turn[] = [];
+  const allTurns: Turn[] = [];
   for (const info of transcripts) {
     const turns = await extractTurns(info);
     allTurns.push(...turns);
   }
 
   // Apply limit
-  if (limit < allTurns.length) {
-  }
+  if (limit < allTurns.length) { /* truncated by --limit */ }
 
   if (dryRun) {
     // P2-14: Accurate cost estimate based on tool result presence
@@ -922,24 +919,23 @@ async function main() {
     const estEvals = allTurns.reduce((sum, t) =>
       sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
     // B7: Estimate tokens from actual content length (~4 chars/token)
-    const estInputTokens = allTurns.reduce((sum, t) => {
+    const _estInputTokens = allTurns.reduce((sum, t) => {
       const contentChars = t.userText.length + t.assistantText.length
         + t.toolResults.reduce((s, r) => s + r.length, 0);
       const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
       return sum + Math.ceil(contentChars / 4) * evalsPerTurn;
     }, 0);
-    const estOutputTokens = estEvals * 200;
+    const _estOutputTokens = estEvals * 200;
     // Haiku 3.5 pricing: $0.80/1M input, $4.00/1M output
-    const HAIKU_INPUT_PER_M = 0.80;
-    const HAIKU_OUTPUT_PER_M = 4.0;
+    const _HAIKU_INPUT_PER_M = 0.80;
+    const _HAIKU_OUTPUT_PER_M = 4.0;
 
     const bySession = new Map<string, number>();
     for (const t of allTurns) {
       bySession.set(t.sessionId.slice(0, 8), (bySession.get(t.sessionId.slice(0, 8)) ?? 0) + 1);
     }
     const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-    for (const [sid, count] of sorted) {
-    }
+    for (const [_sid, _count] of sorted) { /* dry-run summary */ }
     return;
   }
 
@@ -965,8 +961,7 @@ async function main() {
     if (seed) {
       const seedResult = seedEvaluations(allTurns, existingKeys);
       flatEvals = seedResult.evals;
-      if (seedResult.canaryCount > 0) {
-      }
+      if (seedResult.canaryCount > 0) { /* canary turns detected */ }
     } else {
       const llm = await createAnthropicProvider();
       const judge = new LLMJudge(llm, {
@@ -1001,14 +996,12 @@ async function main() {
     for (const ev of flatEvals) {
       byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
     }
-    for (const [name, count] of byCat) {
-    }
+    for (const [_name, _count] of byCat) { /* summary output */ }
 
     // P1-6: Report failures
     const failureEntries = Object.entries(evalFailures).filter(([, n]) => n > 0);
     if (failureEntries.length > 0) {
-      for (const [name, count] of failureEntries) {
-      }
+      for (const [_name, _count] of failureEntries) { /* failure report */ }
     }
   } finally {
     releaseLock();

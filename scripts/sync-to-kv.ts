@@ -28,7 +28,7 @@ import {
   getQualityMetric,
   QUALITY_METRICS,
 } from '../../dist/lib/quality-metrics.js';
-import { computeCoverageHeatmap, computePipelineView } from '../../dist/lib/quality-visualization.js';
+import { computePipelineView } from '../../dist/lib/quality-visualization.js';
 import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../dist/lib/quality-metrics.js';
 import type { EvaluationResult, StepScore } from '../../dist/backends/index.js';
 import {
@@ -188,8 +188,7 @@ function kvBulkPut(entries: KVEntry[]): number {
     try {
       writeFileSync(tmpFile, JSON.stringify(batch));
       if (dryRun) {
-        for (const e of batch) {
-        }
+        for (const _e of batch) { /* dry-run logging */ }
         written += batch.length;
         continue;
       }
@@ -208,7 +207,7 @@ function kvBulkPut(entries: KVEntry[]): number {
       }
       written += batch.length;
     } finally {
-      try { unlinkSync(tmpFile); } catch {}
+      try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
     }
   }
   return written;
@@ -1052,7 +1051,7 @@ async function main(): Promise<void> {
   agentEntries.push({ key: 'meta:agents', value: JSON.stringify(agentSummaryList) });
 
   const allEntries = [...entries, ...sessionEntries, ...traceEntries, ...agentEntries];
-  const totalComputed = allEntries.length;
+  const _totalComputed = allEntries.length;
 
   // ---- Delta sync: skip unchanged entries ----
   const prevState = loadSyncState();
@@ -1093,14 +1092,13 @@ async function main(): Promise<void> {
   ];
   const deferred = changed.length - (toWrite.length - 1); // -1 excludes meta:lastSync
 
-  const referencedInBatch = new Set(
+  const _referencedInBatch = new Set(
     toWrite
       .map(e => extractTraceId(e.key))
       .filter((id): id is string => id != null && referencedTraceIds.has(id)),
   ).size;
 
-  if (deferred > 0) {
-  }
+  if (deferred > 0) { /* deferred entries logged externally */ }
 
   const written = kvBulkPut(toWrite);
 
@@ -1158,7 +1156,7 @@ async function main(): Promise<void> {
   saveLastCoverage(coverage);
 
   const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
-  const actualDeferred = deferred + limitDeferred;
+  const _actualDeferred = deferred + limitDeferred;
 }
 
 main().catch((err) => {

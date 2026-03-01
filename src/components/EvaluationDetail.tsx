@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { EvaluationTable, type EvalRow } from './EvaluationTable.js';
 import { useMetricEvaluations } from '../hooks/useMetricEvaluations.js';
 import type { Period } from '../types.js';
@@ -15,14 +15,12 @@ export function EvaluationDetail({
   period?: Period;
 }) {
   const [showAll, setShowAll] = useState(false);
-  const prevMetricRef = useRef(metricName);
+  const [prevMetric, setPrevMetric] = useState(metricName);
 
-  useEffect(() => {
-    if (prevMetricRef.current !== metricName) {
-      prevMetricRef.current = metricName;
-      setShowAll(false);
-    }
-  }, [metricName]);
+  if (prevMetric !== metricName) {
+    setPrevMetric(metricName);
+    setShowAll(false);
+  }
 
   const { data, isLoading } = useMetricEvaluations(metricName, period, {
     limit: 200,

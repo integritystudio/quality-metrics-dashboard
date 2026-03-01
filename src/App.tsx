@@ -35,9 +35,6 @@ import type {
   Period,
   QualityDashboardSummary,
   RoleViewType,
-  ExecutiveView as ExecutiveViewType,
-  OperatorView as OperatorViewType,
-  AuditorView as AuditorViewType,
   MetricDetailResult,
   MetricDynamics,
 } from './types.js';

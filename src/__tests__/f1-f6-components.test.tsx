@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, within, act } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { CQIHero } from '../components/CQIHero.js';
 import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';

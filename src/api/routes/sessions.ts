@@ -7,7 +7,7 @@ import {
   loadLogsBySessionId,
 } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { EvaluationResult, TraceSpan, StepScore } from '../../../../dist/backends/index.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
 
 export const sessionRoutes = new Hono();
 

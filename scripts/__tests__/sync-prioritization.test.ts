@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { prioritizeTraces, computeBudgetAllocation, MIN_TRACE_BUDGET } from '../sync-to-kv.js';
+import { prioritizeTraces, computeBudgetAllocation } from '../sync-to-kv.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 
 type KVEntry = { key: string; value: string };

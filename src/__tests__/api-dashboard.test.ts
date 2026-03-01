@@ -199,10 +199,10 @@ describe('GET /quality/live', () => {
       makeMockEval('relevance', 0.85, '2026-01-15T23:00:00.000Z'),
       makeMockEval('coherence', 0.9, '2026-01-15T22:00:00.000Z'),
     ];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([
       ['relevance', [evals[0]]],
       ['coherence', [evals[1]]],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]) as any);
   });
 

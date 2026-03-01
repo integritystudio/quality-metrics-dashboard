@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { computeCoverageHeatmap } from '../../../../dist/lib/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';

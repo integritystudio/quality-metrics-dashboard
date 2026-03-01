@@ -20,7 +20,7 @@ export function useShortcut(key: string, description: string, scope: string, act
   const ctx = useContext(KeyboardNavContext);
   const register = ctx?.register;
   const actionRef = useRef(action);
-  actionRef.current = action;
+  useEffect(() => { actionRef.current = action; });
   const stableAction = useCallback(() => actionRef.current(), []);
   useEffect(() => {
     if (!register) return;

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, cleanup } from '@testing-library/react';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
 import { AlertList } from '../components/AlertList.js';

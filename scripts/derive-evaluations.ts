@@ -68,7 +68,7 @@ function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
   if (!isBuiltin && !isMcp) return null;
 
   const success = isBuiltin ? attrs['builtin.success'] : attrs['mcp.success'];
-  const hasError = isBuiltin ? attrs['builtin.has_error'] : attrs['mcp.has_error'];
+  const _hasError = isBuiltin ? attrs['builtin.has_error'] : attrs['mcp.has_error'];
   const tool = isBuiltin ? attrs['builtin.tool'] : attrs['mcp.tool'];
   const errorType = isBuiltin ? attrs['builtin.error_type'] : attrs['mcp.error_type'];
   const server = isMcp ? attrs['mcp.server'] : undefined;
@@ -352,10 +352,10 @@ function main(): void {
     .sort();
 
   const allEvals: EvalRecord[] = [];
-  let spanCount = 0;
+  let _spanCount = 0;
 
   for (const file of traceFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
+    join(TELEMETRY_DIR, file);
 
     for (const line of lines) {
       let span: TraceSpan;
@@ -364,7 +364,7 @@ function main(): void {
       } catch {
         continue;
       }
-      spanCount++;
+      _spanCount++;
 
       // Derive per-span evaluations
       const toolCorr = deriveToolCorrectness(span);
@@ -394,13 +394,13 @@ function main(): void {
 
   // Write evaluation files, preserving existing non-rule (LLM judge) evaluations
   const RULE_EVALUATOR = 'telemetry-rule-engine';
-  let totalWritten = 0;
+  let _totalWritten = 0;
   let preservedCount = 0;
   for (const [date, evals] of byDate) {
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
 
     // Read existing evaluations and keep any that weren't produced by derive (e.g. LLM judge)
-    let preserved: string[] = [];
+    const preserved: string[] = [];
     if (existsSync(outFile)) {
       const existingLines = readFileSync(outFile, 'utf-8').split('\n').filter(Boolean);
       for (const line of existingLines) {
@@ -420,7 +420,7 @@ function main(): void {
     const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
     const content = [...ruleLines, ...preserved].join('\n') + '\n';
     writeFileSync(outFile, content);
-    totalWritten += evals.length + preserved.length;
+    _totalWritten += evals.length + preserved.length;
     preservedCount += preserved.length;
   }
 
@@ -429,10 +429,8 @@ function main(): void {
   for (const ev of allEvals) {
     byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
   }
-  if (preservedCount > 0) {
-  }
-  for (const [name, count] of byCat) {
-  }
+  if (preservedCount > 0) { /* logged externally */ }
+  for (const [_name, _count] of byCat) { /* logged externally */ }
 }
 
 // Only run when executed directly (not imported as module for testing)

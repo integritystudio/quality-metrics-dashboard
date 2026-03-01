@@ -1,9 +1,7 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import {
   computeDashboardSummary,
   computeRoleView,
-  QUALITY_METRICS,
 } from '../../../../dist/lib/quality-metrics.js';
 import type { RoleViewType } from '../../../../dist/lib/quality-metrics.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';

@@ -42,8 +42,7 @@ if (limitIdx !== -1) {
 
 // Auto-fallback to --seed when no API key is present
 const autoSeed = !seed && !skipJudge && !process.env.ANTHROPIC_API_KEY;
-if (autoSeed) {
-}
+if (autoSeed) { /* fallback to seed mode */ }
 
 // Preflight: dist/ must exist for sync-to-kv (imports compiled quality-metrics)
 if (!skipSync && !existsSync(DIST_DIR)) {
@@ -67,8 +66,7 @@ function runStep(name: string, script: string, extraArgs: string[] = []): void {
 // --- Step 1: derive-evaluations (always writes; skipped under --dry-run) ---
 if (!dryRun) {
   runStep('derive-evaluations', 'derive-evaluations.ts');
-} else {
-}
+} else { /* dry-run: skip derive */ }
 
 // --- Step 2: judge-evaluations ---
 if (!skipJudge) {
@@ -87,6 +85,5 @@ if (!skipSync) {
 }
 
 // --- Summary ---
-for (const r of results) {
-}
-const total = results.reduce((sum, r) => sum + r.ms, 0);
+for (const _r of results) { /* step summary */ }
+const _total = results.reduce((sum, r) => sum + r.ms, 0);

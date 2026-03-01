@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from '../components/Indicators.js';
 import { HealthOverview } from '../components/HealthOverview.js';
 import { AlertList } from '../components/AlertList.js';

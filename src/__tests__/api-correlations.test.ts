@@ -34,10 +34,10 @@ beforeEach(vi.clearAllMocks);
 
 describe('GET /correlations', () => {
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([
       ['relevance', [{ scoreValue: 0.8, timestamp: '2026-01-15T12:00:00Z', traceId: 't1' }]],
       ['coherence', [{ scoreValue: 0.9, timestamp: '2026-01-15T12:00:00Z', traceId: 't1' }]],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]) as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(computeCorrelationMatrix).mockReturnValue([[1, 0.5], [0.5, 1]] as any);

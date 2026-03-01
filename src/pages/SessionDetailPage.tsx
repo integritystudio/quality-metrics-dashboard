@@ -137,9 +137,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   if (!data) return null;
 
   const {
-    dataSources, timespan, sessionInfo, tokenTotals, toolUsage, mcpUsage,
+    dataSources, sessionInfo, toolUsage, mcpUsage,
     agentActivity, fileAccess, gitCommits, tokenProgression, spanBreakdown,
-    hookLatency, alertSummary, codeStructure, errors, evaluationBreakdown,
+    alertSummary, codeStructure, errors,
     multiAgentEvaluation, evaluations,
   } = data;
 

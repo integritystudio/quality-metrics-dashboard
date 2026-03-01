@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { TrendChart } from './TrendChart.js';
 import { useMetricDetail } from '../hooks/useMetricDetail.js';
-import { useTrend } from '../hooks/useTrend.js';
 import type { Period, MetricDynamics } from '../types.js';
 
 interface MetricCompareProps {
@@ -13,7 +11,6 @@ interface MetricCompareProps {
 
 export function MetricCompare({ metricName, period, availableMetrics, onMetricChange }: MetricCompareProps) {
   const { data: detail } = useMetricDetail(metricName, period);
-  const { data: trend } = useTrend(metricName ?? '', period, 10);
 
   if (!metricName) {
     return (

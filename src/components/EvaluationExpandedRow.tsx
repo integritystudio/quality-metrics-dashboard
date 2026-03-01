@@ -19,12 +19,11 @@ export function StepScoreChip({ step, score, explanation }: {
   );
 }
 
-export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score, index }: {
+export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score }: {
   toolName: string;
   toolCorrect: boolean;
   argsCorrect: boolean;
   score: number;
-  index: number;
 }) {
   const ok = toolCorrect && argsCorrect;
   const color = ok ? '#26d97f' : '#f04438';
@@ -88,7 +87,6 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
                 toolCorrect={tv.toolCorrect}
                 argsCorrect={tv.argsCorrect}
                 score={tv.score}
-                index={i}
               />
             ))}
           </div>

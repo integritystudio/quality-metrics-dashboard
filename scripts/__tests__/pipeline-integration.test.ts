@@ -26,7 +26,6 @@ import {
 import {
   seedEvaluations,
   toOTelRecord,
-  isCanaryTurn,
   type Turn,
   type EvalRecord as JudgeEvalRecord,
 } from '../judge-evaluations.js';
