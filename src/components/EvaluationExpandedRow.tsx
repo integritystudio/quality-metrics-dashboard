@@ -53,12 +53,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
     (row.toolVerifications && row.toolVerifications.length > 0);
 
   return (
-    <div className="eval-expanded-content" style={{
-      background: 'var(--bg-elevated)',
-      borderRadius: 'var(--radius)',
-      padding: 16,
-      animation: 'fade-in 0.15s ease-in-out',
-    }}>
+    <div className="eval-expanded-content">
       {row.explanation && (
         <SectionBlock label="Explanation">
           <div className="text-xs" style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
@@ -100,19 +95,20 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
         </SectionBlock>
       )}
 
+      {/* back-link (not ArrowLink) — different class with margin-bottom reset via mb-0 */}
       {(row.traceId || row.sessionId) && (
         <div className="gap-4" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex' }}>
           {row.traceId && (
-            <Link href={`/evaluations/trace/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
+            <Link href={`/evaluations/trace/${row.traceId}`} className="back-link mb-0">
               View full evaluation detail &rarr;
             </Link>
           )}
           {row.sessionId ? (
-            <Link href={`/sessions/${row.sessionId}`} className="back-link" style={{ marginBottom: 0 }}>
+            <Link href={`/sessions/${row.sessionId}`} className="back-link mb-0">
               View trace spans &rarr;
             </Link>
           ) : row.traceId ? (
-            <Link href={`/traces/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
+            <Link href={`/traces/${row.traceId}`} className="back-link mb-0">
               View trace spans &rarr;
             </Link>
           ) : null}
