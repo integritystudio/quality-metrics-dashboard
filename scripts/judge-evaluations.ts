@@ -25,6 +25,8 @@ import type { GEvalConfig } from '../../src/lib/llm-as-judge.js';
 import {
   LLMJudge,
 } from '../../src/lib/llm-judge-config.js';
+import type { DatasetRunRecord } from '../../src/backends/index.js';
+import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
 
 /** B9: Tool correctness criteria — evaluates whether tool usage was appropriate */
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
@@ -903,6 +905,10 @@ async function main() {
     limit = Math.min(parsed, MAX_TURN_LIMIT);
   }
 
+  // Optional dataset scoping: --dataset-id <uuid>
+  const datasetIdx = args.indexOf('--dataset-id');
+  const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
+
 
   const allTurns: Turn[] = [];
   for (const info of transcripts) {
@@ -990,6 +996,28 @@ async function main() {
 
     // Write results
     writeEvaluations(flatEvals);
+
+    // Write dataset run record if scoped to a dataset
+    if (datasetId && flatEvals.length > 0) {
+      const backend = new LocalJsonlBackend(TELEMETRY_DIR);
+      const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
+      // Look up current dataset version
+      let datasetVersion = 1;
+      try {
+        const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
+        if (dsResult.action === 'get') datasetVersion = dsResult.dataset.version ?? 1;
+      } catch { /* dataset may not exist locally — use version 1 */ }
+      const runRecord: DatasetRunRecord = {
+        id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        datasetId,
+        datasetVersion,
+        runAt: new Date().toISOString(),
+        evaluationNames: evalNames,
+        resultCount: flatEvals.length,
+        evaluator: seed ? 'seed' : 'llm-judge',
+      };
+      await backend.appendDatasetRun(runRecord);
+    }
 
     // Summary
     const byCat = new Map<string, number>();
