@@ -189,7 +189,6 @@ function kvBulkPut(entries: KVEntry[]): number {
       writeFileSync(tmpFile, JSON.stringify(batch));
       if (dryRun) {
         for (const e of batch) {
-          console.log(`[dry-run] PUT ${e.key} (${e.value.length} bytes)`);
         }
         written += batch.length;
         continue;
@@ -208,7 +207,6 @@ function kvBulkPut(entries: KVEntry[]): number {
         throw new Error(`Wrangler KV bulk put failed for ${batch.length} entries${batchLabel}. Ensure wrangler is installed and authenticated. Error: ${msg}`);
       }
       written += batch.length;
-      console.log(`PUT ${batch.length} entries${batchLabel}`);
     } finally {
       try { unlinkSync(tmpFile); } catch {}
     }
@@ -351,8 +349,8 @@ function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[
 }
 
 function computeTimespan(evaluations: EvaluationResult[]) {
-  let tsMin = Infinity;
-  let tsMax = -Infinity;
+  const tsMin = Infinity;
+  const tsMax = -Infinity;
   for (const ev of evaluations) {
     const t = new Date(ev.timestamp).getTime();
     if (t < tsMin) tsMin = t;
@@ -786,7 +784,6 @@ async function main(): Promise<void> {
       }
     } catch { /* skip malformed */ }
   }
-  console.log(`Collected ${referencedTraceIds.size} trace IDs referenced by metric cards`);
 
   // Trend data per metric × period (10 buckets) — reuses cached grouped evals
   const TREND_BUCKETS = 10;
@@ -830,7 +827,7 @@ async function main(): Promise<void> {
         const detail = scores.length > 0
           ? computeMetricDetail(bucket.evals, config as QualityMetricConfig, { topN: 0, bucketCount: 0, previousValues })
           : undefined;
-        let dynamics = undefined;
+        const dynamics = undefined;
         if (detail?.trend) {
           dynamics = computeMetricDynamics(detail.trend, previousTrend, periodHours);
           previousTrend = detail.trend;
@@ -877,7 +874,6 @@ async function main(): Promise<void> {
     pushToGroup(evalsByTrace, ev.traceId, ev);
   }
   const traceIds = [...evalsByTrace.keys()];
-  console.log(`Found ${traceIds.length} unique traces with evaluations`);
 
   // Query all spans once for the period and group by traceId
   const allSpans = await backend.queryTraces({
@@ -904,7 +900,6 @@ async function main(): Promise<void> {
       value: JSON.stringify({ traceId, spans, evaluations: traceEvals }),
     });
   }
-  console.log(`Computed ${traceEntries.length} trace KV entries`);
 
   // ---- Pre-compute session detail data ----
   // Single pass: group spans by session and build traceId → sessionId mapping
@@ -943,7 +938,7 @@ async function main(): Promise<void> {
 
     // Accumulate agent cross-session stats from detail
     for (const ag of detail.agentActivity) {
-      let acc = agentCrossSession.get(ag.agentName);
+      const acc = agentCrossSession.get(ag.agentName);
       if (!acc) {
         acc = {
           totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
@@ -999,7 +994,6 @@ async function main(): Promise<void> {
       }
     }
   }
-  console.log(`Computed ${sessionEntries.length} session KV entries`);
 
   // Build agent KV entries
   const agentEntries: KVEntry[] = [];
@@ -1056,7 +1050,6 @@ async function main(): Promise<void> {
   // Sort agent list by invocations descending
   agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
   agentEntries.push({ key: 'meta:agents', value: JSON.stringify(agentSummaryList) });
-  console.log(`Computed ${agentEntries.length - 1} agent KV entries + meta:agents`);
 
   const allEntries = [...entries, ...sessionEntries, ...traceEntries, ...agentEntries];
   const totalComputed = allEntries.length;
@@ -1064,7 +1057,6 @@ async function main(): Promise<void> {
   // ---- Delta sync: skip unchanged entries ----
   const prevState = loadSyncState();
   const changed = filterChanged(allEntries, prevState);
-  console.log(`Computed ${totalComputed} total KV entries, ${changed.length} changed since last sync`);
 
   if (changed.length === 0) {
     // Still update lastSync timestamp
@@ -1081,7 +1073,6 @@ async function main(): Promise<void> {
     if (prevCoverage) {
       saveLastCoverage({ ...prevCoverage, lastChecked: now.toISOString() });
     }
-    console.log('No changes to sync');
     return;
   }
 
@@ -1107,11 +1098,8 @@ async function main(): Promise<void> {
       .map(e => extractTraceId(e.key))
       .filter((id): id is string => id != null && referencedTraceIds.has(id)),
   ).size;
-  console.log(`Trace budget: ${traceBudget}/${traceChanged.length} changed traces`);
-  console.log(`Referenced traces in this batch: ${referencedInBatch}/${referencedTraceIds.size}`);
 
   if (deferred > 0) {
-    console.log(`Budget ${WRITE_BUDGET}: writing ${toWrite.length} entries, deferring ${deferred} to next run`);
   }
 
   const written = kvBulkPut(toWrite);
@@ -1171,7 +1159,6 @@ async function main(): Promise<void> {
 
   const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
   const actualDeferred = deferred + limitDeferred;
-  console.log(`Sync complete: wrote ${written} entries (${actualDeferred} deferred, ${totalComputed} total computed)`);
 }
 
 main().catch((err) => {

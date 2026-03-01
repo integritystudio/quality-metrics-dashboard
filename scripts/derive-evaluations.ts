@@ -350,14 +350,12 @@ function main(): void {
   const traceFiles = readdirSync(TELEMETRY_DIR)
     .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
     .sort();
-  console.log(`Found ${traceFiles.length} trace files in ${TELEMETRY_DIR}`);
 
   const allEvals: EvalRecord[] = [];
   let spanCount = 0;
 
   for (const file of traceFiles) {
     const filepath = join(TELEMETRY_DIR, file);
-    console.log(`  ${file}: ${lines.length} spans`);
 
     for (const line of lines) {
       let span: TraceSpan;
@@ -424,7 +422,6 @@ function main(): void {
     writeFileSync(outFile, content);
     totalWritten += evals.length + preserved.length;
     preservedCount += preserved.length;
-    console.log(`Wrote ${evals.length} evaluations to evaluations-${date}.jsonl${preserveNote}`);
   }
 
   // Summary
@@ -433,11 +430,8 @@ function main(): void {
     byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
   }
   if (preservedCount > 0) {
-    console.log(`\nPreserved ${preservedCount} existing LLM judge evaluations across all files`);
   }
-  console.log(`\nSummary: ${totalWritten} evaluations from ${spanCount} spans`);
   for (const [name, count] of byCat) {
-    console.log(`  ${name}: ${count}`);
   }
 }
 

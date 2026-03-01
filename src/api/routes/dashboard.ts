@@ -38,7 +38,7 @@ function computeSparklineData(
   const counts = new Array(buckets).fill(0);
 
   for (const ev of evaluations) {
-    if (ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
     const ts = new Date(ev.timestamp).getTime();
     const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
     if (idx >= 0) {

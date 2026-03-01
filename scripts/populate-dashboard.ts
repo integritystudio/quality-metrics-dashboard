@@ -43,7 +43,6 @@ if (limitIdx !== -1) {
 // Auto-fallback to --seed when no API key is present
 const autoSeed = !seed && !skipJudge && !process.env.ANTHROPIC_API_KEY;
 if (autoSeed) {
-  console.log('[populate] No ANTHROPIC_API_KEY detected — auto-enabling --seed for judge step');
 }
 
 // Preflight: dist/ must exist for sync-to-kv (imports compiled quality-metrics)
@@ -56,7 +55,6 @@ interface StepResult { name: string; ms: number }
 const results: StepResult[] = [];
 
 function runStep(name: string, script: string, extraArgs: string[] = []): void {
-  console.log(`\n${'='.repeat(60)}\n[populate] Step: ${name}\n${'='.repeat(60)}`);
   const start = performance.now();
   execFileSync('npx', ['tsx', join(SCRIPTS_DIR, script), ...extraArgs], {
     stdio: 'inherit',
@@ -64,14 +62,12 @@ function runStep(name: string, script: string, extraArgs: string[] = []): void {
   });
   const ms = Math.round(performance.now() - start);
   results.push({ name, ms });
-  console.log(`[populate] ${name} completed in ${ms}ms`);
 }
 
 // --- Step 1: derive-evaluations (always writes; skipped under --dry-run) ---
 if (!dryRun) {
   runStep('derive-evaluations', 'derive-evaluations.ts');
 } else {
-  console.log(`\n${'='.repeat(60)}\n[populate] Skipping derive-evaluations (--dry-run)\n${'='.repeat(60)}`);
 }
 
 // --- Step 2: judge-evaluations ---
@@ -91,10 +87,6 @@ if (!skipSync) {
 }
 
 // --- Summary ---
-console.log(`\n${'='.repeat(60)}`);
-console.log('[populate] Pipeline complete');
 for (const r of results) {
-  console.log(`  ${r.name.padEnd(25)} ${r.ms}ms`);
 }
 const total = results.reduce((sum, r) => sum + r.ms, 0);
-console.log(`  ${'total'.padEnd(25)} ${total}ms`);

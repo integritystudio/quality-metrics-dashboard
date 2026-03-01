@@ -10,8 +10,8 @@ const ROOT = resolve(import.meta.dirname, '..');
 const TREE_OUTPUT_PATH = resolve(ROOT, 'docs/repomix/token-count-tree.txt');
 const REPOMIX_TIMEOUT_MS = 60_000;
 
-// Box-drawing characters that appear on every tree line
-const TREE_LINE_RE = /[│├└─]/;
+// Tree lines contain box-drawing connectors, not just horizontal dashes
+const TREE_LINE_RE = /[│├└]/;
 
 // NO_COLOR suppresses ANSI codes so no stripping is needed
 const raw = execSync('npx repomix --token-count-tree --no-files -o /dev/null', {
@@ -28,4 +28,3 @@ if (treeLines.length === 0) {
 }
 
 writeFileSync(TREE_OUTPUT_PATH, treeLines.join('\n') + '\n');
-console.log(`Wrote ${TREE_OUTPUT_PATH}`);

@@ -640,8 +640,8 @@ describe('processBatch', () => {
   });
 
   it('respects concurrency limit', async () => {
-    let maxConcurrent = 0;
-    let current = 0;
+    const maxConcurrent = 0;
+    const current = 0;
 
     const items = [1, 2, 3, 4, 5, 6];
     await processBatch(items, 2, 0, async (n) => {

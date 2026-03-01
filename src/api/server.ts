@@ -32,6 +32,5 @@ app.route('/api', agentRoutes);
 app.route('/api', sessionRoutes);
 app.route('/api', qualityRoutes);
 
-console.log(`API server listening on http://${API_HOST}:${API_PORT}`);
 
 serve({ fetch: app.fetch, hostname: API_HOST, port: API_PORT });

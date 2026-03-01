@@ -83,7 +83,7 @@ agentRoutes.get('/agents', async (c) => {
     // Accumulate per-agent evaluation scores by metric name (prototype-safe)
     const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
     for (const ev of evaluations) {
-      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+      if (!ev.traceId || ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
       const agentNames = traceToAgents.get(ev.traceId);
       if (!agentNames) continue;
       for (const agent of agentNames) {
