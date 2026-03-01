@@ -36,7 +36,7 @@ export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
     <PageShell isLoading={isLoading} error={error} skeletonHeight={400}>
       {data && (
         <>
-          <h2 className="page-heading" style={{ marginBottom: 16 }}>Metric Correlations</h2>
+          <h2 className="text-lg mb-3">Metric Correlations</h2>
           <div className="card">
             <CorrelationHeatmap
               correlations={data.correlations}

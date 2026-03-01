@@ -132,7 +132,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
       <Link href="/" className="back-link">&larr; Back to dashboard</Link>
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="metric-card-header">
-          <h2 className="page-heading">{detail.displayName}</h2>
+          <h2 className="text-lg">{detail.displayName}</h2>
           <StatusBadge status={detail.status} />
         </div>
         <div style={{ display: 'flex', gap: 32, marginTop: 12, flexWrap: 'wrap' }}>
@@ -140,19 +140,19 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
             const val = detail.values[key];
             return (
               <div key={key} style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 600 }}>
+                <div className="mono-xl">
                   {val !== null && val !== undefined ? val.toFixed(4) : 'N/A'}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{key}</div>
+                <div className="text-secondary text-xs uppercase">{key}</div>
               </div>
             );
           })}
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 600 }}>{detail.sampleCount}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>samples</div>
+            <div className="mono-xl">{detail.sampleCount}</div>
+            <div className="text-secondary text-xs uppercase">samples</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 16, marginTop: 12, alignItems: 'center' }}>
+        <div className="flex-center" style={{ gap: 16, marginTop: 12 }}>
           <TrendIndicator trend={detail.trend} />
           <ConfidenceBadge confidence={detail.confidence} />
         </div>
@@ -185,10 +185,8 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           <h3 className="section-heading">
             Time Series ({trendData.totalEvaluations} evaluations)
             {trendData.narrowed && (
-              <span style={{
-                fontSize: 11,
+              <span className="text-muted text-xs" style={{
                 fontWeight: 400,
-                color: 'var(--text-muted)',
                 marginLeft: 8,
               }}>auto-narrowed to data range</span>
             )}

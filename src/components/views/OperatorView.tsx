@@ -8,7 +8,7 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
   return (
     <div>
       <div className={`health-banner ${data.overallStatus}`}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="flex-center" style={{ gap: 12 }}>
           <StatusBadge status={data.overallStatus} />
           <span>Operator View &middot; {data.prioritizedAlerts.length} active alert{data.prioritizedAlerts.length !== 1 ? 's' : ''}</span>
         </div>
@@ -28,7 +28,7 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
                 <div className="alert-message">
                   {dt.metricName} <TrendIndicator trend={dt.trend} />
                 </div>
-                <div className="alert-meta">
+                <div className="alert-meta text-secondary text-xs">
                   {dt.trend.previousValue?.toFixed(4)} &rarr; {dt.trend.currentValue?.toFixed(4)}
                 </div>
               </li>

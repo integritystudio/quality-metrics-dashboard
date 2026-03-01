@@ -14,11 +14,11 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
 
   return (
     <div role="region" aria-label="Evaluation pipeline funnel">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 600 }}>
+      <div className="flex-center mb-3" style={{ gap: 8 }}>
+        <span className="mono-xl">
           {overallConversionPercent.toFixed(1)}%
         </span>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>overall conversion</span>
+        <span className="text-secondary text-base">overall conversion</span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -30,7 +30,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
           return (
             <div key={stage.name}>
               {/* Stage bar */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="flex-center" style={{ gap: 12 }}>
                 <div
                   style={{
                     width: `${widthPct}%`,
@@ -53,7 +53,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>
                     {stage.displayName}
                   </span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: '#fff', whiteSpace: 'nowrap' }}>
+                  <span className="mono-xs" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
                     {stage.entryCount.toLocaleString()}
                   </span>
                 </div>
@@ -62,7 +62,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
               {/* Drop-off indicator */}
               {showDropoff && (
                 <div style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   color: dropoff.dropoffPercent > 20 ? 'var(--status-warning)' : 'var(--text-secondary)',
                   paddingLeft: 10,
                   margin: '2px 0',

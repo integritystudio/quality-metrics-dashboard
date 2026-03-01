@@ -12,7 +12,7 @@ export function StatCard({ value, label, valueColor }: StatCardProps) {
       <div className="value" style={valueColor ? { color: valueColor } : undefined}>
         {value}
       </div>
-      <div className="label">{label}</div>
+      <div className="label text-secondary text-xs">{label}</div>
     </div>
   );
 }

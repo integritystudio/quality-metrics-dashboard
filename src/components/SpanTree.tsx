@@ -78,37 +78,33 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
   return (
     <>
       <div
+        className="flex-center"
         style={{
           paddingLeft: depth * 20 + 8,
           paddingTop: 8,
           paddingBottom: 8,
           borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 14, color: isError ? 'var(--status-critical)' : 'var(--text-primary)' }}>
+        <span className="text-base" style={{ color: isError ? 'var(--status-critical)' : 'var(--text-primary)' }}>
           {STATUS_ICONS[statusCode]}
         </span>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>{node.name}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 500 }}>{node.name}</div>
+          <div className="flex-center" style={{ gap: 8 }}>
             <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 2, height: 4 }}>
               <div style={barStyle} />
             </div>
             {node.durationMs != null && (
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              <span className="mono-xs text-secondary" style={{ whiteSpace: 'nowrap' }}>
                 {node.durationMs < 1000 ? `${node.durationMs.toFixed(0)}ms` : `${(node.durationMs / 1000).toFixed(2)}s`}
               </span>
             )}
           </div>
         </div>
         {node.evalCount > 0 && (
-          <span style={{
-            fontSize: 10,
-            padding: '2px 6px',
-            borderRadius: 10,
+          <span className="text-2xs chip" style={{
             background: 'var(--accent-bg)',
             color: 'var(--accent)',
             fontWeight: 600,
@@ -128,7 +124,7 @@ export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
   const roots = buildTree(spans, evalsBySpan);
 
   if (roots.length === 0) {
-    return <div style={{ padding: 16, color: 'var(--text-muted)' }}>No spans found for this trace.</div>;
+    return <div className="text-muted" style={{ padding: 16 }}>No spans found for this trace.</div>;
   }
 
   return (

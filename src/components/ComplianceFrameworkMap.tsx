@@ -23,8 +23,8 @@ export function ComplianceFrameworkMap() {
   return (
     <div>
       {FRAMEWORKS.map(fw => (
-        <div key={fw.name} className="card" style={{ marginBottom: 16 }}>
-          <h4 style={{ fontSize: 14, marginBottom: 12 }}>{fw.name}</h4>
+        <div key={fw.name} className="card mb-3">
+          <h4 className="mb-3 text-base">{fw.name}</h4>
           <table className="eval-table" style={{ width: '100%' }}>
             <thead>
               <tr>
@@ -35,8 +35,8 @@ export function ComplianceFrameworkMap() {
             <tbody>
               {fw.articles.map(a => (
                 <tr key={a.ref}>
-                  <td style={{ fontSize: 13 }}>{a.ref}</td>
-                  <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{a.feature}</td>
+                  <td style={{ fontSize: 12 }}>{a.ref}</td>
+                  <td className="text-secondary text-xs">{a.feature}</td>
                 </tr>
               ))}
             </tbody>

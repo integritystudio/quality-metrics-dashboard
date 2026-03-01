@@ -67,6 +67,7 @@ const columns = [
     cell: ({ row }) => (
       <button
         type="button"
+        className="text-secondary text-xs"
         onClick={row.getToggleExpandedHandler()}
         aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
         style={{
@@ -74,8 +75,6 @@ const columns = [
           border: 'none',
           cursor: 'pointer',
           padding: '2px 6px',
-          fontSize: 12,
-          color: 'var(--text-secondary)',
           transition: 'transform 0.15s',
           transform: row.getIsExpanded() ? 'rotate(90deg)' : 'rotate(0deg)',
         }}
@@ -110,6 +109,7 @@ const columns = [
       const { category } = labelToOrdinal(label);
       return (
         <span
+          className="mono-xs chip"
           style={{
             ...chipBaseStyle,
             fontWeight: 500,
@@ -132,6 +132,7 @@ const columns = [
       const category = ordinalToCategory(labelToOrdinal(label).ordinal);
       return (
         <span
+          className="mono-xs chip"
           style={{
             ...chipBaseStyle,
             fontWeight: 600,
@@ -159,7 +160,7 @@ const columns = [
   columnHelper.accessor('evaluator', {
     header: 'Evaluator',
     cell: (info) => (
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+      <span className="mono-xs">
         {info.getValue() ?? '-'}
       </span>
     ),
@@ -236,7 +237,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+      <div className="mb-3" style={{ display: 'flex', gap: 6 }}>
         {(['Pass', 'Review', 'Fail'] as const).map((cat) => {
           const active = activeCategories.includes(cat);
           return (
@@ -277,7 +278,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {canSort && (
-                      <span style={{ marginLeft: 4, fontSize: 10 }}>
+                      <span style={{ marginLeft: 4, fontSize: 'var(--font-size-2xs)' }}>
                         {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
                       </span>
                     )}
@@ -308,7 +309,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
           ))}
           {table.getRowModel().rows.length === 0 && (
             <tr>
-              <td colSpan={table.getVisibleLeafColumns().length} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16 }}>
+              <td colSpan={table.getVisibleLeafColumns().length} className="text-muted" style={{ textAlign: 'center', padding: 16 }}>
                 No evaluations match the current filter.
               </td>
             </tr>

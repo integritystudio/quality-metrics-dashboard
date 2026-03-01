@@ -79,7 +79,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
   ];
 
   return (
-    <div className="provenance-panel">
+    <div className="text-xs">
       <div className="provenance-grid">
         {entries.map(({ label, value }) => value ? (
           <div key={label} style={{ display: 'contents' }}>
@@ -105,17 +105,13 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
             .map(([type, count]) => (
               <span
                 key={type}
+                className="mono-xs text-secondary chip"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4,
-                  padding: '2px 8px',
-                  borderRadius: 12,
-                  fontSize: 11,
-                  fontFamily: 'var(--font-mono)',
                   background: 'var(--bg-elevated)',
                   border: '1px solid var(--border)',
-                  color: 'var(--text-secondary)',
                 }}
               >
                 {type}
@@ -127,11 +123,11 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
         </div>
       )}
       <div className="provenance-actions">
-        <button type="button" onClick={handleExportJson}>
+        <button type="button" className="text-xs" onClick={handleExportJson}>
           Export as JSON
         </button>
         {traceId && (
-          <button type="button" onClick={handleCopyTraceLink}>
+          <button type="button" className="text-xs" onClick={handleCopyTraceLink}>
             Copy trace link
           </button>
         )}

@@ -55,12 +55,12 @@ export function CompliancePage({ period }: { period: Period }) {
               <tbody>
                 {verData.verifications.map((v, i) => (
                   <tr key={`${v.sessionId}-${v.timestamp}-${i}`}>
-                    <td style={{ fontSize: 13 }} title={new Date(v.timestamp).toLocaleString()}>
+                    <td style={{ fontSize: 12 }} title={new Date(v.timestamp).toLocaleString()}>
                       {formatTimestamp(v.timestamp)}
                     </td>
-                    <td style={{ fontSize: 13 }}>{v.verificationType}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{v.sessionId}</td>
-                    <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{v.verifierId ?? '-'}</td>
+                    <td style={{ fontSize: 12 }}>{v.verificationType}</td>
+                    <td className="mono-xs">{v.sessionId}</td>
+                    <td className="text-secondary text-xs">{v.verifierId ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -2,8 +2,8 @@ export function MetaItem({ label, value }: { label: string; value?: string | num
   if (value == null) return null;
   return (
     <div style={{ minWidth: 120 }}>
-      <div className="section-label">{label}</div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginTop: 2, wordBreak: 'break-all' }}>
+      <div className="section-label mb-1">{label}</div>
+      <div className="mono-xs" style={{ marginTop: 2, wordBreak: 'break-all' }}>
         {value}
       </div>
     </div>

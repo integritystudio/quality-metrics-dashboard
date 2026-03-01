@@ -20,8 +20,7 @@ import {
 function Stat({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div style={{ textAlign: 'center', flex: '1 1 100px', minWidth: 80 }}>
-      <div style={{
-        fontFamily: 'var(--font-mono)',
+      <div className="mono" style={{
         fontSize: 22,
         fontWeight: 700,
         color: color ?? 'var(--text-primary)',
@@ -37,12 +36,9 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
 function FreqBar({ label, count, max, color }: { label: string; count: number; max: number; color?: string }) {
   const pct = max > 0 ? (count / max) * 100 : 0;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-      <div style={{
+    <div className="flex-center mb-1-5" style={{ gap: 10 }}>
+      <div className="mono-xs text-secondary" style={{
         width: 160,
-        fontSize: 12,
-        fontFamily: 'var(--font-mono)',
-        color: 'var(--text-secondary)',
         textAlign: 'right',
         flexShrink: 0,
         overflow: 'hidden',
@@ -58,10 +54,7 @@ function FreqBar({ label, count, max, color }: { label: string; count: number; m
           transition: 'width 0.4s ease',
         }} />
       </div>
-      <div style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 11,
-        color: 'var(--text-muted)',
+      <div className="mono-xs text-muted" style={{
         width: 36,
         textAlign: 'right',
         flexShrink: 0,
@@ -86,16 +79,12 @@ function IssueCallout({ severity, title, children }: {
       padding: '10px 14px',
       marginBottom: 10,
     }}>
-      <div style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 11,
+      <div className="mono-xs uppercase" style={{
         fontWeight: 600,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
         color,
         marginBottom: 4,
       }}>{title}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+      <div className="text-secondary text-xs" style={{ lineHeight: 1.6 }}>
         {children}
       </div>
     </div>
@@ -154,18 +143,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       <div>
         <Link href="/" className="back-link">&larr; Back to dashboard</Link>
         <div className="card" style={{ padding: '32px 24px', textAlign: 'center' }}>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
+          <div className="mono-xs mb-1-5 uppercase" style={{
             color: 'var(--status-warning)',
-            marginBottom: 8,
           }}>Session Not Yet Available</div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 13,
-            color: 'var(--text-secondary)',
+          <div className="mono-xs text-secondary" style={{
             lineHeight: 1.6,
             maxWidth: 480,
             margin: '0 auto',
@@ -173,10 +154,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             This session has not been synced to the dashboard KV store yet.
             Data is synced periodically &mdash; check back after the next pipeline run.
           </div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-muted)',
+          <div className="mono-xs text-muted" style={{
             marginTop: 12,
             wordBreak: 'break-all',
           }}>{sessionId}</div>
@@ -252,16 +230,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <div style={{
-              fontSize: 10,
-              fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              color: 'var(--text-muted)',
-              marginBottom: 6,
-            }}>Session Detail</div>
-            <div style={{
-              fontFamily: 'var(--font-mono)',
+            <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
+            <div className="mono" style={{
               fontSize: 15,
               fontWeight: 600,
               color: 'var(--accent-hover)',
@@ -269,7 +239,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               marginBottom: 8,
               wordBreak: 'break-all',
             }}>{sessionId}</div>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)' }}>
+            <div className="text-secondary text-xs" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <span>{si.projectName}</span>
               {si.gitRepository && (
                 <span style={{ color: 'var(--text-muted)' }}>
@@ -278,24 +248,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 </span>
               )}
               {si.resumeCount > 1 && (
-                <span style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
+                <span className="mono text-2xs chip uppercase" style={{
                   background: 'var(--accent-muted)',
                   color: 'var(--accent-hover)',
-                  padding: '2px 8px',
-                  borderRadius: 10,
-                  letterSpacing: '0.05em',
                 }}>RESUMED ×{si.resumeCount}</span>
               )}
               {models.map(m => (
-                <span key={m} style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
+                <span key={m} className="mono text-2xs text-muted chip" style={{
                   background: 'var(--bg-elevated)',
-                  color: 'var(--text-muted)',
-                  padding: '2px 8px',
-                  borderRadius: 10,
                   border: '1px solid var(--border-subtle)',
                 }}>{m}</span>
               ))}
@@ -350,7 +310,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         defaultOpen={hasIssues}
       >
         {!hasIssues && (
-          <div style={{ color: 'var(--status-healthy)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+          <div className="mono-xs" style={{ color: 'var(--status-healthy)' }}>
             No issues detected in this session.
           </div>
         )}
@@ -368,14 +328,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           <IssueCallout severity="critical" title={plural(errorCount, 'error span')}>
             <div style={{ marginBottom: 8 }}>Tool invocations or agent calls that reported errors:</div>
             {errorDetails.slice(0, MAX_ERROR_ROWS).map((e, i) => (
-              <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginBottom: 4 }}>
+              <div key={i} className="mono-xs" style={{ marginBottom: 4 }}>
                 <span style={{ color: 'var(--status-critical)' }}>✗</span>{' '}
                 {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
                 {e.errorType && e.errorType !== 'unknown' && <span style={{ color: 'var(--text-muted)' }}> — {e.errorType}</span>}
               </div>
             ))}
             {errorCount > MAX_ERROR_ROWS && (
-              <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 4 }}>
+              <div className="text-muted text-xs" style={{ marginTop: 4 }}>
                 +{errorCount - MAX_ERROR_ROWS} more
               </div>
             )}
@@ -391,9 +351,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
                 <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{e.evaluationName}</div>
+                  <div className="mono-xs">{e.evaluationName}</div>
                   {e.explanation && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    <div className="text-muted text-xs" style={{ marginTop: 2 }}>
                       {truncateText(e.explanation, 200)}
                     </div>
                   )}
@@ -406,7 +366,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         {failedEvals.length > 0 && !hallucinationEvals.length && (
           <IssueCallout severity="warning" title={`${plural(failedEvals.length, 'evaluation')} marked fail`}>
             {failedEvals.slice(0, MAX_FAILED_EVAL_ROWS).map((e, i) => (
-              <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginBottom: 3 }}>
+              <div key={i} className="mono-xs" style={{ marginBottom: 3 }}>
                 <span style={{ color: 'var(--status-warning)' }}>⚠</span>{' '}
                 {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
               </div>
@@ -428,12 +388,11 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         health="neutral"
       >
         {tokenProgression.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No token snapshots recorded.</div>
+          <div className="text-muted text-xs">No token snapshots recorded.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{
+            <table className="mono-xs" style={{
               width: '100%', borderCollapse: 'collapse',
-              fontFamily: 'var(--font-mono)', fontSize: 12,
             }}>
               <MonoTableHead columns={[
                 { label: 'Messages' }, { label: 'Input' }, { label: 'Output' },
@@ -443,7 +402,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 {tokenProgression.map((t, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                     <td style={{ padding: '5px 12px', textAlign: 'right' }}>{t.messages}</td>
-                    <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--text-secondary)' }}>{fmtBytes(t.inputTokens)}</td>
+                    <td className="text-secondary" style={{ padding: '5px 12px', textAlign: 'right' }}>{fmtBytes(t.inputTokens)}</td>
                     <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--accent-hover)' }}>{fmtBytes(t.outputTokens)}</td>
                     <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>{fmtBytes(t.cacheRead)}</td>
                     <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>{fmtBytes(t.cacheCreation)}</td>
@@ -489,27 +448,27 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 borderRadius: 'var(--radius)',
                 padding: '10px 14px',
               }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                <div className="mono-xs mb-1-5" style={{ fontWeight: 600 }}>
                   {a.agentName}
                 </div>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700 }}>{a.invocations}</div>
+                    <div className="mono text-md" style={{ fontWeight: 700 }}>{a.invocations}</div>
                     <div className="stat-label">invocations</div>
                   </div>
                   {a.errors > 0 && (
                     <div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--status-warning)' }}>{a.errors}</div>
+                      <div className="mono text-md" style={{ fontWeight: 700, color: 'var(--status-warning)' }}>{a.errors}</div>
                       <div className="stat-label">errors</div>
                     </div>
                   )}
                   <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700 }}>{fmtBytes(a.avgOutputSize)}</div>
+                    <div className="mono text-md" style={{ fontWeight: 700 }}>{fmtBytes(a.avgOutputSize)}</div>
                     <div className="stat-label">avg output</div>
                   </div>
                 </div>
                 {a.hasRateLimit && (
-                  <div style={{ marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--status-warning)' }}>
+                  <div className="mono" style={{ marginTop: 8, fontSize: 'var(--font-size-2xs)', color: 'var(--status-warning)' }}>
                     ⚠ Hit rate limit
                   </div>
                 )}
@@ -566,27 +525,27 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     cursor: 'pointer',
                     listStyle: 'none',
                   }}>
-                    <span style={{ color: 'var(--status-healthy)', fontSize: 10, flexShrink: 0 }}>●</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, flex: 1 }}>
+                    <span style={{ color: 'var(--status-healthy)', fontSize: 'var(--font-size-2xs)', flexShrink: 0 }}>●</span>
+                    <span className="mono-xs" style={{ fontWeight: 600, flex: 1 }}>
                       {commit.subject}
                     </span>
                     {commitFiles.length > 0 && (
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
+                      <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)', flexShrink: 0 }}>
                         {plural(commitFiles.length, 'file')}
                       </span>
                     )}
                   </summary>
                   <div style={{ paddingLeft: 20, paddingBottom: 10 }}>
                     {commit.body && (
-                      <div style={{
-                        fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 8,
+                      <div className="text-secondary text-xs" style={{
+                        lineHeight: 1.6, marginBottom: 8,
                         fontFamily: 'var(--font-body)',
                       }}>
                         {commit.body}
                       </div>
                     )}
                     {commitFiles.length > 0 && (
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }}>
                         {commitFiles.map((f, fi) => (
                           <div key={fi}>{shortPath(f)}</div>
                         ))}
@@ -608,7 +567,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           health={codeStructure.some(f => f.score < 0.6) ? 'warn' : 'ok'}
         >
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+            <table className="mono-xs" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <MonoTableHead columns={[
                 { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },
                 { label: 'Lines' }, { label: 'Exports' }, { label: 'Functions' },
@@ -617,8 +576,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               <tbody>
                 {codeStructure.map((f, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '5px 10px', color: 'var(--text-secondary)' }}>{shortPath(f.file)}</td>
-                    <td style={{ padding: '5px 10px', color: 'var(--text-muted)' }}>{f.tool}</td>
+                    <td className="text-secondary" style={{ padding: '5px 10px' }}>{shortPath(f.file)}</td>
+                    <td className="text-muted" style={{ padding: '5px 10px' }}>{f.tool}</td>
                     <td style={{ padding: '5px 10px', textAlign: 'right' }}>{f.lines}</td>
                     <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.exports}</td>
                     <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.functions}</td>
@@ -650,7 +609,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         health={hallucinationEvals.length > 0 ? 'crit' : failedEvals.length > 0 ? 'warn' : evalRows.length > 0 ? 'ok' : 'neutral'}
       >
         {evalRows.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+          <div className="text-muted text-xs">
             No evaluations recorded for this session.
           </div>
         ) : (

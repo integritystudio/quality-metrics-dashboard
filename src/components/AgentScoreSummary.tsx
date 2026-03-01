@@ -18,7 +18,7 @@ export function AgentScoreSummary({ handoffScore, avgRelevance, completeness }: 
     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
       {SCORES.map(({ label, metricName }) => (
         <div key={label} style={{ textAlign: 'center' }}>
-          <div className="field-label" style={{ marginBottom: 4 }}>{label}</div>
+          <div className="field-label text-secondary text-xs mb-1">{label}</div>
           <ScoreBadge score={values[metricName]} metricName={metricName} />
         </div>
       ))}

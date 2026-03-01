@@ -48,7 +48,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
   if (agents.length === 0) {
     return (
-      <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+      <div className="text-muted" style={{ padding: '32px 0', textAlign: 'center' }}>
         No agent activity recorded for this period.
       </div>
     );
@@ -104,10 +104,10 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                 >
                   {/* Agent name with color accent */}
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div className="flex-center" style={{ gap: 8 }}>
                       {hasLinks && (
                         <span style={{
-                          fontSize: 9,
+                          fontSize: 'var(--font-size-2xs)',
                           color: 'var(--text-muted)',
                           transition: 'transform 0.15s',
                           transform: isExpanded ? 'rotate(90deg)' : 'none',
@@ -124,9 +124,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         background: color,
                         flexShrink: 0,
                       }} />
-                      <span style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 12,
+                      <span className="mono-xs" style={{
                         color: 'var(--text-primary)',
                         wordBreak: 'break-all',
                       }}>
@@ -137,8 +135,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                   {/* Invocations with inline bar */}
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, minWidth: 32 }}>
+                    <div className="flex-center" style={{ gap: 8 }}>
+                      <span className="mono-xs" style={{ minWidth: 32 }}>
                         {agent.invocations}
                       </span>
                       <div className="mini-bar" style={{ flex: 1, minWidth: 48 }}>
@@ -149,16 +147,14 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                   {/* Error rate */}
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 12,
+                    <div className="flex-center" style={{ gap: 6 }}>
+                      <span className="mono-xs" style={{
                         color: errColor,
                       }}>
                         {agent.errors > 0 ? `${(agent.errorRate * 100).toFixed(1)}%` : '\u2014'}
                       </span>
                       {agent.errors > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span className="text-muted text-xs">
                           ({agent.errors})
                         </span>
                       )}
@@ -167,14 +163,14 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                   {/* Session count */}
                   <td>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                    <span className="mono-xs">
                       {agent.sessionCount}
                     </span>
                   </td>
 
                   {/* Avg output size */}
                   <td>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <span className="mono-xs text-secondary">
                       {formatBytes(agent.avgOutputSize)}
                     </span>
                   </td>
@@ -182,9 +178,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   {/* Rate limits */}
                   <td>
                     {agent.rateLimitCount > 0 ? (
-                      <span style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 11,
+                      <span className="mono-xs" style={{
                         color: 'var(--status-warning)',
                         background: RATE_LIMIT_BADGE_BG,
                         padding: '1px 6px',
@@ -193,23 +187,17 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         {agent.rateLimitCount}x
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{'\u2014'}</span>
+                      <span className="text-muted text-xs">{'\u2014'}</span>
                     )}
                   </td>
 
                   {/* Source type */}
                   <td>
                     {topSource ? (
-                      <span style={{
-                        fontSize: 10,
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--text-muted)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                      }}>
+                      <span className="mono text-muted text-2xs uppercase">
                         {topSource}
                       </span>
-                    ) : <span style={{ color: 'var(--text-muted)' }}>{'\u2014'}</span>}
+                    ) : <span className="text-muted">{'\u2014'}</span>}
                   </td>
                 </tr>
 
@@ -232,11 +220,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             alignItems: 'center',
                             gap: 12,
                           }}>
-                            <div style={{
-                              fontSize: 11,
-                              color: 'var(--text-muted)',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.5px',
+                            <div className="text-xs text-muted uppercase" style={{
                               flexShrink: 0,
                             }}>
                               Daily Activity
@@ -248,10 +232,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
                               label={`Daily invocations for ${agent.agentName}`}
                             />
-                            <span style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 10,
-                              color: 'var(--text-muted)',
+                            <span className="mono text-muted" style={{
+                              fontSize: 'var(--font-size-2xs)',
                               flexShrink: 0,
                             }}>
                               peak {Math.max(...agent.dailyCounts)}/day
@@ -268,13 +250,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       }}>
                         {/* Sessions column */}
                         <div>
-                          <div style={{
-                            fontSize: 11,
-                            color: 'var(--text-muted)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            marginBottom: 6,
-                          }}>
+                          <div className="text-muted mb-1-5 text-xs uppercase">
                             Sessions ({agent.sessionCount})
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -282,9 +258,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               <Link
                                 key={sid}
                                 href={`/sessions/${sid}`}
+                                className="mono-xs"
                                 style={{
-                                  fontFamily: 'var(--font-mono)',
-                                  fontSize: 11,
                                   color: 'var(--accent)',
                                   textDecoration: 'none',
                                 }}
@@ -294,11 +269,11 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               </Link>
                             ))}
                             {agent.sessionIds.length === 0 && (
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>none</span>
+                              <span className="text-muted text-xs">none</span>
                             )}
                             {/* sessionCount === total unique sessions; sessionIds is capped at 50 */}
                             {agent.sessionIdsTruncated && (
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              <span className="text-muted" style={{ fontSize: 'var(--font-size-2xs)', fontStyle: 'italic' }}>
                                 +{agent.sessionCount - agent.sessionIds.length} more
                               </span>
                             )}
@@ -307,13 +282,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                         {/* Traces column */}
                         <div>
-                          <div style={{
-                            fontSize: 11,
-                            color: 'var(--text-muted)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            marginBottom: 6,
-                          }}>
+                          <div className="text-muted mb-1-5 text-xs uppercase">
                             Traces ({agent.traceIdsTotal ?? agent.traceIds.length})
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -321,9 +290,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               <Link
                                 key={tid}
                                 href={`/traces/${tid}`}
+                                className="mono-xs"
                                 style={{
-                                  fontFamily: 'var(--font-mono)',
-                                  fontSize: 11,
                                   color: 'var(--accent)',
                                   textDecoration: 'none',
                                 }}
@@ -333,10 +301,10 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               </Link>
                             ))}
                             {agent.traceIds.length === 0 && (
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>none</span>
+                              <span className="text-muted text-xs">none</span>
                             )}
                             {agent.traceIdsTruncated && (
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              <span className="text-muted" style={{ fontSize: 'var(--font-size-2xs)', fontStyle: 'italic' }}>
                                 +{(agent.traceIdsTotal ?? 0) - agent.traceIds.length} more
                               </span>
                             )}
@@ -362,7 +330,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
     return (
       <div style={{
         padding: '10px 0 4px',
-        fontSize: 11,
+        fontSize: 12,
         color: 'var(--text-muted)',
         borderBottom: '1px solid var(--border-subtle)',
         marginBottom: 4,
@@ -378,13 +346,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
       borderBottom: '1px solid var(--border-subtle)',
       marginBottom: 4,
     }}>
-      <div style={{
-        fontSize: 11,
-        color: 'var(--text-muted)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        marginBottom: 8,
-      }}>
+      <div className="text-muted mb-1-5 text-xs uppercase">
         Evaluation Metrics
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
@@ -399,10 +361,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius)',
             }}>
-              <div style={{
-                fontSize: 11,
-                color: 'var(--text-secondary)',
-                marginBottom: 4,
+              <div className="text-secondary mb-1 text-xs" style={{
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -410,13 +369,11 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
                 {name}
               </div>
               {/* Score bar */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div className="flex-center mb-1" style={{ gap: 8 }}>
                 <div className="mini-bar" style={{ flex: 1 }}>
                   <div className="mini-bar-fill" style={{ width: `${Math.min(m.avg * 100, 100)}%`, background: barColor }} />
                 </div>
-                <span style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 13,
+                <span className="mono-xs" style={{
                   fontWeight: 600,
                   color: barColor,
                   minWidth: 38,
@@ -426,12 +383,10 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
                 </span>
               </div>
               {/* Min/max range + count */}
-              <div style={{
+              <div className="mono text-muted" style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: 10,
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--text-muted)',
+                fontSize: 'var(--font-size-2xs)',
               }}>
                 <span>{m.min.toFixed(2)}\u2013{m.max.toFixed(2)}</span>
                 <span>n={m.count}</span>
@@ -482,7 +437,7 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
       ].map(({ label, value, color }) => (
         <div key={label} className="summary-count">
           <div className="value" style={color ? { color } : undefined}>{value}</div>
-          <div className="label">{label}</div>
+          <div className="label text-secondary text-xs">{label}</div>
         </div>
       ))}
     </div>

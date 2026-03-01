@@ -25,12 +25,10 @@ export function QualityLiveIndicator() {
 
   return (
     <div
-      className="quality-live-bar"
+      className="quality-live-bar flex-center"
       role="status"
       aria-label="Live quality signals"
       style={{
-        display: 'flex',
-        alignItems: 'center',
         gap: 8,
         flexWrap: 'wrap',
         padding: '6px 12px',
@@ -40,23 +38,20 @@ export function QualityLiveIndicator() {
         border: '1px solid var(--border)',
       }}
     >
-      <span style={{ color: 'var(--text-secondary)', fontWeight: 600, marginRight: 4 }}>
+      <span className="text-secondary" style={{ fontWeight: 600, marginRight: 4 }}>
         Quality
       </span>
       {data.metrics.map((m) => (
         <span
           key={m.name}
           title={`${m.name}: ${m.score.toFixed(2)} (${m.evaluatorType})`}
+          className="mono text-xs chip"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: 4,
-            padding: '2px 8px',
-            borderRadius: 12,
             background: scoreToBadgeColor(m.score) + '1a',
             color: scoreToBadgeColor(m.score),
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
             fontWeight: 500,
           }}
         >
@@ -70,7 +65,7 @@ export function QualityLiveIndicator() {
           <span style={{ fontWeight: 700 }}>{m.score.toFixed(2)}</span>
         </span>
       ))}
-      <span style={{ color: 'var(--text-secondary)', fontSize: 10, marginLeft: 'auto' }}>
+      <span className="text-secondary" style={{ fontSize: 'var(--font-size-2xs)', marginLeft: 'auto' }}>
         {formatTimestamp(data.lastUpdated)}
       </span>
     </div>

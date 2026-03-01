@@ -39,19 +39,19 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   return (
     <div role="region" aria-label="Evaluation coverage heatmap">
       {/* Summary bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 600 }}>
+      <div className="flex-center mb-3" style={{ gap: 12 }}>
+        <span className="mono-xl">
           {overallCoveragePercent.toFixed(1)}%
         </span>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+        <span className="text-secondary text-base">
           coverage ({metrics.length} metrics x {inputs.length} inputs)
         </span>
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12 }}>
+      <div className="mb-3" style={{ display: 'flex', gap: 16, fontSize: 12 }}>
         {(['covered', 'partial', 'missing'] as const).map(status => (
-          <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div key={status} className="flex-center" style={{ gap: 4 }}>
             <div style={{
               width: 12, height: 12, borderRadius: 2,
               background: STATUS_COLORS[status],
@@ -74,19 +74,19 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
         >
           {/* Header row */}
           <div role="row" style={{ display: 'contents' }}>
-            <div role="columnheader" style={{ fontSize: 11, fontWeight: 600 }} />
+            <div role="columnheader" style={{ fontSize: 12, fontWeight: 600 }} />
             {displayInputs.map(input => (
               <div
                 key={input}
                 role="columnheader"
                 title={input}
+                className="text-secondary"
                 style={{
-                  fontSize: 9,
+                  fontSize: 'var(--font-size-2xs)',
                   writingMode: 'vertical-lr',
                   textAlign: 'end',
                   overflow: 'hidden',
                   maxHeight: 60,
-                  color: 'var(--text-secondary)',
                 }}
               >
                 {truncateId(input, 8)}
@@ -126,6 +126,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     title={`${metric} / ${truncateId(input)}: ${count} evaluation${count !== 1 ? 's' : ''}`}
                     onMouseEnter={() => setHovered({ metric, input })}
                     onMouseLeave={() => setHovered(null)}
+                    className="mono"
                     style={{
                       width: 28,
                       height: 28,
@@ -136,7 +137,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 9,
+                      fontSize: 'var(--font-size-2xs)',
                       fontFamily: 'var(--font-mono)',
                       color: '#fff',
                       transition: 'opacity 0.15s',
@@ -152,7 +153,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       </div>
 
       {truncated && (
-        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
+        <p className="text-secondary text-xs" style={{ marginTop: 8 }}>
           Showing {maxInputs} of {inputs.length} inputs.
         </p>
       )}
@@ -160,10 +161,10 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       {/* Gap summary */}
       {gaps.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <h4 style={{ fontSize: 14, marginBottom: 8 }}>Coverage Gaps</h4>
-          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13 }}>
+          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
+          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
             {gaps.map(gap => (
-              <li key={gap.metric} style={{ marginBottom: 4 }}>
+              <li key={gap.metric} className="mb-1">
                 <strong>{gap.metric}</strong>: {gap.coveragePercent.toFixed(0)}% covered
                 ({gap.missingInputs.length} input{gap.missingInputs.length !== 1 ? 's' : ''} missing)
               </li>

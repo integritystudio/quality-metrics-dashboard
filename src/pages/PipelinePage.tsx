@@ -7,16 +7,13 @@ import type { Period } from '../types.js';
 function T2SamplingStage() {
   return (
     <div
+      className="flex-center text-secondary text-xs"
       style={{
-        display: 'flex',
-        alignItems: 'center',
         gap: 10,
         padding: '10px 14px',
         borderRadius: 6,
         border: '1px dashed var(--border, #2a2a3e)',
         background: 'var(--surface, #1a1a2e)',
-        fontSize: 12,
-        color: 'var(--text-secondary)',
         marginTop: 12,
       }}
     >
@@ -29,7 +26,7 @@ function T2SamplingStage() {
         borderRadius: '50%',
         background: 'var(--accent, #6366f1)',
         color: '#fff',
-        fontSize: 10,
+        fontSize: 'var(--font-size-2xs)',
         fontWeight: 700,
         flexShrink: 0,
       }}>
@@ -51,7 +48,7 @@ export function PipelinePage({ period }: { period: Period }) {
     <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
       {data && (
         <>
-          <h2 className="page-heading" style={{ marginBottom: 16 }}>Evaluation Pipeline</h2>
+          <h2 className="text-lg mb-3">Evaluation Pipeline</h2>
           <div className="card">
             <PipelineFunnel
               stages={data.stages}

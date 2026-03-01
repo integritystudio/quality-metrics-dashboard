@@ -14,7 +14,7 @@ interface TurnTimelineProps {
 
 export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
   if (turns.length === 0) {
-    return <div style={{ padding: 16, color: 'var(--text-muted)' }}>No turns to display.</div>;
+    return <div className="text-muted" style={{ padding: 16 }}>No turns to display.</div>;
   }
 
   return (
@@ -37,29 +37,29 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
               flexShrink: 0,
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, color, textTransform: 'uppercase' }}>{agent}</span>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>#{turn.turnIndex}</span>
+            <div className="flex-center mb-1-5" style={{ justifyContent: 'space-between' }}>
+              <span className="text-2xs uppercase" style={{ fontWeight: 600, color }}>{agent}</span>
+              <span className="text-muted text-2xs">#{turn.turnIndex}</span>
             </div>
 
             {/* Relevance bar */}
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>Relevance</div>
+            <div className="mb-1-5">
+              <div className="text-secondary" style={{ fontSize: 'var(--font-size-2xs)', marginBottom: 2 }}>Relevance</div>
               <div className="mini-bar" style={{ '--bar-h': '6px' } as React.CSSProperties}>
                 <div className="mini-bar-fill" style={{ width: `${turn.relevance * 100}%`, background: bandColor }} />
               </div>
             </div>
 
             {/* Task progress bar */}
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>Progress</div>
+            <div className="mb-1-5">
+              <div className="text-secondary" style={{ fontSize: 'var(--font-size-2xs)', marginBottom: 2 }}>Progress</div>
               <div className="mini-bar" style={{ '--bar-h': '6px' } as React.CSSProperties}>
                 <div className="mini-bar-fill" style={{ width: `${turn.taskProgress * 100}%`, background: 'var(--status-healthy)' }} />
               </div>
             </div>
 
             {turn.hasError && (
-              <div style={{ fontSize: 10, color: 'var(--status-critical)', fontWeight: 600, marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--status-critical)', fontWeight: 600, marginTop: 4 }}>
                 Error
               </div>
             )}

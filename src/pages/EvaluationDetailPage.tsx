@@ -32,10 +32,10 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
       ) : (
         <>
           <div className="eval-detail-header">
-            <h2 className="page-heading">{heading}</h2>
+            <h2 className="text-lg">{heading}</h2>
             <div className="eval-detail-meta">
-              <span className="id-chip">{traceId}</span>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span className="mono-xs text-secondary">{traceId}</span>
+              <span className="text-secondary text-xs">
                 {evaluations.length} evaluation{evaluations.length !== 1 ? 's' : ''}
               </span>
               <Link href={`/traces/${traceId}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>
@@ -54,16 +54,16 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
 
           {evaluations.map((ev, i) => (
             <div key={`${ev.evaluationName}-${ev.timestamp}-${i}`} className="eval-detail-card card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="flex-center mb-3" style={{ justifyContent: 'space-between' }}>
+                <div className="flex-center" style={{ gap: 12 }}>
                   <ScoreBadge
                     score={ev.scoreValue ?? null}
                     metricName={ev.evaluationName}
                     label={ev.scoreLabel ?? (ev.scoreValue != null ? ev.scoreValue.toFixed(4) : undefined)}
                   />
-                  <span style={{ fontSize: 14, fontWeight: 500 }}>{ev.evaluationName}</span>
+                  <span className="text-base" style={{ fontWeight: 500 }}>{ev.evaluationName}</span>
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title={new Date(ev.timestamp).toLocaleString()}>
+                <span className="text-secondary text-xs" title={new Date(ev.timestamp).toLocaleString()}>
                   {formatTimestamp(ev.timestamp)}
                 </span>
               </div>
@@ -75,7 +75,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
 
               {ev.stepScores && ev.stepScores.length > 0 && (
                 <div style={{ marginTop: 12 }}>
-                  <div className="section-label">Step Scores</div>
+                  <div className="section-label mb-1">Step Scores</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                     {ev.stepScores.map(s => (
                       <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
@@ -85,7 +85,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
               )}
 
               <details open style={{ marginTop: 12 }}>
-                <summary className="cot-summary">Provenance &amp; Audit Trail</summary>
+                <summary className="cot-summary text-xs">Provenance &amp; Audit Trail</summary>
                 <div style={{ paddingTop: 8 }}>
                   <ProvenancePanel
                     evaluationName={ev.evaluationName}

@@ -7,10 +7,6 @@ import type { EvalRow } from './EvaluationTable.js';
 
 export const chipBaseStyle: CSSProperties = {
   display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: 10,
-  fontSize: 11,
-  fontFamily: 'var(--font-mono)',
 };
 
 export function StepScoreChip({ step, score, explanation }: {
@@ -22,6 +18,7 @@ export function StepScoreChip({ step, score, explanation }: {
   const color = SCORE_COLORS[band];
   return (
     <span
+      className="mono-xs chip"
       title={explanation ?? `Step ${step}: ${score.toFixed(2)}`}
       style={{ ...chipBaseStyle, backgroundColor: `${color}20`, color }}
     >
@@ -41,6 +38,7 @@ export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score
   const color = ok ? '#26d97f' : '#f04438';
   return (
     <span
+      className="mono-xs chip"
       title={`tool: ${toolCorrect ? 'correct' : 'wrong'}, args: ${argsCorrect ? 'correct' : 'wrong'}, score: ${score.toFixed(2)}`}
       style={{ ...chipBaseStyle, backgroundColor: `${color}20`, color }}
     >
@@ -71,23 +69,23 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       animation: 'fade-in 0.15s ease-in-out',
     }}>
       {row.explanation && (
-        <div style={{ marginBottom: 12 }}>
-          <div className="section-label">Explanation</div>
-          <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+        <div className="mb-3">
+          <div className="section-label mb-1">Explanation</div>
+          <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
             {row.explanation}
           </div>
         </div>
       )}
 
       {meta.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 12 }}>
+        <div className="mb-3" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
           {meta.map(m => <MetaItem key={m.label} label={m.label} value={m.value} />)}
         </div>
       )}
 
       {row.stepScores && row.stepScores.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <div className="section-label" style={{ marginBottom: 6 }}>Step Scores</div>
+        <div className="mb-3">
+          <div className="section-label mb-1-5">Step Scores</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {row.stepScores.map(s => (
               <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
@@ -98,7 +96,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
 
       {row.toolVerifications && row.toolVerifications.length > 0 && (
         <div>
-          <div className="section-label" style={{ marginBottom: 6 }}>Tool Verifications</div>
+          <div className="section-label mb-1-5">Tool Verifications</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {row.toolVerifications.map((tv, i) => (
               <ToolVerificationChip
@@ -134,7 +132,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       )}
 
       {!hasDetail && !row.traceId && !row.sessionId && (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+        <div className="text-muted text-xs">
           No additional detail available.
         </div>
       )}

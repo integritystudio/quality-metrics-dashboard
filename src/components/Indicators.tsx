@@ -10,7 +10,7 @@ const STATUS_SHAPES: Record<string, string> = {
 export function StatusBadge({ status }: { status: string }) {
   const shape = STATUS_SHAPES[status] ?? STATUS_SHAPES.no_data;
   return (
-    <span className={`status-badge ${status}`} aria-label={`Status: ${status}`}>
+    <span className={`status-badge text-xs ${status}`} aria-label={`Status: ${status}`}>
       {shape} {status}
     </span>
   );
@@ -39,7 +39,7 @@ export function ConfidenceBadge({ confidence }: { confidence?: ConfidenceIndicat
   if (!confidence) return null;
   const symbol = CONFIDENCE_SYMBOLS[confidence.level] ?? '\u25CB';
   return (
-    <span className="confidence" aria-label={`Confidence: ${confidence.level}`}>
+    <span className="text-secondary text-xs" aria-label={`Confidence: ${confidence.level}`}>
       {symbol} {confidence.level}
     </span>
   );

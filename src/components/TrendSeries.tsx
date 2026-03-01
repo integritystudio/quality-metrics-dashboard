@@ -73,12 +73,12 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           <CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
-            tick={{ fill: COLORS.text, fontSize: 11 }}
+            tick={{ fill: COLORS.text, fontSize: 12 }}
             stroke={COLORS.grid}
           />
           <YAxis
             domain={[yMin - yPad, yMax + yPad]}
-            tick={{ fill: COLORS.text, fontSize: 11 }}
+            tick={{ fill: COLORS.text, fontSize: 12 }}
             stroke={COLORS.grid}
             tickFormatter={(v: number) => v.toFixed(2)}
             width={48}
@@ -134,7 +134,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', fontSize: 11, color: COLORS.text, marginTop: 4 }}>
+      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', fontSize: 12, color: COLORS.text, marginTop: 4 }}>
         <span><span style={{ color: COLORS.line }}>&#9473;</span> avg</span>
         <span><span style={{ opacity: 0.5 }}>- -</span> p50</span>
         <span><span style={{ opacity: 0.3 }}>&#9608;</span> p10-p90</span>

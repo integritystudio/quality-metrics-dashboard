@@ -13,13 +13,13 @@ export function CoveragePage({ period }: { period: Period }) {
     <PageShell isLoading={isLoading} error={error} skeletonHeight={400}>
       {data && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-            <h2 className="page-heading" style={{ margin: 0 }}>Evaluation Coverage</h2>
+          <div className="flex-center mb-3" style={{ gap: 16 }}>
+            <h2 className="text-lg" style={{ margin: 0 }}>Evaluation Coverage</h2>
             <select
               value={inputKey}
               onChange={(e) => setInputKey(e.target.value as InputKey)}
               aria-label="Group by"
-              style={{ fontSize: 13, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)' }}
+              style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)' }}
             >
               <option value="traceId">By Trace</option>
               <option value="sessionId">By Session</option>

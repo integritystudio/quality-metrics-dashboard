@@ -23,17 +23,17 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
         const avg = evs.reduce((s, e) => s + (e.scoreValue ?? 0), 0) / evs.length;
         const card = (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
+            gap: 6,
             padding: '4px 8px', borderRadius: 6,
             background: 'var(--bg-elevated)',
             border: '1px solid var(--border)',
             ...(traceId ? { cursor: 'pointer', transition: 'border-color 0.15s' } : {}),
           }}
-          className={traceId ? 'eval-summary-card' : undefined}
+          className={traceId ? 'flex-center eval-summary-card' : 'flex-center'}
           >
             <span style={{ fontSize: 12 }}>{name}</span>
             <ScoreBadge score={avg} metricName={name} label={avg.toFixed(2)} />
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({evs.length})</span>
+            <span className="text-muted text-2xs">({evs.length})</span>
           </div>
         );
 

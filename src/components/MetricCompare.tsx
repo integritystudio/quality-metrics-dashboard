@@ -17,7 +17,7 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
 
   if (!metricName) {
     return (
-      <div style={{ padding: 24, color: 'var(--text-muted)', textAlign: 'center' }}>
+      <div className="text-muted" style={{ padding: 24, textAlign: 'center' }}>
         Select a metric from the heatmap or dropdown
       </div>
     );
@@ -28,27 +28,27 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
       <select
         value={metricName}
         onChange={(e) => onMetricChange(e.target.value)}
+        className="mb-3"
         style={{
-          marginBottom: 12,
           padding: '4px 8px',
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',
           borderRadius: 4,
           color: 'var(--text-primary)',
-          fontSize: 13,
+          fontSize: 12,
         }}
       >
         {availableMetrics.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
 
       {detail && (
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div className="mb-3" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {(['avg', 'p50', 'p95'] as const).map(key => (
             <div key={key} style={{ textAlign: 'center' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 600 }}>
+              <div className="mono text-md" style={{ fontWeight: 600 }}>
                 {detail.values[key]?.toFixed(4) ?? 'N/A'}
               </div>
-              <div className="field-label">{key}</div>
+              <div className="field-label text-secondary text-xs">{key}</div>
             </div>
           ))}
         </div>

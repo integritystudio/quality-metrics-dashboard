@@ -12,23 +12,23 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (
     <div>
       <div className={`health-banner ${data.overallStatus}`}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="flex-center" style={{ gap: 12 }}>
           <StatusBadge status={data.overallStatus} />
           <span>Executive Summary</span>
         </div>
         <div className="summary-counts">
           <div className="summary-count">
             <div className="value">{data.summary.totalMetrics}</div>
-            <div className="label">Total</div>
+            <div className="label text-secondary text-xs">Total</div>
           </div>
           <div className="summary-count">
             <div className="value" style={{ color: 'var(--status-healthy)' }}>{data.summary.healthyMetrics}</div>
-            <div className="label">Healthy</div>
+            <div className="label text-secondary text-xs">Healthy</div>
           </div>
           {data.slaCompliantCount !== undefined && (
             <div className="summary-count">
               <div className="value">{data.slaCompliantCount}/{data.slaTotalCount}</div>
-              <div className="label">SLAs Met</div>
+              <div className="label text-secondary text-xs">SLAs Met</div>
             </div>
           )}
         </div>
@@ -40,7 +40,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
             {data.topIssues.map((issue: { name: string; displayName: string; status: string; alertCount: number }) => (
               <li key={issue.name} className={`alert-item ${issue.status}`}>
                 <div className="alert-message">{issue.displayName}</div>
-                <div className="alert-meta">
+                <div className="alert-meta text-secondary text-xs">
                   Status: {issue.status} &middot; {issue.alertCount} alert{issue.alertCount !== 1 ? 's' : ''}
                 </div>
               </li>

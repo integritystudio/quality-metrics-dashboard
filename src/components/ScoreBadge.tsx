@@ -24,8 +24,8 @@ const SCORE_SHAPES: Record<ScoreColorBand | 'no_data', string> = {
 function TooltipRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="tooltip-row">
-      <span>{label}</span>
-      <span style={mono ? { fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-label)' } : undefined}>{value}</span>
+      <span className="text-secondary">{label}</span>
+      <span className={mono ? 'mono-xs' : undefined}>{value}</span>
     </div>
   );
 }
@@ -46,12 +46,12 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
       {evaluatorType && <TooltipRow label="Type" value={evaluatorType} />}
       {explanation && (
         <div className="tooltip-row" style={{ flexDirection: 'column', gap: 2 }}>
-          <span>Explanation</span>
-          <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-label)' }}>{truncateText(explanation, 120)}</span>
+          <span className="text-secondary">Explanation</span>
+          <span className="text-secondary text-xs">{truncateText(explanation, 120)}</span>
         </div>
       )}
       {traceId && (
-        <Link href={`/evaluations/trace/${traceId}`} className="tooltip-link">
+        <Link href={`/evaluations/trace/${traceId}`} className="tooltip-link text-xs">
           View full explanation &rarr;
         </Link>
       )}

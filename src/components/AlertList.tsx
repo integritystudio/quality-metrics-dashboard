@@ -7,11 +7,11 @@ function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
   return (
     <li className={`alert-item ${alert.severity}`}>
       <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta">
+      <div className="alert-meta text-secondary text-xs">
         {alert.aggregation} = {alert.actualValue?.toFixed(4)} (threshold: {alert.threshold?.toFixed(4)})
       </div>
       {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <div className="remediation">
+        <div className="remediation text-xs">
           Hint: {alert.remediationHints[0]}
         </div>
       )}
@@ -51,7 +51,7 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
   return (
     <li className={`alert-item alert-compound ${alert.severity}`}>
       <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta">
+      <div className="alert-meta text-secondary text-xs">
         {alert.aggregation} = {alert.actualValue?.toFixed(4)} (threshold: {alert.threshold?.toFixed(4)})
       </div>
 
@@ -62,7 +62,7 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
       />
 
       {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <ol className="remediation-list">
+        <ol className="remediation-list text-xs">
           {alert.remediationHints.map((hint, i) => (
             <li key={i}>{hint}</li>
           ))}
@@ -71,9 +71,9 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
 
       {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
         <div className="alert-related">
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Related:</span>
+          <span className="text-secondary text-xs">Related:</span>
           {alert.relatedMetrics.map((m) => (
-            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link">
+            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
               {m}
             </Link>
           ))}

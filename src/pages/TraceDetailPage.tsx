@@ -19,10 +19,10 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
       ) : (
         <>
           <div className="eval-detail-header">
-            <h2 className="page-heading">Trace Detail</h2>
+            <h2 className="text-lg">Trace Detail</h2>
             <div className="eval-detail-meta">
-              <span className="id-chip">{traceId}</span>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span className="mono-xs text-secondary">{traceId}</span>
+              <span className="text-secondary text-xs">
                 {data.spans.length} span{data.spans.length !== 1 ? 's' : ''} &middot; {data.evaluations.length} evaluation{data.evaluations.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -52,7 +52,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
 
           {data.spans.length === 0 && data.evaluations.length > 0 && (
             <div className="view-section">
-              <div className="card" style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>
+              <div className="card text-muted text-xs" style={{ padding: 16 }}>
                 Span data not yet available for this trace. Evaluations are shown above.
               </div>
             </div>

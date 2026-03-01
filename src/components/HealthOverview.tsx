@@ -56,7 +56,7 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <StatusBadge status={overallStatus} />
-          <span style={{ fontSize: 14 }}>
+          <span className="text-base">
             {overallStatus === 'healthy' && 'All metrics within thresholds'}
             {overallStatus === 'warning' && 'Some metrics need attention'}
             {overallStatus === 'critical' && 'Critical issues detected'}
@@ -80,19 +80,19 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
       <div className="summary-counts">
         <div className="summary-count">
           <div className="value">{summary.totalMetrics}</div>
-          <div className="label">Total</div>
+          <div className="label text-secondary text-xs">Total</div>
         </div>
         <div className="summary-count">
           <div className="value" style={{ color: 'var(--status-healthy)' }}>{summary.healthyMetrics}</div>
-          <div className="label">Healthy</div>
+          <div className="label text-secondary text-xs">Healthy</div>
         </div>
         <div className="summary-count">
           <div className="value" style={{ color: 'var(--status-warning)' }}>{summary.warningMetrics}</div>
-          <div className="label">Warning</div>
+          <div className="label text-secondary text-xs">Warning</div>
         </div>
         <div className="summary-count">
           <div className="value" style={{ color: 'var(--status-critical)' }}>{summary.criticalMetrics}</div>
-          <div className="label">Critical</div>
+          <div className="label text-secondary text-xs">Critical</div>
         </div>
       </div>
     </div>

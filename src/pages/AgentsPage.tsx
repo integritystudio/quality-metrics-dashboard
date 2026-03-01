@@ -11,9 +11,9 @@ export function AgentsPage({ period }: { period: Period }) {
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
       <div className="eval-detail-header">
-        <h2 className="page-heading">Agent Activity</h2>
+        <h2 className="text-lg">Agent Activity</h2>
         <div className="eval-detail-meta">
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          <span className="text-secondary text-xs">
             {data?.startDate} &ndash; {data?.endDate}
           </span>
         </div>

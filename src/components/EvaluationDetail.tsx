@@ -36,7 +36,7 @@ export function EvaluationDetail({
     <div>
       <EvaluationTable evaluations={displayEvals} />
       {metricName && (
-        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="flex-center" style={{ marginTop: 12, gap: 12 }}>
           {!showAll ? (
             <button
               type="button"
@@ -47,16 +47,16 @@ export function EvaluationDetail({
                 color: 'var(--accent)',
                 padding: '6px 14px',
                 borderRadius: 6,
-                fontSize: 13,
+                fontSize: 12,
                 cursor: 'pointer',
               }}
             >
               Show all evaluations
             </button>
           ) : isLoading ? (
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Loading...</span>
+            <span className="text-secondary text-xs">Loading...</span>
           ) : data ? (
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            <span className="text-secondary text-xs">
               Showing {data.rows.length} of {data.total} evaluations
             </span>
           ) : null}

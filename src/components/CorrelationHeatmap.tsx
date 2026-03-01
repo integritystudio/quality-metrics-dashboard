@@ -82,13 +82,12 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
         <div
           key={`col-${m}`}
           role="columnheader"
+          className="text-secondary text-xs"
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 11,
             fontWeight: 600,
-            color: 'var(--text-secondary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -104,14 +103,13 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
           {/* Row header */}
           <div
             role="rowheader"
+            className="text-secondary text-xs"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
               paddingRight: 8,
-              fontSize: 11,
               fontWeight: 600,
-              color: 'var(--text-secondary)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -141,6 +139,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(2)}`}
                 title={tooltip}
                 onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
+                className="mono-xs"
                 style={{
                   cursor: !isDiag && onCellClick ? 'pointer' : 'default',
                   display: 'flex',
@@ -148,8 +147,6 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                   justifyContent: 'center',
                   backgroundColor: bg,
                   color: isDiag ? 'var(--text-secondary)' : contrastText(value),
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
                   fontWeight: 500,
                   borderRadius: 2,
                   border: isToxic ? '2px solid #f04438' : 'none',

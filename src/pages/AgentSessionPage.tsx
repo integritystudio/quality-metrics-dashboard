@@ -20,10 +20,10 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
       {data && evaluation && (
         <>
           <div className="eval-detail-header">
-            <h2 className="page-heading">Agent Session</h2>
+            <h2 className="text-lg">Agent Session</h2>
             <div className="eval-detail-meta">
-              <span className="id-chip">{sessionId}</span>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span className="mono-xs text-secondary">{sessionId}</span>
+              <span className="text-secondary text-xs">
                 {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
               </span>
             </div>
@@ -34,8 +34,8 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
             {evaluation.errorPropagationTurns > 0 && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Error Propagation</div>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--status-critical)' }}>
+                <div className="mono-xs text-muted mb-1 uppercase">Error Propagation</div>
+                <span className="mono text-md" style={{ color: 'var(--status-critical)' }}>
                   {plural(evaluation.errorPropagationTurns, 'turn')}
                 </span>
               </div>

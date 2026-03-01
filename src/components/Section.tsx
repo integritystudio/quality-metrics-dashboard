@@ -31,9 +31,7 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
 
   return (
     <details open={defaultOpen} style={{ marginBottom: 2 }}>
-      <summary style={{
-        display: 'flex',
-        alignItems: 'center',
+      <summary className="flex-center" style={{
         gap: 12,
         padding: '12px 20px',
         background: 'var(--bg-card)',
@@ -44,30 +42,19 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
         listStyle: 'none',
         transition: 'background 0.15s',
       }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9,
+        <span className="mono" style={{
+          fontSize: 'var(--font-size-2xs)',
           color: railColor,
           transition: 'transform 0.2s',
           display: 'inline-block',
         }}>▶</span>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
+        <span className="mono-xs text-secondary uppercase" style={{
           fontWeight: 600,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: 'var(--text-secondary)',
           flex: 1,
         }}>{title}</span>
         {badge && (
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-muted)',
+          <span className="mono-xs text-muted chip" style={{
             background: 'var(--bg-elevated)',
-            padding: '2px 8px',
-            borderRadius: 10,
             border: '1px solid var(--border-subtle)',
           }}>{badge}</span>
         )}

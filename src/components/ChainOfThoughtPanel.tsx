@@ -11,7 +11,7 @@ export function ChainOfThoughtPanel({ explanation, evaluator }: ChainOfThoughtPa
     <div className="cot-panel">
       {explanation && (
         <details open>
-          <summary className="cot-summary">Explanation</summary>
+          <summary className="cot-summary text-xs">Explanation</summary>
           <div className="cot-content">{explanation}</div>
         </details>
       )}
@@ -21,7 +21,7 @@ export function ChainOfThoughtPanel({ explanation, evaluator }: ChainOfThoughtPa
         </div>
       )}
       {!explanation && !evaluator && (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+        <div className="text-muted text-xs">
           No chain-of-thought data available.
         </div>
       )}

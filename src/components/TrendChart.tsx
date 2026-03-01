@@ -94,7 +94,7 @@ export function TrendChart({
             />
             <YAxis
               domain={[yMin - yPad, yMax + yPad]}
-              tick={{ fill: COLORS.text, fontSize: 11 }}
+              tick={{ fill: COLORS.text, fontSize: 12 }}
               stroke={COLORS.grid}
               tickFormatter={(v: number) => v.toFixed(2)}
               width={48}
@@ -115,7 +115,7 @@ export function TrendChart({
                 y={warningThreshold}
                 stroke={COLORS.warning}
                 strokeDasharray="6 3"
-                label={{ value: 'Warning', fill: COLORS.warning, fontSize: 11, position: 'right' }}
+                label={{ value: 'Warning', fill: COLORS.warning, fontSize: 12, position: 'right' }}
               />
             )}
             {criticalThreshold != null && (
@@ -123,7 +123,7 @@ export function TrendChart({
                 y={criticalThreshold}
                 stroke={COLORS.critical}
                 strokeDasharray="6 3"
-                label={{ value: 'Critical', fill: COLORS.critical, fontSize: 11, position: 'right' }}
+                label={{ value: 'Critical', fill: COLORS.critical, fontSize: 12, position: 'right' }}
               />
             )}
             <Line
@@ -156,26 +156,25 @@ export function TrendChart({
           flexWrap: 'wrap',
           marginTop: 8,
           padding: '8px 0',
-          fontSize: 13,
+          fontSize: 12,
           color: COLORS.text,
         }}>
           <div>
             <span style={{ fontWeight: 600 }}>Velocity:</span>{' '}
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
+            <span className="mono">
               {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
             </span>
           </div>
           <div>
             <span style={{ fontWeight: 600 }}>Acceleration:</span>{' '}
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
+            <span className="mono">
               {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
             </span>
           </div>
           {dynamics.projectedBreachTime && (
             <div>
               <span style={{ fontWeight: 600 }}>Breach in:</span>{' '}
-              <span style={{
-                fontFamily: 'var(--font-mono)',
+              <span className="mono" style={{
                 color: dynamics.projectedStatus === 'critical' ? COLORS.critical : COLORS.warning,
               }}>
                 {formatBreachTime(dynamics.projectedBreachTime)}
@@ -184,7 +183,7 @@ export function TrendChart({
           )}
           <div>
             <span style={{ fontWeight: 600 }}>Confidence:</span>{' '}
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
+            <span className="mono">
               {(dynamics.confidence * 100).toFixed(0)}%
             </span>
           </div>

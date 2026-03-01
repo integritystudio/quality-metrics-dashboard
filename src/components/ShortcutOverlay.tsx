@@ -14,24 +14,24 @@ export function ShortcutOverlay() {
   return (
     <div className="shortcut-overlay-backdrop" onClick={toggleOverlay} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
       <div className="shortcut-overlay" onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{ fontSize: 16, margin: 0 }}>Keyboard Shortcuts</h2>
-          <button type="button" onClick={toggleOverlay} aria-label="Close" style={{
-            background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-secondary)',
+        <div className="flex-center mb-3" style={{ justifyContent: 'space-between' }}>
+          <h2 className="text-md" style={{ margin: 0 }}>Keyboard Shortcuts</h2>
+          <button type="button" onClick={toggleOverlay} aria-label="Close" className="text-lg text-secondary" style={{
+            background: 'none', border: 'none', cursor: 'pointer',
           }}>
             &times;
           </button>
         </div>
         {[...grouped.entries()].map(([scope, items]) => (
-          <div key={scope} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
+          <div key={scope} className="mb-3">
+            <div className="text-secondary mb-1-5 text-xs uppercase" style={{ fontWeight: 600 }}>
               {scope}
             </div>
             {items.map(item => (
-              <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13 }}>
+              <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12 }}>
                 <span>{item.description}</span>
-                <kbd style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 11, padding: '2px 6px',
+                <kbd className="mono-xs" style={{
+                  padding: '2px 6px',
                   borderRadius: 4, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
                 }}>
                   {item.key}
@@ -40,8 +40,8 @@ export function ShortcutOverlay() {
             ))}
           </div>
         ))}
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-          Press <kbd style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>?</kbd> or <kbd style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>Esc</kbd> to close
+        <div className="text-muted text-xs" style={{ marginTop: 8 }}>
+          Press <kbd className="mono-xs">?</kbd> or <kbd className="mono-xs">Esc</kbd> to close
         </div>
       </div>
     </div>

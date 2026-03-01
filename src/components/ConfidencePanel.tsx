@@ -33,7 +33,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
       <div className="variance-bar-track">
         <div className="variance-bar-fill" style={{ width: `${pct}%`, background: SCORE_COLORS[band] }} />
       </div>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', minWidth: 36 }}>
+      <span className="mono-xs text-secondary" style={{ minWidth: 36 }}>
         {value.toFixed(3)}
       </span>
     </div>
@@ -47,33 +47,32 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
   const hasMultiJudge = evaluatorScores && evaluatorScores.length > 1;
 
   return (
-    <div className="confidence-panel">
+    <div className="text-xs">
       <div className="confidence-header">
-        <span style={{ color: levelColor(level), fontSize: 14 }}>
+        <span className="text-base" style={{ color: levelColor(level) }}>
           {levelShape(level)} {level}
         </span>
         <span className="confidence-method">({method})</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px', fontSize: 12, marginBottom: 12 }}>
-        <span style={{ color: 'var(--text-secondary)' }}>Sample Count</span>
-        <span style={{ fontFamily: 'var(--font-mono)' }}>{sampleCount}</span>
+      <div className="mb-3" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px', fontSize: 12 }}>
+        <span className="text-secondary">Sample Count</span>
+        <span className="mono">{sampleCount}</span>
 
         {scoreStdDev != null && (
           <>
-            <span style={{ color: 'var(--text-secondary)' }}>Score Variance</span>
+            <span className="text-secondary">Score Variance</span>
             <VarianceBar value={scoreStdDev} max={0.5} />
           </>
         )}
 
-        <span style={{ color: 'var(--text-secondary)' }}>Evaluators</span>
-        <span style={{ fontFamily: 'var(--font-mono)' }}>{evaluatorCount}</span>
+        <span className="text-secondary">Evaluators</span>
+        <span className="mono">{evaluatorCount}</span>
 
         {evaluatorAgreement != null && (
           <>
-            <span style={{ color: 'var(--text-secondary)' }}>Agreement</span>
-            <span style={{
-              fontFamily: 'var(--font-mono)',
+            <span className="text-secondary">Agreement</span>
+            <span className="mono" style={{
               color: evaluatorAgreement > 0.8 ? SCORE_COLORS.excellent : evaluatorAgreement > 0.5 ? SCORE_COLORS.adequate : SCORE_COLORS.failing,
             }}>
               {(evaluatorAgreement * 100).toFixed(0)}%
@@ -84,16 +83,16 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
 
       {hasMultiJudge && (
         <div>
-          <div className="section-label" style={{ marginBottom: 6 }}>Judge Panel</div>
+          <div className="section-label mb-1-5">Judge Panel</div>
           <div className="agreement-grid">
             <span className="ag-header">Evaluator</span>
             <span className="ag-header">Score</span>
             <span className="ag-header">Label</span>
             {evaluatorScores!.map((es) => (
               <div key={es.evaluator} style={{ display: 'contents' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{es.evaluator}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{es.score.toFixed(4)}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{es.label ?? '-'}</span>
+                <span className="mono-xs">{es.evaluator}</span>
+                <span className="mono-xs">{es.score.toFixed(4)}</span>
+                <span className="text-secondary text-xs">{es.label ?? '-'}</span>
               </div>
             ))}
           </div>
