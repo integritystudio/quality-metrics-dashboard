@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColorBand, SCORE_COLORS, truncateId } from '../lib/quality-utils.js';
+import { scoreColorBand, SCORE_COLORS, truncateId, fmtBytes } from '../lib/quality-utils.js';
 import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 import { Sparkline } from './Sparkline.js';
@@ -17,11 +17,6 @@ function errorRateColor(rate: number): string {
   return 'var(--status-critical)';
 }
 
-function formatBytes(n: number): string {
-  if (n === 0) return '\u2014';
-  if (n < 1024) return `${n}B`;
-  return `${(n / 1024).toFixed(1)}K`;
-}
 
 interface AgentActivityPanelProps {
   agents: AgentStat[];
@@ -166,7 +161,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   {/* Avg output size */}
                   <td>
                     <span className="mono-xs text-secondary">
-                      {formatBytes(agent.avgOutputSize)}
+                      {fmtBytes(agent.avgOutputSize)}
                     </span>
                   </td>
 

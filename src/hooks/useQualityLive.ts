@@ -1,18 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { API_BASE, POLL_INTERVAL_MS } from '../lib/constants.js';
-
-interface LiveMetric {
-  name: string;
-  score: number;
-  evaluatorType: string;
-  timestamp: string;
-}
-
-export interface QualityLiveData {
-  metrics: LiveMetric[];
-  sessionCount: number;
-  lastUpdated: string;
-}
+import type { QualityLiveData } from '../types.js';
 
 export interface UseQualityLiveResult {
   data: QualityLiveData | null;
@@ -27,7 +15,7 @@ export function useQualityLive(): UseQualityLiveResult {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const cancelled = false;
 
     async function fetchLive() {
       try {
