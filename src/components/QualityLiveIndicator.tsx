@@ -1,8 +1,6 @@
 import { useQualityLive } from '../hooks/useQualityLive.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
-
-const SCORE_THRESHOLD_GREEN = 0.8;
-const SCORE_THRESHOLD_YELLOW = 0.5;
+import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW } from '../lib/constants.js';
 
 function scoreToBadgeColor(score: number): string {
   if (score >= SCORE_THRESHOLD_GREEN) return 'var(--status-healthy)';

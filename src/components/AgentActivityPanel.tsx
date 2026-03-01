@@ -2,11 +2,10 @@ import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColorBand, SCORE_COLORS, truncateId } from '../lib/quality-utils.js';
-import { AGENT_PALETTE } from '../lib/constants.js';
+import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
 import { Sparkline } from './Sparkline.js';
 
 const COLUMN_COUNT = 7;
-const ERROR_RATE_WARNING_THRESHOLD = 0.1;
 const RATE_LIMIT_BADGE_BG = 'var(--bg-status-warning)';
 
 type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
