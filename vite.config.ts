@@ -60,6 +60,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/__tests__/setup.ts'],
-    exclude: ['node_modules/**', 'scripts/__tests__/**'],
+    exclude: ['node_modules/**', 'scripts/__tests__/**', 'e2e/**'],
   },
 });
