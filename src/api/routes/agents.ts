@@ -4,17 +4,9 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.j
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES } from '../../lib/constants.js';
 
 export const agentRoutes = new Hono();
-
-/**
- * GET /api/agents?period=30d
- * Returns aggregate agent stats across all sessions for the given period.
- */
-const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
-const MAX_IDS = 50;
-// 'unknown' = attribute absent on span (explicit default); 'other' = unrecognized value (clamped)
-const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
 agentRoutes.get('/agents', async (c) => {
   const periodParam = c.req.query('period') ?? '30d';

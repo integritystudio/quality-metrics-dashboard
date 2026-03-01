@@ -1,15 +1,8 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { computeCorrelationMatrix } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-
-const PeriodSchema = z.enum(['24h', '7d', '30d']).default('30d');
-const PERIOD_MS: Record<string, number> = {
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
+import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
 
 export const correlationRoutes = new Hono();
 

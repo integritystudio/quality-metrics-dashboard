@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT } from '../../lib/constants.js';
 
 export const qualityRoutes = new Hono();
 
@@ -16,9 +17,6 @@ interface QualityLiveResponse {
   sessionCount: number;
   lastUpdated: string;
 }
-
-const LIVE_WINDOW_MS = 24 * 60 * 60 * 1000;
-const EVAL_LIMIT = 100;
 
 /**
  * GET /api/quality/live

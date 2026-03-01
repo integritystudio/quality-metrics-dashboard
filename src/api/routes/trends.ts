@@ -13,15 +13,8 @@ import {
 import type { MetricTrend } from '../../../../dist/lib/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-
-const PeriodSchema = z.enum(['24h', '7d', '30d']).default('7d');
+import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-
-const PERIOD_MS: Record<string, number> = {
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
 
 export const trendRoutes = new Hono();
 

@@ -605,6 +605,27 @@ body {
   margin-bottom: var(--space-1);
 }
 
+/* Session detail — stat label, vitals divider, frequency grid */
+.stat-label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.vitals-divider {
+  width: 1px;
+  background: var(--border-subtle);
+  margin: 0 8px;
+  align-self: stretch;
+}
+
+.freq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 0 32px;
+}
+
 /* View sections */
 .view-section {
   margin-bottom: var(--space-8);

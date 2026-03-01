@@ -7,6 +7,13 @@ import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
 import { Section, type SectionHealth } from '../components/Section.js';
 import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
+import {
+  HALLUCINATION_SCORE_THRESHOLD,
+  MAX_ERROR_ROWS,
+  MAX_HALLUCINATION_ROWS,
+  MAX_FAILED_EVAL_ROWS,
+  SCORE_DISPLAY_PRECISION,
+} from '../lib/constants.js';
 
 // ─── Stat chip ───────────────────────────────────────────────────────────────
 
@@ -20,7 +27,7 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
         color: color ?? 'var(--text-primary)',
         lineHeight: 1.1,
       }}>{value}</div>
-      <div style={{ ...STAT_LABEL_STYLE, letterSpacing: '0.1em', marginTop: 3 }}>{label}</div>
+      <div className="stat-label" style={{ letterSpacing: '0.1em', marginTop: 3 }}>{label}</div>
     </div>
   );
 }
@@ -95,30 +102,6 @@ function IssueCallout({ severity, title, children }: {
   );
 }
 
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-const MAX_ERROR_ROWS = 10;
-const MAX_HALLUCINATION_ROWS = 8;
-const MAX_FAILED_EVAL_ROWS = 6;
-const SCORE_DISPLAY_PRECISION = 3;
-
-// ─── Shared styles ──────────────────────────────────────────────────────────
-
-const STAT_LABEL_STYLE = {
-  fontSize: 10,
-  fontFamily: 'var(--font-mono)',
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-} as const;
-
-const VITALS_DIVIDER_STYLE = { width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' } as const;
-
-const FREQ_GRID_STYLE = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-  gap: '0 32px',
-} as const;
 
 interface TableColumn {
   label: string;
@@ -145,7 +128,7 @@ function FreqBarGrid({ entries, max, color }: {
   color?: string;
 }) {
   return (
-    <div style={FREQ_GRID_STYLE}>
+    <div className="freq-grid">
       {[...entries]
         .sort((a, b) => b[1] - a[1])
         .map(([key, count]) => (
@@ -334,21 +317,21 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         marginBottom: 2,
       }}>
         <Stat label="Spans" value={spanCount} />
-        <div style={VITALS_DIVIDER_STYLE} />
+        <div className="vitals-divider" />
         <Stat label="Tool calls" value={totalToolCalls} />
-        <div style={VITALS_DIVIDER_STYLE} />
+        <div className="vitals-divider" />
         <Stat label="MCP calls" value={totalMcpCalls} />
-        <div style={VITALS_DIVIDER_STYLE} />
+        <div className="vitals-divider" />
         <Stat label="Commits" value={gitCommits.length} color={gitCommits.length > 0 ? 'var(--status-healthy)' : undefined} />
-        <div style={VITALS_DIVIDER_STYLE} />
+        <div className="vitals-divider" />
         <Stat label="Alerts fired" value={alertSummary.totalFired} color={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
-        <div style={VITALS_DIVIDER_STYLE} />
+        <div className="vitals-divider" />
         <Stat label="Errors" value={errorCount} color={errorCount > 0 ? 'var(--status-critical)' : undefined} />
         {maxTokenSnapshot && (
           <>
-            <div style={VITALS_DIVIDER_STYLE} />
+            <div className="vitals-divider" />
             <Stat label="Messages" value={maxTokenSnapshot.messages} />
-            <div style={VITALS_DIVIDER_STYLE} />
+            <div className="vitals-divider" />
             <Stat label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
           </>
         )}
@@ -483,7 +466,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
         {totalMcpCalls > 0 && (
           <>
-            <div style={{ ...STAT_LABEL_STYLE, letterSpacing: '0.12em', margin: '14px 0 8px' }}>
+            <div className="stat-label" style={{ letterSpacing: '0.12em', margin: '14px 0 8px' }}>
               MCP Tools — {totalMcpCalls} calls
             </div>
             <FreqBarGrid entries={Object.entries(mcpUsage)} max={maxMcpCount} color="var(--status-healthy)" />
@@ -512,17 +495,17 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700 }}>{a.invocations}</div>
-                    <div style={STAT_LABEL_STYLE}>invocations</div>
+                    <div className="stat-label">invocations</div>
                   </div>
                   {a.errors > 0 && (
                     <div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--status-warning)' }}>{a.errors}</div>
-                      <div style={STAT_LABEL_STYLE}>errors</div>
+                      <div className="stat-label">errors</div>
                     </div>
                   )}
                   <div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700 }}>{fmtBytes(a.avgOutputSize)}</div>
-                    <div style={STAT_LABEL_STYLE}>avg output</div>
+                    <div className="stat-label">avg output</div>
                   </div>
                 </div>
                 {a.hasRateLimit && (

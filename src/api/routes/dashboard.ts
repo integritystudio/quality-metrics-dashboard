@@ -10,8 +10,7 @@ import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-
-const PeriodSchema = z.enum(['24h', '7d', '30d']).default('7d');
+import { PeriodSchema } from '../../lib/constants.js';
 const RoleSchema = z.enum(['executive', 'operator', 'auditor']).optional();
 
 function computePeriodDates(period: string): { start: string; end: string } {

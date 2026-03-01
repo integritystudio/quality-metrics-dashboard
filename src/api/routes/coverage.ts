@@ -4,8 +4,7 @@ import { computeCoverageHeatmap } from '../../../../dist/lib/quality-metrics.js'
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-
-const PeriodSchema = z.enum(['24h', '7d', '30d']).default('7d');
+import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
 const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
 
 /** Filter out rule-based per-span evaluations; they have incompatible
@@ -23,12 +22,6 @@ function filterJudgeEvaluations(
   }
   return filtered;
 }
-
-const PERIOD_MS: Record<string, number> = {
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
 
 export const coverageRoutes = new Hono();
 
