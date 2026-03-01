@@ -4,7 +4,8 @@ import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetai
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText } from '../lib/quality-utils.js';
+import { PageShell } from '../components/PageShell.js';
+import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
 
 // ─── Section accordion ──────────────────────────────────────────────────────
 
@@ -92,14 +93,7 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
         color: color ?? 'var(--text-primary)',
         lineHeight: 1.1,
       }}>{value}</div>
-      <div style={{
-        fontSize: 10,
-        fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.1em',
-        textTransform: 'uppercase',
-        color: 'var(--text-muted)',
-        marginTop: 3,
-      }}>{label}</div>
+      <div style={{ ...STAT_LABEL_STYLE, letterSpacing: '0.1em', marginTop: 3 }}>{label}</div>
     </div>
   );
 }
@@ -176,6 +170,13 @@ function IssueCallout({ severity, title, children }: {
 
 // ─── Shared styles ──────────────────────────────────────────────────────────
 
+const STAT_LABEL_STYLE = {
+  fontSize: 10,
+  fontFamily: 'var(--font-mono)',
+  textTransform: 'uppercase',
+  color: 'var(--text-muted)',
+} as const;
+
 const VITALS_DIVIDER_STYLE = { width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' } as const;
 
 const FREQ_GRID_STYLE = {
@@ -183,6 +184,25 @@ const FREQ_GRID_STYLE = {
   gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
   gap: '0 32px',
 } as const;
+
+interface TableColumn {
+  label: string;
+  align?: 'left' | 'right' | 'center';
+}
+
+function MonoTableHead({ columns }: { columns: TableColumn[] }) {
+  return (
+    <thead>
+      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+        {columns.map(({ label, align = 'right' }) => (
+          <th key={label} style={{ padding: '5px 10px', textAlign: align, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+            {label.toUpperCase()}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
 
 function FreqBarGrid({ entries, max, color }: {
   entries: [string, number][];
@@ -205,57 +225,44 @@ function FreqBarGrid({ entries, max, color }: {
 
 export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useSessionDetail(sessionId);
+  const isNotSynced = !isLoading && error instanceof SessionNotFoundError;
 
-  if (isLoading) {
-    return (
-      <div>
-        <Link href="/" className="back-link">&larr; Back to dashboard</Link>
-        <div className="card skeleton" style={{ height: 120, marginBottom: 2 }} />
-        <div className="card skeleton" style={{ height: 56, marginBottom: 2 }} />
-        <div className="card skeleton" style={{ height: 200, marginBottom: 2 }} />
-        <div className="card skeleton" style={{ height: 160 }} />
-      </div>
-    );
+  if (isLoading || (!isNotSynced && error)) {
+    return <PageShell isLoading={isLoading} error={error ?? null} skeletonHeight={400}>{null}</PageShell>;
   }
 
-  if (error) {
-    const isNotSynced = error instanceof SessionNotFoundError;
+  if (isNotSynced) {
     return (
-      <div>
-        <Link href="/" className="back-link">&larr; Back to dashboard</Link>
-        {isNotSynced ? (
-          <div className="card" style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: 'var(--status-warning)',
-              marginBottom: 8,
-            }}>Session Not Yet Available</div>
-            <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 13,
-              color: 'var(--text-secondary)',
-              lineHeight: 1.6,
-              maxWidth: 480,
-              margin: '0 auto',
-            }}>
-              This session has not been synced to the dashboard KV store yet.
-              Data is synced periodically &mdash; check back after the next pipeline run.
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              marginTop: 12,
-              wordBreak: 'break-all',
-            }}>{sessionId}</div>
+      <PageShell isLoading={false} error={null}>
+        <div className="card" style={{ padding: '32px 24px', textAlign: 'center' }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'var(--status-warning)',
+            marginBottom: 8,
+          }}>Session Not Yet Available</div>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.6,
+            maxWidth: 480,
+            margin: '0 auto',
+          }}>
+            This session has not been synced to the dashboard KV store yet.
+            Data is synced periodically &mdash; check back after the next pipeline run.
           </div>
-        ) : (
-          <div className="error-state"><h2>Failed to load session</h2><p>{error.message}</p></div>
-        )}
-      </div>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            marginTop: 12,
+            wordBreak: 'break-all',
+          }}>{sessionId}</div>
+        </div>
+      </PageShell>
     );
   }
 
@@ -432,7 +439,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
 
         {alertSummary.totalFired > 0 && (
-          <IssueCallout severity="warning" title={`${alertSummary.totalFired} alert${alertSummary.totalFired !== 1 ? 's' : ''} fired across ${alertSummary.stopEvents} stop event${alertSummary.stopEvents !== 1 ? 's' : ''}`}>
+          <IssueCallout severity="warning" title={`${plural(alertSummary.totalFired, 'alert')} fired across ${plural(alertSummary.stopEvents, 'stop event')}`}>
             <strong>task-completion-low</strong> — The task completion ratio fell below 0.85.
             This fires when tasks are created but not marked complete before the session ends.
             Common causes: work deferred to backlog, sub-tasks spawned but not resolved,
@@ -441,7 +448,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
 
         {errorCount > 0 && (
-          <IssueCallout severity="critical" title={`${errorCount} error span${errorCount !== 1 ? 's' : ''}`}>
+          <IssueCallout severity="critical" title={plural(errorCount, 'error span')}>
             <div style={{ marginBottom: 8 }}>Tool invocations or agent calls that reported errors:</div>
             {errorDetails.slice(0, 10).map((e, i) => (
               <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginBottom: 4 }}>
@@ -459,7 +466,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
 
         {hallucinationEvals.length > 0 && (
-          <IssueCallout severity="critical" title={`${hallucinationEvals.length} hallucination indicator${hallucinationEvals.length !== 1 ? 's' : ''} detected`}>
+          <IssueCallout severity="critical" title={`${plural(hallucinationEvals.length, 'hallucination indicator')} detected`}>
             <div style={{ marginBottom: 8 }}>
               Evaluations flagging potential hallucination or very low confidence:
             </div>
@@ -480,7 +487,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
 
         {failedEvals.length > 0 && !hallucinationEvals.length && (
-          <IssueCallout severity="warning" title={`${failedEvals.length} evaluation${failedEvals.length !== 1 ? 's' : ''} marked fail`}>
+          <IssueCallout severity="warning" title={`${plural(failedEvals.length, 'evaluation')} marked fail`}>
             {failedEvals.slice(0, 6).map((e, i) => (
               <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginBottom: 3 }}>
                 <span style={{ color: 'var(--status-warning)' }}>⚠</span>{' '}
@@ -491,7 +498,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
 
         {evaluation.errorPropagationTurns > 0 && (
-          <IssueCallout severity="warning" title={`${evaluation.errorPropagationTurns} error propagation turn${evaluation.errorPropagationTurns !== 1 ? 's' : ''}`}>
+          <IssueCallout severity="warning" title={plural(evaluation.errorPropagationTurns, 'error propagation turn')}>
             Errors detected in the multi-agent turn sequence may have propagated across agent handoffs.
           </IssueCallout>
         )}
@@ -511,15 +518,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               width: '100%', borderCollapse: 'collapse',
               fontFamily: 'var(--font-mono)', fontSize: 12,
             }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Messages', 'Input', 'Output', 'Cache Read', 'Cache Create', 'Model'].map(h => (
-                    <th key={h} style={{ padding: '6px 12px', textAlign: 'right', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                      {h.toUpperCase()}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+              <MonoTableHead columns={[
+                { label: 'Messages' }, { label: 'Input' }, { label: 'Output' },
+                { label: 'Cache Read' }, { label: 'Cache Create' }, { label: 'Model' },
+              ]} />
               <tbody>
                 {tokenProgression.map((t, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -547,7 +549,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
         {totalMcpCalls > 0 && (
           <>
-            <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '14px 0 8px' }}>
+            <div style={{ ...STAT_LABEL_STYLE, letterSpacing: '0.12em', margin: '14px 0 8px' }}>
               MCP Tools — {totalMcpCalls} calls
             </div>
             <FreqBarGrid entries={Object.entries(mcpUsage)} max={maxMcpCount} color="var(--status-healthy)" />
@@ -576,17 +578,17 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700 }}>{a.invocations}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>invocations</div>
+                    <div style={STAT_LABEL_STYLE}>invocations</div>
                   </div>
                   {a.errors > 0 && (
                     <div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--status-warning)' }}>{a.errors}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>errors</div>
+                      <div style={STAT_LABEL_STYLE}>errors</div>
                     </div>
                   )}
                   <div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700 }}>{fmtBytes(a.avgOutputSize)}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>avg output</div>
+                    <div style={STAT_LABEL_STYLE}>avg output</div>
                   </div>
                 </div>
                 {a.hasRateLimit && (
@@ -631,49 +633,52 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       {gitCommits.length > 0 && (
         <Section
           title="Git Commits"
-          badge={`${gitCommits.length} commit${gitCommits.length !== 1 ? 's' : ''}`}
+          badge={plural(gitCommits.length, 'commit')}
           health="ok"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {gitCommits.map((commit, i) => (
-              <details key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <summary style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '8px 4px',
-                  cursor: 'pointer',
-                  listStyle: 'none',
-                }}>
-                  <span style={{ color: 'var(--status-healthy)', fontSize: 10, flexShrink: 0 }}>●</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, flex: 1 }}>
-                    {commit.subject}
-                  </span>
-                  {commit.files && (
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
-                      {commit.files.split(' ').length} file{commit.files.split(' ').length !== 1 ? 's' : ''}
+            {gitCommits.map((commit, i) => {
+              const commitFiles = commit.files?.split(' ') ?? [];
+              return (
+                <details key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  <summary style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 4px',
+                    cursor: 'pointer',
+                    listStyle: 'none',
+                  }}>
+                    <span style={{ color: 'var(--status-healthy)', fontSize: 10, flexShrink: 0 }}>●</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, flex: 1 }}>
+                      {commit.subject}
                     </span>
-                  )}
-                </summary>
-                <div style={{ paddingLeft: 20, paddingBottom: 10 }}>
-                  {commit.body && (
-                    <div style={{
-                      fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 8,
-                      fontFamily: 'var(--font-body)',
-                    }}>
-                      {commit.body}
-                    </div>
-                  )}
-                  {commit.files && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
-                      {commit.files.split(' ').map((f, fi) => (
-                        <div key={fi}>{shortPath(f)}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </details>
-            ))}
+                    {commitFiles.length > 0 && (
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
+                        {plural(commitFiles.length, 'file')}
+                      </span>
+                    )}
+                  </summary>
+                  <div style={{ paddingLeft: 20, paddingBottom: 10 }}>
+                    {commit.body && (
+                      <div style={{
+                        fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 8,
+                        fontFamily: 'var(--font-body)',
+                      }}>
+                        {commit.body}
+                      </div>
+                    )}
+                    {commitFiles.length > 0 && (
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                        {commitFiles.map((f, fi) => (
+                          <div key={fi}>{shortPath(f)}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         </Section>
       )}
@@ -682,20 +687,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       {codeStructure.length > 0 && (
         <Section
           title="Code Quality"
-          badge={`${codeStructure.length} file${codeStructure.length !== 1 ? 's' : ''} analyzed`}
+          badge={`${plural(codeStructure.length, 'file')} analyzed`}
           health={codeStructure.some(f => f.score < 0.6) ? 'warn' : 'ok'}
         >
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['File', 'Tool', 'Lines', 'Exports', 'Functions', 'Types', 'Score'].map(h => (
-                    <th key={h} style={{ padding: '5px 10px', textAlign: h === 'File' || h === 'Tool' ? 'left' : 'right', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.05em' }}>
-                      {h.toUpperCase()}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+              <MonoTableHead columns={[
+                { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },
+                { label: 'Lines' }, { label: 'Exports' }, { label: 'Functions' },
+                { label: 'Types' }, { label: 'Score' },
+              ]} />
               <tbody>
                 {codeStructure.map((f, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -728,7 +729,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       {/* ── Evaluations ── */}
       <Section
         title="Evaluations"
-        badge={evalRows.length > 0 ? `${evalRows.length} result${evalRows.length !== 1 ? 's' : ''}` : 'none'}
+        badge={evalRows.length > 0 ? plural(evalRows.length, 'result') : 'none'}
         health={hallucinationEvals.length > 0 ? 'crit' : failedEvals.length > 0 ? 'warn' : evalRows.length > 0 ? 'ok' : 'neutral'}
       >
         {evalRows.length === 0 ? (

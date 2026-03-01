@@ -3,6 +3,7 @@ import { TurnTimeline } from '../components/TurnTimeline.js';
 import { HandoffCard } from '../components/HandoffCard.js';
 import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
+import { plural } from '../lib/quality-utils.js';
 
 export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useAgentSession(sessionId);
@@ -23,7 +24,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             <div className="eval-detail-meta">
               <span className="id-chip">{sessionId}</span>
               <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                {evaluation.totalTurns} turn{evaluation.totalTurns !== 1 ? 's' : ''} &middot; {agentNames.length} agent{agentNames.length !== 1 ? 's' : ''}
+                {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
               </span>
             </div>
           </div>
@@ -35,7 +36,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Error Propagation</div>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--status-critical)' }}>
-                  {evaluation.errorPropagationTurns} turn{evaluation.errorPropagationTurns !== 1 ? 's' : ''}
+                  {plural(evaluation.errorPropagationTurns, 'turn')}
                 </span>
               </div>
             )}

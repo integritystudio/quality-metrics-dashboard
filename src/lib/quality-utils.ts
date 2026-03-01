@@ -41,6 +41,10 @@ export function truncateText(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '...' : text;
 }
 
+export function plural(count: number, singular: string, suffix = 's'): string {
+  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
+}
+
 export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
   excellent: '#26d97f',
   good: '#34d399',
