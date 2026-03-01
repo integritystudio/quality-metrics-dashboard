@@ -105,8 +105,6 @@
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
-  --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
   --shadow-glow-healthy: 0 0 12px var(--healthy-alpha-15);
   --shadow-glow-warning: 0 0 12px var(--warning-alpha-15);
   --shadow-glow-critical: 0 0 12px var(--critical-alpha-20);
@@ -123,7 +121,9 @@
 .sla-table th,
 .section-label,
 .cot-summary,
-.agreement-grid .ag-header {
+.agreement-grid .ag-header,
+.stat-label,
+.field-label {
   text-transform: uppercase;
   letter-spacing: var(--label-letter-spacing);
 }
@@ -156,9 +156,18 @@
 .header,
 .pipeline-stat,
 .confidence-header,
-.variance-bar {
+.variance-bar,
+.eval-detail-meta,
+.alert-related {
   display: flex;
   align-items: center;
+}
+
+/* Shared flex row (no align) */
+.summary-counts,
+.pipeline-stats {
+  display: flex;
+  gap: var(--space-6);
 }
 
 /* Shared inline-flex row */
@@ -230,11 +239,6 @@ body {
 .health-banner.warning { background: var(--bg-status-warning); border: 1px solid var(--border-status-warning); }
 .health-banner.critical { background: var(--bg-status-critical); border: 1px solid var(--border-status-critical); }
 .health-banner.no_data { background: var(--bg-card); border: 1px solid var(--border); }
-
-.summary-counts {
-  display: flex;
-  gap: var(--space-6);
-}
 
 .summary-count {
   text-align: center;
@@ -598,7 +602,6 @@ body {
 .field-label {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
-  text-transform: uppercase;
 }
 
 .section-label {
@@ -607,23 +610,22 @@ body {
 
 /* Session detail — stat label, vitals divider, frequency grid */
 .stat-label {
-  font-size: 10px;
+  font-size: var(--font-size-label);
   font-family: var(--font-mono);
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .vitals-divider {
   width: 1px;
   background: var(--border-subtle);
-  margin: 0 8px;
+  margin: 0 var(--space-2);
   align-self: stretch;
 }
 
 .freq-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 0 32px;
+  gap: 0 var(--space-8);
 }
 
 /* View sections */
@@ -728,9 +730,7 @@ details[open] > .cot-summary::before {
   margin-bottom: var(--space-6);
 }
 .eval-detail-meta {
-  display: flex;
   gap: var(--space-4);
-  align-items: center;
   margin-top: var(--space-2);
 }
 .eval-detail-card {
@@ -747,10 +747,8 @@ details[open] > .cot-summary::before {
   background: var(--bg-elevated);
 }
 .alert-related {
-  display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  align-items: center;
   margin-top: var(--space-2);
 }
 .alert-metric-link {
@@ -799,10 +797,6 @@ details[open] > .cot-summary::before {
 }
 
 /* Pipeline health stats in HealthOverview */
-.pipeline-stats {
-  display: flex;
-  gap: var(--space-6);
-}
 .pipeline-stat {
   gap: var(--space-1);
 }
