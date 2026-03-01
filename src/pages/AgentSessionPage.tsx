@@ -1,7 +1,7 @@
 import { useAgentSession } from '../hooks/useAgentSession.js';
 import { TurnTimeline } from '../components/TurnTimeline.js';
 import { HandoffCard } from '../components/HandoffCard.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
 
 export function AgentSessionPage({ sessionId }: { sessionId: string }) {
@@ -29,22 +29,11 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Summary scores */}
-          <div className="card" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', padding: 16, marginBottom: 16 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Handoff Score</div>
-              <ScoreBadge score={evaluation.handoffScore} metricName="handoff" />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Avg Relevance</div>
-              <ScoreBadge score={evaluation.avgTurnRelevance} metricName="relevance" />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Completeness</div>
-              <ScoreBadge score={evaluation.conversationCompleteness} metricName="completeness" />
-            </div>
+          <div className="card" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', padding: 16, marginBottom: 16, alignItems: 'flex-start' }}>
+            <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
             {evaluation.errorPropagationTurns > 0 && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Error Propagation</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Error Propagation</div>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--status-critical)' }}>
                   {evaluation.errorPropagationTurns} turn{evaluation.errorPropagationTurns !== 1 ? 's' : ''}
                 </span>

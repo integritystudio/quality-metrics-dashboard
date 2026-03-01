@@ -3,7 +3,8 @@ import { Link } from 'wouter';
 import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
-import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes } from '../lib/quality-utils.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText } from '../lib/quality-utils.js';
 
 // ─── Section accordion ──────────────────────────────────────────────────────
 
@@ -169,6 +170,33 @@ function IssueCallout({ severity, title, children }: {
       <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
         {children}
       </div>
+    </div>
+  );
+}
+
+// ─── Shared styles ──────────────────────────────────────────────────────────
+
+const VITALS_DIVIDER_STYLE = { width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' } as const;
+
+const FREQ_GRID_STYLE = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+  gap: '0 32px',
+} as const;
+
+function FreqBarGrid({ entries, max, color }: {
+  entries: [string, number][];
+  max: number;
+  color?: string;
+}) {
+  return (
+    <div style={FREQ_GRID_STYLE}>
+      {entries
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, count]) => (
+          <FreqBar key={key} label={key} count={count} max={max} color={color} />
+        ))
+      }
     </div>
   );
 }
@@ -363,23 +391,23 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         marginBottom: 2,
       }}>
         <Stat label="Spans" value={spanCount} />
-        <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
+        <div style={VITALS_DIVIDER_STYLE} />
         <Stat label="Tool calls" value={totalToolCalls} />
-        <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
+        <div style={VITALS_DIVIDER_STYLE} />
         <Stat label="MCP calls" value={totalMcpCalls} />
-        <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
+        <div style={VITALS_DIVIDER_STYLE} />
         <Stat label="Commits" value={gitCommits.length} color={gitCommits.length > 0 ? 'var(--status-healthy)' : undefined} />
-        <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
+        <div style={VITALS_DIVIDER_STYLE} />
         <Stat label="Alerts fired" value={alertSummary.totalFired} color={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
-        <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
+        <div style={VITALS_DIVIDER_STYLE} />
         <Stat label="Errors" value={errorCount} color={errorCount > 0 ? 'var(--status-critical)' : undefined} />
-        <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
+        <div style={VITALS_DIVIDER_STYLE} />
         {maxTokenSnapshot && (
           <Stat label="Messages" value={maxTokenSnapshot.messages} />
         )}
         {maxTokenSnapshot && (
           <>
-            <div style={{ width: 1, background: 'var(--border-subtle)', margin: '0 8px', alignSelf: 'stretch' }} />
+            <div style={VITALS_DIVIDER_STYLE} />
             <Stat label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
           </>
         )}
@@ -442,7 +470,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{e.evaluationName}</div>
                   {e.explanation && (
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {e.explanation.slice(0, 200)}{e.explanation.length > 200 ? '…' : ''}
+                      {truncateText(e.explanation, 200)}
                     </div>
                   )}
                 </div>
@@ -515,28 +543,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         badge={`${totalToolCalls} calls · ${Object.keys(toolUsage).length} tools`}
         health="neutral"
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 32px' }}>
-          {Object.entries(toolUsage)
-            .sort((a, b) => b[1] - a[1])
-            .map(([tool, count]) => (
-              <FreqBar key={tool} label={tool} count={count} max={maxToolCount} />
-            ))
-          }
-        </div>
+        <FreqBarGrid entries={Object.entries(toolUsage)} max={maxToolCount} />
 
         {totalMcpCalls > 0 && (
           <>
             <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '14px 0 8px' }}>
               MCP Tools — {totalMcpCalls} calls
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 32px' }}>
-              {Object.entries(mcpUsage)
-                .sort((a, b) => b[1] - a[1])
-                .map(([tool, count]) => (
-                  <FreqBar key={tool} label={tool} count={count} max={maxMcpCount} color="var(--status-healthy)" />
-                ))
-              }
-            </div>
+            <FreqBarGrid entries={Object.entries(mcpUsage)} max={maxMcpCount} color="var(--status-healthy)" />
           </>
         )}
       </Section>
@@ -585,17 +599,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Multi-agent evaluation scores */}
-          <div style={{ marginTop: 16, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Handoff Score', value: handoffScore },
-              { label: 'Avg Relevance', value: avgRelevance },
-              { label: 'Completeness', value: completeness },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-                <ScoreBadge score={value} metricName={label.toLowerCase()} />
-              </div>
-            ))}
+          <div style={{ marginTop: 16 }}>
+            <AgentScoreSummary handoffScore={handoffScore} avgRelevance={avgRelevance} completeness={completeness} />
           </div>
         </Section>
       )}
@@ -717,14 +722,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         badge={`${spanCount} total · ${Object.keys(spanBreakdown).length} types`}
         health="neutral"
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 32px' }}>
-          {Object.entries(spanBreakdown)
-            .sort((a, b) => b[1] - a[1])
-            .map(([name, count]) => (
-              <FreqBar key={name} label={name} count={count} max={maxSpanCount} color="var(--border-accent)" />
-            ))
-          }
-        </div>
+        <FreqBarGrid entries={Object.entries(spanBreakdown)} max={maxSpanCount} color="var(--border-accent)" />
       </Section>
 
       {/* ── Evaluations ── */}
