@@ -5,81 +5,8 @@ import { EvaluationTable, evalToRow, type EvalRow } from '../components/Evaluati
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
+import { Section, type SectionProps } from '../components/Section.js';
 import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
-
-// ─── Section accordion ──────────────────────────────────────────────────────
-
-interface SectionProps {
-  title: string;
-  badge?: string;
-  health?: 'ok' | 'warn' | 'crit' | 'neutral';
-  defaultOpen?: boolean;
-  children: ReactNode;
-}
-
-function Section({ title, badge, health = 'neutral', defaultOpen = false, children }: SectionProps) {
-  const railColor = health === 'ok'
-    ? 'var(--status-healthy)'
-    : health === 'warn'
-    ? 'var(--status-warning)'
-    : health === 'crit'
-    ? 'var(--status-critical)'
-    : 'var(--border-accent)';
-
-  return (
-    <details open={defaultOpen} style={{ marginBottom: 2 }}>
-      <summary style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '12px 20px',
-        background: 'var(--bg-card)',
-        borderLeft: `3px solid ${railColor}`,
-        borderBottom: '1px solid var(--border-subtle)',
-        cursor: 'pointer',
-        userSelect: 'none',
-        listStyle: 'none',
-        transition: 'background 0.15s',
-      }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9,
-          color: railColor,
-          transition: 'transform 0.2s',
-          display: 'inline-block',
-        }}>▶</span>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          fontWeight: 600,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: 'var(--text-secondary)',
-          flex: 1,
-        }}>{title}</span>
-        {badge && (
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-muted)',
-            background: 'var(--bg-elevated)',
-            padding: '2px 8px',
-            borderRadius: 10,
-            border: '1px solid var(--border-subtle)',
-          }}>{badge}</span>
-        )}
-      </summary>
-      <div style={{
-        padding: '16px 20px 20px',
-        background: 'var(--bg-card)',
-        borderLeft: `3px solid ${railColor}`,
-        borderBottom: '1px solid var(--border-subtle)',
-      }}>
-        {children}
-      </div>
-    </details>
-  );
-}
 
 // ─── Stat chip ───────────────────────────────────────────────────────────────
 
@@ -167,6 +94,14 @@ function IssueCallout({ severity, title, children }: {
     </div>
   );
 }
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+const MAX_ERROR_ROWS = 10;
+const MAX_HALLUCINATION_ROWS = 8;
+const MAX_FAILED_EVAL_ROWS = 6;
+const SCORE_DISPLAY_PRECISION = 3;
 
 // ─── Shared styles ──────────────────────────────────────────────────────────
 
@@ -295,7 +230,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   // Issue detection
   const hallucinationEvals = evaluations.filter(e =>
     (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
-    ((e.scoreLabel ?? '').toLowerCase() === 'fail' && typeof e.scoreValue === 'number' && e.scoreValue < 0.4)
+    ((e.scoreLabel ?? '').toLowerCase() === 'fail' && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
   );
   const failedEvals = evaluations.filter(e =>
     (e.scoreLabel ?? '').toLowerCase() === 'fail'
@@ -450,16 +385,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         {errorCount > 0 && (
           <IssueCallout severity="critical" title={plural(errorCount, 'error span')}>
             <div style={{ marginBottom: 8 }}>Tool invocations or agent calls that reported errors:</div>
-            {errorDetails.slice(0, 10).map((e, i) => (
+            {errorDetails.slice(0, MAX_ERROR_ROWS).map((e, i) => (
               <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginBottom: 4 }}>
                 <span style={{ color: 'var(--status-critical)' }}>✗</span>{' '}
                 {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
                 {e.errorType && e.errorType !== 'unknown' && <span style={{ color: 'var(--text-muted)' }}> — {e.errorType}</span>}
               </div>
             ))}
-            {errorCount > 10 && (
+            {errorCount > MAX_ERROR_ROWS && (
               <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 4 }}>
-                +{errorCount - 10} more
+                +{errorCount - MAX_ERROR_ROWS} more
               </div>
             )}
           </IssueCallout>
@@ -470,7 +405,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             <div style={{ marginBottom: 8 }}>
               Evaluations flagging potential hallucination or very low confidence:
             </div>
-            {hallucinationEvals.slice(0, 8).map((e, i) => (
+            {hallucinationEvals.slice(0, MAX_HALLUCINATION_ROWS).map((e, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
                 <div>
@@ -488,10 +423,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
         {failedEvals.length > 0 && !hallucinationEvals.length && (
           <IssueCallout severity="warning" title={`${plural(failedEvals.length, 'evaluation')} marked fail`}>
-            {failedEvals.slice(0, 6).map((e, i) => (
+            {failedEvals.slice(0, MAX_FAILED_EVAL_ROWS).map((e, i) => (
               <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, marginBottom: 3 }}>
                 <span style={{ color: 'var(--status-warning)' }}>⚠</span>{' '}
-                {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(3) : 'N/A'}
+                {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
               </div>
             ))}
           </IssueCallout>
