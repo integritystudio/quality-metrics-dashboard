@@ -73,8 +73,6 @@ describe('ChainOfThoughtPanel', () => {
     const { container } = render(
       <ChainOfThoughtPanel
         evaluator="claude-3.5-sonnet"
-        evaluatorType="llm"
-        scoreUnit="ratio_0_1"
       />
     );
     expect(container.querySelectorAll('details').length).toBe(0);

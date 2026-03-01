@@ -21,6 +21,15 @@ const SCORE_SHAPES: Record<ScoreColorBand | 'no_data', string> = {
   no_data: '\u25CB',    // ○
 };
 
+function TooltipRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="tooltip-row">
+      <span>{label}</span>
+      <span style={mono ? { fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-label)' } : undefined}>{value}</span>
+    </div>
+  );
+}
+
 function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
   score: number;
   label?: string;
@@ -31,32 +40,14 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
 }) {
   return (
     <div className="score-badge-tooltip" role="tooltip">
-      <div className="tooltip-row">
-        <span>Score</span>
-        <span style={{ fontFamily: 'var(--font-mono)' }}>{score.toFixed(4)}</span>
-      </div>
-      {label && (
-        <div className="tooltip-row">
-          <span>Label</span>
-          <span>{label}</span>
-        </div>
-      )}
-      {evaluator && (
-        <div className="tooltip-row">
-          <span>Evaluator</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{evaluator}</span>
-        </div>
-      )}
-      {evaluatorType && (
-        <div className="tooltip-row">
-          <span>Type</span>
-          <span>{evaluatorType}</span>
-        </div>
-      )}
+      <TooltipRow label="Score" value={score.toFixed(4)} mono />
+      {label && <TooltipRow label="Label" value={label} />}
+      {evaluator && <TooltipRow label="Evaluator" value={evaluator} mono />}
+      {evaluatorType && <TooltipRow label="Type" value={evaluatorType} />}
       {explanation && (
         <div className="tooltip-row" style={{ flexDirection: 'column', gap: 2 }}>
           <span>Explanation</span>
-          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{truncateText(explanation, 120)}</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-label)' }}>{truncateText(explanation, 120)}</span>
         </div>
       )}
       {traceId && (

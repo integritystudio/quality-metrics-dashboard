@@ -1,5 +1,6 @@
 import type { QualityDashboardSummary } from '../types.js';
 import { StatusBadge } from './Indicators.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
 
 interface PipelineHealth {
   evalVolume: number;
@@ -23,15 +24,7 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
     }
   }
 
-  let lastEvalAge: string | null = null;
-  if (latestTs) {
-    const diffMs = Date.now() - new Date(latestTs).getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    if (diffSec < 60) lastEvalAge = `${diffSec}s ago`;
-    else if (diffSec < 3600) lastEvalAge = `${Math.floor(diffSec / 60)}m ago`;
-    else if (diffSec < 86400) lastEvalAge = `${Math.floor(diffSec / 3600)}h ago`;
-    else lastEvalAge = `${Math.floor(diffSec / 86400)}d ago`;
-  }
+  const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
 
   // Compute rate based on period
   const period = dashboard.metrics[0]?.period;

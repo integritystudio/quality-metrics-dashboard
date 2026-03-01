@@ -3,8 +3,6 @@ import { MetaItem } from './MetaItem.js';
 interface ChainOfThoughtPanelProps {
   explanation?: string;
   evaluator?: string;
-  evaluatorType?: string;
-  scoreUnit?: string;
 }
 
 export function ChainOfThoughtPanel({ explanation, evaluator }: ChainOfThoughtPanelProps) {

@@ -46,6 +46,11 @@ export function truncateId(id: string, max = 10): string {
   return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
 }
 
+export function formatScore(val: number | null | undefined): string {
+  if (val === null || val === undefined) return 'N/A';
+  return val.toFixed(4);
+}
+
 export function plural(count: number, singular: string, suffix = 's'): string {
   return `${count} ${singular}${count !== 1 ? suffix : ''}`;
 }

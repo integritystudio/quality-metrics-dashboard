@@ -4,12 +4,7 @@ import type { QualityMetricResult, WorstExplanation } from '../types.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
 import { ScoreBadge } from './ScoreBadge.js';
 import { Sparkline } from './Sparkline.js';
-import { inferScoreDirection, truncateText, plural } from '../lib/quality-utils.js';
-
-function formatValue(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  return val.toFixed(4);
-}
+import { inferScoreDirection, truncateText, plural, formatScore } from '../lib/quality-utils.js';
 
 function MetricCardInner({ metric, sparklineData }: {
   metric: QualityMetricResult;
@@ -33,12 +28,12 @@ function MetricCardInner({ metric, sparklineData }: {
               score={primaryValue ?? null}
               metricName={name}
               direction={inferScoreDirection(alerts?.[0]?.direction)}
-              label={formatValue(primaryValue)}
+              label={formatScore(primaryValue)}
             />
             {trend && <> <TrendIndicator trend={trend} /></>}
           </div>
           <div className="secondary">
-            p50: {formatValue(values.p50)} &middot; p95: {formatValue(values.p95)}
+            p50: {formatScore(values.p50)} &middot; p95: {formatScore(values.p95)}
           </div>
         </div>
 

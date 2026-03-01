@@ -71,8 +71,6 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
               <ChainOfThoughtPanel
                 explanation={ev.explanation}
                 evaluator={ev.evaluator}
-                evaluatorType={ev.evaluatorType}
-                scoreUnit={ev.scoreUnit}
               />
 
               {ev.stepScores && ev.stepScores.length > 0 && (
