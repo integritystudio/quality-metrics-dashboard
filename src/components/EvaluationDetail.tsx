@@ -34,19 +34,18 @@ export function EvaluationDetail({
     <div>
       <EvaluationTable evaluations={displayEvals} />
       {metricName && (
-        <div className="flex-center gap-3" style={{ marginTop: 12 }}>
+        <div className="flex-center gap-3 mt-3">
           {!showAll ? (
             <button
               type="button"
               onClick={() => setShowAll(true)}
+              className="text-xs cursor-pointer"
               style={{
                 background: 'none',
                 border: '1px solid var(--border)',
                 color: 'var(--accent)',
                 padding: '6px 14px',
-                borderRadius: 6,
-                fontSize: 12,
-                cursor: 'pointer',
+                borderRadius: 'var(--radius)',
               }}
             >
               Show all evaluations

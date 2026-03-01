@@ -55,7 +55,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
     <div className="eval-expanded-content">
       {row.explanation && (
         <SectionBlock label="Explanation">
-          <div className="text-xs" style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
+          <div className="text-xs text-primary" style={{ lineHeight: 1.5 }}>
             {row.explanation}
           </div>
         </SectionBlock>
@@ -93,9 +93,9 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
         </SectionBlock>
       )}
 
-      {/* back-link (not ArrowLink) — different class with margin-bottom reset via mb-0 */}
+      {/* back-link inline — uses mb-0 to reset default margin */}
       {(row.traceId || row.sessionId) && (
-        <div className="gap-4" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex' }}>
+        <div className="gap-4 mt-3" style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex' }}>
           {row.traceId && (
             <Link href={`/evaluations/trace/${row.traceId}`} className="back-link mb-0">
               View full evaluation detail &rarr;

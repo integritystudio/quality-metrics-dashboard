@@ -15,11 +15,11 @@ interface TurnTimelineProps {
 
 export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
   if (turns.length === 0) {
-    return <div className="text-muted" style={{ padding: 16 }}>No turns to display.</div>;
+    return <div className="text-muted p-4">No turns to display.</div>;
   }
 
   return (
-    <div className="gap-2" style={{ display: 'flex', overflowX: 'auto', padding: '8px 0' }}>
+    <div className="gap-2 overflow-x-auto" style={{ display: 'flex', padding: '8px 0' }}>
       {turns.map((turn) => {
         const agent = turn.agentName ?? 'unknown';
         const color = agentColor(agent, agentNames);
@@ -45,18 +45,18 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
 
             {/* Relevance bar */}
             <div className="mb-1-5">
-              <div className="text-secondary text-2xs" style={{ marginBottom: 2 }}>Relevance</div>
+              <div className="text-secondary text-2xs mb-1">Relevance</div>
               <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
             </div>
 
             {/* Task progress bar */}
             <div className="mb-1-5">
-              <div className="text-secondary text-2xs" style={{ marginBottom: 2 }}>Progress</div>
+              <div className="text-secondary text-2xs mb-1">Progress</div>
               <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
             </div>
 
             {turn.hasError && (
-              <div className="text-2xs font-semibold" style={{ color: 'var(--status-critical)', marginTop: 4 }}>
+              <div className="text-2xs font-semibold text-critical mt-1">
                 Error
               </div>
             )}

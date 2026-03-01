@@ -28,7 +28,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
           </DetailPageHeader>
 
           {/* Summary scores */}
-          <div className="card flex-wrap gap-6" style={{ padding: 16, marginBottom: 16, alignItems: 'flex-start' }}>
+          <div className="card flex-wrap gap-6 p-4" style={{ marginBottom: 16, alignItems: 'flex-start' }}>
             <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
             {evaluation.errorPropagationTurns > 0 && (
               <div className="text-center">

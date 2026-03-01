@@ -30,19 +30,16 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
     : 'var(--border-accent)';
 
   return (
-    <details open={defaultOpen} style={{ marginBottom: 2 }}>
-      <summary className="flex-center gap-3" style={{
+    <details open={defaultOpen} className="mb-1">
+      <summary className="flex-center gap-3 select-none cursor-pointer" style={{
         padding: '12px 20px',
         background: 'var(--bg-card)',
         borderLeft: `3px solid ${railColor}`,
         borderBottom: '1px solid var(--border-subtle)',
-        cursor: 'pointer',
-        userSelect: 'none',
         listStyle: 'none',
         transition: 'background 0.15s',
       }}>
-        <span className="mono" style={{
-          fontSize: 'var(--font-size-2xs)',
+        <span className="mono text-2xs" style={{
           color: railColor,
           transition: 'transform 0.2s',
           display: 'inline-block',

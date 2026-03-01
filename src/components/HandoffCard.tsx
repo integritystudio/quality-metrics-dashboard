@@ -11,11 +11,9 @@ export function HandoffCard({ handoff }: HandoffCardProps) {
   const color = SCORE_COLORS[band];
 
   return (
-    <div className="flex-center gap-3" style={{
+    <div className="flex-center gap-3 surface-elevated" style={{
       padding: '8px 12px',
-      borderRadius: 8,
-      background: 'var(--bg-elevated)',
-      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-lg)',
     }}>
       <span className="mono-xs font-semibold">
         {handoff.sourceAgent}
@@ -28,10 +26,10 @@ export function HandoffCard({ handoff }: HandoffCardProps) {
         {handoff.score.toFixed(2)}
       </ColoredChip>
       {handoff.correctTarget && (
-        <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--status-healthy)' }} title="Correct target">&#10003;</span>
+        <span className="text-2xs text-healthy" title="Correct target">&#10003;</span>
       )}
       {handoff.contextPreserved && (
-        <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--status-healthy)' }} title="Context preserved">&#9679;</span>
+        <span className="text-2xs text-healthy" title="Context preserved">&#9679;</span>
       )}
     </div>
   );

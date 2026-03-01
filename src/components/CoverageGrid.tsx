@@ -62,7 +62,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       </div>
 
       {/* Grid */}
-      <div style={{ overflowX: 'auto' }}>
+      <div className="overflow-x-auto">
         <div
           role="table"
           aria-label="Coverage matrix"
@@ -80,9 +80,8 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                 key={input}
                 role="columnheader"
                 title={input}
-                className="text-secondary"
+                className="text-secondary text-2xs"
                 style={{
-                  fontSize: 'var(--font-size-2xs)',
                   writingMode: 'vertical-lr',
                   textAlign: 'end',
                   overflow: 'hidden',
@@ -99,8 +98,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
             <div key={metric} role="row" className="contents">
               <div
                 role="rowheader"
-                className="text-xs flex-center truncate"
-                style={{ fontWeight: 500 }}
+                className="text-xs flex-center truncate font-medium"
                 title={metric}
               >
                 {metric}
@@ -119,7 +117,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     title={`${metric} / ${truncateId(input)}: ${count} evaluation${count !== 1 ? 's' : ''}`}
                     onMouseEnter={() => setHovered({ metric, input })}
                     onMouseLeave={() => setHovered(null)}
-                    className="mono"
+                    className="mono text-2xs"
                     style={{
                       width: 28,
                       height: 28,
@@ -130,8 +128,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 'var(--font-size-2xs)',
-                      fontFamily: 'var(--font-mono)',
                       color: '#fff',
                       transition: 'opacity 0.15s',
                     }}
@@ -146,14 +142,14 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       </div>
 
       {truncated && (
-        <p className="text-secondary text-xs" style={{ marginTop: 8 }}>
+        <p className="text-secondary text-xs mt-2">
           Showing {maxInputs} of {inputs.length} inputs.
         </p>
       )}
 
       {/* Gap summary */}
       {gaps.length > 0 && (
-        <div style={{ marginTop: 16 }}>
+        <div className="mt-4">
           <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
           <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
             {gaps.map(gap => (

@@ -105,14 +105,10 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
             .map(([type, count]) => (
               <span
                 key={type}
-                className="mono-xs text-secondary chip gap-1 inline-flex-center"
-                style={{
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border)',
-                }}
+                className="mono-xs text-secondary chip gap-1 inline-flex-center surface-elevated"
               >
                 {type}
-                <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                <span className="font-bold text-primary">
                   {count}
                 </span>
               </span>

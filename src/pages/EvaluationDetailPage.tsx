@@ -7,7 +7,6 @@ import { PageShell } from '../components/PageShell.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
 import { Link, useSearch } from 'wouter';
-import { ArrowLink } from '../components/ArrowLink.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
@@ -37,7 +36,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
             <span className="text-secondary text-xs">
               {evaluations.length} evaluation{evaluations.length !== 1 ? 's' : ''}
             </span>
-            <ArrowLink href={`/traces/${traceId}`}>View trace</ArrowLink>
+            <Link href={`/traces/${traceId}`} className="text-xs link-accent">View trace &rarr;</Link>
             {metricFilter && (
               <Link
                 href={`/evaluations/trace/${traceId}`}
@@ -57,7 +56,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
                     metricName={ev.evaluationName}
                     label={ev.scoreLabel ?? (ev.scoreValue != null ? ev.scoreValue.toFixed(4) : undefined)}
                   />
-                  <span className="text-base" style={{ fontWeight: 500 }}>{ev.evaluationName}</span>
+                  <span className="text-base font-medium">{ev.evaluationName}</span>
                 </div>
                 <span className="text-secondary text-xs" title={new Date(ev.timestamp).toLocaleString()}>
                   {formatTimestamp(ev.timestamp)}
@@ -70,9 +69,9 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
               />
 
               {ev.stepScores && ev.stepScores.length > 0 && (
-                <div style={{ marginTop: 12 }}>
+                <div className="mt-3">
                   <div className="section-label mb-1">Step Scores</div>
-                  <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap', marginTop: 4 }}>
+                  <div className="gap-1-5 mt-1" style={{ display: 'flex', flexWrap: 'wrap' }}>
                     {ev.stepScores.map(s => (
                       <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
                     ))}
@@ -80,7 +79,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
                 </div>
               )}
 
-              <details open style={{ marginTop: 12 }}>
+              <details open className="mt-3">
                 <summary className="cot-summary text-xs">Provenance &amp; Audit Trail</summary>
                 <div style={{ paddingTop: 8 }}>
                   <ProvenancePanel

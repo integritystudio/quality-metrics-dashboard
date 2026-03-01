@@ -33,7 +33,7 @@ function formatTime(iso: string, spanDays: number): string {
 export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   if (data.length === 0) {
     return (
-      <div style={{ color: COLORS.text, padding: 16, textAlign: 'center' }}>
+      <div className="text-center p-4" style={{ color: COLORS.text }}>
         No trend data available
       </div>
     );
@@ -56,7 +56,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   );
   if (allVals.length === 0) {
     return (
-      <div style={{ color: COLORS.text, padding: 16, textAlign: 'center' }}>
+      <div className="text-center p-4" style={{ color: COLORS.text }}>
         No scored evaluations in period
       </div>
     );
@@ -134,7 +134,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="text-xs gap-4" style={{ display: 'flex', justifyContent: 'center', color: COLORS.text, marginTop: 4 }}>
+      <div className="flex-center justify-center gap-4 mt-1 text-xs" style={{ color: COLORS.text }}>
         <span><span style={{ color: COLORS.line }}>&#9473;</span> avg</span>
         <span><span style={{ opacity: 0.5 }}>- -</span> p50</span>
         <span><span style={{ opacity: 0.3 }}>&#9608;</span> p10-p90</span>

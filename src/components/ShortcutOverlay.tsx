@@ -16,8 +16,8 @@ export function ShortcutOverlay() {
       <div className="shortcut-overlay" onClick={e => e.stopPropagation()}>
         <div className="flex-center mb-3 justify-between">
           <h2 className="text-md" style={{ margin: 0 }}>Keyboard Shortcuts</h2>
-          <button type="button" onClick={toggleOverlay} aria-label="Close" className="text-lg text-secondary" style={{
-            background: 'none', border: 'none', cursor: 'pointer',
+          <button type="button" onClick={toggleOverlay} aria-label="Close" className="text-lg text-secondary cursor-pointer" style={{
+            background: 'none', border: 'none',
           }}>
             &times;
           </button>
@@ -30,9 +30,9 @@ export function ShortcutOverlay() {
             {items.map(item => (
               <div key={item.key} className="flex-center justify-between text-xs" style={{ padding: '4px 0' }}>
                 <span>{item.description}</span>
-                <kbd className="mono-xs" style={{
+                <kbd className="mono-xs surface-elevated" style={{
                   padding: '2px 6px',
-                  borderRadius: 4, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                  borderRadius: 4,
                 }}>
                   {item.key}
                 </kbd>
@@ -40,7 +40,7 @@ export function ShortcutOverlay() {
             ))}
           </div>
         ))}
-        <div className="text-muted text-xs" style={{ marginTop: 8 }}>
+        <div className="text-muted text-xs mt-2">
           Press <kbd className="mono-xs">?</kbd> or <kbd className="mono-xs">Esc</kbd> to close
         </div>
       </div>

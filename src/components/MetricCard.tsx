@@ -38,7 +38,7 @@ function MetricCardInner({ metric, sparklineData }: {
         </div>
 
         {sparklineData && sparklineData.length >= 2 && (
-          <div style={{ marginTop: 8 }}>
+          <div className="mt-2">
             <Sparkline
               data={sparklineData}
               width={120}
@@ -52,7 +52,7 @@ function MetricCardInner({ metric, sparklineData }: {
         <div className="metric-footer">
           <span>n={sampleCount} <ConfidenceBadge confidence={confidence} /></span>
           {alerts.length > 0 && (
-            <span style={{ color: 'var(--status-warning)' }}>
+            <span className="text-warning">
               {'\u25B2'} {plural(alerts.length, 'alert')}
             </span>
           )}

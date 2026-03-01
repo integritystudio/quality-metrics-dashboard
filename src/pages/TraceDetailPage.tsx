@@ -28,7 +28,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
 
           {data.evaluations.length > 0 && (
             <ViewSection title="Evaluation Summary">
-              <div className="card" style={{ padding: 16 }}>
+              <div className="card p-4">
                 <EvaluationEventOverlay evaluations={data.evaluations} traceId={traceId} />
               </div>
             </ViewSection>
@@ -48,7 +48,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
 
           {data.spans.length === 0 && data.evaluations.length > 0 && (
             <div className="view-section">
-              <div className="card text-muted text-xs" style={{ padding: 16 }}>
+              <div className="card text-muted text-xs p-4">
                 Span data not yet available for this trace. Evaluations are shown above.
               </div>
             </div>

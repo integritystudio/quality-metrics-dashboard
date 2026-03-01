@@ -7,13 +7,12 @@ import type { Period } from '../types.js';
 function T2SamplingStage() {
   return (
     <div
-      className="flex-center text-secondary text-xs gap-2-5"
+      className="flex-center text-secondary text-xs gap-2-5 mt-3"
       style={{
         padding: '10px 14px',
-        borderRadius: 6,
+        borderRadius: 'var(--radius)',
         border: '1px dashed var(--border, #2a2a3e)',
         background: 'var(--surface, #1a1a2e)',
-        marginTop: 12,
       }}
     >
       <span className="inline-flex-center justify-center shrink-0 text-2xs font-bold" style={{

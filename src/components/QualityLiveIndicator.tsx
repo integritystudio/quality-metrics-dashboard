@@ -25,15 +25,13 @@ export function QualityLiveIndicator() {
 
   return (
     <div
-      className="quality-live-bar flex-center gap-2 text-xs"
+      className="quality-live-bar flex-center gap-2 text-xs surface-elevated"
       role="status"
       aria-label="Live quality signals"
       style={{
         flexWrap: 'wrap',
         padding: '6px 12px',
-        borderRadius: 6,
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
       }}
     >
       <span className="text-secondary font-semibold" style={{ marginRight: 4 }}>
@@ -43,13 +41,12 @@ export function QualityLiveIndicator() {
         <span
           key={m.name}
           title={`${m.name}: ${m.score.toFixed(2)} (${m.evaluatorType})`}
-          className="mono text-xs chip gap-1"
+          className="mono text-xs chip gap-1 font-medium"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             background: scoreToBadgeColor(m.score) + '1a',
             color: scoreToBadgeColor(m.score),
-            fontWeight: 500,
           }}
         >
           <span style={{
@@ -62,7 +59,7 @@ export function QualityLiveIndicator() {
           <span className="font-bold">{m.score.toFixed(2)}</span>
         </span>
       ))}
-      <span className="text-secondary" style={{ fontSize: 'var(--font-size-2xs)', marginLeft: 'auto' }}>
+      <span className="text-secondary text-2xs" style={{ marginLeft: 'auto' }}>
         {formatTimestamp(data.lastUpdated)}
       </span>
     </div>

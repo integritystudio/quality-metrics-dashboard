@@ -71,11 +71,10 @@ function IssueCallout({ severity, title, children }: {
       padding: '10px 14px',
       marginBottom: 10,
     }}>
-      <div className="mono-xs uppercase font-semibold" style={{
+      <div className="mono-xs uppercase font-semibold mb-1" style={{
         color,
-        marginBottom: 4,
       }}>{title}</div>
-      <div className="text-secondary text-xs" style={{ lineHeight: 1.6 }}>
+      <div className="text-secondary text-xs leading-relaxed">
         {children}
       </div>
     </div>
@@ -115,20 +114,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
     return (
       <div>
         <Link href="/" className="back-link">&larr; Back to dashboard</Link>
-        <div className="card" style={{ padding: '32px 24px', textAlign: 'center' }}>
+        <div className="card text-center" style={{ padding: '32px 24px' }}>
           <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
-          <div className="mono-xs text-secondary" style={{
-            lineHeight: 1.6,
+          <div className="mono-xs text-secondary leading-relaxed" style={{
             maxWidth: 480,
             margin: '0 auto',
           }}>
             This session has not been synced to the dashboard KV store yet.
             Data is synced periodically &mdash; check back after the next pipeline run.
           </div>
-          <div className="mono-xs text-muted" style={{
-            marginTop: 12,
-            wordBreak: 'break-all',
-          }}>{sessionId}</div>
+          <div className="mono-xs text-muted mt-3 break-all">{sessionId}</div>
         </div>
       </div>
     );
@@ -202,16 +197,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <div className="flex-wrap gap-4" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
-            <div className="mono font-semibold text-base" style={{
+            <div className="mono font-semibold text-base mb-2 break-all" style={{
               color: 'var(--accent-hover)',
               letterSpacing: '0.02em',
-              marginBottom: 8,
-              wordBreak: 'break-all',
             }}>{sessionId}</div>
             <div className="text-secondary text-xs flex-wrap gap-4">
               <span>{si.projectName}</span>
               {si.gitRepository && (
-                <span style={{ color: 'var(--text-muted)' }}>
+                <span className="text-muted">
                   {si.gitRepository}
                   {si.gitBranch ? ` · ${si.gitBranch}` : ''}
                 </span>
@@ -295,16 +288,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
         {errorCount > 0 && (
           <IssueCallout severity="critical" title={plural(errorCount, 'error span')}>
-            <div style={{ marginBottom: 8 }}>Tool invocations or agent calls that reported errors:</div>
+            <div className="mb-2">Tool invocations or agent calls that reported errors:</div>
             {errorDetails.slice(0, MAX_ERROR_ROWS).map((e, i) => (
-              <div key={i} className="mono-xs" style={{ marginBottom: 4 }}>
+              <div key={i} className="mono-xs mb-1">
                 <span style={{ color: 'var(--status-critical)' }}>✗</span>{' '}
                 {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
-                {e.errorType && e.errorType !== 'unknown' && <span style={{ color: 'var(--text-muted)' }}> — {e.errorType}</span>}
+                {e.errorType && e.errorType !== 'unknown' && <span className="text-muted"> — {e.errorType}</span>}
               </div>
             ))}
             {errorCount > MAX_ERROR_ROWS && (
-              <div className="text-muted text-xs" style={{ marginTop: 4 }}>
+              <div className="text-muted text-xs mt-1">
                 +{errorCount - MAX_ERROR_ROWS} more
               </div>
             )}
@@ -313,7 +306,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
         {hallucinationEvals.length > 0 && (
           <IssueCallout severity="critical" title={`${plural(hallucinationEvals.length, 'hallucination indicator')} detected`}>
-            <div style={{ marginBottom: 8 }}>
+            <div className="mb-2">
               Evaluations flagging potential hallucination or very low confidence:
             </div>
             {hallucinationEvals.slice(0, MAX_HALLUCINATION_ROWS).map((e, i) => (
@@ -336,7 +329,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           <IssueCallout severity="warning" title={`${plural(failedEvals.length, 'evaluation')} marked fail`}>
             {failedEvals.slice(0, MAX_FAILED_EVAL_ROWS).map((e, i) => (
               <div key={i} className="mono-xs" style={{ marginBottom: 3 }}>
-                <span style={{ color: 'var(--status-warning)' }}>⚠</span>{' '}
+                <span className="text-warning">⚠</span>{' '}
                 {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
               </div>
             ))}
@@ -359,7 +352,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         {tokenProgression.length === 0 ? (
           <div className="text-muted text-xs">No token snapshots recorded.</div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="overflow-x-auto">
             <table className="mono-xs" style={{
               width: '100%', borderCollapse: 'collapse',
             }}>
@@ -437,7 +430,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   </div>
                 </div>
                 {a.hasRateLimit && (
-                  <div className="mono" style={{ marginTop: 8, fontSize: 'var(--font-size-2xs)', color: 'var(--status-warning)' }}>
+                  <div className="mono mt-2 text-2xs text-warning">
                     ⚠ Hit rate limit
                   </div>
                 )}
@@ -446,7 +439,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Multi-agent evaluation scores */}
-          <div style={{ marginTop: 16 }}>
+          <div className="mt-4">
             <AgentScoreSummary handoffScore={handoffScore} avgRelevance={avgRelevance} completeness={completeness} />
           </div>
         </Section>
@@ -486,9 +479,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               const commitFiles = commit.files?.split(' ') ?? [];
               return (
                 <details key={i} className="border-b-subtle">
-                  <summary className="flex-center gap-2-5" style={{
+                  <summary className="flex-center gap-2-5 cursor-pointer" style={{
                     padding: '8px 4px',
-                    cursor: 'pointer',
                     listStyle: 'none',
                   }}>
                     <span className="text-healthy text-2xs shrink-0">●</span>
@@ -503,15 +495,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   </summary>
                   <div style={{ paddingLeft: 20, paddingBottom: 10 }}>
                     {commit.body && (
-                      <div className="text-secondary text-xs" style={{
-                        lineHeight: 1.6, marginBottom: 8,
+                      <div className="text-secondary text-xs leading-relaxed mb-2" style={{
                         fontFamily: 'var(--font-body)',
                       }}>
                         {commit.body}
                       </div>
                     )}
                     {commitFiles.length > 0 && (
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)' }}>
+                      <div className="mono text-2xs text-muted">
                         {commitFiles.map((f, fi) => (
                           <div key={fi}>{shortPath(f)}</div>
                         ))}
@@ -532,7 +523,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={`${plural(codeStructure.length, 'file')} analyzed`}
           health={codeStructure.some(f => f.score < 0.6) ? 'warn' : 'ok'}
         >
-          <div style={{ overflowX: 'auto' }}>
+          <div className="overflow-x-auto">
             <table className="mono-xs" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <MonoTableHead columns={[
                 { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },

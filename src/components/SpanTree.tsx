@@ -89,7 +89,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
           {STATUS_ICONS[statusCode]}
         </span>
         <div className="flex-1">
-          <div className="text-xs" style={{ fontWeight: 500 }}>{node.name}</div>
+          <div className="text-xs font-medium">{node.name}</div>
           <div className="flex-center gap-2">
             <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 2, height: 4 }}>
               <div style={barStyle} />
@@ -121,7 +121,7 @@ export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
   const roots = buildTree(spans, evalsBySpan);
 
   if (roots.length === 0) {
-    return <div className="text-muted" style={{ padding: 16 }}>No spans found for this trace.</div>;
+    return <div className="text-muted p-4">No spans found for this trace.</div>;
   }
 
   return (

@@ -54,7 +54,7 @@ function DashboardPage({ period }: { period: Period }) {
       <div className="empty-state">
         <h2>No Evaluation Data</h2>
         <p>No evaluations found for the selected period.</p>
-        <p style={{ marginTop: 8 }}>
+        <p className="mt-2">
           Run evaluations using the <code>obs_inject_evaluations</code> tool to see metrics here.
         </p>
       </div>
@@ -131,11 +131,11 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           <h2 className="text-lg">{detail.displayName}</h2>
           <StatusBadge status={detail.status} />
         </div>
-        <div className="gap-8" style={{ display: 'flex', marginTop: 12, flexWrap: 'wrap' }}>
+        <div className="gap-8 mt-3" style={{ display: 'flex', flexWrap: 'wrap' }}>
           {(['avg', 'min', 'max', 'p50', 'p95', 'p99'] as const).map((key) => {
             const val = detail.values[key];
             return (
-              <div key={key} style={{ textAlign: 'center' }}>
+              <div key={key} className="text-center">
                 <div className="mono-xl font-semibold">
                   {val !== null && val !== undefined ? val.toFixed(4) : 'N/A'}
                 </div>
@@ -143,12 +143,12 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
               </div>
             );
           })}
-          <div style={{ textAlign: 'center' }}>
+          <div className="text-center">
             <div className="mono-xl font-semibold">{detail.sampleCount}</div>
             <div className="text-secondary text-xs uppercase">samples</div>
           </div>
         </div>
-        <div className="flex-center gap-4" style={{ marginTop: 12 }}>
+        <div className="flex-center gap-4 mt-3">
           <TrendIndicator trend={detail.trend} />
           <ConfidenceBadge confidence={detail.confidence} />
         </div>

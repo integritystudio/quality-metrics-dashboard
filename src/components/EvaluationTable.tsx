@@ -68,13 +68,12 @@ const columns = [
     cell: ({ row }) => (
       <button
         type="button"
-        className="text-secondary text-xs"
+        className="text-secondary text-xs cursor-pointer"
         onClick={row.getToggleExpandedHandler()}
         aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
         style={{
           background: 'none',
           border: 'none',
-          cursor: 'pointer',
           padding: '2px 6px',
           transition: 'transform 0.15s',
           transform: row.getIsExpanded() ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -109,7 +108,7 @@ const columns = [
       const label = info.getValue() ?? 'unknown';
       const { category } = labelToOrdinal(label);
       return (
-        <ColoredChip color={CATEGORY_COLORS[category]} style={{ fontWeight: 500 }}>
+        <ColoredChip color={CATEGORY_COLORS[category]} className="font-medium">
           {label}
         </ColoredChip>
       );
@@ -230,14 +229,13 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
               key={cat}
               type="button"
               onClick={() => toggleCategory(cat)}
-              className="text-xs font-semibold"
+              className="text-xs font-semibold cursor-pointer"
               style={{
                 padding: '4px 12px',
                 borderRadius: 6,
                 border: `1px solid ${CATEGORY_COLORS[cat]}`,
                 backgroundColor: active ? `${CATEGORY_COLORS[cat]}30` : 'transparent',
                 color: CATEGORY_COLORS[cat],
-                cursor: 'pointer',
                 opacity: active ? 1 : 0.6,
                 transition: 'opacity 0.15s, background-color 0.15s',
               }}
@@ -257,7 +255,8 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
                   <th
                     key={header.id}
                     onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                    style={{ cursor: canSort ? 'pointer' : 'default', userSelect: 'none' }}
+                    className="select-none"
+                    style={{ cursor: canSort ? 'pointer' : 'default' }}
                     aria-sort={canSort ? sortDir(header.id) : undefined}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
@@ -293,7 +292,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
           ))}
           {table.getRowModel().rows.length === 0 && (
             <tr>
-              <td colSpan={table.getVisibleLeafColumns().length} className="text-muted" style={{ textAlign: 'center', padding: 16 }}>
+              <td colSpan={table.getVisibleLeafColumns().length} className="text-muted text-center p-4">
                 No evaluations match the current filter.
               </td>
             </tr>

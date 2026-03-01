@@ -34,12 +34,12 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
 
       {cqi.contributions.length > 0 && (
         <div
+          className="mt-4"
           style={{
             display: 'flex',
             height: 8,
             borderRadius: 4,
             overflow: 'hidden',
-            marginTop: 16,
           }}
         >
           {cqi.contributions.map((c) => (

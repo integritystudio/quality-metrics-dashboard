@@ -61,21 +61,21 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
     sort === key ? (asc ? ' \u2191' : ' \u2193') : '';
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div className="overflow-x-auto">
       <table className="sla-table" style={{ minWidth: 640 }}>
         <thead>
           <tr>
             <th style={{ width: '30%' }}>Agent</th>
-            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('invocations')}>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('invocations')}>
               Invocations{sortIndicator('invocations')}
             </th>
-            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('errorRate')}>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('errorRate')}>
               Error Rate{sortIndicator('errorRate')}
             </th>
-            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('sessionCount')}>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('sessionCount')}>
               Sessions{sortIndicator('sessionCount')}
             </th>
-            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('avgOutputSize')}>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('avgOutputSize')}>
               Avg Output{sortIndicator('avgOutputSize')}
             </th>
             <th>Rate Limits</th>
@@ -116,10 +116,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         borderRadius: '50%',
                         background: color,
                       }} />
-                      <span className="mono-xs" style={{
-                        color: 'var(--text-primary)',
-                        wordBreak: 'break-all',
-                      }}>
+                      <span className="mono-xs text-primary break-all">
                         {agent.agentName}
                       </span>
                     </div>
@@ -200,9 +197,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                       {/* Daily invocation sparkline */}
                       {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
-                        <div className="border-b-subtle" style={{
+                        <div className="border-b-subtle mb-1" style={{
                           padding: '10px 0 8px',
-                          marginBottom: 4,
                         }}>
                           <div className="flex-center gap-3">
                             <div className="text-xs text-muted uppercase shrink-0">
@@ -299,9 +295,8 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
   const metrics = Object.entries(evalSummary);
   if (metrics.length === 0) {
     return (
-      <div className="text-xs text-muted border-b-subtle" style={{
+      <div className="text-xs text-muted border-b-subtle mb-1" style={{
         padding: '10px 0 4px',
-        marginBottom: 4,
       }}>
         No evaluations linked to this agent.
       </div>
@@ -309,9 +304,8 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
   }
 
   return (
-    <div className="border-b-subtle" style={{
+    <div className="border-b-subtle mb-1" style={{
       padding: '10px 0 8px',
-      marginBottom: 4,
     }}>
       <div className="text-muted mb-1-5 text-xs uppercase">
         Evaluation Metrics

@@ -46,7 +46,7 @@ export function TrendChart({
 }: TrendChartProps) {
   if (!trend) {
     return (
-      <div style={{ color: COLORS.text, padding: 16, textAlign: 'center' }}>
+      <div className="text-center p-4" style={{ color: COLORS.text }}>
         No trend data available
       </div>
     );
@@ -75,7 +75,7 @@ export function TrendChart({
   if (warningThreshold != null) allValues.push(warningThreshold);
   if (criticalThreshold != null) allValues.push(criticalThreshold);
   if (allValues.length === 0) {
-    return <div style={{ color: COLORS.text, padding: 16, textAlign: 'center' }}>Insufficient data</div>;
+    return <div className="text-center p-4" style={{ color: COLORS.text }}>Insufficient data</div>;
   }
   const yMin = Math.min(...allValues);
   const yMax = Math.max(...allValues);
@@ -150,12 +150,8 @@ export function TrendChart({
         </ResponsiveContainer>
       </div>
       {dynamics && (
-        <div className="gap-6" style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          marginTop: 8,
+        <div className="flex-wrap text-xs gap-6 mt-2" style={{
           padding: '8px 0',
-          fontSize: 12,
           color: COLORS.text,
         }}>
           <div>

@@ -18,7 +18,7 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
       <div className="error-state">
         <h2>Something went wrong</h2>
         <p>{error.message}</p>
-        <button onClick={resetErrorBoundary} style={{ marginTop: 12, padding: '6px 16px', cursor: 'pointer' }}>
+        <button onClick={resetErrorBoundary} className="mt-3 cursor-pointer" style={{ padding: '6px 16px' }}>
           Try again
         </button>
       </div>
