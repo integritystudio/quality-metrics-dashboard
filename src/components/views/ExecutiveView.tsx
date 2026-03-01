@@ -1,6 +1,7 @@
 import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from '../../types.js';
 import { StatusBadge } from '../Indicators.js';
 import { CQIHero } from '../CQIHero.js';
+import { StatCard } from '../StatCard.js';
 
 interface ExtendedExecutiveView extends ExecutiveViewType {
   cqi?: CompositeQualityIndex;
@@ -68,12 +69,9 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
 
       <div className="view-section">
         <h3 className="section-heading">Alert Summary</h3>
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
           {Object.entries(data.alertCounts).map(([severity, count]) => (
-            <div key={severity} className="card" style={{ padding: 12, textAlign: 'center', minWidth: 100 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 600 }}>{String(count)}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{severity}</div>
-            </div>
+            <StatCard key={severity} value={String(count)} label={severity} />
           ))}
         </div>
       </div>

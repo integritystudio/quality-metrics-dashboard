@@ -1,11 +1,10 @@
 import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import { AGENT_PALETTE } from '../lib/constants.js';
 import type { TurnLevelResult } from '../types.js';
-
-const AGENT_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#06b6d4'];
 
 function agentColor(agentName: string, agentNames: string[]): string {
   const idx = agentNames.indexOf(agentName);
-  return AGENT_COLORS[idx % AGENT_COLORS.length];
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
 }
 
 interface TurnTimelineProps {

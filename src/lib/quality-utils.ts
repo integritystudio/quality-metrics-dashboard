@@ -41,6 +41,11 @@ export function truncateText(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '...' : text;
 }
 
+export function truncateId(id: string, max = 10): string {
+  if (id.length <= max) return id;
+  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+}
+
 export function plural(count: number, singular: string, suffix = 's'): string {
   return `${count} ${singular}${count !== 1 ? suffix : ''}`;
 }

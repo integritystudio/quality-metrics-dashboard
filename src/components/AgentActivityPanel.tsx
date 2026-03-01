@@ -1,10 +1,9 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import { scoreColorBand, SCORE_COLORS, truncateId } from '../lib/quality-utils.js';
+import { AGENT_PALETTE } from '../lib/constants.js';
 import { Sparkline } from './Sparkline.js';
-
-const AGENT_COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
 const COLUMN_COUNT = 7;
 const ERROR_RATE_WARNING_THRESHOLD = 0.1;
@@ -24,10 +23,6 @@ function formatBytes(n: number): string {
   return `${(n / 1024).toFixed(1)}K`;
 }
 
-function truncateId(id: string): string {
-  return id.length > 12 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
-}
-
 interface AgentActivityPanelProps {
   agents: AgentStat[];
 }
@@ -38,7 +33,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const colorIndex = useMemo(
-    () => new Map(agents.map((a, i) => [a.agentName, AGENT_COLORS[i % AGENT_COLORS.length]])),
+    () => new Map(agents.map((a, i) => [a.agentName, AGENT_PALETTE[i % AGENT_PALETTE.length]])),
     [agents],
   );
 
@@ -94,7 +89,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
         </thead>
         <tbody>
           {sorted.map((agent) => {
-            const color = colorIndex.get(agent.agentName) ?? AGENT_COLORS[0];
+            const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
             const errColor = errorRateColor(agent.errorRate);
             const invPct = (agent.invocations / maxInvocations) * 100;
             const topSource = Object.entries(agent.sourceTypes).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -257,7 +252,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               data={agent.dailyCounts}
                               width={160}
                               height={28}
-                              color={colorIndex.get(agent.agentName) ?? AGENT_COLORS[0]}
+                              color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
                               label={`Daily invocations for ${agent.agentName}`}
                             />
                             <span style={{
@@ -302,7 +297,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                                 }}
                                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                               >
-                                {truncateId(sid)}
+                                {truncateId(sid, 12)}
                               </Link>
                             ))}
                             {agent.sessionIds.length === 0 && (
@@ -341,7 +336,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                                 }}
                                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                               >
-                                {truncateId(tid)}
+                                {truncateId(tid, 12)}
                               </Link>
                             ))}
                             {agent.traceIds.length === 0 && (

@@ -1,5 +1,6 @@
 import { memo, useState, useMemo } from 'react';
 import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId } from '../lib/quality-utils.js';
 
 interface CoverageGridProps {
   metrics: string[];
@@ -14,12 +15,6 @@ const STATUS_COLORS: Record<CoverageStatus, string> = {
   partial: 'var(--score-fair, #E69F00)',
   missing: 'var(--score-poor, #D55E00)',
 };
-
-/** Truncate long IDs for display */
-function truncateId(id: string, max = 10): string {
-  if (id.length <= max) return id;
-  return id.slice(0, 4) + '\u2026' + id.slice(-4);
-}
 
 function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
   const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);

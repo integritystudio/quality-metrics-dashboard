@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { TrendBucket } from '../hooks/useTrend.js';
+import { CHART_COLORS } from '../lib/constants.js';
 
 interface TrendSeriesProps {
   data: TrendBucket[];
@@ -16,12 +17,9 @@ interface TrendSeriesProps {
 }
 
 const COLORS = {
-  line: '#58a6ff',
+  ...CHART_COLORS,
   band: 'rgba(88, 166, 255, 0.1)',
   bandStroke: 'rgba(88, 166, 255, 0.3)',
-  grid: '#30363d',
-  text: '#8b949e',
-  tooltip: '#161b22',
   background: '#0d1117',
 };
 

@@ -2,43 +2,20 @@ import type { AuditorView as AuditorViewType } from '../../types.js';
 import { MetricGrid } from '../MetricGrid.js';
 import { AlertList } from '../AlertList.js';
 import { SLATable } from '../SLATable.js';
+import { StatCard } from '../StatCard.js';
 
 export function AuditorView({ data }: { data: AuditorViewType }) {
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-        <div className="card" style={{ padding: 12, textAlign: 'center', minWidth: 120 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 600 }}>
-            {data.totalEvaluationCount}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-            Total Evaluations
-          </div>
-        </div>
-        <div className="card" style={{ padding: 12, textAlign: 'center', minWidth: 120 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 600 }}>
-            {data.metrics.length}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-            Metrics
-          </div>
-        </div>
-        <div className="card" style={{ padding: 12, textAlign: 'center', minWidth: 120 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 600 }}>
-            {data.alerts.length}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-            Alerts
-          </div>
-        </div>
-        <div className="card" style={{ padding: 12, textAlign: 'center', minWidth: 120 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>
-            {new Date(data.timestamp).toLocaleString()}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase', marginTop: 4 }}>
-            Computed At
-          </div>
-        </div>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+        <StatCard value={data.totalEvaluationCount} label="Total Evaluations" />
+        <StatCard value={data.metrics.length} label="Metrics" />
+        <StatCard value={data.alerts.length} label="Alerts" />
+        <StatCard
+          value={new Date(data.timestamp).toLocaleString()}
+          label="Computed At"
+          valueColor="var(--text-secondary)"
+        />
       </div>
 
       <div className="view-section">

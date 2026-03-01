@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import type { MetricDynamics } from '../types.js';
 import type { MetricTrend } from '../types.js';
+import { CHART_COLORS } from '../lib/constants.js';
 
 interface TrendChartProps {
   trend?: MetricTrend;
@@ -20,13 +21,8 @@ interface TrendChartProps {
 }
 
 const COLORS = {
-  line: '#58a6ff',
-  projection: '#58a6ff',
-  grid: '#30363d',
-  text: '#8b949e',
-  warning: '#d29922',
-  critical: '#f85149',
-  tooltip: '#161b22',
+  ...CHART_COLORS,
+  projection: CHART_COLORS.line,
 };
 
 function formatValue(v: number): string {
