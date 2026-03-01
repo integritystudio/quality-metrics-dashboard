@@ -36,14 +36,8 @@ export type Role = z.infer<typeof RoleSchema>;
 export const ROLES = RoleSchema.options;
 export const DEFAULT_ROLE: Role = 'executive';
 
-/** API server hostname (node-server only). */
-export const API_HOST = '127.0.0.1';
-
-/** API server port (node-server only). Reads API_PORT env, defaults to 3001. */
-export const API_PORT = Number(process.env.API_PORT) || 3001;
-
-/** Base URL for API requests. Uses VITE_API_URL env var, falls back to API_HOST:API_PORT in dev. */
-export const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? `http://${API_HOST}:${API_PORT}` : '');
+/** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
+export const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://127.0.0.1:3001' : '');
 
 /** Percentage of events sampled for T2 LLM evaluation. */
 export const LLM_SAMPLE_RATE = 10;

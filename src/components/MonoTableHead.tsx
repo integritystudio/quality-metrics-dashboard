@@ -13,8 +13,8 @@ export function MonoTableHead({ columns }: { columns: TableColumn[] }) {
   return (
     <thead>
       <tr className="border-b">
-        {columns.map(({ label, align = 'right' }) => (
-          <th key={label} className={`text-muted tracking-wide cell-pad nowrap ${ALIGN_CLASS[align]}`} style={{ fontWeight: 500 }}>
+        {columns.map(({ label, align = 'right' }, i) => (
+          <th key={`${label}-${i}`} className={`text-muted tracking-wide cell-pad nowrap font-semibold ${ALIGN_CLASS[align]}`}>
             {label.toUpperCase()}
           </th>
         ))}

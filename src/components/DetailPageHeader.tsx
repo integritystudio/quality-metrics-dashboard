@@ -7,13 +7,16 @@ interface DetailPageHeaderProps {
 }
 
 export function DetailPageHeader({ title, id, children }: DetailPageHeaderProps) {
+  const hasMeta = id || children;
   return (
     <div className="eval-detail-header">
       <h2 className="text-lg">{title}</h2>
-      <div className="eval-detail-meta">
-        {id && <span className="mono-xs text-secondary">{id}</span>}
-        {children}
-      </div>
+      {hasMeta && (
+        <div className="eval-detail-meta">
+          {id && <span className="mono-xs text-secondary">{id}</span>}
+          {children}
+        </div>
+      )}
     </div>
   );
 }

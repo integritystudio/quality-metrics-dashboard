@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 interface BarIndicatorProps {
   /** Percentage width 0-100 */
   value: number;
@@ -12,7 +14,7 @@ interface BarIndicatorProps {
   /** Extra class on the track div */
   className?: string;
   /** Extra inline styles on the track div (merged with internal overrides) */
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }
 
 export function BarIndicator({
@@ -24,13 +26,13 @@ export function BarIndicator({
   className,
   style,
 }: BarIndicatorProps) {
-  const trackStyle = {
+  const trackStyle: CSSProperties = {
     ...style,
-    ...(height != null && { '--bar-h': `${height}px` }),
+    ...(height != null && { '--bar-h': `${height}px` } as CSSProperties),
     ...(trackColor && { background: trackColor }),
-  } as React.CSSProperties;
+  };
 
-  const fillStyle: React.CSSProperties = {
+  const fillStyle: CSSProperties = {
     width: `${value}%`,
   };
   if (color) fillStyle.background = color;
@@ -39,7 +41,7 @@ export function BarIndicator({
   return (
     <div
       className={className ? `mini-bar ${className}` : 'mini-bar'}
-      style={Object.keys(trackStyle).length > 0 ? trackStyle : undefined}
+      style={trackStyle}
     >
       <div
         className="mini-bar-fill"

@@ -13,7 +13,7 @@ import { traceRoutes } from './routes/traces.js';
 import { agentRoutes } from './routes/agents.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { qualityRoutes } from './routes/quality.js';
-import { API_HOST, API_PORT } from '../lib/constants.js';
+import { API_HOST, API_PORT } from './config.js';
 
 const app = new Hono();
 

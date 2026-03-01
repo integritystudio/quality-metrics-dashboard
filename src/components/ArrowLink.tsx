@@ -1,8 +1,9 @@
+import type { ReactNode } from 'react';
 import { Link } from 'wouter';
 
 interface ArrowLinkProps {
   href: string;
-  children: string;
+  children: ReactNode;
   className?: string;
 }
 

@@ -1,7 +1,7 @@
 import type { ConfidenceIndicator } from '../types.js';
 import { SCORE_COLORS, type ScoreColorBand } from '../lib/quality-utils.js';
 import { BarIndicator } from './BarIndicator.js';
-import { SectionBlock } from './SectionBlock.js';
+
 
 interface EvaluatorScore {
   evaluator: string;
@@ -82,7 +82,8 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
       </div>
 
       {hasMultiJudge && (
-        <SectionBlock label="Judge Panel">
+        <div>
+          <div className="section-label mb-1-5">Judge Panel</div>
           <div className="agreement-grid">
             <span className="ag-header">Evaluator</span>
             <span className="ag-header">Score</span>
@@ -110,7 +111,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
               {' '}(spread: {(Math.max(...evaluatorScores!.map(s => s.score)) - Math.min(...evaluatorScores!.map(s => s.score))).toFixed(3)})
             </div>
           </div>
-        </SectionBlock>
+        </div>
       )}
     </div>
   );
