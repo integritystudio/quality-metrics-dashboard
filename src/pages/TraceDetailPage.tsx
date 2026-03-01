@@ -1,7 +1,9 @@
 import { useTrace } from '../hooks/useTrace.js';
 import { SpanTree } from '../components/SpanTree.js';
 import { EvaluationEventOverlay } from '../components/EvaluationEventOverlay.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
+import { ViewSection } from '../components/Section.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
 
 export function TraceDetailPage({ traceId }: { traceId: string }) {
@@ -18,28 +20,22 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
         />
       ) : (
         <>
-          <div className="eval-detail-header">
-            <h2 className="text-lg">Trace Detail</h2>
-            <div className="eval-detail-meta">
-              <span className="mono-xs text-secondary">{traceId}</span>
-              <span className="text-secondary text-xs">
-                {data.spans.length} span{data.spans.length !== 1 ? 's' : ''} &middot; {data.evaluations.length} evaluation{data.evaluations.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-          </div>
+          <DetailPageHeader title="Trace Detail" id={traceId}>
+            <span className="text-secondary text-xs">
+              {data.spans.length} span{data.spans.length !== 1 ? 's' : ''} &middot; {data.evaluations.length} evaluation{data.evaluations.length !== 1 ? 's' : ''}
+            </span>
+          </DetailPageHeader>
 
           {data.evaluations.length > 0 && (
-            <div className="view-section">
-              <h3 className="section-heading">Evaluation Summary</h3>
+            <ViewSection title="Evaluation Summary">
               <div className="card" style={{ padding: 16 }}>
                 <EvaluationEventOverlay evaluations={data.evaluations} traceId={traceId} />
               </div>
-            </div>
+            </ViewSection>
           )}
 
           {data.spans.length > 0 && (
-            <div className="view-section">
-              <h3 className="section-heading">Span Hierarchy</h3>
+            <ViewSection title="Span Hierarchy">
               <div className="card">
                 <SpanTree
                   spans={data.spans}
@@ -47,7 +43,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
                   maxDuration={data.spans.reduce((max, s) => Math.max(max, s.durationMs ?? 0), 1)}
                 />
               </div>
-            </div>
+            </ViewSection>
           )}
 
           {data.spans.length === 0 && data.evaluations.length > 0 && (

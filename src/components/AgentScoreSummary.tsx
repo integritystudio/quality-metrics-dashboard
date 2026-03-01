@@ -15,9 +15,9 @@ const SCORES = [
 export function AgentScoreSummary({ handoffScore, avgRelevance, completeness }: AgentScoreSummaryProps) {
   const values = { handoff: handoffScore, relevance: avgRelevance, completeness };
   return (
-    <div className="gap-6" style={{ display: 'flex', flexWrap: 'wrap' }}>
+    <div className="flex-wrap gap-6">
       {SCORES.map(({ label, metricName }) => (
-        <div key={label} style={{ textAlign: 'center' }}>
+        <div key={label} className="text-center">
           <div className="field-label text-secondary text-xs mb-1">{label}</div>
           <ScoreBadge score={values[metricName]} metricName={metricName} />
         </div>

@@ -14,6 +14,7 @@ import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indic
 import { TrendChart } from './components/TrendChart.js';
 import { TrendSeries } from './components/TrendSeries.js';
 import { ConfidencePanel } from './components/ConfidencePanel.js';
+import { ViewSection } from './components/Section.js';
 import { CorrelationsPage } from './pages/CorrelationsPage.js';
 import { CoveragePage } from './pages/CoveragePage.js';
 import { PipelinePage } from './pages/PipelinePage.js';
@@ -69,16 +70,14 @@ function DashboardPage({ period }: { period: Period }) {
       <HealthOverview dashboard={dashboard} />
       <MetricGrid metrics={dashboard.metrics} sparklines={sparklines} />
       {dashboard.alerts.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">Active Alerts</h3>
+        <ViewSection title="Active Alerts">
           <AlertList alerts={dashboard.alerts} />
-        </div>
+        </ViewSection>
       )}
       {dashboard.slaCompliance && dashboard.slaCompliance.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">SLA Compliance</h3>
+        <ViewSection title="SLA Compliance">
           <SLATable slas={dashboard.slaCompliance} />
-        </div>
+        </ViewSection>
       )}
     </>
   );
@@ -159,16 +158,14 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
       </div>
 
       {detail.confidence && (
-        <div className="view-section">
-          <h3 className="section-heading">Confidence Analysis</h3>
+        <ViewSection title="Confidence Analysis">
           <div className="card">
             <ConfidencePanel confidence={detail.confidence} />
           </div>
-        </div>
+        </ViewSection>
       )}
 
-      <div className="view-section">
-        <h3 className="section-heading">Trend</h3>
+      <ViewSection title="Trend">
         <div className="card">
           <TrendChart
             trend={detail.trend}
@@ -178,45 +175,41 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
             metricName={detail.displayName}
           />
         </div>
-      </div>
+      </ViewSection>
 
       {trendData && trendData.trendData.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">
-            Time Series ({trendData.totalEvaluations} evaluations)
-            {trendData.narrowed && (
-              <span className="text-muted text-xs" style={{
-                fontWeight: 400,
-                marginLeft: 8,
-              }}>auto-narrowed to data range</span>
-            )}
-          </h3>
+        <ViewSection title={<>
+          Time Series ({trendData.totalEvaluations} evaluations)
+          {trendData.narrowed && (
+            <span className="text-muted text-xs" style={{
+              fontWeight: 400,
+              marginLeft: 8,
+            }}>auto-narrowed to data range</span>
+          )}
+        </>}>
           <div className="card">
             <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
           </div>
-        </div>
+        </ViewSection>
       )}
 
       {detail.alerts.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">Alerts</h3>
+        <ViewSection title="Alerts">
           <AlertList alerts={detail.alerts} />
-        </div>
+        </ViewSection>
       )}
 
-      <div className="view-section">
-        <h3 className="section-heading">Score Distribution</h3>
+      <ViewSection title="Score Distribution">
         <div className="card">
           <ScoreHistogram distribution={detail.scoreDistribution} />
         </div>
-      </div>
+      </ViewSection>
 
-      <div className="view-section">
-        <h3 className="section-heading">Evaluations</h3>
+      <ViewSection title="Evaluations">
         <div className="card">
           <EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} metricName={name} period={period} />
         </div>
-      </div>
+      </ViewSection>
     </div>
   );
 }

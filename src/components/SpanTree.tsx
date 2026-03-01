@@ -78,25 +78,24 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
   return (
     <>
       <div
-        className="flex-center gap-2"
+        className="flex-center gap-2 border-b"
         style={{
           paddingLeft: depth * 20 + 8,
           paddingTop: 8,
           paddingBottom: 8,
-          borderBottom: '1px solid var(--border)',
         }}
       >
         <span className="text-base" style={{ color: isError ? 'var(--status-critical)' : 'var(--text-primary)' }}>
           {STATUS_ICONS[statusCode]}
         </span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 500 }}>{node.name}</div>
+        <div className="flex-1">
+          <div className="text-xs" style={{ fontWeight: 500 }}>{node.name}</div>
           <div className="flex-center gap-2">
             <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 2, height: 4 }}>
               <div style={barStyle} />
             </div>
             {node.durationMs != null && (
-              <span className="mono-xs text-secondary" style={{ whiteSpace: 'nowrap' }}>
+              <span className="mono-xs text-secondary nowrap">
                 {node.durationMs < 1000 ? `${node.durationMs.toFixed(0)}ms` : `${(node.durationMs / 1000).toFixed(2)}s`}
               </span>
             )}

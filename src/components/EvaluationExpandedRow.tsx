@@ -1,13 +1,9 @@
-import type { CSSProperties } from 'react';
 import { Link } from 'wouter';
 import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import { ColoredChip } from './ColoredChip.js';
 import { MetaItem } from './MetaItem.js';
+import { SectionBlock } from './SectionBlock.js';
 import type { EvalRow } from './EvaluationTable.js';
-
-
-export const chipBaseStyle: CSSProperties = {
-  display: 'inline-block',
-};
 
 export function StepScoreChip({ step, score, explanation }: {
   step: string | number;
@@ -17,13 +13,9 @@ export function StepScoreChip({ step, score, explanation }: {
   const band = scoreColorBand(score, 'maximize');
   const color = SCORE_COLORS[band];
   return (
-    <span
-      className="mono-xs chip"
-      title={explanation ?? `Step ${step}: ${score.toFixed(2)}`}
-      style={{ ...chipBaseStyle, backgroundColor: `${color}20`, color }}
-    >
+    <ColoredChip color={color} title={explanation ?? `Step ${step}: ${score.toFixed(2)}`}>
       {step}: {score.toFixed(2)}
-    </span>
+    </ColoredChip>
   );
 }
 
@@ -37,13 +29,12 @@ export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score
   const ok = toolCorrect && argsCorrect;
   const color = ok ? '#26d97f' : '#f04438';
   return (
-    <span
-      className="mono-xs chip"
+    <ColoredChip
+      color={color}
       title={`tool: ${toolCorrect ? 'correct' : 'wrong'}, args: ${argsCorrect ? 'correct' : 'wrong'}, score: ${score.toFixed(2)}`}
-      style={{ ...chipBaseStyle, backgroundColor: `${color}20`, color }}
     >
       {toolName} {score.toFixed(2)}
-    </span>
+    </ColoredChip>
   );
 }
 
@@ -69,35 +60,32 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       animation: 'fade-in 0.15s ease-in-out',
     }}>
       {row.explanation && (
-        <div className="mb-3">
-          <div className="section-label mb-1">Explanation</div>
-          <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+        <SectionBlock label="Explanation">
+          <div className="text-xs" style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
             {row.explanation}
           </div>
-        </div>
+        </SectionBlock>
       )}
 
       {meta.length > 0 && (
-        <div className="mb-3 gap-4" style={{ display: 'flex', flexWrap: 'wrap' }}>
+        <div className="mb-3 flex-wrap gap-4">
           {meta.map(m => <MetaItem key={m.label} label={m.label} value={m.value} />)}
         </div>
       )}
 
       {row.stepScores && row.stepScores.length > 0 && (
-        <div className="mb-3">
-          <div className="section-label mb-1-5">Step Scores</div>
-          <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap' }}>
+        <SectionBlock label="Step Scores">
+          <div className="flex-wrap gap-1-5">
             {row.stepScores.map(s => (
               <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
             ))}
           </div>
-        </div>
+        </SectionBlock>
       )}
 
       {row.toolVerifications && row.toolVerifications.length > 0 && (
-        <div>
-          <div className="section-label mb-1-5">Tool Verifications</div>
-          <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap' }}>
+        <SectionBlock label="Tool Verifications">
+          <div className="flex-wrap gap-1-5">
             {row.toolVerifications.map((tv, i) => (
               <ToolVerificationChip
                 key={`${tv.toolName}-${i}`}
@@ -109,7 +97,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
               />
             ))}
           </div>
-        </div>
+        </SectionBlock>
       )}
 
       {(row.traceId || row.sessionId) && (

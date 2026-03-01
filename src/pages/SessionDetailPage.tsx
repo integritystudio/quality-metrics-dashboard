@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
@@ -14,15 +15,15 @@ import {
   MAX_FAILED_EVAL_ROWS,
   SCORE_DISPLAY_PRECISION,
 } from '../lib/constants.js';
+import { BarIndicator } from '../components/BarIndicator.js';
 
 // ─── Stat chip ───────────────────────────────────────────────────────────────
 
 function Stat({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
-    <div style={{ textAlign: 'center', flex: '1 1 100px', minWidth: 80 }}>
-      <div className="mono" style={{
+    <div className="text-center" style={{ flex: '1 1 100px', minWidth: 80 }}>
+      <div className="mono font-bold" style={{
         fontSize: 22,
-        fontWeight: 700,
         color: color ?? 'var(--text-primary)',
         lineHeight: 1.1,
       }}>{value}</div>
@@ -37,27 +38,18 @@ function FreqBar({ label, count, max, color }: { label: string; count: number; m
   const pct = max > 0 ? (count / max) * 100 : 0;
   return (
     <div className="flex-center mb-1-5 gap-2-5">
-      <div className="mono-xs text-secondary" style={{
+      <div className="mono-xs text-secondary text-right shrink-0 truncate" style={{
         width: 160,
-        textAlign: 'right',
-        flexShrink: 0,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
       }}>{label}</div>
-      <div style={{ flex: 1, background: 'var(--bg-elevated)', borderRadius: 2, height: 6, overflow: 'hidden' }}>
-        <div style={{
-          width: `${pct}%`,
-          height: '100%',
-          background: color ?? 'var(--accent)',
-          borderRadius: 2,
-          transition: 'width 0.4s ease',
-        }} />
-      </div>
-      <div className="mono-xs text-muted" style={{
+      <BarIndicator
+        value={pct}
+        height={6}
+        color={color ?? 'var(--accent)'}
+        trackColor="var(--bg-elevated)"
+        style={{ flex: 1 }}
+      />
+      <div className="mono-xs text-muted text-right shrink-0" style={{
         width: 36,
-        textAlign: 'right',
-        flexShrink: 0,
       }}>{count}</div>
     </div>
   );
@@ -91,24 +83,6 @@ function IssueCallout({ severity, title, children }: {
 }
 
 
-interface TableColumn {
-  label: string;
-  align?: 'left' | 'right' | 'center';
-}
-
-function MonoTableHead({ columns }: { columns: TableColumn[] }) {
-  return (
-    <thead>
-      <tr style={{ borderBottom: '1px solid var(--border)' }}>
-        {columns.map(({ label, align = 'right' }) => (
-          <th key={label} className="text-muted tracking-wide" style={{ padding: '5px 10px', textAlign: align, fontWeight: 500, whiteSpace: 'nowrap' }}>
-            {label.toUpperCase()}
-          </th>
-        ))}
-      </tr>
-    </thead>
-  );
-}
 
 function FreqBarGrid({ entries, max, color }: {
   entries: [string, number][];
@@ -142,9 +116,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       <div>
         <Link href="/" className="back-link">&larr; Back to dashboard</Link>
         <div className="card" style={{ padding: '32px 24px', textAlign: 'center' }}>
-          <div className="mono-xs mb-1-5 uppercase" style={{
-            color: 'var(--status-warning)',
-          }}>Session Not Yet Available</div>
+          <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
           <div className="mono-xs text-secondary" style={{
             lineHeight: 1.6,
             maxWidth: 480,
@@ -227,7 +199,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         padding: '20px 24px 16px',
         marginBottom: 0,
       }}>
-        <div className="gap-4" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div className="flex-wrap gap-4" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
             <div className="mono font-semibold text-base" style={{
@@ -236,7 +208,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               marginBottom: 8,
               wordBreak: 'break-all',
             }}>{sessionId}</div>
-            <div className="text-secondary text-xs gap-4" style={{ display: 'flex', flexWrap: 'wrap' }}>
+            <div className="text-secondary text-xs flex-wrap gap-4">
               <span>{si.projectName}</span>
               {si.gitRepository && (
                 <span style={{ color: 'var(--text-muted)' }}>
@@ -307,7 +279,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         defaultOpen={hasIssues}
       >
         {!hasIssues && (
-          <div className="mono-xs" style={{ color: 'var(--status-healthy)' }}>
+          <div className="mono-xs text-healthy">
             No issues detected in this session.
           </div>
         )}
@@ -397,13 +369,13 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               ]} />
               <tbody>
                 {tokenProgression.map((t, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '5px 12px', textAlign: 'right' }}>{t.messages}</td>
-                    <td className="text-secondary" style={{ padding: '5px 12px', textAlign: 'right' }}>{fmtBytes(t.inputTokens)}</td>
-                    <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--accent-hover)' }}>{fmtBytes(t.outputTokens)}</td>
-                    <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>{fmtBytes(t.cacheRead)}</td>
-                    <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>{fmtBytes(t.cacheCreation)}</td>
-                    <td style={{ padding: '5px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>{t.model}</td>
+                  <tr key={i} className="border-b-subtle">
+                    <td className="cell-pad-wide text-right">{t.messages}</td>
+                    <td className="cell-pad-wide text-right text-secondary">{fmtBytes(t.inputTokens)}</td>
+                    <td className="cell-pad-wide text-right" style={{ color: 'var(--accent-hover)' }}>{fmtBytes(t.outputTokens)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheRead)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheCreation)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{t.model}</td>
                   </tr>
                 ))}
               </tbody>
@@ -448,19 +420,19 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 <div className="mono-xs mb-1-5 font-semibold">
                   {a.agentName}
                 </div>
-                <div className="gap-3" style={{ display: 'flex', flexWrap: 'wrap' }}>
+                <div className="flex-wrap gap-3">
                   <div>
-                    <div className="mono text-md" style={{ fontWeight: 700 }}>{a.invocations}</div>
+                    <div className="mono text-md font-bold">{a.invocations}</div>
                     <div className="stat-label">invocations</div>
                   </div>
                   {a.errors > 0 && (
                     <div>
-                      <div className="mono text-md" style={{ fontWeight: 700, color: 'var(--status-warning)' }}>{a.errors}</div>
+                      <div className="mono text-md font-bold text-warning">{a.errors}</div>
                       <div className="stat-label">errors</div>
                     </div>
                   )}
                   <div>
-                    <div className="mono text-md" style={{ fontWeight: 700 }}>{fmtBytes(a.avgOutputSize)}</div>
+                    <div className="mono text-md font-bold">{fmtBytes(a.avgOutputSize)}</div>
                     <div className="stat-label">avg output</div>
                   </div>
                 </div>
@@ -509,22 +481,22 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={plural(gitCommits.length, 'commit')}
           health="ok"
         >
-          <div className="gap-half" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="flex-col gap-half">
             {gitCommits.map((commit, i) => {
               const commitFiles = commit.files?.split(' ') ?? [];
               return (
-                <details key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <details key={i} className="border-b-subtle">
                   <summary className="flex-center gap-2-5" style={{
                     padding: '8px 4px',
                     cursor: 'pointer',
                     listStyle: 'none',
                   }}>
-                    <span style={{ color: 'var(--status-healthy)', fontSize: 'var(--font-size-2xs)', flexShrink: 0 }}>●</span>
-                    <span className="mono-xs font-semibold" style={{ flex: 1 }}>
+                    <span className="text-healthy text-2xs shrink-0">●</span>
+                    <span className="mono-xs font-semibold flex-1">
                       {commit.subject}
                     </span>
                     {commitFiles.length > 0 && (
-                      <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      <span className="text-2xs text-muted shrink-0">
                         {plural(commitFiles.length, 'file')}
                       </span>
                     )}
@@ -569,14 +541,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               ]} />
               <tbody>
                 {codeStructure.map((f, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td className="text-secondary" style={{ padding: '5px 10px' }}>{shortPath(f.file)}</td>
-                    <td className="text-muted" style={{ padding: '5px 10px' }}>{f.tool}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right' }}>{f.lines}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.exports}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.functions}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'center' }}>{f.hasTypes ? '✓' : '·'}</td>
-                    <td className="font-semibold" style={{ padding: '5px 10px', textAlign: 'right', color: SCORE_COLORS[scoreColorBand(f.score)] }}>
+                  <tr key={i} className="border-b-subtle">
+                    <td className="cell-pad text-secondary">{shortPath(f.file)}</td>
+                    <td className="cell-pad text-muted">{f.tool}</td>
+                    <td className="cell-pad text-right">{f.lines}</td>
+                    <td className="cell-pad text-right text-muted">{f.exports}</td>
+                    <td className="cell-pad text-right text-muted">{f.functions}</td>
+                    <td className="cell-pad text-center">{f.hasTypes ? '✓' : '·'}</td>
+                    <td className="cell-pad text-right font-semibold" style={{ color: SCORE_COLORS[scoreColorBand(f.score)] }}>
                       {f.score.toFixed(2)}
                     </td>
                   </tr>

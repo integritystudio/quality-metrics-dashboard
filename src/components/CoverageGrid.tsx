@@ -49,7 +49,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       </div>
 
       {/* Legend */}
-      <div className="mb-3 text-xs gap-4" style={{ display: 'flex' }}>
+      <div className="mb-3 text-xs flex-wrap gap-4">
         {(['covered', 'partial', 'missing'] as const).map(status => (
           <div key={status} className="flex-center gap-1">
             <div style={{
@@ -73,7 +73,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           }}
         >
           {/* Header row */}
-          <div role="row" style={{ display: 'contents' }}>
+          <div role="row" className="contents">
             <div role="columnheader" className="text-xs font-semibold" />
             {displayInputs.map(input => (
               <div
@@ -96,18 +96,11 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
 
           {/* Data rows */}
           {metrics.map(metric => (
-            <div key={metric} role="row" style={{ display: 'contents' }}>
+            <div key={metric} role="row" className="contents">
               <div
                 role="rowheader"
-                style={{
-                  fontSize: 12,
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
+                className="text-xs flex-center truncate"
+                style={{ fontWeight: 500 }}
                 title={metric}
               >
                 {metric}

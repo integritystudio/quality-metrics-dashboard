@@ -19,14 +19,13 @@ export function SLATable({ slas }: { slas: SLAComplianceResult[] }) {
         {slas.map((sla) => (
           <tr key={`${sla.sla.metric}-${sla.sla.aggregation}`}>
             <td>{sla.sla.metric} ({sla.sla.aggregation})</td>
-            <td style={{ fontFamily: 'var(--font-mono)' }}>
+            <td className="mono">
               {sla.sla.direction === 'above' ? '>=' : '<='} {sla.sla.target.toFixed(4)}
             </td>
-            <td style={{ fontFamily: 'var(--font-mono)' }}>
+            <td className="mono">
               {sla.actualValue !== null ? sla.actualValue.toFixed(4) : 'N/A'}
             </td>
-            <td style={{
-              fontFamily: 'var(--font-mono)',
+            <td className="mono" style={{
               color: sla.gap !== null && !sla.compliant ? 'var(--status-critical)' : 'var(--status-healthy)',
             }}>
               {sla.gap !== null ? (sla.gap >= 0 ? '+' : '') + sla.gap.toFixed(4) : '-'}

@@ -14,7 +14,7 @@ export function ShortcutOverlay() {
   return (
     <div className="shortcut-overlay-backdrop" onClick={toggleOverlay} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
       <div className="shortcut-overlay" onClick={e => e.stopPropagation()}>
-        <div className="flex-center mb-3" style={{ justifyContent: 'space-between' }}>
+        <div className="flex-center mb-3 justify-between">
           <h2 className="text-md" style={{ margin: 0 }}>Keyboard Shortcuts</h2>
           <button type="button" onClick={toggleOverlay} aria-label="Close" className="text-lg text-secondary" style={{
             background: 'none', border: 'none', cursor: 'pointer',
@@ -28,7 +28,7 @@ export function ShortcutOverlay() {
               {scope}
             </div>
             {items.map(item => (
-              <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12 }}>
+              <div key={item.key} className="flex-center justify-between text-xs" style={{ padding: '4px 0' }}>
                 <span>{item.description}</span>
                 <kbd className="mono-xs" style={{
                   padding: '2px 6px',

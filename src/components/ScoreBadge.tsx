@@ -65,7 +65,8 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
   if (score === null) {
     return (
       <span
-        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: SCORE_COLORS.no_data }}
+        className="inline-flex-center gap-1"
+        style={{ color: SCORE_COLORS.no_data }}
         aria-label={`${metricName}: no data`}
       >
         {SCORE_SHAPES.no_data} {label ?? 'N/A'}
@@ -80,7 +81,8 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
 
   const badge = (
     <span
-      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color }}
+      className="inline-flex-center gap-1"
+      style={{ color }}
       aria-label={`Score: ${score}, ${band} (${directionHint})`}
     >
       {shape} {label ?? score.toFixed(2)}

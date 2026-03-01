@@ -13,6 +13,7 @@ import { traceRoutes } from './routes/traces.js';
 import { agentRoutes } from './routes/agents.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { qualityRoutes } from './routes/quality.js';
+import { API_HOST, API_PORT } from '../lib/constants.js';
 
 const app = new Hono();
 
@@ -31,6 +32,6 @@ app.route('/api', agentRoutes);
 app.route('/api', sessionRoutes);
 app.route('/api', qualityRoutes);
 
-console.log(`API server listening on http://127.0.0.1:${port}`);
+console.log(`API server listening on http://${API_HOST}:${API_PORT}`);
 
-serve({ fetch: app.fetch, hostname: '127.0.0.1', port });
+serve({ fetch: app.fetch, hostname: API_HOST, port: API_PORT });

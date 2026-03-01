@@ -83,15 +83,15 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
           <div className="label text-secondary text-xs">Total</div>
         </div>
         <div className="summary-count">
-          <div className="value" style={{ color: 'var(--status-healthy)' }}>{summary.healthyMetrics}</div>
+          <div className="value text-healthy">{summary.healthyMetrics}</div>
           <div className="label text-secondary text-xs">Healthy</div>
         </div>
         <div className="summary-count">
-          <div className="value" style={{ color: 'var(--status-warning)' }}>{summary.warningMetrics}</div>
+          <div className="value text-warning">{summary.warningMetrics}</div>
           <div className="label text-secondary text-xs">Warning</div>
         </div>
         <div className="summary-count">
-          <div className="value" style={{ color: 'var(--status-critical)' }}>{summary.criticalMetrics}</div>
+          <div className="value text-critical">{summary.criticalMetrics}</div>
           <div className="label text-secondary text-xs">Critical</div>
         </div>
       </div>

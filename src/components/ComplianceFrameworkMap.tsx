@@ -28,14 +28,14 @@ export function ComplianceFrameworkMap() {
           <table className="eval-table" style={{ width: '100%' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>Reference</th>
-                <th style={{ textAlign: 'left' }}>Dashboard Feature</th>
+                <th className="text-left">Reference</th>
+                <th className="text-left">Dashboard Feature</th>
               </tr>
             </thead>
             <tbody>
               {fw.articles.map(a => (
                 <tr key={a.ref}>
-                  <td style={{ fontSize: 12 }}>{a.ref}</td>
+                  <td className="text-xs">{a.ref}</td>
                   <td className="text-secondary text-xs">{a.feature}</td>
                 </tr>
               ))}

@@ -4,6 +4,7 @@ import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
 import { SplitPane } from '../components/SplitPane.js';
 import { MetricCompare } from '../components/MetricCompare.js';
 import { PageShell } from '../components/PageShell.js';
+import { ViewSection } from '../components/Section.js';
 import { API_BASE } from '../lib/constants.js';
 import type { CorrelationFeature, Period } from '../types.js';
 
@@ -46,8 +47,7 @@ export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
           </div>
 
           {(leftMetric || rightMetric) && (
-            <div className="view-section">
-              <h3 className="section-heading">Compare Metrics</h3>
+            <ViewSection title="Compare Metrics">
               <div className="card">
                 <SplitPane
                   left={
@@ -68,7 +68,7 @@ export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
                   }
                 />
               </div>
-            </div>
+            </ViewSection>
           )}
         </>
       )}

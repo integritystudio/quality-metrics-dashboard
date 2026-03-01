@@ -1,6 +1,8 @@
 import { Link } from 'wouter';
 import { useComplianceSLA, useComplianceVerifications } from '../hooks/useCompliance.js';
 import { ComplianceFrameworkMap } from '../components/ComplianceFrameworkMap.js';
+import { EmptyCard } from '../components/EmptyCard.js';
+import { ViewSection } from '../components/Section.js';
 import { SLATable } from '../components/SLATable.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
@@ -13,32 +15,29 @@ export function CompliancePage({ period }: { period: Period }) {
     <div>
       <Link href="/" className="back-link">&larr; Back to dashboard</Link>
 
-      <div className="view-section">
-        <h3 className="section-heading">SLA Compliance</h3>
+      <ViewSection title="SLA Compliance">
         {slaLoading && <div className="card skeleton" style={{ height: 120 }} />}
         {slaError && <div className="error-state"><p>{slaError.message}</p></div>}
         {slaData && !slaData.noSLAsConfigured && slaData.results.length > 0 && (
           <SLATable slas={slaData.results} />
         )}
         {slaData && slaData.noSLAsConfigured && (
-          <div className="card card--empty">
+          <EmptyCard>
             No SLAs configured. Define SLAs in your quality metrics configuration.
-          </div>
+          </EmptyCard>
         )}
         {slaData && !slaData.noSLAsConfigured && slaData.results.length === 0 && (
-          <div className="card card--empty">
+          <EmptyCard>
             All SLAs are compliant for the selected period.
-          </div>
+          </EmptyCard>
         )}
-      </div>
+      </ViewSection>
 
-      <div className="view-section">
-        <h3 className="section-heading">Regulatory Framework Mapping</h3>
+      <ViewSection title="Regulatory Framework Mapping">
         <ComplianceFrameworkMap />
-      </div>
+      </ViewSection>
 
-      <div className="view-section">
-        <h3 className="section-heading">Human Verification Events</h3>
+      <ViewSection title="Human Verification Events">
         {verLoading && <div className="card skeleton" style={{ height: 120 }} />}
         {verError && <div className="error-state"><p>{verError.message}</p></div>}
         {verData && verData.verifications.length > 0 && (
@@ -46,19 +45,19 @@ export function CompliancePage({ period }: { period: Period }) {
             <table className="eval-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Timestamp</th>
-                  <th style={{ textAlign: 'left' }}>Type</th>
-                  <th style={{ textAlign: 'left' }}>Session</th>
-                  <th style={{ textAlign: 'left' }}>Verifier</th>
+                  <th className="text-left">Timestamp</th>
+                  <th className="text-left">Type</th>
+                  <th className="text-left">Session</th>
+                  <th className="text-left">Verifier</th>
                 </tr>
               </thead>
               <tbody>
                 {verData.verifications.map((v, i) => (
                   <tr key={`${v.sessionId}-${v.timestamp}-${i}`}>
-                    <td style={{ fontSize: 12 }} title={new Date(v.timestamp).toLocaleString()}>
+                    <td className="text-xs" title={new Date(v.timestamp).toLocaleString()}>
                       {formatTimestamp(v.timestamp)}
                     </td>
-                    <td style={{ fontSize: 12 }}>{v.verificationType}</td>
+                    <td className="text-xs">{v.verificationType}</td>
                     <td className="mono-xs">{v.sessionId}</td>
                     <td className="text-secondary text-xs">{v.verifierId ?? '-'}</td>
                   </tr>
@@ -68,11 +67,11 @@ export function CompliancePage({ period }: { period: Period }) {
           </div>
         )}
         {verData && verData.verifications.length === 0 && (
-          <div className="card card--empty">
+          <EmptyCard>
             No verification events for the selected period.
-          </div>
+          </EmptyCard>
         )}
-      </div>
+      </ViewSection>
     </div>
   );
 }
