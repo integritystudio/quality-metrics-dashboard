@@ -113,13 +113,13 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
                   borderRadius: 12,
                   fontSize: 11,
                   fontFamily: 'var(--font-mono)',
-                  background: 'var(--surface, #1a1a2e)',
-                  border: '1px solid var(--border, #2a2a3e)',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
                   color: 'var(--text-secondary)',
                 }}
               >
                 {type}
-                <span style={{ fontWeight: 700, color: 'var(--text-primary, #e0e0e0)' }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
                   {count}
                 </span>
               </span>

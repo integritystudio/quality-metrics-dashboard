@@ -48,7 +48,7 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 600 }}>
                 {detail.values[key]?.toFixed(4) ?? 'N/A'}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{key}</div>
+              <div className="field-label">{key}</div>
             </div>
           ))}
         </div>

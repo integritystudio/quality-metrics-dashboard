@@ -5,9 +5,9 @@ const SCORE_THRESHOLD_GREEN = 0.8;
 const SCORE_THRESHOLD_YELLOW = 0.5;
 
 function scoreToBadgeColor(score: number): string {
-  if (score >= SCORE_THRESHOLD_GREEN) return '#26d97f';
-  if (score >= SCORE_THRESHOLD_YELLOW) return '#e5a00d';
-  return '#f04438';
+  if (score >= SCORE_THRESHOLD_GREEN) return 'var(--status-healthy)';
+  if (score >= SCORE_THRESHOLD_YELLOW) return 'var(--status-warning)';
+  return 'var(--status-critical)';
 }
 
 export function QualityLiveIndicator() {
@@ -38,8 +38,8 @@ export function QualityLiveIndicator() {
         padding: '6px 12px',
         fontSize: 12,
         borderRadius: 6,
-        background: 'var(--surface, #1a1a2e)',
-        border: '1px solid var(--border, #2a2a3e)',
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
       }}
     >
       <span style={{ color: 'var(--text-secondary)', fontWeight: 600, marginRight: 4 }}>

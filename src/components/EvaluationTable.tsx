@@ -21,7 +21,7 @@ import {
   formatTimestamp,
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
-import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { EvaluationExpandedRow, chipBaseStyle } from './EvaluationExpandedRow.js';
 import { ScoreBadge } from './ScoreBadge.js';
 
 export interface EvalRow {
@@ -111,10 +111,7 @@ const columns = [
       return (
         <span
           style={{
-            display: 'inline-block',
-            padding: '2px 8px',
-            borderRadius: 10,
-            fontSize: 11,
+            ...chipBaseStyle,
             fontWeight: 500,
             backgroundColor: `${CATEGORY_COLORS[category]}20`,
             color: CATEGORY_COLORS[category],
@@ -136,10 +133,7 @@ const columns = [
       return (
         <span
           style={{
-            display: 'inline-block',
-            padding: '2px 8px',
-            borderRadius: 10,
-            fontSize: 11,
+            ...chipBaseStyle,
             fontWeight: 600,
             backgroundColor: `${CATEGORY_COLORS[category]}20`,
             color: CATEGORY_COLORS[category],

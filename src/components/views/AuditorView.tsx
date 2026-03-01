@@ -3,6 +3,7 @@ import { MetricGrid } from '../MetricGrid.js';
 import { AlertList } from '../AlertList.js';
 import { SLATable } from '../SLATable.js';
 import { StatCard } from '../StatCard.js';
+import { ViewSection } from '../Section.js';
 
 export function AuditorView({ data }: { data: AuditorViewType }) {
   return (
@@ -18,23 +19,20 @@ export function AuditorView({ data }: { data: AuditorViewType }) {
         />
       </div>
 
-      <div className="view-section">
-        <h3 className="section-heading">All Metrics</h3>
+      <ViewSection title="All Metrics">
         <MetricGrid metrics={data.metrics} />
-      </div>
+      </ViewSection>
 
       {data.alerts.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">All Alerts</h3>
+        <ViewSection title="All Alerts">
           <AlertList alerts={data.alerts} />
-        </div>
+        </ViewSection>
       )}
 
       {data.slaCompliance && data.slaCompliance.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">SLA Compliance</h3>
+        <ViewSection title="SLA Compliance">
           <SLATable slas={data.slaCompliance} />
-        </div>
+        </ViewSection>
       )}
     </div>
   );

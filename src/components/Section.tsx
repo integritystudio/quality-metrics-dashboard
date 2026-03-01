@@ -1,4 +1,14 @@
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+
+/** Non-collapsible view section — wraps .view-section + .section-heading */
+export function ViewSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="view-section">
+      <h3 className="section-heading">{title}</h3>
+      {children}
+    </div>
+  );
+}
 
 export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
 

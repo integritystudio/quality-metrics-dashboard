@@ -594,6 +594,13 @@ body {
   color: var(--text-muted);
 }
 
+/* Uppercase field label (above a mono value) */
+.field-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
 .section-label {
   margin-bottom: var(--space-1);
 }
@@ -878,6 +885,18 @@ details[open] > .cot-summary::before {
 /* Page-level h2 headings */
 .page-heading {
   font-size: var(--font-size-page-heading);
+}
+
+/* Mini progress bar — track + fill */
+.mini-bar {
+  height: var(--bar-h, 4px);
+  background: var(--bg-surface);
+  border-radius: var(--radius-xs);
+}
+.mini-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-xs);
+  transition: var(--transition-bar);
 }
 
 /* Empty card state — card with muted placeholder text */

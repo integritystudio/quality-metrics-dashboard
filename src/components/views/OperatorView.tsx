@@ -2,6 +2,7 @@ import type { OperatorView as OperatorViewType } from '../../types.js';
 import { StatusBadge, TrendIndicator } from '../Indicators.js';
 import { AlertList } from '../AlertList.js';
 import { MetricGrid } from '../MetricGrid.js';
+import { ViewSection } from '../Section.js';
 
 export function OperatorView({ data }: { data: OperatorViewType }) {
   return (
@@ -14,15 +15,13 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
       </div>
 
       {data.prioritizedAlerts.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">Prioritized Alerts</h3>
+        <ViewSection title="Prioritized Alerts">
           <AlertList alerts={data.prioritizedAlerts} />
-        </div>
+        </ViewSection>
       )}
 
       {data.degradingTrends.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">Degrading Trends</h3>
+        <ViewSection title="Degrading Trends">
           <ul className="alert-list">
             {data.degradingTrends.map((dt) => (
               <li key={dt.metricName} className="alert-item warning">
@@ -35,14 +34,13 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
               </li>
             ))}
           </ul>
-        </div>
+        </ViewSection>
       )}
 
       {data.alertingMetrics.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">Alerting Metrics</h3>
+        <ViewSection title="Alerting Metrics">
           <MetricGrid metrics={data.alertingMetrics} />
-        </div>
+        </ViewSection>
       )}
 
       {data.prioritizedAlerts.length === 0 && data.degradingTrends.length === 0 && (

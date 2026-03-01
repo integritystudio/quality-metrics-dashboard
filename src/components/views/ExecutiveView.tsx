@@ -2,6 +2,7 @@ import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from '
 import { StatusBadge } from '../Indicators.js';
 import { CQIHero } from '../CQIHero.js';
 import { StatCard } from '../StatCard.js';
+import { ViewSection } from '../Section.js';
 
 interface ExtendedExecutiveView extends ExecutiveViewType {
   cqi?: CompositeQualityIndex;
@@ -34,8 +35,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       </div>
 
       {data.topIssues.length > 0 && (
-        <div className="view-section">
-          <h3 className="section-heading">Top Issues</h3>
+        <ViewSection title="Top Issues">
           <ul className="alert-list">
             {data.topIssues.map((issue: { name: string; displayName: string; status: string; alertCount: number }) => (
               <li key={issue.name} className={`alert-item ${issue.status}`}>
@@ -46,7 +46,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
               </li>
             ))}
           </ul>
-        </div>
+        </ViewSection>
       )}
 
       {data.cqi && (
@@ -55,8 +55,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
         </div>
       )}
 
-      <div className="view-section">
-        <h3 className="section-heading">Metric Statuses</h3>
+      <ViewSection title="Metric Statuses">
         <div className="metric-grid">
           {data.metricStatuses.map((m: { name: string; displayName: string; status: string }) => (
             <div key={m.name} className="card" style={{ padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -65,16 +64,15 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
             </div>
           ))}
         </div>
-      </div>
+      </ViewSection>
 
-      <div className="view-section">
-        <h3 className="section-heading">Alert Summary</h3>
+      <ViewSection title="Alert Summary">
         <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
           {Object.entries(data.alertCounts).map(([severity, count]) => (
             <StatCard key={severity} value={String(count)} label={severity} />
           ))}
         </div>
-      </div>
+      </ViewSection>
     </div>
   );
 }

@@ -17,7 +17,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
       className="card"
       style={{ padding: 24, textAlign: 'center' }}
     >
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
+      <div className="field-label" style={{ marginBottom: 4 }}>
         Composite Quality Index
       </div>
       <div

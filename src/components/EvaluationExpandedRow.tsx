@@ -5,7 +5,7 @@ import { MetaItem } from './MetaItem.js';
 import type { EvalRow } from './EvaluationTable.js';
 
 
-const chipBaseStyle: CSSProperties = {
+export const chipBaseStyle: CSSProperties = {
   display: 'inline-block',
   padding: '2px 8px',
   borderRadius: 10,

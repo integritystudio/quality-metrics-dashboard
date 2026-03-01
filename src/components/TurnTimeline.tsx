@@ -45,26 +45,16 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
             {/* Relevance bar */}
             <div style={{ marginBottom: 6 }}>
               <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>Relevance</div>
-              <div style={{ height: 6, background: 'var(--bg-secondary)', borderRadius: 3 }}>
-                <div style={{
-                  height: 6,
-                  width: `${turn.relevance * 100}%`,
-                  background: bandColor,
-                  borderRadius: 3,
-                }} />
+              <div className="mini-bar" style={{ '--bar-h': '6px' } as React.CSSProperties}>
+                <div className="mini-bar-fill" style={{ width: `${turn.relevance * 100}%`, background: bandColor }} />
               </div>
             </div>
 
             {/* Task progress bar */}
             <div style={{ marginBottom: 6 }}>
               <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 2 }}>Progress</div>
-              <div style={{ height: 6, background: 'var(--bg-secondary)', borderRadius: 3 }}>
-                <div style={{
-                  height: 6,
-                  width: `${turn.taskProgress * 100}%`,
-                  background: 'var(--status-healthy)',
-                  borderRadius: 3,
-                }} />
+              <div className="mini-bar" style={{ '--bar-h': '6px' } as React.CSSProperties}>
+                <div className="mini-bar-fill" style={{ width: `${turn.taskProgress * 100}%`, background: 'var(--status-healthy)' }} />
               </div>
             </div>
 

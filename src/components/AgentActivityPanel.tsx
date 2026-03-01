@@ -142,14 +142,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, minWidth: 32 }}>
                         {agent.invocations}
                       </span>
-                      <div style={{ flex: 1, height: 4, background: 'var(--bg-surface)', borderRadius: 2, minWidth: 48 }}>
-                        <div style={{
-                          width: `${invPct}%`,
-                          height: '100%',
-                          background: color,
-                          borderRadius: 2,
-                          opacity: 0.7,
-                        }} />
+                      <div className="mini-bar" style={{ flex: 1, minWidth: 48 }}>
+                        <div className="mini-bar-fill" style={{ width: `${invPct}%`, background: color, opacity: 0.7 }} />
                       </div>
                     </div>
                   </td>
@@ -418,13 +412,8 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
               </div>
               {/* Score bar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <div style={{ flex: 1, height: 4, background: 'var(--bg-surface)', borderRadius: 2 }}>
-                  <div style={{
-                    width: `${Math.min(m.avg * 100, 100)}%`,
-                    height: '100%',
-                    background: barColor,
-                    borderRadius: 2,
-                  }} />
+                <div className="mini-bar" style={{ flex: 1 }}>
+                  <div className="mini-bar-fill" style={{ width: `${Math.min(m.avg * 100, 100)}%`, background: barColor }} />
                 </div>
                 <span style={{
                   fontFamily: 'var(--font-mono)',
