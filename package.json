@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:scripts": "vitest run --config /dev/null --dir scripts/__tests__",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "typecheck": "tsc --noEmit",
     "populate": "tsx scripts/populate-dashboard.ts",
     "sync": "tsx scripts/sync-to-kv.ts",
@@ -37,6 +39,7 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
     "@cloudflare/workers-types": "^4.0.0",
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/d3-scale": "^4.0.9",
