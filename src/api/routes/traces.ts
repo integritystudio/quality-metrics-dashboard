@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { HttpStatus } from '../../lib/constants.js';
 import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../data-loader.js';
 
 export const traceRoutes = new Hono();
@@ -11,7 +12,7 @@ export const traceRoutes = new Hono();
 traceRoutes.get('/traces/:traceId', async (c) => {
   const traceId = c.req.param('traceId');
   if (!traceId) {
-    return c.json({ error: 'traceId is required' }, 400);
+    return c.json({ error: 'traceId is required' }, HttpStatus.BadRequest);
   }
 
   try {
@@ -22,6 +23,6 @@ traceRoutes.get('/traces/:traceId', async (c) => {
 
     return c.json({ traceId, spans, evaluations });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

@@ -8,7 +8,7 @@ import {
 import { computeMetricDynamics } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
@@ -22,20 +22,20 @@ metricsRoutes.get('/metrics/:name', async (c) => {
   const name = c.req.param('name');
   const config = getQualityMetric(name);
   if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, 404);
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
   const topNResult = TopNSchema.safeParse(c.req.query('topN'));
   if (!topNResult.success) {
-    return c.json({ error: 'Invalid topN parameter. Must be integer 1-50.' }, 400);
+    return c.json({ error: 'Invalid topN parameter. Must be integer 1-50.' }, HttpStatus.BadRequest);
   }
   const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
   if (!bucketResult.success) {
-    return c.json({ error: 'Invalid bucketCount parameter. Must be integer 2-20.' }, 400);
+    return c.json({ error: 'Invalid bucketCount parameter. Must be integer 2-20.' }, HttpStatus.BadRequest);
   }
 
   try {
@@ -76,7 +76,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 
     return c.json({ ...detail, dynamics });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
 
@@ -84,28 +84,28 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   const name = c.req.param('name');
   const config = getQualityMetric(name);
   if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, 404);
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
   const limitResult = LimitSchema.safeParse(c.req.query('limit'));
   if (!limitResult.success) {
-    return c.json({ error: 'Invalid limit. Must be integer 1-200.' }, 400);
+    return c.json({ error: 'Invalid limit. Must be integer 1-200.' }, HttpStatus.BadRequest);
   }
   const offsetResult = OffsetSchema.safeParse(c.req.query('offset'));
   if (!offsetResult.success) {
-    return c.json({ error: 'Invalid offset. Must be non-negative integer.' }, 400);
+    return c.json({ error: 'Invalid offset. Must be non-negative integer.' }, HttpStatus.BadRequest);
   }
   const sortByResult = SortBySchema.safeParse(c.req.query('sortBy'));
   if (!sortByResult.success) {
-    return c.json({ error: 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.' }, 400);
+    return c.json({ error: 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.' }, HttpStatus.BadRequest);
   }
   const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
   if (!scoreLabelResult.success) {
-    return c.json({ error: 'Invalid scoreLabel. Max 100 characters.' }, 400);
+    return c.json({ error: 'Invalid scoreLabel. Max 100 characters.' }, HttpStatus.BadRequest);
   }
   const scoreLabel = scoreLabelResult.data;
 
@@ -156,6 +156,6 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
 
     return c.json({ rows, total, limit, offset, hasMore: offset + limit < total });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

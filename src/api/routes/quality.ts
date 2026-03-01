@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT } from '../../lib/constants.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
 
 export const qualityRoutes = new Hono();
 
@@ -75,6 +75,6 @@ qualityRoutes.get('/quality/live', async (c) => {
 
     return c.json(response);
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

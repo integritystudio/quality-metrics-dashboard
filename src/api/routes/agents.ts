@@ -4,7 +4,7 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.j
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES } from '../../lib/constants.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus } from '../../lib/constants.js';
 
 export const agentRoutes = new Hono();
 
@@ -12,7 +12,7 @@ agentRoutes.get('/agents', async (c) => {
   const periodParam = c.req.query('period') ?? '30d';
   const periodDays = VALID_PERIODS[periodParam];
   if (periodDays === undefined) {
-    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, 400);
+    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
   }
   const now = new Date();
   const endDate = now.toISOString().split('T')[0];
@@ -131,7 +131,7 @@ agentRoutes.get('/agents', async (c) => {
 
     return c.json({ period: periodParam, startDate, endDate, agents });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
 
@@ -142,7 +142,7 @@ agentRoutes.get('/agents', async (c) => {
 agentRoutes.get('/agents/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!sessionId) {
-    return c.json({ error: 'sessionId is required' }, 400);
+    return c.json({ error: 'sessionId is required' }, HttpStatus.BadRequest);
   }
 
   try {
@@ -180,6 +180,6 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
       agentMap: Object.fromEntries(agentMap),
     });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

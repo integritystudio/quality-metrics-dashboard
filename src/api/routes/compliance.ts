@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { computeDashboardSummary } from '../../../../dist/lib/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 export const complianceRoutes = new Hono();
 
@@ -13,7 +13,7 @@ export const complianceRoutes = new Hono();
 complianceRoutes.get('/compliance/sla', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
 
   try {
@@ -32,7 +32,7 @@ complianceRoutes.get('/compliance/sla', async (c) => {
       noSLAsConfigured: !summary.slaCompliance || summary.slaCompliance.length === 0,
     });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
 
@@ -43,7 +43,7 @@ complianceRoutes.get('/compliance/sla', async (c) => {
 complianceRoutes.get('/compliance/verifications', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
 
   try {
@@ -59,6 +59,6 @@ complianceRoutes.get('/compliance/verifications', async (c) => {
 
     return c.json({ period, count: verifications.length, verifications });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

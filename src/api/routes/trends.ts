@@ -13,7 +13,7 @@ import {
 import type { MetricTrend } from '../../../../dist/lib/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
 export const trendRoutes = new Hono();
@@ -30,16 +30,16 @@ trendRoutes.get('/trends/:name', async (c) => {
   const name = c.req.param('name');
   const config = getQualityMetric(name);
   if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, 404);
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
   const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
   if (!bucketsResult.success) {
-    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, 400);
+    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
   }
 
   try {
@@ -161,7 +161,7 @@ trendRoutes.get('/trends/:name', async (c) => {
       narrowed,
     });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
 
@@ -172,7 +172,7 @@ trendRoutes.get('/trends/:name', async (c) => {
 trendRoutes.get('/trends', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
 
   try {
@@ -198,6 +198,6 @@ trendRoutes.get('/trends', async (c) => {
 
     return c.json({ period, metrics: summaries });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

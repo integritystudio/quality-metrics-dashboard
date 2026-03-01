@@ -2,14 +2,14 @@ import { Hono } from 'hono';
 import { computeCorrelationMatrix } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 export const correlationRoutes = new Hono();
 
 correlationRoutes.get('/correlations', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
 
   try {
@@ -28,6 +28,6 @@ correlationRoutes.get('/correlations', async (c) => {
     const correlations = computeCorrelationMatrix(metricTimeSeries);
     return c.json({ correlations, metrics: metricNames });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

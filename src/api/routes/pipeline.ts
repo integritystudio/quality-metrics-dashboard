@@ -5,7 +5,7 @@ import {
 } from '../../../../dist/lib/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 export const pipelineRoutes = new Hono();
 
@@ -19,7 +19,7 @@ export const pipelineRoutes = new Hono();
 pipelineRoutes.get('/pipeline', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
 
   try {
@@ -38,6 +38,6 @@ pipelineRoutes.get('/pipeline', async (c) => {
 
     return c.json({ period, ...pipeline });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

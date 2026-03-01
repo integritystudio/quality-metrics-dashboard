@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { HttpStatus } from '../../lib/constants.js';
 import {
   loadEvaluationsBySessionId,
   loadLogsBySessionId,
@@ -42,7 +43,7 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
  */
 sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) return c.json({ error: 'sessionId required' }, 400);
+  if (!sessionId) return c.json({ error: 'sessionId required' }, HttpStatus.BadRequest);
   const startDate = c.req.query('startDate');
   const endDate = c.req.query('endDate');
 
@@ -329,6 +330,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       evaluations,
     });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

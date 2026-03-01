@@ -4,7 +4,7 @@ import { computeCoverageHeatmap } from '../../../../dist/lib/quality-metrics.js'
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, InputKeySchema } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, InputKeySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 /** Filter out rule-based per-span evaluations; they have incompatible
  *  traceId granularity that inflates the coverage input universe.
@@ -35,11 +35,11 @@ export const coverageRoutes = new Hono();
 coverageRoutes.get('/coverage', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
   const inputKeyResult = InputKeySchema.safeParse(c.req.query('inputKey'));
   if (!inputKeyResult.success) {
-    return c.json({ error: 'Invalid inputKey. Must be traceId or sessionId.' }, 400);
+    return c.json({ error: 'Invalid inputKey. Must be traceId or sessionId.' }, HttpStatus.BadRequest);
   }
 
   try {
@@ -60,6 +60,6 @@ coverageRoutes.get('/coverage', async (c) => {
 
     return c.json({ period, ...heatmap });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
