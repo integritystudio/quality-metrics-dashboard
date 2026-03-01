@@ -18,7 +18,7 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
   }
 
   return (
-    <div className="gap-2" style={{ display: 'flex', flexWrap: 'wrap' }}>
+    <div className="flex-wrap gap-2">
       {[...byName.entries()].map(([name, evs]) => {
         const avg = evs.reduce((s, e) => s + (e.scoreValue ?? 0), 0) / evs.length;
         const card = (
@@ -30,7 +30,7 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
           }}
           className={traceId ? 'flex-center eval-summary-card gap-1-5' : 'flex-center gap-1-5'}
           >
-            <span style={{ fontSize: 12 }}>{name}</span>
+            <span className="text-xs">{name}</span>
             <ScoreBadge score={avg} metricName={name} label={avg.toFixed(2)} />
             <span className="text-muted text-2xs">({evs.length})</span>
           </div>

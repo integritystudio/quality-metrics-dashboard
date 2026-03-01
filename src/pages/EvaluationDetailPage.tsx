@@ -7,6 +7,8 @@ import { PageShell } from '../components/PageShell.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
 import { Link, useSearch } from 'wouter';
+import { ArrowLink } from '../components/ArrowLink.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
 
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
   const { data: allEvaluations, isLoading, error } = useTraceEvaluations(traceId);
@@ -31,30 +33,24 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
         />
       ) : (
         <>
-          <div className="eval-detail-header">
-            <h2 className="text-lg">{heading}</h2>
-            <div className="eval-detail-meta">
-              <span className="mono-xs text-secondary">{traceId}</span>
-              <span className="text-secondary text-xs">
-                {evaluations.length} evaluation{evaluations.length !== 1 ? 's' : ''}
-              </span>
-              <Link href={`/traces/${traceId}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>
-                View trace &rarr;
+          <DetailPageHeader title={heading} id={traceId}>
+            <span className="text-secondary text-xs">
+              {evaluations.length} evaluation{evaluations.length !== 1 ? 's' : ''}
+            </span>
+            <ArrowLink href={`/traces/${traceId}`}>View trace</ArrowLink>
+            {metricFilter && (
+              <Link
+                href={`/evaluations/trace/${traceId}`}
+                className="text-xs link-accent"
+              >
+                View all evaluations
               </Link>
-              {metricFilter && (
-                <Link
-                  href={`/evaluations/trace/${traceId}`}
-                  style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}
-                >
-                  View all evaluations
-                </Link>
-              )}
-            </div>
-          </div>
+            )}
+          </DetailPageHeader>
 
           {evaluations.map((ev, i) => (
             <div key={`${ev.evaluationName}-${ev.timestamp}-${i}`} className="eval-detail-card card">
-              <div className="flex-center mb-3" style={{ justifyContent: 'space-between' }}>
+              <div className="flex-center mb-3 justify-between">
                 <div className="flex-center gap-3">
                   <ScoreBadge
                     score={ev.scoreValue ?? null}

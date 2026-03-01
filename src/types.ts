@@ -33,3 +33,16 @@ export type { SLAEvaluationResult } from '../../dist/lib/quality-sla.js';
 export type Period = '24h' | '7d' | '30d';
 
 export type OverallStatus = 'healthy' | 'warning' | 'critical' | 'no_data';
+
+export interface LiveMetric {
+  name: string;
+  score: number;
+  evaluatorType: string;
+  timestamp: string;
+}
+
+export interface QualityLiveData {
+  metrics: LiveMetric[];
+  sessionCount: number;
+  lastUpdated: string;
+}

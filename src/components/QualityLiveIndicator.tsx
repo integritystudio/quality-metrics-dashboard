@@ -59,7 +59,7 @@ export function QualityLiveIndicator() {
             background: scoreToBadgeColor(m.score),
           }} />
           {m.name.replace(/_/g, ' ')}
-          <span style={{ fontWeight: 700 }}>{m.score.toFixed(2)}</span>
+          <span className="font-bold">{m.score.toFixed(2)}</span>
         </span>
       ))}
       <span className="text-secondary" style={{ fontSize: 'var(--font-size-2xs)', marginLeft: 'auto' }}>

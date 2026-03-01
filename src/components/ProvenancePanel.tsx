@@ -82,15 +82,15 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
     <div className="text-xs">
       <div className="provenance-grid">
         {entries.map(({ label, value }) => value ? (
-          <div key={label} style={{ display: 'contents' }}>
+          <div key={label} className="contents">
             <span className="prov-label">{label}</span>
             <span className="prov-value">
               {label === 'Trace ID' && traceId ? (
-                <Link href={`/traces/${traceId}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                <Link href={`/traces/${traceId}`} className="link-accent">
                   {traceId}
                 </Link>
               ) : label === 'Session ID' && sessionId ? (
-                <Link href={`/sessions/${sessionId}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                <Link href={`/sessions/${sessionId}`} className="link-accent">
                   {sessionId}
                 </Link>
               ) : value}
@@ -99,22 +99,20 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
         ) : null)}
       </div>
       {evaluatorTypeCounts && (
-        <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap', margin: '8px 0' }}>
+        <div className="flex-wrap gap-1-5" style={{ margin: '8px 0' }}>
           {(Object.entries(evaluatorTypeCounts) as Array<[keyof EvaluatorTypeCounts, number]>)
             .filter(([, count]) => count > 0)
             .map(([type, count]) => (
               <span
                 key={type}
-                className="mono-xs text-secondary chip gap-1"
+                className="mono-xs text-secondary chip gap-1 inline-flex-center"
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
                   background: 'var(--bg-elevated)',
                   border: '1px solid var(--border)',
                 }}
               >
                 {type}
-                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
                   {count}
                 </span>
               </span>

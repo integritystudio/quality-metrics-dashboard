@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColorBand, SCORE_COLORS, truncateId } from '../lib/quality-utils.js';
+import { scoreColorBand, SCORE_COLORS, truncateId, fmtBytes } from '../lib/quality-utils.js';
 import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
+import { BarIndicator } from './BarIndicator.js';
 import { Sparkline } from './Sparkline.js';
 
 const COLUMN_COUNT = 7;
@@ -16,11 +17,6 @@ function errorRateColor(rate: number): string {
   return 'var(--status-critical)';
 }
 
-function formatBytes(n: number): string {
-  if (n === 0) return '\u2014';
-  if (n < 1024) return `${n}B`;
-  return `${(n / 1024).toFixed(1)}K`;
-}
 
 interface AgentActivityPanelProps {
   agents: AgentStat[];
@@ -48,7 +44,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
   if (agents.length === 0) {
     return (
-      <div className="text-muted" style={{ padding: '32px 0', textAlign: 'center' }}>
+      <div className="text-muted text-center" style={{ padding: '32px 0' }}>
         No agent activity recorded for this period.
       </div>
     );
@@ -70,16 +66,16 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
         <thead>
           <tr>
             <th style={{ width: '30%' }}>Agent</th>
-            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('invocations')}>
+            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('invocations')}>
               Invocations{sortIndicator('invocations')}
             </th>
-            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('errorRate')}>
+            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('errorRate')}>
               Error Rate{sortIndicator('errorRate')}
             </th>
-            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('sessionCount')}>
+            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('sessionCount')}>
               Sessions{sortIndicator('sessionCount')}
             </th>
-            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('avgOutputSize')}>
+            <th className="cursor-pointer" style={{ userSelect: 'none' }} onClick={() => toggleSort('avgOutputSize')}>
               Avg Output{sortIndicator('avgOutputSize')}
             </th>
             <th>Rate Limits</th>
@@ -106,23 +102,19 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   <td>
                     <div className="flex-center gap-2">
                       {hasLinks && (
-                        <span style={{
-                          fontSize: 'var(--font-size-2xs)',
-                          color: 'var(--text-muted)',
+                        <span className="text-2xs text-muted shrink-0" style={{
                           transition: 'transform 0.15s',
                           transform: isExpanded ? 'rotate(90deg)' : 'none',
-                          flexShrink: 0,
                         }}>
                           &#9654;
                         </span>
                       )}
-                      <span style={{
+                      <span className="shrink-0" style={{
                         display: 'inline-block',
                         width: 8,
                         height: 8,
                         borderRadius: '50%',
                         background: color,
-                        flexShrink: 0,
                       }} />
                       <span className="mono-xs" style={{
                         color: 'var(--text-primary)',
@@ -139,9 +131,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       <span className="mono-xs" style={{ minWidth: 32 }}>
                         {agent.invocations}
                       </span>
-                      <div className="mini-bar" style={{ flex: 1, minWidth: 48 }}>
-                        <div className="mini-bar-fill" style={{ width: `${invPct}%`, background: color, opacity: 0.7 }} />
-                      </div>
+                      <BarIndicator value={invPct} color={color} opacity={0.7} style={{ flex: 1, minWidth: 48 }} />
                     </div>
                   </td>
 
@@ -171,7 +161,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   {/* Avg output size */}
                   <td>
                     <span className="mono-xs text-secondary">
-                      {formatBytes(agent.avgOutputSize)}
+                      {fmtBytes(agent.avgOutputSize)}
                     </span>
                   </td>
 
@@ -204,21 +194,18 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                 {/* Expanded row: eval summary + sessions + traces */}
                 {isExpanded && (
                   <tr className="eval-expanded-panel">
-                    <td colSpan={COLUMN_COUNT} style={{ padding: '0 10px 10px', borderBottom: '1px solid var(--border)' }}>
+                    <td colSpan={COLUMN_COUNT} className="border-b" style={{ padding: '0 10px 10px' }}>
                       {/* Evaluation summary */}
                       <EvalSummaryRow evalSummary={agent.evalSummary} />
 
                       {/* Daily invocation sparkline */}
                       {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
-                        <div style={{
+                        <div className="border-b-subtle" style={{
                           padding: '10px 0 8px',
-                          borderBottom: '1px solid var(--border-subtle)',
                           marginBottom: 4,
                         }}>
                           <div className="flex-center gap-3">
-                            <div className="text-xs text-muted uppercase" style={{
-                              flexShrink: 0,
-                            }}>
+                            <div className="text-xs text-muted uppercase shrink-0">
                               Daily Activity
                             </div>
                             <Sparkline
@@ -228,10 +215,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
                               label={`Daily invocations for ${agent.agentName}`}
                             />
-                            <span className="mono text-muted" style={{
-                              fontSize: 'var(--font-size-2xs)',
-                              flexShrink: 0,
-                            }}>
+                            <span className="mono text-muted text-2xs shrink-0">
                               peak {Math.max(...agent.dailyCounts)}/day
                             </span>
                           </div>
@@ -248,16 +232,12 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                           <div className="text-muted mb-1-5 text-xs uppercase">
                             Sessions ({agent.sessionCount})
                           </div>
-                          <div className="gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
+                          <div className="flex-col gap-1">
                             {agent.sessionIds.map(sid => (
                               <Link
                                 key={sid}
                                 href={`/sessions/${sid}`}
-                                className="mono-xs"
-                                style={{
-                                  color: 'var(--accent)',
-                                  textDecoration: 'none',
-                                }}
+                                className="mono-xs link-accent"
                                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                               >
                                 {truncateId(sid, 12)}
@@ -268,7 +248,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             )}
                             {/* sessionCount === total unique sessions; sessionIds is capped at 50 */}
                             {agent.sessionIdsTruncated && (
-                              <span className="text-muted" style={{ fontSize: 'var(--font-size-2xs)', fontStyle: 'italic' }}>
+                              <span className="text-muted text-2xs" style={{ fontStyle: 'italic' }}>
                                 +{agent.sessionCount - agent.sessionIds.length} more
                               </span>
                             )}
@@ -280,16 +260,12 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                           <div className="text-muted mb-1-5 text-xs uppercase">
                             Traces ({agent.traceIdsTotal ?? agent.traceIds.length})
                           </div>
-                          <div className="gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
+                          <div className="flex-col gap-1">
                             {agent.traceIds.map(tid => (
                               <Link
                                 key={tid}
                                 href={`/traces/${tid}`}
-                                className="mono-xs"
-                                style={{
-                                  color: 'var(--accent)',
-                                  textDecoration: 'none',
-                                }}
+                                className="mono-xs link-accent"
                                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                               >
                                 {truncateId(tid, 12)}
@@ -299,7 +275,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               <span className="text-muted text-xs">none</span>
                             )}
                             {agent.traceIdsTruncated && (
-                              <span className="text-muted" style={{ fontSize: 'var(--font-size-2xs)', fontStyle: 'italic' }}>
+                              <span className="text-muted text-2xs" style={{ fontStyle: 'italic' }}>
                                 +{(agent.traceIdsTotal ?? 0) - agent.traceIds.length} more
                               </span>
                             )}
@@ -323,11 +299,8 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
   const metrics = Object.entries(evalSummary);
   if (metrics.length === 0) {
     return (
-      <div style={{
+      <div className="text-xs text-muted border-b-subtle" style={{
         padding: '10px 0 4px',
-        fontSize: 12,
-        color: 'var(--text-muted)',
-        borderBottom: '1px solid var(--border-subtle)',
         marginBottom: 4,
       }}>
         No evaluations linked to this agent.
@@ -336,15 +309,14 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
   }
 
   return (
-    <div style={{
+    <div className="border-b-subtle" style={{
       padding: '10px 0 8px',
-      borderBottom: '1px solid var(--border-subtle)',
       marginBottom: 4,
     }}>
       <div className="text-muted mb-1-5 text-xs uppercase">
         Evaluation Metrics
       </div>
-      <div className="gap-3" style={{ display: 'flex', flexWrap: 'wrap' }}>
+      <div className="flex-wrap gap-3">
         {metrics.map(([name, m]) => {
           const band = scoreColorBand(m.avg);
           const barColor = SCORE_COLORS[band];
@@ -356,32 +328,21 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius)',
             }}>
-              <div className="text-secondary mb-1 text-xs" style={{
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}>
+              <div className="text-secondary mb-1 text-xs truncate">
                 {name}
               </div>
               {/* Score bar */}
               <div className="flex-center mb-1 gap-2">
-                <div className="mini-bar" style={{ flex: 1 }}>
-                  <div className="mini-bar-fill" style={{ width: `${Math.min(m.avg * 100, 100)}%`, background: barColor }} />
-                </div>
-                <span className="mono-xs font-semibold" style={{
+                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} style={{ flex: 1 }} />
+                <span className="mono-xs font-semibold text-right" style={{
                   color: barColor,
                   minWidth: 38,
-                  textAlign: 'right',
                 }}>
                   {m.avg.toFixed(2)}
                 </span>
               </div>
               {/* Min/max range + count */}
-              <div className="mono text-muted" style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: 'var(--font-size-2xs)',
-              }}>
+              <div className="mono text-muted flex-wrap justify-between text-2xs">
                 <span>{m.min.toFixed(2)}\u2013{m.max.toFixed(2)}</span>
                 <span>n={m.count}</span>
               </div>

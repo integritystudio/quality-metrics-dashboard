@@ -219,7 +219,6 @@ async function discoverTranscripts(): Promise<TranscriptInfo[]> {
 
   const scanCount = transcripts.length - logCount;
   if (scanCount > 0) {
-    console.log(`  Log-referenced: ${logCount}, directory scan: ${scanCount}`);
   }
 
   return transcripts;
@@ -854,7 +853,6 @@ function writeEvaluations(evals: EvalRecord[]): void {
   for (const [date, records] of byDate) {
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
     const content = records.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
-    console.log(`  Appended ${records.length} evaluations to evaluations-${date}.jsonl`);
   }
 }
 
@@ -907,20 +905,15 @@ async function main() {
     limit = Math.min(parsed, MAX_TURN_LIMIT);
   }
 
-  console.log('Discovering transcripts...');
-  console.log(`Found ${transcripts.length} unique transcripts`);
 
-  console.log('Extracting turns...');
   let allTurns: Turn[] = [];
   for (const info of transcripts) {
     const turns = await extractTurns(info);
     allTurns.push(...turns);
   }
-  console.log(`Extracted ${allTurns.length} conversation turns`);
 
   // Apply limit
   if (limit < allTurns.length) {
-    console.log(`Limited to ${limit} turns`);
   }
 
   if (dryRun) {
@@ -939,16 +932,13 @@ async function main() {
     // Haiku 3.5 pricing: $0.80/1M input, $4.00/1M output
     const HAIKU_INPUT_PER_M = 0.80;
     const HAIKU_OUTPUT_PER_M = 4.0;
-    console.log(`Estimated cost: ~$${estCost.toFixed(2)}`);
 
     const bySession = new Map<string, number>();
     for (const t of allTurns) {
       bySession.set(t.sessionId.slice(0, 8), (bySession.get(t.sessionId.slice(0, 8)) ?? 0) + 1);
     }
-    console.log(`\nTurns per session (top 10):`);
     const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
     for (const [sid, count] of sorted) {
-      console.log(`  ${sid}: ${count} turns`);
     }
     return;
   }
@@ -966,8 +956,6 @@ async function main() {
   }
 
   try {
-    console.log('Loading existing evaluation keys for deduplication...');
-    console.log(`Found ${existingKeys.size} existing LLM evaluation keys`);
 
     // Reset failure tracking
     for (const key of Object.keys(evalFailures)) delete evalFailures[key];
@@ -975,11 +963,9 @@ async function main() {
     let flatEvals: EvalRecord[];
 
     if (seed) {
-      console.log(`\nSeeding evaluations for ${allTurns.length} turns...`);
       const seedResult = seedEvaluations(allTurns, existingKeys);
       flatEvals = seedResult.evals;
       if (seedResult.canaryCount > 0) {
-        console.log(`  Canary turns: ${seedResult.canaryCount}`);
       }
     } else {
       const llm = await createAnthropicProvider();
@@ -989,12 +975,10 @@ async function main() {
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
         logger: {
-          debug: (msg) => console.log(`  [debug] ${msg}`),
           warn: (msg) => console.warn(`  [warn] ${msg}`),
           error: (msg) => console.error(`  [error] ${msg}`),
         },
       });
-      console.log(`\nEvaluating ${allTurns.length} turns (concurrency=${CONCURRENCY})...`);
       const allEvals = await processBatch(
         allTurns,
         CONCURRENCY,
@@ -1004,10 +988,8 @@ async function main() {
 
       flatEvals = allEvals.flat();
     }
-    console.log(`\nGenerated ${flatEvals.length} evaluations`);
 
     if (flatEvals.length === 0) {
-      console.log('No new evaluations to write (all deduplicated or failed)');
       return;
     }
 
@@ -1019,17 +1001,13 @@ async function main() {
     for (const ev of flatEvals) {
       byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
     }
-    console.log('\nSummary:');
     for (const [name, count] of byCat) {
-      console.log(`  ${name}: ${count}`);
     }
 
     // P1-6: Report failures
     const failureEntries = Object.entries(evalFailures).filter(([, n]) => n > 0);
     if (failureEntries.length > 0) {
-      console.log('\nFailures:');
       for (const [name, count] of failureEntries) {
-        console.log(`  ${name}: ${count} failed`);
       }
     }
   } finally {

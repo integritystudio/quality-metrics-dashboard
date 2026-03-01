@@ -1,5 +1,7 @@
 import type { ConfidenceIndicator } from '../types.js';
 import { SCORE_COLORS, type ScoreColorBand } from '../lib/quality-utils.js';
+import { BarIndicator } from './BarIndicator.js';
+
 
 interface EvaluatorScore {
   evaluator: string;
@@ -30,9 +32,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
   const band: ScoreColorBand = pct < 20 ? 'excellent' : pct < 50 ? 'adequate' : 'failing';
   return (
     <div className="variance-bar">
-      <div className="variance-bar-track">
-        <div className="variance-bar-fill" style={{ width: `${pct}%`, background: SCORE_COLORS[band] }} />
-      </div>
+      <BarIndicator value={pct} color={SCORE_COLORS[band]} style={{ flex: 1 }} />
       <span className="mono-xs text-secondary" style={{ minWidth: 36 }}>
         {value.toFixed(3)}
       </span>
@@ -89,7 +89,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
             <span className="ag-header">Score</span>
             <span className="ag-header">Label</span>
             {evaluatorScores!.map((es) => (
-              <div key={es.evaluator} style={{ display: 'contents' }}>
+              <div key={es.evaluator} className="contents">
                 <span className="mono-xs">{es.evaluator}</span>
                 <span className="mono-xs">{es.score.toFixed(4)}</span>
                 <span className="text-secondary text-xs">{es.label ?? '-'}</span>

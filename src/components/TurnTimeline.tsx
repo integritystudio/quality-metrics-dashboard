@@ -1,5 +1,6 @@
 import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
 import { AGENT_PALETTE } from '../lib/constants.js';
+import { BarIndicator } from './BarIndicator.js';
 import type { TurnLevelResult } from '../types.js';
 
 function agentColor(agentName: string, agentNames: string[]): string {
@@ -37,25 +38,21 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
               flexShrink: 0,
             }}
           >
-            <div className="flex-center mb-1-5" style={{ justifyContent: 'space-between' }}>
+            <div className="flex-center mb-1-5 justify-between">
               <span className="text-2xs uppercase font-semibold" style={{ color }}>{agent}</span>
               <span className="text-muted text-2xs">#{turn.turnIndex}</span>
             </div>
 
             {/* Relevance bar */}
             <div className="mb-1-5">
-              <div className="text-secondary" style={{ fontSize: 'var(--font-size-2xs)', marginBottom: 2 }}>Relevance</div>
-              <div className="mini-bar" style={{ '--bar-h': '6px' } as React.CSSProperties}>
-                <div className="mini-bar-fill" style={{ width: `${turn.relevance * 100}%`, background: bandColor }} />
-              </div>
+              <div className="text-secondary text-2xs" style={{ marginBottom: 2 }}>Relevance</div>
+              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
             </div>
 
             {/* Task progress bar */}
             <div className="mb-1-5">
-              <div className="text-secondary" style={{ fontSize: 'var(--font-size-2xs)', marginBottom: 2 }}>Progress</div>
-              <div className="mini-bar" style={{ '--bar-h': '6px' } as React.CSSProperties}>
-                <div className="mini-bar-fill" style={{ width: `${turn.taskProgress * 100}%`, background: 'var(--status-healthy)' }} />
-              </div>
+              <div className="text-secondary text-2xs" style={{ marginBottom: 2 }}>Progress</div>
+              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
             </div>
 
             {turn.hasError && (

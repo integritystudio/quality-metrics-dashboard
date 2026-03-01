@@ -2,21 +2,9 @@ import { Hono } from 'hono';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
+import type { LiveMetric, QualityLiveData } from '../../types.js';
 
 export const qualityRoutes = new Hono();
-
-interface LiveMetric {
-  name: string;
-  score: number;
-  evaluatorType: string;
-  timestamp: string;
-}
-
-interface QualityLiveResponse {
-  metrics: LiveMetric[];
-  sessionCount: number;
-  lastUpdated: string;
-}
 
 /**
  * GET /api/quality/live
@@ -67,7 +55,7 @@ qualityRoutes.get('/quality/live', async (c) => {
     // Sort by metric name for stable ordering
     metrics.sort((a, b) => a.name.localeCompare(b.name));
 
-    const response: QualityLiveResponse = {
+    const response: QualityLiveData = {
       metrics,
       sessionCount: sessionIds.size,
       lastUpdated: latestTimestamp || now.toISOString(),

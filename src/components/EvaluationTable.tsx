@@ -21,7 +21,8 @@ import {
   formatTimestamp,
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
-import { EvaluationExpandedRow, chipBaseStyle } from './EvaluationExpandedRow.js';
+import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { ColoredChip } from './ColoredChip.js';
 import { ScoreBadge } from './ScoreBadge.js';
 
 export interface EvalRow {
@@ -108,17 +109,9 @@ const columns = [
       const label = info.getValue() ?? 'unknown';
       const { category } = labelToOrdinal(label);
       return (
-        <span
-          className="mono-xs chip"
-          style={{
-            ...chipBaseStyle,
-            fontWeight: 500,
-            backgroundColor: `${CATEGORY_COLORS[category]}20`,
-            color: CATEGORY_COLORS[category],
-          }}
-        >
+        <ColoredChip color={CATEGORY_COLORS[category]} style={{ fontWeight: 500 }}>
           {label}
-        </span>
+        </ColoredChip>
       );
     },
     sortingFn: labelSortFn,
@@ -131,16 +124,9 @@ const columns = [
       const label = info.row.original.label ?? 'unknown';
       const category = ordinalToCategory(labelToOrdinal(label).ordinal);
       return (
-        <span
-          className="mono-xs chip font-semibold"
-          style={{
-            ...chipBaseStyle,
-            backgroundColor: `${CATEGORY_COLORS[category]}20`,
-            color: CATEGORY_COLORS[category],
-          }}
-        >
+        <ColoredChip color={CATEGORY_COLORS[category]} className="font-semibold">
           {category}
-        </span>
+        </ColoredChip>
       );
     },
   }),

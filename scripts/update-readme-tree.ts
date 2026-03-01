@@ -56,7 +56,6 @@ const result = [
 ];
 
 writeFileSync(README_PATH, result.join('\n'));
-console.log(`Updated README.md — ${totalTokens} tokens`);
 
 /**
  * Condense tree for README: dirs with >MAX_SHOWN_PER_DIR files
@@ -64,7 +63,7 @@ console.log(`Updated README.md — ${totalTokens} tokens`);
  */
 function buildCondensedTree(allLines: string[]): string[] {
   const out: string[] = [];
-  let i = 0;
+  const i = 0;
 
   while (i < allLines.length) {
     if (!isFileEntry(allLines[i])) {

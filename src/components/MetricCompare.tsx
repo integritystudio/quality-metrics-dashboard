@@ -17,7 +17,7 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
 
   if (!metricName) {
     return (
-      <div className="text-muted" style={{ padding: 24, textAlign: 'center' }}>
+      <div className="text-muted text-center" style={{ padding: 24 }}>
         Select a metric from the heatmap or dropdown
       </div>
     );
@@ -42,9 +42,9 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
       </select>
 
       {detail && (
-        <div className="mb-3 gap-4" style={{ display: 'flex', flexWrap: 'wrap' }}>
+        <div className="mb-3 flex-wrap gap-4">
           {(['avg', 'p50', 'p95'] as const).map(key => (
-            <div key={key} style={{ textAlign: 'center' }}>
+            <div key={key} className="text-center">
               <div className="mono text-md font-semibold">
                 {detail.values[key]?.toFixed(4) ?? 'N/A'}
               </div>

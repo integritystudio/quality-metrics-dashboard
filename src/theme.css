@@ -435,6 +435,12 @@ body {
 .eval-table .eval-expanded-panel td {
   padding: 0 var(--space-2-5) var(--space-2-5);
 }
+.eval-expanded-content {
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  animation: fade-in 0.15s ease-in-out;
+}
 
 /* Shared ghost button reset */
 .tab-btn,
@@ -849,6 +855,7 @@ details[open] > .cot-summary::before {
   height: var(--bar-h, 4px);
   background: var(--bg-surface);
   border-radius: var(--radius-xs);
+  overflow: hidden;
 }
 .mini-bar-fill {
   height: 100%;
@@ -903,6 +910,48 @@ details[open] > .cot-summary::before {
 .gap-8    { gap: var(--space-8); }      /* 32px */
 
 /* Margin-bottom */
+.mb-0   { margin-bottom: 0; }
 .mb-1   { margin-bottom: var(--space-1); }
 .mb-1-5 { margin-bottom: var(--space-1-5); }
 .mb-3   { margin-bottom: var(--space-3); }
+
+/* Text align */
+.text-center { text-align: center; }
+.text-right  { text-align: right; }
+.text-left   { text-align: left; }
+
+/* Flex */
+.flex-wrap          { display: flex; flex-wrap: wrap; }
+.flex-col           { display: flex; flex-direction: column; }
+.inline-flex-center { display: inline-flex; align-items: center; }
+.shrink-0           { flex-shrink: 0; }
+.flex-1             { flex: 1; }
+.justify-between    { justify-content: space-between; }
+.justify-center     { justify-content: center; }
+
+/* Display */
+.contents { display: contents; }
+
+/* Typography */
+.font-bold { font-weight: 700; }
+.nowrap    { white-space: nowrap; }
+.truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Cursor */
+.cursor-pointer { cursor: pointer; }
+
+/* Status colors */
+.text-healthy  { color: var(--status-healthy); }
+.text-warning  { color: var(--status-warning); }
+.text-critical { color: var(--status-critical); }
+
+/* Link */
+.link-accent { color: var(--accent); text-decoration: none; }
+
+/* Table cells */
+.cell-pad      { padding: 5px 10px; }
+.cell-pad-wide { padding: 5px 12px; }
+
+/* Border */
+.border-b        { border-bottom: 1px solid var(--border); }
+.border-b-subtle { border-bottom: 1px solid var(--border-subtle); }

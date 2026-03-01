@@ -98,7 +98,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
 
       {/* Rows */}
       {metrics.map((rowMetric, ri) => (
-        <div key={`row-${rowMetric}`} role="presentation" style={{ display: 'contents' }}>
+        <div key={`row-${rowMetric}`} role="presentation" className="contents">
           {/* Row header */}
           <div
             role="rowheader"

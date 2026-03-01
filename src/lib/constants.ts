@@ -37,7 +37,7 @@ export const ROLES = RoleSchema.options;
 export const DEFAULT_ROLE: Role = 'executive';
 
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
-export const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');
+export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
 
 /** Percentage of events sampled for T2 LLM evaluation. */
 export const LLM_SAMPLE_RATE = 10;

@@ -16,18 +16,12 @@ function T2SamplingStage() {
         marginTop: 12,
       }}
     >
-      <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+      <span className="inline-flex-center justify-center shrink-0 text-2xs font-bold" style={{
         width: 24,
         height: 24,
         borderRadius: '50%',
         background: 'var(--accent, #6366f1)',
         color: '#fff',
-        fontSize: 'var(--font-size-2xs)',
-        fontWeight: 700,
-        flexShrink: 0,
       }}>
         T2
       </span>

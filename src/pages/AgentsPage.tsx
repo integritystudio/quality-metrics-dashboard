@@ -1,5 +1,6 @@
 import { useAgentStats } from '../hooks/useAgentStats.js';
 import { AgentActivityPanel, AgentActivitySummary } from '../components/AgentActivityPanel.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import type { Period } from '../types.js';
 
@@ -10,14 +11,11 @@ export function AgentsPage({ period }: { period: Period }) {
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
-      <div className="eval-detail-header">
-        <h2 className="text-lg">Agent Activity</h2>
-        <div className="eval-detail-meta">
-          <span className="text-secondary text-xs">
-            {data?.startDate} &ndash; {data?.endDate}
-          </span>
-        </div>
-      </div>
+      <DetailPageHeader title="Agent Activity">
+        <span className="text-secondary text-xs">
+          {data?.startDate} &ndash; {data?.endDate}
+        </span>
+      </DetailPageHeader>
 
       {agents.length > 0 && <AgentActivitySummary agents={agents} />}
 
