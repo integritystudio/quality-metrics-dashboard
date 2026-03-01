@@ -865,7 +865,7 @@ details[open] > .cot-summary::before {
 /* Monospace utilities */
 .mono      { font-family: var(--font-mono); }
 .mono-xs   { font-family: var(--font-mono); font-size: var(--font-size-xs); }
-.mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); font-weight: 600; }
+.mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
 
 /* Font size */
 .text-2xs  { font-size: var(--font-size-2xs); }
@@ -885,9 +885,22 @@ details[open] > .cot-summary::before {
 
 /* Text transform */
 .uppercase { text-transform: uppercase; letter-spacing: 0.05em; }
+.tracking-wide { letter-spacing: 0.05em; }
+.font-semibold { font-weight: 600; }
 
 /* Chip / pill */
 .chip { padding: 2px 6px; border-radius: 10px; }
+
+/* Gap */
+.gap-half { gap: var(--space-half); }   /*  2px */
+.gap-1    { gap: var(--space-1); }      /*  4px */
+.gap-1-5  { gap: var(--space-1-5); }    /*  6px */
+.gap-2    { gap: var(--space-2); }      /*  8px */
+.gap-2-5  { gap: var(--space-2-5); }    /* 10px */
+.gap-3    { gap: var(--space-3); }      /* 12px */
+.gap-4    { gap: var(--space-4); }      /* 16px */
+.gap-6    { gap: var(--space-6); }      /* 24px */
+.gap-8    { gap: var(--space-8); }      /* 32px */
 
 /* Margin-bottom */
 .mb-1   { margin-bottom: var(--space-1); }

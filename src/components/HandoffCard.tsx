@@ -10,18 +10,17 @@ export function HandoffCard({ handoff }: HandoffCardProps) {
   const color = SCORE_COLORS[band];
 
   return (
-    <div className="flex-center" style={{
-      gap: 12,
+    <div className="flex-center gap-3" style={{
       padding: '8px 12px',
       borderRadius: 8,
       background: 'var(--bg-elevated)',
       border: '1px solid var(--border)',
     }}>
-      <span className="mono-xs" style={{ fontWeight: 600 }}>
+      <span className="mono-xs font-semibold">
         {handoff.sourceAgent}
       </span>
       <span className="text-muted text-base">&rarr;</span>
-      <span className="mono-xs" style={{ fontWeight: 600 }}>
+      <span className="mono-xs font-semibold">
         {handoff.targetAgent}
       </span>
       <span className="mono-xs chip" style={{

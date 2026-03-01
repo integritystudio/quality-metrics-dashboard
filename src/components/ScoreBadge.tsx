@@ -45,7 +45,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
       {evaluator && <TooltipRow label="Evaluator" value={evaluator} mono />}
       {evaluatorType && <TooltipRow label="Type" value={evaluatorType} />}
       {explanation && (
-        <div className="tooltip-row" style={{ flexDirection: 'column', gap: 2 }}>
+        <div className="tooltip-row gap-half" style={{ flexDirection: 'column' }}>
           <span className="text-secondary">Explanation</span>
           <span className="text-secondary text-xs">{truncateText(explanation, 120)}</span>
         </div>

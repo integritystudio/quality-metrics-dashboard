@@ -7,9 +7,8 @@ import type { Period } from '../types.js';
 function T2SamplingStage() {
   return (
     <div
-      className="flex-center text-secondary text-xs"
+      className="flex-center text-secondary text-xs gap-2-5"
       style={{
-        gap: 10,
         padding: '10px 14px',
         borderRadius: 6,
         border: '1px dashed var(--border, #2a2a3e)',

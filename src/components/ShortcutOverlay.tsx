@@ -24,7 +24,7 @@ export function ShortcutOverlay() {
         </div>
         {[...grouped.entries()].map(([scope, items]) => (
           <div key={scope} className="mb-3">
-            <div className="text-secondary mb-1-5 text-xs uppercase" style={{ fontWeight: 600 }}>
+            <div className="text-secondary mb-1-5 text-xs uppercase font-semibold">
               {scope}
             </div>
             {items.map(item => (

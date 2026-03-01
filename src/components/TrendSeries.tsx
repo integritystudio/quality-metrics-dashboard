@@ -134,7 +134,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', fontSize: 12, color: COLORS.text, marginTop: 4 }}>
+      <div className="text-xs gap-4" style={{ display: 'flex', justifyContent: 'center', color: COLORS.text, marginTop: 4 }}>
         <span><span style={{ color: COLORS.line }}>&#9473;</span> avg</span>
         <span><span style={{ opacity: 0.5 }}>- -</span> p50</span>
         <span><span style={{ opacity: 0.3 }}>&#9608;</span> p10-p90</span>

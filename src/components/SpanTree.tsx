@@ -78,13 +78,12 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
   return (
     <>
       <div
-        className="flex-center"
+        className="flex-center gap-2"
         style={{
           paddingLeft: depth * 20 + 8,
           paddingTop: 8,
           paddingBottom: 8,
           borderBottom: '1px solid var(--border)',
-          gap: 8,
         }}
       >
         <span className="text-base" style={{ color: isError ? 'var(--status-critical)' : 'var(--text-primary)' }}>
@@ -92,7 +91,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
         </span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 12, fontWeight: 500 }}>{node.name}</div>
-          <div className="flex-center" style={{ gap: 8 }}>
+          <div className="flex-center gap-2">
             <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 2, height: 4 }}>
               <div style={barStyle} />
             </div>
@@ -104,10 +103,9 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
           </div>
         </div>
         {node.evalCount > 0 && (
-          <span className="text-2xs chip" style={{
+          <span className="text-2xs chip font-semibold" style={{
             background: 'var(--accent-bg)',
             color: 'var(--accent)',
-            fontWeight: 600,
           }}>
             {node.evalCount} eval{node.evalCount > 1 ? 's' : ''}
           </span>

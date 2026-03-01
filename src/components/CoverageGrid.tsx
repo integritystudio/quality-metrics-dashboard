@@ -39,8 +39,8 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   return (
     <div role="region" aria-label="Evaluation coverage heatmap">
       {/* Summary bar */}
-      <div className="flex-center mb-3" style={{ gap: 12 }}>
-        <span className="mono-xl">
+      <div className="flex-center mb-3 gap-3">
+        <span className="mono-xl font-semibold">
           {overallCoveragePercent.toFixed(1)}%
         </span>
         <span className="text-secondary text-base">
@@ -49,9 +49,9 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       </div>
 
       {/* Legend */}
-      <div className="mb-3" style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+      <div className="mb-3 text-xs gap-4" style={{ display: 'flex' }}>
         {(['covered', 'partial', 'missing'] as const).map(status => (
-          <div key={status} className="flex-center" style={{ gap: 4 }}>
+          <div key={status} className="flex-center gap-1">
             <div style={{
               width: 12, height: 12, borderRadius: 2,
               background: STATUS_COLORS[status],
@@ -66,15 +66,15 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
         <div
           role="table"
           aria-label="Coverage matrix"
+          className="gap-half"
           style={{
             display: 'grid',
             gridTemplateColumns: `120px repeat(${displayInputs.length}, 28px)`,
-            gap: 1,
           }}
         >
           {/* Header row */}
           <div role="row" style={{ display: 'contents' }}>
-            <div role="columnheader" style={{ fontSize: 12, fontWeight: 600 }} />
+            <div role="columnheader" className="text-xs font-semibold" />
             {displayInputs.map(input => (
               <div
                 key={input}

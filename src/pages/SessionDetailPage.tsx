@@ -36,7 +36,7 @@ function Stat({ label, value, color }: { label: string; value: string | number; 
 function FreqBar({ label, count, max, color }: { label: string; count: number; max: number; color?: string }) {
   const pct = max > 0 ? (count / max) * 100 : 0;
   return (
-    <div className="flex-center mb-1-5" style={{ gap: 10 }}>
+    <div className="flex-center mb-1-5 gap-2-5">
       <div className="mono-xs text-secondary" style={{
         width: 160,
         textAlign: 'right',
@@ -79,8 +79,7 @@ function IssueCallout({ severity, title, children }: {
       padding: '10px 14px',
       marginBottom: 10,
     }}>
-      <div className="mono-xs uppercase" style={{
-        fontWeight: 600,
+      <div className="mono-xs uppercase font-semibold" style={{
         color,
         marginBottom: 4,
       }}>{title}</div>
@@ -102,7 +101,7 @@ function MonoTableHead({ columns }: { columns: TableColumn[] }) {
     <thead>
       <tr style={{ borderBottom: '1px solid var(--border)' }}>
         {columns.map(({ label, align = 'right' }) => (
-          <th key={label} style={{ padding: '5px 10px', textAlign: align, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+          <th key={label} className="text-muted tracking-wide" style={{ padding: '5px 10px', textAlign: align, fontWeight: 500, whiteSpace: 'nowrap' }}>
             {label.toUpperCase()}
           </th>
         ))}
@@ -228,18 +227,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         padding: '20px 24px 16px',
         marginBottom: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div className="gap-4" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
-            <div className="mono" style={{
-              fontSize: 15,
-              fontWeight: 600,
+            <div className="mono font-semibold text-base" style={{
               color: 'var(--accent-hover)',
               letterSpacing: '0.02em',
               marginBottom: 8,
               wordBreak: 'break-all',
             }}>{sessionId}</div>
-            <div className="text-secondary text-xs" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <div className="text-secondary text-xs gap-4" style={{ display: 'flex', flexWrap: 'wrap' }}>
               <span>{si.projectName}</span>
               {si.gitRepository && (
                 <span style={{ color: 'var(--text-muted)' }}>
@@ -348,7 +345,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               Evaluations flagging potential hallucination or very low confidence:
             </div>
             {hallucinationEvals.slice(0, MAX_HALLUCINATION_ROWS).map((e, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <div key={i} className="flex-center gap-2-5 mb-1-5">
                 <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
                 <div>
                   <div className="mono-xs">{e.evaluationName}</div>
@@ -440,7 +437,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={agentActivity.map(a => `${a.agentName} ×${a.invocations}`).join(' · ')}
           health={agentActivity.some(a => a.errors > 0) ? 'warn' : 'neutral'}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+          <div className="gap-2-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
             {agentActivity.map(a => (
               <div key={a.agentName} style={{
                 background: 'var(--bg-elevated)',
@@ -448,10 +445,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 borderRadius: 'var(--radius)',
                 padding: '10px 14px',
               }}>
-                <div className="mono-xs mb-1-5" style={{ fontWeight: 600 }}>
+                <div className="mono-xs mb-1-5 font-semibold">
                   {a.agentName}
                 </div>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div className="gap-3" style={{ display: 'flex', flexWrap: 'wrap' }}>
                   <div>
                     <div className="mono text-md" style={{ fontWeight: 700 }}>{a.invocations}</div>
                     <div className="stat-label">invocations</div>
@@ -512,21 +509,18 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={plural(gitCommits.length, 'commit')}
           health="ok"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div className="gap-half" style={{ display: 'flex', flexDirection: 'column' }}>
             {gitCommits.map((commit, i) => {
               const commitFiles = commit.files?.split(' ') ?? [];
               return (
                 <details key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <summary style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
+                  <summary className="flex-center gap-2-5" style={{
                     padding: '8px 4px',
                     cursor: 'pointer',
                     listStyle: 'none',
                   }}>
                     <span style={{ color: 'var(--status-healthy)', fontSize: 'var(--font-size-2xs)', flexShrink: 0 }}>●</span>
-                    <span className="mono-xs" style={{ fontWeight: 600, flex: 1 }}>
+                    <span className="mono-xs font-semibold" style={{ flex: 1 }}>
                       {commit.subject}
                     </span>
                     {commitFiles.length > 0 && (
@@ -582,7 +576,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.exports}</td>
                     <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)' }}>{f.functions}</td>
                     <td style={{ padding: '5px 10px', textAlign: 'center' }}>{f.hasTypes ? '✓' : '·'}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 600, color: SCORE_COLORS[scoreColorBand(f.score)] }}>
+                    <td className="font-semibold" style={{ padding: '5px 10px', textAlign: 'right', color: SCORE_COLORS[scoreColorBand(f.score)] }}>
                       {f.score.toFixed(2)}
                     </td>
                   </tr>

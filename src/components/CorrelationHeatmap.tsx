@@ -65,11 +65,11 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
     <div
       role="table"
       aria-label="Metric correlation matrix"
+      className="gap-half"
       style={{
         display: 'grid',
         gridTemplateColumns: `80px repeat(${n}, 1fr)`,
         gridTemplateRows: `32px repeat(${n}, 1fr)`,
-        gap: 2,
         width: '100%',
         aspectRatio: `${cols} / ${cols}`,
       }}
@@ -82,12 +82,11 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
         <div
           key={`col-${m}`}
           role="columnheader"
-          className="text-secondary text-xs"
+          className="text-secondary text-xs font-semibold"
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontWeight: 600,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -103,13 +102,12 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
           {/* Row header */}
           <div
             role="rowheader"
-            className="text-secondary text-xs"
+            className="text-secondary text-xs font-semibold"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
               paddingRight: 8,
-              fontWeight: 600,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',

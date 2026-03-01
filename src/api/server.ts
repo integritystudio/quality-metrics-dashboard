@@ -31,7 +31,6 @@ app.route('/api', agentRoutes);
 app.route('/api', sessionRoutes);
 app.route('/api', qualityRoutes);
 
-const port = 3001;
 console.log(`API server listening on http://127.0.0.1:${port}`);
 
 serve({ fetch: app.fetch, hostname: '127.0.0.1', port });

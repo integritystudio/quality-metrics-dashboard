@@ -30,7 +30,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Summary scores */}
-          <div className="card" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', padding: 16, marginBottom: 16, alignItems: 'flex-start' }}>
+          <div className="card gap-6" style={{ display: 'flex', flexWrap: 'wrap', padding: 16, marginBottom: 16, alignItems: 'flex-start' }}>
             <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
             {evaluation.errorPropagationTurns > 0 && (
               <div style={{ textAlign: 'center' }}>
@@ -54,7 +54,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
           {handoffs.length > 0 && (
             <div className="view-section">
               <h3 className="section-heading">Handoffs</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="gap-2" style={{ display: 'flex', flexDirection: 'column' }}>
                 {handoffs.map((h, i) => (
                   <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${i}`} handoff={h} />
                 ))}

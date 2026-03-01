@@ -150,9 +150,8 @@ export function TrendChart({
         </ResponsiveContainer>
       </div>
       {dynamics && (
-        <div style={{
+        <div className="gap-6" style={{
           display: 'flex',
-          gap: 24,
           flexWrap: 'wrap',
           marginTop: 8,
           padding: '8px 0',
@@ -160,20 +159,20 @@ export function TrendChart({
           color: COLORS.text,
         }}>
           <div>
-            <span style={{ fontWeight: 600 }}>Velocity:</span>{' '}
+            <span className="font-semibold">Velocity:</span>{' '}
             <span className="mono">
               {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
             </span>
           </div>
           <div>
-            <span style={{ fontWeight: 600 }}>Acceleration:</span>{' '}
+            <span className="font-semibold">Acceleration:</span>{' '}
             <span className="mono">
               {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
             </span>
           </div>
           {dynamics.projectedBreachTime && (
             <div>
-              <span style={{ fontWeight: 600 }}>Breach in:</span>{' '}
+              <span className="font-semibold">Breach in:</span>{' '}
               <span className="mono" style={{
                 color: dynamics.projectedStatus === 'critical' ? COLORS.critical : COLORS.warning,
               }}>
@@ -182,7 +181,7 @@ export function TrendChart({
             </div>
           )}
           <div>
-            <span style={{ fontWeight: 600 }}>Confidence:</span>{' '}
+            <span className="font-semibold">Confidence:</span>{' '}
             <span className="mono">
               {(dynamics.confidence * 100).toFixed(0)}%
             </span>

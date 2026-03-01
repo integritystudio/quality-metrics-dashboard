@@ -8,7 +8,7 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
   return (
     <div>
       <div className={`health-banner ${data.overallStatus}`}>
-        <div className="flex-center" style={{ gap: 12 }}>
+        <div className="flex-center gap-3">
           <StatusBadge status={data.overallStatus} />
           <span>Operator View &middot; {data.prioritizedAlerts.length} active alert{data.prioritizedAlerts.length !== 1 ? 's' : ''}</span>
         </div>

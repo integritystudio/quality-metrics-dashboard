@@ -25,31 +25,28 @@ export function QualityLiveIndicator() {
 
   return (
     <div
-      className="quality-live-bar flex-center"
+      className="quality-live-bar flex-center gap-2 text-xs"
       role="status"
       aria-label="Live quality signals"
       style={{
-        gap: 8,
         flexWrap: 'wrap',
         padding: '6px 12px',
-        fontSize: 12,
         borderRadius: 6,
         background: 'var(--bg-elevated)',
         border: '1px solid var(--border)',
       }}
     >
-      <span className="text-secondary" style={{ fontWeight: 600, marginRight: 4 }}>
+      <span className="text-secondary font-semibold" style={{ marginRight: 4 }}>
         Quality
       </span>
       {data.metrics.map((m) => (
         <span
           key={m.name}
           title={`${m.name}: ${m.score.toFixed(2)} (${m.evaluatorType})`}
-          className="mono text-xs chip"
+          className="mono text-xs chip gap-1"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 4,
             background: scoreToBadgeColor(m.score) + '1a',
             color: scoreToBadgeColor(m.score),
             fontWeight: 500,

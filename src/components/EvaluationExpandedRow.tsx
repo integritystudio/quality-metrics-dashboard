@@ -78,7 +78,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       )}
 
       {meta.length > 0 && (
-        <div className="mb-3" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+        <div className="mb-3 gap-4" style={{ display: 'flex', flexWrap: 'wrap' }}>
           {meta.map(m => <MetaItem key={m.label} label={m.label} value={m.value} />)}
         </div>
       )}
@@ -86,7 +86,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       {row.stepScores && row.stepScores.length > 0 && (
         <div className="mb-3">
           <div className="section-label mb-1-5">Step Scores</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap' }}>
             {row.stepScores.map(s => (
               <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
             ))}
@@ -97,7 +97,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       {row.toolVerifications && row.toolVerifications.length > 0 && (
         <div>
           <div className="section-label mb-1-5">Tool Verifications</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap' }}>
             {row.toolVerifications.map((tv, i) => (
               <ToolVerificationChip
                 key={`${tv.toolName}-${i}`}
@@ -113,7 +113,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       )}
 
       {(row.traceId || row.sessionId) && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 16 }}>
+        <div className="gap-4" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex' }}>
           {row.traceId && (
             <Link href={`/evaluations/trace/${row.traceId}`} className="back-link" style={{ marginBottom: 0 }}>
               View full evaluation detail &rarr;

@@ -12,7 +12,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (
     <div>
       <div className={`health-banner ${data.overallStatus}`}>
-        <div className="flex-center" style={{ gap: 12 }}>
+        <div className="flex-center gap-3">
           <StatusBadge status={data.overallStatus} />
           <span>Executive Summary</span>
         </div>

@@ -54,7 +54,7 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
   return (
     <div className={`health-banner ${overallStatus}`}>
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="flex-center gap-3">
           <StatusBadge status={overallStatus} />
           <span className="text-base">
             {overallStatus === 'healthy' && 'All metrics within thresholds'}

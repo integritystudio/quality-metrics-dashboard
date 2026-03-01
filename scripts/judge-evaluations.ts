@@ -854,7 +854,6 @@ function writeEvaluations(evals: EvalRecord[]): void {
   for (const [date, records] of byDate) {
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
     const content = records.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
-    appendFileSync(outFile, content);
     console.log(`  Appended ${records.length} evaluations to evaluations-${date}.jsonl`);
   }
 }
@@ -908,12 +907,9 @@ async function main() {
     limit = Math.min(parsed, MAX_TURN_LIMIT);
   }
 
-  // Step 1: Discover transcripts
   console.log('Discovering transcripts...');
-  const transcripts = await discoverTranscripts();
   console.log(`Found ${transcripts.length} unique transcripts`);
 
-  // Step 2: Extract turns
   console.log('Extracting turns...');
   let allTurns: Turn[] = [];
   for (const info of transcripts) {
@@ -924,7 +920,6 @@ async function main() {
 
   // Apply limit
   if (limit < allTurns.length) {
-    allTurns = allTurns.slice(0, limit);
     console.log(`Limited to ${limit} turns`);
   }
 
@@ -944,11 +939,6 @@ async function main() {
     // Haiku 3.5 pricing: $0.80/1M input, $4.00/1M output
     const HAIKU_INPUT_PER_M = 0.80;
     const HAIKU_OUTPUT_PER_M = 4.0;
-    const estCost = (estInputTokens * HAIKU_INPUT_PER_M + estOutputTokens * HAIKU_OUTPUT_PER_M) / 1_000_000;
-    console.log('\n--- Dry Run Summary ---');
-    console.log(`Transcripts: ${transcripts.length}`);
-    console.log(`Turns to evaluate: ${allTurns.length}`);
-    console.log(`Estimated evaluations: ${estEvals}`);
     console.log(`Estimated cost: ~$${estCost.toFixed(2)}`);
 
     const bySession = new Map<string, number>();
@@ -976,9 +966,7 @@ async function main() {
   }
 
   try {
-    // Step 3: Load existing keys for dedup
     console.log('Loading existing evaluation keys for deduplication...');
-    const existingKeys = loadExistingKeys();
     console.log(`Found ${existingKeys.size} existing LLM evaluation keys`);
 
     // Reset failure tracking
@@ -987,7 +975,6 @@ async function main() {
     let flatEvals: EvalRecord[];
 
     if (seed) {
-      // Seed mode: generate deterministic scores from turn content, no API calls
       console.log(`\nSeeding evaluations for ${allTurns.length} turns...`);
       const seedResult = seedEvaluations(allTurns, existingKeys);
       flatEvals = seedResult.evals;
@@ -1007,7 +994,6 @@ async function main() {
           error: (msg) => console.error(`  [error] ${msg}`),
         },
       });
-
       console.log(`\nEvaluating ${allTurns.length} turns (concurrency=${CONCURRENCY})...`);
       const allEvals = await processBatch(
         allTurns,
@@ -1018,7 +1004,6 @@ async function main() {
 
       flatEvals = allEvals.flat();
     }
-
     console.log(`\nGenerated ${flatEvals.length} evaluations`);
 
     if (flatEvals.length === 0) {

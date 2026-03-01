@@ -36,7 +36,7 @@ export function EvaluationDetail({
     <div>
       <EvaluationTable evaluations={displayEvals} />
       {metricName && (
-        <div className="flex-center" style={{ marginTop: 12, gap: 12 }}>
+        <div className="flex-center gap-3" style={{ marginTop: 12 }}>
           {!showAll ? (
             <button
               type="button"

@@ -18,7 +18,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '8px 0' }}>
+    <div className="gap-2" style={{ display: 'flex', overflowX: 'auto', padding: '8px 0' }}>
       {turns.map((turn) => {
         const agent = turn.agentName ?? 'unknown';
         const color = agentColor(agent, agentNames);
@@ -38,7 +38,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
             }}
           >
             <div className="flex-center mb-1-5" style={{ justifyContent: 'space-between' }}>
-              <span className="text-2xs uppercase" style={{ fontWeight: 600, color }}>{agent}</span>
+              <span className="text-2xs uppercase font-semibold" style={{ color }}>{agent}</span>
               <span className="text-muted text-2xs">#{turn.turnIndex}</span>
             </div>
 
@@ -59,7 +59,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
             </div>
 
             {turn.hasError && (
-              <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--status-critical)', fontWeight: 600, marginTop: 4 }}>
+              <div className="text-2xs font-semibold" style={{ color: 'var(--status-critical)', marginTop: 4 }}>
                 Error
               </div>
             )}

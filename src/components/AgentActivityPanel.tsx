@@ -104,7 +104,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                 >
                   {/* Agent name with color accent */}
                   <td>
-                    <div className="flex-center" style={{ gap: 8 }}>
+                    <div className="flex-center gap-2">
                       {hasLinks && (
                         <span style={{
                           fontSize: 'var(--font-size-2xs)',
@@ -135,7 +135,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                   {/* Invocations with inline bar */}
                   <td>
-                    <div className="flex-center" style={{ gap: 8 }}>
+                    <div className="flex-center gap-2">
                       <span className="mono-xs" style={{ minWidth: 32 }}>
                         {agent.invocations}
                       </span>
@@ -147,7 +147,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                   {/* Error rate */}
                   <td>
-                    <div className="flex-center" style={{ gap: 6 }}>
+                    <div className="flex-center gap-1-5">
                       <span className="mono-xs" style={{
                         color: errColor,
                       }}>
@@ -215,11 +215,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                           borderBottom: '1px solid var(--border-subtle)',
                           marginBottom: 4,
                         }}>
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 12,
-                          }}>
+                          <div className="flex-center gap-3">
                             <div className="text-xs text-muted uppercase" style={{
                               flexShrink: 0,
                             }}>
@@ -242,10 +238,9 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         </div>
                       )}
 
-                      <div style={{
+                      <div className="gap-4" style={{
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr',
-                        gap: 16,
                         padding: '12px 0 4px',
                       }}>
                         {/* Sessions column */}
@@ -253,7 +248,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                           <div className="text-muted mb-1-5 text-xs uppercase">
                             Sessions ({agent.sessionCount})
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <div className="gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
                             {agent.sessionIds.map(sid => (
                               <Link
                                 key={sid}
@@ -285,7 +280,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                           <div className="text-muted mb-1-5 text-xs uppercase">
                             Traces ({agent.traceIdsTotal ?? agent.traceIds.length})
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <div className="gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
                             {agent.traceIds.map(tid => (
                               <Link
                                 key={tid}
@@ -349,7 +344,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
       <div className="text-muted mb-1-5 text-xs uppercase">
         Evaluation Metrics
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+      <div className="gap-3" style={{ display: 'flex', flexWrap: 'wrap' }}>
         {metrics.map(([name, m]) => {
           const band = scoreColorBand(m.avg);
           const barColor = SCORE_COLORS[band];
@@ -369,12 +364,11 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
                 {name}
               </div>
               {/* Score bar */}
-              <div className="flex-center mb-1" style={{ gap: 8 }}>
+              <div className="flex-center mb-1 gap-2">
                 <div className="mini-bar" style={{ flex: 1 }}>
                   <div className="mini-bar-fill" style={{ width: `${Math.min(m.avg * 100, 100)}%`, background: barColor }} />
                 </div>
-                <span className="mono-xs" style={{
-                  fontWeight: 600,
+                <span className="mono-xs font-semibold" style={{
                   color: barColor,
                   minWidth: 38,
                   textAlign: 'right',

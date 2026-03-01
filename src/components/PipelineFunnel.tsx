@@ -14,14 +14,14 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
 
   return (
     <div role="region" aria-label="Evaluation pipeline funnel">
-      <div className="flex-center mb-3" style={{ gap: 8 }}>
-        <span className="mono-xl">
+      <div className="flex-center mb-3 gap-2">
+        <span className="mono-xl font-semibold">
           {overallConversionPercent.toFixed(1)}%
         </span>
         <span className="text-secondary text-base">overall conversion</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
         {stages.map((stage, idx) => {
           const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
           const dropoff = dropoffs[idx];
@@ -30,7 +30,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
           return (
             <div key={stage.name}>
               {/* Stage bar */}
-              <div className="flex-center" style={{ gap: 12 }}>
+              <div className="flex-center gap-3">
                 <div
                   style={{
                     width: `${widthPct}%`,
@@ -50,7 +50,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                   aria-valuemin={0}
                   aria-valuemax={maxCount}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>
+                  <span className="text-xs font-semibold" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
                     {stage.displayName}
                   </span>
                   <span className="mono-xs" style={{ color: '#fff', whiteSpace: 'nowrap' }}>

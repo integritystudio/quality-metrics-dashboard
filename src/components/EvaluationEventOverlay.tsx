@@ -18,18 +18,17 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
   }
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+    <div className="gap-2" style={{ display: 'flex', flexWrap: 'wrap' }}>
       {[...byName.entries()].map(([name, evs]) => {
         const avg = evs.reduce((s, e) => s + (e.scoreValue ?? 0), 0) / evs.length;
         const card = (
           <div style={{
-            gap: 6,
             padding: '4px 8px', borderRadius: 6,
             background: 'var(--bg-elevated)',
             border: '1px solid var(--border)',
             ...(traceId ? { cursor: 'pointer', transition: 'border-color 0.15s' } : {}),
           }}
-          className={traceId ? 'flex-center eval-summary-card' : 'flex-center'}
+          className={traceId ? 'flex-center eval-summary-card gap-1-5' : 'flex-center gap-1-5'}
           >
             <span style={{ fontSize: 12 }}>{name}</span>
             <ScoreBadge score={avg} metricName={name} label={avg.toFixed(2)} />

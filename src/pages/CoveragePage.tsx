@@ -13,7 +13,7 @@ export function CoveragePage({ period }: { period: Period }) {
     <PageShell isLoading={isLoading} error={error} skeletonHeight={400}>
       {data && (
         <>
-          <div className="flex-center mb-3" style={{ gap: 16 }}>
+          <div className="flex-center mb-3 gap-4">
             <h2 className="text-lg" style={{ margin: 0 }}>Evaluation Coverage</h2>
             <select
               value={inputKey}

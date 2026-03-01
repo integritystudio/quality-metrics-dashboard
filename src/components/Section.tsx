@@ -31,8 +31,7 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
 
   return (
     <details open={defaultOpen} style={{ marginBottom: 2 }}>
-      <summary className="flex-center" style={{
-        gap: 12,
+      <summary className="flex-center gap-3" style={{
         padding: '12px 20px',
         background: 'var(--bg-card)',
         borderLeft: `3px solid ${railColor}`,
@@ -48,8 +47,7 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
           transition: 'transform 0.2s',
           display: 'inline-block',
         }}>▶</span>
-        <span className="mono-xs text-secondary uppercase" style={{
-          fontWeight: 600,
+        <span className="mono-xs text-secondary uppercase font-semibold" style={{
           flex: 1,
         }}>{title}</span>
         {badge && (

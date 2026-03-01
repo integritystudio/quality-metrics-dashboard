@@ -55,7 +55,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
           {evaluations.map((ev, i) => (
             <div key={`${ev.evaluationName}-${ev.timestamp}-${i}`} className="eval-detail-card card">
               <div className="flex-center mb-3" style={{ justifyContent: 'space-between' }}>
-                <div className="flex-center" style={{ gap: 12 }}>
+                <div className="flex-center gap-3">
                   <ScoreBadge
                     score={ev.scoreValue ?? null}
                     metricName={ev.evaluationName}
@@ -76,7 +76,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
               {ev.stepScores && ev.stepScores.length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   <div className="section-label mb-1">Step Scores</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap', marginTop: 4 }}>
                     {ev.stepScores.map(s => (
                       <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
                     ))}

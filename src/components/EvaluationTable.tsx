@@ -132,10 +132,9 @@ const columns = [
       const category = ordinalToCategory(labelToOrdinal(label).ordinal);
       return (
         <span
-          className="mono-xs chip"
+          className="mono-xs chip font-semibold"
           style={{
             ...chipBaseStyle,
-            fontWeight: 600,
             backgroundColor: `${CATEGORY_COLORS[category]}20`,
             color: CATEGORY_COLORS[category],
           }}
@@ -237,7 +236,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
 
   return (
     <div>
-      <div className="mb-3" style={{ display: 'flex', gap: 6 }}>
+      <div className="mb-3 gap-1-5" style={{ display: 'flex' }}>
         {(['Pass', 'Review', 'Fail'] as const).map((cat) => {
           const active = activeCategories.includes(cat);
           return (
@@ -245,14 +244,13 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
               key={cat}
               type="button"
               onClick={() => toggleCategory(cat)}
+              className="text-xs font-semibold"
               style={{
                 padding: '4px 12px',
                 borderRadius: 6,
                 border: `1px solid ${CATEGORY_COLORS[cat]}`,
                 backgroundColor: active ? `${CATEGORY_COLORS[cat]}30` : 'transparent',
                 color: CATEGORY_COLORS[cat],
-                fontSize: 12,
-                fontWeight: 600,
                 cursor: 'pointer',
                 opacity: active ? 1 : 0.6,
                 transition: 'opacity 0.15s, background-color 0.15s',

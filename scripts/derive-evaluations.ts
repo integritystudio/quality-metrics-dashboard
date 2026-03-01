@@ -350,7 +350,6 @@ function main(): void {
   const traceFiles = readdirSync(TELEMETRY_DIR)
     .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
     .sort();
-
   console.log(`Found ${traceFiles.length} trace files in ${TELEMETRY_DIR}`);
 
   const allEvals: EvalRecord[] = [];
@@ -358,7 +357,6 @@ function main(): void {
 
   for (const file of traceFiles) {
     const filepath = join(TELEMETRY_DIR, file);
-    const lines = readFileSync(filepath, 'utf-8').split('\n').filter(Boolean);
     console.log(`  ${file}: ${lines.length} spans`);
 
     for (const line of lines) {
@@ -426,7 +424,6 @@ function main(): void {
     writeFileSync(outFile, content);
     totalWritten += evals.length + preserved.length;
     preservedCount += preserved.length;
-    const preserveNote = preserved.length > 0 ? ` (preserved ${preserved.length} judge evals)` : '';
     console.log(`Wrote ${evals.length} evaluations to evaluations-${date}.jsonl${preserveNote}`);
   }
 

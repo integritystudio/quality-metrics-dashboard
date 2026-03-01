@@ -42,10 +42,10 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
       </select>
 
       {detail && (
-        <div className="mb-3" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div className="mb-3 gap-4" style={{ display: 'flex', flexWrap: 'wrap' }}>
           {(['avg', 'p50', 'p95'] as const).map(key => (
             <div key={key} style={{ textAlign: 'center' }}>
-              <div className="mono text-md" style={{ fontWeight: 600 }}>
+              <div className="mono text-md font-semibold">
                 {detail.values[key]?.toFixed(4) ?? 'N/A'}
               </div>
               <div className="field-label text-secondary text-xs">{key}</div>

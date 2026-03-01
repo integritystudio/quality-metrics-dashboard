@@ -99,17 +99,16 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
         ) : null)}
       </div>
       {evaluatorTypeCounts && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0' }}>
+        <div className="gap-1-5" style={{ display: 'flex', flexWrap: 'wrap', margin: '8px 0' }}>
           {(Object.entries(evaluatorTypeCounts) as Array<[keyof EvaluatorTypeCounts, number]>)
             .filter(([, count]) => count > 0)
             .map(([type, count]) => (
               <span
                 key={type}
-                className="mono-xs text-secondary chip"
+                className="mono-xs text-secondary chip gap-1"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 4,
                   background: 'var(--bg-elevated)',
                   border: '1px solid var(--border)',
                 }}
