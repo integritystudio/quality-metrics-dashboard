@@ -4,8 +4,7 @@ import { computeCoverageHeatmap } from '../../../../dist/lib/quality-metrics.js'
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
-const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+import { PeriodSchema, PERIOD_MS, InputKeySchema } from '../../lib/constants.js';
 
 /** Filter out rule-based per-span evaluations; they have incompatible
  *  traceId granularity that inflates the coverage input universe.

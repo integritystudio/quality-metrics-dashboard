@@ -10,8 +10,7 @@ import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema } from '../../lib/constants.js';
-const RoleSchema = z.enum(['executive', 'operator', 'auditor']).optional();
+import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 function computePeriodDates(period: string): { start: string; end: string } {
   const now = new Date();
@@ -56,11 +55,11 @@ export const dashboardRoutes = new Hono();
 dashboardRoutes.get('/dashboard', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
-  const roleResult = RoleSchema.safeParse(c.req.query('role') || undefined);
+  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
   if (!roleResult.success) {
-    return c.json({ error: 'Invalid role. Must be executive, operator, or auditor.' }, 400);
+    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
   }
 
   try {
@@ -89,7 +88,7 @@ dashboardRoutes.get('/dashboard', async (c) => {
 
     return c.json({ ...dashboard, cqi, sparklines });
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
 
@@ -98,6 +97,6 @@ dashboardRoutes.get('/health', async (c) => {
     const result = await checkHealth();
     return c.json(result);
   } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, 500);
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });

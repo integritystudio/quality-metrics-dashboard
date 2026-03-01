@@ -8,13 +8,12 @@ import {
 import { computeMetricDynamics } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema } from '../../lib/constants.js';
 
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
 const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
 const OffsetSchema = z.coerce.number().int().min(0).default(0);
-const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
 const ScoreLabelSchema = z.string().max(100).optional();
 
 export const metricsRoutes = new Hono();

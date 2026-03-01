@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Period, CoverageHeatmap } from '../types.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { API_BASE, STALE_TIME, DEFAULT_INPUT_KEY, type InputKey } from '../lib/constants.js';
 
 export type CoverageResponse = CoverageHeatmap & { period: string };
 
-export function useCoverage(period: Period, inputKey: 'traceId' | 'sessionId' = 'traceId') {
+export function useCoverage(period: Period, inputKey: InputKey = DEFAULT_INPUT_KEY) {
   return useQuery<CoverageResponse>({
     queryKey: ['coverage', period, inputKey],
     queryFn: async () => {

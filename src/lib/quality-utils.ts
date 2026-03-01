@@ -18,7 +18,8 @@ export interface LabelOrdinal {
   mapped: boolean;
 }
 
-export type FeatureRoleType = 'executive' | 'operator' | 'auditor';
+import type { Role } from './constants.js';
+export type FeatureRoleType = Role;
 
 export interface RoleFeatureConfig {
   showCQI: boolean;

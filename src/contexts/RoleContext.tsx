@@ -5,8 +5,9 @@ import {
   type FeatureRoleType,
   type RoleFeatureConfig,
 } from '../lib/quality-utils.js';
+import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
 
-const VALID_ROLES = new Set<FeatureRoleType>(['executive', 'operator', 'auditor']);
+const VALID_ROLES = new Set<FeatureRoleType>(ROLES);
 
 interface RoleContextValue {
   role: FeatureRoleType;
@@ -23,7 +24,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const role: FeatureRoleType =
     roleName && VALID_ROLES.has(roleName as FeatureRoleType)
       ? (roleName as FeatureRoleType)
-      : 'executive';
+      : DEFAULT_ROLE;
 
   useEffect(() => {
     if (roleName && !VALID_ROLES.has(roleName as FeatureRoleType)) {

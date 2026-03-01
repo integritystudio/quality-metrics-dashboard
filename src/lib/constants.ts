@@ -5,11 +5,36 @@ export const enum ErrorName {
   SessionNotFound = 'SessionNotFoundError',
 }
 
+/** HTTP status codes used in API error responses. */
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+
 /** Reusable error messages for response validation. */
 export const enum ErrorMessage {
   InvalidResponseShape = 'Invalid response shape',
   MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
 }
+
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+export type InputKey = z.infer<typeof InputKeySchema>;
+export const DEFAULT_INPUT_KEY: InputKey = InputKeySchema._def.defaultValue();
+
+/** Zod schema for evaluation sort order param. */
+export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
+export type SortBy = z.infer<typeof SortBySchema>;
+export const DEFAULT_SORT_BY: SortBy = SortBySchema._def.defaultValue();
+
+/** Zod schema for role param. */
+export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
+export type Role = z.infer<typeof RoleSchema>;
+export const ROLES = RoleSchema.options;
+export const DEFAULT_ROLE: Role = 'executive';
 
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
 export const API_BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '');

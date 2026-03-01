@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EvalRow } from '../components/EvaluationTable.js';
 import type { Period } from '../types.js';
-import { API_BASE, STALE_TIME, DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD } from '../lib/constants.js';
+import { API_BASE, STALE_TIME, DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
 
 interface EvaluationsResponse {
   rows: EvalRow[];
@@ -14,11 +14,11 @@ interface EvaluationsResponse {
 export function useMetricEvaluations(
   name: string | undefined,
   period: Period = DEFAULT_PERIOD,
-  { limit = DEFAULT_PAGE_LIMIT, offset = 0, scoreLabel, sortBy = 'timestamp_desc', enabled = true }: {
+  { limit = DEFAULT_PAGE_LIMIT, offset = 0, scoreLabel, sortBy = DEFAULT_SORT_BY, enabled = true }: {
     limit?: number;
     offset?: number;
     scoreLabel?: string;
-    sortBy?: 'score_asc' | 'score_desc' | 'timestamp_desc';
+    sortBy?: SortBy;
     enabled?: boolean;
   } = {},
 ) {
