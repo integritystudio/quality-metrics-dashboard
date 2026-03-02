@@ -367,7 +367,7 @@ body {
   flex: 1;
   background: var(--accent);
   border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-  min-height: 2px;
+  min-height: var(--space-half);
   position: relative;
 }
 .histogram-bar:hover {
@@ -708,7 +708,7 @@ details[open] > .cot-summary::before {
 
 /* Compound alert card */
 .alert-compound {
-  border-left-width: 4px;
+  border-left-width: var(--space-1);
   background: var(--bg-elevated);
 }
 .alert-related {
@@ -735,7 +735,7 @@ details[open] > .cot-summary::before {
 }
 .threshold-bar {
   position: relative;
-  height: 6px;
+  height: var(--space-1-5);
   background: var(--bg-card);
   border-radius: var(--radius-bar);
   margin-top: var(--space-2);
@@ -842,7 +842,7 @@ details[open] > .cot-summary::before {
 }
 .variance-bar-track {
   flex: 1;
-  height: 4px;
+  height: var(--space-1);
   background: var(--bg-surface);
   border-radius: var(--radius-xs);
   overflow: hidden;
@@ -977,8 +977,8 @@ details[open] > .cot-summary::before {
 .link-accent { color: var(--accent); text-decoration: none; }
 
 /* Table cells */
-.cell-pad      { padding: 5px 10px; }
-.cell-pad-wide { padding: 5px 12px; }
+.cell-pad      { padding: 5px var(--space-2-5); }
+.cell-pad-wide { padding: 5px var(--space-3); }
 
 /* Border */
 .border-b        { border-bottom: 1px solid var(--border); }
