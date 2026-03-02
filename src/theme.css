@@ -879,6 +879,7 @@ details[open] > .cot-summary::before {
 
 /* Flex layout */
 .d-flex         { display: flex; }
+.d-grid         { display: grid; }
 .d-inline-block { display: inline-block; }
 .flex-center    { display: flex; align-items: center; }
 .align-start    { align-items: flex-start; }
@@ -919,6 +920,8 @@ details[open] > .cot-summary::before {
 .mb-2-5 { margin-bottom: var(--space-2-5); }   /* 10px */
 .mb-3   { margin-bottom: var(--space-3); }
 .mb-4   { margin-bottom: var(--space-4); }     /* 16px */
+.mb-5   { margin-bottom: var(--space-5); }     /* 20px */
+.mb-6   { margin-bottom: var(--space-6); }     /* 24px */
 
 /* Margin-top */
 .mt-1   { margin-top: var(--space-1); }     /*  4px */

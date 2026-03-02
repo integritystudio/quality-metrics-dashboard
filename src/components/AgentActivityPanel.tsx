@@ -199,8 +199,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         </div>
                       )}
 
-                      <div className="gap-4" style={{
-                        display: 'grid',
+                      <div className="d-grid gap-4" style={{
                         gridTemplateColumns: '1fr 1fr',
                         padding: '12px 0 4px',
                       }}>
@@ -334,9 +333,8 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
   const overallErrorRate = totalInvocations > 0 ? (totalErrors / totalInvocations) * 100 : 0;
 
   return (
-    <div className="d-flex flex-wrap gap-8 surface-elevated" style={{
+    <div className="d-flex flex-wrap gap-8 surface-elevated mb-5" style={{
       padding: 'var(--space-4) var(--space-5)',
-      marginBottom: 'var(--space-5)',
     }}>
       {[
         { label: 'Agents', value: agents.length },
