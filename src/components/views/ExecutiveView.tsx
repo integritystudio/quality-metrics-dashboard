@@ -3,6 +3,7 @@ import { StatusBadge } from '../Indicators.js';
 import { CQIHero } from '../CQIHero.js';
 import { StatCard } from '../StatCard.js';
 import { MetricGrid } from '../MetricGrid.js';
+import { SimpleAlertList } from '../SimpleAlertList.js';
 import { ViewSection } from '../Section.js';
 import { HealthBanner } from '../HealthBanner.js';
 import { SummaryCount } from '../SummaryCount.js';
@@ -25,16 +26,12 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
 
       {data.topIssues.length > 0 && (
         <ViewSection title="Top Issues">
-          <ul className="alert-list">
-            {data.topIssues.map((issue: { name: string; displayName: string; status: string; alertCount: number }) => (
-              <li key={issue.name} className="alert-item" data-status={issue.status}>
-                <div className="alert-message">{issue.displayName}</div>
-                <div className="alert-meta text-secondary text-xs">
-                  Status: {issue.status} &middot; {plural(issue.alertCount, 'alert')}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <SimpleAlertList items={data.topIssues.map((issue: { name: string; displayName: string; status: string; alertCount: number }) => ({
+            key: issue.name,
+            status: issue.status,
+            message: issue.displayName,
+            meta: <>Status: {issue.status} &middot; {plural(issue.alertCount, 'alert')}</>,
+          }))} />
         </ViewSection>
       )}
 

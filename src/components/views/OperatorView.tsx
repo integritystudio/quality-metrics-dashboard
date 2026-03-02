@@ -2,6 +2,7 @@ import type { OperatorView as OperatorViewType } from '../../types.js';
 import { TrendIndicator } from '../Indicators.js';
 import { AlertList } from '../AlertList.js';
 import { MetricGrid } from '../MetricGrid.js';
+import { SimpleAlertList } from '../SimpleAlertList.js';
 import { ViewSection } from '../Section.js';
 import { HealthBanner } from '../HealthBanner.js';
 import { plural, formatScore } from '../../lib/quality-utils.js';
@@ -22,18 +23,12 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
 
       {data.degradingTrends.length > 0 && (
         <ViewSection title="Degrading Trends">
-          <ul className="alert-list">
-            {data.degradingTrends.map((dt) => (
-              <li key={dt.metricName} className="alert-item" data-status="warning">
-                <div className="alert-message">
-                  {dt.metricName} <TrendIndicator trend={dt.trend} />
-                </div>
-                <div className="alert-meta text-secondary text-xs">
-                  {formatScore(dt.trend.previousValue)} &rarr; {formatScore(dt.trend.currentValue)}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <SimpleAlertList items={data.degradingTrends.map((dt) => ({
+            key: dt.metricName,
+            status: 'warning',
+            message: <>{dt.metricName} <TrendIndicator trend={dt.trend} /></>,
+            meta: <>{formatScore(dt.trend.previousValue)} &rarr; {formatScore(dt.trend.currentValue)}</>,
+          }))} />
         </ViewSection>
       )}
 
