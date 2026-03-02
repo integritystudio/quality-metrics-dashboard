@@ -5,7 +5,7 @@ type AlertWithMeta = TriggeredAlert & { metricName?: string };
 
 function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
   return (
-    <li className={`alert-item ${alert.severity}`}>
+    <li className="alert-item" data-status={alert.severity}>
       <div className="alert-message">{alert.message}</div>
       <div className="alert-meta text-secondary text-xs">
         {alert.aggregation} = {alert.actualValue?.toFixed(4)} (threshold: {alert.threshold?.toFixed(4)})
@@ -49,7 +49,7 @@ function ThresholdBar({ actual, threshold, direction }: {
 
 function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
   return (
-    <li className={`alert-item alert-compound ${alert.severity}`}>
+    <li className="alert-item alert-compound" data-status={alert.severity}>
       <div className="alert-message">{alert.message}</div>
       <div className="alert-meta text-secondary text-xs">
         {alert.aggregation} = {alert.actualValue?.toFixed(4)} (threshold: {alert.threshold?.toFixed(4)})

@@ -8,7 +8,7 @@ import { plural } from '../../lib/quality-utils.js';
 export function OperatorView({ data }: { data: OperatorViewType }) {
   return (
     <div>
-      <div className={`health-banner ${data.overallStatus}`}>
+      <div className="health-banner" data-status={data.overallStatus}>
         <div className="flex-center gap-3">
           <StatusBadge status={data.overallStatus} />
           <span>Operator View &middot; {plural(data.prioritizedAlerts.length, 'active alert')}</span>
@@ -25,7 +25,7 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
         <ViewSection title="Degrading Trends">
           <ul className="alert-list">
             {data.degradingTrends.map((dt) => (
-              <li key={dt.metricName} className="alert-item warning">
+              <li key={dt.metricName} className="alert-item" data-status="warning">
                 <div className="alert-message">
                   {dt.metricName} <TrendIndicator trend={dt.trend} />
                 </div>

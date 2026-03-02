@@ -12,7 +12,7 @@ interface ExtendedExecutiveView extends ExecutiveViewType {
 export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (
     <div>
-      <div className={`health-banner ${data.overallStatus}`}>
+      <div className="health-banner" data-status={data.overallStatus}>
         <div className="flex-center gap-3">
           <StatusBadge status={data.overallStatus} />
           <span>Executive Summary</span>
@@ -39,7 +39,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
         <ViewSection title="Top Issues">
           <ul className="alert-list">
             {data.topIssues.map((issue: { name: string; displayName: string; status: string; alertCount: number }) => (
-              <li key={issue.name} className={`alert-item ${issue.status}`}>
+              <li key={issue.name} className="alert-item" data-status={issue.status}>
                 <div className="alert-message">{issue.displayName}</div>
                 <div className="alert-meta text-secondary text-xs">
                   Status: {issue.status} &middot; {plural(issue.alertCount, 'alert')}

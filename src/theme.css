@@ -229,6 +229,12 @@ body {
   display: block;
 }
 
+/* Status color tokens — applied via data-status attribute */
+[data-status="healthy"]  { --s-bg: var(--bg-status-healthy);  --s-border: var(--border-status-healthy);  --s-fg: var(--status-healthy); }
+[data-status="warning"]  { --s-bg: var(--bg-status-warning);  --s-border: var(--border-status-warning);  --s-fg: var(--status-warning); }
+[data-status="critical"] { --s-bg: var(--bg-status-critical); --s-border: var(--border-status-critical); --s-fg: var(--status-critical); }
+[data-status="no_data"]  { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--status-no-data); }
+
 /* Health banner */
 .health-banner {
   padding: var(--space-4) var(--space-5);
@@ -236,10 +242,7 @@ body {
   margin-bottom: var(--space-6);
   justify-content: space-between;
 }
-.health-banner.healthy { background: var(--bg-status-healthy); border: 1px solid var(--border-status-healthy); }
-.health-banner.warning { background: var(--bg-status-warning); border: 1px solid var(--border-status-warning); }
-.health-banner.critical { background: var(--bg-status-critical); border: 1px solid var(--border-status-critical); }
-.health-banner.no_data { background: var(--bg-card); border: 1px solid var(--border); }
+.health-banner[data-status] { background: var(--s-bg); border: 1px solid var(--s-border); }
 
 .summary-count {
   text-align: center;
@@ -256,10 +259,7 @@ body {
   padding: var(--space-half) var(--space-2);
   border-radius: var(--radius-pill);
 }
-.status-badge.healthy { color: var(--status-healthy); background: var(--bg-status-healthy); }
-.status-badge.warning { color: var(--status-warning); background: var(--bg-status-warning); }
-.status-badge.critical { color: var(--status-critical); background: var(--bg-status-critical); }
-.status-badge.no_data { color: var(--status-no-data); background: var(--bg-elevated); }
+.status-badge[data-status] { color: var(--s-fg); background: var(--s-bg); }
 
 /* Trend indicator */
 .trend {
@@ -320,8 +320,7 @@ body {
   margin-bottom: var(--space-2);
   border-radius: 0 var(--radius) var(--radius) 0;
 }
-.alert-item.critical { border-left-color: var(--status-critical); }
-.alert-item.warning { border-left-color: var(--status-warning); }
+.alert-item[data-status] { border-left-color: var(--s-fg); }
 .alert-item .alert-meta,
 .alert-item .remediation {
   margin-top: var(--space-1);

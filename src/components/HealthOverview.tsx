@@ -52,7 +52,7 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
   const pipeline = computePipelineHealth(dashboard);
 
   return (
-    <div className={`health-banner ${overallStatus}`}>
+    <div className="health-banner" data-status={overallStatus}>
       <div>
         <div className="flex-center gap-3">
           <StatusBadge status={overallStatus} />

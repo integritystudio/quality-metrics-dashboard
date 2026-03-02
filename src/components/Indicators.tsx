@@ -4,7 +4,7 @@ import { STATUS_SHAPES, CONFIDENCE_SYMBOLS } from '../lib/symbols.js';
 export function StatusBadge({ status }: { status: string }) {
   const shape = STATUS_SHAPES[status] ?? STATUS_SHAPES.no_data;
   return (
-    <span className={`status-badge text-xs ${status}`} aria-label={`Status: ${status}`}>
+    <span className="status-badge text-xs" data-status={status} aria-label={`Status: ${status}`}>
       {shape} {status}
     </span>
   );
