@@ -12,15 +12,17 @@ Open items from code reviews and deferred work.
 
 ## Open Items
 
-### Final Review Follow-ups (2026-03-01)
+_None — all Final Review Follow-ups resolved 2026-03-01._
 
-| ID | File | Issue | Priority |
-|----|------|-------|----------|
-| FR1 | `TrendChart.tsx` | Remove redundant `const COLORS = { ...CHART_COLORS, projection: CHART_COLORS.line }` — `projection` equals `CHART_COLORS.line`; reference `CHART_COLORS` directly in JSX | Low |
-| FR2 | `useApiQuery.ts` | `buildUrl` / `enabled` coupling is implicit — callers using `traceId!` in buildUrl rely on `enabled: !!traceId` to prevent execution. Document contract in JSDoc or accept `url: string \| null` to derive enabled | Low |
-| FR3 | `Stat.tsx` | Magic numbers: `fontSize: 22`, `minWidth: 80`, `marginTop: 3`, `lineHeight: 1.1`, `letterSpacing: '0.1em'`. Move stat value styles to `theme.css` classes | Low |
-| FR4 | `TruncatedList.tsx` | Add JSDoc note: `renderItem` must return an element with a `key` prop | Low |
-| FR5 | `TrendChart.tsx` | `aria-label` on inner `div` without `role`; add `role="img"` to the labelled container (matches TrendSeries pattern) | Low |
-| FR6 | `FreqBar.tsx` | Hardcoded widths `160` / `36` for label and count columns; accept `labelWidth` prop or use CSS grid | Low |
-| FR7 | `MetadataRow.tsx` | `value == null` guard allows empty string to render a blank row — consider `if (value == null \|\| value === '') return null` | Low |
-| FR8 | `TrendSeries.tsx` | `background: '#0d1117'` duplicates page background hex; use `var(--bg-page)` so dark-mode variants stay consistent | Low |
+### Final Review Follow-ups (2026-03-01) — Done
+
+| ID | File | Issue | Resolution |
+|----|------|-------|------------|
+| FR1 | `TrendChart.tsx` | Remove redundant `COLORS` alias | Done — 1424c9d |
+| FR2 | `useApiQuery.ts` | Document `buildUrl`/`enabled` contract | Done — d3c8d16 |
+| FR3 | `Stat.tsx` | Move magic number styles to theme.css | Done — 371f663 |
+| FR4 | `TruncatedList.tsx` | JSDoc note: `renderItem` must provide `key` | Done — 443996b |
+| FR5 | `TrendChart.tsx` | Add `role="img"` to aria-label container | Done — 5554948 |
+| FR6 | `FreqBar.tsx` | Replace hardcoded widths with CSS grid | Done — d66fac9 |
+| FR7 | `MetadataRow.tsx` | Suppress empty-string values same as null | Done — 76d7e4b |
+| FR8 | `TrendSeries.tsx` | Replace `#0d1117` with `--bg-card` hex + `role="img"` | Done — c2ab8a6, 604e236 |
