@@ -21,7 +21,7 @@ const COLORS = {
   ...CHART_COLORS,
   band: 'rgba(88, 166, 255, 0.1)',
   bandStroke: 'rgba(88, 166, 255, 0.3)',
-  background: '#0d1117',
+  background: 'var(--bg-card)',
 };
 
 function formatTime(iso: string, spanDays: number): string {
@@ -60,7 +60,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   const yPad = (yMax - yMin) * 0.15 || 0.05;
 
   return (
-    <div aria-label={`Time series trend for ${metricName}`}>
+    <div role="img" aria-label={`Time series trend for ${metricName}`}>
       <ResponsiveContainer width="100%" height={220}>
         <ComposedChart data={chartData} margin={CHART_MARGIN}>
           <CartesianGrid {...CHART_GRID_PROPS} />
