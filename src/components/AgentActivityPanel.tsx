@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, fmtBytes } from '../lib/quality-utils.js';
+import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
@@ -125,7 +125,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       <span className="mono-xs" style={{
                         color: errColor,
                       }}>
-                        {agent.errors > 0 ? `${(agent.errorRate * 100).toFixed(1)}%` : '\u2014'}
+                        {agent.errors > 0 ? formatPercent(agent.errorRate * 100) : '\u2014'}
                       </span>
                       {agent.errors > 0 && (
                         <span className="text-muted text-xs">
@@ -342,7 +342,7 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
         { label: 'Invocations', value: totalInvocations.toLocaleString() },
         {
           label: 'Error Rate',
-          value: totalInvocations > 0 ? `${overallErrorRate.toFixed(1)}%` : '\u2014',
+          value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
           color: overallErrorRate === 0
             ? 'var(--status-healthy)'
             : overallErrorRate < ERROR_RATE_WARNING_THRESHOLD * 100

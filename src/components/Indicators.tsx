@@ -1,5 +1,6 @@
 import type { MetricTrend, ConfidenceIndicator } from '../types.js';
 import { STATUS_SHAPES, CONFIDENCE_SYMBOLS } from '../lib/symbols.js';
+import { formatPercent } from '../lib/quality-utils.js';
 
 export function StatusBadge({ status }: { status: string }) {
   const shape = STATUS_SHAPES[status] ?? STATUS_SHAPES.no_data;
@@ -16,8 +17,8 @@ export function TrendIndicator({ trend }: { trend?: MetricTrend }) {
   const pct = trend.percentChange ?? 0;
   const sign = pct > 0 ? '+' : '';
   return (
-    <span className={`trend inline-flex-center ${trend.direction}`} aria-label={`Trend: ${trend.direction}, ${sign}${pct.toFixed(1)}%`}>
-      {arrow} {sign}{pct.toFixed(1)}%
+    <span className={`trend inline-flex-center ${trend.direction}`} aria-label={`Trend: ${trend.direction}, ${sign}${formatPercent(pct)}`}>
+      {arrow} {sign}{formatPercent(pct)}
       {trend.lowSampleWarning && <span title="Low sample count"> *</span>}
     </span>
   );

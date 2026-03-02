@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { PipelineStage, PipelineDropoff } from '../types.js';
 import { EmptyState } from './EmptyState.js';
+import { formatPercent } from '../lib/quality-utils.js';
 
 interface PipelineFunnelProps {
   stages: PipelineStage[];
@@ -17,7 +18,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
     <div role="region" aria-label="Evaluation pipeline funnel">
       <div className="flex-center mb-3 gap-2">
         <span className="mono-xl font-semibold">
-          {overallConversionPercent.toFixed(1)}%
+          {formatPercent(overallConversionPercent)}
         </span>
         <span className="text-secondary text-base">overall conversion</span>
       </div>
@@ -67,7 +68,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                   paddingLeft: 10,
                   margin: '2px 0',
                 }}>
-                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({dropoff.dropoffPercent.toFixed(1)}% drop)
+                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
                 </div>
               )}
             </div>
@@ -86,7 +87,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
               <td>{stage.displayName}</td>
               <td>{stage.entryCount}</td>
               <td>{stage.exitCount}</td>
-              <td>{dropoffs[idx] != null ? `${dropoffs[idx].dropoffPercent.toFixed(1)}%` : '\u2014'}</td>
+              <td>{dropoffs[idx] != null ? formatPercent(dropoffs[idx].dropoffPercent) : '\u2014'}</td>
             </tr>
           ))}
         </tbody>

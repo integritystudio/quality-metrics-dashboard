@@ -1,6 +1,6 @@
 import { memo, useState, useMemo } from 'react';
 import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural } from '../lib/quality-utils.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
 interface CoverageGridProps {
@@ -42,7 +42,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       {/* Summary bar */}
       <div className="flex-center mb-3 gap-3">
         <span className="mono-xl font-semibold">
-          {overallCoveragePercent.toFixed(1)}%
+          {formatPercent(overallCoveragePercent)}
         </span>
         <span className="text-secondary text-base">
           coverage ({metrics.length} metrics x {inputs.length} inputs)
@@ -152,7 +152,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           <ul className="m-0 text-xs" style={{ paddingLeft: 20 }}>
             {gaps.map(gap => (
               <li key={gap.metric} className="mb-1">
-                <strong>{gap.metric}</strong>: {gap.coveragePercent.toFixed(0)}% covered
+                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
                 ({plural(gap.missingInputs.length, 'input')} missing)
               </li>
             ))}

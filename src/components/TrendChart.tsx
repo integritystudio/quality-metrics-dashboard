@@ -11,6 +11,7 @@ import {
 import type { MetricDynamics } from '../types.js';
 import type { MetricTrend } from '../types.js';
 import { CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
 interface TrendChartProps {
@@ -165,7 +166,7 @@ export function TrendChart({
           <div>
             <span className="font-semibold">Confidence:</span>{' '}
             <span className="mono">
-              {(dynamics.confidence * 100).toFixed(0)}%
+              {formatPercent(dynamics.confidence * 100, 0)}
             </span>
           </div>
         </div>

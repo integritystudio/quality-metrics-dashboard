@@ -1,4 +1,4 @@
-import { scoreColor } from '../lib/quality-utils.js';
+import { scoreColor, formatPercent } from '../lib/quality-utils.js';
 import type { CompositeQualityIndex, CQIContribution } from '../types.js';
 
 function segmentColor(contribution: CQIContribution): string {
@@ -42,7 +42,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
           {cqi.contributions.map((c) => (
             <div
               key={c.metric}
-              title={`${c.metric}: ${c.rawScore.toFixed(2)} (weight ${(c.weight * 100).toFixed(0)}%)`}
+              title={`${c.metric}: ${c.rawScore.toFixed(2)} (weight ${formatPercent(c.weight * 100, 0)})`}
               style={{
                 flex: c.weight,
                 backgroundColor: segmentColor(c),
@@ -69,7 +69,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
             <tr key={c.metric}>
               <td>{c.metric}</td>
               <td>{c.rawScore.toFixed(2)}</td>
-              <td>{(c.weight * 100).toFixed(0)}%</td>
+              <td>{formatPercent(c.weight * 100, 0)}</td>
               <td>{c.contribution.toFixed(3)}</td>
             </tr>
           ))}

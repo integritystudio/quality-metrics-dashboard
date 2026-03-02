@@ -1,5 +1,5 @@
 import type { ConfidenceIndicator } from '../types.js';
-import { SCORE_COLORS, formatScore, type ScoreColorBand } from '../lib/quality-utils.js';
+import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
 import { BarIndicator } from './BarIndicator.js';
 
 
@@ -75,7 +75,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
             <span className="mono" style={{
               color: evaluatorAgreement > 0.8 ? SCORE_COLORS.excellent : evaluatorAgreement > 0.5 ? SCORE_COLORS.adequate : SCORE_COLORS.failing,
             }}>
-              {(evaluatorAgreement * 100).toFixed(0)}%
+              {formatPercent(evaluatorAgreement * 100, 0)}
             </span>
           </>
         )}
