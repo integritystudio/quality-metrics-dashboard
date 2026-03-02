@@ -9,7 +9,7 @@ interface SectionBlockProps {
 export function SectionBlock({ label, className, children }: SectionBlockProps) {
   return (
     <div className={`mb-3${className ? ` ${className}` : ''}`}>
-      <div className="section-label mb-1-5">{label}</div>
+      <div className="uppercase text-xs text-muted mb-1-5">{label}</div>
       {children}
     </div>
   );

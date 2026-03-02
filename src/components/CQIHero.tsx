@@ -13,8 +13,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
     <div
       role="region"
       aria-label={`Composite Quality Index: ${displayValue}`}
-      className="card text-center"
-      style={{ padding: 24 }}
+      className="card text-center p-6"
     >
       <div className="field-label text-secondary text-xs mb-1">
         Composite Quality Index

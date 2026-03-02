@@ -11,10 +11,9 @@ interface ColoredChipProps {
 export function ColoredChip({ color, title, className, style, children }: ColoredChipProps) {
   return (
     <span
-      className={`mono-xs chip${className ? ` ${className}` : ''}`}
+      className={`mono-xs chip d-inline-block${className ? ` ${className}` : ''}`}
       title={title}
       style={{
-        display: 'inline-block',
         backgroundColor: `${color}20`,
         color,
         ...style,

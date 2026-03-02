@@ -39,10 +39,9 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
         listStyle: 'none',
         transition: 'background 0.15s',
       }}>
-        <span className="mono text-2xs" style={{
+        <span className="mono text-2xs d-inline-block" style={{
           color: railColor,
           transition: 'transform 0.2s',
-          display: 'inline-block',
         }}>{CHEVRON_RIGHT}</span>
         <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
         {badge && (

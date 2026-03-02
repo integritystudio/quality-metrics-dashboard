@@ -63,7 +63,7 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
             {overallStatus === 'no_data' && 'No evaluation data available'}
           </span>
         </div>
-        <div className="pipeline-stats">
+        <div className="pipeline-stats d-flex gap-6">
           <div className="pipeline-stat flex-center">
             Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
           </div>
@@ -77,7 +77,7 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
           )}
         </div>
       </div>
-      <div className="summary-counts">
+      <div className="d-flex gap-6">
         <div className="summary-count">
           <div className="value">{summary.totalMetrics}</div>
           <div className="label text-secondary text-xs">Total</div>

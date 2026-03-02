@@ -17,7 +17,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
           <StatusBadge status={data.overallStatus} />
           <span>Executive Summary</span>
         </div>
-        <div className="summary-counts">
+        <div className="d-flex gap-6">
           <div className="summary-count">
             <div className="value">{data.summary.totalMetrics}</div>
             <div className="label text-secondary text-xs">Total</div>
@@ -59,7 +59,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       <ViewSection title="Metric Statuses">
         <div className="metric-grid">
           {data.metricStatuses.map((m: { name: string; displayName: string; status: string }) => (
-            <div key={m.name} className="card d-flex justify-between" style={{ padding: 12, alignItems: 'center' }}>
+            <div key={m.name} className="card d-flex justify-between flex-center p-4">
               <span>{m.displayName}</span>
               <StatusBadge status={m.status} />
             </div>

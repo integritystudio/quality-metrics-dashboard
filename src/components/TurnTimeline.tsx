@@ -29,13 +29,12 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
         return (
           <div
             key={turn.turnIndex}
+            className="p-4 shrink-0"
             style={{
               minWidth: 120,
-              padding: 12,
-              borderRadius: 8,
+              borderRadius: 'var(--radius-lg)',
               border: `2px solid ${color}`,
               background: 'var(--bg-elevated)',
-              flexShrink: 0,
             }}
           >
             <div className="flex-center mb-1-5 justify-between">

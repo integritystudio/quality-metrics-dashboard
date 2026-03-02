@@ -102,8 +102,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       {hasLinks && (
                         <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
                       )}
-                      <span className="shrink-0" style={{
-                        display: 'inline-block',
+                      <span className="shrink-0 d-inline-block" style={{
                         width: 8,
                         height: 8,
                         borderRadius: '50%',

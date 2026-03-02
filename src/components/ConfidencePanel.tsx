@@ -83,7 +83,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
 
       {hasMultiJudge && (
         <div>
-          <div className="section-label mb-1-5">Judge Panel</div>
+          <div className="uppercase text-xs text-muted mb-1-5">Judge Panel</div>
           <div className="agreement-grid">
             <span className="ag-header">Evaluator</span>
             <span className="ag-header">Score</span>

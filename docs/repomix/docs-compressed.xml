@@ -322,7 +322,7 @@ observe()
 unobserve()
 disconnect()</file><file path="src/components/MetricGrid.tsx">import type { QualityMetricResult } from &apos;../types.js&apos;;
 import { MetricCard } from &apos;./MetricCard.js&apos;;</file><file path="src/components/RoleSelector.tsx">import { useLocation } from &apos;wouter&apos;;
-import type { RoleViewType } from &apos;../types.js&apos;;</file><file path="src/components/ScoreHistogram.tsx"></file><file path="src/components/Sparkline.tsx">import { memo } from &apos;react&apos;;
+import type { RoleViewType } from &apos;../types.js&apos;;</file><file path="src/components/Sparkline.tsx">import { memo } from &apos;react&apos;;
 ⋮----
 interface SparklineProps {
   /** Array of score values (nulls allowed for gaps) */
@@ -347,18 +347,7 @@ interface SparklineProps {
 ⋮----
 /** Accessible label for the sparkline */
 ⋮----
-function SparklineInner(</file><file path="src/components/SplitPane.tsx">import { useState, useCallback, useRef, useEffect, type ReactNode } from &apos;react&apos;;
-⋮----
-interface SplitPaneProps {
-  left: ReactNode;
-  right: ReactNode;
-  initialSplit?: number;
-  minPct?: number;
-  maxPct?: number;
-}
-⋮----
-function onMouseMove(e: MouseEvent)
-function onMouseUp()</file><file path="src/vite-env.d.ts">/// &lt;reference types=&quot;vite/client&quot; /&gt;</file><file path="src/__tests__/api-agents.test.ts">/**
+function SparklineInner(</file><file path="src/vite-env.d.ts">/// &lt;reference types=&quot;vite/client&quot; /&gt;</file><file path="src/__tests__/api-agents.test.ts">/**
  * API route tests: /api/agents and /api/agents/:sessionId.
  * Approach A — Node routes with mocked data-loader and dist dependencies.
  *
@@ -755,42 +744,14 @@ interface ColoredChipProps {
   children: ReactNode;
 }
 ⋮----
-export function ColoredChip(</file><file path="src/components/DetailPageHeader.tsx">import type { ReactNode } from &apos;react&apos;;
+export function ColoredChip(</file><file path="src/components/EmptyState.tsx">export function EmptyState(</file><file path="src/components/ExpandChevron.tsx">import { CHEVRON_RIGHT } from &apos;../lib/symbols.js&apos;;
 ⋮----
-interface DetailPageHeaderProps {
-  title: string;
-  id?: string;
-  children?: ReactNode;
-}</file><file path="src/components/EmptyState.tsx">export function EmptyState(</file><file path="src/components/ExpandChevron.tsx">import { CHEVRON_RIGHT } from &apos;../lib/symbols.js&apos;;
-⋮----
-export function ExpandChevron(</file><file path="src/components/Layout.tsx">import type { ReactNode } from &apos;react&apos;;
-import type { Period } from &apos;../types.js&apos;;
-import { ShortcutOverlay } from &apos;./ShortcutOverlay.js&apos;;
-⋮----
-export function Layout({
-  period,
-  onPeriodChange,
-  children,
-}: {
-  period: Period;
-onPeriodChange: (p: Period)
-⋮----
-onClick=</file><file path="src/components/MonoTableHead.tsx">export interface TableColumn {
+export function ExpandChevron(</file><file path="src/components/MonoTableHead.tsx">export interface TableColumn {
   label: string;
   align?: &apos;left&apos; | &apos;right&apos; | &apos;center&apos;;
 }
 ⋮----
-export function MonoTableHead(</file><file path="src/components/PageShell.tsx">import { type ReactNode } from &apos;react&apos;;
-import { Link } from &apos;wouter&apos;;
-⋮----
-interface PageShellProps {
-  isLoading: boolean;
-  error: Error | null | undefined;
-  skeletonHeight?: number;
-  children: ReactNode;
-}
-⋮----
-export function PageShell(</file><file path="src/components/ScoreChip.tsx">import type { CSSProperties, ReactNode } from &apos;react&apos;;
+export function MonoTableHead(</file><file path="src/components/ScoreChip.tsx">import type { CSSProperties, ReactNode } from &apos;react&apos;;
 import { scoreColor, type ScoreDirection } from &apos;../lib/quality-utils.js&apos;;
 import { ColoredChip } from &apos;./ColoredChip.js&apos;;
 ⋮----
@@ -801,7 +762,7 @@ interface ScoreChipProps {
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
-}</file><file path="src/components/SectionBlock.tsx">import type { ReactNode } from &apos;react&apos;;
+}</file><file path="src/components/ScoreHistogram.tsx"></file><file path="src/components/SectionBlock.tsx">import type { ReactNode } from &apos;react&apos;;
 ⋮----
 interface SectionBlockProps {
   label: string;
@@ -1137,54 +1098,46 @@ import { traceRoutes } from &apos;./routes/traces.js&apos;;
 import { agentRoutes } from &apos;./routes/agents.js&apos;;
 import { sessionRoutes } from &apos;./routes/sessions.js&apos;;
 import { qualityRoutes } from &apos;./routes/quality.js&apos;;
-import { API_HOST, API_PORT } from &apos;./config.js&apos;;</file><file path="src/components/views/AuditorView.tsx">import type { AuditorView as AuditorViewType } from &apos;../../types.js&apos;;
-import { MetricGrid } from &apos;../MetricGrid.js&apos;;
-import { AlertList } from &apos;../AlertList.js&apos;;
-import { SLATable } from &apos;../SLATable.js&apos;;
-import { StatCard } from &apos;../StatCard.js&apos;;
-import { ViewSection } from &apos;../Section.js&apos;;</file><file path="src/components/AlertList.tsx">import { Link } from &apos;wouter&apos;;
-import type { TriggeredAlert } from &apos;../types.js&apos;;
+import { API_HOST, API_PORT } from &apos;./config.js&apos;;</file><file path="src/components/DetailPageHeader.tsx">import type { ReactNode } from &apos;react&apos;;
 ⋮----
-type AlertWithMeta = TriggeredAlert &amp; { metricName?: string };
+interface DetailPageHeaderProps {
+  title: string;
+  id?: string;
+  children?: ReactNode;
+}</file><file path="src/components/FreqBar.tsx">import { BarIndicator } from &apos;./BarIndicator.js&apos;;</file><file path="src/components/Layout.tsx">import type { ReactNode } from &apos;react&apos;;
+import type { Period } from &apos;../types.js&apos;;
+import { ShortcutOverlay } from &apos;./ShortcutOverlay.js&apos;;
 ⋮----
-function SimpleAlertItem(</file><file path="src/components/ComplianceFrameworkMap.tsx"></file><file path="src/components/ConfidencePanel.tsx">import type { ConfidenceIndicator } from &apos;../types.js&apos;;
-import { SCORE_COLORS, type ScoreColorBand } from &apos;../lib/quality-utils.js&apos;;
-import { BarIndicator } from &apos;./BarIndicator.js&apos;;
+export function Layout({
+  period,
+  onPeriodChange,
+  children,
+}: {
+  period: Period;
+onPeriodChange: (p: Period)
 ⋮----
-interface EvaluatorScore {
-  evaluator: string;
-  score: number;
-  label?: string;
+onClick=</file><file path="src/components/MetaItem.tsx"></file><file path="src/components/PageShell.tsx">import { type ReactNode } from &apos;react&apos;;
+import { Link } from &apos;wouter&apos;;
+⋮----
+interface PageShellProps {
+  isLoading: boolean;
+  error: Error | null | undefined;
+  skeletonHeight?: number;
+  children: ReactNode;
 }
 ⋮----
-interface ConfidencePanelProps {
-  confidence: ConfidenceIndicator;
-  /** Per-evaluator scores for multi-judge display */
-  evaluatorScores?: EvaluatorScore[];
+export function PageShell(</file><file path="src/components/SplitPane.tsx">import { useState, useCallback, useRef, useEffect, type ReactNode } from &apos;react&apos;;
+⋮----
+interface SplitPaneProps {
+  left: ReactNode;
+  right: ReactNode;
+  initialSplit?: number;
+  minPct?: number;
+  maxPct?: number;
 }
 ⋮----
-/** Per-evaluator scores for multi-judge display */
-⋮----
-function levelColor(level: string): string
-⋮----
-function levelShape(level: string): string
-⋮----
-if (level === &apos;high&apos;) return &apos;\u25CF&apos;; // ●
-if (level === &apos;medium&apos;) return &apos;\u25D0&apos;; // ◐
-return &apos;\u25CB&apos;; // ○</file><file path="src/components/FreqBar.tsx">import { BarIndicator } from &apos;./BarIndicator.js&apos;;</file><file path="src/components/MetaItem.tsx"></file><file path="src/components/PipelineFunnel.tsx">import { memo } from &apos;react&apos;;
-import type { PipelineStage, PipelineDropoff } from &apos;../types.js&apos;;
-⋮----
-interface PipelineFunnelProps {
-  stages: PipelineStage[];
-  dropoffs: PipelineDropoff[];
-  overallConversionPercent: number;
-}
-⋮----
-{/* Stage bar */}
-⋮----
-{/* Drop-off indicator */}
-⋮----
-{/* Screen reader summary table */}</file><file path="src/components/Stat.tsx">export function Stat(</file><file path="src/components/StatCard.tsx">import type { ReactNode } from &apos;react&apos;;
+function onMouseMove(e: MouseEvent)
+function onMouseUp()</file><file path="src/components/Stat.tsx">export function Stat(</file><file path="src/components/StatCard.tsx">import type { ReactNode } from &apos;react&apos;;
 ⋮----
 interface StatCardProps {
   value: ReactNode;
@@ -1380,37 +1333,42 @@ import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from &apos;../../li
 /**
  * GET /api/trends
  * Returns trend summary for all metrics (latest percentiles + count).
- */</file><file path="src/components/ChainOfThoughtPanel.tsx">import { MetaItem } from &apos;./MetaItem.js&apos;;
+ */</file><file path="src/components/views/AuditorView.tsx">import type { AuditorView as AuditorViewType } from &apos;../../types.js&apos;;
+import { MetricGrid } from &apos;../MetricGrid.js&apos;;
+import { AlertList } from &apos;../AlertList.js&apos;;
+import { SLATable } from &apos;../SLATable.js&apos;;
+import { StatCard } from &apos;../StatCard.js&apos;;
+import { ViewSection } from &apos;../Section.js&apos;;</file><file path="src/components/AlertList.tsx">import { Link } from &apos;wouter&apos;;
+import type { TriggeredAlert } from &apos;../types.js&apos;;
+⋮----
+type AlertWithMeta = TriggeredAlert &amp; { metricName?: string };
+⋮----
+function SimpleAlertItem(</file><file path="src/components/ChainOfThoughtPanel.tsx">import { MetaItem } from &apos;./MetaItem.js&apos;;
 ⋮----
 interface ChainOfThoughtPanelProps {
   explanation?: string;
   evaluator?: string;
-}</file><file path="src/components/Indicators.tsx">import type { MetricTrend, ConfidenceIndicator } from &apos;../types.js&apos;;
-import { STATUS_SHAPES, CONFIDENCE_SYMBOLS } from &apos;../lib/symbols.js&apos;;
-⋮----
-export function StatusBadge(
-⋮----
-export function TrendIndicator(
-⋮----
-export function ConfidenceBadge(</file><file path="src/components/MetadataRow.tsx">import type { ReactNode } from &apos;react&apos;;
+}</file><file path="src/components/ComplianceFrameworkMap.tsx"></file><file path="src/components/MetadataRow.tsx">import type { ReactNode } from &apos;react&apos;;
 ⋮----
 /** Horizontal label–value row. Renders nothing when value is nullish or an empty string. */
 export function MetadataRow({ label, value, mono }: {
   label: string;
   value?: ReactNode;
   mono?: boolean;
-})</file><file path="src/components/MetricCard.tsx">import { memo } from &apos;react&apos;;
-import { Link } from &apos;wouter&apos;;
-import type { QualityMetricResult, WorstExplanation } from &apos;../types.js&apos;;
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from &apos;./Indicators.js&apos;;
-import { ScoreBadge } from &apos;./ScoreBadge.js&apos;;
-import { Sparkline } from &apos;./Sparkline.js&apos;;
-import { inferScoreDirection, truncateText, plural, formatScore } from &apos;../lib/quality-utils.js&apos;;
+})</file><file path="src/components/PipelineFunnel.tsx">import { memo } from &apos;react&apos;;
+import type { PipelineStage, PipelineDropoff } from &apos;../types.js&apos;;
 ⋮----
-function MetricCardInner({ metric, sparklineData }: {
-  metric: QualityMetricResult;
-  sparklineData?: (number | null)[];
-⋮----</file><file path="src/components/SyncEmptyState.tsx">import { type ReactNode } from &apos;react&apos;;
+interface PipelineFunnelProps {
+  stages: PipelineStage[];
+  dropoffs: PipelineDropoff[];
+  overallConversionPercent: number;
+}
+⋮----
+{/* Stage bar */}
+⋮----
+{/* Drop-off indicator */}
+⋮----
+{/* Screen reader summary table */}</file><file path="src/components/SyncEmptyState.tsx">import { type ReactNode } from &apos;react&apos;;
 ⋮----
 interface SyncEmptyStateProps {
   title: string;
@@ -1680,52 +1638,54 @@ function computeSparklineData(
   buckets: number,
 ): (number | null)[]
 ⋮----
-// Compute sparkline data (24 time buckets per metric)</file><file path="src/components/CorrelationHeatmap.tsx">import { scaleSequential } from &apos;d3-scale&apos;;
-import { interpolateRdYlGn } from &apos;d3-scale-chromatic&apos;;
-import type { CorrelationFeature } from &apos;../types.js&apos;;
+// Compute sparkline data (24 time buckets per metric)</file><file path="src/components/ConfidencePanel.tsx">import type { ConfidenceIndicator } from &apos;../types.js&apos;;
+import { SCORE_COLORS, type ScoreColorBand } from &apos;../lib/quality-utils.js&apos;;
+import { BarIndicator } from &apos;./BarIndicator.js&apos;;
 ⋮----
-interface CorrelationHeatmapProps {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-  onCellClick?: (rowMetric: string, colMetric: string) =&gt; void;
+interface EvaluatorScore {
+  evaluator: string;
+  score: number;
+  label?: string;
 }
 ⋮----
-function shortName(metric: string): string
+interface ConfidencePanelProps {
+  confidence: ConfidenceIndicator;
+  /** Per-evaluator scores for multi-judge display */
+  evaluatorScores?: EvaluatorScore[];
+}
 ⋮----
-/**
- * Returns black or white text for WCAG 4.5:1 contrast against the
- * interpolateRdYlGn background color for a given pearsonR value.
- * Uses relative luminance per WCAG 2.1 contrast ratio formula.
- */
-function contrastText(pearsonR: number): string
+/** Per-evaluator scores for multi-judge display */
 ⋮----
-// Parse &quot;rgb(r, g, b)&quot; string from d3
+function levelColor(level: string): string
 ⋮----
-// sRGB relative luminance (WCAG 2.1)
-const toLinear = (c: number) =&gt;
+function levelShape(level: string): string
 ⋮----
-// WCAG contrast ratio: (L1 + 0.05) / (L2 + 0.05)
-// White text (#fff, L=1.0) needs ratio &gt;= 4.5 → L_bg &lt;= ~0.18
-// Black text (#111, L≈0.012) needs ratio &gt;= 4.5 → L_bg &gt;= ~0.10
+if (level === &apos;high&apos;) return &apos;\u25CF&apos;; // ●
+if (level === &apos;medium&apos;) return &apos;\u25D0&apos;; // ◐
+return &apos;\u25CB&apos;; // ○
 ⋮----
-function lookupCorrelation(
-  correlations: CorrelationFeature[],
-  a: string,
-  b: string,
-): CorrelationFeature | undefined
-⋮----
-{/* Top-left empty corner */}
-⋮----
-{/* Column headers */}
-⋮----
-{/* Row header */}
-⋮----
-{/* Data cells */}</file><file path="src/components/EvaluationDetail.tsx">import { useState } from &apos;react&apos;;
+function VarianceBar(</file><file path="src/components/EvaluationDetail.tsx">import { useState } from &apos;react&apos;;
 import { EvaluationTable, type EvalRow } from &apos;./EvaluationTable.js&apos;;
 import { useMetricEvaluations } from &apos;../hooks/useMetricEvaluations.js&apos;;
-import type { Period } from &apos;../types.js&apos;;</file><file path="src/components/ShortcutOverlay.tsx">import { useKeyboardNav } from &apos;../contexts/KeyboardNavContext.js&apos;;
+import type { Period } from &apos;../types.js&apos;;</file><file path="src/components/Indicators.tsx">import type { MetricTrend, ConfidenceIndicator } from &apos;../types.js&apos;;
+import { STATUS_SHAPES, CONFIDENCE_SYMBOLS } from &apos;../lib/symbols.js&apos;;
 ⋮----
-export function ShortcutOverlay()</file><file path="src/hooks/useCoverage.ts">import type { Period, CoverageHeatmap } from &apos;../types.js&apos;;
+export function StatusBadge(
+⋮----
+export function TrendIndicator(
+⋮----
+export function ConfidenceBadge(</file><file path="src/components/MetricCard.tsx">import { memo } from &apos;react&apos;;
+import { Link } from &apos;wouter&apos;;
+import type { QualityMetricResult, WorstExplanation } from &apos;../types.js&apos;;
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from &apos;./Indicators.js&apos;;
+import { ScoreBadge } from &apos;./ScoreBadge.js&apos;;
+import { Sparkline } from &apos;./Sparkline.js&apos;;
+import { inferScoreDirection, truncateText, plural, formatScore } from &apos;../lib/quality-utils.js&apos;;
+⋮----
+function MetricCardInner({ metric, sparklineData }: {
+  metric: QualityMetricResult;
+  sparklineData?: (number | null)[];
+⋮----</file><file path="src/hooks/useCoverage.ts">import type { Period, CoverageHeatmap } from &apos;../types.js&apos;;
 import { API_BASE, DEFAULT_INPUT_KEY, type InputKey } from &apos;../lib/constants.js&apos;;
 import { useApiQuery } from &apos;./useApiQuery.js&apos;;
 ⋮----
@@ -1811,12 +1771,7 @@ import type { CorrelationFeature, Period } from &apos;../types.js&apos;;
 interface CorrelationsResponse {
   correlations: CorrelationFeature[];
   metrics: string[];
-}</file><file path="src/pages/CoveragePage.tsx">import { useState } from &apos;react&apos;;
-import { CoverageGrid } from &apos;../components/CoverageGrid.js&apos;;
-import { useCoverage } from &apos;../hooks/useCoverage.js&apos;;
-import { PageShell } from &apos;../components/PageShell.js&apos;;
-import { DEFAULT_INPUT_KEY, type InputKey } from &apos;../lib/constants.js&apos;;
-import type { Period } from &apos;../types.js&apos;;</file><file path="src/api/routes/coverage.ts">import { Hono } from &apos;hono&apos;;
+}</file><file path="src/api/routes/coverage.ts">import { Hono } from &apos;hono&apos;;
 import { computeCoverageHeatmap } from &apos;../../../../dist/lib/quality-metrics.js&apos;;
 import { sanitizeErrorForResponse } from &apos;../../../../dist/lib/error-sanitizer.js&apos;;
 import type { EvaluationResult } from &apos;../../../../dist/backends/index.js&apos;;
@@ -1837,12 +1792,7 @@ function filterJudgeEvaluations(
  * Query params:
  *   period: &apos;24h&apos; | &apos;7d&apos; | &apos;30d&apos; (default: &apos;7d&apos;)
  *   inputKey: &apos;traceId&apos; | &apos;sessionId&apos; (default: &apos;traceId&apos;)
- */</file><file path="src/components/views/OperatorView.tsx">import type { OperatorView as OperatorViewType } from &apos;../../types.js&apos;;
-import { StatusBadge, TrendIndicator } from &apos;../Indicators.js&apos;;
-import { AlertList } from &apos;../AlertList.js&apos;;
-import { MetricGrid } from &apos;../MetricGrid.js&apos;;
-import { ViewSection } from &apos;../Section.js&apos;;
-import { plural } from &apos;../../lib/quality-utils.js&apos;;</file><file path="src/components/AgentScoreSummary.tsx">import { ScoreBadge } from &apos;./ScoreBadge.js&apos;;
+ */</file><file path="src/components/AgentScoreSummary.tsx">import { ScoreBadge } from &apos;./ScoreBadge.js&apos;;
 ⋮----
 interface AgentScoreSummaryProps {
   handoffScore: number;
@@ -1866,29 +1816,7 @@ interface HandoffCardProps {
   handoff: HandoffEvaluation;
 }
 ⋮----
-export function HandoffCard(</file><file path="src/components/HealthOverview.tsx">import type { QualityDashboardSummary } from &apos;../types.js&apos;;
-import { StatusBadge } from &apos;./Indicators.js&apos;;
-import { formatTimestamp } from &apos;../lib/quality-utils.js&apos;;
-⋮----
-interface PipelineHealth {
-  evalVolume: number;
-  lastEvalAge: string | null;
-  evalRate: string;
-}
-⋮----
-function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth
-⋮----
-// Find most recent evaluation timestamp from worst explanations
-⋮----
-// Compute rate based on period
-⋮----
-let periodHours = 168; // default 7d
-⋮----
-function formatVolume(n: number): string
-⋮----
-export function HealthOverview(
-⋮----
-Eval Volume: &lt;span className=&quot;stat-value&quot;&gt;</file><file path="src/components/ProvenancePanel.tsx">import { useCallback } from &apos;react&apos;;
+export function HandoffCard(</file><file path="src/components/ProvenancePanel.tsx">import { useCallback } from &apos;react&apos;;
 import { Link } from &apos;wouter&apos;;
 ⋮----
 interface EvaluatorTypeCounts {
@@ -1918,7 +1846,85 @@ interface ProvenancePanelProps {
 ⋮----
 /** Raw evaluation object for JSON export */
 ⋮----
-/** Evaluator type breakdown counts */</file><file path="src/components/SpanTree.tsx">import type { CSSProperties } from &apos;react&apos;;
+/** Evaluator type breakdown counts */</file><file path="src/components/ShortcutOverlay.tsx">import { useKeyboardNav } from &apos;../contexts/KeyboardNavContext.js&apos;;
+⋮----
+export function ShortcutOverlay()</file><file path="src/pages/CoveragePage.tsx">import { useState } from &apos;react&apos;;
+import { CoverageGrid } from &apos;../components/CoverageGrid.js&apos;;
+import { useCoverage } from &apos;../hooks/useCoverage.js&apos;;
+import { PageShell } from &apos;../components/PageShell.js&apos;;
+import { DEFAULT_INPUT_KEY, type InputKey } from &apos;../lib/constants.js&apos;;
+import type { Period } from &apos;../types.js&apos;;</file><file path="src/components/views/OperatorView.tsx">import type { OperatorView as OperatorViewType } from &apos;../../types.js&apos;;
+import { StatusBadge, TrendIndicator } from &apos;../Indicators.js&apos;;
+import { AlertList } from &apos;../AlertList.js&apos;;
+import { MetricGrid } from &apos;../MetricGrid.js&apos;;
+import { ViewSection } from &apos;../Section.js&apos;;
+import { plural } from &apos;../../lib/quality-utils.js&apos;;</file><file path="src/components/CorrelationHeatmap.tsx">import { scaleSequential } from &apos;d3-scale&apos;;
+import { interpolateRdYlGn } from &apos;d3-scale-chromatic&apos;;
+import type { CorrelationFeature } from &apos;../types.js&apos;;
+⋮----
+interface CorrelationHeatmapProps {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) =&gt; void;
+}
+⋮----
+function shortName(metric: string): string
+⋮----
+/**
+ * Returns black or white text for WCAG 4.5:1 contrast against the
+ * interpolateRdYlGn background color for a given pearsonR value.
+ * Uses relative luminance per WCAG 2.1 contrast ratio formula.
+ */
+function contrastText(pearsonR: number): string
+⋮----
+// Parse &quot;rgb(r, g, b)&quot; string from d3
+⋮----
+// sRGB relative luminance (WCAG 2.1)
+const toLinear = (c: number) =&gt;
+⋮----
+// WCAG contrast ratio: (L1 + 0.05) / (L2 + 0.05)
+// White text (#fff, L=1.0) needs ratio &gt;= 4.5 → L_bg &lt;= ~0.18
+// Black text (#111, L≈0.012) needs ratio &gt;= 4.5 → L_bg &gt;= ~0.10
+⋮----
+function lookupCorrelation(
+  correlations: CorrelationFeature[],
+  a: string,
+  b: string,
+): CorrelationFeature | undefined
+⋮----
+{/* Top-left empty corner */}
+⋮----
+{/* Column headers */}
+⋮----
+{/* Row header */}
+⋮----
+{/* Data cells */}</file><file path="src/components/HealthOverview.tsx">import type { QualityDashboardSummary } from &apos;../types.js&apos;;
+import { StatusBadge } from &apos;./Indicators.js&apos;;
+import { formatTimestamp } from &apos;../lib/quality-utils.js&apos;;
+⋮----
+interface PipelineHealth {
+  evalVolume: number;
+  lastEvalAge: string | null;
+  evalRate: string;
+}
+⋮----
+function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth
+⋮----
+// Find most recent evaluation timestamp from worst explanations
+⋮----
+// Compute rate based on period
+⋮----
+let periodHours = 168; // default 7d
+⋮----
+function formatVolume(n: number): string
+⋮----
+export function HealthOverview(
+⋮----
+Eval Volume: &lt;span className=&quot;stat-value&quot;&gt;</file><file path="src/components/QualityLiveIndicator.tsx">import { useQualityLive } from &apos;../hooks/useQualityLive.js&apos;;
+import { formatTimestamp } from &apos;../lib/quality-utils.js&apos;;
+import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW } from &apos;../lib/constants.js&apos;;
+⋮----
+function scoreToBadgeColor(score: number): string</file><file path="src/components/SpanTree.tsx">import type { CSSProperties } from &apos;react&apos;;
 import { plural } from &apos;../lib/quality-utils.js&apos;;
 import { EmptyState } from &apos;./EmptyState.js&apos;;
 ⋮----
@@ -1963,75 +1969,7 @@ import type { Period } from &apos;../types.js&apos;;
 import { usePipeline } from &apos;../hooks/usePipeline.js&apos;;
 import { PageShell } from &apos;../components/PageShell.js&apos;;
 import { LLM_SAMPLE_RATE } from &apos;../lib/constants.js&apos;;
-import type { Period } from &apos;../types.js&apos;;</file><file path="src/components/views/ExecutiveView.tsx">import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from &apos;../../types.js&apos;;
-import { StatusBadge } from &apos;../Indicators.js&apos;;
-import { CQIHero } from &apos;../CQIHero.js&apos;;
-import { StatCard } from &apos;../StatCard.js&apos;;
-import { ViewSection } from &apos;../Section.js&apos;;
-import { plural } from &apos;../../lib/quality-utils.js&apos;;
-⋮----
-interface ExtendedExecutiveView extends ExecutiveViewType {
-  cqi?: CompositeQualityIndex;
-}</file><file path="src/components/CoverageGrid.tsx">import { memo, useState, useMemo } from &apos;react&apos;;
-import type { CoverageCell, CoverageGap, CoverageStatus } from &apos;../types.js&apos;;
-import { truncateId, plural } from &apos;../lib/quality-utils.js&apos;;
-import { EmptyState } from &apos;./EmptyState.js&apos;;
-⋮----
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-⋮----
-// Limit displayed inputs to avoid huge grids
-⋮----
-{/* Summary bar */}
-⋮----
-{/* Legend */}
-⋮----
-{/* Grid */}
-⋮----
-{/* Header row */}
-⋮----
-{/* Data rows */}
-⋮----
-onMouseLeave=</file><file path="src/components/CQIHero.tsx">import { scoreColor } from &apos;../lib/quality-utils.js&apos;;
-import type { CompositeQualityIndex, CQIContribution } from &apos;../types.js&apos;;
-⋮----
-function segmentColor(contribution: CQIContribution): string
-⋮----
-export function CQIHero(
-⋮----
-{/* Screen reader breakdown table */}</file><file path="src/components/MetricCompare.tsx">import { TrendChart } from &apos;./TrendChart.js&apos;;
-import { useMetricDetail } from &apos;../hooks/useMetricDetail.js&apos;;
-import type { Period, MetricDynamics } from &apos;../types.js&apos;;
-⋮----
-interface MetricCompareProps {
-  metricName?: string;
-  period: Period;
-  availableMetrics: string[];
-  onMetricChange: (name: string) =&gt; void;
-}</file><file path="src/components/QualityLiveIndicator.tsx">import { useQualityLive } from &apos;../hooks/useQualityLive.js&apos;;
-import { formatTimestamp } from &apos;../lib/quality-utils.js&apos;;
-import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW } from &apos;../lib/constants.js&apos;;
-⋮----
-function scoreToBadgeColor(score: number): string</file><file path="src/components/ScoreBadge.tsx">import { Link } from &apos;wouter&apos;;
-import { scoreColorBand, truncateText, SCORE_COLORS, type ScoreDirection } from &apos;../lib/quality-utils.js&apos;;
-import { SCORE_SHAPES } from &apos;../lib/symbols.js&apos;;
-import { MetadataRow } from &apos;./MetadataRow.js&apos;;
-⋮----
-interface ScoreBadgeProps {
-  score: number | null;
-  metricName: string;
-  direction?: ScoreDirection;
-  label?: string;
-  evaluator?: string;
-  evaluatorType?: string;
-  explanation?: string;
-  traceId?: string;
-}</file><file path="src/pages/TraceDetailPage.tsx">import { useTrace } from &apos;../hooks/useTrace.js&apos;;
+import type { Period } from &apos;../types.js&apos;;</file><file path="src/pages/TraceDetailPage.tsx">import { useTrace } from &apos;../hooks/useTrace.js&apos;;
 import { SpanTree } from &apos;../components/SpanTree.js&apos;;
 import { EvaluationEventOverlay } from &apos;../components/EvaluationEventOverlay.js&apos;;
 import { DetailPageHeader } from &apos;../components/DetailPageHeader.js&apos;;
@@ -2074,104 +2012,37 @@ sessionCount: d.sessions.size,  // total unique sessions (invariant: &gt;= sessi
 ⋮----
 // Compute multi-agent evaluation
 ⋮----
-// Bulk-load evaluations for all traces in the session</file><file path="src/components/EvaluationExpandedRow.tsx">import { Link } from &apos;wouter&apos;;
-import { ScoreChip } from &apos;./ScoreChip.js&apos;;
-import { ColoredChip } from &apos;./ColoredChip.js&apos;;
-import { MetaItem } from &apos;./MetaItem.js&apos;;
-import { SectionBlock } from &apos;./SectionBlock.js&apos;;
-import type { EvalRow } from &apos;./EvaluationTable.js&apos;;
+// Bulk-load evaluations for all traces in the session</file><file path="src/components/CQIHero.tsx">import { scoreColor } from &apos;../lib/quality-utils.js&apos;;
+import type { CompositeQualityIndex, CQIContribution } from &apos;../types.js&apos;;
 ⋮----
-export function StepScoreChip({ step, score, explanation }: {
-  step: string | number;
-  score: number;
-  explanation?: string;
-})
+function segmentColor(contribution: CQIContribution): string
 ⋮----
-export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score }: {
-  toolName: string;
-  toolCorrect: boolean;
-  argsCorrect: boolean;
-  score: number;
-})
+export function CQIHero(
 ⋮----
-{/* back-link inline — uses mb-0 to reset default margin */}</file><file path="src/components/EvaluationTable.tsx">import { useState, Fragment } from &apos;react&apos;;
-import type { EvaluationResult } from &apos;../types.js&apos;;
-import {
-  createColumnHelper,
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getExpandedRowModel,
-  flexRender,
-  type SortingState,
-  type ColumnFiltersState,
-  type ExpandedState,
-  type SortingFn,
-  type FilterFn,
-} from &apos;@tanstack/react-table&apos;;
-import {
-  labelToOrdinal,
-  ordinalToCategory,
-  truncateText,
-  formatTimestamp,
-  type LabelFilterCategory,
-} from &apos;../lib/quality-utils.js&apos;;
-import { EvaluationExpandedRow } from &apos;./EvaluationExpandedRow.js&apos;;
-import { ExpandChevron } from &apos;./ExpandChevron.js&apos;;
-import { ColoredChip } from &apos;./ColoredChip.js&apos;;
-import { ScoreBadge } from &apos;./ScoreBadge.js&apos;;
+{/* Screen reader breakdown table */}</file><file path="src/components/MetricCompare.tsx">import { TrendChart } from &apos;./TrendChart.js&apos;;
+import { useMetricDetail } from &apos;../hooks/useMetricDetail.js&apos;;
+import type { Period, MetricDynamics } from &apos;../types.js&apos;;
 ⋮----
-export interface EvalRow {
-  score: number;
+interface MetricCompareProps {
+  metricName?: string;
+  period: Period;
+  availableMetrics: string[];
+  onMetricChange: (name: string) =&gt; void;
+}</file><file path="src/components/ScoreBadge.tsx">import { Link } from &apos;wouter&apos;;
+import { scoreColorBand, truncateText, SCORE_COLORS, type ScoreDirection } from &apos;../lib/quality-utils.js&apos;;
+import { SCORE_SHAPES } from &apos;../lib/symbols.js&apos;;
+import { MetadataRow } from &apos;./MetadataRow.js&apos;;
+⋮----
+interface ScoreBadgeProps {
+  score: number | null;
+  metricName: string;
+  direction?: ScoreDirection;
+  label?: string;
+  evaluator?: string;
+  evaluatorType?: string;
   explanation?: string;
   traceId?: string;
-  timestamp?: string;
-  evaluator?: string;
-  label?: string;
-  evaluatorType?: string;
-  spanId?: string;
-  sessionId?: string;
-  agentName?: string;
-  trajectoryLength?: number;
-  stepScores?: Array&lt;{ step: string | number; score: number; explanation?: string }&gt;;
-  toolVerifications?: Array&lt;{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }&gt;;
-}
-⋮----
-const labelSortFn: SortingFn&lt;EvalRow&gt; = (rowA, rowB) =&gt;
-⋮----
-const categoryFilterFn: FilterFn&lt;EvalRow&gt; = (row, _id, filterValue: LabelFilterCategory[]) =&gt;
-⋮----
-aria-label=
-⋮----
-&lt;span title=
-⋮----
-export function evalToRow(e: EvaluationResult): EvalRow
-⋮----
-const toggleCategory = (cat: LabelFilterCategory) =&gt;
-⋮----
-const sortDir = (colId: string): &apos;ascending&apos; | &apos;descending&apos; | &apos;none&apos; =&gt;
-⋮----
-aria-sort=
-⋮----
-&lt;tr className=
-⋮----
-&lt;td colSpan=</file><file path="src/components/TurnTimeline.tsx">import { scoreColor } from &apos;../lib/quality-utils.js&apos;;
-import { AGENT_PALETTE } from &apos;../lib/constants.js&apos;;
-import { BarIndicator } from &apos;./BarIndicator.js&apos;;
-import { EmptyState } from &apos;./EmptyState.js&apos;;
-import type { TurnLevelResult } from &apos;../types.js&apos;;
-⋮----
-function agentColor(agentName: string, agentNames: string[]): string
-⋮----
-interface TurnTimelineProps {
-  turns: TurnLevelResult[];
-  agentNames: string[];
-}
-⋮----
-{/* Relevance bar */}
-⋮----
-{/* Task progress bar */}</file><file path="src/lib/quality-utils.ts">/**
+}</file><file path="src/lib/quality-utils.ts">/**
  * Subset of quality-feature-engineering utilities needed by the frontend.
  * Extracted from parent src/lib/quality-feature-engineering.ts to allow
  * standalone Vite builds (CI) without the parent dist/ directory.
@@ -2272,23 +2143,56 @@ import { plural } from &apos;../lib/quality-utils.js&apos;;
 ⋮----
 {/* Turn timeline */}
 ⋮----
-{/* Handoffs */}</file><file path="src/components/Section.tsx">import type { ReactNode } from &apos;react&apos;;
-import { CHEVRON_RIGHT } from &apos;../lib/symbols.js&apos;;
+{/* Handoffs */}</file><file path="src/components/views/ExecutiveView.tsx">import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from &apos;../../types.js&apos;;
+import { StatusBadge } from &apos;../Indicators.js&apos;;
+import { CQIHero } from &apos;../CQIHero.js&apos;;
+import { StatCard } from &apos;../StatCard.js&apos;;
+import { ViewSection } from &apos;../Section.js&apos;;
+import { plural } from &apos;../../lib/quality-utils.js&apos;;
 ⋮----
-/** Non-collapsible view section — wraps .view-section + .section-heading */
-export function ViewSection(
+interface ExtendedExecutiveView extends ExecutiveViewType {
+  cqi?: CompositeQualityIndex;
+}</file><file path="src/components/CoverageGrid.tsx">import { memo, useState, useMemo } from &apos;react&apos;;
+import type { CoverageCell, CoverageGap, CoverageStatus } from &apos;../types.js&apos;;
+import { truncateId, plural } from &apos;../lib/quality-utils.js&apos;;
+import { EmptyState } from &apos;./EmptyState.js&apos;;
 ⋮----
-export type SectionHealth = &apos;ok&apos; | &apos;warn&apos; | &apos;crit&apos; | &apos;neutral&apos;;
-⋮----
-export interface SectionProps {
-  title: string;
-  badge?: string;
-  health?: SectionHealth;
-  defaultOpen?: boolean;
-  children: ReactNode;
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
 }
 ⋮----
-export function Section(</file><file path="src/hooks/useAgentStats.ts">import type { Period } from &apos;../types.js&apos;;
+// Limit displayed inputs to avoid huge grids
+⋮----
+{/* Summary bar */}
+⋮----
+{/* Legend */}
+⋮----
+{/* Grid */}
+⋮----
+{/* Header row */}
+⋮----
+{/* Data rows */}
+⋮----
+onMouseLeave=</file><file path="src/components/TurnTimeline.tsx">import { scoreColor } from &apos;../lib/quality-utils.js&apos;;
+import { AGENT_PALETTE } from &apos;../lib/constants.js&apos;;
+import { BarIndicator } from &apos;./BarIndicator.js&apos;;
+import { EmptyState } from &apos;./EmptyState.js&apos;;
+import type { TurnLevelResult } from &apos;../types.js&apos;;
+⋮----
+function agentColor(agentName: string, agentNames: string[]): string
+⋮----
+interface TurnTimelineProps {
+  turns: TurnLevelResult[];
+  agentNames: string[];
+}
+⋮----
+{/* Relevance bar */}
+⋮----
+{/* Task progress bar */}</file><file path="src/hooks/useAgentStats.ts">import type { Period } from &apos;../types.js&apos;;
 import { API_BASE, STALE_TIME, ErrorMessage } from &apos;../lib/constants.js&apos;;
 import { useApiQuery } from &apos;./useApiQuery.js&apos;;
 ⋮----
@@ -2327,46 +2231,105 @@ interface AgentStatsResponse {
 /** Shallow shape check — validates envelope fields only, not individual AgentStat elements. */
 function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResponse
 ⋮----
-export function useAgentStats(period: Period)</file><file path="src/App.tsx">import { useState, useCallback } from &apos;react&apos;;
-import { Route, Switch, Link, useLocation, Router } from &apos;wouter&apos;;
-import { ErrorBoundary } from &apos;react-error-boundary&apos;;
-import { Layout } from &apos;./components/Layout.js&apos;;
-import { RoleSelector } from &apos;./components/RoleSelector.js&apos;;
-import { KeyboardNavProvider, useShortcut } from &apos;./contexts/KeyboardNavContext.js&apos;;
-import { HealthOverview } from &apos;./components/HealthOverview.js&apos;;
-import { MetricGrid, MetricGridSkeleton } from &apos;./components/MetricGrid.js&apos;;
-import { AlertList } from &apos;./components/AlertList.js&apos;;
-import { SLATable } from &apos;./components/SLATable.js&apos;;
-import { ScoreHistogram } from &apos;./components/ScoreHistogram.js&apos;;
-import { EvaluationDetail } from &apos;./components/EvaluationDetail.js&apos;;
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from &apos;./components/Indicators.js&apos;;
-import { TrendChart } from &apos;./components/TrendChart.js&apos;;
-import { TrendSeries } from &apos;./components/TrendSeries.js&apos;;
-import { ConfidencePanel } from &apos;./components/ConfidencePanel.js&apos;;
-import { ViewSection } from &apos;./components/Section.js&apos;;
-import { CorrelationsPage } from &apos;./pages/CorrelationsPage.js&apos;;
-import { CoveragePage } from &apos;./pages/CoveragePage.js&apos;;
-import { PipelinePage } from &apos;./pages/PipelinePage.js&apos;;
-import { EvaluationDetailPage } from &apos;./pages/EvaluationDetailPage.js&apos;;
-import { CompliancePage } from &apos;./pages/CompliancePage.js&apos;;
-import { TraceDetailPage } from &apos;./pages/TraceDetailPage.js&apos;;
-import { AgentSessionPage } from &apos;./pages/AgentSessionPage.js&apos;;
-import { AgentsPage } from &apos;./pages/AgentsPage.js&apos;;
-import { SessionDetailPage } from &apos;./pages/SessionDetailPage.js&apos;;
-import { ExecutiveView } from &apos;./components/views/ExecutiveView.js&apos;;
-import { OperatorView } from &apos;./components/views/OperatorView.js&apos;;
-import { AuditorView } from &apos;./components/views/AuditorView.js&apos;;
-import { useDashboard } from &apos;./hooks/useDashboard.js&apos;;
-import { useMetricDetail } from &apos;./hooks/useMetricDetail.js&apos;;
-import { useTrend } from &apos;./hooks/useTrend.js&apos;;
-import { RoleProvider } from &apos;./contexts/RoleContext.js&apos;;
-import type {
-  Period,
-  QualityDashboardSummary,
-  RoleViewType,
-  MetricDetailResult,
-  MetricDynamics,
-} from &apos;./types.js&apos;;</file><file path="src/components/TrendChart.tsx">import {
+export function useAgentStats(period: Period)</file><file path="src/components/EvaluationExpandedRow.tsx">import { Link } from &apos;wouter&apos;;
+import { ScoreChip } from &apos;./ScoreChip.js&apos;;
+import { ColoredChip } from &apos;./ColoredChip.js&apos;;
+import { MetaItem } from &apos;./MetaItem.js&apos;;
+import { SectionBlock } from &apos;./SectionBlock.js&apos;;
+import type { EvalRow } from &apos;./EvaluationTable.js&apos;;
+⋮----
+export function StepScoreChip({ step, score, explanation }: {
+  step: string | number;
+  score: number;
+  explanation?: string;
+})
+⋮----
+export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score }: {
+  toolName: string;
+  toolCorrect: boolean;
+  argsCorrect: boolean;
+  score: number;
+})
+⋮----
+{/* back-link inline — uses mb-0 to reset default margin */}</file><file path="src/components/EvaluationTable.tsx">import { useState, Fragment } from &apos;react&apos;;
+import type { EvaluationResult } from &apos;../types.js&apos;;
+import {
+  createColumnHelper,
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  getExpandedRowModel,
+  flexRender,
+  type SortingState,
+  type ColumnFiltersState,
+  type ExpandedState,
+  type SortingFn,
+  type FilterFn,
+} from &apos;@tanstack/react-table&apos;;
+import {
+  labelToOrdinal,
+  ordinalToCategory,
+  truncateText,
+  formatTimestamp,
+  type LabelFilterCategory,
+} from &apos;../lib/quality-utils.js&apos;;
+import { EvaluationExpandedRow } from &apos;./EvaluationExpandedRow.js&apos;;
+import { ExpandChevron } from &apos;./ExpandChevron.js&apos;;
+import { ColoredChip } from &apos;./ColoredChip.js&apos;;
+import { ScoreBadge } from &apos;./ScoreBadge.js&apos;;
+⋮----
+export interface EvalRow {
+  score: number;
+  explanation?: string;
+  traceId?: string;
+  timestamp?: string;
+  evaluator?: string;
+  label?: string;
+  evaluatorType?: string;
+  spanId?: string;
+  sessionId?: string;
+  agentName?: string;
+  trajectoryLength?: number;
+  stepScores?: Array&lt;{ step: string | number; score: number; explanation?: string }&gt;;
+  toolVerifications?: Array&lt;{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }&gt;;
+}
+⋮----
+const labelSortFn: SortingFn&lt;EvalRow&gt; = (rowA, rowB) =&gt;
+⋮----
+const categoryFilterFn: FilterFn&lt;EvalRow&gt; = (row, _id, filterValue: LabelFilterCategory[]) =&gt;
+⋮----
+aria-label=
+⋮----
+&lt;span title=
+⋮----
+export function evalToRow(e: EvaluationResult): EvalRow
+⋮----
+const toggleCategory = (cat: LabelFilterCategory) =&gt;
+⋮----
+const sortDir = (colId: string): &apos;ascending&apos; | &apos;descending&apos; | &apos;none&apos; =&gt;
+⋮----
+aria-sort=
+⋮----
+&lt;tr className=
+⋮----
+&lt;td colSpan=</file><file path="src/components/Section.tsx">import type { ReactNode } from &apos;react&apos;;
+import { CHEVRON_RIGHT } from &apos;../lib/symbols.js&apos;;
+⋮----
+/** Non-collapsible view section — wraps .view-section + .section-heading */
+export function ViewSection(
+⋮----
+export type SectionHealth = &apos;ok&apos; | &apos;warn&apos; | &apos;crit&apos; | &apos;neutral&apos;;
+⋮----
+export interface SectionProps {
+  title: string;
+  badge?: string;
+  health?: SectionHealth;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}
+⋮----
+export function Section(</file><file path="src/components/TrendChart.tsx">import {
   LineChart,
   Line,
   XAxis,
@@ -2438,7 +2401,46 @@ import { SyncEmptyState } from &apos;../components/SyncEmptyState.js&apos;;
 import { formatTimestamp, plural } from &apos;../lib/quality-utils.js&apos;;
 import { Link, useSearch } from &apos;wouter&apos;;
 import { DetailPageHeader } from &apos;../components/DetailPageHeader.js&apos;;
-⋮----</file><file path="src/lib/constants.ts">import { z } from &apos;zod&apos;;
+⋮----</file><file path="src/App.tsx">import { useState, useCallback } from &apos;react&apos;;
+import { Route, Switch, Link, useLocation, Router } from &apos;wouter&apos;;
+import { ErrorBoundary } from &apos;react-error-boundary&apos;;
+import { Layout } from &apos;./components/Layout.js&apos;;
+import { RoleSelector } from &apos;./components/RoleSelector.js&apos;;
+import { KeyboardNavProvider, useShortcut } from &apos;./contexts/KeyboardNavContext.js&apos;;
+import { HealthOverview } from &apos;./components/HealthOverview.js&apos;;
+import { MetricGrid, MetricGridSkeleton } from &apos;./components/MetricGrid.js&apos;;
+import { AlertList } from &apos;./components/AlertList.js&apos;;
+import { SLATable } from &apos;./components/SLATable.js&apos;;
+import { ScoreHistogram } from &apos;./components/ScoreHistogram.js&apos;;
+import { EvaluationDetail } from &apos;./components/EvaluationDetail.js&apos;;
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from &apos;./components/Indicators.js&apos;;
+import { TrendChart } from &apos;./components/TrendChart.js&apos;;
+import { TrendSeries } from &apos;./components/TrendSeries.js&apos;;
+import { ConfidencePanel } from &apos;./components/ConfidencePanel.js&apos;;
+import { ViewSection } from &apos;./components/Section.js&apos;;
+import { CorrelationsPage } from &apos;./pages/CorrelationsPage.js&apos;;
+import { CoveragePage } from &apos;./pages/CoveragePage.js&apos;;
+import { PipelinePage } from &apos;./pages/PipelinePage.js&apos;;
+import { EvaluationDetailPage } from &apos;./pages/EvaluationDetailPage.js&apos;;
+import { CompliancePage } from &apos;./pages/CompliancePage.js&apos;;
+import { TraceDetailPage } from &apos;./pages/TraceDetailPage.js&apos;;
+import { AgentSessionPage } from &apos;./pages/AgentSessionPage.js&apos;;
+import { AgentsPage } from &apos;./pages/AgentsPage.js&apos;;
+import { SessionDetailPage } from &apos;./pages/SessionDetailPage.js&apos;;
+import { ExecutiveView } from &apos;./components/views/ExecutiveView.js&apos;;
+import { OperatorView } from &apos;./components/views/OperatorView.js&apos;;
+import { AuditorView } from &apos;./components/views/AuditorView.js&apos;;
+import { useDashboard } from &apos;./hooks/useDashboard.js&apos;;
+import { useMetricDetail } from &apos;./hooks/useMetricDetail.js&apos;;
+import { useTrend } from &apos;./hooks/useTrend.js&apos;;
+import { RoleProvider } from &apos;./contexts/RoleContext.js&apos;;
+import type {
+  Period,
+  QualityDashboardSummary,
+  RoleViewType,
+  MetricDetailResult,
+  MetricDynamics,
+} from &apos;./types.js&apos;;</file><file path="src/lib/constants.ts">import { z } from &apos;zod&apos;;
 ⋮----
 /** Named error identifiers for custom error classes. */
 export const enum ErrorName {
@@ -2677,11 +2679,22 @@ onClick=
 ⋮----
 /* Font sizes */
 ⋮----
+/* Font Weight */
+⋮----
 /* Label typography */
 ⋮----
 /* Transitions */
 ⋮----
 /* Shadows */
+⋮----
+/* Overflow */
+.overflow-x-auto { overflow-x: auto; }
+⋮----
+/* Interaction */
+.select-none { user-select: none; }
+⋮----
+/* Cursor */
+.cursor-pointer { cursor: pointer; }
 ⋮----
 * {
 ⋮----
@@ -2692,19 +2705,11 @@ onClick=
 .back-link,
 .back-link:hover,
 ⋮----
+.summary-count { text-align: center; }
+.card:hover { border-color: var(--border); }
 .trend.stable { color: var(--text-secondary); }
-⋮----
-/* Shared text truncation */
-.eval-table .explanation,
-⋮----
-/* Shared flex row */
-.health-banner,
-⋮----
-/* Shared flex row (no align) */
-.summary-counts,
-⋮----
-/* Shared inline-flex row */
-.status-badge,
+.card.glow-critical { box-shadow: var(--shadow-glow-critical); }
+.card.glow-warning { box-shadow: var(--shadow-glow-warning); }
 ⋮----
 body {
 ⋮----
@@ -2715,11 +2720,6 @@ body {
 .metric-grid {
 ⋮----
 .card {
-⋮----
-.card:hover {
-⋮----
-.card.glow-warning { box-shadow: var(--shadow-glow-warning); }
-.card.glow-critical { box-shadow: var(--shadow-glow-critical); }
 ⋮----
 .card-link {
 ⋮----
@@ -2734,7 +2734,6 @@ body {
 .health-banner {
 .health-banner[data-status] { background: var(--s-bg); border: 1px solid var(--s-border); }
 ⋮----
-.summary-count {
 .summary-count .value {
 /* Status badges */
 .status-badge {
@@ -2764,10 +2763,11 @@ body {
 .alert-item .alert-meta,
 .alert-item .remediation { color: var(--accent); }
 ⋮----
-/* Shared table cell borders */
+/* Shared table styles */
 .sla-table th,
 ⋮----
-/* Shared table header base */
+/* Shared table base */
+.sla-table,
 ⋮----
 /* SLA table */
 .sla-table {
@@ -2776,10 +2776,8 @@ body {
 .histogram {
 .histogram-bar {
 .histogram-bar:hover {
-/* Shared elevated surface */
-.histogram-bar .tooltip,
-⋮----
 /* Shared tooltip popup base */
+.histogram-bar .tooltip,
 ⋮----
 .histogram-bar .tooltip {
 .histogram-bar:hover .tooltip {
@@ -2831,9 +2829,6 @@ body {
 ⋮----
 /* Section headings */
 .section-heading {
-⋮----
-/* Shared muted label */
-.section-label,
 ⋮----
 /* Session detail — stat item, stat value, stat label, vitals divider, frequency grid */
 .stat-item {
@@ -2947,18 +2942,19 @@ details[open] &gt; .cot-summary::before {
 .text-muted     { color: var(--text-muted); }
 ⋮----
 /* Flex layout */
+.d-flex         { display: flex; }
+.d-inline-block { display: inline-block; }
 .flex-center { display: flex; align-items: center; }
 ⋮----
 /* Text transform */
-.uppercase { text-transform: uppercase; letter-spacing: 0.05em; }
-.tracking-wide { letter-spacing: 0.05em; }
-.font-semibold { font-weight: 600; }
+.uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
+.font-semibold { font-weight: var(--bold); }
 ⋮----
 /* Chip / pill */
-.chip { padding: 2px 6px; border-radius: 10px; }
+.chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
 ⋮----
 /* Gap */
-.gap-half { gap: var(--space-half); }   /*  2px */
+.gap-half { gap: var(--space-px); }   /*  1px */
 .gap-1    { gap: var(--space-1); }      /*  4px */
 .gap-1-5  { gap: var(--space-1-5); }    /*  6px */
 .gap-2    { gap: var(--space-2); }      /*  8px */
@@ -2969,6 +2965,12 @@ details[open] &gt; .cot-summary::before {
 .gap-6    { gap: var(--space-6); }      /* 24px */
 .gap-8    { gap: var(--space-8); }      /* 32px */
 .gap-16   { gap: var(--space-16); }     /* 64px */
+⋮----
+/* Width */
+.w-full { width: 100%; }
+⋮----
+/* Margin */
+.m-0    { margin: 0; }
 ⋮----
 /* Margin-bottom */
 .mb-0   { margin-bottom: 0; }
@@ -2986,6 +2988,7 @@ details[open] &gt; .cot-summary::before {
 ⋮----
 /* Padding */
 .p-4    { padding: var(--space-4); }        /* 16px */
+.p-6    { padding: var(--space-6); }        /* 24px */
 ⋮----
 /* Text align */
 .text-center { text-align: center; }
@@ -3004,21 +3007,15 @@ details[open] &gt; .cot-summary::before {
 /* Display */
 .contents { display: contents; }
 ⋮----
-.font-medium { font-weight: 500; }
+.font-medium { font-weight: var(--light-bold); }
 .font-bold   { font-weight: 700; }
 .nowrap      { white-space: nowrap; }
 .truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .break-all { word-break: break-all; }
 .leading-relaxed { line-height: 1.6; }
 ⋮----
-/* Overflow */
-.overflow-x-auto { overflow-x: auto; }
-⋮----
-/* Interaction */
-.select-none { user-select: none; }
-⋮----
-/* Cursor */
-.cursor-pointer { cursor: pointer; }
+/* Button reset */
+.btn-reset { background: none; border: none; padding: 0; }
 ⋮----
 /* Expand chevron */
 .expand-chevron {
@@ -3036,8 +3033,8 @@ details[open] &gt; .cot-summary::before {
 .link-accent { color: var(--accent); text-decoration: none; }
 ⋮----
 /* Table cells */
-.cell-pad      { padding: 5px var(--space-2-5); }
-.cell-pad-wide { padding: 5px var(--space-3); }
+.cell-pad      { padding: var(--space-1) var(--space-2-5); }
+.cell-pad-wide { padding: var(--space-1) var(--space-3); }
 ⋮----
 /* Border */
 .border-b        { border-bottom: 1px solid var(--border); }

@@ -14,14 +14,14 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
 
   if (!metricName) {
     return (
-      <div className="text-muted text-center" style={{ padding: 24 }}>
+      <div className="text-muted text-center p-6">
         Select a metric from the heatmap or dropdown
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 12 }}>
+    <div className="p-4">
       <select
         value={metricName}
         onChange={(e) => onMetricChange(e.target.value)}
