@@ -14,12 +14,13 @@ export function CoveragePage({ period }: { period: Period }) {
       {data && (
         <>
           <div className="flex-center mb-3 gap-4">
-            <h2 className="text-lg" style={{ margin: 0 }}>Evaluation Coverage</h2>
+            <h2 className="text-lg m-0">Evaluation Coverage</h2>
             <select
               value={inputKey}
               onChange={(e) => setInputKey(e.target.value as InputKey)}
               aria-label="Group by"
-              style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)' }}
+              className="text-xs"
+              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)' }}
             >
               <option value="traceId">By Trace</option>
               <option value="sessionId">By Session</option>

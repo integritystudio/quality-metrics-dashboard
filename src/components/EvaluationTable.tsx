@@ -216,7 +216,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
 
   return (
     <div>
-      <div className="mb-3 gap-1-5" style={{ display: 'flex' }}>
+      <div className="d-flex mb-3 gap-1-5">
         {(['Pass', 'Review', 'Fail'] as const).map((cat) => {
           const active = activeCategories.includes(cat);
           return (

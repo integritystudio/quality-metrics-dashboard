@@ -8,7 +8,7 @@ import { ViewSection } from '../Section.js';
 export function AuditorView({ data }: { data: AuditorViewType }) {
   return (
     <div>
-      <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+      <div className="d-flex gap-4" style={{ marginBottom: 'var(--space-6)' }}>
         <StatCard value={data.totalEvaluationCount} label="Total Evaluations" />
         <StatCard value={data.metrics.length} label="Metrics" />
         <StatCard value={data.alerts.length} label="Alerts" />

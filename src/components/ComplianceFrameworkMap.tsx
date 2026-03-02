@@ -25,7 +25,7 @@ export function ComplianceFrameworkMap() {
       {FRAMEWORKS.map(fw => (
         <div key={fw.name} className="card mb-3">
           <h4 className="mb-3 text-base">{fw.name}</h4>
-          <table className="eval-table" style={{ width: '100%' }}>
+          <table className="eval-table w-full">
             <thead>
               <tr>
                 <th className="text-left">Reference</th>

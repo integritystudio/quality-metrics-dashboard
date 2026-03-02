@@ -149,7 +149,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       {gaps.length > 0 && (
         <div className="mt-4">
           <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
-          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
+          <ul className="m-0 text-xs" style={{ paddingLeft: 20 }}>
             {gaps.map(gap => (
               <li key={gap.metric} className="mb-1">
                 <strong>{gap.metric}</strong>: {gap.coveragePercent.toFixed(0)}% covered

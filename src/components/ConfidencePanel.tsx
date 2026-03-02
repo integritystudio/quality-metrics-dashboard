@@ -32,7 +32,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
   const band: ScoreColorBand = pct < 20 ? 'excellent' : pct < 50 ? 'adequate' : 'failing';
   return (
     <div className="variance-bar flex-center">
-      <BarIndicator value={pct} color={SCORE_COLORS[band]} style={{ flex: 1 }} />
+      <BarIndicator value={pct} color={SCORE_COLORS[band]} className="flex-1" />
       <span className="mono-xs text-secondary" style={{ minWidth: 36 }}>
         {value.toFixed(3)}
       </span>

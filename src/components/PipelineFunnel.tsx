@@ -21,7 +21,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
         <span className="text-secondary text-base">overall conversion</span>
       </div>
 
-      <div className="gap-1" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="flex-col gap-1">
         {stages.map((stage, idx) => {
           const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
           const dropoff = dropoffs[idx];
@@ -32,13 +32,13 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
               {/* Stage bar */}
               <div className="flex-center gap-3">
                 <div
+                  className="d-flex"
                   style={{
                     width: `${widthPct}%`,
                     minWidth: 40,
                     height: 32,
                     background: `var(--stage-${stage.name}, var(--accent))`,
                     borderRadius: 4,
-                    display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0 10px',
@@ -61,8 +61,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
 
               {/* Drop-off indicator */}
               {showDropoff && (
-                <div style={{
-                  fontSize: 12,
+                <div className="text-xs" style={{
                   color: dropoff.dropoffPercent > 20 ? 'var(--status-warning)' : 'var(--text-secondary)',
                   paddingLeft: 10,
                   margin: '2px 0',

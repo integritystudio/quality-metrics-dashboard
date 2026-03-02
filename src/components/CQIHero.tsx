@@ -33,9 +33,8 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
 
       {cqi.contributions.length > 0 && (
         <div
-          className="mt-4"
+          className="d-flex mt-4"
           style={{
-            display: 'flex',
             height: 8,
             borderRadius: 4,
             overflow: 'hidden',

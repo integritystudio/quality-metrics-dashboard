@@ -875,6 +875,7 @@ details[open] > .cot-summary::before {
 .text-muted     { color: var(--text-muted); }
 
 /* Flex layout */
+.d-flex      { display: flex; }
 .flex-center { display: flex; align-items: center; }
 
 /* Text transform */
@@ -897,6 +898,12 @@ details[open] > .cot-summary::before {
 .gap-6    { gap: var(--space-6); }      /* 24px */
 .gap-8    { gap: var(--space-8); }      /* 32px */
 .gap-16   { gap: var(--space-16); }     /* 64px */
+
+/* Width */
+.w-full { width: 100%; }
+
+/* Margin */
+.m-0    { margin: 0; }
 
 /* Margin-bottom */
 .mb-0   { margin-bottom: 0; }

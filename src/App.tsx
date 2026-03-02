@@ -131,7 +131,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           <h2 className="text-lg">{detail.displayName}</h2>
           <StatusBadge status={detail.status} />
         </div>
-        <div className="gap-8 mt-3" style={{ display: 'flex', flexWrap: 'wrap' }}>
+        <div className="flex-wrap gap-8 mt-3">
           {(['avg', 'min', 'max', 'p50', 'p95', 'p99'] as const).map((key) => {
             const val = detail.values[key];
             return (

@@ -59,7 +59,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       <ViewSection title="Metric Statuses">
         <div className="metric-grid">
           {data.metricStatuses.map((m: { name: string; displayName: string; status: string }) => (
-            <div key={m.name} className="card" style={{ padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={m.name} className="card d-flex justify-between" style={{ padding: 12, alignItems: 'center' }}>
               <span>{m.displayName}</span>
               <StatusBadge status={m.status} />
             </div>
@@ -68,7 +68,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       </ViewSection>
 
       <ViewSection title="Alert Summary">
-        <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
+        <div className="d-flex gap-4">
           {Object.entries(data.alertCounts).map(([severity, count]) => (
             <StatCard key={severity} value={String(count)} label={severity} />
           ))}

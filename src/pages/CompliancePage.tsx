@@ -35,7 +35,7 @@ export function CompliancePage({ period }: { period: Period }) {
       <ViewSection title="Human Verification Events">
         {verData && verData.verifications.length > 0 && (
           <div className="card">
-            <table className="eval-table" style={{ width: '100%' }}>
+            <table className="eval-table w-full">
               <thead>
                 <tr>
                   <th className="text-left">Timestamp</th>

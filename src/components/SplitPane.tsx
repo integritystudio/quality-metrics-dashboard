@@ -32,7 +32,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
   }, [minPct, maxPct]);
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', width: '100%', minHeight: 300 }}>
+    <div ref={containerRef} className="d-flex w-full" style={{ minHeight: 300 }}>
       <div style={{ width: `${splitPct}%`, overflow: 'auto' }}>{left}</div>
       <div
         className="shrink-0" role="separator"

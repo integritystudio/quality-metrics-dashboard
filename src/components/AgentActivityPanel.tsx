@@ -121,7 +121,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       <span className="mono-xs" style={{ minWidth: 32 }}>
                         {agent.invocations}
                       </span>
-                      <BarIndicator value={invPct} color={color} opacity={0.7} style={{ flex: 1, minWidth: 48 }} />
+                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1" style={{ minWidth: 48 }} />
                     </div>
                   </td>
 
@@ -317,7 +317,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
               </div>
               {/* Score bar */}
               <div className="flex-center mb-1 gap-2">
-                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} style={{ flex: 1 }} />
+                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
                 <span className="mono-xs font-semibold text-right" style={{
                   color: barColor,
                   minWidth: 38,
@@ -346,15 +346,9 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
   const overallErrorRate = totalInvocations > 0 ? (totalErrors / totalInvocations) * 100 : 0;
 
   return (
-    <div style={{
-      display: 'flex',
-      gap: 'var(--space-8)',
+    <div className="d-flex flex-wrap gap-8 surface-elevated" style={{
       padding: 'var(--space-4) var(--space-5)',
-      background: 'var(--bg-elevated)',
-      borderRadius: 'var(--radius)',
-      border: '1px solid var(--border-subtle)',
       marginBottom: 'var(--space-5)',
-      flexWrap: 'wrap',
     }}>
       {[
         { label: 'Agents', value: agents.length },

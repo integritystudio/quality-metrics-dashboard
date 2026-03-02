@@ -15,7 +15,7 @@ export function ShortcutOverlay() {
     <div className="shortcut-overlay-backdrop" onClick={toggleOverlay} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
       <div className="shortcut-overlay" onClick={e => e.stopPropagation()}>
         <div className="flex-center mb-3 justify-between">
-          <h2 className="text-md" style={{ margin: 0 }}>Keyboard Shortcuts</h2>
+          <h2 className="text-md m-0">Keyboard Shortcuts</h2>
           <button type="button" onClick={toggleOverlay} aria-label="Close" className="text-lg text-secondary cursor-pointer" style={{
             background: 'none', border: 'none',
           }}>

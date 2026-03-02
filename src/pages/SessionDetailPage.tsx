@@ -323,9 +323,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           <div className="text-muted text-xs">No token snapshots recorded.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="mono-xs" style={{
-              width: '100%', borderCollapse: 'collapse',
-            }}>
+            <table className="mono-xs w-full" style={{ borderCollapse: 'collapse' }}>
               <MonoTableHead columns={[
                 { label: 'Messages' }, { label: 'Input' }, { label: 'Output' },
                 { label: 'Cache Read' }, { label: 'Cache Create' }, { label: 'Model' },
@@ -494,7 +492,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           health={codeStructure.some(f => f.score < 0.6) ? 'warn' : 'ok'}
         >
           <div className="overflow-x-auto">
-            <table className="mono-xs" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="mono-xs w-full" style={{ borderCollapse: 'collapse' }}>
               <MonoTableHead columns={[
                 { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },
                 { label: 'Lines' }, { label: 'Exports' }, { label: 'Functions' },

@@ -20,7 +20,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
   }
 
   return (
-    <div className="gap-2 overflow-x-auto" style={{ display: 'flex', padding: '8px 0' }}>
+    <div className="d-flex gap-2 overflow-x-auto" style={{ padding: '8px 0' }}>
       {turns.map((turn) => {
         const agent = turn.agentName ?? 'unknown';
         const color = agentColor(agent, agentNames);

@@ -65,12 +65,11 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
     <div
       role="table"
       aria-label="Metric correlation matrix"
-      className="gap-half"
+      className="gap-half w-full"
       style={{
         display: 'grid',
         gridTemplateColumns: `80px repeat(${n}, 1fr)`,
         gridTemplateRows: `32px repeat(${n}, 1fr)`,
-        width: '100%',
         aspectRatio: `${cols} / ${cols}`,
       }}
     >
