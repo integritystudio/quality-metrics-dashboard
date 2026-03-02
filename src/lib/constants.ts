@@ -144,7 +144,8 @@ export const CHART_TOOLTIP_CONTENT_STYLE = {
 };
 export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
 export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number) => v.toFixed(2);
+export const CHART_YAXIS_TICK_FORMATTER = (v: number | string): string =>
+  typeof v === 'number' ? v.toFixed(2) : String(v);
 
 /** Color palette for per-agent visual distinction. */
 export const AGENT_PALETTE = [
