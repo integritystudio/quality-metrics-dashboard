@@ -234,6 +234,7 @@ body {
 [data-status="warning"]  { --s-bg: var(--bg-status-warning);  --s-border: var(--border-status-warning);  --s-fg: var(--status-warning); }
 [data-status="critical"] { --s-bg: var(--bg-status-critical); --s-border: var(--border-status-critical); --s-fg: var(--status-critical); }
 [data-status="no_data"]  { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--status-no-data); }
+[data-status="info"]     { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--text-secondary); }
 
 /* Health banner */
 .health-banner {
