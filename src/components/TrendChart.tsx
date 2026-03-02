@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import type { MetricDynamics } from '../types.js';
 import type { MetricTrend } from '../types.js';
-import { CHART_COLORS } from '../lib/constants.js';
+import { CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
 interface TrendChartProps {
@@ -82,30 +82,24 @@ export function TrendChart({
     <div>
       <div aria-label={`Trend chart for ${metricName}`}>
         <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 16 }}>
-            <CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" />
+          <LineChart data={data} margin={CHART_MARGIN}>
+            <CartesianGrid {...CHART_GRID_PROPS} />
             <XAxis
               dataKey="label"
-              tick={{ fill: COLORS.text, fontSize: 12 }}
-              stroke={COLORS.grid}
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
             />
             <YAxis
               domain={[yMin - yPad, yMax + yPad]}
-              tick={{ fill: COLORS.text, fontSize: 12 }}
-              stroke={COLORS.grid}
-              tickFormatter={(v: number) => v.toFixed(2)}
-              width={48}
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
+              tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+              width={CHART_YAXIS_WIDTH}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: COLORS.tooltip,
-                border: `1px solid ${COLORS.grid}`,
-                borderRadius: 6,
-                color: COLORS.text,
-                fontSize: 12,
-              }}
+              contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
               formatter={(v: number | undefined) => [v != null ? formatValue(v) : 'N/A', '']}
-              labelStyle={{ color: '#e6edf3' }}
+              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
             />
             {warningThreshold != null && (
               <ReferenceLine

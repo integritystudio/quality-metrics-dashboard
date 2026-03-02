@@ -131,6 +131,21 @@ export const CHART_COLORS = {
   critical: '#f85149',
 } as const;
 
+/** Shared Recharts layout and style constants (TrendChart, TrendSeries). */
+export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
+export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
+export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
+export const CHART_TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: CHART_COLORS.tooltip,
+  border: `1px solid ${CHART_COLORS.grid}`,
+  borderRadius: 6,
+  color: CHART_COLORS.text,
+  fontSize: 12,
+};
+export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
+export const CHART_YAXIS_WIDTH = 48;
+export const CHART_YAXIS_TICK_FORMATTER = (v: number) => v.toFixed(2);
+
 /** Color palette for per-agent visual distinction. */
 export const AGENT_PALETTE = [
   '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',

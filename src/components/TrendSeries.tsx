@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { TrendBucket } from '../hooks/useTrend.js';
-import { CHART_COLORS } from '../lib/constants.js';
+import { CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
 interface TrendSeriesProps {
@@ -62,33 +62,27 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   return (
     <div aria-label={`Time series trend for ${metricName}`}>
       <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 16 }}>
-          <CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" />
+        <ComposedChart data={chartData} margin={CHART_MARGIN}>
+          <CartesianGrid {...CHART_GRID_PROPS} />
           <XAxis
             dataKey="time"
-            tick={{ fill: COLORS.text, fontSize: 12 }}
-            stroke={COLORS.grid}
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
           />
           <YAxis
             domain={[yMin - yPad, yMax + yPad]}
-            tick={{ fill: COLORS.text, fontSize: 12 }}
-            stroke={COLORS.grid}
-            tickFormatter={(v: number) => v.toFixed(2)}
-            width={48}
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
+            tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+            width={CHART_YAXIS_WIDTH}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: COLORS.tooltip,
-              border: `1px solid ${COLORS.grid}`,
-              borderRadius: 6,
-              color: COLORS.text,
-              fontSize: 12,
-            }}
+            contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
             formatter={(v: number | string | undefined, name?: string) => [
               typeof v === 'number' ? v.toFixed(4) : 'N/A',
               name === 'avg' ? 'Average' : (name ?? '').toUpperCase(),
             ]}
-            labelStyle={{ color: '#e6edf3' }}
+            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
           />
           {/* P10-P90 band */}
           <Area
