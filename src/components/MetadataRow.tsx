@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** Horizontal label–value row. Renders nothing when value is nullish. */
+/** Horizontal label–value row. Renders nothing when value is nullish or an empty string. */
 export function MetadataRow({ label, value, mono }: {
   label: string;
   value?: ReactNode;

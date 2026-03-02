@@ -91,9 +91,11 @@
   --font-size-lg: 18px;
   --font-size-xl: 20px;
   --font-size-2xl: 24px;
+  --font-size-stat: 22px;
 
   /* Label typography */
   --label-letter-spacing: 0.5px;
+  --stat-label-letter-spacing: 0.1em;
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -587,7 +589,7 @@ body {
 }
 
 .stat-value {
-  font-size: 22px;
+  font-size: var(--font-size-stat);
   line-height: 1.1;
 }
 
@@ -595,8 +597,8 @@ body {
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
-  letter-spacing: 0.1em;
-  margin-top: 3px;
+  letter-spacing: var(--stat-label-letter-spacing);
+  margin-top: var(--space-half);
 }
 
 .freq-bar-row {

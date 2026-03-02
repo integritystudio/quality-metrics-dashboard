@@ -17,12 +17,11 @@ interface TrendSeriesProps {
   metricName: string;
 }
 
-const COLORS = {
-  ...CHART_COLORS,
+const TREND_COLORS = {
   band: 'rgba(88, 166, 255, 0.1)',
   bandStroke: 'rgba(88, 166, 255, 0.3)',
   background: '#131920', // --bg-card; must be a hex literal for SVG fill attribute
-};
+} as const;
 
 function formatTime(iso: string, spanDays: number): string {
   const d = new Date(iso);
@@ -89,21 +88,21 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
             type="monotone"
             dataKey="p90"
             stroke="none"
-            fill={COLORS.band}
+            fill={TREND_COLORS.band}
             connectNulls
           />
           <Area
             type="monotone"
             dataKey="p10"
             stroke="none"
-            fill={COLORS.background}
+            fill={TREND_COLORS.background}
             connectNulls
           />
           {/* P50 line */}
           <Line
             type="monotone"
             dataKey="p50"
-            stroke={COLORS.bandStroke}
+            stroke={TREND_COLORS.bandStroke}
             strokeWidth={1}
             strokeDasharray="4 3"
             dot={false}
@@ -113,16 +112,16 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           <Line
             type="monotone"
             dataKey="avg"
-            stroke={COLORS.line}
+            stroke={CHART_COLORS.line}
             strokeWidth={2}
-            dot={{ fill: COLORS.line, r: 3 }}
+            dot={{ fill: CHART_COLORS.line, r: 3 }}
             activeDot={{ r: 5 }}
             connectNulls
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="flex-center justify-center gap-4 mt-1 text-xs" style={{ color: COLORS.text }}>
-        <span><span style={{ color: COLORS.line }}>&#9473;</span> avg</span>
+      <div className="flex-center justify-center gap-4 mt-1 text-xs" style={{ color: CHART_COLORS.text }}>
+        <span><span style={{ color: CHART_COLORS.line }}>&#9473;</span> avg</span>
         <span><span style={{ opacity: 0.5 }}>- -</span> p50</span>
         <span><span style={{ opacity: 0.3 }}>&#9608;</span> p10-p90</span>
       </div>

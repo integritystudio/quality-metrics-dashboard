@@ -137,7 +137,7 @@ export function TrendChart({
       </div>
       {dynamics && (
         <div className="flex-wrap text-xs gap-6 mt-2" style={{
-          padding: '8px 0',
+          padding: 'var(--space-2) 0',
           color: CHART_COLORS.text,
         }}>
           <div>
