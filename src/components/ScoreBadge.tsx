@@ -1,6 +1,7 @@
 import { Link } from 'wouter';
 import { scoreColorBand, truncateText, SCORE_COLORS, type ScoreDirection } from '../lib/quality-utils.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
+import { MetadataRow } from './MetadataRow.js';
 
 interface ScoreBadgeProps {
   score: number | null;
@@ -13,15 +14,6 @@ interface ScoreBadgeProps {
   traceId?: string;
 }
 
-function TooltipRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="tooltip-row">
-      <span className="text-secondary">{label}</span>
-      <span className={mono ? 'mono-xs' : undefined}>{value}</span>
-    </div>
-  );
-}
-
 function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
   score: number;
   label?: string;
@@ -32,10 +24,10 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
 }) {
   return (
     <div className="score-badge-tooltip" role="tooltip">
-      <TooltipRow label="Score" value={score.toFixed(4)} mono />
-      {label && <TooltipRow label="Label" value={label} />}
-      {evaluator && <TooltipRow label="Evaluator" value={evaluator} mono />}
-      {evaluatorType && <TooltipRow label="Type" value={evaluatorType} />}
+      <MetadataRow label="Score" value={score.toFixed(4)} mono />
+      <MetadataRow label="Label" value={label} />
+      <MetadataRow label="Evaluator" value={evaluator} mono />
+      <MetadataRow label="Type" value={evaluatorType} />
       {explanation && (
         <div className="tooltip-row gap-half" style={{ flexDirection: 'column' }}>
           <span className="text-secondary">Explanation</span>
