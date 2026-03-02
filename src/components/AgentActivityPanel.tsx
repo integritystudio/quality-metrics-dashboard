@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
-import { Link } from 'wouter';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, truncateId, fmtBytes } from '../lib/quality-utils.js';
+import { scoreColor, fmtBytes } from '../lib/quality-utils.js';
+import { TruncatedIdLink } from './TruncatedIdLink.js';
 import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
@@ -223,14 +223,13 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                           </div>
                           <div className="flex-col gap-1">
                             {agent.sessionIds.map(sid => (
-                              <Link
+                              <TruncatedIdLink
                                 key={sid}
+                                id={sid}
                                 href={`/sessions/${sid}`}
-                                className="mono-xs link-accent"
-                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                              >
-                                {truncateId(sid, 12)}
-                              </Link>
+                                maxLen={12}
+                                onClick={(e) => e.stopPropagation()}
+                              />
                             ))}
                             {agent.sessionIds.length === 0 && (
                               <span className="text-muted text-xs">none</span>
@@ -251,14 +250,13 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                           </div>
                           <div className="flex-col gap-1">
                             {agent.traceIds.map(tid => (
-                              <Link
+                              <TruncatedIdLink
                                 key={tid}
+                                id={tid}
                                 href={`/traces/${tid}`}
-                                className="mono-xs link-accent"
-                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                              >
-                                {truncateId(tid, 12)}
-                              </Link>
+                                maxLen={12}
+                                onClick={(e) => e.stopPropagation()}
+                              />
                             ))}
                             {agent.traceIds.length === 0 && (
                               <span className="text-muted text-xs">none</span>
