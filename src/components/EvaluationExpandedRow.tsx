@@ -1,5 +1,6 @@
 import { Link } from 'wouter';
 import { SCORE_COLORS } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
 import { ScoreChip } from './ScoreChip.js';
 import { ColoredChip } from './ColoredChip.js';
 import { MetaItem } from './MetaItem.js';
@@ -96,16 +97,16 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       {(row.traceId || row.sessionId) && (
         <div className="d-flex gap-4 mt-3 border-t" style={{ paddingTop: 12 }}>
           {row.traceId && (
-            <Link href={`/evaluations/trace/${row.traceId}`} className="back-link inline-flex-center mb-0">
+            <Link href={routes.evaluationDetail(row.traceId)} className="back-link inline-flex-center mb-0">
               View full evaluation detail &rarr;
             </Link>
           )}
           {row.sessionId ? (
-            <Link href={`/sessions/${row.sessionId}`} className="back-link inline-flex-center mb-0">
+            <Link href={routes.session(row.sessionId)} className="back-link inline-flex-center mb-0">
               View trace spans &rarr;
             </Link>
           ) : row.traceId ? (
-            <Link href={`/traces/${row.traceId}`} className="back-link inline-flex-center mb-0">
+            <Link href={routes.trace(row.traceId)} className="back-link inline-flex-center mb-0">
               View trace spans &rarr;
             </Link>
           ) : null}

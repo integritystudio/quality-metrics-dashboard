@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { Link } from 'wouter';
 import { formatScore } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
 
 interface EvaluatorTypeCounts {
   rule: number;
@@ -87,11 +88,11 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
             <span className="prov-label">{label}</span>
             <span className="prov-value">
               {label === 'Trace ID' && traceId ? (
-                <Link href={`/traces/${traceId}`} className="link-accent">
+                <Link href={routes.trace(traceId)} className="link-accent">
                   {traceId}
                 </Link>
               ) : label === 'Session ID' && sessionId ? (
-                <Link href={`/sessions/${sessionId}`} className="link-accent">
+                <Link href={routes.session(sessionId)} className="link-accent">
                   {sessionId}
                 </Link>
               ) : value}

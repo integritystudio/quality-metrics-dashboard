@@ -1,5 +1,6 @@
 import { Link } from 'wouter';
 import { ScoreBadge } from './ScoreBadge.js';
+import { routes } from '../lib/routes.js';
 import type { EvaluationResult } from '../types.js';
 
 interface EvaluationEventOverlayProps {
@@ -38,7 +39,7 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
           return (
             <Link
               key={name}
-              href={`/evaluations/trace/${traceId}?metric=${encodeURIComponent(name)}`}
+              href={routes.evaluationDetail(traceId, name)}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
               {card}

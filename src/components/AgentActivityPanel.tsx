@@ -3,6 +3,7 @@ import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColor, fmtBytes } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import { ExpandChevron } from './ExpandChevron.js';
@@ -213,7 +214,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               <TruncatedIdLink
                                 key={sid}
                                 id={sid}
-                                href={`/sessions/${sid}`}
+                                href={routes.session(sid)}
                                 maxLen={12}
                                 onClick={(e) => e.stopPropagation()}
                               />
@@ -240,7 +241,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               <TruncatedIdLink
                                 key={tid}
                                 id={tid}
-                                href={`/traces/${tid}`}
+                                href={routes.trace(tid)}
                                 maxLen={12}
                                 onClick={(e) => e.stopPropagation()}
                               />

@@ -6,6 +6,7 @@ import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { PageShell } from '../components/PageShell.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
 import { formatTimestamp, formatScore, plural } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
 import { Link, useSearch } from 'wouter';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 
@@ -36,10 +37,10 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
             <span className="text-secondary text-xs">
               {plural(evaluations.length, 'evaluation')}
             </span>
-            <Link href={`/traces/${traceId}`} className="text-xs link-accent">View trace &rarr;</Link>
+            <Link href={routes.trace(traceId)} className="text-xs link-accent">View trace &rarr;</Link>
             {metricFilter && (
               <Link
-                href={`/evaluations/trace/${traceId}`}
+                href={routes.evaluationDetail(traceId)}
                 className="text-xs link-accent"
               >
                 View all evaluations

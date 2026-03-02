@@ -1,5 +1,6 @@
 import { Link } from 'wouter';
 import { scoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
 import { MetadataRow } from './MetadataRow.js';
 
@@ -35,7 +36,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
         </div>
       )}
       {traceId && (
-        <Link href={`/evaluations/trace/${traceId}`} className="tooltip-link text-xs">
+        <Link href={routes.evaluationDetail(traceId)} className="tooltip-link text-xs">
           View full explanation &rarr;
         </Link>
       )}
