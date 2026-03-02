@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 
-export interface SimpleAlertItem {
+export interface SimpleAlertListItem {
   key: string;
   status: string;
   message: ReactNode;
   meta: ReactNode;
 }
 
-export function SimpleAlertList({ items }: { items: SimpleAlertItem[] }) {
+export function SimpleAlertList({ items }: { items: SimpleAlertListItem[] }) {
   return (
     <ul className="alert-list">
       {items.map((item) => (
