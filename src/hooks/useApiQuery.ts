@@ -1,6 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME } from '../lib/constants.js';
 
+/**
+ * Thin wrapper around `useQuery` with shared defaults.
+ *
+ * **`buildUrl` / `enabled` contract**: `buildUrl` is called only when `enabled`
+ * is `true` (React Query skips the `queryFn` otherwise). Callers that guard on
+ * a nullable value — e.g. `buildUrl: () => \`/api/traces/${traceId!}\`` — must
+ * also pass `enabled: !!traceId` to prevent `buildUrl` from executing before
+ * the value is available.
+ */
 export function useApiQuery<TRaw, T = TRaw>(
   queryKey: readonly unknown[],
   buildUrl: () => string,
