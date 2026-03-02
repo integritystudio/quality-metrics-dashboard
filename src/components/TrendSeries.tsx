@@ -21,7 +21,7 @@ const COLORS = {
   ...CHART_COLORS,
   band: 'rgba(88, 166, 255, 0.1)',
   bandStroke: 'rgba(88, 166, 255, 0.3)',
-  background: 'var(--bg-card)',
+  background: '#131920', // --bg-card; must be a hex literal for SVG fill attribute
 };
 
 function formatTime(iso: string, spanDays: number): string {
