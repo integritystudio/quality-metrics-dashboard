@@ -75,7 +75,7 @@ export function TrendChart({
 
   return (
     <div>
-      <div aria-label={`Trend chart for ${metricName}`}>
+      <div role="img" aria-label={`Trend chart for ${metricName}`}>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={data} margin={CHART_MARGIN}>
             <CartesianGrid {...CHART_GRID_PROPS} />
