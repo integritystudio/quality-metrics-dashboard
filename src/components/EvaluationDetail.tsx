@@ -39,10 +39,9 @@ export function EvaluationDetail({
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="text-xs cursor-pointer btn-reset"
+              className="text-xs cursor-pointer btn-reset text-accent"
               style={{
                 border: '1px solid var(--border)',
-                color: 'var(--accent)',
                 padding: 'var(--space-1-5) 14px',
                 borderRadius: 'var(--radius)',
               }}

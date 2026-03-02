@@ -158,11 +158,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         padding: '20px 24px 16px',
         marginBottom: 0,
       }}>
-        <div className="flex-wrap gap-4 justify-between" style={{ alignItems: 'flex-start' }}>
+        <div className="flex-wrap gap-4 justify-between align-start">
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
-            <div className="mono font-semibold text-base mb-2 break-all" style={{
-              color: 'var(--accent-hover)',
+            <div className="mono font-semibold text-base mb-2 break-all text-accent-hover" style={{
               letterSpacing: '0.02em',
             }}>{sessionId}</div>
             <div className="text-secondary text-xs flex-wrap gap-4">
@@ -180,10 +179,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 }}>RESUMED ×{si.resumeCount}</span>
               )}
               {models.map(m => (
-                <span key={m} className="mono text-2xs text-muted chip" style={{
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-subtle)',
-                }}>{m}</span>
+                <span key={m} className="mono text-2xs text-muted chip chip-badge">{m}</span>
               ))}
             </div>
           </div>
@@ -323,7 +319,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           <div className="text-muted text-xs">No token snapshots recorded.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="mono-xs w-full" style={{ borderCollapse: 'collapse' }}>
+            <table className="mono-xs w-full table-collapse">
               <MonoTableHead columns={[
                 { label: 'Messages' }, { label: 'Input' }, { label: 'Output' },
                 { label: 'Cache Read' }, { label: 'Cache Create' }, { label: 'Model' },
@@ -333,7 +329,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   <tr key={i} className="border-b-subtle">
                     <td className="cell-pad-wide text-right">{t.messages}</td>
                     <td className="cell-pad-wide text-right text-secondary">{fmtBytes(t.inputTokens)}</td>
-                    <td className="cell-pad-wide text-right" style={{ color: 'var(--accent-hover)' }}>{fmtBytes(t.outputTokens)}</td>
+                    <td className="cell-pad-wide text-right text-accent-hover">{fmtBytes(t.outputTokens)}</td>
                     <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheRead)}</td>
                     <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheCreation)}</td>
                     <td className="cell-pad-wide text-right text-muted">{t.model}</td>
@@ -447,9 +443,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               const commitFiles = commit.files?.split(' ') ?? [];
               return (
                 <details key={i} className="border-b-subtle">
-                  <summary className="flex-center gap-2-5 cursor-pointer" style={{
+                  <summary className="flex-center gap-2-5 cursor-pointer list-none" style={{
                     padding: '8px 4px',
-                    listStyle: 'none',
                   }}>
                     <span className="text-healthy text-2xs shrink-0">●</span>
                     <span className="mono-xs font-semibold flex-1">
@@ -492,7 +487,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           health={codeStructure.some(f => f.score < 0.6) ? 'warn' : 'ok'}
         >
           <div className="overflow-x-auto">
-            <table className="mono-xs w-full" style={{ borderCollapse: 'collapse' }}>
+            <table className="mono-xs w-full table-collapse">
               <MonoTableHead columns={[
                 { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },
                 { label: 'Lines' }, { label: 'Exports' }, { label: 'Functions' },

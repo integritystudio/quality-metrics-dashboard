@@ -872,13 +872,16 @@ details[open] > .cot-summary::before {
 .text-2xl  { font-size: var(--font-size-2xl); }
 
 /* Text color utilities */
-.text-secondary { color: var(--text-secondary); }
-.text-muted     { color: var(--text-muted); }
+.text-secondary    { color: var(--text-secondary); }
+.text-muted        { color: var(--text-muted); }
+.text-accent       { color: var(--accent); }
+.text-accent-hover { color: var(--accent-hover); }
 
 /* Flex layout */
 .d-flex         { display: flex; }
 .d-inline-block { display: inline-block; }
-.flex-center { display: flex; align-items: center; }
+.flex-center    { display: flex; align-items: center; }
+.align-start    { align-items: flex-start; }
 
 /* Text transform */
 .uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
@@ -901,10 +904,12 @@ details[open] > .cot-summary::before {
 .gap-16   { gap: var(--space-16); }     /* 64px */
 
 /* Width */
-.w-full { width: 100%; }
+.w-full   { width: 100%; }
+.min-w-120 { min-width: 120px; }
 
 /* Margin */
 .m-0    { margin: 0; }
+.ml-auto { margin-left: auto; }
 
 /* Margin-bottom */
 .mb-0   { margin-bottom: 0; }
@@ -941,9 +946,32 @@ details[open] > .cot-summary::before {
 /* Display */
 .contents { display: contents; }
 
+/* Opacity */
+.opacity-50 { opacity: 0.5; }
+
+/* List */
+.list-none { list-style: none; }
+
+/* Vertical align */
+.valign-middle { vertical-align: middle; }
+
+/* Table */
+.table-collapse { border-collapse: collapse; }
+
+/* Accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 /* Typography */
 .font-medium { font-weight: var(--light-bold); }
 .font-bold   { font-weight: 700; }
+.italic      { font-style: italic; }
 .nowrap      { white-space: nowrap; }
 .truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .break-all { word-break: break-all; }
@@ -978,3 +1006,46 @@ details[open] > .cot-summary::before {
 /* Border */
 .border-b        { border-bottom: 1px solid var(--border); }
 .border-b-subtle { border-bottom: 1px solid var(--border-subtle); }
+.border-t        { border-top: 1px solid var(--border); }
+
+/* Compound: chip with elevated bg + subtle border */
+.chip-badge {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Compound: chip with accent tint bg */
+.chip-accent {
+  background: var(--accent-alpha-10);
+  color: var(--accent);
+}
+
+/* Compound: colored dot indicators */
+.dot-sm {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-xs {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Compound: warning badge pill */
+.badge-warning {
+  color: var(--status-warning);
+  background: var(--bg-status-warning);
+  padding: var(--space-px) var(--space-1-5);
+  border-radius: var(--radius-pill);
+}
+
+/* Compound: section rail panel (bg-card + left border rail) */
+.section-rail {
+  background: var(--bg-card);
+  border-left: 3px solid var(--section-rail-color, var(--border-accent));
+}

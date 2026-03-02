@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { CHEVRON_RIGHT } from '../lib/symbols.js';
 
 /** Non-collapsible view section — wraps .view-section + .section-heading */
@@ -32,30 +32,30 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
 
   return (
     <details open={defaultOpen} className="mb-1">
-      <summary className="flex-center gap-3 select-none cursor-pointer border-b-subtle" style={{
-        padding: '12px 20px',
-        background: 'var(--bg-card)',
-        borderLeft: `3px solid ${railColor}`,
-        listStyle: 'none',
-        transition: 'background 0.15s',
-      }}>
+      <summary
+        className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail"
+        style={{
+          '--section-rail-color': railColor,
+          padding: '12px 20px',
+          transition: 'background 0.15s',
+        } as CSSProperties}
+      >
         <span className="mono text-2xs d-inline-block" style={{
           color: railColor,
           transition: 'transform 0.2s',
         }}>{CHEVRON_RIGHT}</span>
         <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
         {badge && (
-          <span className="mono-xs text-muted chip" style={{
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
-          }}>{badge}</span>
+          <span className="mono-xs text-muted chip chip-badge">{badge}</span>
         )}
       </summary>
-      <div className="border-b-subtle" style={{
-        padding: '16px 20px 20px',
-        background: 'var(--bg-card)',
-        borderLeft: `3px solid ${railColor}`,
-      }}>
+      <div
+        className="border-b-subtle section-rail"
+        style={{
+          '--section-rail-color': railColor,
+          padding: '16px 20px 20px',
+        } as CSSProperties}
+      >
         {children}
       </div>
     </details>

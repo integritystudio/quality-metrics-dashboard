@@ -122,7 +122,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
       </ResponsiveContainer>
       <div className="flex-center justify-center gap-4 mt-1 text-xs" style={{ color: CHART_COLORS.text }}>
         <span><span style={{ color: CHART_COLORS.line }}>&#9473;</span> avg</span>
-        <span><span style={{ opacity: 0.5 }}>- -</span> p50</span>
+        <span><span className="opacity-50">- -</span> p50</span>
         <span><span style={{ opacity: 0.3 }}>&#9608;</span> p10-p90</span>
       </div>
     </div>

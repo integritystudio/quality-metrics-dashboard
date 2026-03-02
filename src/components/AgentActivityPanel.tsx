@@ -9,8 +9,6 @@ import { ExpandChevron } from './ExpandChevron.js';
 import { Sparkline } from './Sparkline.js';
 
 const COLUMN_COUNT = 7;
-const RATE_LIMIT_BADGE_BG = 'var(--bg-status-warning)';
-
 type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
 
 function errorRateColor(rate: number): string {
@@ -92,8 +90,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
             return (
               <Fragment key={agent.agentName}>
                 <tr
-                  className={isExpanded ? 'eval-row-expanded' : ''}
-                  style={{ verticalAlign: 'middle', cursor: hasLinks ? 'pointer' : undefined }}
+                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}`}
+                  style={{ cursor: hasLinks ? 'pointer' : undefined }}
                   onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
                 >
                   {/* Agent name with color accent */}
@@ -102,12 +100,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       {hasLinks && (
                         <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
                       )}
-                      <span className="shrink-0 d-inline-block" style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: color,
-                      }} />
+                      <span className="dot-sm" style={{ background: color }} />
                       <span className="mono-xs text-primary break-all">
                         {agent.agentName}
                       </span>
@@ -157,12 +150,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   {/* Rate limits */}
                   <td>
                     {agent.rateLimitCount > 0 ? (
-                      <span className="mono-xs" style={{
-                        color: 'var(--status-warning)',
-                        background: RATE_LIMIT_BADGE_BG,
-                        padding: '1px 6px',
-                        borderRadius: 10,
-                      }}>
+                      <span className="mono-xs badge-warning">
                         {agent.rateLimitCount}x
                       </span>
                     ) : (
@@ -235,7 +223,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             )}
                             {/* sessionCount === total unique sessions; sessionIds is capped at 50 */}
                             {agent.sessionIdsTruncated && (
-                              <span className="text-muted text-2xs" style={{ fontStyle: 'italic' }}>
+                              <span className="text-muted text-2xs italic">
                                 +{agent.sessionCount - agent.sessionIds.length} more
                               </span>
                             )}
@@ -261,7 +249,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               <span className="text-muted text-xs">none</span>
                             )}
                             {agent.traceIdsTruncated && (
-                              <span className="text-muted text-2xs" style={{ fontStyle: 'italic' }}>
+                              <span className="text-muted text-2xs italic">
                                 +{(agent.traceIdsTotal ?? 0) - agent.traceIds.length} more
                               </span>
                             )}

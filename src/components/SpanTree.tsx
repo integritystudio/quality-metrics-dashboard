@@ -104,10 +104,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
           </div>
         </div>
         {node.evalCount > 0 && (
-          <span className="text-2xs chip font-semibold" style={{
-            background: 'var(--accent-alpha-10)',
-            color: 'var(--accent)',
-          }}>
+          <span className="text-2xs chip font-semibold chip-accent">
             {plural(node.evalCount, 'eval')}
           </span>
         )}

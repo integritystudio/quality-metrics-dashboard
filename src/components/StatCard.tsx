@@ -8,7 +8,7 @@ interface StatCardProps {
 
 export function StatCard({ value, label, valueColor }: StatCardProps) {
   return (
-    <div className="card summary-count p-4" style={{ minWidth: 120 }}>
+    <div className="card summary-count p-4 min-w-120">
       <div className="value" style={valueColor ? { color: valueColor } : undefined}>
         {value}
       </div>

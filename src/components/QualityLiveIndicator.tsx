@@ -12,7 +12,7 @@ export function QualityLiveIndicator() {
   const { data, isLoading, error } = useQualityLive();
 
   if (isLoading) {
-    return <div className="quality-live-bar" style={{ opacity: 0.5 }}>Loading quality signals...</div>;
+    return <div className="quality-live-bar opacity-50">Loading quality signals...</div>;
   }
 
   if (error || !data) {
@@ -49,17 +49,12 @@ export function QualityLiveIndicator() {
             color: scoreToBadgeColor(m.score),
           }}
         >
-          <span style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: scoreToBadgeColor(m.score),
-          }} />
+          <span className="dot-xs" style={{ background: scoreToBadgeColor(m.score) }} />
           {m.name.replace(/_/g, ' ')}
           <span className="font-bold">{m.score.toFixed(2)}</span>
         </span>
       ))}
-      <span className="text-secondary text-2xs" style={{ marginLeft: 'auto' }}>
+      <span className="text-secondary text-2xs ml-auto">
         {formatTimestamp(data.lastUpdated)}
       </span>
     </div>

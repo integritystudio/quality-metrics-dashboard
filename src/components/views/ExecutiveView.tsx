@@ -23,7 +23,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
             <div className="label text-secondary text-xs">Total</div>
           </div>
           <div className="summary-count">
-            <div className="value" style={{ color: 'var(--status-healthy)' }}>{data.summary.healthyMetrics}</div>
+            <div className="value text-healthy">{data.summary.healthyMetrics}</div>
             <div className="label text-secondary text-xs">Healthy</div>
           </div>
           {data.slaCompliantCount !== undefined && (
