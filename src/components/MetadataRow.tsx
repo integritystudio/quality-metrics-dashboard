@@ -6,7 +6,7 @@ export function MetadataRow({ label, value, mono }: {
   value?: ReactNode;
   mono?: boolean;
 }) {
-  if (value == null) return null;
+  if (value == null || value === '') return null;
   return (
     <div className="tooltip-row">
       <span className="text-secondary">{label}</span>
