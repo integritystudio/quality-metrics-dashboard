@@ -1,6 +1,6 @@
-import { Link } from 'wouter';
 import { useComplianceSLA, useComplianceVerifications } from '../hooks/useCompliance.js';
 import { ComplianceFrameworkMap } from '../components/ComplianceFrameworkMap.js';
+import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { SLATable } from '../components/SLATable.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
@@ -11,16 +11,12 @@ export function CompliancePage({ period }: { period: Period }) {
   const { data: verData, isLoading: verLoading, error: verError } = useComplianceVerifications(period);
 
   return (
-    <div>
-      <Link href="/" className="back-link">&larr; Back to dashboard</Link>
-
+    <PageShell isLoading={slaLoading || verLoading} error={slaError ?? verError}>
       <ViewSection title="SLA Compliance">
-        {slaLoading && <div className="card skeleton" style={{ height: 120 }} />}
-        {slaError && <div className="error-state"><p>{slaError.message}</p></div>}
         {slaData && !slaData.noSLAsConfigured && slaData.results.length > 0 && (
           <SLATable slas={slaData.results} />
         )}
-        {slaData && slaData.noSLAsConfigured && (
+        {slaData?.noSLAsConfigured && (
           <div className="card card--empty">
             No SLAs configured. Define SLAs in your quality metrics configuration.
           </div>
@@ -37,8 +33,6 @@ export function CompliancePage({ period }: { period: Period }) {
       </ViewSection>
 
       <ViewSection title="Human Verification Events">
-        {verLoading && <div className="card skeleton" style={{ height: 120 }} />}
-        {verError && <div className="error-state"><p>{verError.message}</p></div>}
         {verData && verData.verifications.length > 0 && (
           <div className="card">
             <table className="eval-table" style={{ width: '100%' }}>
@@ -71,6 +65,6 @@ export function CompliancePage({ period }: { period: Period }) {
           </div>
         )}
       </ViewSection>
-    </div>
+    </PageShell>
   );
 }
