@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { TruncatedList } from '../components/TruncatedList.js';
 import { Link } from 'wouter';
 import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
@@ -289,18 +290,18 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         {errorCount > 0 && (
           <IssueCallout severity="critical" title={plural(errorCount, 'error span')}>
             <div className="mb-2">Tool invocations or agent calls that reported errors:</div>
-            {errorDetails.slice(0, MAX_ERROR_ROWS).map((e, i) => (
-              <div key={i} className="mono-xs mb-1">
-                <span style={{ color: 'var(--status-critical)' }}>✗</span>{' '}
-                {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
-                {e.errorType && e.errorType !== 'unknown' && <span className="text-muted"> — {e.errorType}</span>}
-              </div>
-            ))}
-            {errorCount > MAX_ERROR_ROWS && (
-              <div className="text-muted text-xs mt-1">
-                +{errorCount - MAX_ERROR_ROWS} more
-              </div>
-            )}
+            <TruncatedList
+              items={errorDetails}
+              max={MAX_ERROR_ROWS}
+              total={errorCount}
+              renderItem={(e, i) => (
+                <div key={i} className="mono-xs mb-1">
+                  <span style={{ color: 'var(--status-critical)' }}>✗</span>{' '}
+                  {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
+                  {e.errorType && e.errorType !== 'unknown' && <span className="text-muted"> — {e.errorType}</span>}
+                </div>
+              )}
+            />
           </IssueCallout>
         )}
 
@@ -309,30 +310,38 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             <div className="mb-2">
               Evaluations flagging potential hallucination or very low confidence:
             </div>
-            {hallucinationEvals.slice(0, MAX_HALLUCINATION_ROWS).map((e, i) => (
-              <div key={i} className="flex-center gap-2-5 mb-1-5">
-                <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
-                <div>
-                  <div className="mono-xs">{e.evaluationName}</div>
-                  {e.explanation && (
-                    <div className="text-muted text-xs" style={{ marginTop: 2 }}>
-                      {truncateText(e.explanation, 200)}
-                    </div>
-                  )}
+            <TruncatedList
+              items={hallucinationEvals}
+              max={MAX_HALLUCINATION_ROWS}
+              renderItem={(e, i) => (
+                <div key={i} className="flex-center gap-2-5 mb-1-5">
+                  <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
+                  <div>
+                    <div className="mono-xs">{e.evaluationName}</div>
+                    {e.explanation && (
+                      <div className="text-muted text-xs" style={{ marginTop: 2 }}>
+                        {truncateText(e.explanation, 200)}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )}
+            />
           </IssueCallout>
         )}
 
         {failedEvals.length > 0 && !hallucinationEvals.length && (
           <IssueCallout severity="warning" title={`${plural(failedEvals.length, 'evaluation')} marked fail`}>
-            {failedEvals.slice(0, MAX_FAILED_EVAL_ROWS).map((e, i) => (
-              <div key={i} className="mono-xs" style={{ marginBottom: 3 }}>
-                <span className="text-warning">⚠</span>{' '}
-                {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
-              </div>
-            ))}
+            <TruncatedList
+              items={failedEvals}
+              max={MAX_FAILED_EVAL_ROWS}
+              renderItem={(e, i) => (
+                <div key={i} className="mono-xs" style={{ marginBottom: 3 }}>
+                  <span className="text-warning">⚠</span>{' '}
+                  {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
+                </div>
+              )}
+            />
           </IssueCallout>
         )}
 
