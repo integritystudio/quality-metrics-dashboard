@@ -53,6 +53,7 @@ export function formatScore(val: number | null | undefined): string {
 }
 
 export function formatPercent(value: number, decimals = 1): string {
+  if (!Number.isFinite(value)) return '\u2014';
   return `${value.toFixed(decimals)}%`;
 }
 
