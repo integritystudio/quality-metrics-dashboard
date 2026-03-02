@@ -869,8 +869,13 @@ details[open] > .cot-summary::before {
 
 /* Monospace utilities */
 .mono      { font-family: var(--font-mono); }
+.mono-2xs  { font-family: var(--font-mono); font-size: var(--font-size-2xs); }
 .mono-xs   { font-family: var(--font-mono); font-size: var(--font-size-xs); }
+.mono-base { font-family: var(--font-mono); font-size: var(--font-size-base); }
+.mono-md   { font-family: var(--font-mono); font-size: var(--font-size-md); }
+.mono-lg   { font-family: var(--font-mono); font-size: var(--font-size-lg); }
 .mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
+.mono-2xl  { font-family: var(--font-mono); font-size: var(--font-size-2xl); }
 
 /* Font size */
 .text-2xs  { font-size: var(--font-size-2xs); }
@@ -904,8 +909,10 @@ details[open] > .cot-summary::before {
 .gap-2-5  { gap: var(--space-2-5); }    /* 10px */
 .gap-3    { gap: var(--space-3); }      /* 12px */
 .gap-4    { gap: var(--space-4); }      /* 16px */
+.gap-5    { gap: var(--space-5); }      /* 20px */
 .gap-6    { gap: var(--space-6); }      /* 24px */
 .gap-8    { gap: var(--space-8); }      /* 32px */
+.gap-16   { gap: var(--space-16); }     /* 64px */
 
 /* Margin-bottom */
 .mb-0   { margin-bottom: 0; }
@@ -913,6 +920,7 @@ details[open] > .cot-summary::before {
 .mb-1-5 { margin-bottom: var(--space-1-5); }
 .mb-2   { margin-bottom: var(--space-2); }     /*  8px */
 .mb-3   { margin-bottom: var(--space-3); }
+.mb-4   { margin-bottom: var(--space-4); }     /* 16px */
 
 /* Margin-top */
 .mt-1   { margin-top: var(--space-1); }     /*  4px */
