@@ -198,12 +198,16 @@ function kvBulkPut(entries: KVEntry[]): number {
         });
       } catch (err) {
         const stderr = (err as { stderr?: Buffer })?.stderr?.toString() ?? '';
+        const stdout = (err as { stdout?: Buffer })?.stdout?.toString() ?? '';
         if (stderr.includes('free usage limit') || stderr.includes('code: 10048')) {
-          console.warn(`[sync-to-kv] KV daily write limit reached — ${batch.length} entries deferred to next run`);
+          console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred. stderr: ${stderr.slice(0, 300)}`);
           return written;
         }
         const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Wrangler KV bulk put failed for ${batch.length} entries${batchLabel}. Ensure wrangler is installed and authenticated. Error: ${msg}`);
+        console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
+        if (stderr) console.error(`[sync-to-kv] stderr: ${stderr.slice(0, 500)}`);
+        if (stdout) console.error(`[sync-to-kv] stdout: ${stdout.slice(0, 500)}`);
+        throw new Error(`Wrangler KV bulk put failed for ${batch.length} entries${batchLabel}.`);
       }
       written += batch.length;
     } finally {
@@ -348,8 +352,8 @@ function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[
 }
 
 function computeTimespan(evaluations: EvaluationResult[]) {
-  const tsMin = Infinity;
-  const tsMax = -Infinity;
+  let tsMin = Infinity;
+  let tsMax = -Infinity;
   for (const ev of evaluations) {
     const t = new Date(ev.timestamp).getTime();
     if (t < tsMin) tsMin = t;
@@ -826,7 +830,7 @@ async function main(): Promise<void> {
         const detail = scores.length > 0
           ? computeMetricDetail(bucket.evals, config as QualityMetricConfig, { topN: 0, bucketCount: 0, previousValues })
           : undefined;
-        const dynamics = undefined;
+        let dynamics = undefined;
         if (detail?.trend) {
           dynamics = computeMetricDynamics(detail.trend, previousTrend, periodHours);
           previousTrend = detail.trend;
@@ -937,7 +941,7 @@ async function main(): Promise<void> {
 
     // Accumulate agent cross-session stats from detail
     for (const ag of detail.agentActivity) {
-      const acc = agentCrossSession.get(ag.agentName);
+      let acc = agentCrossSession.get(ag.agentName);
       if (!acc) {
         acc = {
           totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
