@@ -1,5 +1,4 @@
 import { type ReactNode } from 'react';
-import { TruncatedList } from '../components/TruncatedList.js';
 import { Link } from 'wouter';
 import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
@@ -8,6 +7,9 @@ import { ScoreBadge } from '../components/ScoreBadge.js';
 import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
 import { Section, type SectionHealth } from '../components/Section.js';
+import { Stat } from '../components/Stat.js';
+import { FreqBar } from '../components/FreqBar.js';
+import { TruncatedList } from '../components/TruncatedList.js';
 import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
 import {
   HALLUCINATION_SCORE_THRESHOLD,
@@ -16,45 +18,6 @@ import {
   MAX_FAILED_EVAL_ROWS,
   SCORE_DISPLAY_PRECISION,
 } from '../lib/constants.js';
-import { BarIndicator } from '../components/BarIndicator.js';
-
-// ─── Stat chip ───────────────────────────────────────────────────────────────
-
-function Stat({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  return (
-    <div className="text-center" style={{ flex: '1 1 100px', minWidth: 80 }}>
-      <div className="mono font-bold" style={{
-        fontSize: 22,
-        color: color ?? 'var(--text-primary)',
-        lineHeight: 1.1,
-      }}>{value}</div>
-      <div className="stat-label" style={{ letterSpacing: '0.1em', marginTop: 3 }}>{label}</div>
-    </div>
-  );
-}
-
-// ─── Frequency bar ───────────────────────────────────────────────────────────
-
-function FreqBar({ label, count, max, color }: { label: string; count: number; max: number; color?: string }) {
-  const pct = max > 0 ? (count / max) * 100 : 0;
-  return (
-    <div className="flex-center mb-1-5 gap-2-5">
-      <div className="mono-xs text-secondary text-right shrink-0 truncate" style={{
-        width: 160,
-      }}>{label}</div>
-      <BarIndicator
-        value={pct}
-        height={6}
-        color={color ?? 'var(--accent)'}
-        trackColor="var(--bg-elevated)"
-        style={{ flex: 1 }}
-      />
-      <div className="mono-xs text-muted text-right shrink-0" style={{
-        width: 36,
-      }}>{count}</div>
-    </div>
-  );
-}
 
 // ─── Issue callout ───────────────────────────────────────────────────────────
 
