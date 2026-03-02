@@ -19,12 +19,12 @@ import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, re
 import { createInterface } from 'readline';
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
-import type { LLMProvider } from '../../src/lib/llm-as-judge.js';
-import { sanitizeForPrompt } from '../../src/lib/llm-as-judge.js';
-import type { GEvalConfig } from '../../src/lib/llm-as-judge.js';
+import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
+import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
+import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import {
   LLMJudge,
-} from '../../src/lib/llm-judge-config.js';
+} from '../../src/lib/judge/llm-judge-config.js';
 import type { DatasetRunRecord } from '../../src/backends/index.js';
 import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
 
@@ -909,6 +909,7 @@ async function main() {
   const datasetIdx = args.indexOf('--dataset-id');
   const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
 
+  const transcripts = await _discoverTranscripts();
 
   const allTurns: Turn[] = [];
   for (const info of transcripts) {
@@ -958,6 +959,7 @@ async function main() {
   }
 
   try {
+    const existingKeys = _loadExistingKeys();
 
     // Reset failure tracking
     for (const key of Object.keys(evalFailures)) delete evalFailures[key];

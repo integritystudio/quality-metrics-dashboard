@@ -355,7 +355,8 @@ function main(): void {
   let _spanCount = 0;
 
   for (const file of traceFiles) {
-    join(TELEMETRY_DIR, file);
+    const filePath = join(TELEMETRY_DIR, file);
+    const lines = readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
 
     for (const line of lines) {
       let span: TraceSpan;
