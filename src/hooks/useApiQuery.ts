@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME } from '../lib/constants.js';
 
-export function useApiQuery<T>(
+export function useApiQuery<TRaw, T = TRaw>(
   queryKey: readonly unknown[],
   buildUrl: () => string,
   options: {
@@ -10,18 +10,18 @@ export function useApiQuery<T>(
     retry?: number | ((failureCount: number, error: unknown) => boolean);
     refetchInterval?: number;
     retryDelay?: (attempt: number) => number;
-    select?: (raw: unknown) => T;
+    select?: (raw: TRaw) => T;
   } = {},
 ) {
   const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry = 2, refetchInterval, retryDelay, select } = options;
-  return useQuery<T>({
+  return useQuery<TRaw, Error, T>({
     queryKey,
     queryFn: async () => {
       const res = await fetch(buildUrl());
       if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const raw: unknown = await res.json();
-      return (select ? select(raw) : raw) as T;
+      return res.json() as Promise<TRaw>;
     },
+    select,
     enabled,
     staleTime,
     retry,
