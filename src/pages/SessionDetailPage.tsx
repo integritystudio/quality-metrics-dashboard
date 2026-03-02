@@ -8,6 +8,7 @@ import { PageShell } from '../components/PageShell.js';
 import { Section, type SectionHealth } from '../components/Section.js';
 import { Stat } from '../components/Stat.js';
 import { FreqBar } from '../components/FreqBar.js';
+import { FreqBarGrid } from '../components/FreqBarGrid.js';
 import { TruncatedList } from '../components/TruncatedList.js';
 import { IssueCallout } from '../components/IssueCallout.js';
 import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
@@ -20,23 +21,6 @@ import {
 } from '../lib/constants.js';
 
 
-
-function FreqBarGrid({ entries, max, color }: {
-  entries: [string, number][];
-  max: number;
-  color?: string;
-}) {
-  return (
-    <div className="freq-grid">
-      {[...entries]
-        .sort((a, b) => b[1] - a[1])
-        .map(([key, count]) => (
-          <FreqBar key={key} label={key} count={count} max={max} color={color} />
-        ))
-      }
-    </div>
-  );
-}
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
