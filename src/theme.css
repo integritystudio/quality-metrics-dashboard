@@ -599,6 +599,14 @@ body {
   margin-top: 3px;
 }
 
+.freq-bar-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 36px;
+  align-items: center;
+  gap: var(--space-2-5);
+  margin-bottom: var(--space-1-5);
+}
+
 .vitals-divider {
   width: 1px;
   background: var(--border-subtle);
