@@ -1,4 +1,5 @@
 import { Link } from 'wouter';
+import { formatScore } from '../lib/quality-utils.js';
 import type { TriggeredAlert } from '../types.js';
 
 type AlertWithMeta = TriggeredAlert & { metricName?: string };
@@ -8,7 +9,7 @@ function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
     <li className="alert-item" data-status={alert.severity}>
       <div className="alert-message">{alert.message}</div>
       <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {alert.actualValue?.toFixed(4)} (threshold: {alert.threshold?.toFixed(4)})
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
       </div>
       {alert.remediationHints && alert.remediationHints.length > 0 && (
         <div className="remediation text-xs">
@@ -30,7 +31,7 @@ function ThresholdBar({ actual, threshold, direction }: {
   const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
 
   return (
-    <div className="threshold-bar" aria-label={`Actual: ${actual.toFixed(4)}, Threshold: ${threshold.toFixed(4)}`}>
+    <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
       <div
         className="threshold-bar-fill"
         style={{
@@ -41,7 +42,7 @@ function ThresholdBar({ actual, threshold, direction }: {
       <div
         className="threshold-bar-marker"
         style={{ left: `${thresholdPct}%` }}
-        title={`Threshold: ${threshold.toFixed(4)}`}
+        title={`Threshold: ${formatScore(threshold)}`}
       />
     </div>
   );
@@ -52,7 +53,7 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
     <li className="alert-item alert-compound" data-status={alert.severity}>
       <div className="alert-message">{alert.message}</div>
       <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {alert.actualValue?.toFixed(4)} (threshold: {alert.threshold?.toFixed(4)})
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
       </div>
 
       <ThresholdBar

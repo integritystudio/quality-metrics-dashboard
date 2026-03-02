@@ -30,7 +30,7 @@ export function ShortcutOverlay() {
                 <span>{item.description}</span>
                 <kbd className="mono-xs surface-elevated" style={{
                   padding: '2px 6px',
-                  borderRadius: 4,
+                  borderRadius: 'var(--radius-sm)',
                 }}>
                   {item.key}
                 </kbd>

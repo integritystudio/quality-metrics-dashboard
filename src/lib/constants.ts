@@ -139,7 +139,7 @@ export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
 export const CHART_TOOLTIP_CONTENT_STYLE = {
   backgroundColor: CHART_COLORS.tooltip,
   border: `1px solid ${CHART_COLORS.grid}`,
-  borderRadius: 6,
+  borderRadius: 'var(--radius)',
   color: CHART_COLORS.text,
   fontSize: 12,
 };

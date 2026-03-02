@@ -2,7 +2,10 @@ import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from '
 import { StatusBadge } from '../Indicators.js';
 import { CQIHero } from '../CQIHero.js';
 import { StatCard } from '../StatCard.js';
+import { MetricGrid } from '../MetricGrid.js';
 import { ViewSection } from '../Section.js';
+import { HealthBanner } from '../HealthBanner.js';
+import { SummaryCount } from '../SummaryCount.js';
 import { plural } from '../../lib/quality-utils.js';
 
 interface ExtendedExecutiveView extends ExecutiveViewType {
@@ -12,28 +15,13 @@ interface ExtendedExecutiveView extends ExecutiveViewType {
 export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (
     <div>
-      <div className="health-banner flex-center" data-status={data.overallStatus}>
-        <div className="flex-center gap-3">
-          <StatusBadge status={data.overallStatus} />
-          <span>Executive Summary</span>
-        </div>
-        <div className="d-flex gap-6">
-          <div className="summary-count">
-            <div className="value">{data.summary.totalMetrics}</div>
-            <div className="label text-secondary text-xs">Total</div>
-          </div>
-          <div className="summary-count">
-            <div className="value text-healthy">{data.summary.healthyMetrics}</div>
-            <div className="label text-secondary text-xs">Healthy</div>
-          </div>
-          {data.slaCompliantCount !== undefined && (
-            <div className="summary-count">
-              <div className="value">{data.slaCompliantCount}/{data.slaTotalCount}</div>
-              <div className="label text-secondary text-xs">SLAs Met</div>
-            </div>
-          )}
-        </div>
-      </div>
+      <HealthBanner status={data.overallStatus} message="Executive Summary">
+        <SummaryCount value={data.summary.totalMetrics} label="Total" />
+        <SummaryCount value={data.summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
+        {data.slaCompliantCount !== undefined && (
+          <SummaryCount value={`${data.slaCompliantCount}/${data.slaTotalCount}`} label="SLAs Met" />
+        )}
+      </HealthBanner>
 
       {data.topIssues.length > 0 && (
         <ViewSection title="Top Issues">
@@ -57,14 +45,14 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       )}
 
       <ViewSection title="Metric Statuses">
-        <div className="metric-grid">
+        <MetricGrid>
           {data.metricStatuses.map((m: { name: string; displayName: string; status: string }) => (
             <div key={m.name} className="card d-flex justify-between flex-center p-4">
               <span>{m.displayName}</span>
               <StatusBadge status={m.status} />
             </div>
           ))}
-        </div>
+        </MetricGrid>
       </ViewSection>
 
       <ViewSection title="Alert Summary">

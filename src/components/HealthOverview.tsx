@@ -1,6 +1,7 @@
 import type { QualityDashboardSummary } from '../types.js';
-import { StatusBadge } from './Indicators.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
+import { HealthBanner } from './HealthBanner.js';
+import { SummaryCount } from './SummaryCount.js';
 
 interface PipelineHealth {
   evalVolume: number;
@@ -51,50 +52,34 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
   const { overallStatus, summary } = dashboard;
   const pipeline = computePipelineHealth(dashboard);
 
-  return (
-    <div className="health-banner flex-center" data-status={overallStatus}>
-      <div>
-        <div className="flex-center gap-3">
-          <StatusBadge status={overallStatus} />
-          <span className="text-base">
-            {overallStatus === 'healthy' && 'All metrics within thresholds'}
-            {overallStatus === 'warning' && 'Some metrics need attention'}
-            {overallStatus === 'critical' && 'Critical issues detected'}
-            {overallStatus === 'no_data' && 'No evaluation data available'}
-          </span>
-        </div>
-        <div className="pipeline-stats d-flex gap-6">
-          <div className="pipeline-stat flex-center">
-            Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
-          </div>
-          <div className="pipeline-stat flex-center">
-            Rate: <span className="stat-value">{pipeline.evalRate}</span>
-          </div>
-          {pipeline.lastEvalAge && (
-            <div className="pipeline-stat flex-center">
-              Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
-            </div>
-          )}
-        </div>
+  const statusMessage = <>
+    <span className="text-base">
+      {overallStatus === 'healthy' && 'All metrics within thresholds'}
+      {overallStatus === 'warning' && 'Some metrics need attention'}
+      {overallStatus === 'critical' && 'Critical issues detected'}
+      {overallStatus === 'no_data' && 'No evaluation data available'}
+    </span>
+    <div className="pipeline-stats d-flex gap-6">
+      <div className="pipeline-stat flex-center">
+        Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
       </div>
-      <div className="d-flex gap-6">
-        <div className="summary-count">
-          <div className="value">{summary.totalMetrics}</div>
-          <div className="label text-secondary text-xs">Total</div>
-        </div>
-        <div className="summary-count">
-          <div className="value text-healthy">{summary.healthyMetrics}</div>
-          <div className="label text-secondary text-xs">Healthy</div>
-        </div>
-        <div className="summary-count">
-          <div className="value text-warning">{summary.warningMetrics}</div>
-          <div className="label text-secondary text-xs">Warning</div>
-        </div>
-        <div className="summary-count">
-          <div className="value text-critical">{summary.criticalMetrics}</div>
-          <div className="label text-secondary text-xs">Critical</div>
-        </div>
+      <div className="pipeline-stat flex-center">
+        Rate: <span className="stat-value">{pipeline.evalRate}</span>
       </div>
+      {pipeline.lastEvalAge && (
+        <div className="pipeline-stat flex-center">
+          Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
+        </div>
+      )}
     </div>
+  </>;
+
+  return (
+    <HealthBanner status={overallStatus} message={statusMessage}>
+      <SummaryCount value={summary.totalMetrics} label="Total" />
+      <SummaryCount value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
+      <SummaryCount value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
+      <SummaryCount value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
+    </HealthBanner>
   );
 }

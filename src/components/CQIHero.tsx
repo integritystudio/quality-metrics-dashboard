@@ -35,7 +35,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
           className="d-flex mt-4"
           style={{
             height: 8,
-            borderRadius: 4,
+            borderRadius: 'var(--radius-sm)',
             overflow: 'hidden',
           }}
         >

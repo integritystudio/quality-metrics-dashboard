@@ -19,6 +19,8 @@ import {
   ordinalToCategory,
   truncateText,
   formatTimestamp,
+  formatScore,
+  SCORE_COLORS,
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
@@ -43,9 +45,9 @@ export interface EvalRow {
 }
 
 const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
-  Pass: '#26d97f',
-  Review: '#e5a00d',
-  Fail: '#f04438',
+  Pass: SCORE_COLORS.excellent,
+  Review: SCORE_COLORS.adequate,
+  Fail: SCORE_COLORS.failing,
 };
 
 const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) => {
@@ -87,7 +89,7 @@ const columns = [
         <ScoreBadge
           score={info.getValue()}
           metricName="score"
-          label={info.getValue().toFixed(4)}
+          label={formatScore(info.getValue())}
           evaluator={row.evaluator}
           evaluatorType={row.evaluatorType}
           explanation={row.explanation}
@@ -227,7 +229,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
               className="text-xs font-semibold cursor-pointer"
               style={{
                 padding: '4px 12px',
-                borderRadius: 6,
+                borderRadius: 'var(--radius)',
                 border: `1px solid ${CATEGORY_COLORS[cat]}`,
                 backgroundColor: active ? `${CATEGORY_COLORS[cat]}30` : 'transparent',
                 color: CATEGORY_COLORS[cat],

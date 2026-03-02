@@ -1,4 +1,5 @@
 import { Link } from 'wouter';
+import { SCORE_COLORS } from '../lib/quality-utils.js';
 import { ScoreChip } from './ScoreChip.js';
 import { ColoredChip } from './ColoredChip.js';
 import { MetaItem } from './MetaItem.js';
@@ -24,7 +25,7 @@ export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score
   score: number;
 }) {
   const ok = toolCorrect && argsCorrect;
-  const color = ok ? '#26d97f' : '#f04438';
+  const color = ok ? SCORE_COLORS.excellent : SCORE_COLORS.failing;
   return (
     <ColoredChip
       color={color}

@@ -1,4 +1,3 @@
-import { type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
@@ -10,6 +9,7 @@ import { Section, type SectionHealth } from '../components/Section.js';
 import { Stat } from '../components/Stat.js';
 import { FreqBar } from '../components/FreqBar.js';
 import { TruncatedList } from '../components/TruncatedList.js';
+import { IssueCallout } from '../components/IssueCallout.js';
 import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
 import {
   HALLUCINATION_SCORE_THRESHOLD,
@@ -18,32 +18,6 @@ import {
   MAX_FAILED_EVAL_ROWS,
   SCORE_DISPLAY_PRECISION,
 } from '../lib/constants.js';
-
-// ─── Issue callout ───────────────────────────────────────────────────────────
-
-function IssueCallout({ severity, title, children }: {
-  severity: 'warning' | 'critical';
-  title: string;
-  children: ReactNode;
-}) {
-  const color = severity === 'critical' ? 'var(--status-critical)' : 'var(--status-warning)';
-  return (
-    <div style={{
-      borderLeft: `3px solid ${color}`,
-      background: severity === 'critical' ? 'rgba(240,68,56,0.06)' : 'rgba(229,160,13,0.06)',
-      borderRadius: '0 var(--radius) var(--radius) 0',
-      padding: '10px 14px',
-      marginBottom: 10,
-    }}>
-      <div className="mono-xs uppercase font-semibold mb-1" style={{
-        color,
-      }}>{title}</div>
-      <div className="text-secondary text-xs leading-relaxed">
-        {children}
-      </div>
-    </div>
-  );
-}
 
 
 

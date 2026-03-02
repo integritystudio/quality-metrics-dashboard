@@ -7,6 +7,7 @@ import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import { ExpandChevron } from './ExpandChevron.js';
 import { Sparkline } from './Sparkline.js';
+import { SummaryCount } from './SummaryCount.js';
 
 const COLUMN_COUNT = 7;
 type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
@@ -355,10 +356,7 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
           color: totalRateLimits > 0 ? 'var(--status-warning)' : undefined,
         },
       ].map(({ label, value, color }) => (
-        <div key={label} className="summary-count">
-          <div className="value" style={color ? { color } : undefined}>{value}</div>
-          <div className="label text-secondary text-xs">{label}</div>
-        </div>
+        <SummaryCount key={label} value={value} label={label} valueColor={color} />
       ))}
     </div>
   );

@@ -27,6 +27,7 @@ import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
+import { formatScore } from './lib/quality-utils.js';
 import { useDashboard } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
@@ -137,7 +138,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
             return (
               <div key={key} className="text-center">
                 <div className="mono-xl font-semibold">
-                  {val !== null && val !== undefined ? val.toFixed(4) : 'N/A'}
+                  {formatScore(val)}
                 </div>
                 <div className="text-secondary text-xs uppercase">{key}</div>
               </div>

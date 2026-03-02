@@ -1,3 +1,4 @@
+import { formatScore } from '../lib/quality-utils.js';
 import type { SLAComplianceResult } from '../types.js';
 import { StatusBadge } from './Indicators.js';
 
@@ -20,15 +21,15 @@ export function SLATable({ slas }: { slas: SLAComplianceResult[] }) {
           <tr key={`${sla.sla.metric}-${sla.sla.aggregation}`}>
             <td>{sla.sla.metric} ({sla.sla.aggregation})</td>
             <td className="mono">
-              {sla.sla.direction === 'above' ? '>=' : '<='} {sla.sla.target.toFixed(4)}
+              {sla.sla.direction === 'above' ? '>=' : '<='} {formatScore(sla.sla.target)}
             </td>
             <td className="mono">
-              {sla.actualValue !== null ? sla.actualValue.toFixed(4) : 'N/A'}
+              {formatScore(sla.actualValue)}
             </td>
             <td className="mono" style={{
               color: sla.gap !== null && !sla.compliant ? 'var(--status-critical)' : 'var(--status-healthy)',
             }}>
-              {sla.gap !== null ? (sla.gap >= 0 ? '+' : '') + sla.gap.toFixed(4) : '-'}
+              {sla.gap !== null ? (sla.gap >= 0 ? '+' : '') + formatScore(sla.gap) : '-'}
             </td>
             <td><StatusBadge status={sla.status} /></td>
           </tr>

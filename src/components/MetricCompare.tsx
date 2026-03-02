@@ -1,3 +1,4 @@
+import { formatScore } from '../lib/quality-utils.js';
 import { TrendChart } from './TrendChart.js';
 import { useMetricDetail } from '../hooks/useMetricDetail.js';
 import type { Period, MetricDynamics } from '../types.js';
@@ -39,7 +40,7 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
           {(['avg', 'p50', 'p95'] as const).map(key => (
             <div key={key} className="text-center">
               <div className="mono text-md font-semibold">
-                {detail.values[key]?.toFixed(4) ?? 'N/A'}
+                {formatScore(detail.values[key])}
               </div>
               <div className="field-label text-secondary text-xs">{key}</div>
             </div>

@@ -1,13 +1,15 @@
+import type { ReactNode } from 'react';
 import type { QualityMetricResult } from '../types.js';
 import { MetricCard } from './MetricCard.js';
 
-export function MetricGrid({ metrics, sparklines }: {
-  metrics: QualityMetricResult[];
+export function MetricGrid({ metrics, sparklines, children }: {
+  metrics?: QualityMetricResult[];
   sparklines?: Record<string, (number | null)[]>;
+  children?: ReactNode;
 }) {
   return (
     <div className="metric-grid">
-      {metrics.map((m) => (
+      {children ?? metrics?.map((m) => (
         <MetricCard key={m.name} metric={m} sparklineData={sparklines?.[m.name]} />
       ))}
     </div>

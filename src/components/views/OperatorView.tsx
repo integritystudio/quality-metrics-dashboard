@@ -1,19 +1,18 @@
 import type { OperatorView as OperatorViewType } from '../../types.js';
-import { StatusBadge, TrendIndicator } from '../Indicators.js';
+import { TrendIndicator } from '../Indicators.js';
 import { AlertList } from '../AlertList.js';
 import { MetricGrid } from '../MetricGrid.js';
 import { ViewSection } from '../Section.js';
-import { plural } from '../../lib/quality-utils.js';
+import { HealthBanner } from '../HealthBanner.js';
+import { plural, formatScore } from '../../lib/quality-utils.js';
 
 export function OperatorView({ data }: { data: OperatorViewType }) {
   return (
     <div>
-      <div className="health-banner flex-center" data-status={data.overallStatus}>
-        <div className="flex-center gap-3">
-          <StatusBadge status={data.overallStatus} />
-          <span>Operator View &middot; {plural(data.prioritizedAlerts.length, 'active alert')}</span>
-        </div>
-      </div>
+      <HealthBanner
+        status={data.overallStatus}
+        message={<>Operator View &middot; {plural(data.prioritizedAlerts.length, 'active alert')}</>}
+      />
 
       {data.prioritizedAlerts.length > 0 && (
         <ViewSection title="Prioritized Alerts">
@@ -30,7 +29,7 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
                   {dt.metricName} <TrendIndicator trend={dt.trend} />
                 </div>
                 <div className="alert-meta text-secondary text-xs">
-                  {dt.trend.previousValue?.toFixed(4)} &rarr; {dt.trend.currentValue?.toFixed(4)}
+                  {formatScore(dt.trend.previousValue)} &rarr; {formatScore(dt.trend.currentValue)}
                 </div>
               </li>
             ))}

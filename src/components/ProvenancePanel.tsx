@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Link } from 'wouter';
+import { formatScore } from '../lib/quality-utils.js';
 
 interface EvaluatorTypeCounts {
   rule: number;
@@ -66,7 +67,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
 
   const entries: Array<{ label: string; value: string | undefined }> = [
     { label: 'Evaluation', value: evaluationName },
-    { label: 'Score', value: scoreValue != null ? `${scoreValue.toFixed(4)}${scoreLabel ? ` (${scoreLabel})` : ''}` : undefined },
+    { label: 'Score', value: scoreValue != null ? `${formatScore(scoreValue)}${scoreLabel ? ` (${scoreLabel})` : ''}` : undefined },
     { label: 'Evaluator', value: evaluator },
     { label: 'Type', value: evaluatorType },
     { label: 'Score Unit', value: scoreUnit },

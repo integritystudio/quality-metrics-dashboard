@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import type { TrendBucket } from '../hooks/useTrend.js';
 import { CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import { formatScore } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
 interface TrendSeriesProps {
@@ -78,7 +79,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           <Tooltip
             contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
             formatter={(v: number | string | undefined, name?: string) => [
-              typeof v === 'number' ? v.toFixed(4) : 'N/A',
+              formatScore(typeof v === 'number' ? v : null),
               name === 'avg' ? 'Average' : (name ?? '').toUpperCase(),
             ]}
             labelStyle={CHART_TOOLTIP_LABEL_STYLE}

@@ -1,5 +1,5 @@
 import type { ConfidenceIndicator } from '../types.js';
-import { SCORE_COLORS, type ScoreColorBand } from '../lib/quality-utils.js';
+import { SCORE_COLORS, formatScore, type ScoreColorBand } from '../lib/quality-utils.js';
 import { BarIndicator } from './BarIndicator.js';
 
 
@@ -91,7 +91,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
             {evaluatorScores!.map((es) => (
               <div key={es.evaluator} className="contents">
                 <span className="mono-xs">{es.evaluator}</span>
-                <span className="mono-xs">{es.score.toFixed(4)}</span>
+                <span className="mono-xs">{formatScore(es.score)}</span>
                 <span className="text-secondary text-xs">{es.label ?? '-'}</span>
               </div>
             ))}

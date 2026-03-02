@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { scoreColorBand, truncateText, SCORE_COLORS, type ScoreDirection } from '../lib/quality-utils.js';
+import { scoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection } from '../lib/quality-utils.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
 import { MetadataRow } from './MetadataRow.js';
 
@@ -24,7 +24,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
 }) {
   return (
     <div className="score-badge-tooltip surface-elevated" role="tooltip">
-      <MetadataRow label="Score" value={score.toFixed(4)} mono />
+      <MetadataRow label="Score" value={formatScore(score)} mono />
       <MetadataRow label="Label" value={label} />
       <MetadataRow label="Evaluator" value={evaluator} mono />
       <MetadataRow label="Type" value={evaluatorType} />

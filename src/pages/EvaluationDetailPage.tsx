@@ -5,7 +5,7 @@ import { ProvenancePanel } from '../components/ProvenancePanel.js';
 import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { PageShell } from '../components/PageShell.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
-import { formatTimestamp, plural } from '../lib/quality-utils.js';
+import { formatTimestamp, formatScore, plural } from '../lib/quality-utils.js';
 import { Link, useSearch } from 'wouter';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 
@@ -54,7 +54,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
                   <ScoreBadge
                     score={ev.scoreValue ?? null}
                     metricName={ev.evaluationName}
-                    label={ev.scoreLabel ?? (ev.scoreValue != null ? ev.scoreValue.toFixed(4) : undefined)}
+                    label={ev.scoreLabel ?? (ev.scoreValue != null ? formatScore(ev.scoreValue) : undefined)}
                   />
                   <span className="text-base font-medium">{ev.evaluationName}</span>
                 </div>

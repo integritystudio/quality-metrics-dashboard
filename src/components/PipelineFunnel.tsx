@@ -38,7 +38,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                     minWidth: 40,
                     height: 32,
                     background: `var(--stage-${stage.name}, var(--accent))`,
-                    borderRadius: 4,
+                    borderRadius: 'var(--radius-sm)',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0 10px',

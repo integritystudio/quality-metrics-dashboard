@@ -1,5 +1,6 @@
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
+import { SCORE_COLORS, formatScore } from '../lib/quality-utils.js';
 import type { CorrelationFeature } from '../types.js';
 
 interface CorrelationHeatmapProps {
@@ -115,7 +116,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
             const tooltip = isDiag
               ? `${rowMetric}: diagonal (1.00)`
               : corr
-                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(3)}\nlagHours: ${corr.lagHours}\npValue: ${corr.pValue?.toFixed(4) ?? 'N/A'}\nsignificant: ${corr.significant}`
+                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(3)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
                 : `${rowMetric} vs ${colMetric}: no data`;
 
             return (
@@ -131,7 +132,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                   backgroundColor: bg,
                   color: isDiag ? 'var(--text-secondary)' : contrastText(value),
                   borderRadius: 2,
-                  border: isToxic ? '2px solid #f04438' : 'none',
+                  border: isToxic ? `2px solid ${SCORE_COLORS.failing}` : 'none',
                   animation: isToxic ? 'toxicPulse 2s ease-in-out infinite' : undefined,
                   minHeight: 36,
                 }}
