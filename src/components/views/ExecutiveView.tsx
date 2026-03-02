@@ -12,7 +12,7 @@ interface ExtendedExecutiveView extends ExecutiveViewType {
 export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (
     <div>
-      <div className="health-banner" data-status={data.overallStatus}>
+      <div className="health-banner flex-center" data-status={data.overallStatus}>
         <div className="flex-center gap-3">
           <StatusBadge status={data.overallStatus} />
           <span>Executive Summary</span>

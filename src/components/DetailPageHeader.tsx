@@ -12,7 +12,7 @@ export function DetailPageHeader({ title, id, children }: DetailPageHeaderProps)
     <div className="eval-detail-header">
       <h2 className="text-lg">{title}</h2>
       {hasMeta && (
-        <div className="eval-detail-meta">
+        <div className="eval-detail-meta flex-center">
           {id && <span className="mono-xs text-secondary">{id}</span>}
           {children}
         </div>

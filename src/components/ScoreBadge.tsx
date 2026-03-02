@@ -23,7 +23,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
   traceId?: string;
 }) {
   return (
-    <div className="score-badge-tooltip" role="tooltip">
+    <div className="score-badge-tooltip surface-elevated" role="tooltip">
       <MetadataRow label="Score" value={score.toFixed(4)} mono />
       <MetadataRow label="Label" value={label} />
       <MetadataRow label="Evaluator" value={evaluator} mono />
@@ -76,7 +76,7 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
   if (!hasTooltip) return badge;
 
   return (
-    <span className="score-badge-wrapper" tabIndex={0}>
+    <span className="score-badge-wrapper inline-flex-center" tabIndex={0}>
       {badge}
       <Tooltip
         score={score}

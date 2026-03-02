@@ -129,7 +129,7 @@ const columns = [
     cell: (info) => {
       const text = info.getValue() ?? '-';
       return (
-        <span className="explanation" title={text}>
+        <span className="explanation truncate" title={text}>
           {truncateText(text, 60)}
         </span>
       );

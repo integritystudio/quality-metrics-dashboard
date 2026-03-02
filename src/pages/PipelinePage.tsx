@@ -12,7 +12,7 @@ function T2SamplingStage() {
         padding: '10px 14px',
         borderRadius: 'var(--radius)',
         border: '1px dashed var(--border, #2a2a3e)',
-        background: 'var(--surface, #1a1a2e)',
+        background: 'var(--bg-surface)',
       }}
     >
       <span className="inline-flex-center justify-center shrink-0 text-2xs font-bold" style={{

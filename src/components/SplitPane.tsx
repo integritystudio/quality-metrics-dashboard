@@ -35,7 +35,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
     <div ref={containerRef} style={{ display: 'flex', width: '100%', minHeight: 300 }}>
       <div style={{ width: `${splitPct}%`, overflow: 'auto' }}>{left}</div>
       <div
-        role="separator"
+        className="shrink-0" role="separator"
         aria-orientation="vertical"
         aria-valuenow={Math.round(splitPct)}
         aria-valuemin={minPct}
@@ -51,7 +51,6 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
           width: 6,
           cursor: 'col-resize',
           background: 'var(--border)',
-          flexShrink: 0,
           borderRadius: 3,
         }}
       />

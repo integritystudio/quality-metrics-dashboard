@@ -118,7 +118,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
                     onMouseEnter={() => setHovered({ metric, input })}
                     onMouseLeave={() => setHovered(null)}
-                    className="mono text-2xs"
+                    className="mono text-2xs flex-center justify-center"
                     style={{
                       width: 28,
                       height: 28,
@@ -126,9 +126,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                       background: STATUS_COLORS[status],
                       opacity: isHovered ? 1 : 0.8,
                       cursor: 'default',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
                       color: '#fff',
                       transition: 'opacity 0.15s',
                     }}

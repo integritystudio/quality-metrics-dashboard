@@ -77,7 +77,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   if (isNotSynced) {
     return (
       <div>
-        <Link href="/" className="back-link">&larr; Back to dashboard</Link>
+        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
         <div className="card text-center" style={{ padding: '32px 24px' }}>
           <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
           <div className="mono-xs text-secondary leading-relaxed" style={{
@@ -148,7 +148,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
   return (
     <div style={{ maxWidth: 1100 }}>
-      <Link href="/" className="back-link">&larr; Back to dashboard</Link>
+      <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
 
       {/* ── Header ── */}
       <div style={{
@@ -158,7 +158,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         padding: '20px 24px 16px',
         marginBottom: 0,
       }}>
-        <div className="flex-wrap gap-4" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div className="flex-wrap gap-4 justify-between" style={{ alignItems: 'flex-start' }}>
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
             <div className="mono font-semibold text-base mb-2 break-all" style={{
@@ -191,14 +191,12 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       </div>
 
       {/* ── Vitals strip ── */}
-      <div style={{
-        display: 'flex',
+      <div className="flex-wrap" style={{
         gap: 0,
         background: 'var(--bg-elevated)',
         border: '1px solid var(--border-subtle)',
         borderBottom: '1px solid var(--border)',
         padding: '14px 24px',
-        flexWrap: 'wrap',
         rowGap: 12,
         marginBottom: 2,
       }}>

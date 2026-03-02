@@ -13,7 +13,7 @@ export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket:
             style={{ height: `${(d.count / maxCount) * 100}%` }}
             aria-label={`${d.bucket}: ${d.count} evaluations`}
           >
-            <div className="tooltip">
+            <div className="tooltip surface-elevated">
               {d.bucket}: {d.count}
             </div>
           </div>

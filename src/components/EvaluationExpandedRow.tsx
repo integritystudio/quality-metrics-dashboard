@@ -95,16 +95,16 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       {(row.traceId || row.sessionId) && (
         <div className="gap-4 mt-3" style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex' }}>
           {row.traceId && (
-            <Link href={`/evaluations/trace/${row.traceId}`} className="back-link mb-0">
+            <Link href={`/evaluations/trace/${row.traceId}`} className="back-link inline-flex-center mb-0">
               View full evaluation detail &rarr;
             </Link>
           )}
           {row.sessionId ? (
-            <Link href={`/sessions/${row.sessionId}`} className="back-link mb-0">
+            <Link href={`/sessions/${row.sessionId}`} className="back-link inline-flex-center mb-0">
               View trace spans &rarr;
             </Link>
           ) : row.traceId ? (
-            <Link href={`/traces/${row.traceId}`} className="back-link mb-0">
+            <Link href={`/traces/${row.traceId}`} className="back-link inline-flex-center mb-0">
               View trace spans &rarr;
             </Link>
           ) : null}

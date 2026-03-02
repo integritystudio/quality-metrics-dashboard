@@ -93,7 +93,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
         <div className="flex-1">
           <div className="text-xs font-medium">{node.name}</div>
           <div className="flex-center gap-2">
-            <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 2, height: 4 }}>
+            <div className="flex-1" style={{ background: 'var(--bg-surface)', borderRadius: 2, height: 4 }}>
               <div style={barStyle} />
             </div>
             {node.durationMs != null && (
@@ -105,7 +105,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
         </div>
         {node.evalCount > 0 && (
           <span className="text-2xs chip font-semibold" style={{
-            background: 'var(--accent-bg)',
+            background: 'var(--accent-alpha-10)',
             color: 'var(--accent)',
           }}>
             {plural(node.evalCount, 'eval')}

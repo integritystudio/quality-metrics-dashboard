@@ -82,11 +82,8 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
         <div
           key={`col-${m}`}
           role="columnheader"
-          className="text-secondary text-xs font-semibold truncate"
+          className="text-secondary text-xs font-semibold truncate flex-center"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
           }}
         >
           {shortName(m)}
@@ -99,10 +96,8 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
           {/* Row header */}
           <div
             role="rowheader"
-            className="text-secondary text-xs font-semibold truncate"
+            className="text-secondary text-xs font-semibold truncate flex-center"
             style={{
-              display: 'flex',
-              alignItems: 'center',
               justifyContent: 'flex-end',
               paddingRight: 8,
             }}
@@ -116,7 +111,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
             const corr = isDiag ? undefined : lookupCorrelation(correlations, rowMetric, colMetric);
             const value = isDiag ? 1 : corr?.pearsonR ?? 0;
             const isToxic = corr?.isKnownToxicCombo ?? false;
-            const bg = isDiag ? 'var(--bg-secondary, #2a2a2a)' : colorScale(value);
+            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
 
             const tooltip = isDiag
               ? `${rowMetric}: diagonal (1.00)`
@@ -131,12 +126,9 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(2)}`}
                 title={tooltip}
                 onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className="mono-xs font-medium"
+                className="mono-xs font-medium flex-center justify-center"
                 style={{
                   cursor: !isDiag && onCellClick ? 'pointer' : 'default',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   backgroundColor: bg,
                   color: isDiag ? 'var(--text-secondary)' : contrastText(value),
                   borderRadius: 2,

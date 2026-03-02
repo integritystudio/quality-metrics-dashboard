@@ -70,7 +70,7 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
       )}
 
       {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
-        <div className="alert-related">
+        <div className="alert-related flex-center">
           <span className="text-secondary text-xs">Related:</span>
           {alert.relatedMetrics.map((m) => (
             <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">

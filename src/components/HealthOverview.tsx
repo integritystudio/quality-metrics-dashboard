@@ -52,7 +52,7 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
   const pipeline = computePipelineHealth(dashboard);
 
   return (
-    <div className="health-banner" data-status={overallStatus}>
+    <div className="health-banner flex-center" data-status={overallStatus}>
       <div>
         <div className="flex-center gap-3">
           <StatusBadge status={overallStatus} />
@@ -64,14 +64,14 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
           </span>
         </div>
         <div className="pipeline-stats">
-          <div className="pipeline-stat">
+          <div className="pipeline-stat flex-center">
             Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
           </div>
-          <div className="pipeline-stat">
+          <div className="pipeline-stat flex-center">
             Rate: <span className="stat-value">{pipeline.evalRate}</span>
           </div>
           {pipeline.lastEvalAge && (
-            <div className="pipeline-stat">
+            <div className="pipeline-stat flex-center">
               Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
             </div>
           )}

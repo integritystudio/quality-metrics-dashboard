@@ -15,7 +15,7 @@ export function Layout({
 }) {
   return (
     <div className="dashboard-container">
-      <div className="header">
+      <div className="header flex-center">
         <h1>Quality Metrics</h1>
         <div className="period-selector">
           {PERIODS.map((p) => (

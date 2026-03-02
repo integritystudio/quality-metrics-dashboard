@@ -4,7 +4,7 @@ import { STATUS_SHAPES, CONFIDENCE_SYMBOLS } from '../lib/symbols.js';
 export function StatusBadge({ status }: { status: string }) {
   const shape = STATUS_SHAPES[status] ?? STATUS_SHAPES.no_data;
   return (
-    <span className="status-badge text-xs" data-status={status} aria-label={`Status: ${status}`}>
+    <span className="status-badge inline-flex-center text-xs" data-status={status} aria-label={`Status: ${status}`}>
       {shape} {status}
     </span>
   );
@@ -16,7 +16,7 @@ export function TrendIndicator({ trend }: { trend?: MetricTrend }) {
   const pct = trend.percentChange ?? 0;
   const sign = pct > 0 ? '+' : '';
   return (
-    <span className={`trend ${trend.direction}`} aria-label={`Trend: ${trend.direction}, ${sign}${pct.toFixed(1)}%`}>
+    <span className={`trend inline-flex-center ${trend.direction}`} aria-label={`Trend: ${trend.direction}, ${sign}${pct.toFixed(1)}%`}>
       {arrow} {sign}{pct.toFixed(1)}%
       {trend.lowSampleWarning && <span title="Low sample count"> *</span>}
     </span>

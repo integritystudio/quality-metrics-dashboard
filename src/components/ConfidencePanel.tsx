@@ -31,7 +31,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   const band: ScoreColorBand = pct < 20 ? 'excellent' : pct < 50 ? 'adequate' : 'failing';
   return (
-    <div className="variance-bar">
+    <div className="variance-bar flex-center">
       <BarIndicator value={pct} color={SCORE_COLORS[band]} style={{ flex: 1 }} />
       <span className="mono-xs text-secondary" style={{ minWidth: 36 }}>
         {value.toFixed(3)}
@@ -48,14 +48,14 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
 
   return (
     <div className="text-xs">
-      <div className="confidence-header">
+      <div className="confidence-header flex-center">
         <span className="text-base" style={{ color: levelColor(level) }}>
           {levelShape(level)} {level}
         </span>
         <span className="confidence-method">({method})</span>
       </div>
 
-      <div className="mb-3" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px', fontSize: 12 }}>
+      <div className="mb-3 text-xs" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px' }}>
         <span className="text-secondary">Sample Count</span>
         <span className="mono">{sampleCount}</span>
 

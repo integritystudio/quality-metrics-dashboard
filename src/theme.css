@@ -142,42 +142,11 @@
 
 .trend.stable { color: var(--text-secondary); }
 
-/* Shared text truncation */
-.eval-table .explanation,
-.metric-worst {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Shared flex row */
-.health-banner,
-.metric-card-header,
-.metric-footer,
-.header,
-.pipeline-stat,
-.confidence-header,
-.variance-bar,
-.eval-detail-meta,
-.alert-related {
-  display: flex;
-  align-items: center;
-}
-
 /* Shared flex row (no align) */
 .summary-counts,
 .pipeline-stats {
   display: flex;
   gap: var(--space-6);
-}
-
-/* Shared inline-flex row */
-.status-badge,
-.trend,
-.back-link,
-.score-badge-wrapper {
-  display: inline-flex;
-  align-items: center;
 }
 
 body {
@@ -375,14 +344,6 @@ body {
 .histogram-bar:hover {
   opacity: 0.8;
 }
-/* Shared elevated surface */
-.histogram-bar .tooltip,
-.score-badge-tooltip,
-.refetch-indicator {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-}
-
 /* Shared tooltip popup base */
 .histogram-bar .tooltip,
 .score-badge-tooltip {
@@ -769,8 +730,8 @@ details[open] > .cot-summary::before {
 .variance-bar-fill {
   height: 100%;
   transition: var(--transition-bar);
+  border-radius: var(--radius-bar);
 }
-.threshold-bar-fill { border-radius: var(--radius-bar); }
 .variance-bar-fill  { border-radius: var(--radius-xs); }
 .threshold-bar-marker {
   position: absolute;

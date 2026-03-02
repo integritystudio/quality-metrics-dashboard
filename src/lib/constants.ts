@@ -126,6 +126,7 @@ export const CHART_COLORS = {
   line: '#58a6ff',
   grid: '#30363d',
   text: '#8b949e',
+  surface: '#1f2937',
   tooltip: '#161b22',
   warning: '#d29922',
   critical: '#f85149',

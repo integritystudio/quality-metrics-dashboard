@@ -18,7 +18,7 @@ function MetricCardInner({ metric, sparklineData }: {
   return (
     <Link href={`/metrics/${name}`} className="card-link" aria-label={`View ${displayName} metric details`}>
       <div className={`card ${glowClass}`}>
-        <div className="metric-card-header">
+        <div className="metric-card-header flex-center">
           <h3>{displayName}</h3>
           <StatusBadge status={status} />
         </div>
@@ -49,7 +49,7 @@ function MetricCardInner({ metric, sparklineData }: {
           </div>
         )}
 
-        <div className="metric-footer">
+        <div className="metric-footer flex-center">
           <span>n={sampleCount} <ConfidenceBadge confidence={confidence} /></span>
           {alerts.length > 0 && (
             <span className="text-warning">
@@ -59,7 +59,7 @@ function MetricCardInner({ metric, sparklineData }: {
         </div>
 
         {worst && worst.explanation && (
-          <div className="metric-worst" title={worst.explanation}>
+          <div className="metric-worst truncate" title={worst.explanation}>
             <span className="worst-score">{worst.score.toFixed(2)}</span>{' '}
             {truncateText(worst.explanation, 60)}
           </div>

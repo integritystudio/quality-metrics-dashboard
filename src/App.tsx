@@ -63,7 +63,7 @@ function DashboardPage({ period }: { period: Period }) {
 
   return (
     <>
-      {isFetching && data && <div className="refetch-indicator">Updating...</div>}
+      {isFetching && data && <div className="refetch-indicator surface-elevated">Updating...</div>}
       <HealthOverview dashboard={dashboard} />
       <MetricGrid metrics={dashboard.metrics} sparklines={sparklines} />
       {dashboard.alerts.length > 0 && (
@@ -106,7 +106,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   if (isLoading) {
     return (
       <div>
-        <Link href="/" className="back-link">&larr; Back to dashboard</Link>
+        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
         <div className="card skeleton" style={{ height: 300 }} />
       </div>
     );
@@ -114,7 +114,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   if (error) {
     return (
       <div>
-        <Link href="/" className="back-link">&larr; Back to dashboard</Link>
+        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
         <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>
       </div>
     );
@@ -125,9 +125,9 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
 
   return (
     <div>
-      <Link href="/" className="back-link">&larr; Back to dashboard</Link>
+      <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
       <div className="card" style={{ marginBottom: 24 }}>
-        <div className="metric-card-header">
+        <div className="metric-card-header flex-center">
           <h2 className="text-lg">{detail.displayName}</h2>
           <StatusBadge status={detail.status} />
         </div>

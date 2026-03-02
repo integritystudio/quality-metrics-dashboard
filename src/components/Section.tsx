@@ -32,11 +32,10 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
 
   return (
     <details open={defaultOpen} className="mb-1">
-      <summary className="flex-center gap-3 select-none cursor-pointer" style={{
+      <summary className="flex-center gap-3 select-none cursor-pointer border-b-subtle" style={{
         padding: '12px 20px',
         background: 'var(--bg-card)',
         borderLeft: `3px solid ${railColor}`,
-        borderBottom: '1px solid var(--border-subtle)',
         listStyle: 'none',
         transition: 'background 0.15s',
       }}>
@@ -53,11 +52,10 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
           }}>{badge}</span>
         )}
       </summary>
-      <div style={{
+      <div className="border-b-subtle" style={{
         padding: '16px 20px 20px',
         background: 'var(--bg-card)',
         borderLeft: `3px solid ${railColor}`,
-        borderBottom: '1px solid var(--border-subtle)',
       }}>
         {children}
       </div>
