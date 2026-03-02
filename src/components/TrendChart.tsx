@@ -21,11 +21,6 @@ interface TrendChartProps {
   metricName: string;
 }
 
-const COLORS = {
-  ...CHART_COLORS,
-  projection: CHART_COLORS.line,
-};
-
 function formatValue(v: number): string {
   return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(4);
 }
@@ -104,25 +99,25 @@ export function TrendChart({
             {warningThreshold != null && (
               <ReferenceLine
                 y={warningThreshold}
-                stroke={COLORS.warning}
+                stroke={CHART_COLORS.warning}
                 strokeDasharray="6 3"
-                label={{ value: 'Warning', fill: COLORS.warning, fontSize: 12, position: 'right' }}
+                label={{ value: 'Warning', fill: CHART_COLORS.warning, fontSize: 12, position: 'right' }}
               />
             )}
             {criticalThreshold != null && (
               <ReferenceLine
                 y={criticalThreshold}
-                stroke={COLORS.critical}
+                stroke={CHART_COLORS.critical}
                 strokeDasharray="6 3"
-                label={{ value: 'Critical', fill: COLORS.critical, fontSize: 12, position: 'right' }}
+                label={{ value: 'Critical', fill: CHART_COLORS.critical, fontSize: 12, position: 'right' }}
               />
             )}
             <Line
               type="monotone"
               dataKey="value"
-              stroke={COLORS.line}
+              stroke={CHART_COLORS.line}
               strokeWidth={2}
-              dot={{ fill: COLORS.line, r: 4 }}
+              dot={{ fill: CHART_COLORS.line, r: 4 }}
               activeDot={{ r: 6 }}
               connectNulls
             />
@@ -130,10 +125,10 @@ export function TrendChart({
               <Line
                 type="monotone"
                 dataKey="projected"
-                stroke={COLORS.projection}
+                stroke={CHART_COLORS.line}
                 strokeWidth={2}
                 strokeDasharray="6 4"
-                dot={{ fill: COLORS.projection, r: 3, strokeDasharray: '' }}
+                dot={{ fill: CHART_COLORS.line, r: 3, strokeDasharray: '' }}
                 connectNulls
               />
             )}
@@ -143,7 +138,7 @@ export function TrendChart({
       {dynamics && (
         <div className="flex-wrap text-xs gap-6 mt-2" style={{
           padding: '8px 0',
-          color: COLORS.text,
+          color: CHART_COLORS.text,
         }}>
           <div>
             <span className="font-semibold">Velocity:</span>{' '}
@@ -161,7 +156,7 @@ export function TrendChart({
             <div>
               <span className="font-semibold">Breach in:</span>{' '}
               <span className="mono" style={{
-                color: dynamics.projectedStatus === 'critical' ? COLORS.critical : COLORS.warning,
+                color: dynamics.projectedStatus === 'critical' ? CHART_COLORS.critical : CHART_COLORS.warning,
               }}>
                 {formatBreachTime(dynamics.projectedBreachTime)}
               </span>
