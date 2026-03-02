@@ -579,11 +579,24 @@ body {
   color: var(--text-muted);
 }
 
-/* Session detail — stat label, vitals divider, frequency grid */
+/* Session detail — stat item, stat value, stat label, vitals divider, frequency grid */
+.stat-item {
+  flex: 1 1 100px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
 .stat-label {
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
+  letter-spacing: 0.1em;
+  margin-top: 3px;
 }
 
 .vitals-divider {
