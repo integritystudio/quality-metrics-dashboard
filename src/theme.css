@@ -137,8 +137,6 @@
   text-decoration: underline;
 }
 
-.sla-table th,
-.eval-table th { font-size: var(--font-size-xs); }
 
 .trend.stable { color: var(--text-secondary); }
 
@@ -340,6 +338,7 @@ body {
 /* Shared table header base */
 .sla-table th,
 .eval-table th {
+  font-size: var(--font-size-xs);
   text-align: left;
   color: var(--text-secondary);
   font-weight: 500;
