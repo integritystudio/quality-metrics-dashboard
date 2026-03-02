@@ -1,6 +1,7 @@
-import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import { scoreColor } from '../lib/quality-utils.js';
 import { AGENT_PALETTE } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult } from '../types.js';
 
 function agentColor(agentName: string, agentNames: string[]): string {
@@ -15,7 +16,7 @@ interface TurnTimelineProps {
 
 export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
   if (turns.length === 0) {
-    return <div className="text-muted p-4">No turns to display.</div>;
+    return <EmptyState message="No turns to display." />;
   }
 
   return (
@@ -23,8 +24,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
       {turns.map((turn) => {
         const agent = turn.agentName ?? 'unknown';
         const color = agentColor(agent, agentNames);
-        const band = scoreColorBand(turn.relevance);
-        const bandColor = SCORE_COLORS[band];
+        const bandColor = scoreColor(turn.relevance);
 
         return (
           <div

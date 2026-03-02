@@ -3,6 +3,7 @@ import { StatusBadge, TrendIndicator } from '../Indicators.js';
 import { AlertList } from '../AlertList.js';
 import { MetricGrid } from '../MetricGrid.js';
 import { ViewSection } from '../Section.js';
+import { plural } from '../../lib/quality-utils.js';
 
 export function OperatorView({ data }: { data: OperatorViewType }) {
   return (
@@ -10,7 +11,7 @@ export function OperatorView({ data }: { data: OperatorViewType }) {
       <div className={`health-banner ${data.overallStatus}`}>
         <div className="flex-center gap-3">
           <StatusBadge status={data.overallStatus} />
-          <span>Operator View &middot; {data.prioritizedAlerts.length} active alert{data.prioritizedAlerts.length !== 1 ? 's' : ''}</span>
+          <span>Operator View &middot; {plural(data.prioritizedAlerts.length, 'active alert')}</span>
         </div>
       </div>
 

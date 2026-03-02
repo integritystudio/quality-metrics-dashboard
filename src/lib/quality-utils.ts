@@ -65,6 +65,11 @@ export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
   no_data: '#6b7280',
 };
 
+/** Shorthand: returns the hex color for a given score + direction. */
+export function scoreColor(value: number, direction?: ScoreDirection): string {
+  return SCORE_COLORS[scoreColorBand(value, direction)];
+}
+
 // -- scoreColorBand ---------------------------------------------------------
 
 export function scoreColorBand(

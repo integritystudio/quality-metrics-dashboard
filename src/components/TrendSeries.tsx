@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import type { TrendBucket } from '../hooks/useTrend.js';
 import { CHART_COLORS } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
 
 interface TrendSeriesProps {
   data: TrendBucket[];
@@ -32,11 +33,7 @@ function formatTime(iso: string, spanDays: number): string {
 
 export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   if (data.length === 0) {
-    return (
-      <div className="text-center p-4" style={{ color: COLORS.text }}>
-        No trend data available
-      </div>
-    );
+    return <EmptyState message="No trend data available" />;
   }
 
   const spanMs = new Date(data[data.length - 1].endTime).getTime() - new Date(data[0].startTime).getTime();
@@ -55,11 +52,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
     [d.avg, d.p10, d.p90].filter((v): v is number => v !== null)
   );
   if (allVals.length === 0) {
-    return (
-      <div className="text-center p-4" style={{ color: COLORS.text }}>
-        No scored evaluations in period
-      </div>
-    );
+    return <EmptyState message="No scored evaluations in period" />;
   }
 
   const yMin = Math.min(...allVals);

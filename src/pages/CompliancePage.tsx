@@ -1,7 +1,6 @@
 import { Link } from 'wouter';
 import { useComplianceSLA, useComplianceVerifications } from '../hooks/useCompliance.js';
 import { ComplianceFrameworkMap } from '../components/ComplianceFrameworkMap.js';
-import { EmptyCard } from '../components/EmptyCard.js';
 import { ViewSection } from '../components/Section.js';
 import { SLATable } from '../components/SLATable.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
@@ -22,14 +21,14 @@ export function CompliancePage({ period }: { period: Period }) {
           <SLATable slas={slaData.results} />
         )}
         {slaData && slaData.noSLAsConfigured && (
-          <EmptyCard>
+          <div className="card card--empty">
             No SLAs configured. Define SLAs in your quality metrics configuration.
-          </EmptyCard>
+          </div>
         )}
         {slaData && !slaData.noSLAsConfigured && slaData.results.length === 0 && (
-          <EmptyCard>
+          <div className="card card--empty">
             All SLAs are compliant for the selected period.
-          </EmptyCard>
+          </div>
         )}
       </ViewSection>
 
@@ -67,9 +66,9 @@ export function CompliancePage({ period }: { period: Period }) {
           </div>
         )}
         {verData && verData.verifications.length === 0 && (
-          <EmptyCard>
+          <div className="card card--empty">
             No verification events for the selected period.
-          </EmptyCard>
+          </div>
         )}
       </ViewSection>
     </div>

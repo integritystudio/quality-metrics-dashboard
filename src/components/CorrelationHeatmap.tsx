@@ -82,14 +82,11 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
         <div
           key={`col-${m}`}
           role="columnheader"
-          className="text-secondary text-xs font-semibold"
+          className="text-secondary text-xs font-semibold truncate"
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
           }}
         >
           {shortName(m)}
@@ -102,15 +99,12 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
           {/* Row header */}
           <div
             role="rowheader"
-            className="text-secondary text-xs font-semibold"
+            className="text-secondary text-xs font-semibold truncate"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
               paddingRight: 8,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
             }}
           >
             {shortName(rowMetric)}
@@ -137,7 +131,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(2)}`}
                 title={tooltip}
                 onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className="mono-xs"
+                className="mono-xs font-medium"
                 style={{
                   cursor: !isDiag && onCellClick ? 'pointer' : 'default',
                   display: 'flex',
@@ -145,7 +139,6 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                   justifyContent: 'center',
                   backgroundColor: bg,
                   color: isDiag ? 'var(--text-secondary)' : contrastText(value),
-                  fontWeight: 500,
                   borderRadius: 2,
                   border: isToxic ? '2px solid #f04438' : 'none',
                   animation: isToxic ? 'toxicPulse 2s ease-in-out infinite' : undefined,

@@ -1,5 +1,6 @@
 import { Link } from 'wouter';
-import { scoreColorBand, truncateText, SCORE_COLORS, type ScoreColorBand, type ScoreDirection } from '../lib/quality-utils.js';
+import { scoreColorBand, truncateText, SCORE_COLORS, type ScoreDirection } from '../lib/quality-utils.js';
+import { SCORE_SHAPES } from '../lib/symbols.js';
 
 interface ScoreBadgeProps {
   score: number | null;
@@ -11,15 +12,6 @@ interface ScoreBadgeProps {
   explanation?: string;
   traceId?: string;
 }
-
-const SCORE_SHAPES: Record<ScoreColorBand | 'no_data', string> = {
-  excellent: '\u25CF',  // ●
-  good: '\u25CF',       // ●
-  adequate: '\u25B2',   // ▲
-  poor: '\u25A0',       // ■
-  failing: '\u25A0',    // ■
-  no_data: '\u25CB',    // ○
-};
 
 function TooltipRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (

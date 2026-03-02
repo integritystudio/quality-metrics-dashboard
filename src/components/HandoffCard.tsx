@@ -1,5 +1,4 @@
-import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
-import { ColoredChip } from './ColoredChip.js';
+import { ScoreChip } from './ScoreChip.js';
 import type { HandoffEvaluation } from '../types.js';
 
 interface HandoffCardProps {
@@ -7,9 +6,6 @@ interface HandoffCardProps {
 }
 
 export function HandoffCard({ handoff }: HandoffCardProps) {
-  const band = scoreColorBand(handoff.score);
-  const color = SCORE_COLORS[band];
-
   return (
     <div className="flex-center gap-3 surface-elevated" style={{
       padding: '8px 12px',
@@ -22,9 +18,7 @@ export function HandoffCard({ handoff }: HandoffCardProps) {
       <span className="mono-xs font-semibold">
         {handoff.targetAgent}
       </span>
-      <ColoredChip color={color}>
-        {handoff.score.toFixed(2)}
-      </ColoredChip>
+      <ScoreChip score={handoff.score} />
       {handoff.correctTarget && (
         <span className="text-2xs text-healthy" title="Correct target">&#10003;</span>
       )}

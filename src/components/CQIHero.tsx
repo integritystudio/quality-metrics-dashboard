@@ -1,14 +1,13 @@
-import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import { scoreColor } from '../lib/quality-utils.js';
 import type { CompositeQualityIndex, CQIContribution } from '../types.js';
 
 function segmentColor(contribution: CQIContribution): string {
-  const band = scoreColorBand(contribution.rawScore, 'maximize');
-  return SCORE_COLORS[band];
+  return scoreColor(contribution.rawScore, 'maximize');
 }
 
 export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
   const displayValue = (cqi.value * 100).toFixed(1);
-  const overallBand = scoreColorBand(cqi.value, 'maximize');
+  const overallColor = scoreColor(cqi.value, 'maximize');
 
   return (
     <div
@@ -25,7 +24,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
         style={{
           fontSize: 36,
           fontWeight: 700,
-          color: SCORE_COLORS[overallBand],
+          color: overallColor,
           lineHeight: 1.2,
         }}
       >

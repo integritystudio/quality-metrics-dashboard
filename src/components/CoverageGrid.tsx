@@ -1,6 +1,7 @@
 import { memo, useState, useMemo } from 'react';
 import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId } from '../lib/quality-utils.js';
+import { truncateId, plural } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
 
 interface CoverageGridProps {
   metrics: string[];
@@ -28,7 +29,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   }, [cells]);
 
   if (metrics.length === 0 || inputs.length === 0) {
-    return <p>No coverage data available.</p>;
+    return <EmptyState message="No coverage data available." />;
   }
 
   // Limit displayed inputs to avoid huge grids
@@ -114,7 +115,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     key={input}
                     role="cell"
                     aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
-                    title={`${metric} / ${truncateId(input)}: ${count} evaluation${count !== 1 ? 's' : ''}`}
+                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
                     onMouseEnter={() => setHovered({ metric, input })}
                     onMouseLeave={() => setHovered(null)}
                     className="mono text-2xs"
@@ -155,7 +156,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
             {gaps.map(gap => (
               <li key={gap.metric} className="mb-1">
                 <strong>{gap.metric}</strong>: {gap.coveragePercent.toFixed(0)}% covered
-                ({gap.missingInputs.length} input{gap.missingInputs.length !== 1 ? 's' : ''} missing)
+                ({plural(gap.missingInputs.length, 'input')} missing)
               </li>
             ))}
           </ul>

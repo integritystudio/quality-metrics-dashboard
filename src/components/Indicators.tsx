@@ -1,11 +1,5 @@
 import type { MetricTrend, ConfidenceIndicator } from '../types.js';
-
-const STATUS_SHAPES: Record<string, string> = {
-  healthy: '\u25CF',   // ●
-  warning: '\u25B2',   // ▲
-  critical: '\u25A0',  // ■
-  no_data: '\u25CB',   // ○
-};
+import { STATUS_SHAPES, CONFIDENCE_SYMBOLS } from '../lib/symbols.js';
 
 export function StatusBadge({ status }: { status: string }) {
   const shape = STATUS_SHAPES[status] ?? STATUS_SHAPES.no_data;
@@ -28,12 +22,6 @@ export function TrendIndicator({ trend }: { trend?: MetricTrend }) {
     </span>
   );
 }
-
-const CONFIDENCE_SYMBOLS: Record<string, string> = {
-  high: '\u25CF',   // ●
-  medium: '\u25D0', // ◐
-  low: '\u25CB',    // ○
-};
 
 export function ConfidenceBadge({ confidence }: { confidence?: ConfidenceIndicator }) {
   if (!confidence) return null;

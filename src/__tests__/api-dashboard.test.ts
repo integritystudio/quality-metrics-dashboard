@@ -234,6 +234,7 @@ describe('GET /quality/live', () => {
   });
 
   it('handles empty evaluation map gracefully', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map() as any);
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(200);

@@ -3,6 +3,7 @@ import { StatusBadge } from '../Indicators.js';
 import { CQIHero } from '../CQIHero.js';
 import { StatCard } from '../StatCard.js';
 import { ViewSection } from '../Section.js';
+import { plural } from '../../lib/quality-utils.js';
 
 interface ExtendedExecutiveView extends ExecutiveViewType {
   cqi?: CompositeQualityIndex;
@@ -41,7 +42,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
               <li key={issue.name} className={`alert-item ${issue.status}`}>
                 <div className="alert-message">{issue.displayName}</div>
                 <div className="alert-meta text-secondary text-xs">
-                  Status: {issue.status} &middot; {issue.alertCount} alert{issue.alertCount !== 1 ? 's' : ''}
+                  Status: {issue.status} &middot; {plural(issue.alertCount, 'alert')}
                 </div>
               </li>
             ))}

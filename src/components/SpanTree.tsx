@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react';
+import { plural } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
 
 interface SpanNode {
   spanId: string;
@@ -106,7 +108,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
             background: 'var(--accent-bg)',
             color: 'var(--accent)',
           }}>
-            {node.evalCount} eval{node.evalCount > 1 ? 's' : ''}
+            {plural(node.evalCount, 'eval')}
           </span>
         )}
       </div>
@@ -121,7 +123,7 @@ export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
   const roots = buildTree(spans, evalsBySpan);
 
   if (roots.length === 0) {
-    return <div className="text-muted p-4">No spans found for this trace.</div>;
+    return <EmptyState message="No spans found for this trace." />;
   }
 
   return (

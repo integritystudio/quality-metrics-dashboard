@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { CHEVRON_RIGHT } from '../lib/symbols.js';
 
 /** Non-collapsible view section — wraps .view-section + .section-heading */
 export function ViewSection({ title, children }: { title: ReactNode; children: ReactNode }) {
@@ -43,7 +44,7 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
           color: railColor,
           transition: 'transform 0.2s',
           display: 'inline-block',
-        }}>▶</span>
+        }}>{CHEVRON_RIGHT}</span>
         <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
         {badge && (
           <span className="mono-xs text-muted chip" style={{

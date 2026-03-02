@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { scoreColorBand, SCORE_COLORS } from '../lib/quality-utils.js';
+import { ScoreChip } from './ScoreChip.js';
 import { ColoredChip } from './ColoredChip.js';
 import { MetaItem } from './MetaItem.js';
 import { SectionBlock } from './SectionBlock.js';
@@ -10,12 +10,10 @@ export function StepScoreChip({ step, score, explanation }: {
   score: number;
   explanation?: string;
 }) {
-  const band = scoreColorBand(score, 'maximize');
-  const color = SCORE_COLORS[band];
   return (
-    <ColoredChip color={color} title={explanation ?? `Step ${step}: ${score.toFixed(2)}`}>
+    <ScoreChip score={score} direction="maximize" title={explanation ?? `Step ${step}: ${score.toFixed(2)}`}>
       {step}: {score.toFixed(2)}
-    </ColoredChip>
+    </ScoreChip>
   );
 }
 

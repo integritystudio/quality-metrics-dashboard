@@ -134,10 +134,11 @@ describe('GET /sessions/:sessionId', () => {
 
   it('computes dataSources total from all sources', async () => {
     const spans = [makeSpan()];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     vi.mocked(queryTraces).mockResolvedValue({ traces: spans } as any);
     vi.mocked(loadLogsBySessionId).mockResolvedValue([{ severity: 'INFO' }] as any);
     vi.mocked(loadEvaluationsBySessionId).mockResolvedValue([{ evaluationName: 'relevance' }] as any);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as { dataSources: { total: number } };

@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColorBand, SCORE_COLORS, truncateId, fmtBytes } from '../lib/quality-utils.js';
+import { scoreColor, truncateId, fmtBytes } from '../lib/quality-utils.js';
 import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import { ExpandChevron } from './ExpandChevron.js';
 import { Sparkline } from './Sparkline.js';
 
 const COLUMN_COUNT = 7;
@@ -43,11 +45,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
   }, [sort]);
 
   if (agents.length === 0) {
-    return (
-      <div className="text-muted text-center" style={{ padding: '32px 0' }}>
-        No agent activity recorded for this period.
-      </div>
-    );
+    return <EmptyState message="No agent activity recorded for this period." />;
   }
 
   const maxInvocations = Math.max(...agents.map(a => a.invocations), 1);
@@ -102,12 +100,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   <td>
                     <div className="flex-center gap-2">
                       {hasLinks && (
-                        <span className="text-2xs text-muted shrink-0" style={{
-                          transition: 'transform 0.15s',
-                          transform: isExpanded ? 'rotate(90deg)' : 'none',
-                        }}>
-                          &#9654;
-                        </span>
+                        <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
                       )}
                       <span className="shrink-0" style={{
                         display: 'inline-block',
@@ -312,8 +305,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
       </div>
       <div className="flex-wrap gap-3">
         {metrics.map(([name, m]) => {
-          const band = scoreColorBand(m.avg);
-          const barColor = SCORE_COLORS[band];
+          const barColor = scoreColor(m.avg);
           return (
             <div key={name} style={{
               minWidth: 140,

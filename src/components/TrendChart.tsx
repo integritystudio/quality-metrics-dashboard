@@ -11,6 +11,7 @@ import {
 import type { MetricDynamics } from '../types.js';
 import type { MetricTrend } from '../types.js';
 import { CHART_COLORS } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
 
 interface TrendChartProps {
   trend?: MetricTrend;
@@ -45,11 +46,7 @@ export function TrendChart({
   metricName,
 }: TrendChartProps) {
   if (!trend) {
-    return (
-      <div className="text-center p-4" style={{ color: COLORS.text }}>
-        No trend data available
-      </div>
-    );
+    return <EmptyState message="No trend data available" />;
   }
 
   // Build data points: previous and current
@@ -75,7 +72,7 @@ export function TrendChart({
   if (warningThreshold != null) allValues.push(warningThreshold);
   if (criticalThreshold != null) allValues.push(criticalThreshold);
   if (allValues.length === 0) {
-    return <div className="text-center p-4" style={{ color: COLORS.text }}>Insufficient data</div>;
+    return <EmptyState message="Insufficient data" />;
   }
   const yMin = Math.min(...allValues);
   const yMax = Math.max(...allValues);

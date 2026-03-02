@@ -5,7 +5,7 @@ import { ProvenancePanel } from '../components/ProvenancePanel.js';
 import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { PageShell } from '../components/PageShell.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
+import { formatTimestamp, plural } from '../lib/quality-utils.js';
 import { Link, useSearch } from 'wouter';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 
@@ -34,7 +34,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
         <>
           <DetailPageHeader title={heading} id={traceId}>
             <span className="text-secondary text-xs">
-              {evaluations.length} evaluation{evaluations.length !== 1 ? 's' : ''}
+              {plural(evaluations.length, 'evaluation')}
             </span>
             <Link href={`/traces/${traceId}`} className="text-xs link-accent">View trace &rarr;</Link>
             {metricFilter && (

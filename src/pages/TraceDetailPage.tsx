@@ -5,6 +5,7 @@ import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
+import { plural } from '../lib/quality-utils.js';
 
 export function TraceDetailPage({ traceId }: { traceId: string }) {
   const { data, isLoading, error } = useTrace(traceId);
@@ -22,7 +23,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
         <>
           <DetailPageHeader title="Trace Detail" id={traceId}>
             <span className="text-secondary text-xs">
-              {data.spans.length} span{data.spans.length !== 1 ? 's' : ''} &middot; {data.evaluations.length} evaluation{data.evaluations.length !== 1 ? 's' : ''}
+              {plural(data.spans.length, 'span')} &middot; {plural(data.evaluations.length, 'evaluation')}
             </span>
           </DetailPageHeader>
 

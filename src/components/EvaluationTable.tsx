@@ -22,6 +22,7 @@ import {
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { ExpandChevron } from './ExpandChevron.js';
 import { ColoredChip } from './ColoredChip.js';
 import { ScoreBadge } from './ScoreBadge.js';
 
@@ -68,18 +69,12 @@ const columns = [
     cell: ({ row }) => (
       <button
         type="button"
-        className="text-secondary text-xs cursor-pointer"
+        className="cursor-pointer"
         onClick={row.getToggleExpandedHandler()}
         aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
-        style={{
-          background: 'none',
-          border: 'none',
-          padding: '2px 6px',
-          transition: 'transform 0.15s',
-          transform: row.getIsExpanded() ? 'rotate(90deg)' : 'rotate(0deg)',
-        }}
+        style={{ background: 'none', border: 'none', padding: '2px 6px' }}
       >
-        &#9654;
+        <ExpandChevron expanded={row.getIsExpanded()} className="text-secondary text-xs" />
       </button>
     ),
     size: 32,
