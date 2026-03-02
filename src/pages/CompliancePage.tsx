@@ -3,7 +3,7 @@ import { ComplianceFrameworkMap } from '../components/ComplianceFrameworkMap.js'
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { SLATable } from '../components/SLATable.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
+import { TimestampCell } from '../components/TimestampCell.js';
 import type { Period } from '../types.js';
 
 export function CompliancePage({ period }: { period: Period }) {
@@ -47,9 +47,7 @@ export function CompliancePage({ period }: { period: Period }) {
               <tbody>
                 {verData.verifications.map((v, i) => (
                   <tr key={`${v.sessionId}-${v.timestamp}-${i}`}>
-                    <td className="text-xs" title={new Date(v.timestamp).toLocaleString()}>
-                      {formatTimestamp(v.timestamp)}
-                    </td>
+                    <td><TimestampCell timestamp={v.timestamp} className="text-xs" /></td>
                     <td className="text-xs">{v.verificationType}</td>
                     <td className="mono-xs">{v.sessionId}</td>
                     <td className="text-secondary text-xs">{v.verifierId ?? '-'}</td>

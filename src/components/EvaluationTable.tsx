@@ -24,6 +24,7 @@ import {
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { TimestampCell } from './TimestampCell.js';
 import { ExpandChevron } from './ExpandChevron.js';
 import { ColoredChip } from './ColoredChip.js';
 import { ScoreBadge } from './ScoreBadge.js';
@@ -153,9 +154,7 @@ const columns = [
       const ts = info.getValue();
       if (!ts) return '-';
       return (
-        <span title={new Date(ts).toLocaleString()}>
-          {formatTimestamp(ts)}
-        </span>
+        <TimestampCell timestamp={ts} />
       );
     },
     sortingFn: 'datetime',

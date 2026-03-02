@@ -5,8 +5,9 @@ import { ProvenancePanel } from '../components/ProvenancePanel.js';
 import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { PageShell } from '../components/PageShell.js';
 import { SyncEmptyState } from '../components/SyncEmptyState.js';
-import { formatTimestamp, formatScore, plural } from '../lib/quality-utils.js';
+import { formatScore, plural } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
+import { TimestampCell } from '../components/TimestampCell.js';
 import { Link, useSearch } from 'wouter';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 
@@ -59,9 +60,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
                   />
                   <span className="text-base font-medium">{ev.evaluationName}</span>
                 </div>
-                <span className="text-secondary text-xs" title={new Date(ev.timestamp).toLocaleString()}>
-                  {formatTimestamp(ev.timestamp)}
-                </span>
+                <TimestampCell timestamp={ev.timestamp} className="text-secondary text-xs" />
               </div>
 
               <ChainOfThoughtPanel
