@@ -438,7 +438,7 @@ body {
   background: var(--bg-elevated);
   border-radius: var(--radius);
   padding: var(--space-4);
-  animation: fade-in 0.15s ease-in-out;
+  animation: fade-in var(--transition-fast);
 }
 
 /* Shared ghost button reset */
@@ -614,7 +614,7 @@ body {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
   z-index: 1000;
-  animation: fade-in 0.2s ease-in-out;
+  animation: fade-in var(--transition-fast);
 }
 
 @keyframes fade-in {
