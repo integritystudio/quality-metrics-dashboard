@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import type { PipelineStage, PipelineDropoff } from '../types.js';
+import { EmptyState } from './EmptyState.js';
 
 interface PipelineFunnelProps {
   stages: PipelineStage[];
@@ -8,7 +9,7 @@ interface PipelineFunnelProps {
 }
 
 function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
-  if (stages.length === 0) return <p>No pipeline data available.</p>;
+  if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
 
   const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
 

@@ -1,5 +1,6 @@
 import { useComplianceSLA, useComplianceVerifications } from '../hooks/useCompliance.js';
 import { ComplianceFrameworkMap } from '../components/ComplianceFrameworkMap.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { SLATable } from '../components/SLATable.js';
@@ -17,14 +18,10 @@ export function CompliancePage({ period }: { period: Period }) {
           <SLATable slas={slaData.results} />
         )}
         {slaData?.noSLAsConfigured && (
-          <div className="card card--empty">
-            No SLAs configured. Define SLAs in your quality metrics configuration.
-          </div>
+          <EmptyState message="No SLAs configured. Define SLAs in your quality metrics configuration." />
         )}
         {slaData && !slaData.noSLAsConfigured && slaData.results.length === 0 && (
-          <div className="card card--empty">
-            All SLAs are compliant for the selected period.
-          </div>
+          <EmptyState message="All SLAs are compliant for the selected period." />
         )}
       </ViewSection>
 
@@ -60,9 +57,7 @@ export function CompliancePage({ period }: { period: Period }) {
           </div>
         )}
         {verData && verData.verifications.length === 0 && (
-          <div className="card card--empty">
-            No verification events for the selected period.
-          </div>
+          <EmptyState message="No verification events for the selected period." />
         )}
       </ViewSection>
     </PageShell>
