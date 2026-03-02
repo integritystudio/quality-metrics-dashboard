@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
 
 interface AgentSessionResponse {
   sessionId: string;
@@ -18,15 +18,9 @@ interface AgentSessionResponse {
 }
 
 export function useAgentSession(sessionId: string | undefined) {
-  return useQuery<AgentSessionResponse>({
-    queryKey: ['agent-session', sessionId],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(sessionId!)}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
-    },
-    enabled: !!sessionId,
-    staleTime: STALE_TIME.DETAIL,
-    retry: 2,
-  });
+  return useApiQuery<AgentSessionResponse>(
+    ['agent-session', sessionId],
+    () => `${API_BASE}/api/agents/${encodeURIComponent(sessionId!)}`,
+    { enabled: !!sessionId, staleTime: STALE_TIME.DETAIL },
+  );
 }

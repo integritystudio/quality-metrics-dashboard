@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
 import type { EvalRow } from '../components/EvaluationTable.js';
 import type { Period } from '../types.js';
-import { API_BASE, STALE_TIME, DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
+import { API_BASE, DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
 
 interface EvaluationsResponse {
   rows: EvalRow[];
@@ -22,17 +22,13 @@ export function useMetricEvaluations(
     enabled?: boolean;
   } = {},
 ) {
-  return useQuery<EvaluationsResponse>({
-    queryKey: ['metric-evaluations', name, period, limit, offset, scoreLabel, sortBy],
-    queryFn: async () => {
+  return useApiQuery<EvaluationsResponse>(
+    ['metric-evaluations', name, period, limit, offset, scoreLabel, sortBy],
+    () => {
       const params = new URLSearchParams({ period, limit: String(limit), offset: String(offset), sortBy });
       if (scoreLabel) params.set('scoreLabel', scoreLabel);
-      const res = await fetch(`${API_BASE}/api/metrics/${encodeURIComponent(name!)}/evaluations?${params}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
+      return `${API_BASE}/api/metrics/${encodeURIComponent(name!)}/evaluations?${params}`;
     },
-    enabled: !!name && enabled,
-    staleTime: STALE_TIME.DEFAULT,
-    retry: 2,
-  });
+    { enabled: !!name && enabled },
+  );
 }

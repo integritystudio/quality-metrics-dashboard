@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import type { Period, MetricTrend, MetricDynamics } from '../types.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { API_BASE } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
 
 export interface PercentileSnapshot {
   p10: number;
@@ -31,16 +31,9 @@ export interface TrendResponse {
 }
 
 export function useTrend(metricName: string, period: Period, buckets = 7) {
-  return useQuery<TrendResponse>({
-    queryKey: ['trend', metricName, period, buckets],
-    enabled: !!metricName,
-    queryFn: async () => {
-      const params = new URLSearchParams({ period, buckets: String(buckets) });
-      const res = await fetch(`${API_BASE}/api/trends/${encodeURIComponent(metricName)}?${params}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
-    },
-    staleTime: STALE_TIME.DEFAULT,
-    retry: 2,
-  });
+  return useApiQuery<TrendResponse>(
+    ['trend', metricName, period, buckets],
+    () => `${API_BASE}/api/trends/${encodeURIComponent(metricName)}?${new URLSearchParams({ period, buckets: String(buckets) })}`,
+    { enabled: !!metricName },
+  );
 }

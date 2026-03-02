@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import type { Period } from '../types.js';
 import { API_BASE, STALE_TIME, ErrorMessage } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
 
 export interface EvalMetricSummary {
   avg: number;
@@ -44,16 +44,12 @@ function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResp
 }
 
 export function useAgentStats(period: Period) {
-  return useQuery<AgentStatsResponse>({
-    queryKey: ['agent-stats', period],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/agents?period=${encodeURIComponent(period)}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data: unknown = await res.json();
-      assertAgentStatsResponse(data);
-      return data;
+  return useApiQuery<AgentStatsResponse>(
+    ['agent-stats', period],
+    () => `${API_BASE}/api/agents?period=${encodeURIComponent(period)}`,
+    {
+      staleTime: STALE_TIME.AGGREGATE,
+      select: (raw) => { assertAgentStatsResponse(raw); return raw; },
     },
-    staleTime: STALE_TIME.AGGREGATE,
-    retry: 2,
-  });
+  );
 }
