@@ -18,7 +18,6 @@ import {
   labelToOrdinal,
   ordinalToCategory,
   truncateText,
-  formatTimestamp,
   formatScore,
   SCORE_COLORS,
   type LabelFilterCategory,
