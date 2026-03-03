@@ -99,6 +99,8 @@ const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
 /** Stores last computed coverage object so early-return path can refresh lastChecked. */
 const COVERAGE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-coverage.json');
 const QUERY_LIMIT = 200_000;
+/** Span queries need a higher limit than evaluation queries to capture all sessions. */
+const SPAN_QUERY_LIMIT = 1_000_000;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
@@ -932,7 +934,7 @@ async function main(): Promise<void> {
   if (stateDir) saveDegradationState(stateDir, degradationState);
 
   // Per-trace evaluations and spans
-  const thirtyDaysAgo = new Date(now.getTime() - PERIOD_MS['30d']);
+  const thirtyDaysAgo = new Date(now.getTime() - MAX_DAYS_MS);
   const allEvals = await backend.queryEvaluations({
     startDate: thirtyDaysAgo.toISOString(),
     endDate: now.toISOString(),
@@ -949,7 +951,7 @@ async function main(): Promise<void> {
   const allSpans = await backend.queryTraces({
     startDate: thirtyDaysAgo.toISOString(),
     endDate: now.toISOString(),
-    limit: 50000,
+    limit: SPAN_QUERY_LIMIT,
   });
   const spansByTrace = new Map<string, typeof allSpans>();
   for (const span of allSpans) {
