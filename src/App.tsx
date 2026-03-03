@@ -133,17 +133,16 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           <StatusBadge status={detail.status} />
         </div>
         <div className="flex-wrap gap-8 mt-3">
-          {(['avg', 'min', 'max', 'p50', 'p95', 'p99'] as const).map((key) => {
-            const val = detail.values[key];
-            return (
+          {(['avg', 'min', 'max', 'p50', 'p95', 'p99'] as const)
+            .filter((key) => detail.values[key] != null)
+            .map((key) => (
               <div key={key} className="text-center">
                 <div className="mono-xl font-semibold">
-                  {formatScore(val)}
+                  {formatScore(detail.values[key])}
                 </div>
                 <div className="text-secondary text-xs uppercase">{key}</div>
               </div>
-            );
-          })}
+            ))}
           <div className="text-center">
             <div className="mono-xl font-semibold">{detail.sampleCount}</div>
             <div className="text-secondary text-xs uppercase">samples</div>

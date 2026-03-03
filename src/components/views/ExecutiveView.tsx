@@ -1,3 +1,4 @@
+import { Link } from 'wouter';
 import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from '../../types.js';
 import { StatusBadge } from '../Indicators.js';
 import { CQIHero } from '../CQIHero.js';
@@ -43,10 +44,10 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       <ViewSection title="Metric Statuses">
         <MetricGrid>
           {data.metricStatuses.map((m: { name: string; displayName: string; status: string }) => (
-            <div key={m.name} className="card d-flex justify-between flex-center p-4">
+            <Link key={m.name} href={`/metrics/${m.name}`} className="card card-link d-flex justify-between flex-center p-4">
               <span>{m.displayName}</span>
               <StatusBadge status={m.status} />
-            </div>
+            </Link>
           ))}
         </MetricGrid>
       </ViewSection>
