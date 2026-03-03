@@ -31,6 +31,31 @@ app.get('/api/dashboard', async (c) => {
   return c.json(data);
 });
 
+app.get('/api/metrics/:name/evaluations', async (c) => {
+  const name = c.req.param('name');
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '50', 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
+  const sortBy = c.req.query('sortBy') ?? 'timestamp_desc';
+  const scoreLabel = c.req.query('scoreLabel');
+
+  const data = await c.env.DASHBOARD.get(`metric:evaluations:${name}:${period}`, 'json') as
+    | { rows: Record<string, unknown>[] } | null;
+  if (!data) return c.json({ rows: [], total: 0, limit, offset, hasMore: false });
+
+  let rows = data.rows;
+  if (scoreLabel) rows = rows.filter((r: Record<string, unknown>) => r.label === scoreLabel);
+  if (sortBy === 'score_asc') rows.sort((a, b) => ((a.score as number) ?? 0) - ((b.score as number) ?? 0));
+  else if (sortBy === 'score_desc') rows.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0));
+
+  const total = rows.length;
+  const page = rows.slice(offset, offset + limit);
+  return c.json({ rows: page, total, limit, offset, hasMore: offset + limit < total });
+});
+
 app.get('/api/metrics/:name', async (c) => {
   const name = c.req.param('name');
   const data = await c.env.DASHBOARD.get(`metric:${name}`, 'json');

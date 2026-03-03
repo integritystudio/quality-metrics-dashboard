@@ -774,6 +774,39 @@ async function main(): Promise<void> {
     entries.push({ key: `metric:${name}`, value: JSON.stringify(detail) });
   }
 
+  // Metric evaluation rows per period (for /api/metrics/:name/evaluations)
+  const MAX_EVAL_ROWS = 200;
+  for (const period of PERIODS) {
+    const ms = PERIOD_MS[period];
+    if (ms > MAX_DAYS_MS) continue;
+    const grouped = groupedByPeriod.get(period);
+    if (!grouped) continue;
+    for (const name of metricNames) {
+      const evals = grouped.get(name);
+      if (!evals || evals.length === 0) continue;
+      const sorted = [...evals].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(e => ({
+        score: e.scoreValue ?? 0,
+        explanation: e.explanation,
+        traceId: e.traceId,
+        timestamp: e.timestamp,
+        evaluator: e.evaluator,
+        label: e.scoreLabel,
+        evaluatorType: e.evaluatorType,
+        spanId: e.spanId,
+        sessionId: e.sessionId,
+        agentName: e.agentName,
+        trajectoryLength: e.trajectoryLength,
+        stepScores: e.stepScores,
+        toolVerifications: e.toolVerifications,
+      }));
+      entries.push({
+        key: `metric:evaluations:${name}:${period}`,
+        value: JSON.stringify({ rows }),
+      });
+    }
+  }
+
   // Collect trace IDs referenced by metric detail worstEvaluations
   const referencedTraceIds = new Set<string>();
   for (const entry of entries) {

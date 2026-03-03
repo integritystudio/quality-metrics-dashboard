@@ -6,7 +6,7 @@ import { ScoreBadge } from '../components/ScoreBadge.js';
 import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
 import { PageShell } from '../components/PageShell.js';
 import { Section, type SectionHealth } from '../components/Section.js';
-import { Stat } from '../components/Stat.js';
+import { StatDisplay } from '../components/StatDisplay.js';
 import { FreqBar } from '../components/FreqBar.js';
 import { FreqBarGrid } from '../components/FreqBarGrid.js';
 import { TruncatedList } from '../components/TruncatedList.js';
@@ -154,23 +154,23 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         rowGap: 12,
         marginBottom: 2,
       }}>
-        <Stat label="Spans" value={spanCount} />
+        <StatDisplay label="Spans" value={spanCount} />
         <div className="vitals-divider" />
-        <Stat label="Tool calls" value={totalToolCalls} />
+        <StatDisplay label="Tool calls" value={totalToolCalls} />
         <div className="vitals-divider" />
-        <Stat label="MCP calls" value={totalMcpCalls} />
+        <StatDisplay label="MCP calls" value={totalMcpCalls} />
         <div className="vitals-divider" />
-        <Stat label="Commits" value={gitCommits.length} color={gitCommits.length > 0 ? 'var(--status-healthy)' : undefined} />
+        <StatDisplay label="Commits" value={gitCommits.length} valueColor={gitCommits.length > 0 ? 'var(--status-healthy)' : undefined} />
         <div className="vitals-divider" />
-        <Stat label="Alerts fired" value={alertSummary.totalFired} color={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
+        <StatDisplay label="Alerts fired" value={alertSummary.totalFired} valueColor={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
         <div className="vitals-divider" />
-        <Stat label="Errors" value={errorCount} color={errorCount > 0 ? 'var(--status-critical)' : undefined} />
+        <StatDisplay label="Errors" value={errorCount} valueColor={errorCount > 0 ? 'var(--status-critical)' : undefined} />
         {maxTokenSnapshot && (
           <>
             <div className="vitals-divider" />
-            <Stat label="Messages" value={maxTokenSnapshot.messages} />
+            <StatDisplay label="Messages" value={maxTokenSnapshot.messages} />
             <div className="vitals-divider" />
-            <Stat label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
+            <StatDisplay label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
           </>
         )}
       </div>
