@@ -38,7 +38,7 @@ import {
   computeRollingDegradationSignals,
   loadDegradationState,
   saveDegradationState,
-} from '../../dist/lib/quality-feature-engineering.js';
+} from '../../dist/lib/quality/quality-feature-engineering.js';
 import { DEGRADATION_KV_KEY } from '../../dist/lib/quality/quality-constants.js';
 import { computeMultiAgentEvaluation } from '../../dist/lib/quality-multi-agent.js';
 

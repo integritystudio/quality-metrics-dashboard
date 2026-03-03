@@ -224,6 +224,81 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
 }
 
 // ============================================================================
+// Trace-Based Session Discovery (for --backfill)
+// ============================================================================
+
+interface TraceSession {
+  sessionId: string;
+  traceId: string;
+  earliestTime: number; // epoch seconds
+  spanCount: number;
+}
+
+/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
+async function discoverSessionsFromTraces(): Promise<Turn[]> {
+  const traceFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
+    .sort();
+
+  const sessions = new Map<string, TraceSession>();
+
+  for (const file of traceFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    const rl = createInterface({
+      input: createReadStream(filepath, 'utf-8'),
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      if (!line) continue;
+      let span: Record<string, unknown>;
+      try {
+        span = JSON.parse(line);
+      } catch {
+        continue;
+      }
+
+      const attrs = typeof span.attributes === 'object' && span.attributes !== null
+        ? span.attributes as Record<string, unknown> : undefined;
+      if (!attrs) continue;
+
+      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
+      if (!sessionId) continue;
+
+      const startTime = Array.isArray(span.startTime) ? span.startTime[0] as number : 0;
+      const traceId = typeof span.traceId === 'string' ? span.traceId : '';
+
+      const existing = sessions.get(sessionId);
+      if (!existing) {
+        sessions.set(sessionId, { sessionId, traceId, earliestTime: startTime, spanCount: 1 });
+      } else {
+        existing.spanCount++;
+        if (startTime < existing.earliestTime) {
+          existing.earliestTime = startTime;
+          existing.traceId = traceId;
+        }
+      }
+    }
+  }
+
+  // Convert to Turn[] with synthetic entries (one per session)
+  const turns: Turn[] = [];
+  for (const s of sessions.values()) {
+    const timestamp = new Date(s.earliestTime * 1000).toISOString();
+    turns.push({
+      sessionId: s.sessionId,
+      traceId: s.traceId,
+      timestamp,
+      userText: '[trace-backfill]',
+      assistantText: '[trace-backfill]',
+      toolResults: [],
+    });
+  }
+
+  return turns;
+}
+
+// ============================================================================
 // Turn Extraction
 // ============================================================================
 
@@ -752,7 +827,7 @@ function _loadExistingKeys(): Set<string> {
         ? record.attributes as Record<string, unknown> : undefined;
       if (!attrs) continue;
       const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-      if (evalType !== 'llm' && evalType !== 'seed') continue;
+      if (evalType !== 'llm' && evalType !== 'seed' && evalType !== 'trace-backfill') continue;
 
       const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
       const metricName = typeof attrs['gen_ai.evaluation.name'] === 'string' ? attrs['gen_ai.evaluation.name'] : '';
@@ -894,6 +969,7 @@ async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const seed = args.includes('--seed');
+  const backfill = args.includes('--backfill');
   const limitIdx = args.indexOf('--limit');
   let limit = Infinity;
   if (limitIdx !== -1) {
@@ -908,6 +984,53 @@ async function main() {
   // Optional dataset scoping: --dataset-id <uuid>
   const datasetIdx = args.indexOf('--dataset-id');
   const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
+
+  // --backfill: generate seed evals from trace data for sessions missing transcripts
+  if (backfill) {
+    const traceTurns = await discoverSessionsFromTraces();
+    console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
+
+    if (!acquireLock()) {
+      console.error('Error: Another judge-evaluations process is running (lockfile exists)');
+      process.exit(1);
+    }
+
+    try {
+      const existingKeys = _loadExistingKeys();
+
+      // Filter to sessions without any existing hallucination eval
+      const newTurns = traceTurns.filter(t => {
+        const turnKey = t.timestamp.slice(0, 19);
+        return !existingKeys.has(`${t.sessionId}:hallucination:${turnKey}`);
+      });
+      console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
+
+      if (newTurns.length === 0) return;
+
+      const seedResult = seedEvaluations(newTurns, existingKeys);
+      // Override evaluatorType to 'trace-backfill' for transparency
+      for (const ev of seedResult.evals) {
+        if (ev.evaluatorType === 'seed') {
+          ev.evaluatorType = 'trace-backfill';
+        }
+      }
+
+      if (seedResult.evals.length > 0) {
+        writeEvaluations(seedResult.evals);
+        const byCat = new Map<string, number>();
+        for (const ev of seedResult.evals) {
+          byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+        }
+        console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
+        for (const [name, count] of byCat) {
+          console.log(`  ${name}: ${count}`);
+        }
+      }
+    } finally {
+      releaseLock();
+    }
+    return;
+  }
 
   const transcripts = await _discoverTranscripts();
 
