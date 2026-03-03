@@ -4,7 +4,7 @@ import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
 import { ProvenancePanel } from '../components/ProvenancePanel.js';
 import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
 import { PageShell } from '../components/PageShell.js';
-import { SyncEmptyState } from '../components/SyncEmptyState.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { formatScore, plural } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { TimestampCell } from '../components/TimestampCell.js';
@@ -28,9 +28,10 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={200}>
       {(!evaluations || evaluations.length === 0) ? (
-        <SyncEmptyState
+        <EmptyState
           title="No Evaluations Found"
           description={<>No evaluations found for trace <code>{traceId}</code></>}
+          showSyncHint
         />
       ) : (
         <>

@@ -2,7 +2,17 @@ import { Link } from 'wouter';
 import { scoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
-import { MetadataRow } from './MetadataRow.js';
+import type { ReactNode } from 'react';
+
+function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode; mono?: boolean }) {
+  if (value == null || value === '') return null;
+  return (
+    <div className="tooltip-row">
+      <span className="text-secondary">{label}</span>
+      <span className={mono ? 'mono-xs' : undefined}>{value}</span>
+    </div>
+  );
+}
 
 interface ScoreBadgeProps {
   score: number | null;

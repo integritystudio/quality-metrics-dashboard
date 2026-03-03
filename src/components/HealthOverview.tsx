@@ -1,7 +1,7 @@
 import type { QualityDashboardSummary } from '../types.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
 import { HealthBanner } from './HealthBanner.js';
-import { SummaryCount } from './SummaryCount.js';
+import { StatDisplay } from './StatDisplay.js';
 
 interface PipelineHealth {
   evalVolume: number;
@@ -76,10 +76,10 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
 
   return (
     <HealthBanner status={overallStatus} message={statusMessage}>
-      <SummaryCount value={summary.totalMetrics} label="Total" />
-      <SummaryCount value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
-      <SummaryCount value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
-      <SummaryCount value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
+      <StatDisplay value={summary.totalMetrics} label="Total" />
+      <StatDisplay value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
+      <StatDisplay value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
+      <StatDisplay value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
     </HealthBanner>
   );
 }

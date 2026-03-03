@@ -1,12 +1,11 @@
 import type { ExecutiveView as ExecutiveViewType, CompositeQualityIndex } from '../../types.js';
 import { StatusBadge } from '../Indicators.js';
 import { CQIHero } from '../CQIHero.js';
-import { StatCard } from '../StatCard.js';
+import { StatDisplay } from '../StatDisplay.js';
 import { MetricGrid } from '../MetricGrid.js';
 import { SimpleAlertList } from '../SimpleAlertList.js';
 import { ViewSection } from '../Section.js';
 import { HealthBanner } from '../HealthBanner.js';
-import { SummaryCount } from '../SummaryCount.js';
 import { plural } from '../../lib/quality-utils.js';
 
 interface ExtendedExecutiveView extends ExecutiveViewType {
@@ -17,10 +16,10 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (
     <div>
       <HealthBanner status={data.overallStatus} message="Executive Summary">
-        <SummaryCount value={data.summary.totalMetrics} label="Total" />
-        <SummaryCount value={data.summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
+        <StatDisplay value={data.summary.totalMetrics} label="Total" />
+        <StatDisplay value={data.summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
         {data.slaCompliantCount !== undefined && (
-          <SummaryCount value={`${data.slaCompliantCount}/${data.slaTotalCount}`} label="SLAs Met" />
+          <StatDisplay value={`${data.slaCompliantCount}/${data.slaTotalCount}`} label="SLAs Met" />
         )}
       </HealthBanner>
 
@@ -55,7 +54,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       <ViewSection title="Alert Summary">
         <div className="d-flex gap-4">
           {Object.entries(data.alertCounts).map(([severity, count]) => (
-            <StatCard key={severity} value={String(count)} label={severity} />
+            <StatDisplay variant="card" key={severity} value={String(count)} label={severity} />
           ))}
         </div>
       </ViewSection>

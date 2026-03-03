@@ -25,7 +25,7 @@ import {
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
 import { TimestampCell } from './TimestampCell.js';
 import { ExpandChevron } from './ExpandChevron.js';
-import { ColoredChip } from './ColoredChip.js';
+import { ColoredChip } from './Chip.js';
 import { ScoreBadge } from './ScoreBadge.js';
 
 export interface EvalRow {

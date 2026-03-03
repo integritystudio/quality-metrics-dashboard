@@ -4,7 +4,7 @@ import { EvaluationEventOverlay } from '../components/EvaluationEventOverlay.js'
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
-import { SyncEmptyState } from '../components/SyncEmptyState.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { plural } from '../lib/quality-utils.js';
 
 export function TraceDetailPage({ traceId }: { traceId: string }) {
@@ -15,9 +15,10 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
       {isEmpty ? (
-        <SyncEmptyState
+        <EmptyState
           title="No Trace Data"
           description={<>No spans or evaluations found for trace <code>{traceId}</code></>}
+          showSyncHint
         />
       ) : (
         <>

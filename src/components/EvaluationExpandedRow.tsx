@@ -1,8 +1,7 @@
 import { Link } from 'wouter';
 import { SCORE_COLORS } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
-import { ScoreChip } from './ScoreChip.js';
-import { ColoredChip } from './ColoredChip.js';
+import { ScoreChip, ColoredChip } from './Chip.js';
 import { MetaItem } from './MetaItem.js';
 import { SectionBlock } from './SectionBlock.js';
 import type { EvalRow } from './EvaluationTable.js';

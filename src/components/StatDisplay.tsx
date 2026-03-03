@@ -1,15 +1,20 @@
 import type { ReactNode } from 'react';
 
-interface SummaryCountProps {
+interface StatDisplayProps {
   value: ReactNode;
   label: string;
   valueClassName?: string;
   valueColor?: string;
+  variant?: 'inline' | 'card';
 }
 
-export function SummaryCount({ value, label, valueClassName, valueColor }: SummaryCountProps) {
+export function StatDisplay({ value, label, valueClassName, valueColor, variant = 'inline' }: StatDisplayProps) {
+  const wrapperClass = variant === 'card'
+    ? 'card summary-count p-4 min-w-120'
+    : 'summary-count';
+
   return (
-    <div className="summary-count">
+    <div className={wrapperClass}>
       <div
         className={`value${valueClassName ? ` ${valueClassName}` : ''}`}
         style={valueColor ? { color: valueColor } : undefined}

@@ -1,4 +1,4 @@
-import { ScoreChip } from './ScoreChip.js';
+import { ScoreChip } from './Chip.js';
 import type { HandoffEvaluation } from '../types.js';
 
 interface HandoffCardProps {
