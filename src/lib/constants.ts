@@ -118,6 +118,20 @@ export const RETRY_DELAY_CAP = 30_000;
 export const DEFAULT_TOP_N = 5;
 export const DEFAULT_BUCKET_COUNT = 10;
 
+/** PageShell skeleton placeholder heights (px). */
+export const SKELETON_HEIGHT_SM = 200;
+export const SKELETON_HEIGHT_MD = 300;
+export const SKELETON_HEIGHT_LG = 400;
+
+/** Icon badge diameter (px) for circular label badges. */
+export const ICON_BADGE_SIZE = 24;
+
+/** Layout constraint: narrow callout message width (px). */
+export const CALLOUT_MAX_WIDTH = 480;
+
+/** Layout constraint: session detail page content column width (px). */
+export const PAGE_CONTENT_MAX_WIDTH = 1100;
+
 /** Default page size for paginated evaluation queries. */
 export const DEFAULT_PAGE_LIMIT = 50;
 

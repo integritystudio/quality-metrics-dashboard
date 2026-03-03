@@ -6,6 +6,7 @@ import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { plural } from '../lib/quality-utils.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function TraceDetailPage({ traceId }: { traceId: string }) {
   const { data, isLoading, error } = useTrace(traceId);
@@ -13,7 +14,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
   const isEmpty = !data || (data.spans.length === 0 && data.evaluations.length === 0);
 
   return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
       {isEmpty ? (
         <EmptyState
           title="No Trace Data"

@@ -240,7 +240,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
           );
         })}
       </div>
-      <table className="eval-table">
+      <table className="data-table eval-table">
         <thead>
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id}>

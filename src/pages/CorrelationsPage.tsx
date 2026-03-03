@@ -5,7 +5,7 @@ import { SplitPane } from '../components/SplitPane.js';
 import { MetricCompare } from '../components/MetricCompare.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
-import { API_BASE } from '../lib/constants.js';
+import { API_BASE, SKELETON_HEIGHT_LG } from '../lib/constants.js';
 import type { CorrelationFeature, Period } from '../types.js';
 
 interface CorrelationsResponse {
@@ -34,7 +34,7 @@ export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
   }, []);
 
   return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={400}>
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
       {data && (
         <>
           <h2 className="text-lg mb-3">Metric Correlations</h2>

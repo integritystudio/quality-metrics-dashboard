@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CoverageGrid } from '../components/CoverageGrid.js';
 import { useCoverage } from '../hooks/useCoverage.js';
 import { PageShell } from '../components/PageShell.js';
-import { DEFAULT_INPUT_KEY, type InputKey } from '../lib/constants.js';
+import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
 export function CoveragePage({ period }: { period: Period }) {
@@ -10,7 +10,7 @@ export function CoveragePage({ period }: { period: Period }) {
   const { data, isLoading, error } = useCoverage(period, inputKey);
 
   return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={400}>
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
       {data && (
         <>
           <div className="flex-center mb-3 gap-4">

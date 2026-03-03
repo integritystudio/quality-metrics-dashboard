@@ -18,6 +18,9 @@ import {
   MAX_HALLUCINATION_ROWS,
   MAX_FAILED_EVAL_ROWS,
   SCORE_DISPLAY_PRECISION,
+  SKELETON_HEIGHT_LG,
+  CALLOUT_MAX_WIDTH,
+  PAGE_CONTENT_MAX_WIDTH,
 } from '../lib/constants.js';
 
 
@@ -29,7 +32,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const isNotSynced = !isLoading && error instanceof SessionNotFoundError;
 
   if (isLoading || (!isNotSynced && error)) {
-    return <PageShell isLoading={isLoading} error={error ?? null} skeletonHeight={400}>{null}</PageShell>;
+    return <PageShell isLoading={isLoading} error={error ?? null} skeletonHeight={SKELETON_HEIGHT_LG}>{null}</PageShell>;
   }
 
   if (isNotSynced) {
@@ -39,7 +42,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <div className="card text-center" style={{ padding: '32px 24px' }}>
           <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
           <div className="mono-xs text-secondary leading-relaxed" style={{
-            maxWidth: 480,
+            maxWidth: CALLOUT_MAX_WIDTH,
             margin: '0 auto',
           }}>
             This session has not been synced to the dashboard KV store yet.
@@ -105,7 +108,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const models = [...new Set(tokenProgression.map(t => t.model).filter(Boolean))];
 
   return (
-    <div style={{ maxWidth: 1100 }}>
+    <div style={{ maxWidth: PAGE_CONTENT_MAX_WIDTH }}>
       <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
 
       {/* ── Header ── */}
@@ -141,7 +144,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               ))}
             </div>
             {timespan && (
-              <div className="text-muted text-xs flex-wrap gap-4" style={{ marginTop: 4 }}>
+              <div className="text-muted text-xs flex-wrap gap-4" style={{ marginTop: 'var(--space-1)' }}>
                 <span>{new Date(timespan.start).toLocaleString()}</span>
                 <span>&rarr;</span>
                 <span>{new Date(timespan.end).toLocaleString()}</span>
@@ -159,7 +162,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         border: '1px solid var(--border-subtle)',
         borderBottom: '1px solid var(--border)',
         padding: '14px 24px',
-        rowGap: 12,
+        rowGap: 'var(--space-3)',
         marginBottom: 2,
       }}>
         <StatDisplay label="Spans" value={spanCount} />
@@ -422,7 +425,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                       </span>
                     )}
                   </summary>
-                  <div style={{ paddingLeft: 20, paddingBottom: 10 }}>
+                  <div style={{ paddingLeft: 'var(--space-5)', paddingBottom: 'var(--space-2-5)' }}>
                     {commit.body && (
                       <div className="text-secondary text-xs leading-relaxed mb-2" style={{
                         fontFamily: 'var(--font-body)',

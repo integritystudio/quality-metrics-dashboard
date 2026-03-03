@@ -62,7 +62,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="sla-table" style={{ minWidth: 640 }}>
+      <table className="data-table sla-table" style={{ minWidth: 640 }}>
         <thead>
           <tr>
             <th style={{ width: '30%' }}>Agent</th>
@@ -175,15 +175,13 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                 {/* Expanded row: eval summary + sessions + traces */}
                 {isExpanded && (
                   <tr className="eval-expanded-panel">
-                    <td colSpan={COLUMN_COUNT} className="border-b" style={{ padding: '0 10px 10px' }}>
+                    <td colSpan={COLUMN_COUNT} className="border-b">
                       {/* Evaluation summary */}
                       <EvalSummaryRow evalSummary={agent.evalSummary} />
 
                       {/* Daily invocation sparkline */}
                       {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
-                        <div className="border-b-subtle mb-1" style={{
-                          padding: '10px 0 8px',
-                        }}>
+                        <div className="border-b-subtle mb-1 pad-panel-section">
                           <div className="flex-center gap-3">
                             <div className="text-xs text-muted uppercase shrink-0">
                               Daily Activity
@@ -204,7 +202,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                       <div className="d-grid gap-4" style={{
                         gridTemplateColumns: '1fr 1fr',
-                        padding: '12px 0 4px',
+                        padding: 'var(--space-3) 0 var(--space-1)',
                       }}>
                         {/* Sessions column */}
                         <div>
@@ -276,18 +274,14 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
   const metrics = Object.entries(evalSummary);
   if (metrics.length === 0) {
     return (
-      <div className="text-xs text-muted border-b-subtle mb-1" style={{
-        padding: '10px 0 4px',
-      }}>
+      <div className="text-xs text-muted border-b-subtle mb-1 pad-panel-sparse">
         No evaluations linked to this agent.
       </div>
     );
   }
 
   return (
-    <div className="border-b-subtle mb-1" style={{
-      padding: '10px 0 8px',
-    }}>
+    <div className="border-b-subtle mb-1 pad-panel-section">
       <div className="text-muted mb-1-5 text-xs uppercase">
         Evaluation Metrics
       </div>
@@ -297,7 +291,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
           return (
             <div key={name} style={{
               minWidth: 140,
-              padding: '8px 10px',
+              padding: 'var(--space-2) var(--space-2-5)',
               background: 'var(--bg-card)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius)',
@@ -310,7 +304,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
                 <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
                 <span className="mono-xs font-semibold text-right" style={{
                   color: barColor,
-                  minWidth: 38,
+                  minWidth: 'var(--space-8)',
                 }}>
                   {m.avg.toFixed(2)}
                 </span>

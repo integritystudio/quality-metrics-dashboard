@@ -10,6 +10,7 @@ import { routes } from '../lib/routes.js';
 import { TimestampCell } from '../components/TimestampCell.js';
 import { Link, useSearch } from 'wouter';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
 
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
   const { data: allEvaluations, isLoading, error } = useTraceEvaluations(traceId);
@@ -26,7 +27,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
     : 'Trace Evaluations';
 
   return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={200}>
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_SM}>
       {(!evaluations || evaluations.length === 0) ? (
         <EmptyState
           title="No Evaluations Found"

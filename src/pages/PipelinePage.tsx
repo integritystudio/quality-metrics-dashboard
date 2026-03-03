@@ -1,7 +1,7 @@
 import { PipelineFunnel } from '../components/PipelineFunnel.js';
 import { usePipeline } from '../hooks/usePipeline.js';
 import { PageShell } from '../components/PageShell.js';
-import { LLM_SAMPLE_RATE } from '../lib/constants.js';
+import { LLM_SAMPLE_RATE, SKELETON_HEIGHT_MD, ICON_BADGE_SIZE } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
 function T2SamplingStage() {
@@ -16,8 +16,8 @@ function T2SamplingStage() {
       }}
     >
       <span className="inline-flex-center justify-center shrink-0 text-2xs font-bold" style={{
-        width: 24,
-        height: 24,
+        width: ICON_BADGE_SIZE,
+        height: ICON_BADGE_SIZE,
         borderRadius: '50%',
         background: 'var(--accent, #6366f1)',
         color: '#fff',
@@ -37,7 +37,7 @@ export function PipelinePage({ period }: { period: Period }) {
   const { data, isLoading, error } = usePipeline(period);
 
   return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
       {data && (
         <>
           <h2 className="text-lg mb-3">Evaluation Pipeline</h2>

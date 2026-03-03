@@ -6,7 +6,7 @@ export function SLATable({ slas }: { slas: SLAComplianceResult[] }) {
   if (slas.length === 0) return null;
 
   return (
-    <table className="sla-table">
+    <table className="data-table sla-table">
       <thead>
         <tr>
           <th>Metric</th>

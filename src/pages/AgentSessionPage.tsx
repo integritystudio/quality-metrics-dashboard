@@ -6,6 +6,7 @@ import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { plural } from '../lib/quality-utils.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useAgentSession(sessionId);
@@ -18,7 +19,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   const agentNames = [...new Set(turns.map(t => t.agentName ?? 'unknown'))];
 
   return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={300}>
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
       {data && evaluation && (
         <>
           <DetailPageHeader title="Agent Session" id={sessionId}>
