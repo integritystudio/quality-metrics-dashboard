@@ -5,7 +5,7 @@ import { SplitPane } from '../components/SplitPane.js';
 import { MetricCompare } from '../components/MetricCompare.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
-import { API_BASE, SKELETON_HEIGHT_LG } from '../lib/constants.js';
+import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
 import type { CorrelationFeature, Period } from '../types.js';
 
 interface CorrelationsResponse {
@@ -21,8 +21,8 @@ export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     },
-    staleTime: 60_000,
-    retry: 2,
+    staleTime: STALE_TIME.AGGREGATE,
+    retry: QUERY_RETRY_COUNT,
   });
 
   const [leftMetric, setLeftMetric] = useState<string | undefined>();

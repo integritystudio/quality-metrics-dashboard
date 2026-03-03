@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { PipelineStage, PipelineDropoff } from '../types.js';
 import { EmptyState } from './EmptyState.js';
 import { formatPercent } from '../lib/quality-utils.js';
+import { FUNNEL_BAR_HEIGHT, FUNNEL_BAR_MIN_WIDTH, FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
 
 interface PipelineFunnelProps {
   stages: PipelineStage[];
@@ -37,13 +38,13 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                   className="d-flex"
                   style={{
                     width: `${widthPct}%`,
-                    minWidth: 40,
-                    height: 32,
+                    minWidth: FUNNEL_BAR_MIN_WIDTH,
+                    height: FUNNEL_BAR_HEIGHT,
                     background: `var(--stage-${stage.name}, var(--accent))`,
                     borderRadius: 'var(--radius-sm)',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '0 10px',
+                    padding: '0 var(--space-2-5)',
                     transition: 'width 0.3s ease',
                   }}
                   role="meter"
@@ -52,10 +53,10 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                   aria-valuemin={0}
                   aria-valuemax={maxCount}
                 >
-                  <span className="text-xs font-semibold" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text-on-accent)', whiteSpace: 'nowrap' }}>
                     {stage.displayName}
                   </span>
-                  <span className="mono-xs" style={{ color: '#fff', whiteSpace: 'nowrap' }}>
+                  <span className="mono-xs" style={{ color: 'var(--text-on-accent)', whiteSpace: 'nowrap' }}>
                     {stage.entryCount.toLocaleString()}
                   </span>
                 </div>
@@ -64,9 +65,9 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
               {/* Drop-off indicator */}
               {showDropoff && (
                 <div className="text-xs" style={{
-                  color: dropoff.dropoffPercent > 20 ? 'var(--status-warning)' : 'var(--text-secondary)',
-                  paddingLeft: 10,
-                  margin: '2px 0',
+                  color: dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT ? 'var(--status-warning)' : 'var(--text-secondary)',
+                  paddingLeft: 'var(--space-2-5)',
+                  margin: 'var(--space-0-5) 0',
                 }}>
                   {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
                 </div>

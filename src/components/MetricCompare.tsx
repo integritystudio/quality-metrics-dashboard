@@ -28,7 +28,7 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
         onChange={(e) => onMetricChange(e.target.value)}
         className="mb-3 text-primary text-xs surface-elevated"
         style={{
-          padding: '4px 8px',
+          padding: 'var(--space-1) var(--space-2)',
           borderRadius: 'var(--radius-sm)',
         }}
       >

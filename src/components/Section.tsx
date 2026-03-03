@@ -36,13 +36,13 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
         className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail"
         style={{
           '--section-rail-color': railColor,
-          padding: '12px 20px',
-          transition: 'background 0.15s',
+          padding: 'var(--space-3) var(--space-5)',
+          transition: 'background var(--transition-fast)',
         } as CSSProperties}
       >
         <span className="mono text-2xs d-inline-block" style={{
           color: railColor,
-          transition: 'transform 0.2s',
+          transition: 'transform var(--transition-medium)',
         }}>{CHEVRON_RIGHT}</span>
         <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
         {badge && (
@@ -53,7 +53,7 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
         className="border-b-subtle section-rail"
         style={{
           '--section-rail-color': railColor,
-          padding: '16px 20px 20px',
+          padding: 'var(--space-4) var(--space-5) var(--space-5)',
         } as CSSProperties}
       >
         {children}

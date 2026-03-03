@@ -1,5 +1,10 @@
 import type { ConfidenceIndicator } from '../types.js';
 import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
+import {
+  SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
+  VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT, VARIANCE_DISPLAY_MIN_WIDTH,
+  CONFIDENCE_MIN_SAMPLE_SIZE,
+} from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 
 
@@ -29,11 +34,11 @@ function levelShape(level: string): string {
 
 function VarianceBar({ value, max }: { value: number; max: number }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  const band: ScoreColorBand = pct < 20 ? 'excellent' : pct < 50 ? 'adequate' : 'failing';
+  const band: ScoreColorBand = pct < VARIANCE_LOW_PCT ? 'excellent' : pct < VARIANCE_MEDIUM_PCT ? 'adequate' : 'failing';
   return (
     <div className="variance-bar flex-center">
       <BarIndicator value={pct} color={SCORE_COLORS[band]} className="flex-1" />
-      <span className="mono-xs text-secondary" style={{ minWidth: 36 }}>
+      <span className="mono-xs text-secondary" style={{ minWidth: VARIANCE_DISPLAY_MIN_WIDTH }}>
         {value.toFixed(3)}
       </span>
     </div>
@@ -42,7 +47,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
 
 export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanelProps) {
   const { level, sampleCount, scoreStdDev, evaluatorCount, evaluatorAgreement } = confidence;
-  const method = evaluatorCount > 1 ? 'multi-judge agreement' : sampleCount > 50 ? 'sample size' : 'sample count';
+  const method = evaluatorCount > 1 ? 'multi-judge agreement' : sampleCount > CONFIDENCE_MIN_SAMPLE_SIZE ? 'sample size' : 'sample count';
 
   const hasMultiJudge = evaluatorScores && evaluatorScores.length > 1;
 
@@ -55,7 +60,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
         <span className="confidence-method">({method})</span>
       </div>
 
-      <div className="mb-3 text-xs" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px' }}>
+      <div className="mb-3 text-xs" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 'var(--space-1) var(--space-4)' }}>
         <span className="text-secondary">Sample Count</span>
         <span className="mono">{sampleCount}</span>
 
@@ -73,7 +78,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
           <>
             <span className="text-secondary">Agreement</span>
             <span className="mono" style={{
-              color: evaluatorAgreement > 0.8 ? SCORE_COLORS.excellent : evaluatorAgreement > 0.5 ? SCORE_COLORS.adequate : SCORE_COLORS.failing,
+              color: evaluatorAgreement > SCORE_THRESHOLD_GREEN ? SCORE_COLORS.excellent : evaluatorAgreement > SCORE_THRESHOLD_YELLOW ? SCORE_COLORS.adequate : SCORE_COLORS.failing,
             }}>
               {formatPercent(evaluatorAgreement * 100, 0)}
             </span>

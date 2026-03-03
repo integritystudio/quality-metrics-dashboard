@@ -1,6 +1,6 @@
 import { useQualityLive } from '../hooks/useQualityLive.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
-import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW } from '../lib/constants.js';
+import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_BADGE_ALPHA_HEX } from '../lib/constants.js';
 
 function scoreToBadgeColor(score: number): string {
   if (score >= SCORE_THRESHOLD_GREEN) return 'var(--status-healthy)';
@@ -30,11 +30,11 @@ export function QualityLiveIndicator() {
       aria-label="Live quality signals"
       style={{
         flexWrap: 'wrap',
-        padding: '6px 12px',
+        padding: 'var(--space-1-5) var(--space-3)',
         borderRadius: 'var(--radius)',
       }}
     >
-      <span className="text-secondary font-semibold" style={{ marginRight: 4 }}>
+      <span className="text-secondary font-semibold" style={{ marginRight: 'var(--space-1)' }}>
         Quality
       </span>
       {data.metrics.map((m) => (
@@ -45,7 +45,7 @@ export function QualityLiveIndicator() {
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            background: scoreToBadgeColor(m.score) + '1a',
+            background: scoreToBadgeColor(m.score) + SCORE_BADGE_ALPHA_HEX,
             color: scoreToBadgeColor(m.score),
           }}
         >

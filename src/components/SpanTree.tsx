@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { plural } from '../lib/quality-utils.js';
+import { SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
 interface SpanNode {
@@ -69,12 +70,12 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
   const isError = statusCode === 2;
 
   const barStyle: CSSProperties = {
-    height: 4,
+    height: 'var(--space-1)',
     width: `${barPct}%`,
     background: isError ? 'var(--status-critical)' : 'var(--status-healthy)',
-    borderRadius: 2,
-    marginTop: 4,
-    minWidth: barPct > 0 ? 2 : 0,
+    borderRadius: 'var(--radius-xs)',
+    marginTop: 'var(--space-1)',
+    minWidth: barPct > 0 ? 'var(--space-0-5)' : 0,
   };
 
   return (
@@ -82,9 +83,9 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
       <div
         className="flex-center gap-2 border-b"
         style={{
-          paddingLeft: depth * 20 + 8,
-          paddingTop: 8,
-          paddingBottom: 8,
+          paddingLeft: depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING,
+          paddingTop: 'var(--space-2)',
+          paddingBottom: 'var(--space-2)',
         }}
       >
         <span className="text-base" style={{ color: isError ? 'var(--status-critical)' : 'var(--text-primary)' }}>
@@ -93,7 +94,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
         <div className="flex-1">
           <div className="text-xs font-medium">{node.name}</div>
           <div className="flex-center gap-2">
-            <div className="flex-1" style={{ background: 'var(--bg-surface)', borderRadius: 2, height: 4 }}>
+            <div className="flex-1" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-xs)', height: 'var(--space-1)' }}>
               <div style={barStyle} />
             </div>
             {node.durationMs != null && (

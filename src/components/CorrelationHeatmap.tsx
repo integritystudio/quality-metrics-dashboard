@@ -1,6 +1,7 @@
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { SCORE_COLORS, formatScore } from '../lib/quality-utils.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, HEATMAP_CELL_MIN_HEIGHT } from '../lib/constants.js';
 import type { CorrelationFeature } from '../types.js';
 
 interface CorrelationHeatmapProps {
@@ -8,6 +9,10 @@ interface CorrelationHeatmapProps {
   metrics: string[];
   onCellClick?: (rowMetric: string, colMetric: string) => void;
 }
+
+// WCAG 2.1 contrast ratio formula anchors — these specific values are required by the algorithm.
+const CONTRAST_DARK = '#111';
+const CONTRAST_LIGHT = '#fff';
 
 const SHORT_NAMES: Record<string, string> = {
   faithfulness: 'Faith',
@@ -32,7 +37,7 @@ function contrastText(pearsonR: number): string {
   const bg = colorScale(pearsonR);
   // Parse "rgb(r, g, b)" string from d3
   const m = bg.match(/(\d+)/g);
-  if (!m || m.length < 3) return '#111';
+  if (!m || m.length < 3) return CONTRAST_DARK;
   const [r, g, b] = m.map(Number);
   // sRGB relative luminance (WCAG 2.1)
   const toLinear = (c: number) => {
@@ -43,7 +48,7 @@ function contrastText(pearsonR: number): string {
   // WCAG contrast ratio: (L1 + 0.05) / (L2 + 0.05)
   // White text (#fff, L=1.0) needs ratio >= 4.5 → L_bg <= ~0.18
   // Black text (#111, L≈0.012) needs ratio >= 4.5 → L_bg >= ~0.10
-  return L > 0.18 ? '#111' : '#fff';
+  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
 }
 
 const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
@@ -69,8 +74,8 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
       className="gap-half w-full"
       style={{
         display: 'grid',
-        gridTemplateColumns: `80px repeat(${n}, 1fr)`,
-        gridTemplateRows: `32px repeat(${n}, 1fr)`,
+        gridTemplateColumns: `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
+        gridTemplateRows: `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
         aspectRatio: `${cols} / ${cols}`,
       }}
     >
@@ -99,7 +104,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
             className="text-secondary text-xs font-semibold truncate flex-center"
             style={{
               justifyContent: 'flex-end',
-              paddingRight: 8,
+              paddingRight: 'var(--space-2)',
             }}
           >
             {shortName(rowMetric)}
@@ -131,10 +136,10 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                   cursor: !isDiag && onCellClick ? 'pointer' : 'default',
                   backgroundColor: bg,
                   color: isDiag ? 'var(--text-secondary)' : contrastText(value),
-                  borderRadius: 2,
-                  border: isToxic ? `2px solid ${SCORE_COLORS.failing}` : 'none',
+                  borderRadius: 'var(--radius-xs)',
+                  border: isToxic ? `var(--border-width-thick) solid ${SCORE_COLORS.failing}` : 'none',
                   animation: isToxic ? 'toxicPulse 2s ease-in-out infinite' : undefined,
-                  minHeight: 36,
+                  minHeight: HEATMAP_CELL_MIN_HEIGHT,
                 }}
               >
                 {value.toFixed(2)}

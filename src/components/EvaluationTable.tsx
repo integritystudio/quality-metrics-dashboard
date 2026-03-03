@@ -22,6 +22,7 @@ import {
   SCORE_COLORS,
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
+import { EVAL_TABLE_EXPAND_COL_SIZE, EVAL_FILTER_INACTIVE_OPACITY } from '../lib/constants.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
 import { TimestampCell } from './TimestampCell.js';
 import { ExpandChevron } from './ExpandChevron.js';
@@ -79,7 +80,7 @@ const columns = [
         <ExpandChevron expanded={row.getIsExpanded()} className="text-secondary text-xs" />
       </button>
     ),
-    size: 32,
+    size: EVAL_TABLE_EXPAND_COL_SIZE,
   }),
   columnHelper.accessor('score', {
     header: 'Score',
@@ -226,13 +227,13 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
               onClick={() => toggleCategory(cat)}
               className="text-xs font-semibold cursor-pointer"
               style={{
-                padding: '4px 12px',
+                padding: 'var(--space-1) var(--space-3)',
                 borderRadius: 'var(--radius)',
                 border: `1px solid ${CATEGORY_COLORS[cat]}`,
                 backgroundColor: active ? `${CATEGORY_COLORS[cat]}30` : 'transparent',
                 color: CATEGORY_COLORS[cat],
-                opacity: active ? 1 : 0.6,
-                transition: 'opacity 0.15s, background-color 0.15s',
+                opacity: active ? 1 : EVAL_FILTER_INACTIVE_OPACITY,
+                transition: 'opacity var(--transition-fast), background-color var(--transition-fast)',
               }}
             >
               {cat}
@@ -256,7 +257,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {canSort && (
-                      <span style={{ marginLeft: 4, fontSize: 'var(--font-size-2xs)' }}>
+                      <span style={{ marginLeft: 'var(--space-1)', fontSize: 'var(--font-size-2xs)' }}>
                         {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
                       </span>
                     )}

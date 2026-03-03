@@ -1,5 +1,5 @@
 import { scoreColor } from '../lib/quality-utils.js';
-import { AGENT_PALETTE } from '../lib/constants.js';
+import { AGENT_PALETTE, TURN_CARD_MIN_WIDTH } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult } from '../types.js';
@@ -20,7 +20,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
   }
 
   return (
-    <div className="d-flex gap-2 overflow-x-auto" style={{ padding: '8px 0' }}>
+    <div className="d-flex gap-2 overflow-x-auto" style={{ padding: 'var(--space-2) 0' }}>
       {turns.map((turn) => {
         const agent = turn.agentName ?? 'unknown';
         const color = agentColor(agent, agentNames);
@@ -31,9 +31,9 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
             key={turn.turnIndex}
             className="p-4 shrink-0"
             style={{
-              minWidth: 120,
+              minWidth: TURN_CARD_MIN_WIDTH,
               borderRadius: 'var(--radius-lg)',
-              border: `2px solid ${color}`,
+              border: `var(--border-width-thick) solid ${color}`,
               background: 'var(--bg-elevated)',
             }}
           >

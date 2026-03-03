@@ -19,10 +19,9 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
         Composite Quality Index
       </div>
       <div
-        className="mono"
+        className="mono font-bold"
         style={{
-          fontSize: 36,
-          fontWeight: 700,
+          fontSize: 'var(--font-size-3xl)',
           color: overallColor,
           lineHeight: 1.2,
         }}
@@ -34,7 +33,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
         <div
           className="d-flex mt-4"
           style={{
-            height: 8,
+            height: 'var(--space-2)',
             borderRadius: 'var(--radius-sm)',
             overflow: 'hidden',
           }}
@@ -46,7 +45,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
               style={{
                 flex: c.weight,
                 backgroundColor: segmentColor(c),
-                minWidth: 2,
+                minWidth: 'var(--space-0-5)',
               }}
             />
           ))}

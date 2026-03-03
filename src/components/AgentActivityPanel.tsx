@@ -2,7 +2,11 @@ import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
-import { AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD } from '../lib/constants.js';
+import {
+  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
+  AGENT_TABLE_MIN_WIDTH, AGENT_BAR_MIN_WIDTH, AGENT_EVAL_CARD_MIN_WIDTH,
+  SPARKLINE_WIDTH, SPARKLINE_HEIGHT,
+} from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
@@ -62,7 +66,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="data-table sla-table" style={{ minWidth: 640 }}>
+      <table className="data-table sla-table" style={{ minWidth: AGENT_TABLE_MIN_WIDTH }}>
         <thead>
           <tr>
             <th style={{ width: '30%' }}>Agent</th>
@@ -114,10 +118,10 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   {/* Invocations with inline bar */}
                   <td>
                     <div className="flex-center gap-2">
-                      <span className="mono-xs" style={{ minWidth: 32 }}>
+                      <span className="mono-xs" style={{ minWidth: 'var(--space-8)' }}>
                         {agent.invocations}
                       </span>
-                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1" style={{ minWidth: 48 }} />
+                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1" style={{ minWidth: AGENT_BAR_MIN_WIDTH }} />
                     </div>
                   </td>
 
@@ -188,8 +192,8 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                             </div>
                             <Sparkline
                               data={agent.dailyCounts}
-                              width={160}
-                              height={28}
+                              width={SPARKLINE_WIDTH}
+                              height={SPARKLINE_HEIGHT}
                               color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
                               label={`Daily invocations for ${agent.agentName}`}
                             />
@@ -290,7 +294,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
           const barColor = scoreColor(m.avg);
           return (
             <div key={name} style={{
-              minWidth: 140,
+              minWidth: AGENT_EVAL_CARD_MIN_WIDTH,
               padding: 'var(--space-2) var(--space-2-5)',
               background: 'var(--bg-card)',
               border: '1px solid var(--border-subtle)',

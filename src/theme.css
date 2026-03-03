@@ -17,6 +17,7 @@
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
   --text-muted: #475569;
+  --text-on-accent: #ffffff;
 
   /* Status */
   --status-healthy: #26d97f;
@@ -44,11 +45,13 @@
 
   /* Spacing */
   --space-px: 1px;
+  --space-0-5: 2px;
   --space-1: 4px;
   --space-1-5: 6px;
   --space-2: 8px;
   --space-2-5: 10px;
   --space-3: 12px;
+  --space-3-5: 14px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
@@ -84,6 +87,11 @@
   --radius: 6px;
   --radius-lg: 8px;
   --radius-pill: 12px;
+  --radius-full: 50%;
+
+  /* Border widths */
+  --border-width-thick: 2px;
+  --border-width-rail: 3px;
 
   /* Font sizes */
   --font-size-2xs: 9px;
@@ -94,6 +102,7 @@
   --font-size-xl: 20px;
   --font-size-stat: 22px;
   --font-size-2xl: 24px;
+  --font-size-3xl: 36px;
 
   /* Font Weight */
   --bold: 600;
@@ -102,9 +111,12 @@
   /* Label typography */
   --label-letter-spacing: 0.5px;
   --stat-label-letter-spacing: 0.1em;
+  --letter-spacing-id: 0.02em;
+  --label-letter-spacing-wide: 0.12em;
 
   /* Transitions */
   --transition-fast: 0.15s ease;
+  --transition-medium: 0.2s ease;
   --transition-bar: width 0.3s ease;
 
   /* Shadows */

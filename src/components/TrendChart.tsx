@@ -10,7 +10,12 @@ import {
 } from 'recharts';
 import type { MetricDynamics } from '../types.js';
 import type { MetricTrend } from '../types.js';
-import { CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import {
+  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
+  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
+  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
+  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED,
+} from '../lib/constants.js';
 import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -77,7 +82,7 @@ export function TrendChart({
   return (
     <div>
       <div role="img" aria-label={`Trend chart for ${metricName}`}>
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
           <LineChart data={data} margin={CHART_MARGIN}>
             <CartesianGrid {...CHART_GRID_PROPS} />
             <XAxis
@@ -101,25 +106,25 @@ export function TrendChart({
               <ReferenceLine
                 y={warningThreshold}
                 stroke={CHART_COLORS.warning}
-                strokeDasharray="6 3"
-                label={{ value: 'Warning', fill: CHART_COLORS.warning, fontSize: 12, position: 'right' }}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: 'Warning', fill: CHART_COLORS.warning, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
               />
             )}
             {criticalThreshold != null && (
               <ReferenceLine
                 y={criticalThreshold}
                 stroke={CHART_COLORS.critical}
-                strokeDasharray="6 3"
-                label={{ value: 'Critical', fill: CHART_COLORS.critical, fontSize: 12, position: 'right' }}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: 'Critical', fill: CHART_COLORS.critical, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
               />
             )}
             <Line
               type="monotone"
               dataKey="value"
               stroke={CHART_COLORS.line}
-              strokeWidth={2}
-              dot={{ fill: CHART_COLORS.line, r: 4 }}
-              activeDot={{ r: 6 }}
+              strokeWidth={CHART_STROKE_WIDTH}
+              dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS }}
+              activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
               connectNulls
             />
             {dynamics && dynamics.velocity !== 0 && (
@@ -127,9 +132,9 @@ export function TrendChart({
                 type="monotone"
                 dataKey="projected"
                 stroke={CHART_COLORS.line}
-                strokeWidth={2}
-                strokeDasharray="6 4"
-                dot={{ fill: CHART_COLORS.line, r: 3, strokeDasharray: '' }}
+                strokeWidth={CHART_STROKE_WIDTH}
+                strokeDasharray={CHART_DASH_PROJECTED}
+                dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS_PROJECTED, strokeDasharray: '' }}
                 connectNulls
               />
             )}

@@ -21,6 +21,9 @@ import {
   SKELETON_HEIGHT_LG,
   CALLOUT_MAX_WIDTH,
   PAGE_CONTENT_MAX_WIDTH,
+  CODE_QUALITY_WARN_THRESHOLD,
+  AGENT_CARD_MIN_WIDTH,
+  FILE_ACCESS_COL_MIN,
 } from '../lib/constants.js';
 
 
@@ -39,7 +42,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
     return (
       <div>
         <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-        <div className="card text-center" style={{ padding: '32px 24px' }}>
+        <div className="card text-center" style={{ padding: 'var(--space-8) var(--space-6)' }}>
           <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
           <div className="mono-xs text-secondary leading-relaxed" style={{
             maxWidth: CALLOUT_MAX_WIDTH,
@@ -116,14 +119,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',
         borderBottom: 'none',
-        padding: '20px 24px 16px',
+        padding: 'var(--space-5) var(--space-6) var(--space-4)',
         marginBottom: 0,
       }}>
         <div className="flex-wrap gap-4 justify-between align-start">
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
             <div className="mono font-semibold text-base mb-2 break-all text-accent-hover" style={{
-              letterSpacing: '0.02em',
+              letterSpacing: 'var(--letter-spacing-id)',
             }}>{sessionId}</div>
             <div className="text-secondary text-xs flex-wrap gap-4">
               <span>{si.projectName}</span>
@@ -161,9 +164,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         background: 'var(--bg-elevated)',
         border: '1px solid var(--border-subtle)',
         borderBottom: '1px solid var(--border)',
-        padding: '14px 24px',
+        padding: 'var(--space-3-5) var(--space-6)',
         rowGap: 'var(--space-3)',
-        marginBottom: 2,
+        marginBottom: 'var(--space-0-5)',
       }}>
         <StatDisplay label="Spans" value={spanCount} />
         <div className="vitals-divider" />
@@ -245,7 +248,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   <div>
                     <div className="mono-xs">{e.evaluationName}</div>
                     {e.explanation && (
-                      <div className="text-muted text-xs" style={{ marginTop: 2 }}>
+                      <div className="text-muted text-xs" style={{ marginTop: 'var(--space-0-5)' }}>
                         {truncateText(e.explanation, 200)}
                       </div>
                     )}
@@ -262,7 +265,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               items={failedEvals}
               max={MAX_FAILED_EVAL_ROWS}
               renderItem={(e, i) => (
-                <div key={i} className="mono-xs" style={{ marginBottom: 3 }}>
+                <div key={i} className="mono-xs" style={{ marginBottom: 'var(--space-1)' }}>
                   <span className="text-warning">⚠</span>{' '}
                   {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
                 </div>
@@ -320,7 +323,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
         {totalMcpCalls > 0 && (
           <>
-            <div className="stat-label" style={{ letterSpacing: '0.12em', margin: '14px 0 8px' }}>
+            <div className="stat-label" style={{ letterSpacing: 'var(--label-letter-spacing-wide)', margin: 'var(--space-3-5) 0 var(--space-2)' }}>
               MCP Tools — {totalMcpCalls} calls
             </div>
             <FreqBarGrid entries={Object.entries(mcpUsage)} max={maxMcpCount} color="var(--status-healthy)" />
@@ -335,13 +338,13 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={agentActivity.map(a => `${a.agentName} ×${a.invocations}`).join(' · ')}
           health={agentActivity.some(a => a.errors > 0) ? 'warn' : 'neutral'}
         >
-          <div className="gap-2-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+          <div className="gap-2-5" style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${AGENT_CARD_MIN_WIDTH}, 1fr))` }}>
             {agentActivity.map(a => (
               <div key={a.agentName} style={{
                 background: 'var(--bg-elevated)',
                 border: `1px solid ${a.errors > 0 ? 'var(--status-warning)' : 'var(--border-subtle)'}`,
                 borderRadius: 'var(--radius)',
-                padding: '10px 14px',
+                padding: 'var(--space-2-5) var(--space-3-5)',
               }}>
                 <div className="mono-xs mb-1-5 font-semibold">
                   {a.agentName}
@@ -385,7 +388,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={`${fileAccess.length} files · top: ${shortPath(fileAccess[0]?.path ?? '')}`}
           health="neutral"
         >
-          <div style={{ columns: '2 320px', columnGap: 32 }}>
+          <div style={{ columns: `2 ${FILE_ACCESS_COL_MIN}`, columnGap: 'var(--space-8)' }}>
             {fileAccess.map(({ path, count }) => (
               <div key={path} style={{ breakInside: 'avoid' }}>
                 <FreqBar
@@ -413,7 +416,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               return (
                 <details key={i} className="border-b-subtle">
                   <summary className="flex-center gap-2-5 cursor-pointer list-none" style={{
-                    padding: '8px 4px',
+                    padding: 'var(--space-2) var(--space-1)',
                   }}>
                     <span className="text-healthy text-2xs shrink-0">●</span>
                     <span className="mono-xs font-semibold flex-1">
@@ -453,7 +456,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <Section
           title="Code Quality"
           badge={`${plural(codeStructure.length, 'file')} analyzed`}
-          health={codeStructure.some(f => f.score < 0.6) ? 'warn' : 'ok'}
+          health={codeStructure.some(f => f.score < CODE_QUALITY_WARN_THRESHOLD) ? 'warn' : 'ok'}
         >
           <div className="overflow-x-auto">
             <table className="mono-xs w-full table-collapse">

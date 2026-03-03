@@ -9,23 +9,23 @@ function T2SamplingStage() {
     <div
       className="flex-center text-secondary text-xs gap-2-5 mt-3"
       style={{
-        padding: '10px 14px',
+        padding: 'var(--space-2-5) var(--space-3-5)',
         borderRadius: 'var(--radius)',
-        border: '1px dashed var(--border, #2a2a3e)',
+        border: '1px dashed var(--border)',
         background: 'var(--bg-surface)',
       }}
     >
       <span className="inline-flex-center justify-center shrink-0 text-2xs font-bold" style={{
         width: ICON_BADGE_SIZE,
         height: ICON_BADGE_SIZE,
-        borderRadius: '50%',
-        background: 'var(--accent, #6366f1)',
-        color: '#fff',
+        borderRadius: 'var(--radius-full)',
+        background: 'var(--accent)',
+        color: 'var(--text-on-accent)',
       }}>
         T2
       </span>
       <span>
-        <strong style={{ color: 'var(--text-primary, #e0e0e0)' }}>LLM Sampling</strong>
+        <strong style={{ color: 'var(--text-primary)' }}>LLM Sampling</strong>
         {' \u2014 '}
         {LLM_SAMPLE_RATE}% sampled for LLM evaluation (relevance, coherence, faithfulness, hallucination)
       </span>

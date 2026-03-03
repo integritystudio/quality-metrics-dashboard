@@ -1,6 +1,10 @@
 import { memo, useState, useMemo } from 'react';
 import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
 import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE, COVERAGE_GRID_LEGEND_SIZE,
+  COVERAGE_GRID_MAX_INPUTS, COVERAGE_GRID_HEADER_MAX_HEIGHT,
+} from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
 interface CoverageGridProps {
@@ -34,7 +38,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   }
 
   // Limit displayed inputs to avoid huge grids
-  const maxInputs = 30;
+  const maxInputs = COVERAGE_GRID_MAX_INPUTS;
   const displayInputs = inputs.slice(0, maxInputs);
   const truncated = inputs.length > maxInputs;
 
@@ -55,7 +59,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
         {(['covered', 'partial', 'missing'] as const).map(status => (
           <div key={status} className="flex-center gap-1">
             <div style={{
-              width: 12, height: 12, borderRadius: 2,
+              width: COVERAGE_GRID_LEGEND_SIZE, height: COVERAGE_GRID_LEGEND_SIZE, borderRadius: 'var(--radius-xs)',
               background: STATUS_COLORS[status],
             }} />
             <span>{status}</span>
@@ -71,7 +75,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           className="gap-half"
           style={{
             display: 'grid',
-            gridTemplateColumns: `120px repeat(${displayInputs.length}, 28px)`,
+            gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
           }}
         >
           {/* Header row */}
@@ -87,7 +91,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                   writingMode: 'vertical-lr',
                   textAlign: 'end',
                   overflow: 'hidden',
-                  maxHeight: 60,
+                  maxHeight: COVERAGE_GRID_HEADER_MAX_HEIGHT,
                 }}
               >
                 {truncateId(input, 8)}
@@ -121,14 +125,14 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     onMouseLeave={() => setHovered(null)}
                     className="mono text-2xs flex-center justify-center"
                     style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 3,
+                      width: COVERAGE_GRID_CELL_SIZE,
+                      height: COVERAGE_GRID_CELL_SIZE,
+                      borderRadius: 'var(--radius-bar)',
                       background: STATUS_COLORS[status],
                       opacity: isHovered ? 1 : 0.8,
                       cursor: 'default',
-                      color: '#fff',
-                      transition: 'opacity 0.15s',
+                      color: 'var(--text-on-accent)',
+                      transition: 'opacity var(--transition-fast)',
                     }}
                   >
                     {count > 0 ? count : ''}
@@ -150,7 +154,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       {gaps.length > 0 && (
         <div className="mt-4">
           <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
-          <ul className="m-0 text-xs" style={{ paddingLeft: 20 }}>
+          <ul className="m-0 text-xs" style={{ paddingLeft: 'var(--space-5)' }}>
             {gaps.map(gap => (
               <li key={gap.metric} className="mb-1">
                 <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
