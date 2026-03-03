@@ -35,7 +35,11 @@ import {
   computePercentileDistribution,
   computeMetricDynamics,
   computeCorrelationMatrix,
+  computeRollingDegradationSignals,
+  loadDegradationState,
+  saveDegradationState,
 } from '../../dist/lib/quality-feature-engineering.js';
+import { DEGRADATION_KV_KEY } from '../../dist/lib/quality/quality-constants.js';
 import { computeMultiAgentEvaluation } from '../../dist/lib/quality-multi-agent.js';
 
 function resolveNamespaceId(): string {
@@ -823,6 +827,8 @@ async function main(): Promise<void> {
 
   // Trend data per metric × period (10 buckets) — reuses cached grouped evals
   const TREND_BUCKETS = 10;
+  // R5: Collect time buckets per period×metric for degradation signal computation
+  const degradationBuckets = new Map<string, Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>>>();
   for (const period of PERIODS) {
     const ms = PERIOD_MS[period];
     if (ms > MAX_DAYS_MS) continue;
@@ -850,6 +856,14 @@ async function main(): Promise<void> {
           timeBuckets[idx].evals.push(ev);
         }
       }
+
+      // R5: Save buckets for degradation signal computation
+      if (!degradationBuckets.has(period)) degradationBuckets.set(period, {});
+      degradationBuckets.get(period)![name] = timeBuckets.map(b => ({
+        scores: b.scores,
+        startTime: b.startTime,
+        endTime: b.endTime,
+      }));
 
       const periodHours = ms / (TREND_BUCKETS * 3600000);
       let previousTrend: MetricTrend | undefined;
@@ -896,6 +910,26 @@ async function main(): Promise<void> {
       });
     }
   }
+
+  // R5: Compute degradation signals for all periods
+  const stateDir = backend.getDirectories().find(d => d.source === 'global')?.path ?? '';
+  const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
+  for (const [period, metricBuckets] of degradationBuckets) {
+    const ms = PERIOD_MS[period];
+    const windowStart = new Date(now.getTime() - ms);
+    const window = { startDate: windowStart.toISOString(), endDate: now.toISOString() };
+    const reports = computeRollingDegradationSignals(metricBuckets, metricNames, degradationState, window);
+    // Update breach counts from this period's reports (latest period wins)
+    for (const r of reports) {
+      degradationState.breaches[r.metricName] = r.signal.consecutiveBreaches;
+    }
+    entries.push({
+      key: `${DEGRADATION_KV_KEY}:${period}`,
+      value: JSON.stringify({ period, reports, computedAt: now.toISOString() }),
+    });
+  }
+  degradationState.lastRun = now.toISOString();
+  if (stateDir) saveDegradationState(stateDir, degradationState);
 
   // Per-trace evaluations and spans
   const thirtyDaysAgo = new Date(now.getTime() - PERIOD_MS['30d']);
