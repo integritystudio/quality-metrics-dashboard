@@ -54,7 +54,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   if (!data) return null;
 
   const {
-    dataSources, sessionInfo, toolUsage, mcpUsage,
+    dataSources, sessionInfo, timespan, toolUsage, mcpUsage,
     agentActivity, fileAccess, gitCommits, tokenProgression, spanBreakdown,
     alertSummary, codeStructure, errors,
     multiAgentEvaluation, evaluations,
@@ -140,6 +140,14 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 <span key={m} className="mono text-2xs text-muted chip chip-badge">{m}</span>
               ))}
             </div>
+            {timespan && (
+              <div className="text-muted text-xs flex-wrap gap-4" style={{ marginTop: 4 }}>
+                <span>{new Date(timespan.start).toLocaleString()}</span>
+                <span>&rarr;</span>
+                <span>{new Date(timespan.end).toLocaleString()}</span>
+                <span className="mono text-2xs chip chip-badge">{timespan.durationHours}h</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
