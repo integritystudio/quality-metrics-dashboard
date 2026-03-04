@@ -5,12 +5,12 @@ import {
   computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
+  type MetricTrend,
 } from '../../../../dist/lib/quality-metrics.js';
 import {
   computePercentileDistribution,
   computeMetricDynamics,
 } from '../../../../dist/lib/quality-feature-engineering.js';
-import type { MetricTrend } from '../../../../dist/lib/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';

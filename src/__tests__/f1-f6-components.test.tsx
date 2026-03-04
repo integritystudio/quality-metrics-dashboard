@@ -5,8 +5,7 @@ import { CQIHero } from '../components/CQIHero.js';
 import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
 import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
 import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
-import type { CompositeQualityIndex } from '../types.js';
-import type { CorrelationFeature } from '../types.js';
+import type { CompositeQualityIndex, CorrelationFeature } from '../types.js';
 
 afterEach(cleanup);
 
@@ -349,4 +348,3 @@ describe('KeyboardNavProvider', () => {
     expect(screen.getByTestId('overlay').textContent).toBe('open');
   });
 });
-

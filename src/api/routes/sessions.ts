@@ -1,7 +1,17 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
-import { HttpStatus } from '../../lib/constants.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
+import {
+  COMMIT_BODY_START_LINE_INDEX,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  FILE_ACCESS_TOP_N,
+  LATENCY_P50,
+  LATENCY_P95,
+  MS_PER_HOUR,
+  OTEL_STATUS_ERROR_CODE,
+  PERCENT_BASE,
+} from '../api-constants.js';
 import {
   loadEvaluationsBySessionId,
   loadLogsBySessionId,
@@ -17,7 +27,7 @@ function attr<T>(span: { attributes?: Record<string, unknown> }, key: string): T
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
-  const idx = Math.ceil(sorted.length * p / 100) - 1;
+  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
   return sorted[Math.max(0, idx)];
 }
 
@@ -25,7 +35,7 @@ function percentile(sorted: number[], p: number): number {
 async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
   const now = new Date();
   const end = endDate ?? now.toISOString().split('T')[0];
-  const start = startDate ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const start = startDate ?? new Date(now.getTime() - PERIOD_MS['30d']).toISOString().split('T')[0];
   const result = await queryTraces({
     attributeFilter: { 'session.id': sessionId },
     startDate: start,
@@ -85,7 +95,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const timespan = tsMin < Infinity ? {
       start: new Date(tsMin).toISOString(),
       end: new Date(tsMax).toISOString(),
-      durationHours: +((tsMax - tsMin) / 3_600_000).toFixed(1),
+      durationHours: +((tsMax - tsMin) / MS_PER_HOUR).toFixed(1),
     } : null;
 
     // ---- Session Info from session-start spans ----
@@ -168,8 +178,8 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       hookLatency[name] = {
         count: sorted.length,
         avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(1),
-        p50: +percentile(sorted, 50).toFixed(1),
-        p95: +percentile(sorted, 95).toFixed(1),
+        p50: +percentile(sorted, LATENCY_P50).toFixed(1),
+        p95: +percentile(sorted, LATENCY_P95).toFixed(1),
         max: +sorted[sorted.length - 1].toFixed(1),
       };
     }
@@ -185,7 +195,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     for (const s of spans) {
       const hasError = attr<boolean>(s, 'builtin.has_error') === true
         || attr<boolean>(s, 'agent.has_error') === true
-        || s.status?.code === 2;
+        || s.status?.code === OTEL_STATUS_ERROR_CODE;
       if (!hasError) continue;
       const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
       const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
@@ -228,7 +238,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const fileAccess = Object.entries(fileCount)
       .map(([path, count]) => ({ path, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 30);
+      .slice(0, FILE_ACCESS_TOP_N);
 
     // ---- Git Commits ----
     const gitCommits = spans
@@ -239,8 +249,8 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         const files = filesMatch ? filesMatch[1].trim() : '';
         const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
         const fullMessage = msgMatch ? msgMatch[1] : '';
-        const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, 80);
-        const body = fullMessage ? fullMessage.split('\n').slice(2).join('\n').trim() : '';
+        const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
+        const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
         return { subject, body, files };
       });
 
@@ -279,9 +289,9 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       return {
         name,
         count: d.count,
-        avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3) : null,
-        min: sorted.length > 0 ? +sorted[0].toFixed(3) : null,
-        max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(3) : null,
+        avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION) : null,
+        min: sorted.length > 0 ? +sorted[0].toFixed(SCORE_DISPLAY_PRECISION) : null,
+        max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION) : null,
       };
     });
 
@@ -302,7 +312,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       step: i,
       score: typeof span.attributes?.['evaluation.score'] === 'number'
         ? span.attributes['evaluation.score'] as number
-        : (span.status?.code === 2 ? 0 : 1),
+        : (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
       explanation: span.name,
     }));
     const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);

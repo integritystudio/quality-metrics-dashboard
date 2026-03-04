@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import {
   computeDashboardSummary,
   computeRoleView,
+  type RoleViewType,
 } from '../../../../dist/lib/quality-metrics.js';
-import type { RoleViewType } from '../../../../dist/lib/quality-metrics.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';

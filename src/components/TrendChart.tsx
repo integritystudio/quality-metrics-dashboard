@@ -8,8 +8,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
-import type { MetricDynamics } from '../types.js';
-import type { MetricTrend } from '../types.js';
+import type { MetricDynamics, MetricTrend } from '../types.js';
 import {
   CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
   CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
