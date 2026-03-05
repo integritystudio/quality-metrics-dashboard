@@ -27,6 +27,7 @@ export default defineConfig({
   include: ['src/**/*'],
   ignore: {
     useDefaultPatterns: true,
+    useGitignore: true,
     customPatterns: ['tmp/', '*.log', 'dist/'],
   },
   security: {
