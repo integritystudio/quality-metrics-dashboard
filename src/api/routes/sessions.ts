@@ -8,7 +8,7 @@ import {
   FILE_ACCESS_TOP_N,
   LATENCY_P50,
   LATENCY_P95,
-  MS_PER_HOUR,
+  TIME_MS,
   OTEL_STATUS_ERROR_CODE,
   PERCENT_BASE,
 } from '../api-constants.js';
@@ -95,7 +95,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const timespan = tsMin < Infinity ? {
       start: new Date(tsMin).toISOString(),
       end: new Date(tsMax).toISOString(),
-      durationHours: +((tsMax - tsMin) / MS_PER_HOUR).toFixed(1),
+      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(1),
     } : null;
 
     // ---- Session Info from session-start spans ----

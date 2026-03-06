@@ -270,7 +270,7 @@ describe('CorrelationHeatmap', () => {
   it('applies toxic border styling', () => {
     const { correlations, metrics } = makeCorrelations();
     const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    const toxicCells = container.querySelectorAll('[style*="2px solid"]');
+    const toxicCells = container.querySelectorAll('[data-toxic="true"]');
     expect(toxicCells.length).toBeGreaterThanOrEqual(2);
   });
 });

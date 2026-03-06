@@ -20,8 +20,8 @@ import {
   type Turn,
   type EvalRecord,
 } from '../judge-evaluations.js';
-import { LLMJudge } from '../../../src/lib/llm-judge-config.js';
-import type { LLMProvider } from '../../../src/lib/llm-as-judge.js';
+import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
+import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories

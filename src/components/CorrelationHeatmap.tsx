@@ -129,6 +129,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 key={`${ri}-${ci}`}
                 role="cell"
                 aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(2)}`}
+                data-toxic={isToxic ? 'true' : undefined}
                 title={tooltip}
                 onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
                 className="mono-xs font-medium flex-center justify-center"

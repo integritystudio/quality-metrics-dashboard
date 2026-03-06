@@ -19,7 +19,7 @@ import { createHash, randomBytes } from 'crypto';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { MultiDirectoryBackend } from '../../dist/backends/local-jsonl.js';
+import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
 import {
   computeDashboardSummary,
   computeRoleView,
@@ -27,10 +27,10 @@ import {
   computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
-} from '../../dist/lib/quality-metrics.js';
-import { computePipelineView } from '../../dist/lib/quality-visualization.js';
-import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../dist/lib/quality-metrics.js';
-import type { EvaluationResult, StepScore } from '../../dist/backends/index.js';
+} from '../../src/lib/quality/quality-metrics.js';
+import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
+import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
 import {
   computePercentileDistribution,
   computeMetricDynamics,
@@ -38,9 +38,9 @@ import {
   computeRollingDegradationSignals,
   loadDegradationState,
   saveDegradationState,
-} from '../../dist/lib/quality/quality-feature-engineering.js';
-import { DEGRADATION_KV_KEY } from '../../dist/lib/quality/quality-constants.js';
-import { computeMultiAgentEvaluation } from '../../dist/lib/quality-multi-agent.js';
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
+import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
 
 function resolveNamespaceId(): string {
   if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;

@@ -41,7 +41,9 @@ export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill',
 
 
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const TIME_MS = {
+  DAY: 24 * 60 * 60 * 1000,
+} as const;
 /** Period string → day count for API route validation. */
 export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
 /** Zod-compatible tuple of valid period keys, derived from VALID_PERIODS. */
@@ -56,7 +58,7 @@ export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
 export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
 /** Period string → milliseconds, derived from VALID_PERIODS. */
 export const PERIOD_MS: Record<string, number> = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * MS_PER_DAY]),
+  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
 );
 
 
@@ -74,7 +76,7 @@ export const MAX_ERROR_ROWS = 10;
 export const MAX_HALLUCINATION_ROWS = 8;
 export const MAX_FAILED_EVAL_ROWS = 6;
 /** Rolling window for live quality endpoint (24 h). */
-export const LIVE_WINDOW_MS = MS_PER_DAY;
+export const LIVE_WINDOW_MS = TIME_MS.DAY;
 /** Default React Query retry count for data fetching. */
 export const QUERY_RETRY_COUNT = 2;
 /** Polling / refetch interval for live and dashboard queries (ms). */
