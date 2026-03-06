@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { HttpStatus } from '../../lib/constants.js';
 import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../data-loader.js';
 

@@ -510,19 +510,19 @@ describe('OperatorView', () => {
 // Trends API route — input validation
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../../dist/lib/quality-metrics.js', () => ({
+vi.mock('../../../../dist/lib/quality/quality-metrics.js', () => ({
   getQualityMetric: vi.fn((name: string) => name === 'relevance' ? { aggregations: ['avg'] } : null),
   computeMetricDetail: vi.fn(() => null),
   computeAggregations: vi.fn(() => ({})),
   QUALITY_METRICS: { relevance: { aggregations: ['avg'] } },
 }));
 
-vi.mock('../../../../dist/lib/quality-feature-engineering.js', () => ({
+vi.mock('../../../../dist/lib/quality/quality-feature-engineering.js', () => ({
   computePercentileDistribution: vi.fn(() => null),
   computeMetricDynamics: vi.fn(() => null),
 }));
 
-vi.mock('../../../../dist/lib/error-sanitizer.js', () => ({
+vi.mock('../../../../dist/lib/errors/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: vi.fn((e: unknown) => String(e)),
 }));
 

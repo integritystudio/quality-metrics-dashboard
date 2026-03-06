@@ -8,11 +8,11 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality-multi-agent.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
   computeMultiAgentEvaluation: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/error-sanitizer.js', () => ({
+vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
@@ -36,7 +36,7 @@ vi.mock('../api/data-loader.js', () => ({
 
 import { agentRoutes } from '../api/routes/agents.js';
 import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality-multi-agent.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
 import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
 import {
   COMMIT_BODY_START_LINE_INDEX,

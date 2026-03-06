@@ -5,17 +5,17 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality-metrics.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
   getQualityMetric: vi.fn(),
   computeMetricDetail: vi.fn(),
   computeAggregations: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/quality-feature-engineering.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-feature-engineering.js', () => ({
   computeMetricDynamics: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/error-sanitizer.js', () => ({
+vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
@@ -34,8 +34,8 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { metricsRoutes } from '../api/routes/metrics.js';
-import { getQualityMetric, computeMetricDetail, computeAggregations } from '../../../dist/lib/quality-metrics.js';
-import { computeMetricDynamics } from '../../../dist/lib/quality-feature-engineering.js';
+import { getQualityMetric, computeMetricDetail, computeAggregations } from '../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDynamics } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
 
 // ---------------------------------------------------------------------------

@@ -3,10 +3,10 @@ import {
   computeDashboardSummary,
   computeRoleView,
   type RoleViewType,
-} from '../../../../dist/lib/quality-metrics.js';
+} from '../../../../dist/lib/quality/quality-metrics.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
 import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 

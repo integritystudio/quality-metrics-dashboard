@@ -4,9 +4,9 @@ import {
   computeMetricDetail,
   computeAggregations,
   getQualityMetric,
-} from '../../../../dist/lib/quality-metrics.js';
-import { computeMetricDynamics } from '../../../../dist/lib/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 

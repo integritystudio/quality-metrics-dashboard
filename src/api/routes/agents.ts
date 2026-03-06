@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';

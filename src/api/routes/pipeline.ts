@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import {
   computePipelineView,
   computeDashboardSummary,
-} from '../../../../dist/lib/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 

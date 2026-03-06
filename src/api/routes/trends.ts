@@ -6,12 +6,12 @@ import {
   getQualityMetric,
   QUALITY_METRICS,
   type MetricTrend,
-} from '../../../../dist/lib/quality-metrics.js';
+} from '../../../../dist/lib/quality/quality-metrics.js';
 import {
   computePercentileDistribution,
   computeMetricDynamics,
-} from '../../../../dist/lib/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);

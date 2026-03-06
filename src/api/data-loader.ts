@@ -1,6 +1,6 @@
 import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/verification-events.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
 import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
 
 let backend: MultiDirectoryBackend | undefined;

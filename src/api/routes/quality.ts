@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
 import type { LiveMetric, QualityLiveData } from '../../types.js';

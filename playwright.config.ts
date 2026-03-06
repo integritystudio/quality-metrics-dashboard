@@ -4,10 +4,11 @@ const BASE_URL = process.env.BASE_URL ?? 'http://localhost:5173';
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  // API-backed tests contend on local telemetry reads; serial execution is more stable.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: [['html', { open: 'never' }]],
   timeout: 30_000,
   expect: { timeout: 5_000 },

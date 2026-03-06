@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { HttpStatus } from '../../lib/constants.js';
 import { loadEvaluationsByTraceId } from '../data-loader.js';
 

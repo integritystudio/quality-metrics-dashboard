@@ -9,17 +9,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dist modules via their virtual IDs (parentDistStub intercepts both 3-level
 // and 4-level relative dist imports into the same \0dist/... virtual module).
-vi.mock('../../../dist/lib/quality-metrics.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
   QUALITY_METRICS: {},
   computeDashboardSummary: vi.fn(),
   computeRoleView: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/quality-feature-engineering.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-feature-engineering.js', () => ({
   computeCQI: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/error-sanitizer.js', () => ({
+vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
@@ -40,8 +40,8 @@ vi.mock('../api/data-loader.js', () => ({
 
 import { dashboardRoutes } from '../api/routes/dashboard.js';
 import { qualityRoutes } from '../api/routes/quality.js';
-import { computeDashboardSummary, computeRoleView } from '../../../dist/lib/quality-metrics.js';
-import { computeCQI } from '../../../dist/lib/quality-feature-engineering.js';
+import { computeDashboardSummary, computeRoleView } from '../../../dist/lib/quality/quality-metrics.js';
+import { computeCQI } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
 
 // ---------------------------------------------------------------------------

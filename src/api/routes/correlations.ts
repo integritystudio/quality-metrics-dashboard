@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { computeCorrelationMatrix } from '../../../../dist/lib/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/error-sanitizer.js';
+import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 

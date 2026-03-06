@@ -4,12 +4,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality-metrics.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
   computePipelineView: vi.fn(),
   computeDashboardSummary: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/error-sanitizer.js', () => ({
+vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
@@ -28,7 +28,7 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { pipelineRoutes } from '../api/routes/pipeline.js';
-import { computePipelineView, computeDashboardSummary } from '../../../dist/lib/quality-metrics.js';
+import { computePipelineView, computeDashboardSummary } from '../../../dist/lib/quality/quality-metrics.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);
