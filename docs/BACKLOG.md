@@ -13,9 +13,11 @@ Open items from code reviews and deferred work.
 > All 7 DRY backlog items (M1–M4, L1–L3) were implemented 2026-03-02.
 > Commits d8a0098–40499b3.
 
+**Resolved items**: [v3.0.1 H1/M1](changelog/3.0.1/CHANGELOG.md) (2026-03-06) — backfill pre-filter fix + toxic-border test stabilization.
+
 ## Open Items
 
-### H1: `--backfill` session pre-filter can skip missing metric gaps
+### ~~H1: `--backfill` session pre-filter can skip missing metric gaps~~ [Done]
 
 - Severity: `High`
 - Introduced in: `2446f81` (`feat(judge): add --backfill flag to generate trace-based seed evaluations`)
@@ -70,7 +72,7 @@ Open items from code reviews and deferred work.
 
 ---
 
-### M1: Correlation toxic-border test is brittle after CSS var refactor
+### ~~M1: Correlation toxic-border test is brittle after CSS var refactor~~ [Done]
 
 - Severity: `Medium`
 - Introduced by style constantization in commit range including `ad5f0c3`
