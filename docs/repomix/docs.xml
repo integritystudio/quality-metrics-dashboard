@@ -10127,7 +10127,7 @@ or other automated processes.</purpose><file_format>The content is organized as 
  41: 
  42: 
  43: 
- 44: const MS_PER_DAY = 24 * 60 * 60 * 1000;
+ 44: const TIME_MS.DAY = 24 * 60 * 60 * 1000;
  45: /** Period string → day count for API route validation. */
  46: export const VALID_PERIODS: Record&lt;string, number&gt; = { &apos;24h&apos;: 1, &apos;7d&apos;: 7, &apos;30d&apos;: 30 };
  47: /** Zod-compatible tuple of valid period keys, derived from VALID_PERIODS. */
@@ -10142,7 +10142,7 @@ or other automated processes.</purpose><file_format>The content is organized as 
  56: export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
  57: /** Period string → milliseconds, derived from VALID_PERIODS. */
  58: export const PERIOD_MS: Record&lt;string, number&gt; = Object.fromEntries(
- 59:   Object.entries(VALID_PERIODS).map(([k, days]) =&gt; [k, days * MS_PER_DAY]),
+ 59:   Object.entries(VALID_PERIODS).map(([k, days]) =&gt; [k, days * TIME_MS.DAY]),
  60: );
  61: 
  62: 
@@ -10160,7 +10160,7 @@ or other automated processes.</purpose><file_format>The content is organized as 
  74: export const MAX_HALLUCINATION_ROWS = 8;
  75: export const MAX_FAILED_EVAL_ROWS = 6;
  76: /** Rolling window for live quality endpoint (24 h). */
- 77: export const LIVE_WINDOW_MS = MS_PER_DAY;
+ 77: export const LIVE_WINDOW_MS = TIME_MS.DAY;
  78: /** Default React Query retry count for data fetching. */
  79: export const QUERY_RETRY_COUNT = 2;
  80: /** Polling / refetch interval for live and dashboard queries (ms). */
