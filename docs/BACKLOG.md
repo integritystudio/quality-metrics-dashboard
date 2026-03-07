@@ -115,3 +115,47 @@ Open items from code reviews and deferred work.
 #### Suggested follow-up
 
 - Audit nearby tests for similar brittle style-string selectors after tokenization refactors.
+
+---
+
+### L1: Repomix snapshot shows invalid `const TIME_MS.DAY` syntax
+
+- Severity: `Low`
+- Introduced in: `90e3a14` (`chore(docs): update repomix snapshot and kv-sync coverage`)
+- Primary area: `docs/repomix/docs.xml`
+- Why this matters:
+  - The snapshot renders `const TIME_MS.DAY = 24 * 60 * 60 * 1000` which is invalid JS — a dot in a `const` identifier is a syntax error.
+  - The actual source likely uses `TIME_MS.DAY` as a property access (from a namespace object), not a standalone `const` declaration.
+  - Snapshot is misleading for anyone using it as a reference.
+
+#### Recommended fix
+
+- Regenerate `docs/repomix/docs.xml` from current source (`bash scripts/generate-token-tree.sh` or equivalent repomix command).
+- Verify the rendered snippet matches the actual `constants.ts` source (property access on `TIME_MS` object, not a `const` declaration).
+
+#### Acceptance criteria
+
+- `docs/repomix/docs.xml` faithfully represents current source for `TIME_MS.DAY` usage.
+- No invalid JS syntax appears in snapshot const declarations.
+
+---
+
+### L2: KV sync coverage trace count decreased without explanation
+
+- Severity: `Low`
+- Introduced in: `90e3a14` (`chore(docs): update repomix snapshot and kv-sync coverage`)
+- Primary area: `scripts/.kv-sync-coverage.json`
+- Why this matters:
+  - Total traces dropped from 84,573 → 79,097 (delta of ~5,476) between sync runs.
+  - Coverage went to 100% (79,097/79,097), but the decrease in total traces is unexplained.
+  - Could indicate expected pruning of stale/expired traces, or unexpected data loss.
+
+#### Recommended fix
+
+- Investigate whether trace count decrease is due to intentional pruning (TTL, dedup) or data loss.
+- If intentional, add a note in the commit message or coverage JSON explaining the decrease.
+- No code change required if pruning is expected behavior.
+
+#### Acceptance criteria
+
+- Root cause of trace count decrease is documented or understood.
