@@ -555,6 +555,30 @@ describe('seedEvaluations', () => {
     }
   });
 
+  it('backfill: partial existingKeys (only hallucination) still seeds missing metrics (H1)', () => {
+    const turn = makeTurn();
+    const turnKey = turn.timestamp.slice(0, 19);
+    // Only hallucination is already covered — relevance/coherence/faithfulness are missing
+    const existingKeys = new Set([`${turn.sessionId}:hallucination:${turnKey}`]);
+
+    const { evals } = seedEvaluations([turn], existingKeys);
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('relevance');
+    expect(names).toContain('coherence');
+    expect(names).toContain('faithfulness');
+    expect(names).not.toContain('hallucination');
+  });
+
+  it('backfill idempotency: second run with all keys emits nothing (H1)', () => {
+    const turn = makeTurn();
+    const turnKey = turn.timestamp.slice(0, 19);
+    const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
+    const existingKeys = new Set(SEED_METRICS.map(m => `${turn.sessionId}:${m}:${turnKey}`));
+
+    const { evals } = seedEvaluations([turn], existingKeys);
+    expect(evals).toHaveLength(0);
+  });
+
   it('canary turns get intentionally low scores (B6)', () => {
     // Generate enough turns to likely hit a canary (~2% rate)
     const turns = Array.from({ length: 200 }, (_, i) =>

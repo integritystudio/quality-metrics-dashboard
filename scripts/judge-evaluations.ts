@@ -998,10 +998,12 @@ async function main() {
     try {
       const existingKeys = _loadExistingKeys();
 
-      // Filter to sessions without any existing hallucination eval
+      // Filter to sessions where at least one seed metric key is missing.
+      // Checking only hallucination would skip sessions with partial coverage.
+      const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
       const newTurns = traceTurns.filter(t => {
         const turnKey = t.timestamp.slice(0, 19);
-        return !existingKeys.has(`${t.sessionId}:hallucination:${turnKey}`);
+        return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
       });
       console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
 
