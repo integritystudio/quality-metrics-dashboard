@@ -103,8 +103,9 @@ app.get('/api/degradation-signals', async (c) => {
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
+  // Key matches DEGRADATION_KV_KEY in src/lib/quality/quality-constants.ts + period suffix
   const data = await c.env.DASHBOARD.get(`meta/dashboard/degradation-signals:${period}`, 'json');
-  if (!data) return c.json([]);
+  if (!data) return c.json({ period, reports: [], computedAt: null });
   return c.json(data);
 });
 
