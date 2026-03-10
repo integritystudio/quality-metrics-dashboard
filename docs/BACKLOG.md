@@ -118,7 +118,7 @@ Open items from code reviews and deferred work.
 
 ---
 
-### L1: Repomix snapshot shows invalid `const TIME_MS.DAY` syntax
+### ~~L1: Repomix snapshot shows invalid `const TIME_MS.DAY` syntax~~ [Done]
 
 - Severity: `Low`
 - Introduced in: `90e3a14` (`chore(docs): update repomix snapshot and kv-sync coverage`)
@@ -140,7 +140,7 @@ Open items from code reviews and deferred work.
 
 ---
 
-### L2: KV sync coverage trace count decreased without explanation
+### ~~L2: KV sync coverage trace count decreased without explanation~~ [Done]
 
 - Severity: `Low`
 - Introduced in: `90e3a14` (`chore(docs): update repomix snapshot and kv-sync coverage`)
@@ -159,3 +159,9 @@ Open items from code reviews and deferred work.
 #### Acceptance criteria
 
 - Root cause of trace count decrease is documented or understood.
+
+#### Investigation result (2026-03-10)
+
+- Decrease is **expected behavior**: `sync-to-kv.ts` defaults to `--days=30` rolling window.
+- Traces older than 30 days rotate out naturally (84,573 → 79,097 → 77,856).
+- No data loss. No code change required.
