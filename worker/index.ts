@@ -98,6 +98,16 @@ app.get('/api/correlations', async (c) => {
   return c.json(data);
 });
 
+app.get('/api/degradation-signals', async (c) => {
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const data = await c.env.DASHBOARD.get(`meta/dashboard/degradation-signals:${period}`, 'json');
+  if (!data) return c.json([]);
+  return c.json(data);
+});
+
 app.get('/api/coverage', async (c) => {
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
