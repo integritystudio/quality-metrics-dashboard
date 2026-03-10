@@ -10,8 +10,6 @@ import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,
-  computePSI,
-  loadCalibrationState,
   saveCalibrationState,
 } from '../../src/lib/quality/quality-feature-engineering.js';
 
@@ -441,34 +439,13 @@ function main(): void {
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
   if (Object.keys(newDistributions).length > 0) {
-    const previous = loadCalibrationState(TELEMETRY_DIR);
-    const psiValues: Record<string, number> = {};
-
-    if (previous) {
-      // Check whether any metric has drifted enough to require recalibration
-      let anyDrifted = false;
-      for (const [metric, entry] of Object.entries(newDistributions)) {
-        const prev = previous.distributions[metric];
-        if (prev) {
-          const prevScores = Array.from({ length: prev.sampleSize }, (_, i) => i / prev.sampleSize);
-          const currScores = Array.from({ length: entry.sampleSize }, (_, i) => i / entry.sampleSize);
-          const psiResult = computePSI(prevScores, currScores);
-          psiValues[metric] = psiResult.psi;
-          if (psiResult.drifted) anyDrifted = true;
-        } else {
-          anyDrifted = true; // new metric — always calibrate
-        }
-      }
-      if (!anyDrifted) {
-        // Distributions are stable; skip writing to preserve existing state
-        return;
-      }
-    }
-
+    // TODO(FE-R1): PSI-based drift gating requires persisting raw scores across runs,
+    // not just percentile summaries. For now, always write updated distributions so the
+    // dashboard API always has fresh calibration data. Use computePSI() for gating once
+    // raw score storage is added (needs >= MIN_QUANTILE_SAMPLE_SIZE samples per metric).
     saveCalibrationState(TELEMETRY_DIR, {
       lastCalibrated: new Date().toISOString(),
       distributions: newDistributions,
-      psiValues: Object.keys(psiValues).length > 0 ? psiValues : undefined,
     });
   }
 
