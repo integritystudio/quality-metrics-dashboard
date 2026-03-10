@@ -8,6 +8,12 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
+import {
+  computeCalibrationDistributions,
+  computePSI,
+  loadCalibrationState,
+  saveCalibrationState,
+} from '../../src/lib/quality/quality-feature-engineering.js';
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
 
@@ -423,6 +429,47 @@ function main(): void {
     writeFileSync(outFile, content);
     _totalWritten += evals.length + preserved.length;
     preservedCount += preserved.length;
+  }
+
+  // Calibration step (FE-R1): compute per-metric percentile distributions
+  // and persist to .calibration-state.json for the dashboard API to consume.
+  const scoresByMetric: Record<string, number[]> = {};
+  for (const ev of allEvals) {
+    if (!scoresByMetric[ev.evaluationName]) scoresByMetric[ev.evaluationName] = [];
+    scoresByMetric[ev.evaluationName].push(ev.scoreValue);
+  }
+
+  const newDistributions = computeCalibrationDistributions(scoresByMetric);
+  if (Object.keys(newDistributions).length > 0) {
+    const previous = loadCalibrationState(TELEMETRY_DIR);
+    const psiValues: Record<string, number> = {};
+
+    if (previous) {
+      // Check whether any metric has drifted enough to require recalibration
+      let anyDrifted = false;
+      for (const [metric, entry] of Object.entries(newDistributions)) {
+        const prev = previous.distributions[metric];
+        if (prev) {
+          const prevScores = Array.from({ length: prev.sampleSize }, (_, i) => i / prev.sampleSize);
+          const currScores = Array.from({ length: entry.sampleSize }, (_, i) => i / entry.sampleSize);
+          const psiResult = computePSI(prevScores, currScores);
+          psiValues[metric] = psiResult.psi;
+          if (psiResult.drifted) anyDrifted = true;
+        } else {
+          anyDrifted = true; // new metric — always calibrate
+        }
+      }
+      if (!anyDrifted) {
+        // Distributions are stable; skip writing to preserve existing state
+        return;
+      }
+    }
+
+    saveCalibrationState(TELEMETRY_DIR, {
+      lastCalibrated: new Date().toISOString(),
+      distributions: newDistributions,
+      psiValues: Object.keys(psiValues).length > 0 ? psiValues : undefined,
+    });
   }
 
   // Summary
