@@ -7,7 +7,7 @@ const TABS: Array<{ path: string; label: string; role?: RoleViewType }> = [
   { path: '/role/operator', label: 'Operator', role: 'operator' },
   { path: '/role/auditor', label: 'Auditor', role: 'auditor' },
   { path: '/correlations', label: 'Correlations' },
-  { path: '/coverage', label: 'Coverage' },
+  // { path: '/coverage', label: 'Coverage' },  // hidden until data compression (see BACKLOG.md)
   { path: '/pipeline', label: 'Pipeline' },
 ];
 
