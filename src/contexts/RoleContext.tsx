@@ -19,7 +19,7 @@ const RoleContext = createContext<RoleContextValue | null>(null);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [, params] = useRoute('/role/:roleName');
-  const roleName = params?.roleName as string | undefined;
+  const roleName = params?.roleName;
 
   const role: FeatureRoleType =
     roleName && VALID_ROLES.has(roleName as FeatureRoleType)

@@ -88,7 +88,10 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
       if (pendingRef.current) {
         const combo = `${pendingRef.current} ${key}`;
         pendingRef.current = null;
-        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        if (pendingTimerRef.current) {
+          clearTimeout(pendingTimerRef.current);
+          pendingTimerRef.current = null;
+        }
         const match = shortcutsRef.current.find(s => s.key === combo);
         if (match) {
           e.preventDefault();
