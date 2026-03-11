@@ -8,6 +8,7 @@ import {
 import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PARAM_METRIC_NAME_RE } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
@@ -20,6 +21,9 @@ export const metricsRoutes = new Hono();
 
 metricsRoutes.get('/metrics/:name', async (c) => {
   const name = c.req.param('name');
+  if (!name || !PARAM_METRIC_NAME_RE.test(name)) {
+    return c.json({ error: 'Invalid metric name format' }, HttpStatus.BadRequest);
+  }
   const config = getQualityMetric(name);
   if (!config) {
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
@@ -82,6 +86,9 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 
 metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   const name = c.req.param('name');
+  if (!name || !PARAM_METRIC_NAME_RE.test(name)) {
+    return c.json({ error: 'Invalid metric name format' }, HttpStatus.BadRequest);
+  }
   const config = getQualityMetric(name);
   if (!config) {
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { HttpStatus } from '../../lib/constants.js';
+import { PARAM_ID_RE } from '../api-constants.js';
 import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../data-loader.js';
 
 export const traceRoutes = new Hono();
@@ -11,8 +12,8 @@ export const traceRoutes = new Hono();
  */
 traceRoutes.get('/traces/:traceId', async (c) => {
   const traceId = c.req.param('traceId');
-  if (!traceId) {
-    return c.json({ error: 'traceId is required' }, HttpStatus.BadRequest);
+  if (!traceId || !PARAM_ID_RE.test(traceId)) {
+    return c.json({ error: 'Invalid traceId format' }, HttpStatus.BadRequest);
   }
 
   try {

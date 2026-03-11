@@ -30,16 +30,16 @@ The toolkit has the data layer; the gap is visualization. Langfuse's inference-f
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `MultiAgentEvaluation` | `src/lib/quality-multi-agent.ts:64` | Handoff scores, turn-level results, error propagation |
-| `HandoffEvaluation` | `src/lib/quality-multi-agent.ts:27` | Source → target agent, correctTarget, contextPreserved, score |
-| `TurnLevelResult` | `src/lib/quality-multi-agent.ts:46` | Per-turn relevance, task progress, error flag |
-| `computeMultiAgentEvaluation()` | `src/lib/quality-multi-agent.ts:185` | Builds full evaluation from stepScores + agentMap |
-| `computePipelineView()` | `src/lib/quality-visualization.ts:65` | 4-stage funnel: ingested → scored → evaluated → alerted |
-| `computeCoverageHeatmap()` | `src/lib/quality-visualization.ts:183` | Metric × input coverage matrix |
-| `analyzeTrajectory()` | `src/lib/agent-judge-verification.ts:407` | Tool call count, efficiency ratio, redundancy |
-| `verifyToolCall()` | `src/lib/agent-judge-verification.ts:205` | Weighted tool verification (selection 40%, args 30%, result 30%) |
-| `ProceduralJudge` | `src/lib/agent-judge-classes.ts:119` | Stage-based evaluation pipeline |
-| `ReactiveJudge` | `src/lib/agent-judge-classes.ts:238` | Event-driven specialist routing |
+| `MultiAgentEvaluation` | `src/lib/quality/quality-multi-agent.ts:69` | Handoff scores, turn-level results, error propagation |
+| `HandoffEvaluation` | `src/lib/quality/quality-multi-agent.ts:32` | Source → target agent, correctTarget, contextPreserved, score |
+| `TurnLevelResult` | `src/lib/quality/quality-multi-agent.ts:51` | Per-turn relevance, task progress, error flag |
+| `computeMultiAgentEvaluation()` | `src/lib/quality/quality-multi-agent.ts:191` | Builds full evaluation from stepScores + agentMap |
+| `computePipelineView()` | `src/lib/quality/quality-visualization.ts:65` | 4-stage funnel: ingested → scored → evaluated → alerted |
+| `computeCoverageHeatmap()` | `src/lib/quality/quality-visualization.ts:183` | Metric × input coverage matrix |
+| `analyzeTrajectory()` | `src/lib/agent-judge/agent-judge-verification.ts:406` | Tool call count, efficiency ratio, redundancy |
+| `verifyToolCall()` | `src/lib/agent-judge/agent-judge-verification.ts:203` | Weighted tool verification (selection 40%, args 30%, result 30%) |
+| `ProceduralJudge` | `src/lib/agent-judge/agent-judge-classes.ts:116` | Stage-based evaluation pipeline |
+| `ReactiveJudge` | `src/lib/agent-judge/agent-judge-classes.ts:235` | Event-driven specialist routing |
 
 ### Dashboard infrastructure (partial)
 

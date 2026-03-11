@@ -17,7 +17,11 @@ import { API_HOST, API_PORT } from './config.js';
 
 const app = new Hono();
 
-app.use('/*', cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+if (!corsOrigin.startsWith('http://') && !corsOrigin.startsWith('https://')) {
+  throw new Error(`Invalid CORS_ORIGIN: must start with http:// or https://, got "${corsOrigin}"`);
+}
+app.use('/*', cors({ origin: corsOrigin }));
 
 app.route('/api', dashboardRoutes);
 app.route('/api', metricsRoutes);

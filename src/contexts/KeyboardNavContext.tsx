@@ -20,7 +20,7 @@ export function useShortcut(key: string, description: string, scope: string, act
   const ctx = useContext(KeyboardNavContext);
   const register = ctx?.register;
   const actionRef = useRef(action);
-  useEffect(() => { actionRef.current = action; });
+  actionRef.current = action;
   const stableAction = useCallback(() => actionRef.current(), []);
   useEffect(() => {
     if (!register) return;
@@ -40,6 +40,7 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
   const shortcutsRef = useRef<Shortcut[]>([]);
   const [shortcuts, setShortcuts] = useState<Shortcut[]>([]);
   const [overlayOpen, setOverlayOpen] = useState(false);
+  const overlayOpenRef = useRef(false);
   const pendingRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,7 +54,12 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const toggleOverlay = useCallback(() => setOverlayOpen(o => !o), []);
+  const toggleOverlay = useCallback(() => {
+    setOverlayOpen(o => {
+      overlayOpenRef.current = !o;
+      return !o;
+    });
+  }, []);
 
   useEffect(() => {
     function handleKeydown(e: KeyboardEvent) {
@@ -64,12 +70,14 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
 
       if (key === '?') {
         e.preventDefault();
-        setOverlayOpen(o => !o);
+        overlayOpenRef.current = !overlayOpenRef.current;
+        setOverlayOpen(overlayOpenRef.current);
         return;
       }
 
-      if (key === 'Escape' && overlayOpen) {
+      if (key === 'Escape' && overlayOpenRef.current) {
         e.preventDefault();
+        overlayOpenRef.current = false;
         setOverlayOpen(false);
         return;
       }
@@ -108,7 +116,7 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('keydown', handleKeydown);
       if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
     };
-  }, [overlayOpen]);
+  }, []);
 
   const value = useMemo<KeyboardNavContextValue>(
     () => ({ shortcuts, register, overlayOpen, toggleOverlay }),

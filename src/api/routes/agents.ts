@@ -5,6 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus } from '../../lib/constants.js';
+import { PARAM_ID_RE } from '../api-constants.js';
 
 export const agentRoutes = new Hono();
 
@@ -141,8 +142,8 @@ agentRoutes.get('/agents', async (c) => {
  */
 agentRoutes.get('/agents/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) {
-    return c.json({ error: 'sessionId is required' }, HttpStatus.BadRequest);
+  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
+    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
   }
 
   try {

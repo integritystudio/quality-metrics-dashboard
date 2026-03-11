@@ -20,7 +20,7 @@ interface AgentSessionResponse {
 export function useAgentSession(sessionId: string | undefined) {
   return useApiQuery<AgentSessionResponse>(
     ['agent-session', sessionId],
-    () => `${API_BASE}/api/agents/${encodeURIComponent(sessionId!)}`,
+    () => `${API_BASE}/api/agents/${encodeURIComponent(sessionId ?? '')}`,
     { enabled: !!sessionId, staleTime: STALE_TIME.DETAIL },
   );
 }

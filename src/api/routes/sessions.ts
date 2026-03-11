@@ -10,6 +10,7 @@ import {
   LATENCY_P95,
   TIME_MS,
   OTEL_STATUS_ERROR_CODE,
+  PARAM_ID_RE,
   PERCENT_BASE,
 } from '../api-constants.js';
 import {
@@ -53,7 +54,9 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
  */
 sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) return c.json({ error: 'sessionId required' }, HttpStatus.BadRequest);
+  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
+    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
+  }
   const startDate = c.req.query('startDate');
   const endDate = c.req.query('endDate');
 
