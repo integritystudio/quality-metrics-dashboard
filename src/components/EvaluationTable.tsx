@@ -30,7 +30,7 @@ import { ColoredChip } from './Chip.js';
 import { ScoreBadge } from './ScoreBadge.js';
 
 export interface EvalRow {
-  score: number;
+  score: number | null;
   explanation?: string;
   traceId?: string;
   timestamp?: string;
@@ -163,7 +163,7 @@ const columns = [
 
 export function evalToRow(e: EvaluationResult): EvalRow {
   return {
-    score: typeof e.scoreValue === 'number' ? e.scoreValue : 0,
+    score: typeof e.scoreValue === 'number' ? e.scoreValue : null,
     explanation: e.explanation,
     traceId: e.traceId,
     timestamp: e.timestamp,
