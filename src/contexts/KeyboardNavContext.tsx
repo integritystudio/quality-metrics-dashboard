@@ -70,8 +70,10 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
 
       if (key === '?') {
         e.preventDefault();
-        overlayOpenRef.current = !overlayOpenRef.current;
-        setOverlayOpen(overlayOpenRef.current);
+        setOverlayOpen(o => {
+          overlayOpenRef.current = !o;
+          return !o;
+        });
         return;
       }
 

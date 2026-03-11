@@ -27,7 +27,8 @@ export function useMetricEvaluations(
     () => {
       const params = new URLSearchParams({ period, limit: String(limit), offset: String(offset), sortBy });
       if (scoreLabel) params.set('scoreLabel', scoreLabel);
-      return `${API_BASE}/api/metrics/${encodeURIComponent(name ?? '')}/evaluations?${params}`;
+      if (!name) throw new Error('metric name is required');
+      return `${API_BASE}/api/metrics/${encodeURIComponent(name)}/evaluations?${params}`;
     },
     { enabled: !!name && enabled },
   );

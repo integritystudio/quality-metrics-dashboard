@@ -782,6 +782,9 @@ async function main(): Promise<void> {
       evaluationName: name,
       limit: QUERY_LIMIT,
     });
+    if (prevRawEvals.length === QUERY_LIMIT) {
+      console.warn(`[sync-to-kv] Previous-period query for ${name} returned ${QUERY_LIMIT} results — trend may use truncated data`);
+    }
     const prevEvals = filterCanary(prevRawEvals);
     const prevScores = prevEvals.map(e => e.scoreValue).filter(isValidScore);
     const previousValues = prevScores.length > 0
