@@ -758,8 +758,9 @@ async function main(): Promise<void> {
     });
   }
 
-  // Metric details (7d window)
+  // Metric details (7d window with previous-period trend)
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const metricNames = Object.keys(QUALITY_METRICS);
 
   for (const name of metricNames) {
@@ -773,9 +774,24 @@ async function main(): Promise<void> {
     });
     const evals = filterCanary(rawEvals);
     if (evals.length === 0) continue;
+
+    // Query prior week for trend comparison
+    const prevRawEvals = await backend.queryEvaluations({
+      startDate: twoWeeksAgo.toISOString(),
+      endDate: weekAgo.toISOString(),
+      evaluationName: name,
+      limit: QUERY_LIMIT,
+    });
+    const prevEvals = filterCanary(prevRawEvals);
+    const prevScores = prevEvals.map(e => e.scoreValue).filter(isValidScore);
+    const previousValues = prevScores.length > 0
+      ? computeAggregations(prevScores, config.aggregations)
+      : undefined;
+
     const detail = computeMetricDetail(evals, config as QualityMetricConfig, {
       topN: 5,
       bucketCount: 10,
+      previousValues,
     });
     entries.push({ key: `metric:${name}`, value: JSON.stringify(detail) });
   }
