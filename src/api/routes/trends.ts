@@ -14,6 +14,7 @@ import {
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD } from '../api-constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
 export const trendRoutes = new Hono();
@@ -58,7 +59,6 @@ trendRoutes.get('/trends/:name', async (c) => {
     const dataMin = timestamps.length > 0 ? Math.min(...timestamps) : periodStart.getTime();
     const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
     const dataSpan = dataMax - dataMin;
-    const CONCENTRATION_THRESHOLD = 0.2;
     const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
     const pad = narrowed ? Math.max(dataSpan * 0.1, 60_000) : 0;
     const start = narrowed ? new Date(dataMin - pad) : periodStart;

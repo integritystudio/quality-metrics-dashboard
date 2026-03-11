@@ -16,6 +16,9 @@ export const OTEL_STATUS_ERROR_CODE = 2;
 /** Maximum number of file-access entries returned in session detail. */
 export const FILE_ACCESS_TOP_N = 30;
 
+/** Fraction of the query period below which data is considered concentrated and the time axis is auto-narrowed. */
+export const CONCENTRATION_THRESHOLD = 0.2;
+
 /** Fallback max characters for commit subject preview. */
 export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
 
