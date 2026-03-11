@@ -4,7 +4,10 @@ dist/
 .DS_Store
 .wrangler/
 repomix-output.xml
+docs/repomix/docs.xml
+docs/repomix/docs-compressed.xml
 .kv-sync-state.json
 worker-configuration.d.ts
 playwright-report/
 test-results/
+tsconfig.tsbuildinfo
