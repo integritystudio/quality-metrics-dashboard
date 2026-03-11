@@ -6,7 +6,7 @@ Open items from code reviews and deferred work.
 
 ### Medium
 
-- **M1** After L1 fix, `PARAM_ID_RE` and `PARAM_METRIC_NAME_RE` are identical patterns — alias one to the other or add explicit comment to document intentional separation (`src/api/api-constants.ts:26,28`)
+- **M1** [x] After L1 fix, `PARAM_ID_RE` and `PARAM_METRIC_NAME_RE` are identical patterns — alias one to the other or add explicit comment to document intentional separation (`src/api/api-constants.ts:26,28`)
 
 ### Low
 
