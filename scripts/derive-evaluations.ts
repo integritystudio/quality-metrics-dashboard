@@ -434,7 +434,7 @@ function main(): void {
   const scoresByMetric: Record<string, number[]> = {};
   for (const ev of allEvals) {
     if (!scoresByMetric[ev.evaluationName]) scoresByMetric[ev.evaluationName] = [];
-    scoresByMetric[ev.evaluationName].push(ev.scoreValue);
+    if (Number.isFinite(ev.scoreValue)) scoresByMetric[ev.evaluationName].push(ev.scoreValue);
   }
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
