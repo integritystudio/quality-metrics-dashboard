@@ -32,6 +32,7 @@ import { useDashboard } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
+import { CalibrationProvider } from './context/CalibrationContext.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -251,6 +252,7 @@ export function App() {
     <Router base={BASE_PATH}>
     <KeyboardNavProvider>
     <RoleProvider>
+    <CalibrationProvider>
     <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
     <Layout period={period} onPeriodChange={setPeriod}>
       <RoleSelector />
@@ -335,6 +337,7 @@ export function App() {
         </Route>
       </Switch>
     </Layout>
+    </CalibrationProvider>
     </RoleProvider>
     </KeyboardNavProvider>
     </Router>

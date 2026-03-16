@@ -1,5 +1,7 @@
 # Quality Metrics Dashboard
 
+v3.0.3
+
 React 19 + Vite 6 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry.
 
 ## Quick Start

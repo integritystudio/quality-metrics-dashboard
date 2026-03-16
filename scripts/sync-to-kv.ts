@@ -38,7 +38,9 @@ import {
   computeRollingDegradationSignals,
   loadDegradationState,
   saveDegradationState,
+  loadCalibrationState,
 } from '../../src/lib/quality/quality-feature-engineering.js';
+import type { CalibrationState } from '../../src/lib/quality/quality-feature-engineering.js';
 import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
 
@@ -104,6 +106,25 @@ const SPAN_QUERY_LIMIT = 1_000_000;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
+
+/** Transform CalibrationState → meta:calibration KV entry, or null if no data. */
+export function buildCalibrationEntry(
+  state: CalibrationState | null,
+): KVEntry | null {
+  if (!state || !state.distributions || Object.keys(state.distributions).length === 0) {
+    return null;
+  }
+  const distributions: Record<string, object> = {};
+  const sampleCounts: Record<string, number> = {};
+  for (const [metric, entry] of Object.entries(state.distributions)) {
+    distributions[metric] = entry.distribution;
+    sampleCounts[metric] = entry.sampleSize;
+  }
+  return {
+    key: 'meta:calibration',
+    value: JSON.stringify({ distributions, sampleCounts, lastCalibrated: state.lastCalibrated }),
+  };
+}
 
 /** Trace priority weights */
 const TRACE_PRIORITY_WEIGHTS = {
@@ -951,6 +972,11 @@ async function main(): Promise<void> {
   }
   degradationState.lastRun = now.toISOString();
   if (stateDir) saveDegradationState(stateDir, degradationState);
+
+  // meta:calibration
+  const calibrationState = stateDir ? loadCalibrationState(stateDir) : null;
+  const calibrationEntry = buildCalibrationEntry(calibrationState);
+  if (calibrationEntry) entries.push(calibrationEntry);
 
   // Per-trace evaluations and spans
   const thirtyDaysAgo = new Date(now.getTime() - MAX_DAYS_MS);

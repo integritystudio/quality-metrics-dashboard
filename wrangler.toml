@@ -14,4 +14,3 @@ preview_id = "0f4d40dd84b14e038024a9775b9be4f7"
 [assets]
 directory = "./dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"

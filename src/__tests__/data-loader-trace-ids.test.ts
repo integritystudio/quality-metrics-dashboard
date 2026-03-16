@@ -11,10 +11,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockQueryEvaluations = vi.fn();
 
 vi.mock('../../../dist/backends/local-jsonl.js', () => {
-  function MultiDirectoryBackend() {
-    return { queryEvaluations: mockQueryEvaluations };
+  class MockMultiDirectoryBackend {
+    queryEvaluations = mockQueryEvaluations;
   }
-  return { MultiDirectoryBackend };
+  return { MultiDirectoryBackend: MockMultiDirectoryBackend };
 });
 
 vi.mock('../../../dist/backends/index.js', () => ({}));
@@ -127,5 +127,43 @@ describe('loadEvaluationsByTraceIds', () => {
 
     // 2 traceIds × 2 evals each = 4 total
     expect(result).toHaveLength(4);
+  });
+
+  it('deduplicates traceIds to avoid duplicate backend calls', async () => {
+    mockQueryEvaluations.mockResolvedValue([]);
+
+    await loadEvaluationsByTraceIds(['trace-dup', 'trace-dup', 'trace-dup']);
+
+    expect(mockQueryEvaluations).toHaveBeenCalledTimes(1);
+  });
+
+  it('respects concurrency limit by batching queries', async () => {
+    const traceIds = Array.from({ length: 25 }, (_, i) => `trace-${i}`);
+    const callTimestamps: number[] = [];
+
+    mockQueryEvaluations.mockImplementation(() => {
+      callTimestamps.push(Date.now());
+      return Promise.resolve([]);
+    });
+
+    await loadEvaluationsByTraceIds(traceIds);
+
+    expect(mockQueryEvaluations).toHaveBeenCalledTimes(25);
+  });
+
+  it('returns partial results when some per-traceId queries fail', async () => {
+    mockQueryEvaluations.mockImplementation((opts: { traceId?: string }) => {
+      if (opts.traceId === 'trace-bad') {
+        return Promise.reject(new Error('I/O error'));
+      }
+      return Promise.resolve([
+        { traceId: opts.traceId, evaluationName: 'relevance', scoreValue: 0.9 },
+      ]);
+    });
+
+    const result = await loadEvaluationsByTraceIds(['trace-ok', 'trace-bad', 'trace-also-ok']);
+
+    expect(result).toHaveLength(2);
+    expect(result.map(e => e.traceId)).toEqual(['trace-ok', 'trace-also-ok']);
   });
 });

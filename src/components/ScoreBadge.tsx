@@ -2,6 +2,7 @@ import { Link } from 'wouter';
 import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
+import { useMetricCalibration } from '../context/CalibrationContext.js';
 import type { ReactNode } from 'react';
 
 function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode; mono?: boolean }) {
@@ -55,7 +56,9 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
   );
 }
 
-export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId, calibration }: ScoreBadgeProps) {
+export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId, calibration: calibrationProp }: ScoreBadgeProps) {
+  const contextCalibration = useMetricCalibration(metricName);
+  const calibration = calibrationProp ?? contextCalibration;
   const hasTooltip = evaluator || evaluatorType || explanation || traceId;
 
   if (score === null) {
