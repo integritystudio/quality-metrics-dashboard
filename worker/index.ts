@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
-type Bindings = { DASHBOARD: KVNamespace };
+type Bindings = { DASHBOARD: KVNamespace; ASSETS: Fetcher };
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -204,6 +204,12 @@ app.get('/api/health', async (c) => {
     status: lastSync ? 'ok' : 'no_data',
     lastSync: lastSync ?? null,
   });
+});
+
+// SPA fallback: serve static assets / index.html for non-API routes
+app.get('*', async (c) => {
+  if (c.req.path.startsWith('/api/')) return c.notFound();
+  return c.env.ASSETS.fetch(c.req.raw);
 });
 
 export default app;
