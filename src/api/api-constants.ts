@@ -35,3 +35,6 @@ export const LOG_SUMMARY_MAX_ENTRIES = 200;
 
 /** Safe fields exposed per log entry in logSummary (strips attributes/extractedFields/body). */
 export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
+
+/** Sanitized log entry shape derived from LOG_SUMMARY_FIELDS allowlist. */
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
