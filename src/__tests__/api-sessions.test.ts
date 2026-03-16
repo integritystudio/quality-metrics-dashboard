@@ -116,6 +116,30 @@ describe('GET /sessions/:sessionId', () => {
     expect(body).toHaveProperty('evaluations');
   });
 
+  it('strips sensitive fields from logSummary.logs', async () => {
+    vi.mocked(loadLogsBySessionId).mockResolvedValue([{
+      timestamp: '2026-01-01T00:00:00Z',
+      severity: 'INFO',
+      severityNumber: 9,
+      body: 'secret content',
+      traceId: 'trace-1',
+      spanId: 'span-1',
+      attributes: { 'user.token': 'abc123' },
+      extractedFields: { password: 'hunter2' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }] as any);
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = await res.json() as any;
+    const log = body.logSummary.logs[0];
+    expect(log).not.toHaveProperty('body');
+    expect(log).not.toHaveProperty('attributes');
+    expect(log).not.toHaveProperty('extractedFields');
+    expect(log).toHaveProperty('severity', 'INFO');
+    expect(log).toHaveProperty('timestamp', '2026-01-01T00:00:00Z');
+    expect(log).toHaveProperty('traceId', 'trace-1');
+  });
+
   it('builds tool usage from span attributes', async () => {
     const toolAttrs = { 'hook.type': 'builtin', 'hook.trigger': 'PostToolUse' };
     const spans = [

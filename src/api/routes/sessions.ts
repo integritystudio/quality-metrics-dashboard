@@ -8,6 +8,8 @@ import {
   FILE_ACCESS_TOP_N,
   LATENCY_P50,
   LATENCY_P95,
+  LOG_SUMMARY_FIELDS,
+  LOG_SUMMARY_MAX_ENTRIES,
   TIME_MS,
   OTEL_STATUS_ERROR_CODE,
   PARAM_ID_RE,
@@ -18,7 +20,7 @@ import {
   loadLogsBySessionId,
 } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
+import type { LogRecord, StepScore } from '../../../../dist/backends/index.js';
 
 export const sessionRoutes = new Hono();
 
@@ -338,7 +340,18 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       alertSummary,
       codeStructure,
       evaluationBreakdown,
-      logSummary: { bySeverity: logBySeverity, logs },
+      logSummary: {
+        bySeverity: logBySeverity,
+        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
+          type SafeLog = Partial<Pick<LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+          const entry: SafeLog = {};
+          for (const key of LOG_SUMMARY_FIELDS) {
+            const val = l[key];
+            if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
+          }
+          return entry;
+        }),
+      },
       multiAgentEvaluation,
       evaluations,
     });
