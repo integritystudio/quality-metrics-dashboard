@@ -63,9 +63,8 @@ export async function loadEvaluationsByTraceId(
 
 /**
  * Loads evaluations matching any of the given traceIds.
- * NOTE: O(all_evals) — fetches all evaluations for the date range then
- * filters in memory because the backend lacks a multi-traceId query.
- * Callers should keep date ranges narrow to limit the scan cost.
+ * Issues one backend query per traceId in parallel via Promise.all,
+ * then flattens the results into a single array.
  */
 export async function loadEvaluationsByTraceIds(
   traceIds: string[],
@@ -77,13 +76,10 @@ export async function loadEvaluationsByTraceIds(
   const now = new Date();
   const start = startDate ?? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const end = endDate ?? now.toISOString();
-  const allEvals = await be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    limit: 10000,
-  });
-  const idSet = new Set(traceIds);
-  return allEvals.filter(e => e.traceId && idSet.has(e.traceId));
+  const results = await Promise.all(
+    traceIds.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: 1000 }))
+  );
+  return results.flat();
 }
 
 export async function loadTracesByTraceId(
