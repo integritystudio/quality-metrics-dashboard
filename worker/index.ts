@@ -208,7 +208,7 @@ app.get('/api/health', async (c) => {
 
 // SPA fallback: serve static assets / index.html for non-API routes
 app.get('*', async (c) => {
-  if (c.req.path.startsWith('/api/')) return c.notFound();
+  if (c.req.path === '/api' || c.req.path.startsWith('/api/')) return c.notFound();
   return c.env.ASSETS.fetch(c.req.raw);
 });
 

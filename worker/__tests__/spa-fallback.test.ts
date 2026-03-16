@@ -13,12 +13,7 @@ import app from '../index.js';
 const SPA_HTML = '<!DOCTYPE html><html><body>SPA</body></html>';
 
 const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(
-    new Response(SPA_HTML, {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' },
-    })
-  ),
+  fetch: vi.fn(),
 };
 
 const mockKV = {
@@ -87,6 +82,13 @@ describe('SPA fallback: non-API routes serve index.html', () => {
     const body = await res.text();
     expect(body).toMatch(/<!DOCTYPE html>/i);
   });
+
+  it('ASSETS.fetch is called with the original request', async () => {
+    await app.request('/agents', {}, makeEnv());
+    expect(mockAssets.fetch).toHaveBeenCalledTimes(1);
+    const passedReq = mockAssets.fetch.mock.calls[0][0] as Request;
+    expect(new URL(passedReq.url).pathname).toBe('/agents');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -112,5 +114,11 @@ describe('API routes: unaffected by SPA fallback', () => {
   it('GET /api/nonexistent returns 404', async () => {
     const res = await app.request('/api/nonexistent', {}, makeEnv());
     expect(res.status).toBe(404);
+  });
+
+  it('GET /api (no trailing slash) returns 404, not SPA HTML', async () => {
+    const res = await app.request('/api', {}, makeEnv());
+    expect(res.status).toBe(404);
+    expect(mockAssets.fetch).not.toHaveBeenCalled();
   });
 });
