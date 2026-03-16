@@ -27,7 +27,10 @@ export function useApiQuery<TRaw, T = TRaw>(
     queryKey,
     queryFn: async () => {
       const res = await fetch(buildUrl());
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
+      }
       return res.json() as Promise<TRaw>;
     },
     select,

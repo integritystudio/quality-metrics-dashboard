@@ -40,6 +40,8 @@ import type {
   MetricDynamics,
 } from './types.js';
 
+const VALID_ROLES: readonly RoleViewType[] = ['executive', 'operator', 'auditor'];
+
 function DashboardPage({ period }: { period: Period }) {
   const { data, isLoading, isFetching, error } = useDashboard(period);
 
@@ -259,11 +261,15 @@ export function App() {
           </ErrorBoundary>
         </Route>
         <Route path="/role/:roleName">
-          {(params) => (
-            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-              <RolePage role={params.roleName as RoleViewType} period={period} />
-            </ErrorBoundary>
-          )}
+          {(params) => {
+            const role = VALID_ROLES.find(r => r === params.roleName);
+            if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
+            return (
+              <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                <RolePage role={role} period={period} />
+              </ErrorBoundary>
+            );
+          }}
         </Route>
         <Route path="/metrics/:metricName">
           {(params) => (

@@ -27,6 +27,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
     return () => {
+      dragging.current = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };

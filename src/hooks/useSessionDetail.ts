@@ -34,7 +34,7 @@ export interface TokenTotals {
   models: Record<string, number>;
 }
 
-export interface AgentStat {
+export interface SessionAgentStat {
   agentName: string;
   invocations: number;
   errors: number;
@@ -117,7 +117,7 @@ export interface SessionDetailResponse {
       filePath?: string;
     }>;
   };
-  agentActivity: AgentStat[];
+  agentActivity: SessionAgentStat[];
   fileAccess: FileAccessEntry[];
   gitCommits: GitCommit[];
   alertSummary: AlertSummary;
