@@ -14,6 +14,7 @@ import {
   saveCalibrationState,
   shouldRecalibrate,
 } from '../../src/lib/quality/quality-feature-engineering.js';
+import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
 
@@ -443,12 +444,16 @@ function main(): void {
   if (Object.keys(newDistributions).length > 0) {
     const previousState = loadCalibrationState(TELEMETRY_DIR);
     const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
+    // psiValues reflects PSI at the time of last write (when shouldWrite: true),
+    // not from every check — stable runs don't update the file.
     if (shouldWrite) {
       saveCalibrationState(TELEMETRY_DIR, {
         lastCalibrated: new Date().toISOString(),
         distributions: newDistributions,
         psiValues,
-        rawScores: scoresByMetric,
+        rawScores: Object.fromEntries(
+          Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
+        ),
       });
     }
   }
