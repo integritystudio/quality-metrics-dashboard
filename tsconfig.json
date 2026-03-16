@@ -16,5 +16,5 @@
     },
     "rootDir": "."
   },
-  "include": ["src", "../dist"]
+  "include": ["src", "worker", "../dist"]
 }

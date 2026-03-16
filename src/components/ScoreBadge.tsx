@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { scoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection } from '../lib/quality-utils.js';
+import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
 import type { ReactNode } from 'react';
@@ -23,6 +23,7 @@ interface ScoreBadgeProps {
   evaluatorType?: string;
   explanation?: string;
   traceId?: string;
+  calibration?: { distribution: PercentileDistribution; sampleSize: number };
 }
 
 function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
@@ -54,7 +55,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
   );
 }
 
-export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId }: ScoreBadgeProps) {
+export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId, calibration }: ScoreBadgeProps) {
   const hasTooltip = evaluator || evaluatorType || explanation || traceId;
 
   if (score === null) {
@@ -69,7 +70,9 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
     );
   }
 
-  const band = scoreColorBand(score, direction);
+  const band = calibration
+    ? adaptiveScoreColorBand(score, metricName, direction, calibration.distribution, calibration.sampleSize)
+    : scoreColorBand(score, direction);
   const color = SCORE_COLORS[band];
   const shape = SCORE_SHAPES[band];
   const directionHint = direction === 'minimize' ? 'lower is better' : 'higher is better';

@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
@@ -189,6 +190,12 @@ app.get('/api/compliance/verifications', async (c) => {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
   return c.json({ period, count: 0, verifications: [] });
+});
+
+app.get('/api/calibration', async (c) => {
+  const data = await c.env.DASHBOARD.get('meta:calibration', 'json');
+  if (!data) return c.json({ error: 'No calibration data available' }, 404);
+  return c.json(data);
 });
 
 app.get('/api/health', async (c) => {
