@@ -1,22 +1,35 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+/** Single-char key (e.g. "1") or two-key combo (e.g. "g h"). A single key MUST NOT also be a combo prefix. */
+type ShortcutKey = string;
+/** Two-key combo: `"prefix suffix"` */
+type ComboKey = `${string} ${string}`;
+
 interface Shortcut {
-  key: string;
+  key: ShortcutKey;
   description: string;
   scope: string;
   action: () => void;
 }
 
+function isComboKey(key: string): key is ComboKey {
+  return key.includes(' ');
+}
+
+function comboPrefix(key: ComboKey): string {
+  return key.split(' ')[0];
+}
+
 interface KeyboardNavContextValue {
   shortcuts: Shortcut[];
-  register: (key: string, description: string, scope: string, action: () => void) => () => void;
+  register: (key: ShortcutKey, description: string, scope: string, action: () => void) => () => void;
   overlayOpen: boolean;
   toggleOverlay: () => void;
 }
 
 const KeyboardNavContext = createContext<KeyboardNavContextValue | null>(null);
 
-export function useShortcut(key: string, description: string, scope: string, action: () => void) {
+export function useShortcut(key: ShortcutKey, description: string, scope: string, action: () => void) {
   const ctx = useContext(KeyboardNavContext);
   if (!ctx) throw new Error('useShortcut must be used within KeyboardNavProvider');
   const { register } = ctx;
@@ -42,13 +55,26 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
   const pendingRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const register = useCallback((key: string, description: string, scope: string, action: () => void) => {
+  const register = useCallback((key: ShortcutKey, description: string, scope: string, action: () => void) => {
+    const existing = shortcutsRef.current;
+    const duplicate = existing.find(s => s.key === key);
+    if (duplicate) throw new Error(`Shortcut conflict: "${key}" is already registered (${duplicate.description})`);
+    if (isComboKey(key)) {
+      const prefix = comboPrefix(key);
+      const conflict = existing.find(s => s.key === prefix);
+      if (conflict) throw new Error(`Shortcut conflict: combo "${key}" clashes with single-key "${prefix}" (${conflict.description})`);
+    } else {
+      const conflict = existing.find(s => isComboKey(s.key) && comboPrefix(s.key) === key);
+      if (conflict) throw new Error(`Shortcut conflict: single-key "${key}" clashes with combo "${conflict.key}" (${conflict.description})`);
+    }
     const shortcut: Shortcut = { key, description, scope, action };
-    shortcutsRef.current = [...shortcutsRef.current, shortcut];
-    setShortcuts([...shortcutsRef.current]);
+    const next = [...existing, shortcut];
+    shortcutsRef.current = next;
+    setShortcuts(next);
     return () => {
-      shortcutsRef.current = shortcutsRef.current.filter(s => s !== shortcut);
-      setShortcuts([...shortcutsRef.current]);
+      const filtered = shortcutsRef.current.filter(s => s !== shortcut);
+      shortcutsRef.current = filtered;
+      setShortcuts(filtered);
     };
   }, []);
 

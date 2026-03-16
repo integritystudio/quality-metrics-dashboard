@@ -1,25 +1,23 @@
 /**
  * Tests for useQualityLive hook.
  *
- * Uses vi.useFakeTimers() + vi.advanceTimersByTimeAsync() to control
- * setInterval polling without triggering infinite timer loops.
- *
- * Pattern:
- *   - Flush initial async fetch: advanceTimersByTimeAsync(0) (flushes microtasks)
- *   - Trigger one poll interval: advanceTimersByTimeAsync(30_000)
- *   - Never use vi.runAllTimersAsync() — it loops infinitely on setInterval
+ * Mocks useApiQuery to test the thin wrapper behavior:
+ * query key, URL builder, null coalescing, and return shape.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
 import { useQualityLive } from '../hooks/useQualityLive.js';
+import { POLL_INTERVAL_MS } from '../lib/constants.js';
 
 // ---------------------------------------------------------------------------
-// Mock fetch globally
+// Mock useApiQuery
 // ---------------------------------------------------------------------------
 
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
+const mockUseApiQuery = vi.fn();
+vi.mock('../hooks/useApiQuery.js', () => ({
+  useApiQuery: (...args: unknown[]) => mockUseApiQuery(...args),
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,191 +35,78 @@ function makeQualityResponse(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function makeOkResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    json: () => Promise.resolve(body),
-  } as Response;
-}
-
-function makeErrorResponse(status = 500): Response {
-  return {
-    ok: false,
-    status,
-    json: () => Promise.resolve({ error: 'Server error' }),
-  } as Response;
-}
-
-/** Flush the initial fetchLive() promise without advancing the polling interval. */
-async function flushInitialFetch() {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(0);
-  });
-}
-
-/** Advance by exactly one poll interval (30s) to trigger the setInterval callback. */
-async function advanceOnePoll() {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(30_000);
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('useQualityLive', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    mockFetch.mockReset();
+    mockUseApiQuery.mockReset();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-    // Ensure visibilityState is restored even if a test fails mid-mutation
-    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true, configurable: true });
+  it('passes correct query key, URL builder, and refetchInterval to useApiQuery', () => {
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: true, error: null });
+
+    renderHook(() => useQualityLive());
+
+    expect(mockUseApiQuery).toHaveBeenCalledTimes(1);
+    const [queryKey, buildUrl, options] = mockUseApiQuery.mock.calls[0];
+    expect(queryKey).toEqual(['quality', 'live']);
+    expect(buildUrl()).toContain('/api/quality/live');
+    expect(options).toEqual({ refetchInterval: POLL_INTERVAL_MS });
   });
 
-  it('starts with isLoading=true, data=null, error=null', () => {
-    mockFetch.mockReturnValue(new Promise(() => {}));
+  it('returns isLoading=true, data=null, error=null while loading', () => {
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: true, error: null });
+
     const { result } = renderHook(() => useQualityLive());
+
     expect(result.current.isLoading).toBe(true);
     expect(result.current.data).toBeNull();
     expect(result.current.error).toBeNull();
   });
 
-  it('sets data and clears isLoading after successful fetch', async () => {
+  it('returns data and clears isLoading after successful fetch', () => {
     const payload = makeQualityResponse();
-    mockFetch.mockResolvedValue(makeOkResponse(payload));
+    mockUseApiQuery.mockReturnValue({ data: payload, isLoading: false, error: null });
 
     const { result } = renderHook(() => useQualityLive());
-    await flushInitialFetch();
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data).toEqual(payload);
     expect(result.current.error).toBeNull();
   });
 
-  it('sets error and clears isLoading on non-ok response', async () => {
-    mockFetch.mockResolvedValue(makeErrorResponse(500));
+  it('coerces undefined data to null', () => {
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: false, error: null });
 
     const { result } = renderHook(() => useQualityLive());
-    await flushInitialFetch();
 
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.error).toBeInstanceOf(Error);
-    expect(result.current.error?.message).toContain('500');
     expect(result.current.data).toBeNull();
   });
 
-  it('sets error on network failure (fetch throws)', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'));
+  it('returns error from useApiQuery', () => {
+    const err = new Error('API error: 500');
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: false, error: err });
 
     const { result } = renderHook(() => useQualityLive());
-    await flushInitialFetch();
 
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.error).toBeInstanceOf(Error);
-    expect(result.current.error?.message).toBe('Network error');
+    expect(result.current.error).toBe(err);
+    expect(result.current.data).toBeNull();
   });
 
-  it('calls fetch once on mount with correct URL', async () => {
-    mockFetch.mockResolvedValue(makeOkResponse(makeQualityResponse()));
+  it('returns updated data when useApiQuery provides new results', () => {
+    const first = makeQualityResponse({ sessionCount: 1 });
+    mockUseApiQuery.mockReturnValue({ data: first, isLoading: false, error: null });
 
-    renderHook(() => useQualityLive());
-    await flushInitialFetch();
-
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/quality/live')
-    );
-  });
-
-  it('polls again after POLL_INTERVAL_MS (30s)', async () => {
-    mockFetch.mockResolvedValue(makeOkResponse(makeQualityResponse()));
-
-    renderHook(() => useQualityLive());
-    await flushInitialFetch();
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await advanceOnePoll();
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('polls a third time after two intervals', async () => {
-    mockFetch.mockResolvedValue(makeOkResponse(makeQualityResponse()));
-
-    renderHook(() => useQualityLive());
-    await flushInitialFetch();
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await advanceOnePoll();
-    await advanceOnePoll();
-    expect(mockFetch).toHaveBeenCalledTimes(3);
-  });
-
-  it('stops polling after unmount', async () => {
-    mockFetch.mockResolvedValue(makeOkResponse(makeQualityResponse()));
-
-    const { unmount } = renderHook(() => useQualityLive());
-    await flushInitialFetch();
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    unmount();
-    mockFetch.mockClear();
-
-    await advanceOnePoll();
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it('updates data on subsequent successful polls', async () => {
-    const firstPayload = makeQualityResponse({ sessionCount: 1 });
-    const secondPayload = makeQualityResponse({ sessionCount: 5 });
-    mockFetch
-      .mockResolvedValueOnce(makeOkResponse(firstPayload))
-      .mockResolvedValueOnce(makeOkResponse(secondPayload));
-
-    const { result } = renderHook(() => useQualityLive());
-    await flushInitialFetch();
+    const { result, rerender } = renderHook(() => useQualityLive());
     expect(result.current.data?.sessionCount).toBe(1);
 
-    await advanceOnePoll();
+    const second = makeQualityResponse({ sessionCount: 5 });
+    mockUseApiQuery.mockReturnValue({ data: second, isLoading: false, error: null });
+    rerender();
+
     expect(result.current.data?.sessionCount).toBe(5);
-  });
-
-  it('clears error when subsequent poll succeeds after failure', async () => {
-    mockFetch
-      .mockResolvedValueOnce(makeErrorResponse(500))
-      .mockResolvedValueOnce(makeOkResponse(makeQualityResponse()));
-
-    const { result } = renderHook(() => useQualityLive());
-    await flushInitialFetch();
-    expect(result.current.error).not.toBeNull();
-
-    await advanceOnePoll();
-    expect(result.current.error).toBeNull();
-    expect(result.current.data).not.toBeNull();
-  });
-
-  it('pauses polling when document is hidden', async () => {
-    mockFetch.mockResolvedValue(makeOkResponse(makeQualityResponse()));
-
-    renderHook(() => useQualityLive());
-    await flushInitialFetch();
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    mockFetch.mockClear();
-
-    // Simulate tab hidden → visibilitychange → stopPolling clears the interval
-    Object.defineProperty(document, 'visibilityState', { value: 'hidden', writable: true, configurable: true });
-    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
-
-    await advanceOnePoll();
-
-    // Interval was cleared — no new fetches
-    expect(mockFetch).not.toHaveBeenCalled();
-
-    // (visibilityState restored to 'visible' in afterEach)
   });
 });
