@@ -10,7 +10,9 @@ import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,
+  loadCalibrationState,
   saveCalibrationState,
+  shouldRecalibrate,
 } from '../../src/lib/quality/quality-feature-engineering.js';
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
@@ -439,14 +441,16 @@ function main(): void {
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
   if (Object.keys(newDistributions).length > 0) {
-    // TODO(FE-R1): PSI-based drift gating requires persisting raw scores across runs,
-    // not just percentile summaries. For now, always write updated distributions so the
-    // dashboard API always has fresh calibration data. Use computePSI() for gating once
-    // raw score storage is added (needs >= MIN_QUANTILE_SAMPLE_SIZE samples per metric).
-    saveCalibrationState(TELEMETRY_DIR, {
-      lastCalibrated: new Date().toISOString(),
-      distributions: newDistributions,
-    });
+    const previousState = loadCalibrationState(TELEMETRY_DIR);
+    const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
+    if (shouldWrite) {
+      saveCalibrationState(TELEMETRY_DIR, {
+        lastCalibrated: new Date().toISOString(),
+        distributions: newDistributions,
+        psiValues,
+        rawScores: scoresByMetric,
+      });
+    }
   }
 
   // Summary
