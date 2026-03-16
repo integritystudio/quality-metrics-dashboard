@@ -18,14 +18,12 @@ const KeyboardNavContext = createContext<KeyboardNavContextValue | null>(null);
 
 export function useShortcut(key: string, description: string, scope: string, action: () => void) {
   const ctx = useContext(KeyboardNavContext);
-  const register = ctx?.register;
+  if (!ctx) throw new Error('useShortcut must be used within KeyboardNavProvider');
+  const { register } = ctx;
   const actionRef = useRef(action);
   useEffect(() => { actionRef.current = action; });
   const stableAction = useCallback(() => actionRef.current(), []);
-  useEffect(() => {
-    if (!register) return;
-    return register(key, description, scope, stableAction);
-  }, [register, key, description, scope, stableAction]);
+  useEffect(() => register(key, description, scope, stableAction), [register, key, description, scope, stableAction]);
 }
 
 export function useKeyboardNav() {

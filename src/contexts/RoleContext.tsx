@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { useRoute } from 'wouter';
 import {
   getRoleFeatureConfig,
@@ -37,10 +38,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     return {
       role,
       config,
+      // Config has boolean + numeric fields; for numerics (explanationTruncation,
+      // maxWorstEvaluations) "enabled" means present — Boolean(0) would be wrong.
       hasFeature: (feature: keyof RoleFeatureConfig) => {
         const v = config[feature];
-        if (typeof v === 'boolean') return v;
-        return v !== undefined && v !== null;
+        return typeof v === 'boolean' ? v : v != null;
       },
     };
   }, [role]);
@@ -60,10 +62,3 @@ export function useRole(): RoleContextValue {
   return ctx;
 }
 
-export function RoleGate({ feature, children }: {
-  feature: keyof RoleFeatureConfig;
-  children: ReactNode;
-}) {
-  const { hasFeature } = useRole();
-  return hasFeature(feature) ? <>{children}</> : null;
-}

@@ -297,8 +297,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 { label: 'Cache Read' }, { label: 'Cache Create' }, { label: 'Model' },
               ]} />
               <tbody>
-                {tokenProgression.map((t, i) => (
-                  <tr key={i} className="border-b-subtle">
+                {tokenProgression.map((t) => (
+                  <tr key={`${t.messages}-${t.model}`} className="border-b-subtle">
                     <td className="cell-pad-wide text-right">{t.messages}</td>
                     <td className="cell-pad-wide text-right text-secondary">{fmtBytes(t.inputTokens)}</td>
                     <td className="cell-pad-wide text-right text-accent-hover">{fmtBytes(t.outputTokens)}</td>
@@ -411,10 +411,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           health="ok"
         >
           <div className="flex-col gap-half">
-            {gitCommits.map((commit, i) => {
+            {gitCommits.map((commit) => {
               const commitFiles = commit.files?.split(' ') ?? [];
               return (
-                <details key={i} className="border-b-subtle">
+                <details key={commit.subject} className="border-b-subtle">
                   <summary className="flex-center gap-2-5 cursor-pointer list-none" style={{
                     padding: 'var(--space-2) var(--space-1)',
                   }}>
@@ -438,8 +438,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     )}
                     {commitFiles.length > 0 && (
                       <div className="mono text-2xs text-muted">
-                        {commitFiles.map((f, fi) => (
-                          <div key={fi}>{shortPath(f)}</div>
+                        {commitFiles.map((f) => (
+                          <div key={f}>{shortPath(f)}</div>
                         ))}
                       </div>
                     )}
@@ -466,8 +466,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 { label: 'Types' }, { label: 'Score' },
               ]} />
               <tbody>
-                {codeStructure.map((f, i) => (
-                  <tr key={i} className="border-b-subtle">
+                {codeStructure.map((f) => (
+                  <tr key={`${f.file}:${f.tool}`} className="border-b-subtle">
                     <td className="cell-pad text-secondary">{shortPath(f.file)}</td>
                     <td className="cell-pad text-muted">{f.tool}</td>
                     <td className="cell-pad text-right">{f.lines}</td>
