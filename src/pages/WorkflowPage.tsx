@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+import { useLocation } from 'wouter';
 import { useAgentSession } from '../hooks/useAgentSession.js';
 import { WorkflowGraphView } from '../components/WorkflowGraph.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
@@ -6,6 +8,11 @@ import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function WorkflowPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useAgentSession(sessionId);
+  const [, navigate] = useLocation();
+
+  const handleNodeClick = useCallback((nodeId: string) => {
+    navigate(`/agents/${encodeURIComponent(sessionId)}?agent=${encodeURIComponent(nodeId)}`);
+  }, [sessionId, navigate]);
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
@@ -19,9 +26,7 @@ export function WorkflowPage({ sessionId }: { sessionId: string }) {
           <div className="card">
             <WorkflowGraphView
               graph={data.graph}
-              onNodeClick={(nodeId) => {
-                window.location.hash = `/agents/${sessionId}?agent=${nodeId}`;
-              }}
+              onNodeClick={handleNodeClick}
             />
           </div>
         </>

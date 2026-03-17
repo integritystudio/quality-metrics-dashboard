@@ -26,7 +26,6 @@ import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
-const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
 import { formatScore } from './lib/quality-utils.js';
 import { useDashboard } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
@@ -40,6 +39,8 @@ import type {
   MetricDetailResult,
   MetricDynamics,
 } from './types.js';
+
+const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
 
 const VALID_ROLES: readonly RoleViewType[] = ['executive', 'operator', 'auditor'];
 

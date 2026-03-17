@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -53,10 +53,16 @@ function getScoreBand(score: number | null) {
 
 const elk = new ELK();
 
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
+  return new Map(nodes.map(n => [n.id, n]));
+}
+
 async function computeLayout(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const nodeDataMap = buildNodeDataMap(nodes);
+
   const elkGraph = {
     id: 'root',
     layoutOptions: ELK_OPTIONS,
@@ -66,20 +72,20 @@ async function computeLayout(
 
   const layout = await elk.layout(elkGraph);
 
-  const rfNodes: Node[] = (layout.children ?? []).map(elkNode => ({
-    id: elkNode.id,
-    position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-    data: nodes.find(n => n.id === elkNode.id)! as unknown as Record<string, unknown>,
-    type: 'agentNode',
-  }));
+  const rfNodes: Node[] = (layout.children ?? [])
+    .filter(elkNode => nodeDataMap.has(elkNode.id))
+    .map(elkNode => ({
+      id: elkNode.id,
+      position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+      data: nodeDataMap.get(elkNode.id) as unknown as Record<string, unknown>,
+      type: 'agentNode',
+    }));
 
   const rfEdges: Edge[] = edges.map(e => ({
     id: e.id,
     source: e.source,
     target: e.target,
     label: e.label,
-    data: e as unknown as Record<string, unknown>,
-    type: 'agentEdge',
   }));
 
   return { nodes: rfNodes, edges: rfEdges };
@@ -132,7 +138,6 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
 });
 
 const NODE_TYPES = { agentNode: AgentNodeComponent };
-const EDGE_TYPES = {};
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -147,10 +152,12 @@ interface WorkflowGraphProps {
 export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: WorkflowGraphProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (graph.nodes.length === 0) return;
     let cancelled = false;
+    setLayoutError(null);
     computeLayout(graph.nodes, graph.edges)
       .then(({ nodes: rfNodes, edges: rfEdges }) => {
         if (!cancelled) {
@@ -158,7 +165,11 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
           setEdges(rfEdges);
         }
       })
-      .catch(err => console.error('ELK layout failed', err));
+      .catch(err => {
+        if (!cancelled) {
+          setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
+        }
+      });
     return () => { cancelled = true; };
   }, [graph.nodes, graph.edges, setNodes, setEdges]);
 
@@ -187,6 +198,16 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
     );
   }
 
+  if (layoutError) {
+    return (
+      <div style={{ height }} role="img" aria-label="Agent workflow graph">
+        <div className="error-state" style={{ padding: 24, textAlign: 'center' }}>
+          Failed to compute workflow layout: {layoutError}
+        </div>
+      </div>
+    );
+  }
+
   const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
 
   return (
@@ -198,7 +219,6 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
         nodeTypes={NODE_TYPES}
-        edgeTypes={EDGE_TYPES}
         fitView
       >
         <Controls />
