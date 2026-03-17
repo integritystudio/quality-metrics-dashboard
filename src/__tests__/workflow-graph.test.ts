@@ -335,3 +335,68 @@ describe('buildWorkflowGraph — root node identification', () => {
     expect(rootNode).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. Span-inference fallback (evaluation === null, spans carry gen_ai.agent.id)
+// ---------------------------------------------------------------------------
+
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+
+describe('buildWorkflowGraph — span-inference fallback', () => {
+  it('infers 2 nodes from spans when evaluation is null', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, {}, spans);
+    expect(graph.nodes).toHaveLength(2);
+  });
+
+  it('infers sequential edge when agent A spans end before agent B spans start', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, {}, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+
+  it('sets rootNodeId to the agent with the earliest span start time', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, {}, spans);
+    expect(graph.rootNodeId).toBe('agentA');
+  });
+
+  it('sets node hasError to true when any span for that agent has status.code === 2', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, {}, spans);
+    const node = graph.nodes.find(n => n.id === 'agentA');
+    expect(node?.hasError).toBe(true);
+  });
+
+  it('returns empty graph when evaluation is null and no spans have gen_ai.agent.id', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { 'some.other.attr': 'value' } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, {}, spans);
+    expect(graph.nodes).toHaveLength(0);
+    expect(graph.edges).toHaveLength(0);
+  });
+
+  it('counts tool calls from span names starting with "tool:"', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
+      makeSpan({ spanId: 's2', name: 'tool:write', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
+      makeSpan({ spanId: 's3', name: 'agent_turn', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, {}, spans);
+    const node = graph.nodes.find(n => n.id === 'agentA');
+    expect(node?.toolCallCount).toBe(2);
+  });
+});
