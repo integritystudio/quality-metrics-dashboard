@@ -20,6 +20,10 @@ vi.mock('../../../dist/tools/query-traces.js', () => ({
   queryTraces: vi.fn(),
 }));
 
+vi.mock('../lib/workflow-graph.js', () => ({
+  buildWorkflowGraph: vi.fn(),
+}));
+
 vi.mock('../api/data-loader.js', () => ({
   loadEvaluationsByMetric: vi.fn(),
   loadEvaluationsForMetric: vi.fn(),
@@ -38,6 +42,7 @@ import { agentRoutes } from '../api/routes/agents.js';
 import { queryTraces } from '../../../dist/tools/query-traces.js';
 import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
 import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -202,6 +207,8 @@ describe('GET /agents/:sessionId', () => {
     vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1, agentScores: {}, trajectory: [] } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(buildWorkflowGraph).mockReturnValue({ nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent' } as any);
   });
 
   it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
@@ -236,5 +243,17 @@ describe('GET /agents/:sessionId', () => {
     vi.mocked(loadTracesBySessionId).mockRejectedValue(new Error('session not found'));
     const res = await agentRoutes.request('/agents/sess-abc');
     expect(res.status).toBe(500);
+  });
+
+  it('returns graph field from buildWorkflowGraph', async () => {
+    const mockGraph = { nodes: [{ id: 'a' }], edges: [], rootNodeId: 'a', workflowShape: 'single_agent' };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph as any);
+
+    const res = await agentRoutes.request('/agents/sess-abc');
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('graph');
+    expect(body.graph).toEqual(mockGraph);
   });
 });

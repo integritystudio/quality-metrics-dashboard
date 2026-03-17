@@ -6,6 +6,7 @@ import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus } from '../../lib/constants.js';
 import { PARAM_ID_RE } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 export const agentRoutes = new Hono();
 
@@ -173,12 +174,16 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     // Bulk-load evaluations for all traces in the session
     const evaluations = await loadEvaluationsByTraceIds([...traceIds]);
 
+    const serializedAgentMap = Object.fromEntries(agentMap);
+    const graph = buildWorkflowGraph(evaluation, serializedAgentMap, spans);
+
     return c.json({
       sessionId,
       spans,
       evaluation,
       evaluations,
-      agentMap: Object.fromEntries(agentMap),
+      agentMap: serializedAgentMap,
+      graph,
     });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
