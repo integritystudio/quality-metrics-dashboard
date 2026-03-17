@@ -1,4 +1,5 @@
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
 import { API_BASE, STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
@@ -15,6 +16,7 @@ interface AgentSessionResponse {
   evaluation: MultiAgentEvaluation;
   evaluations: EvaluationResult[];
   agentMap: Record<string, string>;
+  graph: WorkflowGraph;
 }
 
 export function useAgentSession(sessionId: string | undefined) {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, lazy, Suspense } from 'react';
 import { Route, Switch, Link, useLocation, Router } from 'wouter';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
@@ -16,7 +16,6 @@ import { TrendSeries } from './components/TrendSeries.js';
 import { ConfidencePanel } from './components/ConfidencePanel.js';
 import { ViewSection } from './components/Section.js';
 import { CorrelationsPage } from './pages/CorrelationsPage.js';
-import { CoveragePage } from './pages/CoveragePage.js';
 import { PipelinePage } from './pages/PipelinePage.js';
 import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { CompliancePage } from './pages/CompliancePage.js';
@@ -27,6 +26,7 @@ import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
+const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
 import { formatScore } from './lib/quality-utils.js';
 import { useDashboard } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
@@ -326,6 +326,15 @@ export function App() {
           {(params) => (
             <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
               <SessionDetailPage sessionId={params.sessionId} />
+            </ErrorBoundary>
+          )}
+        </Route>
+        <Route path="/workflows/:sessionId">
+          {(params) => (
+            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+              <Suspense fallback={<div className="card skeleton" style={{ height: 600 }} />}>
+                <WorkflowPage sessionId={params.sessionId} />
+              </Suspense>
             </ErrorBoundary>
           )}
         </Route>

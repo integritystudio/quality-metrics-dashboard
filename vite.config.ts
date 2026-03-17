@@ -39,6 +39,7 @@ export default defineConfig({
         manualChunks: {
           react: ['react', 'react-dom'],
           query: ['@tanstack/react-query'],
+          'workflow-viz': ['@xyflow/react', 'elkjs'],
         },
       },
     },
