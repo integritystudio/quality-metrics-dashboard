@@ -71,7 +71,11 @@ jobs:
         uses: dopplerhq/cli-action@v3
       - run: npm ci
       - run: npm run build
-      - name: Deploy Worker via Doppler
+      - name: Deploy default worker
         run: CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_WORKER_TOKEN --plain) npx wrangler deploy
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Deploy production worker
+        run: CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_WORKER_TOKEN --plain) npx wrangler deploy --name quality-metrics-api
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
