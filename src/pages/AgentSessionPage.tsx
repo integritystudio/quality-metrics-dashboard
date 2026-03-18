@@ -1,3 +1,4 @@
+import { Link } from 'wouter';
 import { useAgentSession } from '../hooks/useAgentSession.js';
 import { TurnTimeline } from '../components/TurnTimeline.js';
 import { HandoffCard } from '../components/HandoffCard.js';
@@ -26,6 +27,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             <span className="text-secondary text-xs">
               {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
             </span>
+            <Link href={`/workflows/${sessionId}`} className="text-xs text-link">View Workflow</Link>
           </DetailPageHeader>
 
           {/* Summary scores */}
