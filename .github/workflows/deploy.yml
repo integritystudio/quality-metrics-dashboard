@@ -70,6 +70,7 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
       - run: npm ci
+      - run: npm run build
       - name: Deploy Worker via Doppler
         run: CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_WORKER_TOKEN --plain) npx wrangler deploy
         env:
