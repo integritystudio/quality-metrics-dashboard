@@ -16,7 +16,7 @@ export function WorkflowPage({ sessionId }: { sessionId: string }) {
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data?.graph && (
+      {data?.graph ? (
         <>
           <DetailPageHeader title="Workflow" id={sessionId}>
             <span className="text-secondary text-xs">
@@ -30,7 +30,11 @@ export function WorkflowPage({ sessionId }: { sessionId: string }) {
             />
           </div>
         </>
-      )}
+      ) : data ? (
+        <div className="card text-secondary text-center py-8">
+          No workflow graph available for this session.
+        </div>
+      ) : null}
     </PageShell>
   );
 }
