@@ -16,10 +16,9 @@
     "lint": "eslint -c eslint.config.mjs src/ scripts/ worker/",
     "typecheck": "tsc --noEmit",
     "populate": "tsx scripts/populate-dashboard.ts",
+    "derive": "tsx scripts/derive-evaluations.ts",
     "sync": "tsx scripts/sync-to-kv.ts",
-    "filetree": "tsx scripts/generate-token-tree.ts && tsx scripts/update-readme-tree.ts",
-    "filetree:generate": "tsx scripts/generate-token-tree.ts",
-    "filetree:readme": "tsx scripts/update-readme-tree.ts",
+    "filetree": "bash scripts/generate-token-tree.sh && bash scripts/update-readme-tree.sh",
     "deploy:worker": "wrangler deploy",
     "dev:worker": "wrangler dev"
   },
