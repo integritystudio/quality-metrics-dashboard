@@ -60,7 +60,19 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
 app.get('/api/metrics/:name', async (c) => {
   const name = c.req.param('name');
   const data = await c.env.DASHBOARD.get(`metric:${name}`, 'json');
-  if (!data) return c.json({ error: `No data for metric: ${name}` }, 404);
+  if (!data) {
+    return c.json({
+      name,
+      displayName: name,
+      status: 'no_data',
+      values: { count: 0 },
+      alerts: [],
+      sampleCount: 0,
+      scoreDistribution: [],
+      worstEvaluations: [],
+      bestEvaluations: [],
+    });
+  }
   return c.json(data);
 });
 
@@ -71,7 +83,7 @@ app.get('/api/trends/:name', async (c) => {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
   const data = await c.env.DASHBOARD.get(`trend:${name}:${period}`, 'json');
-  if (!data) return c.json({ error: `No trend data for metric: ${name}` }, 404);
+  if (!data) return c.json({ metric: name, period, points: [], bucketCount: 0 });
   return c.json(data);
 });
 

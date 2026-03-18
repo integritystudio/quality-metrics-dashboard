@@ -916,19 +916,12 @@ function safeExit(code: number): never {
 }
 
 function writeEvaluations(evals: EvalRecord[]): void {
-  // Group by date
-  const byDate = new Map<string, EvalRecord[]>();
-  for (const ev of evals) {
-    const date = ev.timestamp.slice(0, 10);
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date)!.push(ev);
-  }
-
-  for (const [date, records] of byDate) {
-    const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
-    const content = records.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
-    appendFileSync(outFile, content);
-  }
+  // Write all evals to today's file so they appear in recent time-window queries.
+  // The record's timestamp field still reflects the original turn time for accuracy.
+  const today = new Date().toISOString().slice(0, 10);
+  const outFile = join(TELEMETRY_DIR, `evaluations-${today}.jsonl`);
+  const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
+  appendFileSync(outFile, content);
 }
 
 // ============================================================================
