@@ -18,7 +18,7 @@ Open items from code reviews and deferred work.
 
 | # | Item | Priority | Source |
 |---|------|----------|--------|
-| G5-WG4 | `_agentMap` parameter in `buildWorkflowGraph` is unused — decide: remove or use for agents with zero turns | P4 | WG-4 |
+| ~~G5-WG4~~ | ~~`_agentMap` parameter in `buildWorkflowGraph` is unused — decide: remove or use for agents with zero turns~~ Removed | P4 | WG-4 |
 | G5-WG5 | Turns with undefined `agentName` are silently dropped — add observability counter | P4 | WG-5 |
 | G5-WG9 | `durationMs` on WorkflowNode sums nested spans (double-counts wall time) — document or fix | P4 | WG-9 |
 | ~~G5-WG10~~ | ~~Test suite rebuilds graph in every `it` block — extract to `beforeAll` or describe-scope const~~ Done | P5 | WG-10 |

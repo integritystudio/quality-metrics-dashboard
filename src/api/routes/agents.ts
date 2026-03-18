@@ -175,7 +175,7 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     const evaluations = await loadEvaluationsByTraceIds([...traceIds]);
 
     const serializedAgentMap = Object.fromEntries(agentMap);
-    const graph = buildWorkflowGraph(evaluation, serializedAgentMap, spans);
+    const graph = buildWorkflowGraph(evaluation, spans);
 
     return c.json({
       sessionId,

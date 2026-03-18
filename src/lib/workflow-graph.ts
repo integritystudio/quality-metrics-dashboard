@@ -8,7 +8,6 @@ const SPAN_STATUS_ERROR = 2;
 
 export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
-  _agentMap: Record<string, string>,
   spans: TraceSpan[],
 ): WorkflowGraph {
   if (evaluation !== null) {
