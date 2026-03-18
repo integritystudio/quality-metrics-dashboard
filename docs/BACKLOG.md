@@ -21,7 +21,7 @@ Open items from code reviews and deferred work.
 | G5-WG4 | `_agentMap` parameter in `buildWorkflowGraph` is unused — decide: remove or use for agents with zero turns | P4 | WG-4 |
 | G5-WG5 | Turns with undefined `agentName` are silently dropped — add observability counter | P4 | WG-5 |
 | G5-WG9 | `durationMs` on WorkflowNode sums nested spans (double-counts wall time) — document or fix | P4 | WG-9 |
-| G5-WG10 | Test suite rebuilds graph in every `it` block — extract to `beforeAll` or describe-scope const | P5 | WG-10 |
+| ~~G5-WG10~~ | ~~Test suite rebuilds graph in every `it` block — extract to `beforeAll` or describe-scope const~~ Done | P5 | WG-10 |
 | G5-C1 | `agent.name` vs `gen_ai.agent.name` attribute key: route uses former, transformer uses latter — verify both attributes are present on real spans | P3 | WG-C1 |
 | G5-M1 | `classifyShape` only detects pairwise back-edges; misses 3+ node cycles (A→B→C→A) — needs DFS cycle detection | P3 | WG-M1 |
 | G5-M2 | `inferFromSpans` strict `<=` for edge inference misses near-concurrent spans — consider epsilon tolerance | P4 | WG-M2 |

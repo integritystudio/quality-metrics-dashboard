@@ -98,8 +98,12 @@ function makeGraph(overrides: Partial<WorkflowGraph> = {}): WorkflowGraph {
   };
 }
 
-function makeTwoNodeGraph(): WorkflowGraph {
-  return {
+// ---------------------------------------------------------------------------
+// WorkflowGraphView
+// ---------------------------------------------------------------------------
+
+describe('WorkflowGraphView', () => {
+  const twoNodeGraph: WorkflowGraph = {
     nodes: [
       makeNode({ id: 'node-1', label: 'planner' }),
       makeNode({ id: 'node-2', label: 'executor' }),
@@ -108,10 +112,8 @@ function makeTwoNodeGraph(): WorkflowGraph {
     rootNodeId: 'node-1',
     workflowShape: 'linear',
   };
-}
 
-function makeThreeNodeGraph(): WorkflowGraph {
-  return {
+  const threeNodeGraph: WorkflowGraph = {
     nodes: [
       makeNode({ id: 'node-1' }),
       makeNode({ id: 'node-2' }),
@@ -121,10 +123,8 @@ function makeThreeNodeGraph(): WorkflowGraph {
     rootNodeId: 'node-1',
     workflowShape: 'linear',
   };
-}
 
-function makeFiveNodeGraph(): WorkflowGraph {
-  return {
+  const fiveNodeGraph: WorkflowGraph = {
     nodes: Array.from({ length: 5 }, (_, i) =>
       makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
     ),
@@ -132,15 +132,8 @@ function makeFiveNodeGraph(): WorkflowGraph {
     rootNodeId: 'node-1',
     workflowShape: 'branching',
   };
-}
-
-// ---------------------------------------------------------------------------
-// WorkflowGraphView
-// ---------------------------------------------------------------------------
-
-describe('WorkflowGraphView', () => {
   it('renders container with role=img and aria-label', async () => {
-    render(<WorkflowGraphView graph={makeTwoNodeGraph()} />);
+    render(<WorkflowGraphView graph={twoNodeGraph} />);
     const container = await waitFor(() =>
       screen.getByRole('img', { name: 'Agent workflow graph' })
     );
@@ -148,7 +141,7 @@ describe('WorkflowGraphView', () => {
   });
 
   it('renders correct number of nodes', async () => {
-    render(<WorkflowGraphView graph={makeThreeNodeGraph()} />);
+    render(<WorkflowGraphView graph={threeNodeGraph} />);
     await waitFor(() => {
       expect(screen.getByTestId('rf-node-node-1')).toBeInTheDocument();
       expect(screen.getByTestId('rf-node-node-2')).toBeInTheDocument();
@@ -187,21 +180,21 @@ describe('WorkflowGraphView', () => {
   });
 
   it('shows Controls always', async () => {
-    render(<WorkflowGraphView graph={makeTwoNodeGraph()} />);
+    render(<WorkflowGraphView graph={twoNodeGraph} />);
     await waitFor(() => {
       expect(screen.getByTestId('controls')).toBeInTheDocument();
     });
   });
 
   it('shows MiniMap for 5+ nodes', async () => {
-    render(<WorkflowGraphView graph={makeFiveNodeGraph()} />);
+    render(<WorkflowGraphView graph={fiveNodeGraph} />);
     await waitFor(() => {
       expect(screen.getByTestId('minimap')).toBeInTheDocument();
     });
   });
 
   it('hides MiniMap for fewer than 5 nodes', async () => {
-    render(<WorkflowGraphView graph={makeThreeNodeGraph()} />);
+    render(<WorkflowGraphView graph={threeNodeGraph} />);
     await waitFor(() => {
       expect(screen.getByTestId('reactflow')).toBeInTheDocument();
     });
@@ -223,7 +216,7 @@ describe('WorkflowGraphView', () => {
 
   it('fires onNodeClick with the correct nodeId when a node is clicked', async () => {
     const onNodeClick = vi.fn();
-    render(<WorkflowGraphView graph={makeTwoNodeGraph()} onNodeClick={onNodeClick} />);
+    render(<WorkflowGraphView graph={twoNodeGraph} onNodeClick={onNodeClick} />);
     await waitFor(() => {
       expect(screen.getByTestId('rf-node-node-1')).toBeInTheDocument();
     });
