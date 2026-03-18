@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 
-vi.mock('@xyflow/react', () => {
-  const React = require('react');
+vi.mock('@xyflow/react', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
   return {
     ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, edgeTypes, children, ...rest }: any) => (
       <div data-testid="reactflow" {...rest}>

@@ -26,5 +26,5 @@ Open items from code reviews and deferred work.
 | G5-M1 | `classifyShape` only detects pairwise back-edges; misses 3+ node cycles (A→B→C→A) — needs DFS cycle detection | P3 | WG-M1 |
 | G5-M2 | `inferFromSpans` strict `<=` for edge inference misses near-concurrent spans — consider epsilon tolerance | P4 | WG-M2 |
 | G5-M4 | `WorkflowEdge.handoffScore` typed as `number` but inferred edges use `0` — consider `number | null` to distinguish from real zero scores | P4 | WG-M4 |
-| G5-L1 | Test mock uses `require('react')` (CommonJS) — switch to `vi.importActual` for ES module consistency | P5 | WG-L1 |
+| ~~G5-L1~~ | ~~Test mock uses `require('react')` (CommonJS) — switch to `vi.importActual` for ES module consistency~~ Done | P5 | WG-L1 |
 | G5-L2 | WorkflowPage shows nothing when `data` present but `graph` absent — add empty state | P5 | WG-L2 |
