@@ -47,6 +47,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@parent': path.resolve(__dirname, '../dist'),
+      'web-worker': path.resolve(__dirname, 'src/stubs/web-worker.ts'),
     },
   },
   server: {
