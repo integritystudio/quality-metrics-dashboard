@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
 import type { SupabaseSession } from '../lib/supabase.js';
@@ -13,14 +13,25 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchAppSession(jwt: string): Promise<AppSession | null> {
+async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
   try {
     const res = await fetch(`${API_BASE}/api/me`, {
-      method: 'POST',
+      method: 'GET',
       headers: { 'Authorization': `Bearer ${jwt}` },
+      signal,
     });
     if (!res.ok) return null;
-    return res.json() as Promise<AppSession>;
+    const data: unknown = await res.json();
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      !('authUserId' in data) ||
+      !('appUserId' in data) ||
+      !('email' in data)
+    ) {
+      return null;
+    }
+    return data as AppSession;
   } catch {
     return null;
   }
@@ -29,35 +40,48 @@ async function fetchAppSession(jwt: string): Promise<AppSession | null> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AppSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const loadSeqRef = useRef(0);
 
-  const loadSession = useCallback(async (supabaseSession: SupabaseSession | null) => {
+  const loadSession = useCallback(async (supabaseSession: SupabaseSession | null, signal?: AbortSignal) => {
+    const seq = ++loadSeqRef.current;
     if (!supabaseSession) {
-      setSession(null);
-      setIsLoading(false);
+      if (seq === loadSeqRef.current) {
+        setSession(null);
+        setIsLoading(false);
+      }
       return;
     }
-    const appSession = await fetchAppSession(supabaseSession.access_token);
-    setSession(appSession);
-    setIsLoading(false);
+    const appSession = await fetchAppSession(supabaseSession.access_token, signal);
+    if (seq === loadSeqRef.current) {
+      setSession(appSession);
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const current = getSession();
-    const init = current ? loadSession(current) : refreshSession().then(loadSession);
+    const init = current
+      ? loadSession(current, controller.signal)
+      : refreshSession().then((s) => loadSession(s, controller.signal));
     void init;
 
     const unsubscribe = onAuthStateChange((supabaseSession) => {
       setIsLoading(true);
-      loadSession(supabaseSession);
+      void loadSession(supabaseSession, controller.signal);
     });
 
-    return unsubscribe;
+    return () => {
+      controller.abort();
+      unsubscribe();
+    };
   }, [loadSession]);
 
-  async function handleSignOut() {
+  const handleSignOut = useCallback(async () => {
     await supabaseSignOut();
     setSession(null);
-  }
+  }, []);
 
   return (
     <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut }}>
