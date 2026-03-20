@@ -1,0 +1,663 @@
+Here's the concrete version I'd use.
+
+## Recommended approach
+
+Add **Supabase Auth for sign-in**, but keep authorization grounded in your existing app schema:
+
+* authenticate with `auth.users`
+* provision/resolve the matching `public.users` row
+* load roles from `user_roles -> roles`
+* gate dashboard/API access by permissions
+* keep Cloudflare KV as the metrics source for now
+
+That fits the current repo shape: React/Vite frontend, Hono API, Cloudflare Worker backend, and KV-backed read APIs. The app today still exposes role as a request/UI concept, and the worker currently serves public GET routes with no auth enforcement. ([GitHub][1])
+
+---
+
+## Schema adjustment checklist
+
+### 1) Pick one identity mapping rule
+
+Use this rule for all **new** dashboard users:
+
+* `public.users.id = auth.users.id`
+
+Why: your current schema is split. Some tables point to `auth.users`, while others point to `public.users`, which creates ongoing join and authorization complexity. In the schema you shared, `analytics_projects` and `provider_oauth_tokens` point to `auth.users`, while `api_keys`, `user_profiles`, `user_roles`, `user_sessions`, and `user_activity` point to `public.users`. That split is the main thing to tame first.
+
+### 2) Treat `public.users` as the app user record
+
+Keep using:
+
+* `public.users`
+* `user_profiles`
+* `roles`
+* `user_roles`
+* `user_activity`
+* `user_sessions`
+
+for application identity, RBAC, and audit.
+
+### 3) Do not use `user_profiles.role` as source of truth
+
+Use:
+
+* `user_roles`
+* joined to `roles`
+* read `roles.permissions`
+
+Treat `user_profiles.role` as legacy/denormalized metadata only.
+
+### 4) Add dashboard permissions into `roles.permissions`
+
+Recommended permission strings:
+
+```json
+[
+  "dashboard.read",
+  "dashboard.executive",
+  "dashboard.operator",
+  "dashboard.auditor",
+  "dashboard.traces.read",
+  "dashboard.sessions.read",
+  "dashboard.agents.read",
+  "dashboard.pipeline.read",
+  "dashboard.compliance.read",
+  "dashboard.admin"
+]
+```
+
+### 5) Keep `auth0_id` temporarily, but plan to rename it
+
+Near term:
+
+* keep the column for compatibility
+
+Medium term:
+
+* rename `auth0_id` to something neutral like `identity_subject` or `external_auth_id`
+
+If Supabase Auth becomes the canonical login path, `auth0_id` becomes misleading.
+
+### 6) Decide whether `user_sessions` is auth or audit
+
+Since Supabase Auth already manages authentication sessions, use your `user_sessions` table as:
+
+* telemetry
+* device/session audit
+* risk monitoring
+
+not as the source of truth for active login validity.
+
+---
+
+## SQL / data changes to make first
+
+### A. Seed dashboard permissions into `roles`
+
+You likely already have role rows; add permissions there rather than inventing new dashboard-only tables.
+
+Example conceptual update:
+
+```sql
+update public.roles
+set permissions = permissions || '["dashboard.read","dashboard.executive"]'::jsonb
+where name = 'executive';
+```
+
+Do the equivalent for operator, auditor, admin.
+
+### B. Add a lightweight mapping safeguard if IDs cannot be aligned
+
+Only if you cannot make `public.users.id = auth.users.id` for new users:
+
+```sql
+create table public.auth_user_links (
+  auth_user_id uuid primary key references auth.users(id) on delete cascade,
+  app_user_id uuid unique not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+```
+
+I would avoid this unless necessary.
+
+### C. Add indexes if missing
+
+Helpful indexes:
+
+```sql
+create index if not exists idx_user_roles_user_id on public.user_roles(user_id);
+create index if not exists idx_user_roles_role_id on public.user_roles(role_id);
+create index if not exists idx_user_profiles_user_id on public.user_profiles(user_id);
+create index if not exists idx_user_activity_user_id_created_at on public.user_activity(user_id, created_at desc);
+create index if not exists idx_user_sessions_user_id_created_at on public.user_sessions(user_id, created_at desc);
+```
+
+---
+
+## File-by-file implementation plan
+
+## 1) `package.json`
+
+Add Supabase client dependency to the frontend app. The repo is already a React 19 + Vite 6 app. ([GitHub][1])
+
+Add:
+
+* `@supabase/supabase-js`
+
+You may also want:
+
+* `jose` if you choose explicit JWT verification in worker code
+* or use Supabase JWKS-based verification flow from the worker
+
+### Changes
+
+* install `@supabase/supabase-js`
+* optionally install `jose`
+
+---
+
+## 2) `src/lib/supabase.ts` (new)
+
+Create a browser Supabase client.
+
+Responsibilities:
+
+* initialize client from `VITE_SUPABASE_URL`
+* initialize from `VITE_SUPABASE_ANON_KEY`
+* export singleton client
+
+Example shape:
+
+```ts
+import { createClient } from '@supabase/supabase-js';
+
+export const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  }
+);
+```
+
+---
+
+## 3) `src/contexts/AuthContext.tsx` (new)
+
+Add an auth/session provider distinct from the current role provider.
+
+Responsibilities:
+
+* load Supabase session on app boot
+* subscribe to auth state changes
+* fetch `/api/me`
+* expose:
+
+  * `session`
+  * `user`
+  * `appSession`
+  * `isLoading`
+  * `signIn`
+  * `signOut`
+
+### Important
+
+This becomes the new top-level identity source.
+Today the app wraps UI in `RoleProvider` and uses explicit role view types like `executive`, `operator`, `auditor`. ([GitHub][2])
+
+---
+
+## 4) `src/pages/LoginPage.tsx` (new)
+
+Create a login page.
+
+Recommended first login methods:
+
+* Google SSO for internal access, or
+* magic link if you want minimal setup
+
+UI:
+
+* app logo/title
+* "Continue with Google" button or email magic link form
+* optional "allowed domain only" message
+
+---
+
+## 5) `src/components/RequireAuth.tsx` (new)
+
+Add a simple route guard.
+
+Behavior:
+
+* loading -> spinner/skeleton
+* unauthenticated -> redirect to `/login`
+* authenticated but unauthorized -> render access denied
+* authenticated and authorized -> render children
+
+---
+
+## 6) `src/App.tsx`
+
+This is the biggest frontend refactor.
+
+The app currently imports `RoleSelector`, `RoleProvider`, and uses `VALID_ROLES = ['executive', 'operator', 'auditor']`, with `RolePage` and dashboard fetching shaped around role as a first-class view selector. ([GitHub][2])
+
+### Refactor goals
+
+* wrap app in `AuthProvider`
+* add `/login`
+* gate protected routes with `RequireAuth`
+* derive available dashboard views from permissions, not from public role selection
+* keep "view mode" only for users who actually have multiple allowed view permissions
+
+### Concrete changes
+
+* add auth provider above router
+* change root route logic:
+
+  * anonymous -> `/login`
+  * signed-in -> dashboard routes
+* make `RoleSelector` conditional:
+
+  * only show if user has >1 dashboard view permission
+* stop trusting URL/query role alone
+* treat role as a display mode derived from permissions
+
+---
+
+## 7) `src/contexts/RoleContext.tsx`
+
+Refactor, don't necessarily delete.
+
+New responsibility:
+
+* store selected **allowed** dashboard mode
+* validate selected mode against authenticated user permissions
+
+Example:
+
+* if permissions include `dashboard.executive` and `dashboard.auditor`, allow switching only between those two
+* if only `dashboard.operator`, pin mode to operator
+
+---
+
+## 8) `src/hooks/useDashboard.ts`
+
+Today `/api/dashboard` accepts `?period=7d&role=executive` per README, and the frontend already requests role-specific views. ([GitHub][1])
+
+### Change
+
+Send the Supabase access token in `Authorization: Bearer ...`.
+
+Also:
+
+* keep `role` only as a requested view mode
+* let backend validate whether that requested role is permitted
+
+---
+
+## 9) Other data hooks
+
+Update these hooks similarly to include auth headers:
+
+* `useMetricDetail`
+* `useTrend`
+* any trace/session/evaluation/agents/compliance/pipeline hooks
+
+Reason: the worker currently exposes many sensitive detail routes:
+
+* `/api/evaluations/trace/:traceId`
+* `/api/traces/:traceId`
+* `/api/sessions/:sessionId`
+* `/api/agents/detail/:agentId`
+* `/api/compliance/*`
+* `/api/pipeline` ([GitHub][1])
+
+---
+
+## 10) `src/api/server.ts`
+
+This file should become the frontend API helper boundary.
+
+### Add
+
+* common `apiFetch()` helper
+* inject bearer token from Supabase session
+* normalize 401 / 403 handling
+* optionally auto-refresh on token changes
+
+---
+
+## 11) `src/types.ts`
+
+Add app-auth types.
+
+Recommended additions:
+
+```ts
+export type DashboardPermission =
+  | 'dashboard.read'
+  | 'dashboard.executive'
+  | 'dashboard.operator'
+  | 'dashboard.auditor'
+  | 'dashboard.traces.read'
+  | 'dashboard.sessions.read'
+  | 'dashboard.agents.read'
+  | 'dashboard.pipeline.read'
+  | 'dashboard.compliance.read'
+  | 'dashboard.admin';
+
+export type AppSession = {
+  authUserId: string;
+  appUserId: string;
+  email: string;
+  fullName?: string;
+  organization?: string;
+  roles: string[];
+  permissions: DashboardPermission[];
+  allowedViews: RoleViewType[];
+};
+```
+
+---
+
+## 12) `worker/index.ts`
+
+This is the most important backend file.
+
+Right now the worker:
+
+* applies CORS for a few fixed origins
+* allows only GET methods
+* caches `/api/*`
+* serves unauthenticated GET routes directly from KV and query params, including `role` as user input. ([GitHub][3])
+
+### Refactor this file into layers
+
+### A. Add environment bindings
+
+Add bindings for:
+
+* `SUPABASE_URL`
+* `SUPABASE_JWKS_URL` or derive from URL
+* optionally `SUPABASE_SERVICE_ROLE_KEY` only if you need privileged DB/admin calls
+* existing `DASHBOARD`
+* existing `ASSETS`
+
+### B. Add auth middleware
+
+For `/api/*` except maybe `/api/health`:
+
+1. read bearer token
+2. verify Supabase JWT
+3. resolve/provision app user
+4. resolve permissions
+5. attach normalized session to context
+
+Conceptual context shape:
+
+```ts
+type AppSession = {
+  authUserId: string;
+  appUserId: string;
+  email: string;
+  roles: string[];
+  permissions: string[];
+};
+```
+
+### C. Add authorization helpers
+
+Example helpers:
+
+* `requirePermission('dashboard.read')`
+* `requireAnyPermission(['dashboard.executive', 'dashboard.operator', 'dashboard.auditor'])`
+
+### D. Protect routes
+
+Suggested mapping:
+
+* `/api/dashboard` -> `dashboard.read`
+* role-specific dashboard mode:
+
+  * executive -> `dashboard.executive`
+  * operator -> `dashboard.operator`
+  * auditor -> `dashboard.auditor`
+* `/api/metrics/:name` -> `dashboard.read`
+* `/api/trends/:name` -> `dashboard.read`
+* `/api/correlations` -> `dashboard.read`
+* `/api/coverage` -> `dashboard.auditor` or `dashboard.read`, depending on sensitivity
+* `/api/pipeline` -> `dashboard.pipeline.read`
+* `/api/agents` -> `dashboard.agents.read`
+* `/api/agents/detail/:agentId` -> `dashboard.agents.read`
+* `/api/traces/:traceId` -> `dashboard.traces.read`
+* `/api/evaluations/trace/:traceId` -> `dashboard.traces.read`
+* `/api/sessions/:sessionId` -> `dashboard.sessions.read`
+* `/api/compliance/*` -> `dashboard.compliance.read`
+
+### E. Add `/api/me`
+
+Return normalized session info:
+
+```json
+{
+  "email": "user@company.com",
+  "roles": ["auditor"],
+  "permissions": ["dashboard.read", "dashboard.auditor", "dashboard.traces.read"],
+  "allowedViews": ["auditor"]
+}
+```
+
+### F. Adjust cache policy
+
+Do not cache authenticated JSON as `public`.
+The worker currently sets `Cache-Control: public, max-age=300` on `/api/*`. That should change for protected routes. ([GitHub][3])
+
+Use something like:
+
+* `private, no-store` for `/api/me`
+* cautious/private caching or no-store for sensitive detail endpoints
+* maybe short-lived private caching if you really need it
+
+### G. Tighten CORS
+
+The worker currently allows three fixed origins. Keep this, but ensure login/callback origin coverage matches actual deployed frontends. ([GitHub][3])
+
+---
+
+## 13) `wrangler.toml`
+
+Add worker environment vars/secrets wiring.
+
+Add/configure:
+
+* `SUPABASE_URL`
+* `SUPABASE_PROJECT_REF` if helpful
+* non-secret vars for public env if needed
+* secret for service role only if used server-side
+
+Do not expose service role to the browser.
+
+---
+
+## 14) `vite.config.ts`
+
+Usually minimal changes only.
+
+Make sure browser env passthrough is ready for:
+
+* `VITE_SUPABASE_URL`
+* `VITE_SUPABASE_ANON_KEY`
+
+---
+
+## 15) `e2e/*`
+
+Add end-to-end coverage for auth and authorization.
+
+Recommended tests:
+
+* anonymous user redirected to `/login`
+* signed-in executive can open executive dashboard
+* executive cannot open trace detail if not granted
+* auditor can open trace and compliance pages
+* operator cannot access admin-only routes if added later
+* expired token leads to relogin / 401 flow
+
+The repo already has an `e2e` directory, so this fits the current structure. ([GitHub][1])
+
+---
+
+## 16) `docs/*`
+
+Add a short auth architecture doc.
+
+Sections:
+
+* identity flow
+* `auth.users` vs `public.users`
+* provisioning rules
+* role/permission model
+* protected endpoints
+* env vars
+* local dev auth setup
+
+The repo already includes a `docs` directory, so this belongs there. ([GitHub][1])
+
+---
+
+## Backend flow to implement
+
+I'd implement this exact request lifecycle:
+
+### On first authenticated request
+
+1. verify Supabase JWT
+2. read:
+
+   * `sub`
+   * `email`
+   * `name` / user metadata if present
+3. find `public.users` by `id = authUserId`
+4. if missing:
+
+   * insert `public.users`
+   * insert `user_profiles`
+   * optionally assign default role
+5. resolve `user_roles -> roles`
+6. flatten permissions from `roles.permissions`
+7. return/attach normalized session
+
+### On every protected request
+
+1. verify token
+2. resolve normalized session
+3. authorize permission
+4. serve KV payload
+
+### On login/logout or sensitive reads
+
+Write `user_activity` records:
+
+* `login`
+* `logout`
+* `dashboard_view`
+* `trace_view`
+* `session_view`
+* `compliance_view`
+
+---
+
+## Provisioning logic
+
+Use backend upsert-on-first-login rather than DB triggers for phase 1.
+
+Why:
+
+* easier to reason about
+* easier to control allowed domains
+* easier to log activity
+* easier to reject unknown users cleanly
+
+Pseudo-rules:
+
+* allow if email domain is approved
+* create `public.users`
+* create `user_profiles`
+* attach default role if applicable
+* else deny with 403 and log attempted access
+
+---
+
+## Rollout sequence
+
+### Phase 1
+
+* add Supabase client
+* add login page
+* add auth provider
+* add `/api/me`
+* add worker JWT verification
+
+### Phase 2
+
+* add app-user provisioning into `public.users`
+* load permissions from `roles`
+* protect routes
+
+### Phase 3
+
+* replace unrestricted role selector with permission-constrained view selector
+* protect sensitive detail endpoints
+* add activity/session audit logging
+
+### Phase 4
+
+* clean up legacy columns/naming
+* evaluate whether to align older users to `auth.users.id`
+* optionally add admin tooling for role assignment
+
+---
+
+## Highest-risk items
+
+### 1. `auth.users` vs `public.users` split
+
+This is the architectural sharp edge.
+
+### 2. Public cache headers on authenticated APIs
+
+Current `public, max-age=300` is wrong for user-scoped or sensitive responses. ([GitHub][3])
+
+### 3. Role query param abuse
+
+Right now the worker accepts a `role` query param for dashboard views. That should become a requested mode validated against authenticated permissions, not a trust boundary. ([GitHub][3])
+
+### 4. Frontend role-first mental model
+
+The current app structure makes role a primary UI state. That needs to become auth-first, permission-driven state. ([GitHub][2])
+
+---
+
+## My recommended "definition of done"
+
+You're done with phase 1 when:
+
+* anonymous users cannot load dashboard data
+* signed-in users get a normalized `/api/me`
+* user roles come from `user_roles -> roles.permissions`
+* `/api/dashboard` only allows permitted views
+* trace/session/compliance endpoints are protected
+* KV remains the source for metrics data
+* the frontend no longer treats role as an unauthenticated free selector
+
+If you want, I can turn this into a PR-ready task list with exact commits and acceptance criteria.
+
+[1]: https://github.com/integritystudio/quality-metrics-dashboard "GitHub - integritystudio/quality-metrics-dashboard · GitHub"
+[2]: https://raw.githubusercontent.com/integritystudio/quality-metrics-dashboard/refs/heads/main/src/App.tsx "raw.githubusercontent.com"
+[3]: https://raw.githubusercontent.com/integritystudio/quality-metrics-dashboard/refs/heads/main/worker/index.ts "raw.githubusercontent.com"
