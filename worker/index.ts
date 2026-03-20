@@ -1,19 +1,134 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import type { DashboardPermission, AppSession, MeResponse } from '../src/types/auth.js';
 
-type Bindings = { DASHBOARD: KVNamespace; ASSETS: Fetcher };
+export type { DashboardPermission, AppSession };
 
-const app = new Hono<{ Bindings: Bindings }>();
+type Bindings = {
+  DASHBOARD: KVNamespace;
+  ASSETS: Fetcher;
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+};
+
+type Variables = {
+  session: AppSession;
+};
+
+const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use('/*', cors({
   origin: ['https://integritystudio.dev', 'https://www.aledlie.com', 'https://aledlie.com'],
-  allowMethods: ['GET'],
+  allowMethods: ['GET', 'POST'],
 }));
 
+// Cache policy: private, no-store for all /api/* (responses may contain user-specific data)
 app.use('/api/*', async (c, next) => {
   await next();
-  c.header('Cache-Control', 'public, max-age=300');
+  c.header('Cache-Control', 'private, no-store');
+});
+
+// JWT auth middleware — runs before all /api/* routes, exempts /api/health
+app.use('/api/*', async (c, next) => {
+  if (c.req.path === '/api/health') return next();
+
+  const authHeader = c.req.header('Authorization');
+  const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!jwt) return c.json({ error: 'Unauthorized' }, 401);
+
+  // Verify JWT via Supabase /auth/v1/user
+  let authUserId: string;
+  try {
+    const verifyRes = await fetch(`${c.env.SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        'Authorization': `Bearer ${jwt}`,
+        'apikey': c.env.SUPABASE_ANON_KEY,
+      },
+    });
+    if (!verifyRes.ok) return c.json({ error: 'Unauthorized' }, 401);
+    const authUser = await verifyRes.json() as { id: string };
+    authUserId = authUser.id;
+  } catch {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  // Fetch public.users row
+  let email = '';
+  let appUserId = authUserId;
+  try {
+    const userRes = await fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${authUserId}&limit=1`,
+      {
+        headers: {
+          'apikey': c.env.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${jwt}`,
+        },
+      },
+    );
+    if (userRes.ok) {
+      const users = await userRes.json() as Array<{ id: string; email: string }>;
+      if (users[0]) {
+        appUserId = users[0].id;
+        email = users[0].email;
+      }
+    }
+  } catch {
+    // Non-fatal — proceed with auth user info only
+  }
+
+  // Fetch roles + permissions
+  const roles: string[] = [];
+  const permissions: DashboardPermission[] = [];
+  try {
+    const rolesRes = await fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${appUserId}`,
+      {
+        headers: {
+          'apikey': c.env.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${jwt}`,
+        },
+      },
+    );
+    if (rolesRes.ok) {
+      const rows = await rolesRes.json() as Array<{ roles: { name: string; permissions: string[] } | null }>;
+      for (const row of rows) {
+        if (!row.roles) continue;
+        roles.push(row.roles.name);
+        for (const perm of row.roles.permissions) {
+          if (!permissions.includes(perm as DashboardPermission)) {
+            permissions.push(perm as DashboardPermission);
+          }
+        }
+      }
+    }
+  } catch {
+    // Non-fatal — user will have no permissions, routes will deny
+  }
+
+  c.set('session', { authUserId, appUserId, email, roles, permissions });
+  return next();
+});
+
+app.post('/api/me', (c) => {
+  const session = c.get('session');
+  const allowedViews: Array<'executive' | 'operator' | 'auditor'> = [];
+
+  if (session.permissions.includes('dashboard.admin')) {
+    allowedViews.push('executive', 'operator', 'auditor');
+  } else {
+    if (session.permissions.includes('dashboard.executive')) allowedViews.push('executive');
+    if (session.permissions.includes('dashboard.operator')) allowedViews.push('operator');
+    if (session.permissions.includes('dashboard.auditor')) allowedViews.push('auditor');
+  }
+
+  const response: MeResponse = {
+    email: session.email,
+    roles: session.roles,
+    permissions: session.permissions,
+    allowedViews,
+  };
+  return c.json(response);
 });
 
 app.get('/api/dashboard', async (c) => {
