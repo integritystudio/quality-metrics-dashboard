@@ -47,7 +47,8 @@ app.use('/api/*', async (c, next) => {
       },
     });
     if (!verifyRes.ok) return c.json({ error: 'Unauthorized' }, 401);
-    const authUser = await verifyRes.json() as { id: string };
+    const authUser = await verifyRes.json() as { id?: string };
+    if (!authUser?.id || typeof authUser.id !== 'string') return c.json({ error: 'Unauthorized' }, 401);
     authUserId = authUser.id;
   } catch {
     return c.json({ error: 'Unauthorized' }, 401);
@@ -58,7 +59,7 @@ app.use('/api/*', async (c, next) => {
   let appUserId = authUserId;
   try {
     const userRes = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${authUserId}&limit=1`,
+      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
       {
         headers: {
           'apikey': c.env.SUPABASE_ANON_KEY,
@@ -81,7 +82,7 @@ app.use('/api/*', async (c, next) => {
   const permissionSet = new Set<DashboardPermission>();
   try {
     const rolesRes = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${appUserId}`,
+      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
       {
         headers: {
           'apikey': c.env.SUPABASE_ANON_KEY,
@@ -108,6 +109,12 @@ app.use('/api/*', async (c, next) => {
   return next();
 });
 
+// Permission guard helper — returns true if session has the required permission.
+// Admins bypass all permission checks via 'dashboard.admin'.
+function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
+  return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
+}
+
 app.post('/api/me', (c) => {
   const session = c.get('session');
   const allowedViews: Array<'executive' | 'operator' | 'auditor'> = [];
@@ -130,6 +137,7 @@ app.post('/api/me', (c) => {
 });
 
 app.get('/api/dashboard', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -146,6 +154,7 @@ app.get('/api/dashboard', async (c) => {
 });
 
 app.get('/api/metrics/:name/evaluations', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const name = c.req.param('name');
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
@@ -171,6 +180,7 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
 });
 
 app.get('/api/metrics/:name', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const name = c.req.param('name');
   const data = await c.env.DASHBOARD.get(`metric:${name}`, 'json');
   if (!data) {
@@ -190,6 +200,7 @@ app.get('/api/metrics/:name', async (c) => {
 });
 
 app.get('/api/trends/:name', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const name = c.req.param('name');
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
@@ -201,6 +212,7 @@ app.get('/api/trends/:name', async (c) => {
 });
 
 app.get('/api/evaluations/trace/:traceId', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
@@ -208,6 +220,7 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
 });
 
 app.get('/api/traces/:traceId', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, 404);
@@ -215,6 +228,7 @@ app.get('/api/traces/:traceId', async (c) => {
 });
 
 app.get('/api/correlations', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '30d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -225,6 +239,7 @@ app.get('/api/correlations', async (c) => {
 });
 
 app.get('/api/degradation-signals', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -236,6 +251,7 @@ app.get('/api/degradation-signals', async (c) => {
 });
 
 app.get('/api/coverage', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -250,6 +266,7 @@ app.get('/api/coverage', async (c) => {
 });
 
 app.get('/api/pipeline', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.pipeline.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -260,6 +277,7 @@ app.get('/api/pipeline', async (c) => {
 });
 
 app.get('/api/sessions/:sessionId', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.sessions.read')) return c.json({ error: 'Forbidden' }, 403);
   const sessionId = c.req.param('sessionId');
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, 404);
@@ -267,12 +285,14 @@ app.get('/api/sessions/:sessionId', async (c) => {
 });
 
 app.get('/api/agents', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, 403);
   const data = await c.env.DASHBOARD.get('meta:agents', 'json');
   if (!data) return c.json([]);
   return c.json(data);
 });
 
 app.get('/api/agents/detail/:agentId', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, 403);
   const agentId = c.req.param('agentId');
   if (!agentId || agentId.length > 200 || !/^[\w:.-]+$/.test(agentId)) {
     return c.json({ error: 'Invalid agentId' }, 400);
@@ -283,6 +303,7 @@ app.get('/api/agents/detail/:agentId', async (c) => {
 });
 
 app.get('/api/agents/:sessionId', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, 403);
   const sessionId = c.req.param('sessionId');
   const session = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json') as Record<string, unknown> | null;
   if (!session) return c.json({ error: `No session data for: ${sessionId}` }, 404);
@@ -296,6 +317,7 @@ app.get('/api/agents/:sessionId', async (c) => {
 });
 
 app.get('/api/compliance/sla', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -310,6 +332,7 @@ app.get('/api/compliance/sla', async (c) => {
 });
 
 app.get('/api/compliance/verifications', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -318,6 +341,7 @@ app.get('/api/compliance/verifications', async (c) => {
 });
 
 app.get('/api/calibration', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const data = await c.env.DASHBOARD.get('meta:calibration', 'json');
   if (!data) return c.json({ error: 'No calibration data available' }, 404);
   return c.json(data);
