@@ -18,9 +18,11 @@ export interface AppSession {
   permissions: DashboardPermission[];
 }
 
+export type DashboardView = 'executive' | 'operator' | 'auditor';
+
 export interface MeResponse {
   email: string;
   roles: string[];
   permissions: DashboardPermission[];
-  allowedViews: Array<'executive' | 'operator' | 'auditor'>;
+  allowedViews: DashboardView[];
 }
