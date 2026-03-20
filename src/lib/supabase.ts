@@ -1,9 +1,3 @@
-/**
- * Minimal Supabase auth client — no @supabase/supabase-js SDK.
- * Uses raw fetch against Supabase REST API.
- * Env vars: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
- */
-
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
 
@@ -17,6 +11,13 @@ export interface SupabaseSession {
 }
 
 type AuthStateListener = (session: SupabaseSession | null) => void;
+
+type AuthTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: { id: string; email: string };
+};
 
 const listeners = new Set<AuthStateListener>();
 
@@ -42,17 +43,30 @@ function clearSession(): void {
   }
 }
 
-export function getSession(): SupabaseSession | null {
+function readRawSession(): SupabaseSession | null {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw) as SupabaseSession;
-    // Treat session as expired 60s early to avoid edge races
-    if (Date.now() / 1000 > session.expires_at - 60) return null;
-    return session;
+    return raw ? (JSON.parse(raw) as SupabaseSession) : null;
   } catch {
     return null;
   }
+}
+
+function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+    user: data.user,
+  };
+}
+
+export function getSession(): SupabaseSession | null {
+  const session = readRawSession();
+  if (!session) return null;
+  // Treat session as expired 60s early to avoid edge races
+  if (Date.now() / 1000 > session.expires_at - 60) return null;
+  return session;
 }
 
 export async function signIn(email: string, password: string): Promise<SupabaseSession> {
@@ -70,20 +84,7 @@ export async function signIn(email: string, password: string): Promise<SupabaseS
     throw new Error(body || `Sign in failed: ${res.status}`);
   }
 
-  const data = await res.json() as {
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-    user: { id: string; email: string };
-  };
-
-  const session: SupabaseSession = {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-    user: { id: data.user.id, email: data.user.email },
-  };
-
+  const session = sessionFromTokenResponse(await res.json() as AuthTokenResponse);
   saveSession(session);
   notifyListeners(session);
   return session;
@@ -109,15 +110,8 @@ export async function signOut(): Promise<void> {
 }
 
 export async function refreshSession(): Promise<SupabaseSession | null> {
-  let session: SupabaseSession | null;
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    session = raw ? (JSON.parse(raw) as SupabaseSession) : null;
-  } catch {
-    return null;
-  }
-
-  if (!session?.refresh_token) return null;
+  const stored = readRawSession();
+  if (!stored?.refresh_token) return null;
 
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
@@ -126,7 +120,7 @@ export async function refreshSession(): Promise<SupabaseSession | null> {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ refresh_token: session.refresh_token }),
+      body: JSON.stringify({ refresh_token: stored.refresh_token }),
     });
 
     if (!res.ok) {
@@ -135,20 +129,7 @@ export async function refreshSession(): Promise<SupabaseSession | null> {
       return null;
     }
 
-    const data = await res.json() as {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
-      user: { id: string; email: string };
-    };
-
-    const refreshed: SupabaseSession = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-      user: { id: data.user.id, email: data.user.email },
-    };
-
+    const refreshed = sessionFromTokenResponse(await res.json() as AuthTokenResponse);
     saveSession(refreshed);
     notifyListeners(refreshed);
     return refreshed;
@@ -157,8 +138,7 @@ export async function refreshSession(): Promise<SupabaseSession | null> {
   }
 }
 
-/** Subscribe to auth state changes. Returns an unsubscribe function. */
 export function onAuthStateChange(listener: AuthStateListener): () => void {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => listeners.delete(listener);
 }
