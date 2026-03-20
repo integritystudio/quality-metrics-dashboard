@@ -1,6 +1,10 @@
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
 
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Missing required env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
+}
+
 const SESSION_STORAGE_KEY = 'supabase.session';
 
 export interface SupabaseSession {
@@ -43,10 +47,25 @@ function clearSession(): void {
   }
 }
 
+function isValidSession(value: unknown): value is SupabaseSession {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['access_token'] === 'string' &&
+    typeof v['refresh_token'] === 'string' &&
+    typeof v['expires_at'] === 'number' &&
+    typeof v['user'] === 'object' && v['user'] !== null &&
+    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
+    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
+  );
+}
+
 function readRawSession(): SupabaseSession | null {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as SupabaseSession) : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidSession(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -80,8 +99,9 @@ export async function signIn(email: string, password: string): Promise<SupabaseS
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(body || `Sign in failed: ${res.status}`);
+    const body = await res.json().catch(() => null) as { message?: string } | null;
+    const message = body?.message;
+    throw new Error(message ? `Sign in failed: ${message}` : `Sign in failed (${res.status})`);
   }
 
   const session = sessionFromTokenResponse(await res.json() as AuthTokenResponse);
@@ -134,6 +154,8 @@ export async function refreshSession(): Promise<SupabaseSession | null> {
     notifyListeners(refreshed);
     return refreshed;
   } catch {
+    clearSession();
+    notifyListeners(null);
     return null;
   }
 }
