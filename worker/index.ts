@@ -77,9 +77,8 @@ app.use('/api/*', async (c, next) => {
     // Non-fatal — proceed with auth user info only
   }
 
-  // Fetch roles + permissions
   const roles: string[] = [];
-  const permissions: DashboardPermission[] = [];
+  const permissionSet = new Set<DashboardPermission>();
   try {
     const rolesRes = await fetch(
       `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${appUserId}`,
@@ -96,15 +95,14 @@ app.use('/api/*', async (c, next) => {
         if (!row.roles) continue;
         roles.push(row.roles.name);
         for (const perm of row.roles.permissions) {
-          if (!permissions.includes(perm as DashboardPermission)) {
-            permissions.push(perm as DashboardPermission);
-          }
+          permissionSet.add(perm as DashboardPermission);
         }
       }
     }
   } catch {
     // Non-fatal — user will have no permissions, routes will deny
   }
+  const permissions = [...permissionSet];
 
   c.set('session', { authUserId, appUserId, email, roles, permissions });
   return next();
