@@ -42,16 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Load on mount from localStorage
     const current = getSession();
-    if (!current) {
-      // Try refresh before giving up
-      refreshSession().then(refreshed => loadSession(refreshed));
-    } else {
-      loadSession(current);
-    }
+    const init = current ? loadSession(current) : refreshSession().then(loadSession);
+    void init;
 
-    // Subscribe to future auth state changes (signIn / signOut)
     const unsubscribe = onAuthStateChange((supabaseSession) => {
       setIsLoading(true);
       loadSession(supabaseSession);
@@ -60,10 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, [loadSession]);
 
-  const handleSignOut = useCallback(async () => {
+  async function handleSignOut() {
     await supabaseSignOut();
     setSession(null);
-  }, []);
+  }
 
   return (
     <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut }}>
