@@ -18,7 +18,8 @@ The dashboard uses **Supabase Auth** for sign-in and **JWT verification** on the
 - **Login**: `/login` page with email/password sign-in
 - **Session storage**: Browser localStorage (JWT + refresh token)
 - **Token injection**: All data hooks include `Authorization: Bearer <token>` header
-- **Worker verification**: JWT verified via Supabase `/auth/v1/user` endpoint
+- **Worker verification**: JWT verified via Supabase `/auth/v1/user` endpoint with Zod schema validation
+- **Validation**: Request/response types validated using Zod schemas (`src/lib/validation/auth-schemas.ts`)
 - **Permissions**: Loaded from `user_roles -> roles.permissions` (database-driven RBAC)
 
 ### Permissions

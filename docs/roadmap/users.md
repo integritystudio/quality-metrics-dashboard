@@ -753,37 +753,36 @@ All items resolved across 5 commits (27e7f2c through 398d6eb):
 - All items verified with unit + integration tests
 - E2E coverage for auth flows + token lifecycle
 
+### Phase 2.1 (v3.0.10) — Zod Validation Schemas
+- **8b9898c** feat(auth): add remaining Zod validation schemas (login, refresh, me endpoint)
+  - Created 7 Zod schemas in `src/lib/validation/auth-schemas.ts` for all auth request/response types
+  - Updated `AuthContext.tsx` to use `MeResponseSchema.safeParse()` instead of manual validation
+  - Added response validation in worker `/api/me` endpoint
+  - Eliminated remaining manual `typeof` checks and type assertions
+
 See `git log --oneline` for full implementation sequence and code-review findings.
 
 ---
 
-## Technical Debt: Missing Zod Validation Schemas
+## Zod Validation Schemas ✅ Complete
 
-During AUTH phase 1-2 implementation, manual runtime validation was used instead of Zod schemas. The following schemas should be created in `src/lib/validation/auth-schemas.ts` for type safety and consistency with existing Zod patterns (see `src/api/routes/metrics.ts` for reference):
+Created in Phase 2.1 (commit 8b9898c) to consolidate all auth validation into Zod schemas at `src/lib/validation/auth-schemas.ts`:
 
-### Backend (worker/index.ts)
-- `AuthUserResponse` — Validate Supabase `/auth/v1/user` response shape
-  - Required: `id` (string), optional: `email`, `user_metadata`, `aud`, `exp`
-- `PublicUser` — Validate `public.users` table row
-  - Required: `id` (uuid), `email` (string)
-- `UserRoleRow` — Validate `user_roles` joined with `roles`
-  - Required: `roles.name` (string), `roles.permissions` (string[])
+### Completed Schemas
+- ✅ `AuthUserResponseSchema` — Supabase `/auth/v1/user` response (required: `id`; optional: `email`, `email_confirmed_at`, `user_metadata`, etc.)
+- ✅ `PublicUserSchema` — `public.users` table rows (required: `id` uuid, `email` string)
+- ✅ `UserRoleRowSchema` — `user_roles` joined with `roles` (required: `roles.name` string, `roles.permissions` string[])
+- ✅ `AuthTokenResponseSchema` — Supabase sign-in/sign-up responses (optional: `session`, `user`, `error`)
+- ✅ `LoginRequestSchema` — Frontend login payload (required: `email`, `password`)
+- ✅ `RefreshTokenRequestSchema` — Token refresh payload (required: `refresh_token`)
+- ✅ `MeResponseSchema` — `/api/me` endpoint response (required: `email`, `roles`, `permissions`, `allowedViews`)
 
-### Frontend (src/contexts/AuthContext.tsx, src/hooks/)
-- `AuthTokenResponse` — From Supabase sign-in/sign-up
-  - `session?: { access_token: string, refresh_token?: string, user: { id: string, email?: string } }`
-  - `user?: { id: string, email?: string, user_metadata?: Record<string, unknown> }`
-- `MeResponse` validation — Currently TypeScript-only (src/types/auth.ts)
-  - Validate against `{ email: string, roles: string[], permissions: DashboardPermission[], allowedViews: DashboardView[] }`
-- `LoginRequest` — Future: signup/signin request payload
-- `PermissionCheckResult` — For authorization helper returns
+### Integration Points
+- **worker/index.ts**: JWT verification (line 85), `public.users` lookup (line 109), `user_roles` validation (line 133), `/api/me` response validation (line 176)
+- **AuthContext.tsx**: Replaces manual `typeof` checks in `fetchAppSession()` with `MeResponseSchema.safeParse()`
+- **Consistency**: Aligns auth validation with existing patterns in `src/api/routes/metrics.ts`, `trends.ts`, `evaluations.ts`
 
-### Current Workaround
-- Worker uses manual `typeof` checks + Set validation (worker/index.ts:131-133)
-- Frontend uses implicit casting via TypeScript (no runtime validation)
-- API routes use Zod (metrics.ts, trends.ts, evaluations.ts) — inconsistent with auth paths
-
-**Recommendation**: Add these schemas in Phase 3-4 to align with "Zod-first" approach already used in other API routes and improve maintainability.
+**Result**: Full Zod coverage for auth request/response validation, eliminating manual type assertions and typeof checks.
 
 [1]: https://github.com/integritystudio/quality-metrics-dashboard "GitHub - integritystudio/quality-metrics-dashboard · GitHub"
 [2]: https://raw.githubusercontent.com/integritystudio/quality-metrics-dashboard/refs/heads/main/src/App.tsx "raw.githubusercontent.com"
