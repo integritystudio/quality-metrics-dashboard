@@ -3,7 +3,20 @@ import type { ReactNode } from 'react';
 import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
 import type { SupabaseSession } from '../lib/supabase.js';
 import { API_BASE } from '../lib/constants.js';
-import type { AppSession, MeResponse } from '../types/auth.js';
+import type { AppSession, DashboardPermission, MeResponse } from '../types/auth.js';
+
+const VALID_PERMISSIONS = new Set<string>([
+  'dashboard.read',
+  'dashboard.executive',
+  'dashboard.operator',
+  'dashboard.auditor',
+  'dashboard.traces.read',
+  'dashboard.sessions.read',
+  'dashboard.agents.read',
+  'dashboard.pipeline.read',
+  'dashboard.compliance.read',
+  'dashboard.admin',
+] satisfies DashboardPermission[]);
 
 interface AuthContextValue {
   session: AppSession | null;
@@ -26,15 +39,18 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
     const me = data as Record<string, unknown>;
     if (typeof me['email'] !== 'string') return null;
     if (!Array.isArray(me['roles']) || !me['roles'].every((r): r is string => typeof r === 'string')) return null;
-    if (!Array.isArray(me['permissions']) || !me['permissions'].every((p): p is string => typeof p === 'string')) return null;
-    // MeResponse doesn't include internal IDs (authUserId/appUserId not exposed by /api/me)
-    // We satisfy AppSession type but these IDs are never used in frontend code
+    if (!Array.isArray(me['permissions']) || !me['permissions'].every((p): p is DashboardPermission =>
+      typeof p === 'string' && VALID_PERMISSIONS.has(p)
+    )) return null;
+    // MeResponse doesn't include internal IDs (authUserId/appUserId not exposed by /api/me);
+    // allowedViews from MeResponse is intentionally omitted — not part of AppSession.
+    // authUserId/appUserId are set to '' because /api/me never returns internal IDs.
     return {
       authUserId: '',
       appUserId: '',
       email: me['email'],
       roles: me['roles'],
-      permissions: me['permissions'] as import('../types/auth.js').DashboardPermission[],
+      permissions: me['permissions'],
     };
   } catch {
     return null;
