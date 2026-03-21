@@ -28,8 +28,9 @@ export function useApiQuery<TRaw, T = TRaw>(
     queryKey,
     queryFn: async () => {
       const session = getSession();
-      const headers: Record<string, string> = {};
-      if (session) headers['Authorization'] = `Bearer ${session.access_token}`;
+      const headers: Record<string, string> = session
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {};
       const res = await fetch(buildUrl(), { headers });
       if (!res.ok) {
         const body = await res.text().catch(() => '');

@@ -20,11 +20,6 @@ export interface AppSession {
 
 export type DashboardView = 'executive' | 'operator' | 'auditor';
 
-export interface MeResponse {
-  authUserId: string;
-  appUserId: string;
-  email: string;
-  roles: string[];
-  permissions: DashboardPermission[];
+export interface MeResponse extends AppSession {
   allowedViews: DashboardView[];
 }

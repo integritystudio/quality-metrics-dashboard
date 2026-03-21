@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { DashboardPermission, AppSession, MeResponse } from '../src/types/auth.js';
+import type { DashboardPermission, AppSession, MeResponse, DashboardView } from '../src/types/auth.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -20,7 +20,7 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use('/*', cors({
   origin: ['https://integritystudio.dev', 'https://www.aledlie.com', 'https://aledlie.com'],
-  allowMethods: ['GET', 'POST'],
+  allowMethods: ['GET'],
 }));
 
 // Cache policy: private, no-store for all /api/* (responses may contain user-specific data)
@@ -115,27 +115,22 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
   return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
 }
 
+const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
+  ['dashboard.executive', 'executive'],
+  ['dashboard.operator', 'operator'],
+  ['dashboard.auditor', 'auditor'],
+];
+
 app.get('/api/me', (c) => {
   const session = c.get('session');
-  const allowedViews: Array<'executive' | 'operator' | 'auditor'> = [];
+  const isAdmin = session.permissions.includes('dashboard.admin');
+  const allowedViews: DashboardView[] = isAdmin
+    ? ['executive', 'operator', 'auditor']
+    : VIEW_PERMISSION_MAP
+        .filter(([perm]) => session.permissions.includes(perm))
+        .map(([, view]) => view);
 
-  if (session.permissions.includes('dashboard.admin')) {
-    allowedViews.push('executive', 'operator', 'auditor');
-  } else {
-    if (session.permissions.includes('dashboard.executive')) allowedViews.push('executive');
-    if (session.permissions.includes('dashboard.operator')) allowedViews.push('operator');
-    if (session.permissions.includes('dashboard.auditor')) allowedViews.push('auditor');
-  }
-
-  const response: MeResponse = {
-    authUserId: session.authUserId,
-    appUserId: session.appUserId,
-    email: session.email,
-    roles: session.roles,
-    permissions: session.permissions,
-    allowedViews,
-  };
-  return c.json(response);
+  return c.json<MeResponse>({ ...session, allowedViews });
 });
 
 app.get('/api/dashboard', async (c) => {

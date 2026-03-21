@@ -254,116 +254,114 @@ export function App() {
 
   return (
     <Router base={BASE_PATH}>
-    <AuthProvider>
-    <KeyboardNavProvider>
-    <RoleProvider>
-    <CalibrationProvider>
-    <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
-    <Switch>
-      <Route path="/login">
-        <LoginPage />
-      </Route>
-      <Route>
-    <RequireAuth>
-    <Layout period={period} onPeriodChange={setPeriod}>
-      <RoleSelector />
-      <Switch>
-        <Route path="/">
-          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-            <DashboardPage period={period} />
-          </ErrorBoundary>
-        </Route>
-        <Route path="/role/:roleName">
-          {(params) => {
-            const role = VALID_ROLES.find(r => r === params.roleName);
-            if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
-            return (
-              <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                <RolePage role={role} period={period} />
-              </ErrorBoundary>
-            );
-          }}
-        </Route>
-        <Route path="/metrics/:metricName">
-          {(params) => (
-            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-              <MetricDetailPage name={params.metricName} period={period} />
-            </ErrorBoundary>
-          )}
-        </Route>
-        <Route path="/evaluations/trace/:traceId">
-          {(params) => (
-            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-              <EvaluationDetailPage traceId={params.traceId} />
-            </ErrorBoundary>
-          )}
-        </Route>
-        <Route path="/correlations">
-          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-            <CorrelationsPage period={period} />
-          </ErrorBoundary>
-        </Route>
-        {/* Coverage route hidden until data compression (see BACKLOG.md) */}
-        <Route path="/pipeline">
-          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-            <PipelinePage period={period} />
-          </ErrorBoundary>
-        </Route>
-        <Route path="/compliance">
-          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-            <CompliancePage period={period} />
-          </ErrorBoundary>
-        </Route>
-        <Route path="/agents">
-          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-            <AgentsPage period={period} />
-          </ErrorBoundary>
-        </Route>
-        <Route path="/traces/:traceId">
-          {(params) => (
-            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-              <TraceDetailPage traceId={params.traceId} />
-            </ErrorBoundary>
-          )}
-        </Route>
-        <Route path="/agents/:sessionId">
-          {(params) => (
-            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-              <AgentSessionPage sessionId={params.sessionId} />
-            </ErrorBoundary>
-          )}
-        </Route>
-        <Route path="/sessions/:sessionId">
-          {(params) => (
-            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-              <SessionDetailPage sessionId={params.sessionId} />
-            </ErrorBoundary>
-          )}
-        </Route>
-        <Route path="/workflows/:sessionId">
-          {(params) => (
-            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-              <Suspense fallback={<div className="card skeleton" style={{ height: 600 }} />}>
-                <WorkflowPage sessionId={params.sessionId} />
-              </Suspense>
-            </ErrorBoundary>
-          )}
-        </Route>
-        <Route>
-          <div className="empty-state">
-            <h2>Page Not Found</h2>
-            <p><Link href="/">Go to dashboard</Link></p>
-          </div>
-        </Route>
-      </Switch>
-    </Layout>
-    </RequireAuth>
-    </Route>
-    </Switch>
-    </CalibrationProvider>
-    </RoleProvider>
-    </KeyboardNavProvider>
-    </AuthProvider>
+      <AuthProvider>
+        <KeyboardNavProvider>
+          <RoleProvider>
+            <CalibrationProvider>
+              <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
+              <Switch>
+                <Route path="/login">
+                  <LoginPage />
+                </Route>
+                <RequireAuth>
+                  <Layout period={period} onPeriodChange={setPeriod}>
+                    <RoleSelector />
+                    <Switch>
+                      <Route path="/">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <DashboardPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/role/:roleName">
+                        {(params) => {
+                          const role = VALID_ROLES.find(r => r === params.roleName);
+                          if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
+                          return (
+                            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                              <RolePage role={role} period={period} />
+                            </ErrorBoundary>
+                          );
+                        }}
+                      </Route>
+                      <Route path="/metrics/:metricName">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <MetricDetailPage name={params.metricName} period={period} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/evaluations/trace/:traceId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <EvaluationDetailPage traceId={params.traceId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/correlations">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <CorrelationsPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      {/* Coverage route hidden until data compression (see BACKLOG.md) */}
+                      <Route path="/pipeline">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <PipelinePage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/compliance">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <CompliancePage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/agents">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <AgentsPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/traces/:traceId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <TraceDetailPage traceId={params.traceId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/agents/:sessionId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <AgentSessionPage sessionId={params.sessionId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/sessions/:sessionId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <SessionDetailPage sessionId={params.sessionId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/workflows/:sessionId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <Suspense fallback={<div className="card skeleton" style={{ height: 600 }} />}>
+                              <WorkflowPage sessionId={params.sessionId} />
+                            </Suspense>
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route>
+                        <div className="empty-state">
+                          <h2>Page Not Found</h2>
+                          <p><Link href="/">Go to dashboard</Link></p>
+                        </div>
+                      </Route>
+                    </Switch>
+                  </Layout>
+                </RequireAuth>
+              </Switch>
+            </CalibrationProvider>
+          </RoleProvider>
+        </KeyboardNavProvider>
+      </AuthProvider>
     </Router>
   );
 }
