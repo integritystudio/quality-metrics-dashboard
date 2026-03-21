@@ -9,7 +9,7 @@ interface RequireAuthProps {
 export function RequireAuth({ children }: RequireAuthProps) {
   const { session, isLoading } = useAuth();
 
-  if (isLoading) return null;
+  if (isLoading) return <div className="auth-loading" role="status" aria-label="Loading" />;
   if (!session) return <Redirect to="/login" />;
   return <>{children}</>;
 }
