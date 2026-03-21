@@ -11,12 +11,15 @@ type UserActivityEvent = typeof USER_ACTIVITY_EVENTS[number];
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
+// 3s timeout prevents hung fetch from blocking worker execution on slow/unreliable networks.
 function logActivity(
   appUserId: string,
   activityType: UserActivityEvent,
   env: { SUPABASE_URL: string; SUPABASE_ANON_KEY: string },
   jwt: string,
 ): void {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
   void fetch(`${env.SUPABASE_URL}/rest/v1/user_activity`, {
     method: 'POST',
     headers: {
@@ -26,7 +29,8 @@ function logActivity(
       'Prefer': 'return=minimal',
     },
     body: JSON.stringify({ user_id: appUserId, activity_type: activityType }),
-  }).catch(() => undefined);
+    signal: controller.signal,
+  }).catch(() => undefined).finally(() => clearTimeout(timeout));
 }
 
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
@@ -210,7 +214,9 @@ app.get('/api/me', (c) => {
 });
 
 app.get('/api/dashboard', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  if (!hasPermission(session, 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -219,14 +225,14 @@ app.get('/api/dashboard', async (c) => {
   if (role && !['executive', 'operator', 'auditor'].includes(role)) {
     return c.json({ error: 'Invalid role. Must be executive, operator, or auditor.' }, 400);
   }
-  if (role && !c.get('session').allowedViews.includes(role as DashboardView)) {
+  if (role && !session.allowedViews.includes(role as DashboardView)) {
     return c.json({ error: 'Forbidden' }, 403);
   }
 
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await c.env.DASHBOARD.get(key, 'json');
   if (!data) return c.json({ error: 'No data available' }, 404);
-  logActivity(c.get('session').appUserId, 'dashboard_view', c.env, c.get('jwt'));
+  logActivity(session.appUserId, 'dashboard_view', c.env, jwt);
   return c.json(data);
 });
 
@@ -292,22 +298,26 @@ app.get('/api/trends/:name', async (c) => {
 });
 
 app.get('/api/evaluations/trace/:traceId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
-  logActivity(c.get('session').appUserId, 'trace_view', c.env, c.get('jwt'));
+  logActivity(session.appUserId, 'trace_view', c.env, jwt);
   return c.json(data);
 });
 
 app.get('/api/traces/:traceId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, 404);
-  logActivity(c.get('session').appUserId, 'trace_view', c.env, c.get('jwt'));
+  logActivity(session.appUserId, 'trace_view', c.env, jwt);
   return c.json(data);
 });
 
@@ -361,12 +371,14 @@ app.get('/api/pipeline', async (c) => {
 });
 
 app.get('/api/sessions/:sessionId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.sessions.read')) return c.json({ error: 'Forbidden' }, 403);
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  if (!hasPermission(session, 'dashboard.sessions.read')) return c.json({ error: 'Forbidden' }, 403);
   const sessionId = c.req.param('sessionId');
   if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, 400);
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, 404);
-  logActivity(c.get('session').appUserId, 'session_view', c.env, c.get('jwt'));
+  logActivity(session.appUserId, 'session_view', c.env, jwt);
   return c.json(data);
 });
 
@@ -404,14 +416,16 @@ app.get('/api/agents/:sessionId', async (c) => {
 });
 
 app.get('/api/compliance/sla', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
-  logActivity(c.get('session').appUserId, 'compliance_view', c.env, c.get('jwt'));
+  logActivity(session.appUserId, 'compliance_view', c.env, jwt);
   return c.json({
     period,
     results: (dashboard['slaCompliance'] as unknown[]) ?? [],
@@ -420,12 +434,14 @@ app.get('/api/compliance/sla', async (c) => {
 });
 
 app.get('/api/compliance/verifications', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
-  logActivity(c.get('session').appUserId, 'compliance_view', c.env, c.get('jwt'));
+  logActivity(session.appUserId, 'compliance_view', c.env, jwt);
   return c.json({ period, count: 0, verifications: [] });
 });
 
