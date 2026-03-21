@@ -2,6 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME } from '../lib/constants.js';
 import { getSession } from '../lib/supabase.js';
 
+// Never retry auth errors — no token means the request will always fail.
+// Callers can override with their own retry function via options.retry.
+function defaultRetry(failureCount: number, error: unknown): boolean {
+  if (error instanceof Error && (
+    error.message === 'AUTH_REQUIRED' ||
+    error.message.startsWith('API error: 401')
+  )) return false;
+  return failureCount < 2;
+}
+
 /**
  * Thin wrapper around `useQuery` with shared defaults.
  *
@@ -10,6 +20,9 @@ import { getSession } from '../lib/supabase.js';
  * a nullable value — e.g. `buildUrl: () => \`/api/traces/${traceId!}\`` — must
  * also pass `enabled: !!traceId` to prevent `buildUrl` from executing before
  * the value is available.
+ *
+ * **Auth**: throws `AUTH_REQUIRED` immediately (no HTTP request) when no session
+ * is available, preventing wasteful retries against 401-protected routes.
  */
 export function useApiQuery<TRaw, T = TRaw>(
   queryKey: readonly unknown[],
@@ -23,15 +36,13 @@ export function useApiQuery<TRaw, T = TRaw>(
     select?: (raw: TRaw) => T;
   } = {},
 ) {
-  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry = 2, refetchInterval, retryDelay, select } = options;
+  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select } = options;
   return useQuery<TRaw, Error, T>({
     queryKey,
     queryFn: async () => {
       const session = getSession();
-      const headers: Record<string, string> = session
-        ? { Authorization: `Bearer ${session.access_token}` }
-        : {};
-      const res = await fetch(buildUrl(), { headers });
+      if (!session) throw new Error('AUTH_REQUIRED');
+      const res = await fetch(buildUrl(), { headers: { Authorization: `Bearer ${session.access_token}` } });
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
@@ -41,7 +52,7 @@ export function useApiQuery<TRaw, T = TRaw>(
     select,
     enabled,
     staleTime,
-    retry,
+    retry: retry !== undefined ? retry : defaultRetry,
     ...(refetchInterval !== undefined && { refetchInterval }),
     ...(retryDelay !== undefined && { retryDelay }),
   });
