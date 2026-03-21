@@ -69,3 +69,48 @@ export const AuthTokenResponseSchema = z.object({
 });
 
 export type AuthTokenResponse = z.infer<typeof AuthTokenResponseSchema>;
+
+/**
+ * Frontend login/signin request payload
+ * Sent to Supabase /auth/v1/token endpoint
+ */
+export const LoginRequestSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1, 'Password is required'),
+});
+
+export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+
+/**
+ * Refresh token request payload
+ * Sent to Supabase /auth/v1/token endpoint with grant_type=refresh_token
+ */
+export const RefreshTokenRequestSchema = z.object({
+  refresh_token: z.string().min(1, 'Refresh token is required'),
+});
+
+export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
+
+/**
+ * API /api/me response
+ * Dashboard API authentication and permission resolution result
+ */
+export const MeResponseSchema = z.object({
+  email: z.string().email(),
+  roles: z.array(z.string()),
+  permissions: z.array(z.enum([
+    'dashboard.read',
+    'dashboard.executive',
+    'dashboard.operator',
+    'dashboard.auditor',
+    'dashboard.traces.read',
+    'dashboard.sessions.read',
+    'dashboard.agents.read',
+    'dashboard.pipeline.read',
+    'dashboard.compliance.read',
+    'dashboard.admin',
+  ])),
+  allowedViews: z.array(z.enum(['executive', 'operator', 'auditor'])),
+});
+
+export type MeResponse = z.infer<typeof MeResponseSchema>;

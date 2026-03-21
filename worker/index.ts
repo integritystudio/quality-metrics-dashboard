@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { DashboardPermission, AppSession, MeResponse, DashboardView } from '../src/types/auth.js';
-import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema } from '../src/lib/validation/auth-schemas.js';
+import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema } from '../src/lib/validation/auth-schemas.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -172,13 +172,16 @@ app.get('/api/me', (c) => {
         .map(([, view]) => view);
 
   // Explicitly construct response to avoid exposing internal IDs (authUserId, appUserId)
-  const me: MeResponse = {
+  const me = {
     email: session.email,
     roles: session.roles,
     permissions: session.permissions,
     allowedViews,
   };
-  return c.json(me);
+
+  const meResult = MeResponseSchema.safeParse(me);
+  if (!meResult.success) return c.json({ error: 'Internal server error' }, 500);
+  return c.json(meResult.data);
 });
 
 app.get('/api/dashboard', async (c) => {
