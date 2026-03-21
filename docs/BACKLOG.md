@@ -25,20 +25,3 @@ Open items from code reviews and deferred work.
 | G5-M2 | `inferFromSpans` strict `<=` for edge inference misses near-concurrent spans — consider epsilon tolerance | P4 | WG-M2 |
 | G5-M4 | `WorkflowEdge.handoffScore` typed as `number` but inferred edges use `0` — consider `number | null` to distinguish from real zero scores | P4 | WG-M4 |
 
-### AUTH: Phase 1 Implementation — Code Review Findings
-
-| # | Item | Priority | Source | Status |
-|---|------|----------|--------|--------|
-| AUTH-1 | Fix unsafe `AppSession` cast in `fetchAppSession` — only validates 3 fields, casts without checking `roles`/`permissions` arrays | P1 | code-review: e7afb28, 9c1d14b | Done — 894b73b |
-| AUTH-2 | Fix `RequireAuth` loading state — returns `null` causing blank screen flash; should return loading skeleton | P1 | code-review: 9c1d14b | Done — 0963fc5 |
-| AUTH-3 | Gate protected queries on token availability — missing token fires tokenless request, wastes 3 retry attempts | P1 | code-review: bb6b0b7 | Done — 46f2f16 |
-| AUTH-4 | Add automatic token refresh on 401 — no refresh-and-retry path when token expires between read and request | P1 | code-review: bb6b0b7 | Done — a3b8acf |
-| AUTH-6 | Silent `appUserId` fallback on `public.users` lookup failure — should return 401 instead of zero-permission session | P2 | code-review: e7afb28 | Done — 6ae89a6 |
-| AUTH-7 | `LoginPage` doesn't restore originally requested route — users always land on `/` after sign-in | P2 | code-review: 9c1d14b | Done — a7599cc |
-| AUTH-8 | Validate `AuthTokenResponse` shape before casting — `await res.json() as AuthTokenResponse` is unchecked, could produce corrupted session | P2 | code-review: 9c1d14b | Done — ef6e26d |
-| AUTH-9 | `getSession()` reads + JSON-parses `localStorage` on every query — use auth state directly instead | P2 | code-review: bb6b0b7 | Done — f827358 |
-| AUTH-12 | Add token length check before header interpolation — empty string would produce `Authorization: Bearer ` with blank token | P3 | code-review: bb6b0b7 | Done — beae4b7 |
-| AUTH-13 | Add `localhost` to CORS policy for local dev — local `npm run dev` hits CORS failures against worker | P3 | code-review: bb6b0b7 | Done — beae4b7 |
-| AUTH-15 | Input validation on `name` path params in metrics/trends routes — `/api/metrics/:name`, `/api/trends/:name` accept unsanitized values as KV keys; inconsistent with `/api/agents/detail/:agentId` which validates | P2 | code-review: 11f4c53 | Done — 398d6eb |
-| AUTH-16 | Add explanatory comment on CORS `allowMethods: ['GET']` — affects entire app via `/*` middleware; future maintainers may wonder why POST was removed | P3 | code-review: 11f4c53 | Done — beae4b7 |
-| AUTH-17 | Parallelize and timeout Supabase fetches in auth middleware — three sequential unawaited fetches (JWT verify, public.users lookup, user_roles lookup) with no timeout blocks other routes under load | P3 | code-review: 11f4c53 | Done — beae4b7 |
