@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
-import type { SupabaseSession, AuthEvent } from '../lib/supabase.js';
+import type { SupabaseSession } from '../lib/supabase.js';
 import { API_BASE } from '../lib/constants.js';
 import type { AppSession, DashboardPermission } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : refreshSession().then((s) => loadSession(s, controller.signal));
     void init;
 
-    const unsubscribe = onAuthStateChange((supabaseSession: SupabaseSession | null, event: AuthEvent) => {
+    const unsubscribe = onAuthStateChange((supabaseSession, event) => {
       if (event === 'SIGNED_IN' && supabaseSession) {
         void postActivityEvent('login', supabaseSession.access_token);
       }

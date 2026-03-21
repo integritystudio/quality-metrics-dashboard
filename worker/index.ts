@@ -214,12 +214,10 @@ app.get('/api/me', (c) => {
 });
 
 app.post('/api/activity', async (c) => {
-  const session = c.get('session');
-  const jwt = c.get('jwt');
   const body: unknown = await c.req.json().catch(() => null);
   const result = ActivityRequestSchema.safeParse(body);
   if (!result.success) return c.json({ error: 'Invalid request body' }, 400);
-  logActivity(session.appUserId, result.data.activity_type, c.env, jwt);
+  logActivity(c.get('session').appUserId, result.data.activity_type, c.env, c.get('jwt'));
   return c.body(null, 204);
 });
 
