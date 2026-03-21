@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME } from '../lib/constants.js';
-import { getSession } from '../lib/supabase.js';
+import { getSession, refreshSession } from '../lib/supabase.js';
 
 // Never retry auth errors — no token means the request will always fail.
 // Callers can override with their own retry function via options.retry.
@@ -22,7 +22,8 @@ function defaultRetry(failureCount: number, error: unknown): boolean {
  * the value is available.
  *
  * **Auth**: throws `AUTH_REQUIRED` immediately (no HTTP request) when no session
- * is available, preventing wasteful retries against 401-protected routes.
+ * is available, preventing wasteful retries against 401-protected routes. On a
+ * 401 response, attempts a single token refresh and retries the request once.
  */
 export function useApiQuery<TRaw, T = TRaw>(
   queryKey: readonly unknown[],
@@ -40,9 +41,24 @@ export function useApiQuery<TRaw, T = TRaw>(
   return useQuery<TRaw, Error, T>({
     queryKey,
     queryFn: async () => {
-      const session = getSession();
-      if (!session) throw new Error('AUTH_REQUIRED');
-      const res = await fetch(buildUrl(), { headers: { Authorization: `Bearer ${session.access_token}` } });
+      let session = getSession();
+      if (!session) {
+        session = await refreshSession();
+        if (!session) throw new Error('AUTH_REQUIRED');
+      }
+      const url = buildUrl();
+      const doFetch = (token: string) =>
+        fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      let res = await doFetch(session.access_token);
+      if (res.status === 401) {
+        // Token may have expired mid-flight — attempt a single refresh and retry
+        const refreshed = await refreshSession();
+        if (!refreshed) {
+          const body = await res.text().catch(() => '');
+          throw new Error(body ? `API error: 401 – ${body}` : 'API error: 401');
+        }
+        res = await doFetch(refreshed.access_token);
+      }
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
