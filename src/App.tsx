@@ -4,6 +4,9 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
+import { AuthProvider } from './contexts/AuthContext.js';
+import { RequireAuth } from './components/RequireAuth.js';
+import { LoginPage } from './pages/LoginPage.js';
 import { HealthOverview } from './components/HealthOverview.js';
 import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
 import { AlertList } from './components/AlertList.js';
@@ -251,10 +254,17 @@ export function App() {
 
   return (
     <Router base={BASE_PATH}>
+    <AuthProvider>
     <KeyboardNavProvider>
     <RoleProvider>
     <CalibrationProvider>
     <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
+    <Switch>
+      <Route path="/login">
+        <LoginPage />
+      </Route>
+      <Route>
+    <RequireAuth>
     <Layout period={period} onPeriodChange={setPeriod}>
       <RoleSelector />
       <Switch>
@@ -347,9 +357,13 @@ export function App() {
         </Route>
       </Switch>
     </Layout>
+    </RequireAuth>
+    </Route>
+    </Switch>
     </CalibrationProvider>
     </RoleProvider>
     </KeyboardNavProvider>
+    </AuthProvider>
     </Router>
   );
 }
