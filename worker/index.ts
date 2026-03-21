@@ -54,9 +54,9 @@ app.use('/api/*', async (c, next) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  // Fetch public.users row
+  // Fetch public.users row — required; auth users with no app record are rejected with 401
   let email = '';
-  let appUserId = authUserId;
+  let appUserId = '';
   try {
     const userRes = await fetch(
       `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
@@ -67,15 +67,13 @@ app.use('/api/*', async (c, next) => {
         },
       },
     );
-    if (userRes.ok) {
-      const users = await userRes.json() as Array<{ id: string; email: string }>;
-      if (users[0]) {
-        appUserId = users[0].id;
-        email = users[0].email;
-      }
-    }
+    if (!userRes.ok) return c.json({ error: 'Unauthorized' }, 401);
+    const users = await userRes.json() as Array<{ id: string; email: string }>;
+    if (!users[0]) return c.json({ error: 'Unauthorized' }, 401);
+    appUserId = users[0].id;
+    email = users[0].email;
   } catch {
-    // Non-fatal — proceed with auth user info only
+    return c.json({ error: 'Unauthorized' }, 401);
   }
 
   const roles: string[] = [];
