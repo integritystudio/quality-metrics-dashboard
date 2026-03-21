@@ -731,7 +731,7 @@ All items resolved across 5 commits (27e7f2c through 398d6eb):
 
 ### Phase 4: Legacy Cleanup (Partial)
 - ✅ Add activity/session audit logging to `user_activity` table (**0a5cb35**, **c9ecaac**: fire-and-forget logActivity on dashboard_view, trace_view, session_view, compliance_view)
-- [ ] Add login/logout activity logging (requires frontend event hooks — cannot be fired from GET-only worker)
+- ✅ Add login/logout activity logging (**251b8d5**, **daef5a2**: POST /api/activity endpoint, AuthEvent type, SIGNED_IN/SIGNED_OUT hooks in AuthContext)
 - [ ] Align older users to `auth.users.id` if needed
 - [ ] Rename `auth0_id` to neutral name like `identity_subject`
 - [ ] Add admin tooling for role/permission assignment
