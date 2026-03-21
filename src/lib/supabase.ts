@@ -103,8 +103,11 @@ export function getSession(): SupabaseSession | null {
   // Use in-memory cache when available; fall back to localStorage (e.g. on first load)
   const session = cachedSession ?? readRawSession();
   if (!session) return null;
-  // Treat session as expired 60s early to avoid edge races
-  if (Date.now() / 1000 > session.expires_at - 60) return null;
+  // Treat session as expired 60s early to avoid edge races; evict stale cache entry
+  if (Date.now() / 1000 > session.expires_at - 60) {
+    cachedSession = null;
+    return null;
+  }
   if (!cachedSession) cachedSession = session; // warm cache from localStorage
   return session;
 }
