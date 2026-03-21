@@ -352,16 +352,24 @@ export type DashboardPermission =
   | 'dashboard.compliance.read'
   | 'dashboard.admin';
 
-export type AppSession = {
-  authUserId: string;
-  appUserId: string;
+export interface AppSession {
+  authUserId: string;  // Server-side only, never exposed via /api/me
+  appUserId: string;   // Server-side only, never exposed via /api/me
   email: string;
   fullName?: string;
   organization?: string;
   roles: string[];
   permissions: DashboardPermission[];
   allowedViews: RoleViewType[];
-};
+}
+
+export interface MeResponse {
+  // Only these fields are exposed via /api/me — internal IDs are never sent to client
+  email: string;
+  roles: string[];
+  permissions: DashboardPermission[];
+  allowedViews: RoleViewType[];
+}
 ```
 
 ---
@@ -442,7 +450,7 @@ Suggested mapping:
 
 ### E. Add `/api/me`
 
-Return normalized session info:
+Return normalized session info. **Important**: Never expose internal user IDs (`authUserId`, `appUserId`) to the client — keep these server-side only.
 
 ```json
 {
@@ -452,6 +460,8 @@ Return normalized session info:
   "allowedViews": ["auditor"]
 }
 ```
+
+See **Section 11** for the MeResponse type definition.
 
 ### F. Adjust cache policy
 
@@ -634,11 +644,19 @@ This is the architectural sharp edge.
 
 Current `public, max-age=300` is wrong for user-scoped or sensitive responses. ([GitHub][3])
 
-### 3. Role query param abuse
+**Status**: Changed to `private, no-store` for all `/api/*` routes.
+
+### 3. PII leakage via `/api/me` response
+
+Internal user IDs (`authUserId`, `appUserId`) from `auth.users` and `public.users` should never be exposed to the client. These are server-side implementation details.
+
+**Status**: v3.0.4 removed these fields from `/api/me` response. Frontend receives only `email`, `roles`, `permissions`, `allowedViews`.
+
+### 4. Role query param abuse
 
 Right now the worker accepts a `role` query param for dashboard views. That should become a requested mode validated against authenticated permissions, not a trust boundary. ([GitHub][3])
 
-### 4. Frontend role-first mental model
+### 5. Frontend role-first mental model
 
 The current app structure makes role a primary UI state. That needs to become auth-first, permission-driven state. ([GitHub][2])
 
