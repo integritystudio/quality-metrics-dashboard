@@ -28,3 +28,22 @@ Open items from code reviews and deferred work.
 | G5-M4 | `WorkflowEdge.handoffScore` typed as `number` but inferred edges use `0` — consider `number | null` to distinguish from real zero scores | P4 | WG-M4 |
 | ~~G5-L1~~ | ~~Test mock uses `require('react')` (CommonJS) — switch to `vi.importActual` for ES module consistency~~ Done | P5 | WG-L1 |
 | ~~G5-L2~~ | ~~WorkflowPage shows nothing when `data` present but `graph` absent — add empty state~~ Done | P5 | WG-L2 |
+
+### AUTH: Phase 1 Implementation — Code Review Findings
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| AUTH-1 | Fix unsafe `AppSession` cast in `fetchAppSession` — only validates 3 fields, casts without checking `roles`/`permissions` arrays | P1 | code-review: e7afb28, 9c1d14b |
+| AUTH-2 | Fix `RequireAuth` loading state — returns `null` causing blank screen flash; should return loading skeleton | P1 | code-review: 9c1d14b |
+| AUTH-3 | Gate protected queries on token availability — missing token fires tokenless request, wastes 3 retry attempts | P1 | code-review: bb6b0b7 |
+| AUTH-4 | Add automatic token refresh on 401 — no refresh-and-retry path when token expires between read and request | P1 | code-review: bb6b0b7 |
+| AUTH-5 | Design decision: `authUserId` (Supabase UUID) is now public in `/api/me` response — verify if intentional | P2 | code-review: e7afb28 |
+| AUTH-6 | Silent `appUserId` fallback on `public.users` lookup failure — should return 401 instead of zero-permission session | P2 | code-review: e7afb28 |
+| AUTH-7 | `LoginPage` doesn't restore originally requested route — users always land on `/` after sign-in | P2 | code-review: 9c1d14b |
+| AUTH-8 | Validate `AuthTokenResponse` shape before casting — `await res.json() as AuthTokenResponse` is unchecked, could produce corrupted session | P2 | code-review: 9c1d14b |
+| AUTH-9 | `getSession()` reads + JSON-parses `localStorage` on every query — use auth state directly instead | P2 | code-review: bb6b0b7 |
+| AUTH-10 | Consolidate `MeResponse` and `AppSession` — they share the same fields; use inheritance to avoid drift | P3 | code-review: e7afb28 |
+| AUTH-11 | Document or make explicit the pathless catch-all `<Route>` at line 266 — could accidentally break if routes reordered | P3 | code-review: 9c1d14b |
+| AUTH-12 | Add token length check before header interpolation — empty string would produce `Authorization: Bearer ` with blank token | P3 | code-review: bb6b0b7 |
+| AUTH-13 | Add `localhost` to CORS policy for local dev — local `npm run dev` hits CORS failures against worker | P3 | code-review: bb6b0b7 |
+| AUTH-14 | Verify if `POST` is still needed in CORS `allowMethods` — `/api/me` was the only POST route, now converted to GET | P4 | code-review: 11f4c53 |
