@@ -42,8 +42,8 @@ Open items from code reviews and deferred work.
 | AUTH-7 | `LoginPage` doesn't restore originally requested route — users always land on `/` after sign-in | P2 | code-review: 9c1d14b |
 | AUTH-8 | Validate `AuthTokenResponse` shape before casting — `await res.json() as AuthTokenResponse` is unchecked, could produce corrupted session | P2 | code-review: 9c1d14b |
 | AUTH-9 | `getSession()` reads + JSON-parses `localStorage` on every query — use auth state directly instead | P2 | code-review: bb6b0b7 |
-| AUTH-10 | Consolidate `MeResponse` and `AppSession` — they share the same fields; use inheritance to avoid drift | P3 | code-review: e7afb28 |
-| AUTH-11 | Document or make explicit the pathless catch-all `<Route>` at line 266 — could accidentally break if routes reordered | P3 | code-review: 9c1d14b |
+| ~~AUTH-10~~ | ~~Consolidate `MeResponse` and `AppSession` — they share the same fields; use inheritance to avoid drift~~ DONE | P3 | fedb21d |
+| ~~AUTH-11~~ | ~~Document or make explicit the pathless catch-all `<Route>` at line 266 — could accidentally break if routes reordered~~ DONE | P3 | fedb21d |
 | AUTH-12 | Add token length check before header interpolation — empty string would produce `Authorization: Bearer ` with blank token | P3 | code-review: bb6b0b7 |
 | AUTH-13 | Add `localhost` to CORS policy for local dev — local `npm run dev` hits CORS failures against worker | P3 | code-review: bb6b0b7 |
-| AUTH-14 | Verify if `POST` is still needed in CORS `allowMethods` — `/api/me` was the only POST route, now converted to GET | P4 | code-review: 11f4c53 |
+| ~~AUTH-14~~ | ~~Verify if `POST` is still needed in CORS `allowMethods` — `/api/me` was the only POST route, now converted to GET~~ DONE | P4 | fedb21d |
