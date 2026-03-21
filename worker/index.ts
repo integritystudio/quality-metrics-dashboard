@@ -130,7 +130,14 @@ app.get('/api/me', (c) => {
         .filter(([perm]) => session.permissions.includes(perm))
         .map(([, view]) => view);
 
-  return c.json<MeResponse>({ ...session, allowedViews });
+  // Explicitly construct response to avoid exposing internal IDs (authUserId, appUserId)
+  const me: MeResponse = {
+    email: session.email,
+    roles: session.roles,
+    permissions: session.permissions,
+    allowedViews,
+  };
+  return c.json(me);
 });
 
 app.get('/api/dashboard', async (c) => {

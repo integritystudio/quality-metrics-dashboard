@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
 import type { SupabaseSession } from '../lib/supabase.js';
 import { API_BASE } from '../lib/constants.js';
-import type { AppSession } from '../types/auth.js';
+import type { AppSession, MeResponse } from '../types/auth.js';
 
 interface AuthContextValue {
   session: AppSession | null;
@@ -25,13 +25,24 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
     if (
       typeof data !== 'object' ||
       data === null ||
-      !('authUserId' in data) ||
-      !('appUserId' in data) ||
-      !('email' in data)
+      !('email' in data) ||
+      !('roles' in data) ||
+      !('permissions' in data) ||
+      !Array.isArray((data as Record<string, unknown>).roles) ||
+      !Array.isArray((data as Record<string, unknown>).permissions)
     ) {
       return null;
     }
-    return data as AppSession;
+    // MeResponse doesn't include internal IDs (authUserId/appUserId not exposed by /api/me)
+    // We satisfy AppSession type but these IDs are never used in frontend code
+    const me = data as Record<string, unknown>;
+    return {
+      authUserId: '',
+      appUserId: '',
+      email: me.email as string,
+      roles: me.roles as string[],
+      permissions: me.permissions as string[],
+    };
   } catch {
     return null;
   }
