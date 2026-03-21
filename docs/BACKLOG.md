@@ -40,3 +40,11 @@ Open items from code reviews and deferred work.
 | G5-M2 | `inferFromSpans` strict `<=` for edge inference misses near-concurrent spans — consider epsilon tolerance | P4 | WG-M2 |
 | G5-M4 | `WorkflowEdge.handoffScore` typed as `number` but inferred edges use `0` — consider `number | null` to distinguish from real zero scores | P4 | WG-M4 |
 
+### Phase 4 Admin: Code Review Deferred Items
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| ADMIN-P4-1 | `AdminUserSchema` silently drops users with non-standard emails (phone auth, OAuth) via failed Zod parse — consider logging dropped users or using optional/refinement for email field | P3 | code-reviewer feedback on c9a38dc |
+| ADMIN-P4-2 | `AdminPage.tsx` `onChanged` refetch invalidates all users after each role mutation — no concurrent mutation guard, races possible if multiple UserRow components assign/revoke simultaneously | P3 | code-reviewer feedback on c9a38dc |
+| ADMIN-P4-3 | Admin routes return generic error messages on Supabase REST failures — currently safe (no body exposure), but document error handling policy for consistency with other endpoints | P4 | code-reviewer feedback on c9a38dc |
+
