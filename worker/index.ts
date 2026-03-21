@@ -17,7 +17,7 @@ function logActivity(
   env: { SUPABASE_URL: string; SUPABASE_ANON_KEY: string },
   jwt: string,
 ): void {
-  void Promise.resolve(fetch(`${env.SUPABASE_URL}/rest/v1/user_activity`, {
+  void fetch(`${env.SUPABASE_URL}/rest/v1/user_activity`, {
     method: 'POST',
     headers: {
       'apikey': env.SUPABASE_ANON_KEY,
@@ -26,7 +26,7 @@ function logActivity(
       'Prefer': 'return=minimal',
     },
     body: JSON.stringify({ user_id: appUserId, activity_type: activityType }),
-  })).catch(() => undefined);
+  }).catch(() => undefined);
 }
 
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
@@ -73,8 +73,8 @@ app.use('/*', cors({
     'http://localhost:5173',
     'http://localhost:3000',
   ],
-  // GET-only: this app is a read-only dashboard; all data mutations happen via separate services.
-  // Restricting methods here prevents CSRF on any future POST-capable route additions.
+  // GET-only governs inbound browser requests only — not outbound worker fetch calls (e.g. logActivity).
+  // Restricting inbound methods prevents CSRF on any future POST-capable route additions.
   allowMethods: ['GET'],
 }));
 

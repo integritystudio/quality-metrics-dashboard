@@ -122,7 +122,9 @@ describe('logActivity: trace_view', () => {
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
-    const body = JSON.parse((activityCall![1] as RequestInit).body as string) as Record<string, unknown>;
+    const init = activityCall![1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.activity_type).toBe('trace_view');
   });
 });
@@ -144,7 +146,9 @@ describe('logActivity: session_view', () => {
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
-    const body = JSON.parse((activityCall![1] as RequestInit).body as string) as Record<string, unknown>;
+    const init = activityCall![1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.activity_type).toBe('session_view');
   });
 });
@@ -166,7 +170,9 @@ describe('logActivity: compliance_view', () => {
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
-    const body = JSON.parse((activityCall![1] as RequestInit).body as string) as Record<string, unknown>;
+    const init = activityCall![1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.activity_type).toBe('compliance_view');
   });
 });
