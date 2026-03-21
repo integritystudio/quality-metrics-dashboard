@@ -6,6 +6,29 @@ import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponse
 
 export type { DashboardPermission, AppSession };
 
+const USER_ACTIVITY_EVENTS = ['login', 'logout', 'dashboard_view', 'trace_view', 'session_view', 'compliance_view'] as const;
+type UserActivityEvent = typeof USER_ACTIVITY_EVENTS[number];
+
+// Fire-and-forget: logs activity to user_activity table without blocking the response.
+// Failures are intentionally swallowed — audit logging must not fail user requests.
+function logActivity(
+  appUserId: string,
+  activityType: UserActivityEvent,
+  env: { SUPABASE_URL: string; SUPABASE_ANON_KEY: string },
+  jwt: string,
+): void {
+  void Promise.resolve(fetch(`${env.SUPABASE_URL}/rest/v1/user_activity`, {
+    method: 'POST',
+    headers: {
+      'apikey': env.SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${jwt}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({ user_id: appUserId, activity_type: activityType }),
+  })).catch(() => undefined);
+}
+
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
   ['dashboard.executive', 'executive'],
   ['dashboard.operator', 'operator'],
@@ -36,6 +59,7 @@ type Bindings = {
 
 type Variables = {
   session: AppSession;
+  jwt: string;
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -156,6 +180,7 @@ app.use('/api/*', async (c, next) => {
           .map(([, view]) => view);
 
     c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
+    c.set('jwt', jwt);
     return next();
   } finally {
     clearTimeout(timeout);
@@ -201,6 +226,7 @@ app.get('/api/dashboard', async (c) => {
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await c.env.DASHBOARD.get(key, 'json');
   if (!data) return c.json({ error: 'No data available' }, 404);
+  logActivity(c.get('session').appUserId, 'dashboard_view', c.env, c.get('jwt'));
   return c.json(data);
 });
 
@@ -271,6 +297,7 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
+  logActivity(c.get('session').appUserId, 'trace_view', c.env, c.get('jwt'));
   return c.json(data);
 });
 
@@ -280,6 +307,7 @@ app.get('/api/traces/:traceId', async (c) => {
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, 404);
+  logActivity(c.get('session').appUserId, 'trace_view', c.env, c.get('jwt'));
   return c.json(data);
 });
 
@@ -338,6 +366,7 @@ app.get('/api/sessions/:sessionId', async (c) => {
   if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, 400);
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, 404);
+  logActivity(c.get('session').appUserId, 'session_view', c.env, c.get('jwt'));
   return c.json(data);
 });
 
@@ -382,6 +411,7 @@ app.get('/api/compliance/sla', async (c) => {
   }
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
+  logActivity(c.get('session').appUserId, 'compliance_view', c.env, c.get('jwt'));
   return c.json({
     period,
     results: (dashboard['slaCompliance'] as unknown[]) ?? [],
@@ -395,6 +425,7 @@ app.get('/api/compliance/verifications', async (c) => {
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
+  logActivity(c.get('session').appUserId, 'compliance_view', c.env, c.get('jwt'));
   return c.json({ period, count: 0, verifications: [] });
 });
 

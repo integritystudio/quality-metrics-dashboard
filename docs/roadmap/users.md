@@ -1,6 +1,6 @@
-## Status: Phase 1 + Phase 2 Complete (v3.0.4–v3.0.10)
+## Status: Phase 1 + Phase 2 + Phase 3 Complete (v3.0.4–current)
 
-As of 2026-03-20, **Phase 1 + Phase 2 are implemented and hardened**:
+As of 2026-03-20, **Phase 1, Phase 2, and Phase 3 are implemented**:
 
 ### Phase 1 (v3.0.4)
 - ✅ Supabase Auth for sign-in with JWT verification
@@ -32,6 +32,11 @@ As of 2026-03-20, **Phase 1 + Phase 2 are implemented and hardened**:
 - ✅ AUTH-13: Add `localhost` to CORS policy for local dev
 - ✅ AUTH-16: Document CORS `allowMethods: ['GET']` rationale
 - ✅ AUTH-17: Parallelize and timeout Supabase fetches in auth middleware
+
+### Phase 3 (current) — Permission-Constrained Views
+- ✅ Gate RoleSelector UI based on `allowedViews` from authenticated session
+- ✅ Close role query param bypass with server-side `allowedViews` validation on `/api/dashboard`
+- ✅ Clean up MeResponse imports
 
 ---
 
@@ -709,7 +714,7 @@ The current app structure makes role a primary UI state. That needs to become au
 
 ---
 
-## Next: Phase 3 & Beyond
+## Next: Phase 4 & Beyond
 
 ### Phase 2: ✅ COMPLETE — Hardened Phase 1 Issues (AUTH-1 through AUTH-17)
 All items resolved across 5 commits (27e7f2c through 398d6eb):
@@ -717,11 +722,12 @@ All items resolved across 5 commits (27e7f2c through 398d6eb):
 - ✅ **P2**: AUTH-6, AUTH-7, AUTH-8, AUTH-9, AUTH-15 — lookup strictness, route restoration, type validation, state mgmt
 - ✅ **P3**: AUTH-12, AUTH-13, AUTH-16, AUTH-17 — token guard, CORS, docs, parallelization
 
-### Phase 3: Permission-Constrained Views & Audit (In Progress)
-- [ ] Replace public role selector with permission-driven view selector
-- [ ] Add activity/session audit logging to `user_activity` table
-- [ ] Protect sensitive detail endpoints (may already be done)
-- [ ] Document admin role assignment workflows
+### Phase 3: ✅ COMPLETE — Permission-Constrained Views & Audit
+- ✅ Replace public role selector with permission-driven view selector (**ce1cb6a**: gate RoleSelector tabs and /role routes on allowedViews)
+- ✅ Protect `/api/dashboard` with server-side `allowedViews` check (**34195c9**: close role gate bypass)
+- ✅ Clean up MeResponse imports (**3fddbb4**: remove dead MeResponse import)
+- ⏳ Add activity/session audit logging to `user_activity` table (deferred to Phase 4)
+- ⏳ Document admin role assignment workflows (deferred to Phase 4)
 
 ### Phase 4: Legacy Cleanup (Future)
 - [ ] Align older users to `auth.users.id` if needed
@@ -759,6 +765,18 @@ All items resolved across 5 commits (27e7f2c through 398d6eb):
   - Updated `AuthContext.tsx` to use `MeResponseSchema.safeParse()` instead of manual validation
   - Added response validation in worker `/api/me` endpoint
   - Eliminated remaining manual `typeof` checks and type assertions
+
+### Phase 3 (current) — Permission-Constrained Views & Audit
+- **ce1cb6a** feat(auth): gate RoleSelector tabs and /role routes on allowedViews (Phase 3)
+  - Replace public role selector with permission-driven view selector
+  - Gate RoleSelector component based on `allowedViews` from authenticated session
+- **34195c9** fix(auth): close role gate bypass and add server-side allowedViews check on /api/dashboard
+  - Add server-side permission validation on `/api/dashboard` endpoint
+  - Prevent role query param bypass by validating against user's allowed views
+- **abd2e87** chore(backlog): add Phase 3 auth deferred items from code review (ce1cb6a)
+  - Deferred activity logging and admin workflows to Phase 4
+- **3fddbb4** chore(auth): remove dead MeResponse import from worker
+  - Clean up unused imports
 
 See `git log --oneline` for full implementation sequence and code-review findings.
 
