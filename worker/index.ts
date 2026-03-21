@@ -115,7 +115,7 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
   return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
 }
 
-app.post('/api/me', (c) => {
+app.get('/api/me', (c) => {
   const session = c.get('session');
   const allowedViews: Array<'executive' | 'operator' | 'auditor'> = [];
 
