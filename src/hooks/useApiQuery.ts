@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME } from '../lib/constants.js';
+import { getSession } from '../lib/supabase.js';
 
 /**
  * Thin wrapper around `useQuery` with shared defaults.
@@ -26,7 +27,10 @@ export function useApiQuery<TRaw, T = TRaw>(
   return useQuery<TRaw, Error, T>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(buildUrl());
+      const session = getSession();
+      const headers: Record<string, string> = {};
+      if (session) headers['Authorization'] = `Bearer ${session.access_token}`;
+      const res = await fetch(buildUrl(), { headers });
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
