@@ -16,6 +16,7 @@ export interface AppSession {
   email: string;
   roles: string[];
   permissions: DashboardPermission[];
+  allowedViews: DashboardView[];
 }
 
 export type DashboardView = 'executive' | 'operator' | 'auditor';

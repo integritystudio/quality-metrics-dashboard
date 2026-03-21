@@ -35,6 +35,7 @@ import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './context/CalibrationContext.js';
+import { useAuth } from './contexts/AuthContext.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -89,6 +90,16 @@ function DashboardPage({ period }: { period: Period }) {
 }
 
 function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
+  const { session } = useAuth();
+  if (session && !session.allowedViews.includes(role)) {
+    return (
+      <div className="empty-state">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to view the {role} dashboard.</p>
+        <p><Link href="/">Go to dashboard</Link></p>
+      </div>
+    );
+  }
   const { data, isLoading, error } = useDashboard(period, role);
 
   if (isLoading && !data) return <MetricGridSkeleton />;

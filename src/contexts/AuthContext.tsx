@@ -26,8 +26,6 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
     const meResult = MeResponseSchema.safeParse(data);
     if (!meResult.success) return null;
     const me = meResult.data;
-    // MeResponse doesn't include internal IDs (authUserId/appUserId not exposed by /api/me);
-    // allowedViews from MeResponse is intentionally omitted — not part of AppSession.
     // authUserId/appUserId are set to '' because /api/me never returns internal IDs.
     return {
       authUserId: '',
@@ -35,6 +33,7 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
       email: me.email,
       roles: me.roles,
       permissions: me.permissions,
+      allowedViews: me.allowedViews,
     };
   } catch {
     return null;

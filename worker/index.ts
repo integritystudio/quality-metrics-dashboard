@@ -6,6 +6,12 @@ import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponse
 
 export type { DashboardPermission, AppSession };
 
+const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
+  ['dashboard.executive', 'executive'],
+  ['dashboard.operator', 'operator'],
+  ['dashboard.auditor', 'auditor'],
+];
+
 // Mirror of client-side VALID_PERMISSIONS — filters DB permission strings before
 // trusting them as DashboardPermission values in the session.
 const VALID_PERMISSIONS = new Set<string>([
@@ -142,8 +148,14 @@ app.use('/api/*', async (c, next) => {
       // Non-fatal — user will have no permissions, routes will deny
     }
     const permissions = [...permissionSet];
+    const isAdmin = permissionSet.has('dashboard.admin');
+    const allowedViews: DashboardView[] = isAdmin
+      ? ['executive', 'operator', 'auditor']
+      : VIEW_PERMISSION_MAP
+          .filter(([perm]) => permissionSet.has(perm))
+          .map(([, view]) => view);
 
-    c.set('session', { authUserId, appUserId, email, roles, permissions });
+    c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
     return next();
   } finally {
     clearTimeout(timeout);
@@ -156,27 +168,15 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
   return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
 }
 
-const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
-  ['dashboard.executive', 'executive'],
-  ['dashboard.operator', 'operator'],
-  ['dashboard.auditor', 'auditor'],
-];
-
 app.get('/api/me', (c) => {
   const session = c.get('session');
-  const isAdmin = session.permissions.includes('dashboard.admin');
-  const allowedViews: DashboardView[] = isAdmin
-    ? ['executive', 'operator', 'auditor']
-    : VIEW_PERMISSION_MAP
-        .filter(([perm]) => session.permissions.includes(perm))
-        .map(([, view]) => view);
 
   // Explicitly construct response to avoid exposing internal IDs (authUserId, appUserId)
   const me = {
     email: session.email,
     roles: session.roles,
     permissions: session.permissions,
-    allowedViews,
+    allowedViews: session.allowedViews,
   };
 
   const meResult = MeResponseSchema.safeParse(me);
