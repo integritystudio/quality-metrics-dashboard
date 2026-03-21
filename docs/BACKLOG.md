@@ -4,6 +4,15 @@ Open items from code reviews and deferred work.
 
 ## Open Items
 
+### Phase 3 Auth: Code Review Deferred Items
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| AUTH-P3-1 | `RoleViewType` and `DashboardView` are structurally identical unions declared independently — unify by making one an alias of the other | P3 | ce1cb6a review |
+| AUTH-P3-2 | `VALID_ROLES` in App.tsx hardcodes `['executive', 'operator', 'auditor']` — derive from Zod schema or VIEW_PERMISSION_MAP to avoid silent divergence | P3 | ce1cb6a review |
+| AUTH-P3-3 | `authUserId`/`appUserId` set to `''` in fetchAppSession — consider optional or null to make emptiness explicit in the type | P4 | ce1cb6a review |
+| AUTH-P3-4 | Dual `MeResponse` types: hand-written interface in `src/types/auth.ts` and Zod-inferred in `auth-schemas.ts` — remove hand-written and re-export from schemas | P3 | ce1cb6a review |
+
 ### G5: Multi-Agent Workflow Visualization — Remaining Work
 
 | # | Item | Priority | Source |
