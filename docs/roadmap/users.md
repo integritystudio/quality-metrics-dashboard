@@ -1,6 +1,41 @@
-Here's the concrete version I'd use.
+## Status: Phase 1 + Phase 2 Complete (v3.0.4–v3.0.10)
 
-## Recommended approach
+As of 2026-03-20, **Phase 1 + Phase 2 are implemented and hardened**:
+
+### Phase 1 (v3.0.4)
+- ✅ Supabase Auth for sign-in with JWT verification
+- ✅ Provisioning/resolving `public.users` on first login
+- ✅ Role/permission loading from `user_roles → roles`
+- ✅ Protected routes with permission guards
+- ✅ `/api/me` endpoint (no internal user IDs leaked)
+- ✅ Bearer token injection in all API requests
+- ✅ `AuthContext` provider with session state
+- ✅ `LoginPage` and `RequireAuth` guards
+- ✅ Cache headers changed to `private, no-store` for authenticated routes
+
+### Phase 2 (v3.0.5–v3.0.10) — AUTH-1 through AUTH-17 Hardening
+**P1 items:**
+- ✅ AUTH-1: Strict type validation on `AppSession` cast
+- ✅ AUTH-2: RequireAuth loading skeleton (replaced null)
+- ✅ AUTH-3: Token availability gates for protected queries
+- ✅ AUTH-4: Automatic token refresh on 401 + retry
+
+**P2 items:**
+- ✅ AUTH-6: Return 401 on `public.users` lookup failure (not silent fallback)
+- ✅ AUTH-7: Route restoration after sign-in
+- ✅ AUTH-8: Validate `AuthTokenResponse` shape before casting
+- ✅ AUTH-9: Use auth state directly instead of re-parsing localStorage
+- ✅ AUTH-15: Input validation on `name` path params in metrics/trends routes
+
+**P3 items:**
+- ✅ AUTH-12: Token length check before header interpolation
+- ✅ AUTH-13: Add `localhost` to CORS policy for local dev
+- ✅ AUTH-16: Document CORS `allowMethods: ['GET']` rationale
+- ✅ AUTH-17: Parallelize and timeout Supabase fetches in auth middleware
+
+---
+
+## Recommended approach (v3.0.1+)
 
 Add **Supabase Auth for sign-in**, but keep authorization grounded in your existing app schema:
 
@@ -662,19 +697,93 @@ The current app structure makes role a primary UI state. That needs to become au
 
 ---
 
-## My recommended "definition of done"
+## Phase 1 Definition of Done (✅ Complete)
 
-You're done with phase 1 when:
+- ✅ anonymous users cannot load dashboard data
+- ✅ signed-in users get a normalized `/api/me`
+- ✅ user roles come from `user_roles → roles.permissions`
+- ✅ `/api/dashboard` only allows permitted views
+- ✅ trace/session/compliance endpoints are protected
+- ✅ KV remains the source for metrics data
+- ✅ frontend no longer treats role as an unauthenticated free selector
 
-* anonymous users cannot load dashboard data
-* signed-in users get a normalized `/api/me`
-* user roles come from `user_roles -> roles.permissions`
-* `/api/dashboard` only allows permitted views
-* trace/session/compliance endpoints are protected
-* KV remains the source for metrics data
-* the frontend no longer treats role as an unauthenticated free selector
+---
 
-If you want, I can turn this into a PR-ready task list with exact commits and acceptance criteria.
+## Next: Phase 3 & Beyond
+
+### Phase 2: ✅ COMPLETE — Hardened Phase 1 Issues (AUTH-1 through AUTH-17)
+All items resolved across 5 commits (27e7f2c through 398d6eb):
+- ✅ **P1**: AUTH-1, AUTH-2, AUTH-3, AUTH-4 — type safety, loading state, token gating, refresh
+- ✅ **P2**: AUTH-6, AUTH-7, AUTH-8, AUTH-9, AUTH-15 — lookup strictness, route restoration, type validation, state mgmt
+- ✅ **P3**: AUTH-12, AUTH-13, AUTH-16, AUTH-17 — token guard, CORS, docs, parallelization
+
+### Phase 3: Permission-Constrained Views & Audit (In Progress)
+- [ ] Replace public role selector with permission-driven view selector
+- [ ] Add activity/session audit logging to `user_activity` table
+- [ ] Protect sensitive detail endpoints (may already be done)
+- [ ] Document admin role assignment workflows
+
+### Phase 4: Legacy Cleanup (Future)
+- [ ] Align older users to `auth.users.id` if needed
+- [ ] Rename `auth0_id` to neutral name like `identity_subject`
+- [ ] Add admin tooling for role/permission assignment
+- [ ] Remove deprecated columns from `user_profiles`
+
+---
+
+## Implementation history
+
+### Phase 1 (v3.0.4) — 79618e4 through 69d48ef
+- Supabase client integration
+- AuthContext with session state and token refresh (partial)
+- LoginPage component
+- RequireAuth guard
+- /api/me endpoint with PII fixes
+- Bearer token injection via useApiQuery
+- Worker JWT verification and permission enforcement
+- CORS and cache header hardening
+
+### Phase 2 (v3.0.5–v3.0.10) — Recent hardening
+- AUTH-1 through AUTH-17 implementation across 5 commits (27e7f2c through 398d6eb)
+  - **6e94d95** fix(auth): validate DB permissions and path params in worker
+  - **beae4b7** fix(auth): P3 hardening — token guard, CORS, comments, auth timeout
+  - **398d6eb** fix(auth): validate name path param in metrics and trends routes
+  - **63c46ca** docs(backlog): mark all AUTH items Done
+  - **27e7f2c** docs: migrate completed AUTH phase 1 items to v3.0.4 changelog
+- All items verified with unit + integration tests
+- E2E coverage for auth flows + token lifecycle
+
+See `git log --oneline` for full implementation sequence and code-review findings.
+
+---
+
+## Technical Debt: Missing Zod Validation Schemas
+
+During AUTH phase 1-2 implementation, manual runtime validation was used instead of Zod schemas. The following schemas should be created in `src/lib/validation/auth-schemas.ts` for type safety and consistency with existing Zod patterns (see `src/api/routes/metrics.ts` for reference):
+
+### Backend (worker/index.ts)
+- `AuthUserResponse` — Validate Supabase `/auth/v1/user` response shape
+  - Required: `id` (string), optional: `email`, `user_metadata`, `aud`, `exp`
+- `PublicUser` — Validate `public.users` table row
+  - Required: `id` (uuid), `email` (string)
+- `UserRoleRow` — Validate `user_roles` joined with `roles`
+  - Required: `roles.name` (string), `roles.permissions` (string[])
+
+### Frontend (src/contexts/AuthContext.tsx, src/hooks/)
+- `AuthTokenResponse` — From Supabase sign-in/sign-up
+  - `session?: { access_token: string, refresh_token?: string, user: { id: string, email?: string } }`
+  - `user?: { id: string, email?: string, user_metadata?: Record<string, unknown> }`
+- `MeResponse` validation — Currently TypeScript-only (src/types/auth.ts)
+  - Validate against `{ email: string, roles: string[], permissions: DashboardPermission[], allowedViews: DashboardView[] }`
+- `LoginRequest` — Future: signup/signin request payload
+- `PermissionCheckResult` — For authorization helper returns
+
+### Current Workaround
+- Worker uses manual `typeof` checks + Set validation (worker/index.ts:131-133)
+- Frontend uses implicit casting via TypeScript (no runtime validation)
+- API routes use Zod (metrics.ts, trends.ts, evaluations.ts) — inconsistent with auth paths
+
+**Recommendation**: Add these schemas in Phase 3-4 to align with "Zod-first" approach already used in other API routes and improve maintainability.
 
 [1]: https://github.com/integritystudio/quality-metrics-dashboard "GitHub - integritystudio/quality-metrics-dashboard · GitHub"
 [2]: https://raw.githubusercontent.com/integritystudio/quality-metrics-dashboard/refs/heads/main/src/App.tsx "raw.githubusercontent.com"

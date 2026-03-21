@@ -4,6 +4,7 @@
 
 | Version | Date | Summary |
 |---------|------|---------|
+| [v3.0.4](changelog/3.0.4/CHANGELOG.md) | 2026-03-20 | Auth Hardening: Remove PII, consolidate types (AUTH-5, AUTH-10–11, AUTH-14, G5-WG4, G5-WG10, G5-L1–L2) |
 | [v3.0.3](changelog/3.0.3/CHANGELOG.md) | 2026-03-16 | Follow-up Backlog: Regex polish, error logging (L4–L6) |
 | [v3.0.2](changelog/3.0.2/CHANGELOG.md) | 2026-03-11 | Backlog Clearance: API UX, React strict-mode, security (L1–L3) |
 | [v3.0.1](../docs/changelog/3.0.1/CHANGELOG.md) | 2026-03-06 | Backfill pre-filter fix (H1) + toxic-border test stabilization (M1) |

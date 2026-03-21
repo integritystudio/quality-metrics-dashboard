@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { DashboardPermission, AppSession, MeResponse, DashboardView } from '../src/types/auth.js';
+import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema } from '../src/lib/validation/auth-schemas.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -79,9 +80,9 @@ app.use('/api/*', async (c, next) => {
         signal: controller.signal,
       });
       if (!verifyRes.ok) return c.json({ error: 'Unauthorized' }, 401);
-      const authUser = await verifyRes.json() as { id?: string };
-      if (!authUser?.id || typeof authUser.id !== 'string') return c.json({ error: 'Unauthorized' }, 401);
-      authUserId = authUser.id;
+      const authUserResult = AuthUserResponseSchema.safeParse(await verifyRes.json());
+      if (!authUserResult.success) return c.json({ error: 'Unauthorized' }, 401);
+      authUserId = authUserResult.data.id;
     } catch {
       return c.json({ error: 'Unauthorized' }, 401);
     }
@@ -101,10 +102,12 @@ app.use('/api/*', async (c, next) => {
         },
       );
       if (!userRes.ok) return c.json({ error: 'Unauthorized' }, 401);
-      const users = await userRes.json() as Array<{ id: string; email: string }>;
-      if (!users[0] || users[0].id !== authUserId || typeof users[0].email !== 'string') return c.json({ error: 'Unauthorized' }, 401);
-      appUserId = users[0].id;
-      email = users[0].email;
+      const users = await userRes.json() as Array<unknown>;
+      if (!Array.isArray(users) || !users[0]) return c.json({ error: 'Unauthorized' }, 401);
+      const userResult = PublicUserSchema.safeParse(users[0]);
+      if (!userResult.success) return c.json({ error: 'Unauthorized' }, 401);
+      appUserId = userResult.data.id;
+      email = userResult.data.email;
     } catch {
       return c.json({ error: 'Unauthorized' }, 401);
     }
@@ -123,12 +126,13 @@ app.use('/api/*', async (c, next) => {
         },
       );
       if (rolesRes.ok) {
-        const rows = await rolesRes.json() as Array<{ roles: { name: string; permissions: string[] } | null }>;
+        const rows = await rolesRes.json() as Array<unknown>;
         for (const row of rows) {
-          if (!row.roles) continue;
-          roles.push(row.roles.name);
-          for (const perm of row.roles.permissions) {
-            if (typeof perm === 'string' && VALID_PERMISSIONS.has(perm)) {
+          const rowResult = UserRoleRowSchema.safeParse(row);
+          if (!rowResult.success || !rowResult.data.roles) continue;
+          roles.push(rowResult.data.roles.name);
+          for (const perm of rowResult.data.roles.permissions) {
+            if (VALID_PERMISSIONS.has(perm)) {
               permissionSet.add(perm as DashboardPermission);
             }
           }
