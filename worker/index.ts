@@ -158,6 +158,7 @@ app.get('/api/dashboard', async (c) => {
 app.get('/api/metrics/:name/evaluations', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const name = c.req.param('name');
+  if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, 400);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
@@ -184,6 +185,7 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
 app.get('/api/metrics/:name', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const name = c.req.param('name');
+  if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, 400);
   const data = await c.env.DASHBOARD.get(`metric:${name}`, 'json');
   if (!data) {
     return c.json({
@@ -204,6 +206,7 @@ app.get('/api/metrics/:name', async (c) => {
 app.get('/api/trends/:name', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const name = c.req.param('name');
+  if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, 400);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
