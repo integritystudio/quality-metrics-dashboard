@@ -5,6 +5,21 @@ import type { DashboardPermission, AppSession, MeResponse, DashboardView } from 
 
 export type { DashboardPermission, AppSession };
 
+// Mirror of client-side VALID_PERMISSIONS — filters DB permission strings before
+// trusting them as DashboardPermission values in the session.
+const VALID_PERMISSIONS = new Set<string>([
+  'dashboard.read',
+  'dashboard.executive',
+  'dashboard.operator',
+  'dashboard.auditor',
+  'dashboard.traces.read',
+  'dashboard.sessions.read',
+  'dashboard.agents.read',
+  'dashboard.pipeline.read',
+  'dashboard.compliance.read',
+  'dashboard.admin',
+] satisfies DashboardPermission[]);
+
 type Bindings = {
   DASHBOARD: KVNamespace;
   ASSETS: Fetcher;
@@ -113,7 +128,9 @@ app.use('/api/*', async (c, next) => {
           if (!row.roles) continue;
           roles.push(row.roles.name);
           for (const perm of row.roles.permissions) {
-            permissionSet.add(perm as DashboardPermission);
+            if (typeof perm === 'string' && VALID_PERMISSIONS.has(perm)) {
+              permissionSet.add(perm as DashboardPermission);
+            }
           }
         }
       }
@@ -241,6 +258,7 @@ app.get('/api/trends/:name', async (c) => {
 app.get('/api/evaluations/trace/:traceId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
+  if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
   return c.json(data);
@@ -249,6 +267,7 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
 app.get('/api/traces/:traceId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
+  if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, 404);
   return c.json(data);
@@ -306,6 +325,7 @@ app.get('/api/pipeline', async (c) => {
 app.get('/api/sessions/:sessionId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.sessions.read')) return c.json({ error: 'Forbidden' }, 403);
   const sessionId = c.req.param('sessionId');
+  if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, 400);
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, 404);
   return c.json(data);
@@ -332,6 +352,7 @@ app.get('/api/agents/detail/:agentId', async (c) => {
 app.get('/api/agents/:sessionId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, 403);
   const sessionId = c.req.param('sessionId');
+  if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, 400);
   const session = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json') as Record<string, unknown> | null;
   if (!session) return c.json({ error: `No session data for: ${sessionId}` }, 404);
   return c.json({
