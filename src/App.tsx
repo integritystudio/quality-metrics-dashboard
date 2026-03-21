@@ -90,8 +90,9 @@ function DashboardPage({ period }: { period: Period }) {
 }
 
 function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
-  const { session } = useAuth();
-  if (session && !session.allowedViews.includes(role)) {
+  const { session, isLoading: authLoading } = useAuth();
+  if (authLoading) return <MetricGridSkeleton />;
+  if (!session || !session.allowedViews.includes(role)) {
     return (
       <div className="empty-state">
         <h2>Access Denied</h2>

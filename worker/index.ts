@@ -194,6 +194,9 @@ app.get('/api/dashboard', async (c) => {
   if (role && !['executive', 'operator', 'auditor'].includes(role)) {
     return c.json({ error: 'Invalid role. Must be executive, operator, or auditor.' }, 400);
   }
+  if (role && !c.get('session').allowedViews.includes(role as DashboardView)) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
 
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await c.env.DASHBOARD.get(key, 'json');
