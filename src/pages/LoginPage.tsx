@@ -2,6 +2,13 @@ import { useState, type FormEvent } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { signIn } from '../lib/supabase.js';
 
+// Only allow absolute-path redirects (e.g. /dashboard). Blocks open redirects:
+// - external URLs: must start with /
+// - protocol-relative URLs (//evil.com): startsWith('/') passes but '//' must be blocked
+function safeRedirectPath(raw: string): string {
+  return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+}
+
 export function LoginPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -10,12 +17,6 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function getRedirectPath(): string {
-    const raw = new URLSearchParams(search).get('redirect') ?? '/';
-    // Only allow relative paths to prevent open redirect
-    return raw.startsWith('/') ? raw : '/';
-  }
-
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -23,7 +24,7 @@ export function LoginPage() {
 
     try {
       await signIn(email, password);
-      navigate(getRedirectPath());
+      navigate(safeRedirectPath(new URLSearchParams(search).get('redirect') ?? '/'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
