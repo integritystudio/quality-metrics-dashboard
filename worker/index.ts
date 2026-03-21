@@ -69,7 +69,7 @@ app.use('/api/*', async (c, next) => {
     );
     if (!userRes.ok) return c.json({ error: 'Unauthorized' }, 401);
     const users = await userRes.json() as Array<{ id: string; email: string }>;
-    if (!users[0]) return c.json({ error: 'Unauthorized' }, 401);
+    if (!users[0] || users[0].id !== authUserId || typeof users[0].email !== 'string') return c.json({ error: 'Unauthorized' }, 401);
     appUserId = users[0].id;
     email = users[0].email;
   } catch {
