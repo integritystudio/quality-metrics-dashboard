@@ -71,6 +71,19 @@ function readRawSession(): SupabaseSession | null {
   }
 }
 
+function isValidTokenResponse(value: unknown): value is AuthTokenResponse {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['access_token'] === 'string' &&
+    typeof v['refresh_token'] === 'string' &&
+    typeof v['expires_in'] === 'number' &&
+    typeof v['user'] === 'object' && v['user'] !== null &&
+    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
+    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
+  );
+}
+
 function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
   return {
     access_token: data.access_token,
@@ -104,7 +117,9 @@ export async function signIn(email: string, password: string): Promise<SupabaseS
     throw new Error(message ? `Sign in failed: ${message}` : `Sign in failed (${res.status})`);
   }
 
-  const session = sessionFromTokenResponse(await res.json() as AuthTokenResponse);
+  const body: unknown = await res.json().catch(() => null);
+  if (!isValidTokenResponse(body)) throw new Error('Sign in failed: unexpected response shape');
+  const session = sessionFromTokenResponse(body);
   saveSession(session);
   notifyListeners(session);
   return session;
@@ -149,7 +164,13 @@ export async function refreshSession(): Promise<SupabaseSession | null> {
       return null;
     }
 
-    const refreshed = sessionFromTokenResponse(await res.json() as AuthTokenResponse);
+    const refreshBody: unknown = await res.json().catch(() => null);
+    if (!isValidTokenResponse(refreshBody)) {
+      clearSession();
+      notifyListeners(null);
+      return null;
+    }
+    const refreshed = sessionFromTokenResponse(refreshBody);
     saveSession(refreshed);
     notifyListeners(refreshed);
     return refreshed;
