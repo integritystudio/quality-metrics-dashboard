@@ -1,14 +1,55 @@
 # Quality Metrics Dashboard
 
-v3.0.3
+v3.0.4
 
-React 19 + Vite 6 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry.
+React 19 + Vite 6 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. **Auth: Supabase JWT-based sign-in with role-based access control.**
 
 ## Quick Start
 
 ```bash
 npm install
 npm run dev          # Vite + Hono API on :3001
+```
+
+## Authentication
+
+The dashboard uses **Supabase Auth** for sign-in and **JWT verification** on the worker.
+
+- **Login**: `/login` page with email/password sign-in
+- **Session storage**: Browser localStorage (JWT + refresh token)
+- **Token injection**: All data hooks include `Authorization: Bearer <token>` header
+- **Worker verification**: JWT verified via Supabase `/auth/v1/user` endpoint
+- **Permissions**: Loaded from `user_roles -> roles.permissions` (database-driven RBAC)
+
+### Permissions
+
+Dashboard permissions are defined in `src/types/auth.ts`:
+
+```
+dashboard.read                 # Base read access
+dashboard.executive            # Executive view
+dashboard.operator             # Operator view
+dashboard.auditor              # Auditor view
+dashboard.traces.read          # Trace detail access
+dashboard.sessions.read        # Session detail access
+dashboard.agents.read          # Agent detail access
+dashboard.pipeline.read        # Pipeline status access
+dashboard.compliance.read      # Compliance pages access
+dashboard.admin                # Admin access (bypasses all checks)
+```
+
+### Environment Variables
+
+**Frontend (.env or .env.local):**
+```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGc...
+```
+
+**Worker (wrangler.toml secrets):**
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=eyJhbGc...
 ```
 
 ## Populating Data
@@ -62,28 +103,31 @@ See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
 
 ## API Routes (Worker)
 
-| Route | Description |
-|-------|-------------|
-| `GET /api/dashboard` | Dashboard summary (`?period=7d&role=executive`) |
-| `GET /api/metrics/:name` | Metric detail |
-| `GET /api/trends/:name` | Metric trend data (`?period=7d`) |
-| `GET /api/evaluations/trace/:traceId` | Evaluations for a trace |
-| `GET /api/traces/:traceId` | Trace spans + evaluations |
-| `GET /api/correlations` | Metric correlation matrix (`?period=30d`) |
-| `GET /api/coverage` | Evaluation coverage heatmap (`?period=7d&inputKey=traceId`) |
-| `GET /api/pipeline` | Populate pipeline status (`?period=7d`) |
-| `GET /api/sessions/:sessionId` | Session detail |
-| `GET /api/agents` | Cross-session agent list (all agents, sorted by invocations) |
-| `GET /api/agents/detail/:agentId` | Cross-session agent stats (RED metrics, output quality, last 20 sessions) |
-| `GET /api/agents/:sessionId` | Per-session agent activity |
-| `GET /api/compliance/sla` | SLA compliance (`?period=7d`) |
-| `GET /api/compliance/verifications` | Human verifications (`?period=7d`) |
-| `GET /api/health` | Health check + last sync timestamp |
+All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Supabase access token).
 
-## Project Structure (110,770 tokens)
+| Route | Auth | Description |
+|-------|------|-------------|
+| `GET /api/me` | ✓ | Current user session (`email`, `roles`, `permissions`, `allowedViews`) |
+| `GET /api/dashboard` | ✓ | Dashboard summary (`?period=7d&role=executive`) |
+| `GET /api/metrics/:name` | ✓ | Metric detail |
+| `GET /api/trends/:name` | ✓ | Metric trend data (`?period=7d`) |
+| `GET /api/evaluations/trace/:traceId` | ✓ | Evaluations for a trace |
+| `GET /api/traces/:traceId` | ✓ | Trace spans + evaluations |
+| `GET /api/correlations` | ✓ | Metric correlation matrix (`?period=30d`) |
+| `GET /api/coverage` | ✓ | Evaluation coverage heatmap (`?period=7d&inputKey=traceId`) |
+| `GET /api/pipeline` | ✓ | Populate pipeline status (`?period=7d`) |
+| `GET /api/sessions/:sessionId` | ✓ | Session detail |
+| `GET /api/agents` | ✓ | Cross-session agent list (all agents, sorted by invocations) |
+| `GET /api/agents/detail/:agentId` | ✓ | Cross-session agent stats (RED metrics, output quality, last 20 sessions) |
+| `GET /api/agents/:sessionId` | ✓ | Per-session agent activity |
+| `GET /api/compliance/sla` | ✓ | SLA compliance (`?period=7d`) |
+| `GET /api/compliance/verifications` | ✓ | Human verifications (`?period=7d`) |
+| `GET /api/health` | ✗ | Health check + last sync timestamp |
+
+## Project Structure (114,279 tokens)
 
 ```
-└── src/ (110,770 tokens)
+└── src/ (114,279 tokens)
     ├── App.tsx (4,156 tokens)
     ├── main.tsx (332 tokens)
     ├── theme.css (11,825 tokens)
@@ -101,20 +145,21 @@ See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
     │       ├── sessions.ts (4,679 tokens)
     │       ├── trends.ts (2,279 tokens)
     ├── ... (7 more)
-    ├── components/ (43,792 tokens)
+    ├── components/ (43,931 tokens)
     │   ├── AgentActivityPanel.tsx (3,985 tokens)
     │   ├── CorrelationHeatmap.tsx (1,880 tokens)
     │   ├── EvaluationTable.tsx (3,013 tokens)
     │   ├── TrendChart.tsx (2,060 tokens)
     │   ├── WorkflowGraph.tsx (2,484 tokens)
-    ├── ... (49 more)
+    ├── ... (50 more)
     │   └── views/ (1,683 tokens)
     │       ├── AuditorView.tsx (418 tokens)
     │       ├── ExecutiveView.tsx (732 tokens)
     │       └── OperatorView.tsx (533 tokens)
     ├── context/ (343 tokens)
     │   └── CalibrationContext.tsx (343 tokens)
-    ├── contexts/ (2,371 tokens)
+    ├── contexts/ (3,277 tokens)
+    │   ├── AuthContext.tsx (906 tokens)
     │   ├── KeyboardNavContext.tsx (1,751 tokens)
     │   └── RoleContext.tsx (620 tokens)
     ├── hooks/ (5,411 tokens)
@@ -124,20 +169,24 @@ See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
     │   ├── useSessionDetail.ts (1,331 tokens)
     │   ├── useTrace.ts (372 tokens)
     ├── ... (10 more)
-    ├── lib/ (9,206 tokens)
+    ├── lib/ (10,832 tokens)
     │   ├── constants.ts (2,963 tokens)
     │   ├── quality-utils.ts (3,724 tokens)
-    │   ├── routes.ts (105 tokens)
+    │   ├── supabase.ts (1,626 tokens)
     │   ├── symbols.ts (309 tokens)
-    │   └── workflow-graph.ts (2,105 tokens)
-    ├── pages/ (12,663 tokens)
+    │   ├── workflow-graph.ts (2,105 tokens)
+    ├── ... (1 more)
+    ├── pages/ (13,238 tokens)
     │   ├── AgentSessionPage.tsx (791 tokens)
     │   ├── CompliancePage.tsx (792 tokens)
     │   ├── EvaluationDetailPage.tsx (1,304 tokens)
     │   ├── SessionDetailPage.tsx (6,423 tokens)
     │   ├── TraceDetailPage.tsx (803 tokens)
-    ├── ... (5 more)
-    └── types/ (222 tokens)
+    ├── ... (6 more)
+    ├── stubs/ (36 tokens)
+    │   └── web-worker.ts (36 tokens)
+    └── types/ (449 tokens)
+        ├── auth.ts (227 tokens)
         └── workflow-graph.ts (222 tokens)
 ```
 
