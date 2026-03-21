@@ -102,6 +102,52 @@ export const ActivityRequestSchema = z.object({
 export type ActivityRequest = z.infer<typeof ActivityRequestSchema>;
 
 /**
+ * Role record from public.roles — used by admin endpoints
+ */
+export const AdminRoleSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  permissions: z.array(z.string()),
+});
+
+export type AdminRole = z.infer<typeof AdminRoleSchema>;
+
+/**
+ * user_roles row joined with roles — used by GET /api/admin/users
+ */
+export const AdminUserRoleRowSchema = z.object({
+  user_id: z.string().uuid(),
+  role_id: z.string().uuid(),
+  roles: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+  }).nullable(),
+});
+
+export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
+
+/**
+ * User list item returned by GET /api/admin/users
+ */
+export const AdminUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  created_at: z.string().datetime().optional(),
+  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+});
+
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+
+/**
+ * POST /api/admin/users/:userId/roles request body
+ */
+export const AssignRoleRequestSchema = z.object({
+  role_id: z.string().uuid(),
+});
+
+export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
+
+/**
  * API /api/me response
  * Dashboard API authentication and permission resolution result
  */

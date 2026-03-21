@@ -26,6 +26,7 @@ import { TraceDetailPage } from './pages/TraceDetailPage.js';
 import { AgentSessionPage } from './pages/AgentSessionPage.js';
 import { AgentsPage } from './pages/AgentsPage.js';
 import { SessionDetailPage } from './pages/SessionDetailPage.js';
+import { AdminPage } from './pages/AdminPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
@@ -243,6 +244,12 @@ function RouteErrorFallback({ error, resetErrorBoundary }: { error: Error; reset
   );
 }
 
+function AdminLink() {
+  const { session } = useAuth();
+  if (!session?.permissions.includes('dashboard.admin')) return null;
+  return <Link href="/admin" className="admin-link text-xs text-muted">Admin</Link>;
+}
+
 function GlobalShortcuts({ setPeriod, navigate }: {
   setPeriod: (p: Period) => void;
   navigate: (path: string) => void;
@@ -278,6 +285,7 @@ export function App() {
                 <RequireAuth>
                   <Layout period={period} onPeriodChange={setPeriod}>
                     <RoleSelector />
+                    <AdminLink />
                     <Switch>
                       <Route path="/">
                         <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
@@ -359,6 +367,11 @@ export function App() {
                             </Suspense>
                           </ErrorBoundary>
                         )}
+                      </Route>
+                      <Route path="/admin">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <AdminPage />
+                        </ErrorBoundary>
                       </Route>
                       <Route>
                         <div className="empty-state">

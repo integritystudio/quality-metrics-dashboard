@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { DashboardPermission, AppSession, DashboardView } from '../src/types/auth.js';
-import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema } from '../src/lib/validation/auth-schemas.js';
+import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -59,6 +59,9 @@ type Bindings = {
   ASSETS: Fetcher;
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
+  // Service role key required for admin routes (bypasses RLS).
+  // Set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+  SUPABASE_SERVICE_ROLE_KEY: string;
 };
 
 type Variables = {
@@ -77,9 +80,9 @@ app.use('/*', cors({
     'http://localhost:5173',
     'http://localhost:3000',
   ],
-  // GET and POST are allowed. Bearer JWT auth on all /api/* routes prevents CSRF —
+  // GET, POST, and DELETE are allowed. Bearer JWT auth on all /api/* routes prevents CSRF —
   // browsers cannot set custom Authorization headers in cross-site requests.
-  allowMethods: ['GET', 'POST'],
+  allowMethods: ['GET', 'POST', 'DELETE'],
 }));
 
 // Cache policy: private, no-store for all /api/* (responses may contain user-specific data)
@@ -195,6 +198,17 @@ app.use('/api/*', async (c, next) => {
 // Admins bypass all permission checks via 'dashboard.admin'.
 function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
   return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Returns headers for Supabase REST calls using the service role key (bypasses RLS).
+function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string; SUPABASE_ANON_KEY: string }): HeadersInit {
+  return {
+    'apikey': env.SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+  };
 }
 
 app.get('/api/me', (c) => {
@@ -466,6 +480,96 @@ app.get('/api/health', async (c) => {
     status: lastSync ? 'ok' : 'no_data',
     lastSync: lastSync ?? null,
   });
+});
+
+// Admin: list all users with their assigned roles
+app.get('/api/admin/users', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, 403);
+
+  const headers = serviceRoleHeaders(c.env);
+  const [usersRes, roleRowsRes] = await Promise.all([
+    fetch(`${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,created_at&order=created_at.desc`, { headers }),
+    fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles?select=user_id,role_id,roles(id,name)`, { headers }),
+  ]);
+
+  if (!usersRes.ok) return c.json({ error: 'Failed to fetch users' }, 500);
+  const rawUsers = await usersRes.json() as Array<unknown>;
+  const rawRoleRows = roleRowsRes.ok ? await roleRowsRes.json() as Array<unknown> : [];
+
+  // Build userId → roles map
+  const rolesByUser = new Map<string, { id: string; name: string }[]>();
+  for (const row of rawRoleRows) {
+    const parsed = AdminUserRoleRowSchema.safeParse(row);
+    if (!parsed.success || !parsed.data.roles) continue;
+    const existing = rolesByUser.get(parsed.data.user_id) ?? [];
+    existing.push({ id: parsed.data.roles.id, name: parsed.data.roles.name });
+    rolesByUser.set(parsed.data.user_id, existing);
+  }
+
+  const users = [];
+  for (const raw of rawUsers) {
+    const parsed = AdminUserSchema.safeParse({
+      ...(raw as object),
+      roles: rolesByUser.get((raw as { id: string }).id) ?? [],
+    });
+    if (parsed.success) users.push(parsed.data);
+  }
+
+  return c.json(users);
+});
+
+// Admin: list all available roles
+app.get('/api/admin/roles', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, 403);
+
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/roles?select=id,name,permissions&order=name.asc`,
+    { headers: serviceRoleHeaders(c.env) },
+  );
+  if (!res.ok) return c.json({ error: 'Failed to fetch roles' }, 500);
+
+  const rows = await res.json() as Array<unknown>;
+  const roles = rows.flatMap((row) => {
+    const parsed = AdminRoleSchema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return c.json(roles);
+});
+
+// Admin: assign a role to a user
+app.post('/api/admin/users/:userId/roles', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, 403);
+
+  const userId = c.req.param('userId');
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: 'Invalid userId' }, 400);
+
+  const body: unknown = await c.req.json().catch(() => null);
+  const result = AssignRoleRequestSchema.safeParse(body);
+  if (!result.success) return c.json({ error: 'Invalid request body' }, 400);
+
+  const res = await fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles`, {
+    method: 'POST',
+    headers: { ...serviceRoleHeaders(c.env) as Record<string, string>, 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ user_id: userId, role_id: result.data.role_id }),
+  });
+  if (!res.ok) return c.json({ error: 'Failed to assign role' }, 500);
+  return c.body(null, 204);
+});
+
+// Admin: revoke a role from a user
+app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, 403);
+
+  const userId = c.req.param('userId');
+  const roleId = c.req.param('roleId');
+  if (!UUID_PATTERN.test(userId) || !UUID_PATTERN.test(roleId)) return c.json({ error: 'Invalid ID' }, 400);
+
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${encodeURIComponent(userId)}&role_id=eq.${encodeURIComponent(roleId)}`,
+    { method: 'DELETE', headers: serviceRoleHeaders(c.env) },
+  );
+  if (!res.ok) return c.json({ error: 'Failed to revoke role' }, 500);
+  return c.body(null, 204);
 });
 
 // SPA fallback: serve static assets / index.html for non-API routes
