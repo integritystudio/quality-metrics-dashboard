@@ -128,6 +128,8 @@ app.get('/api/me', (c) => {
   }
 
   const response: MeResponse = {
+    authUserId: session.authUserId,
+    appUserId: session.appUserId,
     email: session.email,
     roles: session.roles,
     permissions: session.permissions,
