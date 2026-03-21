@@ -203,9 +203,10 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Returns headers for Supabase REST calls using the service role key (bypasses RLS).
-function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string; SUPABASE_ANON_KEY: string }): HeadersInit {
+// Both apikey and Authorization use the service role key — the anon key is for browser clients only.
+function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
   return {
-    'apikey': env.SUPABASE_ANON_KEY,
+    'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
     'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
     'Content-Type': 'application/json',
   };

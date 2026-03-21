@@ -1,4 +1,4 @@
-import { useState, useCallback, lazy, Suspense } from 'react';
+import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import { Route, Switch, Link, useLocation, Router } from 'wouter';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
@@ -250,6 +250,21 @@ function AdminLink() {
   return <Link href="/admin" className="admin-link text-xs text-muted">Admin</Link>;
 }
 
+function AdminGuard({ children }: { children: ReactNode }) {
+  const { session, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!session?.permissions.includes('dashboard.admin')) {
+    return (
+      <div className="empty-state">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page.</p>
+        <p><Link href="/">Go to dashboard</Link></p>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 function GlobalShortcuts({ setPeriod, navigate }: {
   setPeriod: (p: Period) => void;
   navigate: (path: string) => void;
@@ -370,7 +385,9 @@ export function App() {
                       </Route>
                       <Route path="/admin">
                         <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <AdminPage />
+                          <AdminGuard>
+                            <AdminPage />
+                          </AdminGuard>
                         </ErrorBoundary>
                       </Route>
                       <Route>
