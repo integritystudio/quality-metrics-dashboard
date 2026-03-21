@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { DashboardPermission, AppSession, MeResponse, DashboardView } from '../src/types/auth.js';
+import type { DashboardPermission, AppSession, DashboardView } from '../src/types/auth.js';
 import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema } from '../src/lib/validation/auth-schemas.js';
 
 export type { DashboardPermission, AppSession };
