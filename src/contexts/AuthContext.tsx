@@ -22,26 +22,19 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
     });
     if (!res.ok) return null;
     const data: unknown = await res.json();
-    if (
-      typeof data !== 'object' ||
-      data === null ||
-      !('email' in data) ||
-      !('roles' in data) ||
-      !('permissions' in data) ||
-      !Array.isArray((data as Record<string, unknown>).roles) ||
-      !Array.isArray((data as Record<string, unknown>).permissions)
-    ) {
-      return null;
-    }
+    if (typeof data !== 'object' || data === null) return null;
+    const me = data as Record<string, unknown>;
+    if (typeof me['email'] !== 'string') return null;
+    if (!Array.isArray(me['roles']) || !me['roles'].every((r): r is string => typeof r === 'string')) return null;
+    if (!Array.isArray(me['permissions']) || !me['permissions'].every((p): p is string => typeof p === 'string')) return null;
     // MeResponse doesn't include internal IDs (authUserId/appUserId not exposed by /api/me)
     // We satisfy AppSession type but these IDs are never used in frontend code
-    const me = data as Record<string, unknown>;
     return {
       authUserId: '',
       appUserId: '',
-      email: me.email as string,
-      roles: me.roles as string[],
-      permissions: me.permissions as string[],
+      email: me['email'],
+      roles: me['roles'],
+      permissions: me['permissions'] as import('../types/auth.js').DashboardPermission[],
     };
   } catch {
     return null;
