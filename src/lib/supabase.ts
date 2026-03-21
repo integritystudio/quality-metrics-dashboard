@@ -14,7 +14,9 @@ export interface SupabaseSession {
   user: { id: string; email: string };
 }
 
-type AuthStateListener = (session: SupabaseSession | null) => void;
+export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
+
+type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
 
 type AuthTokenResponse = {
   access_token: string;
@@ -29,9 +31,9 @@ const listeners = new Set<AuthStateListener>();
 // Kept in sync by saveSession() and clearSession().
 let cachedSession: SupabaseSession | null = null;
 
-function notifyListeners(session: SupabaseSession | null): void {
+function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void {
   for (const listener of listeners) {
-    listener(session);
+    listener(session, event);
   }
 }
 
@@ -132,7 +134,7 @@ export async function signIn(email: string, password: string): Promise<SupabaseS
   if (!isValidTokenResponse(body)) throw new Error('Sign in failed: unexpected response shape');
   const session = sessionFromTokenResponse(body);
   saveSession(session);
-  notifyListeners(session);
+  notifyListeners(session, 'SIGNED_IN');
   return session;
 }
 
@@ -152,7 +154,7 @@ export async function signOut(): Promise<void> {
     }
   }
   clearSession();
-  notifyListeners(null);
+  notifyListeners(null, 'SIGNED_OUT');
 }
 
 export async function refreshSession(): Promise<SupabaseSession | null> {
@@ -171,23 +173,23 @@ export async function refreshSession(): Promise<SupabaseSession | null> {
 
     if (!res.ok) {
       clearSession();
-      notifyListeners(null);
+      notifyListeners(null, 'SIGNED_OUT');
       return null;
     }
 
     const refreshBody: unknown = await res.json().catch(() => null);
     if (!isValidTokenResponse(refreshBody)) {
       clearSession();
-      notifyListeners(null);
+      notifyListeners(null, 'SIGNED_OUT');
       return null;
     }
     const refreshed = sessionFromTokenResponse(refreshBody);
     saveSession(refreshed);
-    notifyListeners(refreshed);
+    notifyListeners(refreshed, 'TOKEN_REFRESHED');
     return refreshed;
   } catch {
     clearSession();
-    notifyListeners(null);
+    notifyListeners(null, 'SIGNED_OUT');
     return null;
   }
 }

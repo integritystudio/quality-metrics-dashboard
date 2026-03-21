@@ -92,6 +92,16 @@ export const RefreshTokenRequestSchema = z.object({
 export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
 
 /**
+ * POST /api/activity request body — frontend-initiated audit events
+ * Only login/logout are accepted; view events are logged server-side by route handlers.
+ */
+export const ActivityRequestSchema = z.object({
+  activity_type: z.enum(['login', 'logout']),
+});
+
+export type ActivityRequest = z.infer<typeof ActivityRequestSchema>;
+
+/**
  * API /api/me response
  * Dashboard API authentication and permission resolution result
  */

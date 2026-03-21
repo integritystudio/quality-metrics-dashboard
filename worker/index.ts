@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { DashboardPermission, AppSession, DashboardView } from '../src/types/auth.js';
-import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema } from '../src/lib/validation/auth-schemas.js';
+import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema } from '../src/lib/validation/auth-schemas.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -77,9 +77,9 @@ app.use('/*', cors({
     'http://localhost:5173',
     'http://localhost:3000',
   ],
-  // GET-only governs inbound browser requests only — not outbound worker fetch calls (e.g. logActivity).
-  // Restricting inbound methods prevents CSRF on any future POST-capable route additions.
-  allowMethods: ['GET'],
+  // GET and POST are allowed. Bearer JWT auth on all /api/* routes prevents CSRF —
+  // browsers cannot set custom Authorization headers in cross-site requests.
+  allowMethods: ['GET', 'POST'],
 }));
 
 // Cache policy: private, no-store for all /api/* (responses may contain user-specific data)
@@ -211,6 +211,16 @@ app.get('/api/me', (c) => {
   const meResult = MeResponseSchema.safeParse(me);
   if (!meResult.success) return c.json({ error: 'Internal server error' }, 500);
   return c.json(meResult.data);
+});
+
+app.post('/api/activity', async (c) => {
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  const body: unknown = await c.req.json().catch(() => null);
+  const result = ActivityRequestSchema.safeParse(body);
+  if (!result.success) return c.json({ error: 'Invalid request body' }, 400);
+  logActivity(session.appUserId, result.data.activity_type, c.env, jwt);
+  return c.body(null, 204);
 });
 
 app.get('/api/dashboard', async (c) => {

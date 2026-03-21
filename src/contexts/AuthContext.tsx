@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
-import type { SupabaseSession } from '../lib/supabase.js';
+import type { SupabaseSession, AuthEvent } from '../lib/supabase.js';
 import { API_BASE } from '../lib/constants.js';
 import type { AppSession, DashboardPermission } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
@@ -13,6 +13,22 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+// Fire-and-forget — failures must not block auth flows.
+async function postActivityEvent(activityType: 'login' | 'logout', jwt: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/activity`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${jwt}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ activity_type: activityType }),
+    });
+  } catch {
+    // Intentionally swallowed — audit logging must not fail auth flows
+  }
+}
 
 async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
   try {
@@ -70,7 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : refreshSession().then((s) => loadSession(s, controller.signal));
     void init;
 
-    const unsubscribe = onAuthStateChange((supabaseSession) => {
+    const unsubscribe = onAuthStateChange((supabaseSession: SupabaseSession | null, event: AuthEvent) => {
+      if (event === 'SIGNED_IN' && supabaseSession) {
+        void postActivityEvent('login', supabaseSession.access_token);
+      }
       setIsLoading(true);
       void loadSession(supabaseSession, controller.signal);
     });
@@ -82,6 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadSession]);
 
   const handleSignOut = useCallback(async () => {
+    const currentSession = getSession();
+    if (currentSession) void postActivityEvent('logout', currentSession.access_token);
     await supabaseSignOut();
     setSession(null);
   }, []);
