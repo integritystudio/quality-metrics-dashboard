@@ -25,6 +25,10 @@ type AuthTokenResponse = {
 
 const listeners = new Set<AuthStateListener>();
 
+// In-memory session cache — avoids localStorage read/parse on every getSession() call.
+// Kept in sync by saveSession() and clearSession().
+let cachedSession: SupabaseSession | null = null;
+
 function notifyListeners(session: SupabaseSession | null): void {
   for (const listener of listeners) {
     listener(session);
@@ -32,6 +36,7 @@ function notifyListeners(session: SupabaseSession | null): void {
 }
 
 function saveSession(session: SupabaseSession): void {
+  cachedSession = session;
   try {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } catch {
@@ -40,6 +45,7 @@ function saveSession(session: SupabaseSession): void {
 }
 
 function clearSession(): void {
+  cachedSession = null;
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   } catch {
@@ -94,10 +100,12 @@ function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
 }
 
 export function getSession(): SupabaseSession | null {
-  const session = readRawSession();
+  // Use in-memory cache when available; fall back to localStorage (e.g. on first load)
+  const session = cachedSession ?? readRawSession();
   if (!session) return null;
   // Treat session as expired 60s early to avoid edge races
   if (Date.now() / 1000 > session.expires_at - 60) return null;
+  if (!cachedSession) cachedSession = session; // warm cache from localStorage
   return session;
 }
 
