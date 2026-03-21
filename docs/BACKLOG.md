@@ -13,6 +13,12 @@ Open items from code reviews and deferred work.
 | AUTH-P3-3 | `authUserId`/`appUserId` set to `''` in fetchAppSession — consider optional or null to make emptiness explicit in the type | P4 | ce1cb6a review |
 | AUTH-P3-4 | Dual `MeResponse` types: hand-written interface in `src/types/auth.ts` and Zod-inferred in `auth-schemas.ts` — remove hand-written and re-export from schemas | P3 | ce1cb6a review |
 
+### Phase 4 Auth: Code Review Deferred Items
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| AUTH-P4-1 | Extract generic Supabase REST client helper (`dashboard/src/lib/supabase-rest.ts`) to unify duplicate POST patterns in `logActivity` and `api-provisioning-sender` | P3 | activity-logging code-simplifier review |
+
 ### G5: Multi-Agent Workflow Visualization — Remaining Work
 
 | # | Item | Priority | Source |
