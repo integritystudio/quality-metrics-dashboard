@@ -1,13 +1,20 @@
 import { useState, type FormEvent } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
 import { signIn } from '../lib/supabase.js';
 
 export function LoginPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function getRedirectPath(): string {
+    const raw = new URLSearchParams(search).get('redirect') ?? '/';
+    // Only allow relative paths to prevent open redirect
+    return raw.startsWith('/') ? raw : '/';
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -16,7 +23,7 @@ export function LoginPage() {
 
     try {
       await signIn(email, password);
-      navigate('/');
+      navigate(getRedirectPath());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {

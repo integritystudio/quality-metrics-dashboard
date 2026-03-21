@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Redirect } from 'wouter';
+import { Redirect, useLocation } from 'wouter';
 import { useAuth } from '../contexts/AuthContext.js';
 
 interface RequireAuthProps {
@@ -8,8 +8,12 @@ interface RequireAuthProps {
 
 export function RequireAuth({ children }: RequireAuthProps) {
   const { session, isLoading } = useAuth();
+  const [location] = useLocation();
 
   if (isLoading) return <div className="auth-loading" role="status" aria-label="Loading" />;
-  if (!session) return <Redirect to="/login" />;
+  if (!session) {
+    const redirect = location !== '/login' ? `?redirect=${encodeURIComponent(location)}` : '';
+    return <Redirect to={`/login${redirect}`} />;
+  }
   return <>{children}</>;
 }
