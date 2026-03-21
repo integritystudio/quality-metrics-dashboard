@@ -46,6 +46,7 @@ export function useApiQuery<TRaw, T = TRaw>(
         session = await refreshSession();
         if (!session) throw new Error('AUTH_REQUIRED');
       }
+      if (!session.access_token) throw new Error('AUTH_REQUIRED');
       const url = buildUrl();
       const doFetch = (token: string) =>
         fetch(url, { headers: { Authorization: `Bearer ${token}` } });

@@ -19,7 +19,16 @@ type Variables = {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use('/*', cors({
-  origin: ['https://integritystudio.dev', 'https://www.aledlie.com', 'https://aledlie.com'],
+  origin: [
+    'https://integritystudio.dev',
+    'https://www.aledlie.com',
+    'https://aledlie.com',
+    // Localhost origins for local dev (npm run dev hits deployed worker)
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ],
+  // GET-only: this app is a read-only dashboard; all data mutations happen via separate services.
+  // Restricting methods here prevents CSRF on any future POST-capable route additions.
   allowMethods: ['GET'],
 }));
 
@@ -29,6 +38,8 @@ app.use('/api/*', async (c, next) => {
   c.header('Cache-Control', 'private, no-store');
 });
 
+const AUTH_TIMEOUT_MS = 5000;
+
 // JWT auth middleware — runs before all /api/* routes, exempts /api/health
 app.use('/api/*', async (c, next) => {
   if (c.req.path === '/api/health') return next();
@@ -37,74 +48,85 @@ app.use('/api/*', async (c, next) => {
   const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!jwt) return c.json({ error: 'Unauthorized' }, 401);
 
-  // Verify JWT via Supabase /auth/v1/user
-  let authUserId: string;
-  try {
-    const verifyRes = await fetch(`${c.env.SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        'Authorization': `Bearer ${jwt}`,
-        'apikey': c.env.SUPABASE_ANON_KEY,
-      },
-    });
-    if (!verifyRes.ok) return c.json({ error: 'Unauthorized' }, 401);
-    const authUser = await verifyRes.json() as { id?: string };
-    if (!authUser?.id || typeof authUser.id !== 'string') return c.json({ error: 'Unauthorized' }, 401);
-    authUserId = authUser.id;
-  } catch {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+  // Single AbortController shared across all auth fetches; aborts on timeout
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
 
-  // Fetch public.users row — required; auth users with no app record are rejected with 401
-  let email = '';
-  let appUserId = '';
   try {
-    const userRes = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
-      {
+    // Verify JWT via Supabase /auth/v1/user
+    let authUserId: string;
+    try {
+      const verifyRes = await fetch(`${c.env.SUPABASE_URL}/auth/v1/user`, {
         headers: {
-          'apikey': c.env.SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${jwt}`,
+          'apikey': c.env.SUPABASE_ANON_KEY,
         },
-      },
-    );
-    if (!userRes.ok) return c.json({ error: 'Unauthorized' }, 401);
-    const users = await userRes.json() as Array<{ id: string; email: string }>;
-    if (!users[0] || users[0].id !== authUserId || typeof users[0].email !== 'string') return c.json({ error: 'Unauthorized' }, 401);
-    appUserId = users[0].id;
-    email = users[0].email;
-  } catch {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+        signal: controller.signal,
+      });
+      if (!verifyRes.ok) return c.json({ error: 'Unauthorized' }, 401);
+      const authUser = await verifyRes.json() as { id?: string };
+      if (!authUser?.id || typeof authUser.id !== 'string') return c.json({ error: 'Unauthorized' }, 401);
+      authUserId = authUser.id;
+    } catch {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
 
-  const roles: string[] = [];
-  const permissionSet = new Set<DashboardPermission>();
-  try {
-    const rolesRes = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
-      {
-        headers: {
-          'apikey': c.env.SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${jwt}`,
+    // Fetch public.users row — required; auth users with no app record are rejected with 401
+    let email = '';
+    let appUserId = '';
+    try {
+      const userRes = await fetch(
+        `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
+        {
+          headers: {
+            'apikey': c.env.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${jwt}`,
+          },
+          signal: controller.signal,
         },
-      },
-    );
-    if (rolesRes.ok) {
-      const rows = await rolesRes.json() as Array<{ roles: { name: string; permissions: string[] } | null }>;
-      for (const row of rows) {
-        if (!row.roles) continue;
-        roles.push(row.roles.name);
-        for (const perm of row.roles.permissions) {
-          permissionSet.add(perm as DashboardPermission);
+      );
+      if (!userRes.ok) return c.json({ error: 'Unauthorized' }, 401);
+      const users = await userRes.json() as Array<{ id: string; email: string }>;
+      if (!users[0] || users[0].id !== authUserId || typeof users[0].email !== 'string') return c.json({ error: 'Unauthorized' }, 401);
+      appUserId = users[0].id;
+      email = users[0].email;
+    } catch {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const roles: string[] = [];
+    const permissionSet = new Set<DashboardPermission>();
+    try {
+      const rolesRes = await fetch(
+        `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
+        {
+          headers: {
+            'apikey': c.env.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${jwt}`,
+          },
+          signal: controller.signal,
+        },
+      );
+      if (rolesRes.ok) {
+        const rows = await rolesRes.json() as Array<{ roles: { name: string; permissions: string[] } | null }>;
+        for (const row of rows) {
+          if (!row.roles) continue;
+          roles.push(row.roles.name);
+          for (const perm of row.roles.permissions) {
+            permissionSet.add(perm as DashboardPermission);
+          }
         }
       }
+    } catch {
+      // Non-fatal — user will have no permissions, routes will deny
     }
-  } catch {
-    // Non-fatal — user will have no permissions, routes will deny
-  }
-  const permissions = [...permissionSet];
+    const permissions = [...permissionSet];
 
-  c.set('session', { authUserId, appUserId, email, roles, permissions });
-  return next();
+    c.set('session', { authUserId, appUserId, email, roles, permissions });
+    return next();
+  } finally {
+    clearTimeout(timeout);
+  }
 });
 
 // Permission guard helper — returns true if session has the required permission.
