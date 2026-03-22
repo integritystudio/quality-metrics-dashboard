@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { loadEnv } from 'vite';
 
 const PARENT_DIST_RE = /\.\.\/\.\.\/\.\.(?:\/\.\.)*\/dist\//;
 
@@ -27,41 +28,46 @@ function parentDistStub(): Plugin {
   };
 }
 
-export default defineConfig({
-  base: '/',
-  plugins: [
-    react(),
-    ...(process.env.VITEST ? [parentDistStub()] : []),
-  ],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          query: ['@tanstack/react-query'],
-          'workflow-viz': ['@xyflow/react', 'elkjs'],
+export default defineConfig(({ command }) => {
+  // Load .env.test for test environment
+  const env = command === 'serve' ? {} : loadEnv('test', process.cwd(), 'VITE_');
+
+  return {
+    base: '/',
+    plugins: [
+      react(),
+      ...(process.env.VITEST ? [parentDistStub()] : []),
+    ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom'],
+            query: ['@tanstack/react-query'],
+            'workflow-viz': ['@xyflow/react', 'elkjs'],
+          },
         },
       },
     },
-  },
-  resolve: {
-    alias: {
-      '@parent': path.resolve(__dirname, '../dist'),
-      'web-worker': path.resolve(__dirname, 'src/stubs/web-worker.ts'),
-    },
-  },
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:3001',
-        changeOrigin: true,
+    resolve: {
+      alias: {
+        '@parent': path.resolve(__dirname, '../dist'),
+        'web-worker': path.resolve(__dirname, 'src/stubs/web-worker.ts'),
       },
     },
-  },
-  test: {
-    environment: 'jsdom',
-    setupFiles: ['./src/__tests__/setup.ts'],
-    exclude: ['node_modules/**', 'scripts/__tests__/**', 'e2e/**'],
-  },
+    server: {
+      port: 5173,
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:3001',
+          changeOrigin: true,
+        },
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./src/__tests__/setup.ts'],
+      exclude: ['node_modules/**', 'scripts/__tests__/**', 'e2e/**'],
+    },
+  };
 });
