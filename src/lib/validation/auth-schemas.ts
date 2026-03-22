@@ -99,8 +99,6 @@ export const ActivityRequestSchema = z.object({
   activity_type: z.enum(['login', 'logout']),
 });
 
-export type ActivityRequest = z.infer<typeof ActivityRequestSchema>;
-
 /**
  * Role record from public.roles — used by admin endpoints
  */
