@@ -14,8 +14,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: dopplerhq/cli-action@v3
+        with:
+          token: ${{ secrets.DOPPLER_TOKEN }}
       - run: npm ci
       - run: npm run build
       - run: doppler run --project integrity-studio --config dev -- npm test
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
