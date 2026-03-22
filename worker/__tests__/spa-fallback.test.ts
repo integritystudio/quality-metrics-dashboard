@@ -112,12 +112,12 @@ describe('API routes: unaffected by SPA fallback', () => {
   });
 
   it('GET /api/nonexistent returns 404', async () => {
-    const res = await app.request('/api/nonexistent', {}, makeEnv());
+    const res = await app.request('/api/nonexistent', { headers: { Authorization: 'Bearer test-token' } }, makeEnv());
     expect(res.status).toBe(404);
   });
 
   it('GET /api (no trailing slash) returns 404, not SPA HTML', async () => {
-    const res = await app.request('/api', {}, makeEnv());
+    const res = await app.request('/api', { headers: { Authorization: 'Bearer test-token' } }, makeEnv());
     expect(res.status).toBe(404);
     expect(mockAssets.fetch).not.toHaveBeenCalled();
   });

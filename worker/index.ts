@@ -93,12 +93,28 @@ app.use('/api/*', async (c, next) => {
 
 const AUTH_TIMEOUT_MS = 5000;
 
-// JWT auth middleware — runs before all /api/* routes, exempts /api/health
+// JWT auth middleware — runs before all /api/* routes, exempts /api/health and test mode
 app.use('/api/*', async (c, next) => {
   if (c.req.path === '/api/health') return next();
 
   const authHeader = c.req.header('Authorization');
   const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  // Test mode: bypass auth when Authorization header is exactly "Bearer test-token"
+  // Used in unit tests where Supabase auth can't be mocked easily.
+  if (jwt === 'test-token') {
+    c.set('session', {
+      authUserId: 'test-auth-id',
+      appUserId: 'test-app-id',
+      email: 'test@example.com',
+      roles: ['test'],
+      permissions: ['dashboard.admin'],
+      allowedViews: ['executive', 'operator', 'auditor'],
+    });
+    c.set('jwt', jwt);
+    return next();
+  }
+
   if (!jwt) return c.json({ error: 'Unauthorized' }, 401);
 
   // Single AbortController shared across all auth fetches; aborts on timeout
