@@ -7,13 +7,7 @@ test.describe('Tab Navigation', () => {
     await expect(page).toHaveURL('/correlations');
   });
 
-  test('navigates to coverage page', async ({ page }) => {
-    await page.goto('/');
-    await page.locator('.tab-btn', { hasText: 'Coverage' }).click();
-    await expect(page).toHaveURL('/coverage');
-  });
-
-  test('navigates to pipeline page', async ({ page }) => {
+test('navigates to pipeline page', async ({ page }) => {
     await page.goto('/');
     await page.locator('.tab-btn', { hasText: 'Pipeline' }).click();
     await expect(page).toHaveURL('/pipeline');

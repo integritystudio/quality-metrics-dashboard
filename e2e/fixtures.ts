@@ -2,10 +2,9 @@ import { test as base, expect } from '@playwright/test';
 
 const TEST_SESSION = {
   access_token: 'test-token',
-  token_type: 'bearer',
-  expires_in: 3600,
   refresh_token: 'test-refresh',
   expires_at: 9_999_999_999, // year 2286 — never expires in tests
+  user: { id: 'test-user-id', email: 'test@example.com' },
 };
 
 const MOCK_ME_RESPONSE = {

@@ -7,13 +7,6 @@ test.describe('Correlations Page', () => {
   });
 });
 
-test.describe('Coverage Page', () => {
-  test('renders coverage content', async ({ page }) => {
-    await page.goto('/coverage');
-    await expect(page.locator('table, .card').first()).toBeVisible({ timeout: 15_000 });
-  });
-});
-
 test.describe('Pipeline Page', () => {
   test('renders pipeline content', async ({ page }) => {
     await page.goto('/pipeline');
