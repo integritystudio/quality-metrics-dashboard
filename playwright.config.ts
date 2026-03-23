@@ -31,9 +31,10 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
-    // Provide placeholder Supabase env vars so supabase.ts doesn't throw when
-    // the dev server starts without Doppler (e.g. CI or bare local test runs).
-    // Real values from Doppler/shell take precedence at runtime via reuseExistingServer.
+    // Provide placeholder Supabase env vars as fallback (used only when npm run test:e2e
+    // is called directly without doppler run). In CI/normal usage, values come from:
+    // - Doppler injection via: doppler run ... npm run test:e2e
+    // - Existing shell environment (reuseExistingServer=true in local dev)
     env: {
       ...process.env,
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ?? 'https://placeholder.supabase.co',
