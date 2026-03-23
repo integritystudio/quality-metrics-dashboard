@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
 import type { SupabaseSession } from '../lib/supabase.js';
 import { API_BASE } from '../lib/constants.js';
-import type { AppSession, DashboardPermission } from '../types/auth.js';
+import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
 
 interface AuthContextValue {

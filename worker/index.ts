@@ -6,8 +6,8 @@ import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponse
 
 export type { DashboardPermission, AppSession };
 
-const USER_ACTIVITY_EVENTS = ['login', 'logout', 'dashboard_view', 'trace_view', 'session_view', 'compliance_view'] as const;
-type UserActivityEvent = typeof USER_ACTIVITY_EVENTS[number];
+const _USER_ACTIVITY_EVENTS = ['login', 'logout', 'dashboard_view', 'trace_view', 'session_view', 'compliance_view'] as const;
+type UserActivityEvent = typeof _USER_ACTIVITY_EVENTS[number];
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.

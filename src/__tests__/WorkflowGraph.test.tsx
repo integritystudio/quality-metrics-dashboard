@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 vi.mock('@xyflow/react', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   return {
-    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, edgeTypes, children, ...rest }: any) => (
+    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, _edgeTypes, children, ...rest }: any) => (
       <div data-testid="reactflow" {...rest}>
         {(nodes ?? []).map((n: any) => {
           const NodeComp = nodeTypes?.[n.type];
@@ -20,7 +20,7 @@ vi.mock('@xyflow/react', async () => {
         {children}
       </div>
     ),
-    MiniMap: (props: any) => <div data-testid="minimap" />,
+    MiniMap: (_props: any) => <div data-testid="minimap" />,
     Controls: () => <div data-testid="controls" />,
     Background: () => null,
     Handle: () => null,
