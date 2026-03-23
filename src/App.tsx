@@ -92,6 +92,8 @@ function DashboardPage({ period }: { period: Period }) {
 
 function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
   const { session, isLoading: authLoading } = useAuth();
+  const { data, isLoading, error } = useDashboard(period, role);
+
   if (authLoading) return <MetricGridSkeleton />;
   if (!session || !session.allowedViews.includes(role)) {
     return (
@@ -102,7 +104,6 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
       </div>
     );
   }
-  const { data, isLoading, error } = useDashboard(period, role);
 
   if (isLoading && !data) return <MetricGridSkeleton />;
   if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;

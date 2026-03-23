@@ -180,6 +180,7 @@ export function evalToRow(e: EvaluationResult): EvalRow {
 }
 
 export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
+  'use no memo';
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [activeCategories, setActiveCategories] = useState<LabelFilterCategory[]>([]);
