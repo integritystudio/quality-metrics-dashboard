@@ -79,22 +79,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    let cancelled = false;
+    const seqSnapshot = ++loadSeqRef.current;
 
-    const current = getSession();
-    const init = current
-      ? loadSession(current, controller.signal)
-      : refreshSession().then((s) => loadSession(s, controller.signal));
-    void init;
+    const initializeSession = async () => {
+      const current = getSession();
+      const session = current ?? (await refreshSession());
+      if (!cancelled && seqSnapshot === loadSeqRef.current) {
+        await loadSession(session, controller.signal);
+      }
+    };
+
+    void initializeSession();
 
     const unsubscribe = onAuthStateChange((supabaseSession, event) => {
       if (event === 'SIGNED_IN' && supabaseSession) {
         void postActivityEvent('login', supabaseSession.access_token);
       }
-      setIsLoading(true);
-      void loadSession(supabaseSession, controller.signal);
+      if (!cancelled) {
+        void loadSession(supabaseSession, controller.signal);
+      }
     });
 
     return () => {
+      cancelled = true;
       controller.abort();
       unsubscribe();
     };

@@ -157,10 +157,10 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   useEffect(() => {
     if (graph.nodes.length === 0) return;
     let cancelled = false;
-    setLayoutError(null);
     computeLayout(graph.nodes, graph.edges)
       .then(({ nodes: rfNodes, edges: rfEdges }) => {
         if (!cancelled) {
+          setLayoutError(null);
           setNodes(rfNodes);
           setEdges(rfEdges);
         }
