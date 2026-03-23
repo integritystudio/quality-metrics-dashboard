@@ -1,12 +1,34 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import type { ReactNode } from 'react';
+
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) => void;
+  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
+  _edgeTypes?: unknown;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
 
 vi.mock('@xyflow/react', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   return {
-    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, _edgeTypes, children, ...rest }: any) => (
+    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, _edgeTypes, children, ...rest }: ReactFlowProps) => (
       <div data-testid="reactflow" {...rest}>
-        {(nodes ?? []).map((n: any) => {
+        {(nodes ?? []).map((n) => {
           const NodeComp = nodeTypes?.[n.type];
           return (
             <div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() => onNodeClick?.({}, n)}>
@@ -14,24 +36,24 @@ vi.mock('@xyflow/react', async () => {
             </div>
           );
         })}
-        {(edges ?? []).map((e: any) => (
+        {(edges ?? []).map((e) => (
           <div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} />
         ))}
         {children}
       </div>
     ),
-    MiniMap: (_props: any) => <div data-testid="minimap" />,
+    MiniMap: (_props: unknown) => <div data-testid="minimap" />,
     Controls: () => <div data-testid="controls" />,
     Background: () => null,
     Handle: () => null,
     Position: { Top: 'top', Bottom: 'bottom' },
     BaseEdge: () => null,
     getStraightPath: () => ['M 0 0', 0, 0],
-    useNodesState: (initial: any[]) => {
+    useNodesState: (initial: MockNode[]) => {
       const [nodes, setNodes] = React.useState(initial);
       return [nodes, setNodes, vi.fn()];
     },
-    useEdgesState: (initial: any[]) => {
+    useEdgesState: (initial: MockEdge[]) => {
       const [edges, setEdges] = React.useState(initial);
       return [edges, setEdges, vi.fn()];
     },
@@ -39,12 +61,17 @@ vi.mock('@xyflow/react', async () => {
   };
 });
 
+interface ELKGraph {
+  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+
 vi.mock('elkjs/lib/elk.bundled.js', () => ({
   default: class ELK {
-    layout(graph: any) {
+    layout(graph: ELKGraph) {
       return Promise.resolve({
         ...graph,
-        children: (graph.children ?? []).map((c: any, i: number) => ({
+        children: (graph.children ?? []).map((c, i: number) => ({
           ...c,
           x: i * 300,
           y: i * 200,

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 
 // ---------------------------------------------------------------------------
 // Mock useAgentSession
@@ -17,7 +18,7 @@ vi.mock('../hooks/useAgentSession.js', () => ({
 const mockNavigate = vi.fn();
 vi.mock('wouter', () => ({
   useLocation: () => ['/', mockNavigate],
-  Link: ({ href, children, ...rest }: any) => (
+  Link: ({ href, children, ...rest }: LinkProps) => (
     <a href={href} {...rest}>{children}</a>
   ),
 }));
@@ -27,9 +28,9 @@ vi.mock('wouter', () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock('../components/WorkflowGraph.js', () => ({
-  WorkflowGraphView: ({ graph, onNodeClick }: any) => (
+  WorkflowGraphView: ({ graph, onNodeClick }: WorkflowGraphViewProps) => (
     <div data-testid="workflow-graph-view">
-      {(graph.nodes ?? []).map((n: any) => (
+      {(graph.nodes ?? []).map(n => (
         <button
           key={n.id}
           data-testid={`graph-node-${n.id}`}
@@ -47,7 +48,7 @@ vi.mock('../components/WorkflowGraph.js', () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock('../components/DetailPageHeader.js', () => ({
-  DetailPageHeader: ({ title, id, children }: any) => (
+  DetailPageHeader: ({ title, id, children }: DetailPageHeaderProps) => (
     <div data-testid="detail-page-header">
       <h2>{title}</h2>
       {id && <span data-testid="header-id">{id}</span>}
@@ -62,7 +63,7 @@ vi.mock('../components/DetailPageHeader.js', () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock('../components/PageShell.js', () => ({
-  PageShell: ({ isLoading, error, children }: any) => {
+  PageShell: ({ isLoading, error, children }: PageShellProps) => {
     if (isLoading) return <div data-testid="page-shell-loading" />;
     if (error) return <div data-testid="page-shell-error">{error.message}</div>;
     return <div data-testid="page-shell">{children}</div>;
