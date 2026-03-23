@@ -3,6 +3,7 @@ import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { loadEnv } from 'vite';
+import ReactCompilerConfig from 'babel-plugin-react-compiler/experimental';
 
 const PARENT_DIST_RE = /\.\.\/\.\.\/\.\.(?:\/\.\.)*\/dist\//;
 
@@ -35,7 +36,13 @@ export default defineConfig(({ command }) => {
   return {
     base: '/',
     plugins: [
-      react(),
+      react({
+        babel: {
+          plugins: [
+            [ReactCompilerConfig, { compilationMode: 'annotation' }],
+          ],
+        },
+      }),
       ...(process.env.VITEST ? [parentDistStub()] : []),
     ],
     build: {
