@@ -48,3 +48,9 @@ Open items from code reviews and deferred work.
 | ADMIN-P4-2 | `AdminPage.tsx` `onChanged` refetch invalidates all users after each role mutation — no concurrent mutation guard, races possible if multiple UserRow components assign/revoke simultaneously | P3 | code-reviewer feedback on c9a38dc |
 | ADMIN-P4-3 | Admin routes return generic error messages on Supabase REST failures — currently safe (no body exposure), but document error handling policy for consistency with other endpoints | P4 | code-reviewer feedback on c9a38dc |
 
+### E2E & Integration Testing
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| E2E-1 | Create production-aligned integration tests that remove mocked APIs and run E2E tests with Doppler-injected credentials against real dev environment. Current E2E suite uses placeholder Supabase credentials + custom fixture that mocks `/api/me` endpoint (suitable for unit-like testing). Separate integration tests would validate API contracts and auth flow with real Supabase. | P3 | e2e-auth-setup session |
+
