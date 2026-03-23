@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 test.describe('Error & Empty States', () => {
   test('shows loading skeleton on initial load', async ({ page }) => {
