@@ -2,12 +2,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { DashboardPermission, AppSession, DashboardView } from '../src/types/auth.js';
+import type { UserActivityEvent } from '../src/types/activity.js';
 import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
 
 export type { DashboardPermission, AppSession };
-
-const _USER_ACTIVITY_EVENTS = ['login', 'logout', 'dashboard_view', 'trace_view', 'session_view', 'compliance_view'] as const;
-type UserActivityEvent = typeof _USER_ACTIVITY_EVENTS[number];
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
@@ -248,7 +246,7 @@ app.post('/api/activity', async (c) => {
   const body: unknown = await c.req.json().catch(() => null);
   const result = ActivityRequestSchema.safeParse(body);
   if (!result.success) return c.json({ error: 'Invalid request body' }, 400);
-  logActivity(c.get('session').appUserId, result.data.activity_type, c.env, c.get('jwt'));
+  logActivity(c.get('session').appUserId, result.data.activity_type as UserActivityEvent, c.env, c.get('jwt'));
   return c.body(null, 204);
 });
 

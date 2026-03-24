@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
 
 /**
  * Supabase /auth/v1/user endpoint response
@@ -96,7 +97,7 @@ export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
  * Only login/logout are accepted; view events are logged server-side by route handlers.
  */
 export const ActivityRequestSchema = z.object({
-  activity_type: z.enum(['login', 'logout']),
+  activity_type: z.enum(FRONTEND_ACTIVITY_EVENTS),
 });
 
 /**

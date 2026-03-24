@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
 import type { SupabaseSession } from '../lib/supabase.js';
 import { API_BASE } from '../lib/constants.js';
+import { postActivityEvent } from '../lib/activity-logger.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
 
@@ -13,22 +14,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-// Fire-and-forget — failures must not block auth flows.
-async function postActivityEvent(activityType: 'login' | 'logout', jwt: string): Promise<void> {
-  try {
-    await fetch(`${API_BASE}/api/activity`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${jwt}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ activity_type: activityType }),
-    });
-  } catch {
-    // Intentionally swallowed — audit logging must not fail auth flows
-  }
-}
 
 async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
   try {
