@@ -1,0 +1,27 @@
+[
+  {
+    "startTime": "2026-01-11T00:00:00.000Z",
+    "endTime": "2026-01-21T23:59:59.000Z",
+    "severity": "critical"
+  },
+  {
+    "startTime": "2026-01-22T00:00:00.000Z",
+    "endTime": "2026-01-22T23:59:59.000Z",
+    "severity": "minor"
+  },
+  {
+    "startTime": "2026-02-23T00:00:00.000Z",
+    "endTime": "2026-02-23T23:59:59.000Z",
+    "severity": "minor"
+  },
+  {
+    "startTime": "2026-03-02T00:00:00.000Z",
+    "endTime": "2026-03-02T23:59:59.000Z",
+    "severity": "minor"
+  },
+  {
+    "startTime": "2026-03-23T00:00:00.000Z",
+    "endTime": "2026-03-24T00:00:00.000Z",
+    "severity": "critical"
+  }
+]
