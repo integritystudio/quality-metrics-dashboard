@@ -43,6 +43,18 @@ import {
 import type { CalibrationState } from '../../src/lib/quality/quality-feature-engineering.js';
 import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
+import {
+  kvSyncStateSchema,
+  metricDetailValueSchema,
+  coverageHeatmapSchema,
+  type KvSyncState,
+  type MetricDetailValue,
+  type CoverageHeatmap,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import {
+  loadJsonWithValidationSafe,
+  loadJsonWithValidation,
+} from '../src/lib/dashboard-file-utils.js';
 
 function resolveNamespaceId(): string {
   if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
@@ -152,36 +164,20 @@ export function computeBudgetAllocation(
 
 // ---- Delta sync state ----
 
-type SyncState = Record<string, string>; // key → sha256(value)
-
-function loadJsonFile<T>(path: string, fallback: T): T {
-  if (!existsSync(path)) return fallback;
-  try { return JSON.parse(readFileSync(path, 'utf-8')) as T; }
-  catch { return fallback; }
+function loadSyncState(): KvSyncState {
+  return loadJsonWithValidationSafe(STATE_FILE, kvSyncStateSchema, {});
 }
 
-function loadSyncState(): SyncState {
-  return loadJsonFile(STATE_FILE, {} as SyncState);
-}
-
-function saveSyncState(state: SyncState): void {
+function saveSyncState(state: KvSyncState): void {
   writeFileSync(STATE_FILE, JSON.stringify(state));
 }
 
-interface CoverageData {
-  totalTraces: number;
-  syncedTraces: number;
-  coveragePercent: number;
-  referencedCoverage: number;
-  runsRemaining: number | null;
-  /** When stable coverage numbers were last computed/changed. */
-  timestamp: string;
-  /** When sync last ran, regardless of whether data changed. Refreshed on every run. */
-  lastChecked: string;
-}
-
-function loadLastCoverage(): CoverageData | null {
-  return loadJsonFile<CoverageData | null>(COVERAGE_FILE, null);
+function loadLastCoverage(): CoverageHeatmap | null {
+  try {
+    return loadJsonWithValidation(COVERAGE_FILE, coverageHeatmapSchema);
+  } catch {
+    return null;
+  }
 }
 
 function saveLastCoverage(coverage: CoverageData): void {
@@ -858,11 +854,12 @@ async function main(): Promise<void> {
   for (const entry of entries) {
     if (!entry.key.startsWith('metric:')) continue;
     try {
-      const detail = JSON.parse(entry.value) as {
-        worstEvaluations?: Array<{ traceId?: string }>;
-      };
-      for (const w of detail.worstEvaluations ?? []) {
-        if (w.traceId) referencedTraceIds.add(w.traceId);
+      const parsed = JSON.parse(entry.value);
+      const detail = metricDetailValueSchema.safeParse(parsed);
+      if (detail.success) {
+        for (const w of detail.data.worstEvaluations ?? []) {
+          if (w.traceId) referencedTraceIds.add(w.traceId);
+        }
       }
     } catch { /* skip malformed */ }
   }
