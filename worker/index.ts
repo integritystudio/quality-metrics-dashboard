@@ -489,6 +489,27 @@ app.get('/api/calibration', async (c) => {
   return c.json(data);
 });
 
+app.get('/api/routing-telemetry', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
+  const period = c.req.query('period') ?? '7d';
+  if (!['24h', '7d', '30d'].includes(period)) {
+    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
+  }
+  const data = await c.env.DASHBOARD.get(`routing-telemetry:${period}`, 'json');
+  if (!data) {
+    return c.json({
+      period,
+      totalSpansScanned: 0,
+      summary: { routedSpans: 0, fallbackRate: 0 },
+      modelDistribution: {},
+      providerDistribution: {},
+      costSavings: 0,
+      groups: [],
+    });
+  }
+  return c.json(data);
+});
+
 app.get('/api/health', async (c) => {
   const lastSync = await c.env.DASHBOARD.get('meta:lastSync');
   return c.json({
