@@ -27,6 +27,17 @@ import {
 } from '../../src/lib/judge/llm-judge-config.js';
 import type { DatasetRunRecord } from '../../src/backends/index.js';
 import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
+import {
+  traceSpanSchema,
+  otelLogEntrySchema,
+  transcriptEntrySchema,
+  otelEvaluationRecordSchema,
+  type TraceSpan,
+  type OTelLogEntry,
+  type TranscriptEntry,
+  type OTelEvaluationRecord,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 
 /** B9: Tool correctness criteria — evaluates whether tool usage was appropriate */
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
@@ -152,23 +163,10 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   for (const file of logFiles) {
     const filepath = join(TELEMETRY_DIR, file);
     // P1-2: Stream line-by-line instead of loading entire file into memory
-    const rl = createInterface({
-      input: createReadStream(filepath, 'utf-8'),
-      crlfDelay: Infinity,
-    });
+    // Use validated streaming to ensure schema compliance
 
-    for await (const line of rl) {
-      if (!line) continue;
-      let entry: Record<string, unknown>;
-      try {
-        entry = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      const attrs = typeof entry.attributes === 'object' && entry.attributes !== null
-        && !Array.isArray(entry.attributes)
-        ? entry.attributes as Record<string, unknown> : undefined;
+    for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
+      const attrs = entry.attributes as Record<string, unknown> | undefined;
       if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
 
       const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
@@ -244,29 +242,16 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
 
   for (const file of traceFiles) {
     const filepath = join(TELEMETRY_DIR, file);
-    const rl = createInterface({
-      input: createReadStream(filepath, 'utf-8'),
-      crlfDelay: Infinity,
-    });
 
-    for await (const line of rl) {
-      if (!line) continue;
-      let span: Record<string, unknown>;
-      try {
-        span = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      const attrs = typeof span.attributes === 'object' && span.attributes !== null
-        ? span.attributes as Record<string, unknown> : undefined;
+    for await (const span of streamJsonlWithValidation(filepath, traceSpanSchema)) {
+      const attrs = span.attributes;
       if (!attrs) continue;
 
       const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
       if (!sessionId) continue;
 
       const startTime = Array.isArray(span.startTime) ? span.startTime[0] as number : 0;
-      const traceId = typeof span.traceId === 'string' ? span.traceId : '';
+      const traceId = span.traceId || '';
 
       const existing = sessions.get(sessionId);
       if (!existing) {
@@ -355,31 +340,20 @@ export function extractToolResults(content: unknown): string[] {
 
 export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
   // H1: Stream line-by-line to avoid loading entire transcript into memory
-  const rl = createInterface({
-    input: createReadStream(info.path, 'utf-8'),
-    crlfDelay: Infinity,
-  });
+  // Use validated streaming to ensure schema compliance
   const turns: Turn[] = [];
 
   let pendingUser: { text: string; timestamp: string } | null = null;
   const accumulatedToolResults: string[] = [];
 
-  for await (const line of rl) {
-    if (!line) continue;
-    let entry: Record<string, unknown>;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-
-    const type = entry.type as string;
+  for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
+    const type = entry.type;
     if (type === 'progress' || type === 'file-history-snapshot') continue;
 
-    const message = entry.message as Record<string, unknown> | undefined;
+    const message = entry.message;
     if (!message) continue;
 
-    const role = message.role as string | undefined;
+    const role = message.role;
     const content = message.content;
 
     if (type === 'user' && role === 'user') {
@@ -813,25 +787,17 @@ function _loadExistingKeys(): Set<string> {
 
   for (const file of evalFiles) {
     const filepath = join(TELEMETRY_DIR, file);
-    const lines = readFileSync(filepath, 'utf-8').split('\n').filter(Boolean);
+    const records = readJsonlWithValidationSync(filepath, otelEvaluationRecordSchema);
 
-    for (const line of lines) {
-      let record: Record<string, unknown>;
-      try {
-        record = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      const attrs = typeof record.attributes === 'object' && record.attributes !== null
-        ? record.attributes as Record<string, unknown> : undefined;
+    for (const record of records) {
+      const attrs = record.attributes;
       if (!attrs) continue;
       const evalType = attrs['gen_ai.evaluation.evaluator.type'];
       if (evalType !== 'llm' && evalType !== 'seed' && evalType !== 'trace-backfill') continue;
 
-      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
-      const metricName = typeof attrs['gen_ai.evaluation.name'] === 'string' ? attrs['gen_ai.evaluation.name'] : '';
-      const timestamp = typeof record.timestamp === 'string' ? record.timestamp : '';
+      const sessionId = attrs['session.id'] as string || '';
+      const metricName = attrs['gen_ai.evaluation.name'] as string || '';
+      const timestamp = record.timestamp || '';
       const turnKey = timestamp.slice(0, 19);
 
       keys.add(`${sessionId}:${metricName}:${turnKey}`);

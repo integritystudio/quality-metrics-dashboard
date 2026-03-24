@@ -15,19 +15,10 @@ import {
   shouldRecalibrate,
 } from '../../src/lib/quality/quality-feature-engineering.js';
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
+import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
-
-export interface TraceSpan {
-  traceId: string;
-  spanId: string;
-  name: string;
-  startTime: [number, number];
-  endTime: [number, number];
-  duration: [number, number];
-  status: { code: number };
-  attributes: Record<string, unknown>;
-}
 
 export interface EvalRecord {
   timestamp: string;
@@ -363,15 +354,9 @@ function main(): void {
 
   for (const file of traceFiles) {
     const filePath = join(TELEMETRY_DIR, file);
-    const lines = readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
+    const spans = readJsonlWithValidationSync(filePath, traceSpanSchema);
 
-    for (const line of lines) {
-      let span: TraceSpan;
-      try {
-        span = JSON.parse(line);
-      } catch {
-        continue;
-      }
+    for (const span of spans) {
       _spanCount++;
 
       // Derive per-span evaluations
@@ -410,17 +395,12 @@ function main(): void {
     // Read existing evaluations and keep any that weren't produced by derive (e.g. LLM judge)
     const preserved: string[] = [];
     if (existsSync(outFile)) {
-      const existingLines = readFileSync(outFile, 'utf-8').split('\n').filter(Boolean);
-      for (const line of existingLines) {
-        try {
-          const rec = JSON.parse(line);
-          const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'] ?? rec.evaluator;
-          if (evaluator !== RULE_EVALUATOR) {
-            preserved.push(line);
-          }
-        } catch {
-          // keep unparseable lines as-is
-          preserved.push(line);
+      const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
+      for (const rec of existingRecs) {
+        const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
+        if (evaluator && evaluator !== RULE_EVALUATOR) {
+          // Preserve non-rule evaluations by re-serializing
+          preserved.push(JSON.stringify(rec));
         }
       }
     }
