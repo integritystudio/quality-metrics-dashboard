@@ -15,7 +15,8 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
+import { z } from 'zod';
 import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
 import {
   computeStdDev,
@@ -30,8 +31,7 @@ import type {
 } from '../../src/lib/quality/quality-feature-engineering.js';
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 
-const INCIDENTS_FILE = join(import.meta.dirname ?? '.', '.degradation-incidents.json');
-const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
+const INCIDENTS_FILE = join(import.meta.dirname ?? process.cwd(), '.degradation-incidents.json');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** F1 improvement above which best config triggers graduation recommendation */
@@ -43,21 +43,35 @@ const MIN_INCIDENTS_WARN = 5;
 
 function parseIntArg(argList: string[], flag: string, defaultValue: number): number {
   const match = argList.find(a => a.startsWith(`--${flag}=`));
-  const parsed = match ? parseInt(match.split('=')[1], 10) : defaultValue;
+  const eqIdx = match ? match.indexOf('=') : -1;
+  const parsed = eqIdx !== -1 ? parseInt(match!.slice(eqIdx + 1), 10) : defaultValue;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
 function parseStringArg(argList: string[], flag: string): string | null {
   const match = argList.find(a => a.startsWith(`--${flag}=`));
-  return match ? match.split('=')[1] : null;
+  if (!match) return null;
+  const eqIdx = match.indexOf('=');
+  return eqIdx === -1 ? null : match.slice(eqIdx + 1);
 }
 
 const cliArgs = process.argv.slice(2);
 const days = parseIntArg(cliArgs, 'days', 90);
 const metricFilter = parseStringArg(cliArgs, 'metric');
-const outputFile = parseStringArg(cliArgs, 'output') ?? 'backtest-results.json';
+const outputFile = basename(parseStringArg(cliArgs, 'output') ?? 'backtest-results.json');
+
+if (metricFilter !== null && !(metricFilter in QUALITY_METRICS)) {
+  console.error(`Unknown metric: "${metricFilter}". Valid: ${Object.keys(QUALITY_METRICS).join(', ')}`);
+  process.exit(1);
+}
 
 // ---- Incidents ----
+
+const labeledIncidentSchema = z.object({
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  severity: z.enum(['minor', 'major', 'critical']),
+});
 
 function loadIncidents(): LabeledIncident[] {
   if (!existsSync(INCIDENTS_FILE)) {
@@ -68,11 +82,12 @@ function loadIncidents(): LabeledIncident[] {
   try {
     const raw = readFileSync(INCIDENTS_FILE, 'utf8');
     const data: unknown = JSON.parse(raw);
-    if (!Array.isArray(data)) {
-      console.error('.degradation-incidents.json must be a JSON array of LabeledIncident');
+    const result = z.array(labeledIncidentSchema).safeParse(data);
+    if (!result.success) {
+      console.error('Invalid .degradation-incidents.json:', result.error.flatten().fieldErrors);
       return [];
     }
-    return data as LabeledIncident[];
+    return result.data;
   } catch (err) {
     console.error(`Failed to parse incidents file: ${err instanceof Error ? err.message : String(err)}`);
     return [];
@@ -126,15 +141,25 @@ type TimeSeriesPoint = {
  * - totalCoverageCells: i + 1
  * - historicalValues: all scores seen up to and including bucket i (for EWMA drift)
  * - latencyP95/P50: 0 (not available from evaluation data)
+ *
+ * Uses running accumulators to avoid O(n²) repeated slicing.
  */
 function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
   const cumulativeScores: number[] = [];
+  const baselineScores: number[] = [];
+  let baselineEnd = 0;
+  let coverageGapCount = 0;
+
   return buckets.map((bucket, i) => {
     cumulativeScores.push(...bucket.scores);
+    if (bucket.scores.length === 0) coverageGapCount++;
 
-    const baselineEnd = Math.max(1, Math.floor((i + 1) * 0.7));
-    const baselineScores = buckets.slice(0, baselineEnd).flatMap(b => b.scores);
-    const coverageGapCount = buckets.slice(0, i + 1).filter(b => b.scores.length === 0).length;
+    // Extend baseline incrementally: baseline covers first 70% of [0..i]
+    const newBaselineEnd = Math.max(1, Math.floor((i + 1) * 0.7));
+    while (baselineEnd < newBaselineEnd) {
+      baselineScores.push(...buckets[baselineEnd].scores);
+      baselineEnd++;
+    }
 
     return {
       timestamp: bucket.timestamp,
@@ -238,12 +263,16 @@ async function main(): Promise<void> {
   }> = {};
 
   for (const name of metricNames) {
-    const evaluations = await backend.queryEvaluations?.({
+    const rawEvals = await backend.queryEvaluations({
       evaluationName: name,
       startDate,
       endDate,
       limit: 100_000,
-    }) ?? [];
+    });
+
+    const evaluations = rawEvals.filter(
+      (e): e is typeof e & { scoreValue: number } => e.scoreValue !== undefined,
+    );
 
     if (evaluations.length === 0) {
       console.log(`  ${name}: no evaluations in window, skipping`);
@@ -269,7 +298,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const outputPath = join(import.meta.dirname ?? '.', outputFile);
+  const outputPath = join(import.meta.dirname ?? process.cwd(), outputFile);
   const totalSweepGrid = Object.values(BACKTEST_SWEEP).reduce((acc, arr) => acc * arr.length, 1);
 
   writeFileSync(outputPath, JSON.stringify({
