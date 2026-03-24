@@ -6,7 +6,7 @@ import type { Period } from '../types.js';
 const PERCENT_MULTIPLIER = 100;
 
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
-  return 'strategy' in g;
+  return 'strategy' in g && !('pair' in g);
 }
 
 export function RoutingTelemetryPage({ period }: { period: Period }) {
@@ -65,7 +65,9 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                         <td className="mono">{model}</td>
                         <td className="mono">{count}</td>
                         <td className="mono">
-                          {((count / data.summary.routedSpans) * PERCENT_MULTIPLIER).toFixed(1)}%
+                          {data.summary.routedSpans > 0
+                            ? ((count / data.summary.routedSpans) * PERCENT_MULTIPLIER).toFixed(1) + '%'
+                            : '—'}
                         </td>
                       </tr>
                     ))}

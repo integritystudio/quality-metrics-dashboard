@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import type { DashboardPermission, AppSession, DashboardView } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
+import { routingTelemetryKvSchema } from '../src/lib/validation/dashboard-schemas.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -495,19 +496,10 @@ app.get('/api/routing-telemetry', async (c) => {
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
-  const data = await c.env.DASHBOARD.get(`routing-telemetry:${period}`, 'json');
-  if (!data) {
-    return c.json({
-      period,
-      totalSpansScanned: 0,
-      summary: { routedSpans: 0, fallbackRate: 0 },
-      modelDistribution: {},
-      providerDistribution: {},
-      costSavings: 0,
-      groups: [],
-    });
-  }
-  return c.json(data);
+  const raw = await c.env.DASHBOARD.get(`routing-telemetry:${period}`, 'json');
+  const result = routingTelemetryKvSchema.safeParse(raw ?? {});
+  if (!result.success) return c.json({ error: 'Routing telemetry data is malformed' }, 500);
+  return c.json({ ...result.data, period });
 });
 
 app.get('/api/health', async (c) => {

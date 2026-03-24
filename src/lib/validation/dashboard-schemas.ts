@@ -179,3 +179,49 @@ export const coverageHeatmapCellSchema = z.object({
 export const coverageHeatmapSchema = z.record(z.array(coverageHeatmapCellSchema));
 
 export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
+
+// ============================================================================
+// Routing Telemetry KV Data
+// ============================================================================
+
+const routingTelemetrySummarySchema = z.object({
+  routedSpans: z.number().int().min(0),
+  fallbackRate: z.number().min(0).max(1),
+});
+
+const routingTelemetryModelPairGroupSchema = z.object({
+  pair: z.string(),
+  requestedModel: z.string(),
+  actualModel: z.string(),
+  provider: z.string().nullable(),
+  count: z.number().int().min(0),
+});
+
+const routingTelemetryStrategyGroupSchema = z.object({
+  strategy: z.string(),
+  count: z.number().int().min(0),
+  fallbackCount: z.number().int().min(0),
+  fallbackRate: z.number().min(0).max(1),
+});
+
+const routingTelemetryGroupSchema = z.union([
+  routingTelemetryStrategyGroupSchema,
+  routingTelemetryModelPairGroupSchema,
+]);
+
+export const routingTelemetryKvSchema = z.object({
+  period: z.string().optional(),
+  totalSpansScanned: z.number().int().min(0).default(0),
+  summary: routingTelemetrySummarySchema.default({ routedSpans: 0, fallbackRate: 0 }),
+  modelDistribution: z.record(z.number().int().min(0)).default({}),
+  providerDistribution: z.record(z.number().int().min(0)).default({}),
+  costSavings: z.number().min(0).default(0),
+  routingLatency: z.object({
+    p50: z.number().min(0),
+    p99: z.number().min(0),
+    source: z.enum(['classification_time', 'span_duration']),
+  }).optional(),
+  groups: z.array(routingTelemetryGroupSchema).default([]),
+});
+
+export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
