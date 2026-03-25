@@ -46,6 +46,36 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
             </div>
           </div>
 
+          {Object.keys(data.providerDistribution).length > 0 && (
+            <div className="card mb-3">
+              <h3 className="text-sm font-semibold mb-3">Provider Distribution</h3>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Count</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(data.providerDistribution)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([provider, count]) => (
+                      <tr key={provider}>
+                        <td className="mono">{provider}</td>
+                        <td className="mono">{count}</td>
+                        <td className="mono">
+                          {data.summary.routedSpans > 0
+                            ? ((count / data.summary.routedSpans) * PERCENT_MULTIPLIER).toFixed(1) + '%'
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {Object.keys(data.modelDistribution).length > 0 && (
             <div className="card mb-3">
               <h3 className="text-sm font-semibold mb-3">Model Distribution</h3>
