@@ -11,6 +11,9 @@ export type { DashboardPermission, AppSession };
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
 // 3s timeout prevents hung fetch from blocking worker execution on slow/unreliable networks.
+// Auth: uses the user's JWT (not service-role). Requires RLS policy:
+//   create policy "users can insert own activity" on public.user_activity for insert
+//   to authenticated with check (user_id = auth.uid());
 function logActivity(
   appUserId: string,
   activityType: UserActivityEvent,
