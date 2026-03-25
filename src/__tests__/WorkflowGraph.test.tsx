@@ -261,3 +261,123 @@ describe('WorkflowGraphView', () => {
     expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
   });
 });
+
+// ============================================================================
+// ST-G5 Stress Tests — graph layout stability at scale
+// ============================================================================
+
+const ST_G5_LARGE_GRAPH_SIZE = 100;
+const ST_G5_DEEP_CHAIN_SIZE = 20;
+
+describe('WorkflowGraphView stress (ST-G5)', () => {
+  it('renders 100+ node graph without error and shows all nodes', async () => {
+    const nodes: WorkflowNode[] = Array.from({ length: ST_G5_LARGE_GRAPH_SIZE }, (_, i) =>
+      makeNode({ id: `node-${i}`, label: `agent-${i}` })
+    );
+    // Chain edges: 0→1→2→...→99
+    const edges: WorkflowEdge[] = nodes.slice(0, -1).map((n, i) =>
+      makeEdge({ id: `edge-${i}`, source: n.id, target: `node-${i + 1}` })
+    );
+    const graph: WorkflowGraph = {
+      nodes,
+      edges,
+      rootNodeId: 'node-0',
+      workflowShape: 'branching',
+    };
+
+    render(<WorkflowGraphView graph={graph} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-node-0')).toBeInTheDocument();
+      expect(screen.getByTestId(`rf-node-node-${ST_G5_LARGE_GRAPH_SIZE - 1}`)).toBeInTheDocument();
+    });
+    // All 100 nodes rendered
+    expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_LARGE_GRAPH_SIZE);
+  });
+
+  it('renders deeply nested delegation chain without error', async () => {
+    const nodes: WorkflowNode[] = Array.from({ length: ST_G5_DEEP_CHAIN_SIZE }, (_, i) =>
+      makeNode({ id: `node-${i}`, label: `delegate-${i}` })
+    );
+    const edges: WorkflowEdge[] = nodes.slice(0, -1).map((n, i) =>
+      makeEdge({ id: `edge-${i}`, source: n.id, target: `node-${i + 1}` })
+    );
+    const graph: WorkflowGraph = {
+      nodes,
+      edges,
+      rootNodeId: 'node-0',
+      workflowShape: 'linear',
+    };
+
+    render(<WorkflowGraphView graph={graph} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-node-0')).toBeInTheDocument();
+      expect(screen.getByTestId(`rf-node-node-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
+    });
+  });
+
+  it('renders without crash when rootNodeId is null (missing parent span inference fallback)', async () => {
+    const nodes: WorkflowNode[] = Array.from({ length: 5 }, (_, i) =>
+      makeNode({ id: `node-${i}`, label: `orphan-${i}` })
+    );
+    const graph: WorkflowGraph = {
+      nodes,
+      edges: [],
+      rootNodeId: null,
+      workflowShape: 'branching',
+    };
+
+    expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
+    await waitFor(() => {
+      expect(screen.getByTestId('reactflow')).toBeInTheDocument();
+    });
+  });
+
+  it('renders disconnected nodes (no edges) without crash', async () => {
+    const nodes: WorkflowNode[] = Array.from({ length: 10 }, (_, i) =>
+      makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
+    );
+    const graph: WorkflowGraph = {
+      nodes,
+      edges: [],
+      rootNodeId: 'orphan-0',
+      workflowShape: 'branching',
+    };
+
+    render(<WorkflowGraphView graph={graph} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(10);
+    });
+  });
+
+  it('handles concurrent renders of different graphs without state leakage', async () => {
+    const graphA: WorkflowGraph = {
+      nodes: [makeNode({ id: 'a-1', label: 'alpha' }), makeNode({ id: 'a-2', label: 'beta' })],
+      edges: [makeEdge({ id: 'ea-1', source: 'a-1', target: 'a-2' })],
+      rootNodeId: 'a-1',
+      workflowShape: 'linear',
+    };
+    const graphB: WorkflowGraph = {
+      nodes: [makeNode({ id: 'b-1', label: 'gamma' }), makeNode({ id: 'b-2', label: 'delta' })],
+      edges: [makeEdge({ id: 'eb-1', source: 'b-1', target: 'b-2' })],
+      rootNodeId: 'b-1',
+      workflowShape: 'linear',
+    };
+
+    const { unmount: unmountA } = render(<WorkflowGraphView graph={graphA} />);
+    const { unmount: unmountB } = render(<WorkflowGraphView graph={graphB} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-a-1')).toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
+    });
+
+    // Unmounting one should not affect the other
+    unmountA();
+    expect(screen.queryByTestId('rf-node-a-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
+    unmountB();
+  });
+});
