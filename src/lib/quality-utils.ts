@@ -301,17 +301,18 @@ export function adaptiveScoreColorBand(
 
 // -- Timestamp formatting ---------------------------------------------------
 
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+
 export function formatTimestamp(ts: string): string {
   const d = new Date(ts);
   if (isNaN(d.getTime())) return ts || '-';
-  const now = Date.now();
-  const diffMs = now - d.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
+  const now = new Date();
+  const diffMin = differenceInMinutes(now, d);
   if (diffMin < 1) return 'just now';
   if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
+  const diffHr = differenceInHours(now, d);
   if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
+  const diffDay = differenceInDays(now, d);
   if (diffDay < 7) return `${diffDay}d ago`;
-  return d.toLocaleDateString();
+  return format(d, 'PP');
 }

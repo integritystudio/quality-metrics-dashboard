@@ -1,4 +1,5 @@
 import { Link } from 'wouter';
+import { format } from 'date-fns';
 import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
@@ -148,9 +149,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             </div>
             {timespan && (
               <div className="text-muted text-xs flex-wrap gap-4" style={{ marginTop: 'var(--space-1)' }}>
-                <span>{new Date(timespan.start).toLocaleString()}</span>
+                <span>{format(new Date(timespan.start), 'PPp')}</span>
                 <span>&rarr;</span>
-                <span>{new Date(timespan.end).toLocaleString()}</span>
+                <span>{format(new Date(timespan.end), 'PPp')}</span>
                 <span className="mono text-2xs chip chip-badge">{timespan.durationHours}h</span>
               </div>
             )}

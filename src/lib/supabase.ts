@@ -1,3 +1,5 @@
+import { fromUnixTime, isPast, subSeconds } from 'date-fns';
+
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
 
@@ -106,7 +108,7 @@ export function getSession(): SupabaseSession | null {
   const session = cachedSession ?? readRawSession();
   if (!session) return null;
   // Treat session as expired 60s early to avoid edge races; evict stale cache entry
-  if (Date.now() / 1000 > session.expires_at - 60) {
+  if (isPast(subSeconds(fromUnixTime(session.expires_at), 60))) {
     cachedSession = null;
     return null;
   }

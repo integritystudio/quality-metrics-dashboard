@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
@@ -38,8 +39,8 @@ function percentile(sorted: number[], p: number): number {
 /** Load spans for a session, defaulting to 30-day window. */
 async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
   const now = new Date();
-  const end = endDate ?? now.toISOString().split('T')[0];
-  const start = startDate ?? new Date(now.getTime() - PERIOD_MS['30d']).toISOString().split('T')[0];
+  const end = endDate ?? formatISO(now, { representation: 'date' });
+  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
   const result = await queryTraces({
     attributeFilter: { 'session.id': sessionId },
     startDate: start,

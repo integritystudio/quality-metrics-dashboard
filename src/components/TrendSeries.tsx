@@ -8,6 +8,7 @@ import {
   Area,
   ResponsiveContainer,
 } from 'recharts';
+import { format, differenceInMilliseconds } from 'date-fns';
 import type { TrendBucket } from '../hooks/useTrend.js';
 import { CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
 import { formatScore } from '../lib/quality-utils.js';
@@ -26,9 +27,9 @@ const TREND_COLORS = {
 
 function formatTime(iso: string, spanDays: number): string {
   const d = new Date(iso);
-  if (spanDays <= 1) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (spanDays <= 7) return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit' });
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (spanDays <= 1) return format(d, 'HH:mm');
+  if (spanDays <= 7) return format(d, 'EEE HH:mm');
+  return format(d, 'MMM d');
 }
 
 export function TrendSeries({ data, metricName }: TrendSeriesProps) {
@@ -36,7 +37,10 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
     return <EmptyState message="No trend data available" />;
   }
 
-  const spanMs = new Date(data[data.length - 1].endTime).getTime() - new Date(data[0].startTime).getTime();
+  const spanMs = differenceInMilliseconds(
+    new Date(data[data.length - 1].endTime),
+    new Date(data[0].startTime)
+  );
   const spanDays = spanMs / (1000 * 60 * 60 * 24);
 
   const chartData = data.map((bucket) => ({

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { subMilliseconds } from 'date-fns';
 import {
   computeMetricDetail,
   computeAggregations,
@@ -45,8 +46,8 @@ metricsRoutes.get('/metrics/:name', async (c) => {
   try {
     const now = new Date();
     const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const prevStart = new Date(start.getTime() - periodMs);
+    const start = subMilliseconds(now, periodMs);
+    const prevStart = subMilliseconds(start, periodMs);
 
     const [evaluations, prevEvaluations] = await Promise.all([
       loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
@@ -119,7 +120,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   try {
     const now = new Date();
     const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
+    const start = subMilliseconds(now, periodMs);
 
     let evaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
 

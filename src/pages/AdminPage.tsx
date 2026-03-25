@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { format } from 'date-fns';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
@@ -145,7 +146,7 @@ function UserRow({
         </div>
       </td>
       <td className="cell-pad text-right text-muted text-xs nowrap">
-        {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+        {user.created_at ? format(new Date(user.created_at), 'PP') : '—'}
       </td>
     </tr>
   );
