@@ -106,8 +106,8 @@ app.use('/api/*', async (c, next) => {
   // Used in unit tests where Supabase auth can't be mocked easily.
   if (jwt === 'test-token') {
     c.set('session', {
-      authUserId: 'test-auth-id',
-      appUserId: 'test-app-id',
+      authUserId: 'a0000000-0000-4000-8000-000000000001',
+      appUserId: 'a0000000-0000-4000-8000-000000000002',
       email: 'test@example.com',
       roles: ['test'],
       permissions: ['dashboard.admin'],

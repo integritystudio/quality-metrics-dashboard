@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
 
-const MOCK_JWT = 'test-jwt-token';
+const MOCK_JWT = 'test-token';
 const MOCK_AUTH_USER_ID = 'a0000000-0000-4000-8000-000000000001';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 
@@ -39,16 +39,39 @@ function authHeaders() {
   return { Authorization: `Bearer ${MOCK_JWT}` };
 }
 
-function mockAuthSequence(fetchMock: ReturnType<typeof vi.fn>) {
-  fetchMock.mockResolvedValueOnce(
-    new Response(JSON.stringify({ id: MOCK_AUTH_USER_ID, email: 'user@test.com' }), { status: 200 })
-  );
-  fetchMock.mockResolvedValueOnce(
-    new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'user@test.com' }]), { status: 200 })
-  );
-  fetchMock.mockResolvedValueOnce(
-    new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: 200 })
-  );
+function mockAuthSequence(fetchMock: ReturnType<typeof vi.fn>, options?: { rejectActivity?: boolean }) {
+  // Set up a reusable implementation that returns appropriate responses based on URL
+  const callCount = new Map<string, number>();
+
+  fetchMock.mockImplementation((url: string) => {
+    const count = (callCount.get(url) ?? 0) + 1;
+    callCount.set(url, count);
+
+    // Auth user endpoint
+    if (url.includes('/auth/v1/user')) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: MOCK_AUTH_USER_ID, email: 'user@test.com' }), { status: 200 })
+      );
+    }
+    // Get app users (by auth ID)
+    if (url.includes('/rest/v1/users') && url.includes('auth_id')) {
+      return Promise.resolve(
+        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'user@test.com' }]), { status: 200 })
+      );
+    }
+    // Get user roles
+    if (url.includes('/rest/v1/user_roles')) {
+      return Promise.resolve(
+        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: 200 })
+      );
+    }
+    // Activity logging calls: optionally reject for failure testing
+    if (url.includes('/rest/v1/user_activity') && options?.rejectActivity) {
+      return Promise.reject(new Error('Supabase unreachable'));
+    }
+    // Activity logging and other calls: return success
+    return Promise.resolve(new Response(null, { status: 201 }));
+  });
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -70,7 +93,6 @@ function findActivityCall(calls: unknown[][]) {
 describe('logActivity: dashboard_view', () => {
   it('POSTs to user_activity after /api/dashboard returns data', async () => {
     mockAuthSequence(fetchMock);
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
     mockKV.get.mockResolvedValue({ metrics: [] });
 
     const res = await app.request(
@@ -80,7 +102,8 @@ describe('logActivity: dashboard_view', () => {
     );
     expect(res.status).toBe(200);
 
-    await Promise.resolve();
+    // Wait for microtasks to allow async activity logging to be queued
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
@@ -98,7 +121,8 @@ describe('logActivity: dashboard_view', () => {
     const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeEnv());
     expect(res.status).toBe(404);
 
-    await Promise.resolve();
+    // Wait for microtasks
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeUndefined();
@@ -108,7 +132,6 @@ describe('logActivity: dashboard_view', () => {
 describe('logActivity: trace_view', () => {
   it('POSTs activity_type=trace_view on /api/traces/:traceId', async () => {
     mockAuthSequence(fetchMock);
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
     mockKV.get.mockResolvedValue({ traceId: 'trace-1', spans: [] });
 
     const res = await app.request(
@@ -118,7 +141,8 @@ describe('logActivity: trace_view', () => {
     );
     expect(res.status).toBe(200);
 
-    await Promise.resolve();
+    // Wait for microtasks
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
@@ -132,7 +156,6 @@ describe('logActivity: trace_view', () => {
 describe('logActivity: session_view', () => {
   it('POSTs activity_type=session_view on /api/sessions/:sessionId', async () => {
     mockAuthSequence(fetchMock);
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
     mockKV.get.mockResolvedValue({ sessionId: 'sess-1' });
 
     const res = await app.request(
@@ -142,7 +165,7 @@ describe('logActivity: session_view', () => {
     );
     expect(res.status).toBe(200);
 
-    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
@@ -156,7 +179,6 @@ describe('logActivity: session_view', () => {
 describe('logActivity: compliance_view', () => {
   it('POSTs activity_type=compliance_view on /api/compliance/sla', async () => {
     mockAuthSequence(fetchMock);
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
     mockKV.get.mockResolvedValue({ slaCompliance: [] });
 
     const res = await app.request(
@@ -166,7 +188,7 @@ describe('logActivity: compliance_view', () => {
     );
     expect(res.status).toBe(200);
 
-    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
@@ -179,8 +201,7 @@ describe('logActivity: compliance_view', () => {
 
 describe('logActivity: failure resilience', () => {
   it('returns 200 even when activity POST throws', async () => {
-    mockAuthSequence(fetchMock);
-    fetchMock.mockRejectedValueOnce(new Error('Supabase unreachable'));
+    mockAuthSequence(fetchMock, { rejectActivity: true });
     mockKV.get.mockResolvedValue({ metrics: [] });
 
     const res = await app.request(
