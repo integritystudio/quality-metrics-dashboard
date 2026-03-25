@@ -206,6 +206,8 @@ app.use('/api/*', async (c, next) => {
 
     c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
     c.set('jwt', jwt);
+    // Log login activity (fire-and-forget, non-blocking)
+    logActivity(appUserId, 'login', c.env, jwt);
     return next();
   } finally {
     clearTimeout(timeout);
@@ -244,6 +246,13 @@ app.get('/api/me', (c) => {
   const meResult = MeResponseSchema.safeParse(me);
   if (!meResult.success) return c.json({ error: 'Internal server error' }, 500);
   return c.json(meResult.data);
+});
+
+app.post('/api/logout', (c) => {
+  const session = c.get('session');
+  const jwt = c.get('jwt');
+  logActivity(session.appUserId, 'logout', c.env, jwt);
+  return c.body(null, 204);
 });
 
 app.post('/api/activity', async (c) => {
