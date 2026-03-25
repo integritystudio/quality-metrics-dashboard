@@ -112,7 +112,7 @@ export const otelEvaluationRecordSchema = z.object({
     'gen_ai.evaluation.evaluator': z.string().optional(),
     'gen_ai.evaluation.evaluator.type': z.enum(['rule', 'llm', 'human', 'seed', 'trace-backfill']).optional(),
     'session.id': z.string().optional(),
-  }).strict({ 'gen_ai.evaluation.name': true }).catchall(z.unknown()),
+  }).strict().catchall(z.unknown()),
   traceId: z.string().optional(),
   spanId: z.string().optional(),
 });
