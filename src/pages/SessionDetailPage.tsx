@@ -104,7 +104,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
     <div className="page-content">
       <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
 
-      {/* ── Header ── */}
       <div className="session-detail-header">
         <div className="flex-wrap gap-4 justify-between align-start">
           <div>
@@ -140,7 +139,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      {/* ── Vitals strip ── */}
       <div className="flex-wrap session-vitals-strip">
         <StatDisplay label="Spans" value={spanCount} />
         <div className="vitals-divider" />
@@ -163,7 +161,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
       </div>
 
-      {/* ── Issues & Anomalies ── */}
       <Section
         title="Issues & Anomalies"
         badge={hasIssues ? `${[
@@ -255,7 +252,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
       </Section>
 
-      {/* ── Token Journey ── */}
       <Section
         title="Token Journey"
         badge={maxTokenSnapshot ? `${maxTokenSnapshot.messages} msg · ${fmtBytes(maxTokenSnapshot.outputTokens)} out` : 'no data'}
@@ -287,7 +283,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
       </Section>
 
-      {/* ── Tool Activity ── */}
       <Section
         title="Tool Activity"
         badge={`${totalToolCalls} calls · ${toolUsageValues.length} tools`}
@@ -305,7 +300,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         )}
       </Section>
 
-      {/* ── Agent Activity ── */}
       {agentActivity.length > 0 && (
         <Section
           title="Agent Activity"
@@ -343,14 +337,12 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             ))}
           </div>
 
-          {/* Multi-agent evaluation scores */}
           <div className="mt-4">
             <AgentScoreSummary handoffScore={handoffScore} avgRelevance={avgRelevance} completeness={completeness} />
           </div>
         </Section>
       )}
 
-      {/* ── Files Accessed ── */}
       {fileAccess.length > 0 && (
         <Section
           title="Files Accessed"
@@ -372,7 +364,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         </Section>
       )}
 
-      {/* ── Git Commits ── */}
       {gitCommits.length > 0 && (
         <Section
           title="Git Commits"
@@ -416,7 +407,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         </Section>
       )}
 
-      {/* ── Code Quality ── */}
       {codeStructure.length > 0 && (
         <Section
           title="Code Quality"
@@ -450,7 +440,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         </Section>
       )}
 
-      {/* ── Span Breakdown ── */}
       <Section
         title="Span Breakdown"
         badge={`${spanCount} total · ${spanBreakdownValues.length} types`}
@@ -459,7 +448,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <FreqBarGrid entries={Object.entries(spanBreakdown)} max={maxSpanCount} color="var(--border-accent)" />
       </Section>
 
-      {/* ── Evaluations ── */}
       <Section
         title="Evaluations"
         badge={evalRows.length > 0 ? plural(evalRows.length, 'result') : 'none'}
