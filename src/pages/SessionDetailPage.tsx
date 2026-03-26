@@ -444,7 +444,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     <td className="cell-pad text-right text-muted">{f.functions}</td>
                     <td className="cell-pad text-center">{f.hasTypes ? '✓' : '·'}</td>
                     <td className="cell-pad text-right font-semibold" style={{ color: SCORE_COLORS[scoreColorBand(f.score)] }}>
-                      {f.score.toFixed(2)}
+                      {f.score.toFixed(SCORE_CHIP_PRECISION)}
                     </td>
                   </tr>
                 ))}
