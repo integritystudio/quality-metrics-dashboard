@@ -132,7 +132,6 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   style={{ '--agent-color': color } as CSSProperties}
                   onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
                 >
-                  {/* Agent name with color accent */}
                   <td>
                     <div className="flex-center gap-2">
                       {hasLinks && (
@@ -145,7 +144,6 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                     </div>
                   </td>
 
-                  {/* Invocations with inline bar */}
                   <td>
                     <div className="flex-center gap-2">
                       <span className="mono-xs agent-inv-count">

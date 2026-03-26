@@ -89,7 +89,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
             ))}
           </div>
 
-          {/* Data rows */}
           {metrics.map(metric => (
             <div key={metric} role="row" className="contents">
               <div
@@ -132,7 +131,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
         </p>
       )}
 
-      {/* Gap summary */}
       {gaps.length > 0 && (
         <div className="mt-4">
           <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
