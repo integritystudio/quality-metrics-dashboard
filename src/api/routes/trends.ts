@@ -58,8 +58,9 @@ trendRoutes.get('/trends/:name', async (c) => {
 
     const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
 
-    const evWithTs = evaluations.map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }));
-    const validTs = evWithTs.filter(({ ts }) => Number.isFinite(ts));
+    const validTs = evaluations
+      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
+      .filter(({ ts }) => Number.isFinite(ts));
 
     // Determine actual data range — auto-narrow if data is concentrated
     const { dataMin, dataMax } = validTs.length > 0
