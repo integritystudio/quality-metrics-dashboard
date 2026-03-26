@@ -23,6 +23,12 @@ import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflo
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
 const MINIMAP_THRESHOLD = 5;
+/**
+ * CR-PERF-2: Maximum nodes passed to ELK layout.
+ * Graphs with 100+ agents would block the main thread during synchronous ELK layout.
+ * Graphs exceeding this limit are rendered in a degraded list fallback instead.
+ */
+const MAX_ELK_NODES = 50;
 
 const SCORE_BANDS = {
   HIGH: { min: 0.7, label: 'Good', bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
@@ -180,6 +186,30 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onNodeClick?.(node.id);
   }, [onNodeClick]);
+
+  // Large-graph fallback: skip ELK layout to avoid blocking the main thread (CR-PERF-2)
+  if (graph.nodes.length > MAX_ELK_NODES) {
+    return (
+      <div style={{ height }} role="img" aria-label="Agent workflow graph">
+        <div className="text-secondary text-xs" style={{ padding: 24 }}>
+          <div className="font-semibold mb-2">
+            Graph too large to render ({graph.nodes.length} agents)
+          </div>
+          <div className="text-muted mb-3">
+            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
+          </div>
+          <ul style={{ listStyle: 'disc', paddingLeft: 20 }}>
+            {graph.nodes.map(n => (
+              <li key={n.id} className="mono-xs mb-1">
+                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
+                {n.hasError && <span className="text-warning"> (error)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
 
   // Single-agent fallback
   if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
