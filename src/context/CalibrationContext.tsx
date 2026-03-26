@@ -1,7 +1,5 @@
-import { createContext, useContext, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useCalibration, getMetricCalibration } from '../hooks/useCalibration.js';
-import type { CalibrationResponse, MetricCalibration } from '../hooks/useCalibration.js';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useCalibration, getMetricCalibration, type CalibrationResponse, type MetricCalibration } from '../hooks/useCalibration.js';
 
 interface CalibrationContextValue {
   data: CalibrationResponse | undefined;
