@@ -961,12 +961,10 @@ async function main(): Promise<void> {
   degradationState.lastRun = now.toISOString();
   if (stateDir) saveDegradationState(stateDir, degradationState);
 
-  // meta:calibration
   const calibrationState = stateDir ? loadCalibrationState(stateDir) : null;
   const calibrationEntry = buildCalibrationEntry(calibrationState);
   if (calibrationEntry) entries.push(calibrationEntry);
 
-  // Per-trace evaluations and spans
   const thirtyDaysAgo = new Date(now.getTime() - MAX_DAYS_MS);
   const allEvals = await backend.queryEvaluations({
     startDate: thirtyDaysAgo.toISOString(),
@@ -980,7 +978,6 @@ async function main(): Promise<void> {
   }
   const traceIds = [...evalsByTrace.keys()];
 
-  // Query all spans once for the period and group by traceId
   const allSpans = await backend.queryTraces({
     startDate: thirtyDaysAgo.toISOString(),
     endDate: now.toISOString(),
@@ -1006,7 +1003,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // ---- Pre-compute session detail data ----
   // Single pass: group spans by session and build traceId → sessionId mapping
   type Span = (typeof allSpans)[number];
   const spansBySession = new Map<string, Span[]>();
@@ -1041,7 +1037,6 @@ async function main(): Promise<void> {
       }),
     });
 
-    // Accumulate agent cross-session stats from detail
     for (const ag of detail.agentActivity) {
       let acc = agentCrossSession.get(ag.agentName);
       if (!acc) {
@@ -1100,7 +1095,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // Build agent KV entries
   const agentEntries: KVEntry[] = [];
   const agentSummaryList: Array<{
     agentName: string; totalSessions: number; totalInvocations: number;
@@ -1147,14 +1141,12 @@ async function main(): Promise<void> {
     });
   }
 
-  // Sort agent list by invocations descending
   agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
   agentEntries.push({ key: 'meta:agents', value: JSON.stringify(agentSummaryList) });
 
   const allEntries = [...entries, ...sessionEntries, ...traceEntries, ...agentEntries];
   const _totalComputed = allEntries.length;
 
-  // ---- Delta sync: skip unchanged entries ----
   const prevState = loadSyncState();
   const changed = filterChanged(allEntries, prevState);
 
