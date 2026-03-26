@@ -59,7 +59,6 @@ dashboardRoutes.get('/dashboard', async (c) => {
     const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
     const cqi = computeCQI(dashboard.metrics);
 
-    // Compute sparkline data (24 time buckets per metric)
     const startMs = new Date(dates.start).getTime();
     const endMs = new Date(dates.end).getTime();
     const sparklines: Record<string, (number | null)[]> = {};

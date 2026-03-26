@@ -107,7 +107,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const endDate = c.req.query('endDate');
 
   try {
-    // Query all 3 data sources in parallel
     const [spans, logs, evaluations] = await Promise.all([
       loadSessionSpans(sessionId, startDate, endDate),
       loadLogsBySessionId(sessionId, startDate, endDate),
