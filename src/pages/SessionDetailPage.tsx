@@ -12,7 +12,7 @@ import { FreqBar } from '../components/FreqBar.js';
 import { FreqBarGrid } from '../components/FreqBarGrid.js';
 import { TruncatedList } from '../components/TruncatedList.js';
 import { IssueCallout } from '../components/IssueCallout.js';
-import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
+import { scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
 import {
   HALLUCINATION_SCORE_THRESHOLD,
   MAX_ERROR_ROWS,
@@ -443,7 +443,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     <td className="cell-pad text-right text-muted">{f.exports}</td>
                     <td className="cell-pad text-right text-muted">{f.functions}</td>
                     <td className="cell-pad text-center">{f.hasTypes ? '✓' : '·'}</td>
-                    <td className="cell-pad text-right font-semibold" style={{ color: SCORE_COLORS[scoreColorBand(f.score)] }}>
+                    <td className="cell-pad text-right font-semibold score-band" data-band={scoreColorBand(f.score)}>
                       {f.score.toFixed(SCORE_CHIP_PRECISION)}
                     </td>
                   </tr>
