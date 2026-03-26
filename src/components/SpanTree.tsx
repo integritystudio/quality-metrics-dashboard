@@ -66,7 +66,8 @@ const STATUS_ICONS: Record<number, string> = {
 
 function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
   const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
-  const isError = (node.status?.code ?? 0) === OTEL_STATUS_ERROR_CODE;
+  const statusCode = node.status?.code ?? 0;
+  const isError = statusCode === OTEL_STATUS_ERROR_CODE;
 
   const barStyle: CSSProperties = {
     height: 'var(--space-1)',
