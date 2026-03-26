@@ -334,7 +334,6 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
         }
       }
 
-      // Skip tool_result-only messages
       if (isToolResultOnly(content)) continue;
 
       const userText = extractTextFromContent(content);
@@ -674,7 +673,6 @@ export async function evaluateTurn(
         console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
       }
 
-      // Structured sub-criteria: selection, arguments, integration
       const subCriteria = [
         { config: TOOL_SELECTION_CRITERIA, name: 'tool_selection' },
         { config: TOOL_ARGUMENTS_CRITERIA, name: 'tool_arguments' },
