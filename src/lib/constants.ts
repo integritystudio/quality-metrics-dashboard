@@ -157,14 +157,6 @@ export const CHART_DASH_PROJECTED = '6 4';
 // ─── Evaluation table constants ───────────────────────────────────────────────
 /** EvaluationTable: expand/collapse column width (px). */
 export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-/** EvaluationTable: opacity for inactive category filter buttons. */
-export const EVAL_FILTER_INACTIVE_OPACITY = 0.6;
-
-// ─── Quality live indicator ───────────────────────────────────────────────────
-
-/** Hex alpha suffix (10% opacity) appended to status colors for score badge backgrounds. */
-export const SCORE_BADGE_ALPHA_HEX = '1a';
-
 /** Shared Recharts color palette for TrendChart and TrendSeries. */
 export const CHART_COLORS = {
   line: '#58a6ff',
