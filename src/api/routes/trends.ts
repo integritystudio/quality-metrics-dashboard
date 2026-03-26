@@ -16,6 +16,8 @@ import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, TIME_MS } from '../api-constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+/** Multiply/divide factor for rounding scores to 4 decimal places. */
+const SCORE_ROUND_FACTOR = 10_000;
 
 export const trendRoutes = new Hono();
 
@@ -123,7 +125,7 @@ trendRoutes.get('/trends/:name', async (c) => {
         startTime: bucket.startTime,
         endTime: bucket.endTime,
         count,
-        avg: avg != null ? Math.round(avg * 10000) / 10000 : null,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
         percentiles,
         trend: detail?.trend ?? null,
         dynamics: dynamics ?? null,
