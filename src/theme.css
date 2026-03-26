@@ -876,6 +876,11 @@ details[open] > .cot-summary::before {
 .heatmap-cell {
   border-radius: var(--radius-xs);
   min-height: 36px;
+  border: none;
+}
+.heatmap-cell[data-toxic] {
+  border: var(--border-width-thick) solid var(--score-failing);
+  animation: toxicPulse 2s ease-in-out infinite;
 }
 
 /* Compact metric card used in agent eval summary and similar inline panels */

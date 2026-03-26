@@ -1,6 +1,6 @@
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import { SCORE_COLORS, formatScore } from '../lib/quality-utils.js';
+import { formatScore } from '../lib/quality-utils.js';
 import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
 import type { CorrelationFeature } from '../types.js';
 
@@ -130,8 +130,6 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 style={{
                   backgroundColor: bg,
                   color: isDiag ? 'var(--text-secondary)' : contrastText(value),
-                  border: isToxic ? `var(--border-width-thick) solid ${SCORE_COLORS.failing}` : 'none',
-                  animation: isToxic ? 'toxicPulse 2s ease-in-out infinite' : undefined,
                 }}
               >
                 {value.toFixed(SCORE_CHIP_PRECISION)}
