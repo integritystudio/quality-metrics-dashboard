@@ -10,14 +10,12 @@ import { renderHook } from '@testing-library/react';
 import { useQualityLive } from '../hooks/useQualityLive.js';
 import { POLL_INTERVAL_MS } from '../lib/constants.js';
 
-// Mock useApiQuery
 
 const mockUseApiQuery = vi.fn();
 vi.mock('../hooks/useApiQuery.js', () => ({
   useApiQuery: (...args: unknown[]) => mockUseApiQuery(...args),
 }));
 
-// Helpers
 
 function makeQualityResponse(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -31,7 +29,6 @@ function makeQualityResponse(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-// Tests
 
 describe('useQualityLive', () => {
   beforeEach(() => {

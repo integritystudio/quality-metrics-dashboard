@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 
-// Mock useAgentSession
 
 const mockUseAgentSession = vi.fn();
 vi.mock('../hooks/useAgentSession.js', () => ({
@@ -91,7 +90,6 @@ function makeAgentSessionData(graph: WorkflowGraph | null | undefined = makeGrap
   };
 }
 
-// WorkflowPage tests
 
 describe('WorkflowPage', () => {
   describe('when data has a valid graph', () => {
