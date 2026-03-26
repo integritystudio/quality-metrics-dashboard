@@ -10,6 +10,10 @@ import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 
+function toDateOnly(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
 export const agentRoutes = new Hono();
 
 agentRoutes.get('/agents', async (c) => {
@@ -19,8 +23,8 @@ agentRoutes.get('/agents', async (c) => {
     return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
   }
   const now = new Date();
-  const endDate = now.toISOString().split('T')[0];
-  const startDate = new Date(now.getTime() - periodDays * TIME_MS.DAY).toISOString().split('T')[0];
+  const endDate = toDateOnly(now);
+  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
 
   try {
     const result = await queryTraces({
@@ -34,7 +38,7 @@ agentRoutes.get('/agents', async (c) => {
     const dateBuckets: string[] = [];
     for (let d = 0; d < periodDays; d++) {
       const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
-      dateBuckets.push(day.toISOString().split('T')[0]);
+      dateBuckets.push(toDateOnly(day));
     }
     const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
 
@@ -62,7 +66,7 @@ agentRoutes.get('/agents', async (c) => {
       acc[name].invocations++;
       // Bucket into daily counts
       if (span.startTimeUnixNano) {
-        const dayKey = new Date(span.startTimeUnixNano / 1_000_000).toISOString().split('T')[0];
+        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / 1_000_000));
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) acc[name].dailyCounts[idx]++;
       }
