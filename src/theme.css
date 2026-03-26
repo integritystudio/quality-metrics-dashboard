@@ -1537,6 +1537,10 @@ summary.section-rail {
 .split-pane {
   min-height: 300px;
 }
+.split-pane-panel {
+  width: var(--split-width);
+  overflow: auto;
+}
 .split-pane-divider {
   width: 6px;
   cursor: col-resize;

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
 
 interface SplitPaneProps {
   left: ReactNode;
@@ -34,7 +34,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
 
   return (
     <div ref={containerRef} className="d-flex w-full split-pane">
-      <div style={{ width: `${splitPct}%`, overflow: 'auto' }}>{left}</div>
+      <div className="split-pane-panel" style={{ '--split-width': `${splitPct}%` } as CSSProperties}>{left}</div>
       <div
         className="shrink-0 split-pane-divider" role="separator"
         aria-orientation="vertical"
@@ -49,7 +49,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
           if (e.key === 'ArrowRight') { e.preventDefault(); setSplitPct(p => Math.min(maxPct, p + 2)); }
         }}
       />
-      <div style={{ width: `${100 - splitPct}%`, overflow: 'auto' }}>{right}</div>
+      <div className="split-pane-panel" style={{ '--split-width': `${100 - splitPct}%` } as CSSProperties}>{right}</div>
     </div>
   );
 }
