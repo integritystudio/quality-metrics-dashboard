@@ -1497,6 +1497,7 @@ summary.section-rail {
 .coverage-cell {
   width: 28px;
   height: 28px;
+  background: var(--coverage-status-color);
   border-radius: var(--radius-bar);
   cursor: default;
   color: var(--text-on-accent);
@@ -1509,6 +1510,7 @@ summary.section-rail {
 .coverage-legend-swatch {
   width: 12px;
   height: 12px;
+  background: var(--coverage-status-color);
   border-radius: var(--radius-xs);
 }
 .coverage-gap-list {

@@ -1,4 +1,4 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, type CSSProperties } from 'react';
 import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
 import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
 import {
@@ -59,7 +59,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           <div key={status} className="flex-center gap-1">
             <div
               className="coverage-legend-swatch"
-              style={{ background: STATUS_COLORS[status] }}
+              style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
             />
             <span>{status}</span>
           </div>
@@ -114,7 +114,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     onMouseLeave={() => setHovered(null)}
                     className="mono text-2xs flex-center justify-center coverage-cell"
                     data-hovered={isHovered || undefined}
-                    style={{ background: STATUS_COLORS[status] }}
+                    style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
                   >
                     {count > 0 ? count : ''}
                   </div>
