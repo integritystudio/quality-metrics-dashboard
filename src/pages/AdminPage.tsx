@@ -35,7 +35,7 @@ function RoleChip({
   revoking,
 }: {
   role: { id: string; name: string };
-  onRevoke: (roleId: string) => void;
+  onRevoke: (roleId: string, roleName: string) => void;
   revoking: boolean;
 }) {
   return (
@@ -43,7 +43,7 @@ function RoleChip({
       {role.name}
       <button
         className="chip-remove"
-        onClick={() => onRevoke(role.id)}
+        onClick={() => onRevoke(role.id, role.name)}
         disabled={revoking}
         aria-label={`Remove role ${role.name}`}
       >
@@ -93,7 +93,8 @@ function UserRow({
     }
   }
 
-  async function handleRevoke(roleId: string) {
+  async function handleRevoke(roleId: string, roleName: string) {
+    if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
     setBusy(true);
     setError(null);
     onMutationStart();

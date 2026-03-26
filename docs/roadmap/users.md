@@ -732,10 +732,10 @@ All items resolved across 5 commits (27e7f2c through 398d6eb):
 ### Phase 4: Legacy Cleanup (Partial)
 - ✅ Add activity/session audit logging to `user_activity` table (**0a5cb35**, **c9ecaac**: fire-and-forget logActivity on dashboard_view, trace_view, session_view, compliance_view)
 - ✅ Add login/logout activity logging (**251b8d5**, **daef5a2**: POST /api/activity endpoint, AuthEvent type, SIGNED_IN/SIGNED_OUT hooks in AuthContext)
-- [ ] Align older users to `auth.users.id` if needed
-- [ ] Rename `auth0_id` to neutral name like `identity_subject`
+- [ ] Align older users to `auth.users.id` if needed — **INVESTIGATION pending**
+- [ ] Rename `auth0_id` to neutral name like `identity_subject` — **INVESTIGATION pending**
 - ✅ Add admin tooling for role/permission assignment (**d420e6c**, **c9a38dc**: GET/POST/DELETE /api/admin/* routes gated by dashboard.admin, AdminPage.tsx with user list + role assign/revoke, AdminGuard frontend permission check, service role key for RLS bypass)
-- [ ] Remove deprecated columns from `user_profiles`
+- [ ] Remove deprecated columns from `user_profiles` — **INVESTIGATION pending**
 
 ---
 

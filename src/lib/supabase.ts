@@ -200,3 +200,37 @@ export function onAuthStateChange(listener: AuthStateListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+/** How often (ms) to check if the token is approaching expiry. */
+const AUTO_REFRESH_INTERVAL_MS = 30_000;
+/** How many seconds before expiry to proactively refresh. */
+const TOKEN_EXPIRY_BUFFER_S = 120;
+
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Starts a background timer that proactively refreshes the session when the
+ * access token is within TOKEN_EXPIRY_BUFFER_S seconds of expiry.
+ * Safe to call multiple times — subsequent calls are no-ops if already running.
+ */
+export function startAutoRefresh(): void {
+  if (autoRefreshTimer !== null) return;
+  autoRefreshTimer = setInterval(() => {
+    const session = cachedSession ?? readRawSession();
+    if (!session) return;
+    const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000);
+    if (secondsUntilExpiry <= TOKEN_EXPIRY_BUFFER_S) {
+      void refreshSession();
+    }
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+/**
+ * Stops the background auto-refresh timer.
+ */
+export function stopAutoRefresh(): void {
+  if (autoRefreshTimer !== null) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}

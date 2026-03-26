@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession } from '../lib/supabase.js';
+import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession, startAutoRefresh, stopAutoRefresh } from '../lib/supabase.js';
 import type { SupabaseSession } from '../lib/supabase.js';
 import { API_BASE } from '../lib/constants.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
@@ -74,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     void initializeSession();
+    startAutoRefresh();
 
     const unsubscribe = onAuthStateChange((supabaseSession, event) => {
       if (event === 'SIGNED_IN' && supabaseSession) {
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       controller.abort();
       unsubscribe();
+      stopAutoRefresh();
     };
   }, [loadSession]);
 
