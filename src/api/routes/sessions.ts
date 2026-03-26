@@ -189,24 +189,16 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     }
 
     const toolUsage: Record<string, number> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.type') === 'builtin' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
-        const tool = attr<string>(s, 'builtin.tool') ?? 'unknown';
-        incrementCount(toolUsage, tool);
-      }
-    }
-
     const mcpUsage: Record<string, number> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.type') === 'mcp' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
-        const tool = attr<string>(s, 'mcp.tool') ?? 'unknown';
-        incrementCount(mcpUsage, tool);
-      }
-    }
-
     const spanBreakdown: Record<string, number> = {};
     const hookDurations: Record<string, number[]> = {};
     for (const s of spans) {
+      const hookType = attr<string>(s, 'hook.type');
+      const hookTrigger = attr<string>(s, 'hook.trigger');
+      if (hookTrigger === 'PostToolUse') {
+        if (hookType === 'builtin') incrementCount(toolUsage, attr<string>(s, 'builtin.tool') ?? 'unknown');
+        else if (hookType === 'mcp') incrementCount(mcpUsage, attr<string>(s, 'mcp.tool') ?? 'unknown');
+      }
       incrementCount(spanBreakdown, s.name);
       const ms = s.durationMs ?? 0;
       if (ms > 0) {
