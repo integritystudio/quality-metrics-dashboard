@@ -31,7 +31,7 @@ function MetricCardInner({ metric, sparklineData }: {
               direction={inferScoreDirection(alerts?.[0]?.direction)}
               label={formatScore(primaryValue)}
             />
-            {trend && <> <TrendIndicator trend={trend} /></>}
+            {trend && <TrendIndicator trend={trend} />}
           </div>
           <div className="secondary">
             p50: {formatScore(values.p50)} &middot; p95: {formatScore(values.p95)}
