@@ -157,10 +157,8 @@ export function trackTaskActivity(span: TraceSpan): void {
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
 
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  if (!sessionTasks.has(sessionId)) {
-    sessionTasks.set(sessionId, { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
-  }
-  const entry = sessionTasks.get(sessionId)!;
+  let entry = sessionTasks.get(sessionId);
+  if (!entry) sessionTasks.set(sessionId, entry = { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
   entry.lastSpan = span;
 
   // Always track counts for fallback
@@ -254,10 +252,8 @@ function trackAgentActivity(span: TraceSpan): void {
   if (!isPre && !isPost) return;
 
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  if (!sessionAgents.has(sessionId)) {
-    sessionAgents.set(sessionId, { pre: 0, post: 0, spans: [], agentSequence: [] });
-  }
-  const entry = sessionAgents.get(sessionId)!;
+  let entry = sessionAgents.get(sessionId);
+  if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });;
   if (isPre) entry.pre++;
   if (isPost) {
     entry.post++;
