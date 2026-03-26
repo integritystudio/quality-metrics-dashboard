@@ -47,6 +47,10 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
+function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+
 const LIMIT_SESSION_SPANS = 1000;
 
 /** Load spans for a session, defaulting to 30-day window. */
@@ -162,7 +166,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       tokenTotals.cacheRead += t.cacheRead;
       tokenTotals.cacheCreation += t.cacheCreation;
       tokenTotals.messages += t.messages;
-      if (t.model) tokenTotals.models[t.model] = (tokenTotals.models[t.model] ?? 0) + 1;
+      if (t.model) incrementCount(tokenTotals.models, t.model);
     }
 
     // ---- Tool Usage ----
@@ -170,7 +174,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     for (const s of spans) {
       if (attr<string>(s, 'hook.type') === 'builtin' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
         const tool = attr<string>(s, 'builtin.tool') ?? 'unknown';
-        toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
+        incrementCount(toolUsage, tool);
       }
     }
 
@@ -179,7 +183,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     for (const s of spans) {
       if (attr<string>(s, 'hook.type') === 'mcp' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
         const tool = attr<string>(s, 'mcp.tool') ?? 'unknown';
-        mcpUsage[tool] = (mcpUsage[tool] ?? 0) + 1;
+        incrementCount(mcpUsage, tool);
       }
     }
 
@@ -187,7 +191,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const spanBreakdown: Record<string, number> = {};
     const hookDurations: Record<string, number[]> = {};
     for (const s of spans) {
-      spanBreakdown[s.name] = (spanBreakdown[s.name] ?? 0) + 1;
+      incrementCount(spanBreakdown, s.name);
       const ms = s.durationMs ?? 0;
       if (ms > 0) {
         if (!hookDurations[s.name]) hookDurations[s.name] = [];
@@ -222,7 +226,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
       const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
       const key = `${tool} -> ${errType}`;
-      errorsByCategory[key] = (errorsByCategory[key] ?? 0) + 1;
+      incrementCount(errorsByCategory, key);
       errorDetails.push({
         spanName: s.name,
         tool,
@@ -255,7 +259,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const fileCount: Record<string, number> = {};
     for (const s of spans) {
       const fp = attr<string>(s, 'builtin.file_path');
-      if (fp) fileCount[fp] = (fileCount[fp] ?? 0) + 1;
+      if (fp) incrementCount(fileCount, fp);
     }
     const fileAccess = Object.entries(fileCount)
       .map(([path, count]) => ({ path, count }))
@@ -321,7 +325,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const logBySeverity: Record<string, number> = {};
     for (const l of logs) {
       const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
-      logBySeverity[sev] = (logBySeverity[sev] ?? 0) + 1;
+      incrementCount(logBySeverity, sev);
     }
 
     // ---- Multi-agent Evaluation ----
