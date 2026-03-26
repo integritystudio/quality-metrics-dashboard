@@ -51,6 +51,7 @@ function percentile(sorted: number[], p: number): number {
 type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
 
 function computeLatencyStats(durations: number[]): LatencyStats {
+  if (durations.length === 0) return { count: 0, avg: 0, p50: 0, p95: 0, max: 0 };
   const sorted = [...durations].sort((a, b) => a - b);
   return {
     count: sorted.length,
