@@ -215,6 +215,19 @@ export function fmtDuration(ms: number, secDecimals = 1): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
 }
 
+/** Groups items into a Map by a string key; items with undefined keys are skipped. */
+export function groupBy<T>(items: T[], keyFn: (item: T) => string | undefined): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (key == null) continue;
+    const group = map.get(key);
+    if (group) group.push(item);
+    else map.set(key, [item]);
+  }
+  return map;
+}
+
 export function fmtBytes(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;

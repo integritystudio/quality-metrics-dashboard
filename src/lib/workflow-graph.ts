@@ -1,6 +1,7 @@
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
 import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
 
 const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 const ATTR_AGENT_ID = 'gen_ai.agent.id';
@@ -51,15 +52,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     }
   }
 
-  // Pre-group spans by agent name in a single O(M) pass to avoid O(N*M) nested iteration
-  const spansByAgent = new Map<string, TraceSpan[]>();
-  for (const s of spans) {
-    const name = s.attributes?.[ATTR_AGENT_NAME] as string | undefined;
-    if (!name) continue;
-    const group = spansByAgent.get(name);
-    if (group) group.push(s);
-    else spansByAgent.set(name, [s]);
-  }
+  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
 
   const nodes: WorkflowNode[] = [];
   for (const [agentName, turns] of agentTurns) {
@@ -117,14 +110,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
 }
 
 function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = new Map<string, TraceSpan[]>();
-  for (const span of spans) {
-    const agentId = span.attributes?.[ATTR_AGENT_ID] as string | undefined;
-    if (!agentId) continue;
-    const group = agentSpans.get(agentId) ?? [];
-    group.push(span);
-    agentSpans.set(agentId, group);
-  }
+  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
 
   if (agentSpans.size === 0) {
     return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
