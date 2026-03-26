@@ -1343,6 +1343,7 @@ summary.section-rail {
   padding: var(--space-4) var(--space-5) var(--space-5);
 }
 .section-rail-chevron {
+  color: var(--section-rail-color, var(--border-accent));
   transition: transform var(--transition-medium);
 }
 

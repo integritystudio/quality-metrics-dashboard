@@ -33,7 +33,7 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
   return (
     <details open={defaultOpen} className="mb-1" style={{ '--section-rail-color': railColor } as CSSProperties}>
       <summary className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail">
-        <span className="mono text-2xs d-inline-block section-rail-chevron" style={{ color: railColor }}>
+        <span className="mono text-2xs d-inline-block section-rail-chevron">
           {CHEVRON_RIGHT}
         </span>
         <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
