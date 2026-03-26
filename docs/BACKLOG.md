@@ -49,47 +49,31 @@ Open items from code reviews and deferred work.
 
 | # | Item | Priority | Source |
 |---|------|----------|--------|
-| CR-SEC-1 | **Test-token auth bypass in production worker** — `worker/index.ts:98-111` hardcodes `Bearer test-token` granting `dashboard.admin` + all views. Remove entirely or gate behind `TEST_MODE` env var in non-production wrangler env only. | P0 | code-review 2026-03-26 |
+| CR-SEC-1 | ~~Test-token auth bypass in production worker~~ — Resolved: gated behind `ALLOW_TEST_BYPASS` env binding (absent in production wrangler.toml). Tests set it via `makeEnv()`. Documented in README.md and parent CLAUDE.md. | P0 | code-review 2026-03-26 |
 
 ### CR: Type Safety — Critical / High
 
 | # | Item | Priority | Source |
 |---|------|----------|--------|
 | CR-TS-1 | **Unsafe `attr<T>` cast in sessions.ts** — `attr<T>()` helper (line 29-31) casts `unknown` to `T` without validation. Used 60+ times. Add type-guard parameter or Zod validation at span parse time. | P1 | code-review 2026-03-26 |
-| CR-TS-2 | **Unsafe `as Array<unknown>` casts in worker.ts** — `userRes.json() as Array<unknown>` (lines 144, 162) bypasses TS safety. Replace with `const parsed: unknown = await res.json()` + `Array.isArray()` narrowing. | P1 | code-review 2026-03-26 |
-| CR-TS-3 | **Unsafe attribute casts in agents.ts** — `span.attributes?.['gen_ai.agent.name'] as string` (lines 55, 68, 76) without validation. Same pattern as CR-TS-1. | P2 | code-review 2026-03-26 |
-| CR-TS-4 | **Double-cast in WorkflowGraph.tsx** — `data as unknown as WorkflowNode` (line 98) without validation. Add Zod parse or explicit type guards on `label`, `durationMs`, etc. | P2 | code-review 2026-03-26 |
-| CR-TS-5 | **Unvalidated `buildFromEvaluation` input** — `workflow-graph.ts:25-98` does not validate `MultiAgentEvaluation` structure. If `evaluation.turns` is null, throws. Add safeParse guard. | P2 | code-review 2026-03-26 |
+
+**Status**: CR-TS-2 (4f239b8), CR-TS-3 (04bf4be), CR-TS-4 (cd22bd9), CR-TS-5 (25454d5) — Done. CR-TS-1 open: attr<T> has 60+ call sites in sessions.ts; requires a type-guard parameter or Zod schema-per-attribute refactor — deferred as a larger refactor.
 
 ### CR: Error Handling — High / Medium
 
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| CR-ERR-1 | **Unvalidated date parsing in sessions.ts** — Lines 91-106 parse timestamps via `new Date(str).getTime()` without validation. Invalid strings produce NaN that corrupts `tsMin`/`tsMax` comparisons and `durationHours`. Add `parseTimestamp()` helper with null return for invalid input. | P2 | code-review 2026-03-26 |
-| CR-ERR-2 | **Silent Zod safeParse failures in worker.ts** — Lines 224, 237, 261 discard `safeParse` error details. Add `console.error(result.error.issues)` before returning 500. | P3 | code-review 2026-03-26 |
-| CR-ERR-3 | **Silent roles-fetch failure in admin route** — `worker/index.ts:517-524` treats failed role fetch as empty array. Should return 500 if `roleRowsRes.ok` is false. | P3 | code-review 2026-03-26 |
-| CR-ERR-4 | **Silent fire-and-forget activity logging** — `supabase-rest.ts:26-43` and `activity-logger.ts` swallow all errors. Add conditional `console.warn` in development for audit trail debugging. | P4 | code-review 2026-03-26 |
+**Status**: CR-ERR-1 (03c47f3), CR-ERR-2 (4f239b8), CR-ERR-3 (4f239b8), CR-ERR-4 (9d6db6f) — all Done.
 
 ### CR: Performance / Robustness — Medium
 
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| CR-PERF-1 | **Unbounded WorkflowTimeline SVG** — `WorkflowTimeline.tsx:137-152` computes SVG width from `totalTurns` with no cap. Sessions with 10K+ turns produce 400KB+ SVG. Add `MAX_VISIBLE_TURNS` limit with pagination. | P3 | code-review 2026-03-26 |
-| CR-PERF-2 | **Unbounded ELK layout in WorkflowGraph** — `WorkflowGraph.tsx:73` runs ELK on every node/edge change with no size guard. Large graphs (100+ agents) block main thread. Cap node count or add web worker. | P3 | code-review 2026-03-26 |
-| CR-PERF-3 | **WorkflowGraph useEffect dependency array** — `setNodes`/`setEdges` in dependency array are recreated each render, causing unnecessary layout recomputation. Remove from deps. | P4 | code-review 2026-03-26 |
+**Status**: CR-PERF-1 (64486eb), CR-PERF-2 (ccf894f), CR-PERF-3 (1bed863) — all Done.
 
 ### CR: Auth — High
 
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| CR-AUTH-1 | **Auto-refresh timer race condition** — `supabase.ts:213-233` uses module-level `autoRefreshTimer` without reference counting. React Strict Mode double-mount or multiple AuthProvider instances can leak timers. Add ref counter to `startAutoRefresh`/`stopAutoRefresh`. | P2 | code-review 2026-03-26 |
-| CR-AUTH-2 | **AdminPage mutation counter fragility** — `AdminPage.tsx:59-63` uses numeric ref counter. If a mutation throws before `onMutationEnd`, counter gets stuck. Replace with `Set<string>` of in-flight request IDs. | P3 | code-review 2026-03-26 |
+**Status**: CR-AUTH-1 (ce66127), CR-AUTH-2 (5a223ae) — both Done.
 
 ### CR: Style — Low
 
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| CR-STYLE-1 | **Inline styling in workflow components** — `WorkflowGraph.tsx:104-136`, `AgentWorkflowView.tsx:54-77` use inline `style` objects. Project guideline: no inline styling for UI components. Extract to CSS module. | P4 | code-review 2026-03-26 |
+**Status**: CR-STYLE-1 (d132fc6) — Done. Score-band colors retained as inline CSS custom properties (data-driven, cannot be static classes).
 
 ### E2E & Integration Testing
 
