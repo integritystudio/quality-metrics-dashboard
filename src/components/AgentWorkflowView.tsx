@@ -68,7 +68,6 @@ export function AgentWorkflowView({
         ))}
       </div>
 
-      {/* DAG panel */}
       <div
         role="tabpanel"
         id="workflow-panel-dag"
@@ -82,7 +81,6 @@ export function AgentWorkflowView({
         />
       </div>
 
-      {/* Timeline panel */}
       <div
         role="tabpanel"
         id="workflow-panel-timeline"
