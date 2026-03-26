@@ -90,7 +90,6 @@ export async function loadEvaluationsByTraceId(
 const TRACE_QUERY_CONCURRENCY = 10;
 
 /**
- * Loads evaluations matching any of the given traceIds.
  * Deduplicates input, then issues batched per-traceId queries
  * (max {@link TRACE_QUERY_CONCURRENCY} in parallel) to avoid
  * saturating the backend with unbounded concurrent reads.
