@@ -72,7 +72,6 @@ agentRoutes.get('/agents', async (c) => {
     }
     const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
 
-    // Phase 1: aggregate agent stats from spans (prototype-safe accumulators)
     const acc: Record<string, AgentAcc> = Object.create(null);
 
     const traceToAgents = new Map<string, Set<string>>();
@@ -106,7 +105,6 @@ agentRoutes.get('/agents', async (c) => {
     const allTraceIds = [...traceToAgents.keys()];
     const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
 
-    // Accumulate per-agent evaluation scores by metric name (prototype-safe)
     const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
     for (const ev of evaluations) {
       if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
