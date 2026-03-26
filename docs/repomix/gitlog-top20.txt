@@ -1,3 +1,11 @@
+dfe7a15 2026-03-26 refactor(judge-evaluations): remove section-separator divider comments
+  scripts/judge-evaluations.ts
+
+e7849fe 2026-03-26 chore: regenerate repomix docs after Round 9 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 1aea9a6 2026-03-26 refactor(sync-to-kv): remove remaining what-comments and section separators
   scripts/sync-to-kv.ts
 
@@ -316,15 +324,6 @@ f89622f 2026-03-26 refactor(sync-to-kv): remove dead dry-run loop body
   scripts/sync-to-kv.ts
 
 d7018ed 2026-03-26 refactor(metrics,scripts): simplify dynamics assignment and remove dead code in judge script
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  scripts/judge-evaluations.ts
-
-840bf0a 2026-03-26 refactor(components,scripts): extract JudgePanel sub-component and remove dead _logCount
-  scripts/judge-evaluations.ts
-
-bb1713a 2026-03-26 fix(auth,dashboard): defer auth state reset and remove unused vars
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
   docs/repomix/repomix.xml
