@@ -39,12 +39,7 @@ jobs:
         uses: dopplerhq/cli-action@v3
       - run: npm ci
       - name: Build with env vars from Doppler
-        run: |
-          echo "VITE_API_URL=$(doppler secrets get DEV_WORKER_URL --plain)" >> .env
-          echo "VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --plain)" >> .env
-          echo "VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --plain)" >> .env
-          echo "VITE_AUTH0_AUDIENCE=$(doppler secrets get VITE_AUTH0_AUDIENCE --plain)" >> .env
-          npm run build
+        run: doppler run --project integrity-studio --config dev -- npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
@@ -74,12 +69,7 @@ jobs:
         uses: dopplerhq/cli-action@v3
       - run: npm ci
       - name: Build with env vars from Doppler
-        run: |
-          echo "VITE_API_URL=$(doppler secrets get DEV_WORKER_URL --plain)" >> .env
-          echo "VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --plain)" >> .env
-          echo "VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --plain)" >> .env
-          echo "VITE_AUTH0_AUDIENCE=$(doppler secrets get VITE_AUTH0_AUDIENCE --plain)" >> .env
-          npm run build
+        run: doppler run --project integrity-studio --config dev -- npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Deploy default worker

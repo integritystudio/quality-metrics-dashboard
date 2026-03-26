@@ -29,12 +29,17 @@ function parentDistStub(): Plugin {
 }
 
 export default defineConfig(({ command, mode }) => {
-  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  // Merge .env file vars with process.env VITE_* vars (process.env wins — allows CI injection)
+  const fileEnv = loadEnv(mode, process.cwd(), 'VITE_');
+  const merged: Record<string, string> = { ...fileEnv };
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k.startsWith('VITE_') && v !== undefined) merged[k] = v;
+  }
 
   return {
     base: '/',
     define: command === 'build' ? Object.fromEntries(
-      Object.entries(env).map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)])
+      Object.entries(merged).map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)])
     ) : {},
     plugins: [
       react(),
