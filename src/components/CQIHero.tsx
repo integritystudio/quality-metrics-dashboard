@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { scoreColor, formatPercent } from '../lib/quality-utils.js';
 import type { CompositeQualityIndex, CQIContribution } from '../types.js';
 import { SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
@@ -15,14 +16,12 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
       role="region"
       aria-label={`Composite Quality Index: ${displayValue}`}
       className="card text-center p-6"
+      style={{ '--cqi-color': overallColor } as CSSProperties}
     >
       <div className="field-label text-secondary text-xs mb-1">
         Composite Quality Index
       </div>
-      <div
-        className="mono font-bold cqi-value"
-        style={{ color: overallColor }}
-      >
+      <div className="mono font-bold cqi-value">
         {displayValue}
       </div>
 
@@ -31,12 +30,9 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
           {cqi.contributions.map((c) => (
             <div
               key={c.metric}
+              className="cqi-segment"
               title={`${c.metric}: ${c.rawScore.toFixed(SCORE_CHIP_PRECISION)} (weight ${formatPercent(c.weight * 100, 0)})`}
-              style={{
-                flex: c.weight,
-                backgroundColor: segmentColor(c),
-                minWidth: 'var(--space-0-5)',
-              }}
+              style={{ flex: c.weight, backgroundColor: segmentColor(c) }}
             />
           ))}
         </div>
