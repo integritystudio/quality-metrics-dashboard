@@ -9,7 +9,7 @@ import {
 import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, extractFiniteScores } from '../api-constants.js';
+import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 /** Period hours used for dynamics computation: 1h buckets for 24h window, daily (24h) buckets for longer windows. */
@@ -26,7 +26,7 @@ export const metricsRoutes = new Hono();
 
 metricsRoutes.get('/metrics/:name', async (c) => {
   const name = c.req.param('name');
-  if (!name || !PARAM_METRIC_NAME_RE.test(name)) {
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
     return c.json({ error: 'Invalid metric name format' }, HttpStatus.BadRequest);
   }
   const config = getQualityMetric(name);
@@ -80,7 +80,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 
 metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   const name = c.req.param('name');
-  if (!name || !PARAM_METRIC_NAME_RE.test(name)) {
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
     return c.json({ error: 'Invalid metric name format' }, HttpStatus.BadRequest);
   }
   const config = getQualityMetric(name);
