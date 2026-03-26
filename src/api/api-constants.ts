@@ -20,6 +20,9 @@ export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
 /** Number of leading commit message lines to skip before body extraction. */
 export const COMMIT_BODY_START_LINE_INDEX = 2;
 
+/** Maximum trace/session ID length accepted by Zod schemas and path-param validation. */
+export const MAX_TRACE_ID_LEN = 128;
+
 /** Format validation for path parameters (session IDs, trace IDs). Min 2 chars; IDs in practice are much longer. */
 export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
 /** Format validation for metric name path parameters. Aliased to PARAM_ID_RE since both allow identical character sets. */

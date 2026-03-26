@@ -2,9 +2,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { HttpStatus } from '../../lib/constants.js';
+import { MAX_TRACE_ID_LEN } from '../api-constants.js';
 import { loadEvaluationsByTraceId } from '../data-loader.js';
 
-const TraceIdSchema = z.string().min(1).max(256);
+const TraceIdSchema = z.string().min(1).max(MAX_TRACE_ID_LEN);
 
 export const evaluationRoutes = new Hono();
 
