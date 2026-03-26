@@ -1047,6 +1047,7 @@ details[open] > .cot-summary::before {
 
 /* Text transform */
 .uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
+.font-normal   { font-weight: 400; }
 .font-semibold { font-weight: var(--bold); }
 
 /* Chip / pill */
@@ -1072,6 +1073,7 @@ details[open] > .cot-summary::before {
 /* Margin */
 .m-0    { margin: 0; }
 .ml-1   { margin-left: var(--space-1); }
+.ml-2   { margin-left: var(--space-2); }
 .ml-auto { margin-left: auto; }
 .mr-1   { margin-right: var(--space-1); }
 

@@ -202,10 +202,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
         <ViewSection title={<>
           Time Series ({trendData.totalEvaluations} evaluations)
           {trendData.narrowed && (
-            <span className="text-muted text-xs" style={{
-              fontWeight: 400,
-              marginLeft: 8,
-            }}>auto-narrowed to data range</span>
+            <span className="text-muted text-xs font-normal ml-2">auto-narrowed to data range</span>
           )}
         </>}>
           <div className="card">
