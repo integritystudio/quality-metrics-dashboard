@@ -6,12 +6,10 @@ import { queryLogs } from '../../../dist/tools/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toDateOnly } from './api-constants.js';
 
-/** Default lookback windows */
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
 const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
 
-/** Query result limits */
 const LIMIT_EVALS_BULK = 100_000;
 const LIMIT_EVALS_METRIC = 10_000;
 /**
