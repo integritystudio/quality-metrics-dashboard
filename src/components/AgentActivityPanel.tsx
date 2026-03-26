@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
@@ -53,7 +53,6 @@ function errorRateColor(rate: number): string {
   if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
   return 'var(--status-critical)';
 }
-
 
 interface AgentActivityPanelProps {
   agents: AgentStat[];
@@ -120,7 +119,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
         <tbody>
           {sorted.map((agent) => {
             const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
-            const errColor = errorRateColor(agent.errorRate);
+            const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
             const invPct = (agent.invocations / maxInvocations) * 100;
             const topSource = Object.entries(agent.sourceTypes).sort(byValueDesc)[0]?.[0];
             const isExpanded = expanded === agent.agentName;
@@ -159,9 +158,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   {/* Error rate */}
                   <td>
                     <div className="flex-center gap-1-5">
-                      <span className="mono-xs" style={{
-                        color: errColor,
-                      }}>
+                      <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
                         {agent.errors > 0 ? formatPercent(agent.errorRate * 100) : '\u2014'}
                       </span>
                       {agent.errors > 0 && (
@@ -283,6 +280,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
       <div className="flex-wrap gap-3">
         {metrics.map(([name, m]) => {
           const barColor = scoreColor(m.avg);
+          const band = scoreColorBand(m.avg);
           return (
             <div key={name} className="metric-card-compact">
               <div className="text-secondary mb-1 text-xs truncate">
@@ -290,7 +288,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
               </div>
               <div className="flex-center mb-1 gap-2">
                 <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
-                <span className="mono-xs font-semibold text-right score-label-width" style={{ color: barColor }}>
+                <span className="mono-xs font-semibold text-right score-label-width" data-band={band}>
                   {m.avg.toFixed(SCORE_CHIP_PRECISION)}
                 </span>
               </div>

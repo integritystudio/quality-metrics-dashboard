@@ -885,6 +885,14 @@ details[open] > .cot-summary::before {
 }
 .agent-inv-count { min-width: var(--space-8); }
 .agent-dot { background: var(--agent-color, var(--border)); }
+.agent-err-rate { color: var(--status-critical); }
+.agent-err-rate[data-err-status="ok"] { color: var(--status-healthy); }
+.agent-err-rate[data-err-status="warn"] { color: var(--status-warning); }
+.score-label-width[data-band="excellent"] { color: var(--score-excellent); }
+.score-label-width[data-band="good"] { color: var(--score-good); }
+.score-label-width[data-band="adequate"] { color: var(--score-adequate); }
+.score-label-width[data-band="poor"] { color: var(--score-poor); }
+.score-label-width[data-band="failing"] { color: var(--score-failing); }
 
 /* Two-column equal grid */
 .grid-two-col {
