@@ -1,11 +1,6 @@
 /** Divisor to convert percentage values to rank indexes. */
 export const PERCENT_BASE = 100;
 
-/** Milliseconds in one hour. */
-export const TIME_MS = {
-  HOUR: 3_600_000,
-} as const;
-
 /** Common latency percentiles used in session summaries. */
 export const LATENCY_P50 = 50;
 export const LATENCY_P95 = 95;
