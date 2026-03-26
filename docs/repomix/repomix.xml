@@ -6302,81 +6302,6 @@ export function CompliancePage({ period }: { period: Period }) {
 }
 
 ================
-File: src/pages/CorrelationsPage.tsx
-================
-import { useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
-import { SplitPane } from '../components/SplitPane.js';
-import { MetricCompare } from '../components/MetricCompare.js';
-import { PageShell } from '../components/PageShell.js';
-import { ViewSection } from '../components/Section.js';
-import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
-import type { CorrelationFeature, Period } from '../types.js';
-interface CorrelationsResponse {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-}
-export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
-  const { data, isLoading, error } = useQuery<CorrelationsResponse>({
-    queryKey: ['correlations', period],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/correlations?period=${period}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
-    },
-    staleTime: STALE_TIME.AGGREGATE,
-    retry: QUERY_RETRY_COUNT,
-  });
-  const [leftMetric, setLeftMetric] = useState<string | undefined>();
-  const [rightMetric, setRightMetric] = useState<string | undefined>();
-  const handleCellClick = useCallback((row: string, col: string) => {
-    setLeftMetric(row);
-    setRightMetric(col);
-  }, []);
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
-      {data && (
-        <>
-          <h2 className="text-lg mb-3">Metric Correlations</h2>
-          <div className="card">
-            <CorrelationHeatmap
-              correlations={data.correlations}
-              metrics={data.metrics}
-              onCellClick={handleCellClick}
-            />
-          </div>
-          {(leftMetric || rightMetric) && (
-            <ViewSection title="Compare Metrics">
-              <div className="card">
-                <SplitPane
-                  left={
-                    <MetricCompare
-                      metricName={leftMetric}
-                      period={period}
-                      availableMetrics={data.metrics}
-                      onMetricChange={setLeftMetric}
-                    />
-                  }
-                  right={
-                    <MetricCompare
-                      metricName={rightMetric}
-                      period={period}
-                      availableMetrics={data.metrics}
-                      onMetricChange={setRightMetric}
-                    />
-                  }
-                />
-              </div>
-            </ViewSection>
-          )}
-        </>
-      )}
-    </PageShell>
-  );
-}
-
-================
 File: src/pages/CoveragePage.tsx
 ================
 import { useState } from 'react';
@@ -8640,6 +8565,76 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
 }
 
 ================
+File: src/pages/CorrelationsPage.tsx
+================
+import { useState, useCallback } from 'react';
+import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
+import { SplitPane } from '../components/SplitPane.js';
+import { MetricCompare } from '../components/MetricCompare.js';
+import { PageShell } from '../components/PageShell.js';
+import { ViewSection } from '../components/Section.js';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
+import type { CorrelationFeature, Period } from '../types.js';
+interface CorrelationsResponse {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+}
+export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
+  const { data, isLoading, error } = useApiQuery<CorrelationsResponse>(
+    ['correlations', period],
+    () => `${API_BASE}/api/correlations?period=${period}`,
+    { staleTime: STALE_TIME.AGGREGATE },
+  );
+  const [leftMetric, setLeftMetric] = useState<string | undefined>();
+  const [rightMetric, setRightMetric] = useState<string | undefined>();
+  const handleCellClick = useCallback((row: string, col: string) => {
+    setLeftMetric(row);
+    setRightMetric(col);
+  }, []);
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
+      {data && (
+        <>
+          <h2 className="text-lg mb-3">Metric Correlations</h2>
+          <div className="card">
+            <CorrelationHeatmap
+              correlations={data.correlations}
+              metrics={data.metrics}
+              onCellClick={handleCellClick}
+            />
+          </div>
+          {(leftMetric || rightMetric) && (
+            <ViewSection title="Compare Metrics">
+              <div className="card">
+                <SplitPane
+                  left={
+                    <MetricCompare
+                      metricName={leftMetric}
+                      period={period}
+                      availableMetrics={data.metrics}
+                      onMetricChange={setLeftMetric}
+                    />
+                  }
+                  right={
+                    <MetricCompare
+                      metricName={rightMetric}
+                      period={period}
+                      availableMetrics={data.metrics}
+                      onMetricChange={setRightMetric}
+                    />
+                  }
+                />
+              </div>
+            </ViewSection>
+          )}
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+================
 File: src/pages/PipelinePage.tsx
 ================
 import { PipelineFunnel } from '../components/PipelineFunnel.js';
@@ -9447,862 +9442,6 @@ const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
   process.argv[1]?.endsWith('derive-evaluations.js');
 if (isDirectRun) {
   main();
-}
-
-================
-File: scripts/judge-evaluations.ts
-================
-#!/usr/bin/env tsx
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
-import { createHash } from 'crypto';
-import { join, basename } from 'path';
-import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
-import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import {
-  LLMJudge,
-} from '../../src/lib/judge/llm-judge-config.js';
-import type { DatasetRunRecord } from '../../src/backends/index.js';
-import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
-import {
-  traceSpanSchema,
-  otelLogEntrySchema,
-  transcriptEntrySchema,
-  otelEvaluationRecordSchema,
-} from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
-import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
-  name: 'tool_correctness',
-  criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-export const TOOL_SELECTION_CRITERIA: GEvalConfig = {
-  name: 'tool_selection',
-  criteria: 'Evaluate whether the assistant selected the appropriate tools for the given task. Were the chosen tools the best fit for the user request? Were unnecessary tools avoided? Were any required tools missing that should have been used?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-export const TOOL_ARGUMENTS_CRITERIA: GEvalConfig = {
-  name: 'tool_arguments',
-  criteria: 'Evaluate whether the tool arguments provided by the assistant were correct and appropriate. Were all required parameters provided with accurate values? Were parameter formats and types correct? Were optional parameters used effectively when beneficial?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
-  name: 'tool_integration',
-  criteria: 'Evaluate whether tool results were properly incorporated into the assistant response. Were results accurately reflected without distortion? Was relevant information extracted and presented clearly? Were errors or unexpected results handled appropriately?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-const HOME = process.env.HOME ?? '';
-export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
-export const SESSION_ID_PREVIEW_LEN = 8;
-export const EVAL_SCORE_PRECISION = 4;
-export const CONCURRENCY = 3;
-export const BATCH_DELAY_MS = 500;
-export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
-export const MAX_TURN_TEXT_LEN = 8000;
-export const MAX_TOOL_CONTEXT_ITEMS = 10;
-export const MAX_TOOL_RESULTS_PER_TURN = 20;
-export const MAX_TURN_LIMIT = 10_000;
-export function normalizeScore(score: number): number {
-  return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
-}
-export interface TranscriptInfo {
-  path: string;
-  sessionId: string;
-  traceId: string;
-}
-export interface Turn {
-  sessionId: string;
-  traceId: string;
-  timestamp: string;
-  userText: string;
-  assistantText: string;
-  toolResults: string[];
-}
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  explanation: string;
-  evaluator: string;
-  evaluatorType: string;
-  traceId: string;
-  sessionId: string;
-}
-const TRANSCRIPT_DIRS = [
-  join(HOME, '.claude', 'projects'),
-  join(HOME, 'claude-tool-use', 'projects'),
-  join(HOME, '.claude-history', 'projects'),
-  join(HOME, 'claude-tool-use'),
-  join(HOME, '.claude-history'),
-];
-function resolveTranscriptPath(originalPath: string): string | null {
-  if (existsSync(originalPath)) return originalPath;
-  const projectsIdx = originalPath.indexOf('/projects/');
-  if (projectsIdx === -1) return null;
-  const suffix = originalPath.slice(projectsIdx + '/projects/'.length);
-  for (const dir of TRANSCRIPT_DIRS) {
-    const candidate = join(dir, suffix);
-    if (candidate !== originalPath && existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
-  const seen = new Set<string>();
-  const transcripts: TranscriptInfo[] = [];
-  const logFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('logs-') && f.endsWith('.jsonl'))
-    .sort();
-  for (const file of logFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
-      const attrs = entry.attributes as Record<string, unknown> | undefined;
-      if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
-      const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
-      if (!tPath) continue;
-      const sessionId = basename(tPath, '.jsonl');
-      if (seen.has(sessionId)) continue;
-      const resolved = resolveTranscriptPath(tPath);
-      if (!resolved) continue;
-      seen.add(sessionId);
-      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
-      transcripts.push({ path: resolved, sessionId, traceId });
-    }
-  }
-  for (const dir of TRANSCRIPT_DIRS) {
-    if (!existsSync(dir)) continue;
-    let slugDirs: string[];
-    try {
-      slugDirs = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const slug of slugDirs) {
-      const slugPath = join(dir, slug);
-      let files: string[];
-      try {
-        files = readdirSync(slugPath);
-      } catch {
-        continue;
-      }
-      for (const f of files) {
-        if (!f.endsWith('.jsonl')) continue;
-        const sessionId = basename(f, '.jsonl');
-        if (!/^[0-9a-f]{8}-/.test(sessionId)) continue;
-        if (seen.has(sessionId)) continue;
-        seen.add(sessionId);
-        transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
-      }
-    }
-  }
-  return transcripts;
-}
-// Trace-Based Session Discovery (for --backfill)
-interface TraceSession {
-  sessionId: string;
-  traceId: string;
-  earliestTime: number; // epoch seconds
-  spanCount: number;
-}
-/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
-async function discoverSessionsFromTraces(): Promise<Turn[]> {
-  const traceFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
-    .sort();
-  const sessions = new Map<string, TraceSession>();
-  for (const file of traceFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    for await (const span of streamJsonlWithValidation(filepath, traceSpanSchema)) {
-      const attrs = span.attributes;
-      if (!attrs) continue;
-      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
-      if (!sessionId) continue;
-      const startTime = Array.isArray(span.startTime) ? span.startTime[0] as number : 0;
-      const traceId = span.traceId || '';
-      const existing = sessions.get(sessionId);
-      if (!existing) {
-        sessions.set(sessionId, { sessionId, traceId, earliestTime: startTime, spanCount: 1 });
-      } else {
-        existing.spanCount++;
-        if (startTime < existing.earliestTime) {
-          existing.earliestTime = startTime;
-          existing.traceId = traceId;
-        }
-      }
-    }
-  }
-  const turns: Turn[] = [];
-  for (const s of sessions.values()) {
-    const timestamp = new Date(s.earliestTime * 1000).toISOString();
-    turns.push({
-      sessionId: s.sessionId,
-      traceId: s.traceId,
-      timestamp,
-      userText: '[trace-backfill]',
-      assistantText: '[trace-backfill]',
-      toolResults: [],
-    });
-  }
-  return turns;
-}
-// Turn Extraction
-/** B8: Discriminated union for transcript content blocks */
-export interface TextBlock { type: 'text'; text: string }
-export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
-export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
-export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
-function isContentBlock(value: unknown): value is ContentBlock {
-  if (typeof value !== 'object' || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return obj.type === 'text' || obj.type === 'tool_result' || obj.type === 'tool_use';
-}
-function asContentBlocks(content: unknown): ContentBlock[] {
-  if (!Array.isArray(content)) return [];
-  return content.filter(isContentBlock);
-}
-export function isSystemPrompt(text: string): boolean {
-  if (typeof text !== 'string') return false;
-  const trimmed = text.trimStart();
-  return trimmed.startsWith('<system-reminder>') || trimmed.startsWith('Stop hook feedback:');
-}
-export function isToolResultOnly(content: unknown): boolean {
-  if (!Array.isArray(content)) return false;
-  const blocks = asContentBlocks(content);
-  return blocks.length > 0 && blocks.every(b => b.type === 'tool_result');
-}
-export function extractTextFromContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  return asContentBlocks(content)
-    .filter((b): b is TextBlock => b.type === 'text')
-    .map(b => b.text)
-    .join('\n')
-    .trim();
-}
-export function extractToolResults(content: unknown): string[] {
-  return asContentBlocks(content)
-    .filter((b): b is ToolResultBlock => b.type === 'tool_result')
-    .map(b => {
-      if (typeof b.content === 'string') return b.content;
-      return b.content
-        .filter((inner): inner is TextBlock => inner.type === 'text')
-        .map(inner => inner.text)
-        .join('\n');
-    })
-    .filter(Boolean);
-}
-export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
-  const turns: Turn[] = [];
-  let pendingUser: { text: string; timestamp: string } | null = null;
-  const accumulatedToolResults: string[] = [];
-  for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
-    const type = entry.type;
-    if (type === 'progress' || type === 'file-history-snapshot') continue;
-    const message = entry.message;
-    if (!message) continue;
-    const role = message.role;
-    const content = message.content;
-    if (type === 'user' && role === 'user') {
-      const toolRes = extractToolResults(content);
-      if (toolRes.length > 0) {
-        accumulatedToolResults.push(...toolRes);
-        if (accumulatedToolResults.length > MAX_TOOL_RESULTS_PER_TURN) {
-          accumulatedToolResults.splice(0, accumulatedToolResults.length - MAX_TOOL_RESULTS_PER_TURN);
-        }
-      }
-      if (isToolResultOnly(content)) continue;
-      const userText = extractTextFromContent(content);
-      if (!userText || isSystemPrompt(userText)) continue;
-      const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : null;
-      if (!timestamp) continue;
-      const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
-      if (!sanitizedUser.trim()) continue;
-      pendingUser = {
-        text: sanitizedUser,
-        timestamp,
-      };
-    }
-    if (type === 'assistant' && role === 'assistant' && pendingUser) {
-      const assistantText = extractTextFromContent(content);
-      if (!assistantText) continue;
-      turns.push({
-        sessionId: info.sessionId,
-        traceId: info.traceId,
-        timestamp: pendingUser.timestamp,
-        userText: pendingUser.text,
-        assistantText: sanitizeForPrompt(assistantText, MAX_TURN_TEXT_LEN),
-        toolResults: accumulatedToolResults.slice(-MAX_TOOL_RESULTS_PER_TURN),
-      });
-      pendingUser = null;
-      accumulatedToolResults.length = 0;
-    }
-  }
-  return turns;
-}
-async function createAnthropicProvider(): Promise<LLMProvider> {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic();
-  return {
-    async generate(
-      prompt: string,
-      options?: { temperature?: number; logprobs?: boolean }
-    ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
-      const response = await client.messages.create({
-        model: HAIKU_MODEL,
-        max_tokens: 1024,
-        temperature: options?.temperature ?? 0.1,
-        messages: [{ role: 'user', content: prompt }],
-      });
-      const text = response.content
-        .filter((b: { type: string; text?: string }) => b.type === 'text')
-        .map((b: { type: string; text?: string }) => b.text)
-        .join('');
-      // B15: Anthropic Messages API doesn't support logprobs, so G-Eval
-      return { text };
-    },
-  };
-}
-export function hashToScore(input: string, min: number, max: number): number {
-  const hash = createHash('sha256').update(input).digest();
-  const value = hash.readUInt16BE(0) / 0xFFFF;
-  return normalizeScore(min + value * (max - min));
-}
-export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
-  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
-}
-export interface SeedResult {
-  evals: EvalRecord[];
-  canaryCount: number;
-}
-export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
-  const evals: EvalRecord[] = [];
-  let canaryCount = 0;
-  for (const turn of turns) {
-    const turnKey = turn.timestamp.slice(0, 19);
-    const canary = isCanaryTurn(turn.sessionId, turnKey);
-    if (canary) canaryCount++;
-    const relKey = `${turn.sessionId}:relevance:${turnKey}`;
-    if (!existingKeys.has(relKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'relevance',
-        scoreValue: canary
-          ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
-          : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
-        explanation: canary
-          ? `Relevance (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
-          : `Relevance (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: canary ? 'canary' : 'seed',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    }
-    const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
-    if (!existingKeys.has(cohKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'coherence',
-        scoreValue: canary
-          ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
-          : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-        explanation: canary
-          ? `Coherence (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
-          : `Coherence (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: canary ? 'canary' : 'seed',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    }
-    {
-      const halScore = canary
-        ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
-        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.09);
-      const faithScore = normalizeScore(1 - halScore);
-      const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
-      if (!existingKeys.has(faithKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'faithfulness',
-          scoreValue: faithScore,
-          explanation: canary
-            ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
-            : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: canary ? 'canary' : 'seed',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      }
-      const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
-      if (!existingKeys.has(halKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'hallucination',
-          scoreValue: halScore,
-          explanation: canary
-            ? `Hallucination (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
-            : `Hallucination (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: canary ? 'canary' : 'seed',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      }
-    }
-    if (turn.toolResults.length > 0) {
-      const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
-      if (!existingKeys.has(tcKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'tool_correctness',
-          scoreValue: canary
-            ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
-            : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-          explanation: canary
-            ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
-            : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: canary ? 'canary' : 'seed',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      }
-    }
-  }
-  return { evals, canaryCount };
-}
-export const evalFailures: Record<string, number> = {};
-function trackFailure(metric: string): void {
-  evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
-}
-export async function evaluateTurn(
-  judge: LLMJudge,
-  turn: Turn,
-  existingKeys: Set<string>,
-): Promise<EvalRecord[]> {
-  const evals: EvalRecord[] = [];
-  const turnKey = turn.timestamp.slice(0, 19);
-  const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
-  const relKey = `${turn.sessionId}:relevance:${turnKey}`;
-  if (!existingKeys.has(relKey)) {
-    try {
-      const result = await judge.evaluateRelevance(
-        turn.userText,
-        turn.assistantText,
-        toolContext,
-      );
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'relevance',
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: 'llm',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    } catch (err) {
-      trackFailure('relevance');
-      console.warn(`  [relevance] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
-    }
-  }
-  const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
-  if (!existingKeys.has(cohKey)) {
-    try {
-      const result = await judge.evaluateCoherence(turn.assistantText);
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'coherence',
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: 'llm',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    } catch (err) {
-      trackFailure('coherence');
-      console.warn(`  [coherence] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
-    }
-  }
-  if (turn.toolResults.length > 0) {
-    const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
-    const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
-    const needsFaith = !existingKeys.has(faithKey);
-    const needsHal = !existingKeys.has(halKey);
-    if (needsFaith) {
-      try {
-        const faithResult = await judge.qagEvaluate(
-          turn.userText,
-          turn.assistantText,
-          toolContext,
-        );
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'faithfulness',
-          scoreValue: normalizeScore(faithResult.score),
-          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: 'llm',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      } catch (err) {
-        trackFailure('faithfulness');
-        console.warn(`  [faithfulness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
-      }
-    }
-    if (needsHal) {
-      try {
-        const halResult = await judge.evaluateFaithfulness(
-          turn.userText,
-          turn.assistantText,
-          toolContext,
-        );
-        const halScore = normalizeScore(1 - halResult.score);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'hallucination',
-          scoreValue: halScore,
-          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: 'llm',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      } catch (err) {
-        trackFailure('hallucination');
-        console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
-      }
-    }
-    const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
-    if (!existingKeys.has(tcKey)) {
-      const tcTestCase = {
-        input: turn.userText,
-        output: turn.assistantText,
-        context: toolContext,
-      };
-      try {
-        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'tool_correctness',
-          scoreValue: normalizeScore(tcResult.score),
-          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: 'llm',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      } catch (err) {
-        trackFailure('tool_correctness');
-        console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
-      }
-      const subCriteria = [
-        { config: TOOL_SELECTION_CRITERIA, name: 'tool_selection' },
-        { config: TOOL_ARGUMENTS_CRITERIA, name: 'tool_arguments' },
-        { config: TOOL_INTEGRATION_CRITERIA, name: 'tool_integration' },
-      ] as const;
-      for (const { config, name } of subCriteria) {
-        const subKey = `${turn.sessionId}:${name}:${turnKey}`;
-        if (existingKeys.has(subKey)) continue;
-        try {
-          const result = await judge.gEval(config, tcTestCase);
-          evals.push({
-            timestamp: turn.timestamp,
-            evaluationName: name,
-            scoreValue: normalizeScore(result.score),
-            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-            evaluator: 'llm-judge',
-            evaluatorType: 'llm',
-            traceId: turn.traceId,
-            sessionId: turn.sessionId,
-          });
-        } catch (err) {
-          trackFailure(name);
-          console.warn(`  [${name}] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
-        }
-      }
-    }
-  }
-  return evals;
-}
-export function toOTelRecord(ev: EvalRecord): object {
-  const attrs: Record<string, unknown> = {
-    'gen_ai.evaluation.name': ev.evaluationName,
-    'gen_ai.evaluation.score.value': ev.scoreValue,
-    'gen_ai.evaluation.explanation': ev.explanation,
-    'gen_ai.evaluation.evaluator': ev.evaluator,
-    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
-  };
-  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
-  return {
-    timestamp: ev.timestamp,
-    name: 'gen_ai.evaluation.result',
-    attributes: attrs,
-    traceId: ev.traceId,
-  };
-}
-function _loadExistingKeys(): Set<string> {
-  const keys = new Set<string>();
-  const evalFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('evaluations-') && f.endsWith('.jsonl'));
-  for (const file of evalFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    const records = readJsonlWithValidationSync(filepath, otelEvaluationRecordSchema);
-    for (const record of records) {
-      const attrs = record.attributes;
-      if (!attrs) continue;
-      const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-      if (evalType !== 'llm' && evalType !== 'seed' && evalType !== 'trace-backfill') continue;
-      const sessionId = attrs['session.id'] as string || '';
-      const metricName = attrs['gen_ai.evaluation.name'] as string || '';
-      const timestamp = record.timestamp || '';
-      const turnKey = timestamp.slice(0, 19);
-      keys.add(`${sessionId}:${metricName}:${turnKey}`);
-    }
-  }
-  return keys;
-}
-// Output
-const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
-function acquireLock(): boolean {
-  try {
-    const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
-    writeFileSync(fd, String(process.pid));
-    closeSync(fd);
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
-    try {
-      const lockContent = readFileSync(LOCK_FILE, 'utf-8').trim();
-      const lockPid = parseInt(lockContent, 10);
-      if (!isNaN(lockPid) && lockPid > 0) {
-        try {
-          process.kill(lockPid, 0);
-          return false;
-        } catch (killErr) {
-          if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
-        }
-      }
-    } catch {
-      return false;
-    }
-    let stale = false;
-    {
-      try {
-        const lockStat = statSync(LOCK_FILE);
-        const lockAgeMs = Date.now() - lockStat.mtimeMs;
-        if (lockAgeMs > TIME_MS.HOUR) {
-          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
-          stale = true;
-        }
-      } catch {  }
-    }
-    if (stale) {
-      try { unlinkSync(LOCK_FILE); } catch {  }
-      try {
-        const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
-        writeFileSync(fd, String(process.pid));
-        closeSync(fd);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    return false;
-  }
-}
-function releaseLock(): void {
-  try { unlinkSync(LOCK_FILE); } catch {  }
-}
-function safeExit(code: number): never {
-  releaseLock();
-  process.exit(code);
-}
-function writeEvaluations(evals: EvalRecord[]): void {
-  const today = new Date().toISOString().slice(0, 10);
-  const outFile = join(TELEMETRY_DIR, `evaluations-${today}.jsonl`);
-  const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
-  appendFileSync(outFile, content);
-}
-export async function processBatch<T, R>(
-  items: T[],
-  concurrency: number,
-  delayMs: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = [];
-  for (let i = 0; i < items.length; i += concurrency) {
-    const batch = items.slice(i, i + concurrency);
-    const batchResults = await Promise.allSettled(batch.map(fn));
-    for (const r of batchResults) {
-      if (r.status === 'fulfilled') {
-        results.push(r.value);
-      }
-    }
-    if (i + concurrency < items.length) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-  }
-  return results;
-}
-async function main() {
-  const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
-  const seed = args.includes('--seed');
-  const backfill = args.includes('--backfill');
-  const limitIdx = args.indexOf('--limit');
-  let limit = Infinity;
-  if (limitIdx !== -1) {
-    const parsed = parseInt(args[limitIdx + 1], 10);
-    if (isNaN(parsed) || parsed < 1) {
-      console.error('Error: --limit must be a positive integer');
-      process.exit(1);
-    }
-    limit = Math.min(parsed, MAX_TURN_LIMIT);
-  }
-  const datasetIdx = args.indexOf('--dataset-id');
-  const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
-  if (backfill) {
-    const traceTurns = await discoverSessionsFromTraces();
-    console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
-    if (!acquireLock()) {
-      console.error('Error: Another judge-evaluations process is running (lockfile exists)');
-      process.exit(1);
-    }
-    try {
-      const existingKeys = _loadExistingKeys();
-      const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
-      const newTurns = traceTurns.filter(t => {
-        const turnKey = t.timestamp.slice(0, 19);
-        return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
-      });
-      console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
-      if (newTurns.length === 0) return;
-      const seedResult = seedEvaluations(newTurns, existingKeys);
-      for (const ev of seedResult.evals) {
-        if (ev.evaluatorType === 'seed') {
-          ev.evaluatorType = 'trace-backfill';
-        }
-      }
-      if (seedResult.evals.length > 0) {
-        writeEvaluations(seedResult.evals);
-        const byCat = new Map<string, number>();
-        for (const ev of seedResult.evals) {
-          byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
-        }
-        console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
-        for (const [name, count] of byCat) {
-          console.log(`  ${name}: ${count}`);
-        }
-      }
-    } finally {
-      releaseLock();
-    }
-    return;
-  }
-  const transcripts = await _discoverTranscripts();
-  const turnArrays = await Promise.all(transcripts.map(info => extractTurns(info)));
-  const allTurns = turnArrays.flat().slice(0, limit);
-  if (dryRun) {
-    const estEvals = allTurns.reduce((sum, t) =>
-      sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
-    const estInputTokens = allTurns.reduce((sum, t) => {
-      const contentChars = t.userText.length + t.assistantText.length
-        + t.toolResults.reduce((s, r) => s + r.length, 0);
-      const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
-      return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
-    }, 0);
-    const estOutputTokens = estEvals * 200;
-    const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
-    const estCost = (estInputTokens / TOKENS_PER_MILLION) * haikuPricing.input
-      + (estOutputTokens / TOKENS_PER_MILLION) * haikuPricing.output;
-    console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
-    console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
-    console.log(`[dry-run] estimated cost: $${estCost.toFixed(EVAL_SCORE_PRECISION)}`);
-    const bySession = new Map<string, number>();
-    for (const t of allTurns) {
-      const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
-      bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
-    }
-    const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-    console.log('[dry-run] top sessions by turn count:');
-    for (const [sid, count] of sorted) {
-      console.log(`  ${sid}: ${count} turns`);
-    }
-    return;
-  }
-  if (!seed && !process.env.ANTHROPIC_API_KEY) {
-    console.error('Error: ANTHROPIC_API_KEY required (or use --seed for offline mode)');
-    process.exit(1);
-  }
-  if (!acquireLock()) {
-    console.error('Error: Another judge-evaluations process is running (lockfile exists)');
-    process.exit(1);
-  }
-  try {
-    const existingKeys = _loadExistingKeys();
-    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
-    let flatEvals: EvalRecord[];
-    if (seed) {
-      const seedResult = seedEvaluations(allTurns, existingKeys);
-      flatEvals = seedResult.evals;
-    } else {
-      const llm = await createAnthropicProvider();
-      const judge = new LLMJudge(llm, {
-        timeoutMs: TIME_MS.MINUTE,
-        maxRetries: 2,
-        evaluator: 'llm-judge',
-        evaluatorType: 'llm',
-        logger: {
-          warn: (msg) => console.warn(`  [warn] ${msg}`),
-          error: (msg) => console.error(`  [error] ${msg}`),
-        },
-      });
-      const allEvals = await processBatch(
-        allTurns,
-        CONCURRENCY,
-        BATCH_DELAY_MS,
-        (turn) => evaluateTurn(judge, turn, existingKeys),
-      );
-      flatEvals = allEvals.flat();
-    }
-    if (flatEvals.length === 0) {
-      return;
-    }
-    writeEvaluations(flatEvals);
-    if (datasetId) {
-      const backend = new LocalJsonlBackend(TELEMETRY_DIR);
-      const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
-      let datasetVersion = 1;
-      try {
-        const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
-        if (dsResult.action === 'get') datasetVersion = dsResult.dataset.version ?? 1;
-      } catch {  }
-      const runRecord: DatasetRunRecord = {
-        id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        datasetId,
-        datasetVersion,
-        runAt: new Date().toISOString(),
-        evaluationNames: evalNames,
-        resultCount: flatEvals.length,
-        evaluator: seed ? 'seed' : 'llm-judge',
-      };
-      await backend.appendDatasetRun(runRecord);
-    }
-  } finally {
-    releaseLock();
-  }
-}
-const isDirectRun = process.argv[1]?.endsWith('judge-evaluations.ts') ||
-  process.argv[1]?.endsWith('judge-evaluations.js');
-if (isDirectRun) {
-  main().catch(err => {
-    console.error('Fatal error:', err);
-    safeExit(1);
-  });
 }
 
 ================
@@ -14503,6 +13642,160 @@ export const routingTelemetryKvSchema = z.object({
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
+File: src/pages/RoutingTelemetryPage.tsx
+================
+import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
+import { PageShell } from '../components/PageShell.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import type { Period } from '../types.js';
+const PERCENT_MULTIPLIER = 100;
+function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
+  return 'strategy' in g && !('pair' in g);
+}
+export function RoutingTelemetryPage({ period }: { period: Period }) {
+  const { data, isLoading, error } = useRoutingTelemetry(period);
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
+      {data && data.summary.routedSpans === 0 ? (
+        <div className="empty-state">
+          <h2>No Routing Telemetry</h2>
+          <p>No routed spans found for this period. Routing telemetry is recorded when the request model differs from the actual response model.</p>
+        </div>
+      ) : data ? (
+        <>
+          <h2 className="text-lg mb-3">Routing Telemetry</h2>
+          <div className="card mb-3">
+            <div className="flex-wrap gap-8">
+              <div className="text-center">
+                <div className="mono-xl font-semibold">{data.summary.routedSpans}</div>
+                <div className="text-secondary text-xs uppercase">Routed Spans</div>
+              </div>
+              <div className="text-center">
+                <div className="mono-xl font-semibold">
+                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
+                </div>
+                <div className="text-secondary text-xs uppercase">Fallback Rate</div>
+              </div>
+              <div className="text-center">
+                <div className="mono-xl font-semibold">${data.costSavings.toFixed(4)}</div>
+                <div className="text-secondary text-xs uppercase">Cost Savings</div>
+              </div>
+              <div className="text-center">
+                <div className="mono-xl font-semibold">{data.totalSpansScanned}</div>
+                <div className="text-secondary text-xs uppercase">Spans Scanned</div>
+              </div>
+            </div>
+          </div>
+          {Object.keys(data.providerDistribution).length > 0 && (
+            <div className="card mb-3">
+              <h3 className="text-sm font-semibold mb-3">Provider Distribution</h3>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Count</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(data.providerDistribution)
+                    .sort(byValueDesc)
+                    .map(([provider, count]) => (
+                      <tr key={provider}>
+                        <td className="mono">{provider}</td>
+                        <td className="mono">{count}</td>
+                        <td className="mono">
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {Object.keys(data.modelDistribution).length > 0 && (
+            <div className="card mb-3">
+              <h3 className="text-sm font-semibold mb-3">Model Distribution</h3>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Count</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(data.modelDistribution)
+                    .sort(byValueDesc)
+                    .map(([model, count]) => (
+                      <tr key={model}>
+                        <td className="mono">{model}</td>
+                        <td className="mono">{count}</td>
+                        <td className="mono">
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {data.groups.length > 0 && data.groups.some(isStrategyGroup) && (
+            <div className="card mb-3">
+              <h3 className="text-sm font-semibold mb-3">Strategy Breakdown</h3>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Strategy</th>
+                    <th>Count</th>
+                    <th>Fallbacks</th>
+                    <th>Fallback Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.groups
+                    .filter(isStrategyGroup)
+                    .sort((a, b) => b.count - a.count)
+                    .map((g) => (
+                      <tr key={g.strategy}>
+                        <td className="mono">{g.strategy}</td>
+                        <td className="mono">{g.count}</td>
+                        <td className="mono">{g.fallbackCount}</td>
+                        <td className="mono">{formatPercent(g.fallbackRate * PERCENT_MULTIPLIER)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {data.routingLatency && (
+            <div className="card">
+              <h3 className="text-sm font-semibold mb-3">
+                Routing Latency
+                <span className="text-secondary text-xs font-normal ml-2">
+                  ({data.routingLatency.source === 'classification_time' ? 'classification time' : 'span duration'})
+                </span>
+              </h3>
+              <div className="flex-wrap gap-8">
+                <div className="text-center">
+                  <div className="mono-xl font-semibold">{data.routingLatency.p50.toFixed(0)}ms</div>
+                  <div className="text-secondary text-xs uppercase">p50</div>
+                </div>
+                <div className="text-center">
+                  <div className="mono-xl font-semibold">{data.routingLatency.p99.toFixed(0)}ms</div>
+                  <div className="text-secondary text-xs uppercase">p99</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : null}
+    </PageShell>
+  );
+}
+
+================
 File: src/__tests__/api-agents.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -15214,297 +14507,6 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
 }
 
 ================
-File: src/pages/RoutingTelemetryPage.tsx
-================
-import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
-import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
-import type { Period } from '../types.js';
-const PERCENT_MULTIPLIER = 100;
-function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
-  return 'strategy' in g && !('pair' in g);
-}
-export function RoutingTelemetryPage({ period }: { period: Period }) {
-  const { data, isLoading, error } = useRoutingTelemetry(period);
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && data.summary.routedSpans === 0 ? (
-        <div className="empty-state">
-          <h2>No Routing Telemetry</h2>
-          <p>No routed spans found for this period. Routing telemetry is recorded when the request model differs from the actual response model.</p>
-        </div>
-      ) : data ? (
-        <>
-          <h2 className="text-lg mb-3">Routing Telemetry</h2>
-          <div className="card mb-3">
-            <div className="flex-wrap gap-8">
-              <div className="text-center">
-                <div className="mono-xl font-semibold">{data.summary.routedSpans}</div>
-                <div className="text-secondary text-xs uppercase">Routed Spans</div>
-              </div>
-              <div className="text-center">
-                <div className="mono-xl font-semibold">
-                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
-                </div>
-                <div className="text-secondary text-xs uppercase">Fallback Rate</div>
-              </div>
-              <div className="text-center">
-                <div className="mono-xl font-semibold">${data.costSavings.toFixed(4)}</div>
-                <div className="text-secondary text-xs uppercase">Cost Savings</div>
-              </div>
-              <div className="text-center">
-                <div className="mono-xl font-semibold">{data.totalSpansScanned}</div>
-                <div className="text-secondary text-xs uppercase">Spans Scanned</div>
-              </div>
-            </div>
-          </div>
-          {Object.keys(data.providerDistribution).length > 0 && (
-            <div className="card mb-3">
-              <h3 className="text-sm font-semibold mb-3">Provider Distribution</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Provider</th>
-                    <th>Count</th>
-                    <th>Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(data.providerDistribution)
-                    .sort(byValueDesc)
-                    .map(([provider, count]) => (
-                      <tr key={provider}>
-                        <td className="mono">{provider}</td>
-                        <td className="mono">{count}</td>
-                        <td className="mono">
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {Object.keys(data.modelDistribution).length > 0 && (
-            <div className="card mb-3">
-              <h3 className="text-sm font-semibold mb-3">Model Distribution</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Model</th>
-                    <th>Count</th>
-                    <th>Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(data.modelDistribution)
-                    .sort(byValueDesc)
-                    .map(([model, count]) => (
-                      <tr key={model}>
-                        <td className="mono">{model}</td>
-                        <td className="mono">{count}</td>
-                        <td className="mono">
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {data.groups.length > 0 && data.groups.some(isStrategyGroup) && (
-            <div className="card mb-3">
-              <h3 className="text-sm font-semibold mb-3">Strategy Breakdown</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Strategy</th>
-                    <th>Count</th>
-                    <th>Fallbacks</th>
-                    <th>Fallback Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.groups
-                    .filter(isStrategyGroup)
-                    .sort((a, b) => b.count - a.count)
-                    .map((g) => (
-                      <tr key={g.strategy}>
-                        <td className="mono">{g.strategy}</td>
-                        <td className="mono">{g.count}</td>
-                        <td className="mono">{g.fallbackCount}</td>
-                        <td className="mono">{formatPercent(g.fallbackRate * PERCENT_MULTIPLIER)}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {data.routingLatency && (
-            <div className="card">
-              <h3 className="text-sm font-semibold mb-3">
-                Routing Latency
-                <span className="text-secondary text-xs font-normal ml-2">
-                  ({data.routingLatency.source === 'classification_time' ? 'classification time' : 'span duration'})
-                </span>
-              </h3>
-              <div className="flex-wrap gap-8">
-                <div className="text-center">
-                  <div className="mono-xl font-semibold">{data.routingLatency.p50.toFixed(0)}ms</div>
-                  <div className="text-secondary text-xs uppercase">p50</div>
-                </div>
-                <div className="text-center">
-                  <div className="mono-xl font-semibold">{data.routingLatency.p99.toFixed(0)}ms</div>
-                  <div className="text-secondary text-xs uppercase">p99</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      ) : null}
-    </PageShell>
-  );
-}
-
-================
-File: src/components/PipelineFunnel.tsx
-================
-import { memo, type CSSProperties } from 'react';
-import type { PipelineStage, PipelineDropoff } from '../types.js';
-import { EmptyState } from './EmptyState.js';
-import { formatPercent } from '../lib/quality-utils.js';
-import { FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
-interface PipelineFunnelProps {
-  stages: PipelineStage[];
-  dropoffs: PipelineDropoff[];
-  overallConversionPercent: number;
-}
-function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
-  if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
-  const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
-  return (
-    <div role="region" aria-label="Evaluation pipeline funnel">
-      <div className="flex-center mb-3 gap-2">
-        <span className="mono-xl font-semibold">
-          {formatPercent(overallConversionPercent)}
-        </span>
-        <span className="text-secondary text-base">overall conversion</span>
-      </div>
-      <div className="flex-col gap-1">
-        {stages.map((stage, idx) => {
-          const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
-          const dropoff = dropoffs[idx];
-          const showDropoff = dropoff && dropoff.dropped > 0;
-          return (
-            <div key={stage.name}>
-              <div className="flex-center gap-3">
-                <div
-                  className="d-flex funnel-bar"
-                  style={{
-                    '--funnel-width': `${widthPct}%`,
-                    '--funnel-bg': `var(--stage-${stage.name}, var(--accent))`,
-                  } as CSSProperties}
-                  role="meter"
-                  aria-label={`${stage.displayName}: ${stage.entryCount} evaluations`}
-                  aria-valuenow={stage.entryCount}
-                  aria-valuemin={0}
-                  aria-valuemax={maxCount}
-                >
-                  <span className="text-xs font-semibold text-on-accent nowrap">
-                    {stage.displayName}
-                  </span>
-                  <span className="mono-xs text-on-accent nowrap">
-                    {stage.entryCount.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              {showDropoff && (
-                <div
-                  className="text-xs funnel-dropoff"
-                  data-warn={dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT || undefined}
-                >
-                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <table className="sr-only" aria-label="Pipeline stage details">
-        <thead>
-          <tr><th>Stage</th><th>Entry</th><th>Exit</th><th>Drop-off</th></tr>
-        </thead>
-        <tbody>
-          {stages.map((stage, idx) => (
-            <tr key={stage.name}>
-              <td>{stage.displayName}</td>
-              <td>{stage.entryCount}</td>
-              <td>{stage.exitCount}</td>
-              <td>{dropoffs[idx] != null ? formatPercent(dropoffs[idx].dropoffPercent) : '\u2014'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-export const PipelineFunnel = memo(PipelineFunnelInner);
-
-================
-File: src/components/TurnTimeline.tsx
-================
-import type { CSSProperties } from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult } from '../types.js';
-interface TurnTimelineProps {
-  turns: TurnLevelResult[];
-  agentNames: string[];
-}
-export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const colorByAgent = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
-  return (
-    <div className="d-flex gap-2 overflow-x-auto py-2">
-      {turns.map((turn) => {
-        const agent = turn.agentName ?? 'unknown';
-        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
-        const bandColor = scoreColor(turn.relevance);
-        return (
-          <div
-            key={turn.turnIndex}
-            className="p-4 shrink-0 turn-card"
-            style={{ '--turn-color': color } as CSSProperties}
-          >
-            <div className="flex-center mb-1-5 justify-between">
-              <span className="text-2xs uppercase font-semibold turn-card-agent">{agent}</span>
-              <span className="text-muted text-2xs">#{turn.turnIndex}</span>
-            </div>
-            <div className="mb-1-5">
-              <div className="text-secondary text-2xs mb-1">Relevance</div>
-              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
-            </div>
-            <div className="mb-1-5">
-              <div className="text-secondary text-2xs mb-1">Progress</div>
-              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
-            </div>
-            {turn.hasError && (
-              <div className="text-2xs font-semibold text-critical mt-1">
-                Error
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-================
 File: src/lib/constants.ts
 ================
 import { z } from 'zod';
@@ -15771,6 +14773,143 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
+
+================
+File: src/components/PipelineFunnel.tsx
+================
+import { memo, type CSSProperties } from 'react';
+import type { PipelineStage, PipelineDropoff } from '../types.js';
+import { EmptyState } from './EmptyState.js';
+import { formatPercent } from '../lib/quality-utils.js';
+import { FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
+interface PipelineFunnelProps {
+  stages: PipelineStage[];
+  dropoffs: PipelineDropoff[];
+  overallConversionPercent: number;
+}
+function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
+  if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
+  const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
+  return (
+    <div role="region" aria-label="Evaluation pipeline funnel">
+      <div className="flex-center mb-3 gap-2">
+        <span className="mono-xl font-semibold">
+          {formatPercent(overallConversionPercent)}
+        </span>
+        <span className="text-secondary text-base">overall conversion</span>
+      </div>
+      <div className="flex-col gap-1">
+        {stages.map((stage, idx) => {
+          const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
+          const dropoff = dropoffs[idx];
+          const showDropoff = dropoff && dropoff.dropped > 0;
+          return (
+            <div key={stage.name}>
+              <div className="flex-center gap-3">
+                <div
+                  className="d-flex funnel-bar"
+                  style={{
+                    '--funnel-width': `${widthPct}%`,
+                    '--funnel-bg': `var(--stage-${stage.name}, var(--accent))`,
+                  } as CSSProperties}
+                  role="meter"
+                  aria-label={`${stage.displayName}: ${stage.entryCount} evaluations`}
+                  aria-valuenow={stage.entryCount}
+                  aria-valuemin={0}
+                  aria-valuemax={maxCount}
+                >
+                  <span className="text-xs font-semibold text-on-accent nowrap">
+                    {stage.displayName}
+                  </span>
+                  <span className="mono-xs text-on-accent nowrap">
+                    {stage.entryCount.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              {showDropoff && (
+                <div
+                  className="text-xs funnel-dropoff"
+                  data-warn={dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT || undefined}
+                >
+                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <table className="sr-only" aria-label="Pipeline stage details">
+        <thead>
+          <tr><th>Stage</th><th>Entry</th><th>Exit</th><th>Drop-off</th></tr>
+        </thead>
+        <tbody>
+          {stages.map((stage, idx) => (
+            <tr key={stage.name}>
+              <td>{stage.displayName}</td>
+              <td>{stage.entryCount}</td>
+              <td>{stage.exitCount}</td>
+              <td>{dropoffs[idx] != null ? formatPercent(dropoffs[idx].dropoffPercent) : '\u2014'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+export const PipelineFunnel = memo(PipelineFunnelInner);
+
+================
+File: src/components/TurnTimeline.tsx
+================
+import type { CSSProperties } from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult } from '../types.js';
+interface TurnTimelineProps {
+  turns: TurnLevelResult[];
+  agentNames: string[];
+}
+export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+  const colorByAgent = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
+  return (
+    <div className="d-flex gap-2 overflow-x-auto py-2">
+      {turns.map((turn) => {
+        const agent = turn.agentName ?? 'unknown';
+        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
+        const bandColor = scoreColor(turn.relevance);
+        return (
+          <div
+            key={turn.turnIndex}
+            className="p-4 shrink-0 turn-card"
+            style={{ '--turn-color': color } as CSSProperties}
+          >
+            <div className="flex-center mb-1-5 justify-between">
+              <span className="text-2xs uppercase font-semibold turn-card-agent">{agent}</span>
+              <span className="text-muted text-2xs">#{turn.turnIndex}</span>
+            </div>
+            <div className="mb-1-5">
+              <div className="text-secondary text-2xs mb-1">Relevance</div>
+              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
+            </div>
+            <div className="mb-1-5">
+              <div className="text-secondary text-2xs mb-1">Progress</div>
+              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
+            </div>
+            {turn.hasError && (
+              <div className="text-2xs font-semibold text-critical mt-1">
+                Error
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 ================
 File: src/components/CQIHero.tsx
@@ -16351,6 +15490,1479 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
     </div>
   );
 }
+
+================
+File: scripts/judge-evaluations.ts
+================
+#!/usr/bin/env tsx
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
+import { createHash } from 'crypto';
+import { join, basename } from 'path';
+import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
+import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
+import {
+  LLMJudge,
+} from '../../src/lib/judge/llm-judge-config.js';
+import type { DatasetRunRecord } from '../../src/backends/index.js';
+import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
+import {
+  traceSpanSchema,
+  otelLogEntrySchema,
+  transcriptEntrySchema,
+  otelEvaluationRecordSchema,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
+import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
+  name: 'tool_correctness',
+  criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+export const TOOL_SELECTION_CRITERIA: GEvalConfig = {
+  name: 'tool_selection',
+  criteria: 'Evaluate whether the assistant selected the appropriate tools for the given task. Were the chosen tools the best fit for the user request? Were unnecessary tools avoided? Were any required tools missing that should have been used?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+export const TOOL_ARGUMENTS_CRITERIA: GEvalConfig = {
+  name: 'tool_arguments',
+  criteria: 'Evaluate whether the tool arguments provided by the assistant were correct and appropriate. Were all required parameters provided with accurate values? Were parameter formats and types correct? Were optional parameters used effectively when beneficial?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
+  name: 'tool_integration',
+  criteria: 'Evaluate whether tool results were properly incorporated into the assistant response. Were results accurately reflected without distortion? Was relevant information extracted and presented clearly? Were errors or unexpected results handled appropriately?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+const HOME = process.env.HOME ?? '';
+export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
+export const SESSION_ID_PREVIEW_LEN = 8;
+export const EVAL_SCORE_PRECISION = 4;
+export const CONCURRENCY = 3;
+export const BATCH_DELAY_MS = 500;
+export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const MAX_TURN_TEXT_LEN = 8000;
+export const MAX_TOOL_CONTEXT_ITEMS = 10;
+export const MAX_TOOL_RESULTS_PER_TURN = 20;
+export const MAX_TURN_LIMIT = 10_000;
+export function normalizeScore(score: number): number {
+  return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
+}
+export interface TranscriptInfo {
+  path: string;
+  sessionId: string;
+  traceId: string;
+}
+export interface Turn {
+  sessionId: string;
+  traceId: string;
+  timestamp: string;
+  userText: string;
+  assistantText: string;
+  toolResults: string[];
+}
+export interface EvalRecord {
+  timestamp: string;
+  evaluationName: string;
+  scoreValue: number;
+  explanation: string;
+  evaluator: string;
+  evaluatorType: string;
+  traceId: string;
+  sessionId: string;
+}
+const TRANSCRIPT_DIRS = [
+  join(HOME, '.claude', 'projects'),
+  join(HOME, 'claude-tool-use', 'projects'),
+  join(HOME, '.claude-history', 'projects'),
+  join(HOME, 'claude-tool-use'),
+  join(HOME, '.claude-history'),
+];
+function resolveTranscriptPath(originalPath: string): string | null {
+  if (existsSync(originalPath)) return originalPath;
+  const projectsIdx = originalPath.indexOf('/projects/');
+  if (projectsIdx === -1) return null;
+  const suffix = originalPath.slice(projectsIdx + '/projects/'.length);
+  for (const dir of TRANSCRIPT_DIRS) {
+    const candidate = join(dir, suffix);
+    if (candidate !== originalPath && existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
+  const seen = new Set<string>();
+  const transcripts: TranscriptInfo[] = [];
+  const logFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('logs-') && f.endsWith('.jsonl'))
+    .sort();
+  for (const file of logFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
+      const attrs = entry.attributes as Record<string, unknown> | undefined;
+      if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
+      const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
+      if (!tPath) continue;
+      const sessionId = basename(tPath, '.jsonl');
+      if (seen.has(sessionId)) continue;
+      const resolved = resolveTranscriptPath(tPath);
+      if (!resolved) continue;
+      seen.add(sessionId);
+      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
+      transcripts.push({ path: resolved, sessionId, traceId });
+    }
+  }
+  for (const dir of TRANSCRIPT_DIRS) {
+    if (!existsSync(dir)) continue;
+    let slugDirs: string[];
+    try {
+      slugDirs = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const slug of slugDirs) {
+      const slugPath = join(dir, slug);
+      let files: string[];
+      try {
+        files = readdirSync(slugPath);
+      } catch {
+        continue;
+      }
+      for (const f of files) {
+        if (!f.endsWith('.jsonl')) continue;
+        const sessionId = basename(f, '.jsonl');
+        if (!/^[0-9a-f]{8}-/.test(sessionId)) continue;
+        if (seen.has(sessionId)) continue;
+        seen.add(sessionId);
+        transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
+      }
+    }
+  }
+  return transcripts;
+}
+interface TraceSession {
+  sessionId: string;
+  traceId: string;
+  earliestTime: number; // epoch seconds
+  spanCount: number;
+}
+/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
+async function discoverSessionsFromTraces(): Promise<Turn[]> {
+  const traceFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
+    .sort();
+  const sessions = new Map<string, TraceSession>();
+  for (const file of traceFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    for await (const span of streamJsonlWithValidation(filepath, traceSpanSchema)) {
+      const attrs = span.attributes;
+      if (!attrs) continue;
+      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
+      if (!sessionId) continue;
+      const startTime = Array.isArray(span.startTime) ? span.startTime[0] as number : 0;
+      const traceId = span.traceId || '';
+      const existing = sessions.get(sessionId);
+      if (!existing) {
+        sessions.set(sessionId, { sessionId, traceId, earliestTime: startTime, spanCount: 1 });
+      } else {
+        existing.spanCount++;
+        if (startTime < existing.earliestTime) {
+          existing.earliestTime = startTime;
+          existing.traceId = traceId;
+        }
+      }
+    }
+  }
+  const turns: Turn[] = [];
+  for (const s of sessions.values()) {
+    const timestamp = new Date(s.earliestTime * 1000).toISOString();
+    turns.push({
+      sessionId: s.sessionId,
+      traceId: s.traceId,
+      timestamp,
+      userText: '[trace-backfill]',
+      assistantText: '[trace-backfill]',
+      toolResults: [],
+    });
+  }
+  return turns;
+}
+/** B8: Discriminated union for transcript content blocks */
+export interface TextBlock { type: 'text'; text: string }
+export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
+export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
+export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
+function isContentBlock(value: unknown): value is ContentBlock {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return obj.type === 'text' || obj.type === 'tool_result' || obj.type === 'tool_use';
+}
+function asContentBlocks(content: unknown): ContentBlock[] {
+  if (!Array.isArray(content)) return [];
+  return content.filter(isContentBlock);
+}
+export function isSystemPrompt(text: string): boolean {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trimStart();
+  return trimmed.startsWith('<system-reminder>') || trimmed.startsWith('Stop hook feedback:');
+}
+export function isToolResultOnly(content: unknown): boolean {
+  if (!Array.isArray(content)) return false;
+  const blocks = asContentBlocks(content);
+  return blocks.length > 0 && blocks.every(b => b.type === 'tool_result');
+}
+export function extractTextFromContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  return asContentBlocks(content)
+    .filter((b): b is TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('\n')
+    .trim();
+}
+export function extractToolResults(content: unknown): string[] {
+  return asContentBlocks(content)
+    .filter((b): b is ToolResultBlock => b.type === 'tool_result')
+    .map(b => {
+      if (typeof b.content === 'string') return b.content;
+      return b.content
+        .filter((inner): inner is TextBlock => inner.type === 'text')
+        .map(inner => inner.text)
+        .join('\n');
+    })
+    .filter(Boolean);
+}
+export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
+  const turns: Turn[] = [];
+  let pendingUser: { text: string; timestamp: string } | null = null;
+  const accumulatedToolResults: string[] = [];
+  for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
+    const type = entry.type;
+    if (type === 'progress' || type === 'file-history-snapshot') continue;
+    const message = entry.message;
+    if (!message) continue;
+    const role = message.role;
+    const content = message.content;
+    if (type === 'user' && role === 'user') {
+      const toolRes = extractToolResults(content);
+      if (toolRes.length > 0) {
+        accumulatedToolResults.push(...toolRes);
+        if (accumulatedToolResults.length > MAX_TOOL_RESULTS_PER_TURN) {
+          accumulatedToolResults.splice(0, accumulatedToolResults.length - MAX_TOOL_RESULTS_PER_TURN);
+        }
+      }
+      if (isToolResultOnly(content)) continue;
+      const userText = extractTextFromContent(content);
+      if (!userText || isSystemPrompt(userText)) continue;
+      const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : null;
+      if (!timestamp) continue;
+      const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
+      if (!sanitizedUser.trim()) continue;
+      pendingUser = {
+        text: sanitizedUser,
+        timestamp,
+      };
+    }
+    if (type === 'assistant' && role === 'assistant' && pendingUser) {
+      const assistantText = extractTextFromContent(content);
+      if (!assistantText) continue;
+      turns.push({
+        sessionId: info.sessionId,
+        traceId: info.traceId,
+        timestamp: pendingUser.timestamp,
+        userText: pendingUser.text,
+        assistantText: sanitizeForPrompt(assistantText, MAX_TURN_TEXT_LEN),
+        toolResults: accumulatedToolResults.slice(-MAX_TOOL_RESULTS_PER_TURN),
+      });
+      pendingUser = null;
+      accumulatedToolResults.length = 0;
+    }
+  }
+  return turns;
+}
+async function createAnthropicProvider(): Promise<LLMProvider> {
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client = new Anthropic();
+  return {
+    async generate(
+      prompt: string,
+      options?: { temperature?: number; logprobs?: boolean }
+    ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
+      const response = await client.messages.create({
+        model: HAIKU_MODEL,
+        max_tokens: 1024,
+        temperature: options?.temperature ?? 0.1,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const text = response.content
+        .filter((b: { type: string; text?: string }) => b.type === 'text')
+        .map((b: { type: string; text?: string }) => b.text)
+        .join('');
+      // B15: Anthropic Messages API doesn't support logprobs, so G-Eval
+      return { text };
+    },
+  };
+}
+export function hashToScore(input: string, min: number, max: number): number {
+  const hash = createHash('sha256').update(input).digest();
+  const value = hash.readUInt16BE(0) / 0xFFFF;
+  return normalizeScore(min + value * (max - min));
+}
+export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
+  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
+}
+export interface SeedResult {
+  evals: EvalRecord[];
+  canaryCount: number;
+}
+export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
+  const evals: EvalRecord[] = [];
+  let canaryCount = 0;
+  for (const turn of turns) {
+    const turnKey = turn.timestamp.slice(0, 19);
+    const canary = isCanaryTurn(turn.sessionId, turnKey);
+    if (canary) canaryCount++;
+    const relKey = `${turn.sessionId}:relevance:${turnKey}`;
+    if (!existingKeys.has(relKey)) {
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'relevance',
+        scoreValue: canary
+          ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
+          : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
+        explanation: canary
+          ? `Relevance (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+          : `Relevance (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: canary ? 'canary' : 'seed',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    }
+    const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
+    if (!existingKeys.has(cohKey)) {
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'coherence',
+        scoreValue: canary
+          ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
+          : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+        explanation: canary
+          ? `Coherence (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+          : `Coherence (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: canary ? 'canary' : 'seed',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    }
+    {
+      const halScore = canary
+        ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
+        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.09);
+      const faithScore = normalizeScore(1 - halScore);
+      const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
+      if (!existingKeys.has(faithKey)) {
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'faithfulness',
+          scoreValue: faithScore,
+          explanation: canary
+            ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: canary ? 'canary' : 'seed',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      }
+      const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
+      if (!existingKeys.has(halKey)) {
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'hallucination',
+          scoreValue: halScore,
+          explanation: canary
+            ? `Hallucination (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Hallucination (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: canary ? 'canary' : 'seed',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      }
+    }
+    if (turn.toolResults.length > 0) {
+      const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+      if (!existingKeys.has(tcKey)) {
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'tool_correctness',
+          scoreValue: canary
+            ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
+            : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+          explanation: canary
+            ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: canary ? 'canary' : 'seed',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      }
+    }
+  }
+  return { evals, canaryCount };
+}
+export const evalFailures: Record<string, number> = {};
+function trackFailure(metric: string): void {
+  evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
+}
+export async function evaluateTurn(
+  judge: LLMJudge,
+  turn: Turn,
+  existingKeys: Set<string>,
+): Promise<EvalRecord[]> {
+  const evals: EvalRecord[] = [];
+  const turnKey = turn.timestamp.slice(0, 19);
+  const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
+  const relKey = `${turn.sessionId}:relevance:${turnKey}`;
+  if (!existingKeys.has(relKey)) {
+    try {
+      const result = await judge.evaluateRelevance(
+        turn.userText,
+        turn.assistantText,
+        toolContext,
+      );
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'relevance',
+        scoreValue: normalizeScore(result.score),
+        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: 'llm',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    } catch (err) {
+      trackFailure('relevance');
+      console.warn(`  [relevance] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+    }
+  }
+  const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
+  if (!existingKeys.has(cohKey)) {
+    try {
+      const result = await judge.evaluateCoherence(turn.assistantText);
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'coherence',
+        scoreValue: normalizeScore(result.score),
+        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: 'llm',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    } catch (err) {
+      trackFailure('coherence');
+      console.warn(`  [coherence] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+    }
+  }
+  if (turn.toolResults.length > 0) {
+    const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
+    const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
+    const needsFaith = !existingKeys.has(faithKey);
+    const needsHal = !existingKeys.has(halKey);
+    if (needsFaith) {
+      try {
+        const faithResult = await judge.qagEvaluate(
+          turn.userText,
+          turn.assistantText,
+          toolContext,
+        );
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'faithfulness',
+          scoreValue: normalizeScore(faithResult.score),
+          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('faithfulness');
+        console.warn(`  [faithfulness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+      }
+    }
+    if (needsHal) {
+      try {
+        const halResult = await judge.evaluateFaithfulness(
+          turn.userText,
+          turn.assistantText,
+          toolContext,
+        );
+        const halScore = normalizeScore(1 - halResult.score);
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'hallucination',
+          scoreValue: halScore,
+          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('hallucination');
+        console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+      }
+    }
+    const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+    if (!existingKeys.has(tcKey)) {
+      const tcTestCase = {
+        input: turn.userText,
+        output: turn.assistantText,
+        context: toolContext,
+      };
+      try {
+        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'tool_correctness',
+          scoreValue: normalizeScore(tcResult.score),
+          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('tool_correctness');
+        console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+      }
+      const subCriteria = [
+        { config: TOOL_SELECTION_CRITERIA, name: 'tool_selection' },
+        { config: TOOL_ARGUMENTS_CRITERIA, name: 'tool_arguments' },
+        { config: TOOL_INTEGRATION_CRITERIA, name: 'tool_integration' },
+      ] as const;
+      for (const { config, name } of subCriteria) {
+        const subKey = `${turn.sessionId}:${name}:${turnKey}`;
+        if (existingKeys.has(subKey)) continue;
+        try {
+          const result = await judge.gEval(config, tcTestCase);
+          evals.push({
+            timestamp: turn.timestamp,
+            evaluationName: name,
+            scoreValue: normalizeScore(result.score),
+            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+            evaluator: 'llm-judge',
+            evaluatorType: 'llm',
+            traceId: turn.traceId,
+            sessionId: turn.sessionId,
+          });
+        } catch (err) {
+          trackFailure(name);
+          console.warn(`  [${name}] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+        }
+      }
+    }
+  }
+  return evals;
+}
+export function toOTelRecord(ev: EvalRecord): object {
+  const attrs: Record<string, unknown> = {
+    'gen_ai.evaluation.name': ev.evaluationName,
+    'gen_ai.evaluation.score.value': ev.scoreValue,
+    'gen_ai.evaluation.explanation': ev.explanation,
+    'gen_ai.evaluation.evaluator': ev.evaluator,
+    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
+  };
+  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
+  return {
+    timestamp: ev.timestamp,
+    name: 'gen_ai.evaluation.result',
+    attributes: attrs,
+    traceId: ev.traceId,
+  };
+}
+function _loadExistingKeys(): Set<string> {
+  const keys = new Set<string>();
+  const evalFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('evaluations-') && f.endsWith('.jsonl'));
+  for (const file of evalFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    const records = readJsonlWithValidationSync(filepath, otelEvaluationRecordSchema);
+    for (const record of records) {
+      const attrs = record.attributes;
+      if (!attrs) continue;
+      const evalType = attrs['gen_ai.evaluation.evaluator.type'];
+      if (evalType !== 'llm' && evalType !== 'seed' && evalType !== 'trace-backfill') continue;
+      const sessionId = attrs['session.id'] as string || '';
+      const metricName = attrs['gen_ai.evaluation.name'] as string || '';
+      const timestamp = record.timestamp || '';
+      const turnKey = timestamp.slice(0, 19);
+      keys.add(`${sessionId}:${metricName}:${turnKey}`);
+    }
+  }
+  return keys;
+}
+const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
+function acquireLock(): boolean {
+  try {
+    const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+    writeFileSync(fd, String(process.pid));
+    closeSync(fd);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
+    try {
+      const lockContent = readFileSync(LOCK_FILE, 'utf-8').trim();
+      const lockPid = parseInt(lockContent, 10);
+      if (!isNaN(lockPid) && lockPid > 0) {
+        try {
+          process.kill(lockPid, 0);
+          return false;
+        } catch (killErr) {
+          if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
+        }
+      }
+    } catch {
+      return false;
+    }
+    let stale = false;
+    {
+      try {
+        const lockStat = statSync(LOCK_FILE);
+        const lockAgeMs = Date.now() - lockStat.mtimeMs;
+        if (lockAgeMs > TIME_MS.HOUR) {
+          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
+          stale = true;
+        }
+      } catch {  }
+    }
+    if (stale) {
+      try { unlinkSync(LOCK_FILE); } catch {  }
+      try {
+        const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+        writeFileSync(fd, String(process.pid));
+        closeSync(fd);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+}
+function releaseLock(): void {
+  try { unlinkSync(LOCK_FILE); } catch {  }
+}
+function safeExit(code: number): never {
+  releaseLock();
+  process.exit(code);
+}
+function writeEvaluations(evals: EvalRecord[]): void {
+  const today = new Date().toISOString().slice(0, 10);
+  const outFile = join(TELEMETRY_DIR, `evaluations-${today}.jsonl`);
+  const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
+  appendFileSync(outFile, content);
+}
+export async function processBatch<T, R>(
+  items: T[],
+  concurrency: number,
+  delayMs: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const batchResults = await Promise.allSettled(batch.map(fn));
+    for (const r of batchResults) {
+      if (r.status === 'fulfilled') {
+        results.push(r.value);
+      }
+    }
+    if (i + concurrency < items.length) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  return results;
+}
+async function main() {
+  const args = process.argv.slice(2);
+  const dryRun = args.includes('--dry-run');
+  const seed = args.includes('--seed');
+  const backfill = args.includes('--backfill');
+  const limitIdx = args.indexOf('--limit');
+  let limit = Infinity;
+  if (limitIdx !== -1) {
+    const parsed = parseInt(args[limitIdx + 1], 10);
+    if (isNaN(parsed) || parsed < 1) {
+      console.error('Error: --limit must be a positive integer');
+      process.exit(1);
+    }
+    limit = Math.min(parsed, MAX_TURN_LIMIT);
+  }
+  const datasetIdx = args.indexOf('--dataset-id');
+  const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
+  if (backfill) {
+    const traceTurns = await discoverSessionsFromTraces();
+    console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
+    if (!acquireLock()) {
+      console.error('Error: Another judge-evaluations process is running (lockfile exists)');
+      process.exit(1);
+    }
+    try {
+      const existingKeys = _loadExistingKeys();
+      const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
+      const newTurns = traceTurns.filter(t => {
+        const turnKey = t.timestamp.slice(0, 19);
+        return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
+      });
+      console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
+      if (newTurns.length === 0) return;
+      const seedResult = seedEvaluations(newTurns, existingKeys);
+      for (const ev of seedResult.evals) {
+        if (ev.evaluatorType === 'seed') {
+          ev.evaluatorType = 'trace-backfill';
+        }
+      }
+      if (seedResult.evals.length > 0) {
+        writeEvaluations(seedResult.evals);
+        const byCat = new Map<string, number>();
+        for (const ev of seedResult.evals) {
+          byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+        }
+        console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
+        for (const [name, count] of byCat) {
+          console.log(`  ${name}: ${count}`);
+        }
+      }
+    } finally {
+      releaseLock();
+    }
+    return;
+  }
+  const transcripts = await _discoverTranscripts();
+  const turnArrays = await Promise.all(transcripts.map(info => extractTurns(info)));
+  const allTurns = turnArrays.flat().slice(0, limit);
+  if (dryRun) {
+    const estEvals = allTurns.reduce((sum, t) =>
+      sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
+    const estInputTokens = allTurns.reduce((sum, t) => {
+      const contentChars = t.userText.length + t.assistantText.length
+        + t.toolResults.reduce((s, r) => s + r.length, 0);
+      const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
+      return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
+    }, 0);
+    const estOutputTokens = estEvals * 200;
+    const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
+    const estCost = (estInputTokens / TOKENS_PER_MILLION) * haikuPricing.input
+      + (estOutputTokens / TOKENS_PER_MILLION) * haikuPricing.output;
+    console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
+    console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
+    console.log(`[dry-run] estimated cost: $${estCost.toFixed(EVAL_SCORE_PRECISION)}`);
+    const bySession = new Map<string, number>();
+    for (const t of allTurns) {
+      const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
+      bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
+    }
+    const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+    console.log('[dry-run] top sessions by turn count:');
+    for (const [sid, count] of sorted) {
+      console.log(`  ${sid}: ${count} turns`);
+    }
+    return;
+  }
+  if (!seed && !process.env.ANTHROPIC_API_KEY) {
+    console.error('Error: ANTHROPIC_API_KEY required (or use --seed for offline mode)');
+    process.exit(1);
+  }
+  if (!acquireLock()) {
+    console.error('Error: Another judge-evaluations process is running (lockfile exists)');
+    process.exit(1);
+  }
+  try {
+    const existingKeys = _loadExistingKeys();
+    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+    let flatEvals: EvalRecord[];
+    if (seed) {
+      const seedResult = seedEvaluations(allTurns, existingKeys);
+      flatEvals = seedResult.evals;
+    } else {
+      const llm = await createAnthropicProvider();
+      const judge = new LLMJudge(llm, {
+        timeoutMs: TIME_MS.MINUTE,
+        maxRetries: 2,
+        evaluator: 'llm-judge',
+        evaluatorType: 'llm',
+        logger: {
+          warn: (msg) => console.warn(`  [warn] ${msg}`),
+          error: (msg) => console.error(`  [error] ${msg}`),
+        },
+      });
+      const allEvals = await processBatch(
+        allTurns,
+        CONCURRENCY,
+        BATCH_DELAY_MS,
+        (turn) => evaluateTurn(judge, turn, existingKeys),
+      );
+      flatEvals = allEvals.flat();
+    }
+    if (flatEvals.length === 0) {
+      return;
+    }
+    writeEvaluations(flatEvals);
+    if (datasetId) {
+      const backend = new LocalJsonlBackend(TELEMETRY_DIR);
+      const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
+      let datasetVersion = 1;
+      try {
+        const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
+        if (dsResult.action === 'get') datasetVersion = dsResult.dataset.version ?? 1;
+      } catch {  }
+      const runRecord: DatasetRunRecord = {
+        id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        datasetId,
+        datasetVersion,
+        runAt: new Date().toISOString(),
+        evaluationNames: evalNames,
+        resultCount: flatEvals.length,
+        evaluator: seed ? 'seed' : 'llm-judge',
+      };
+      await backend.appendDatasetRun(runRecord);
+    }
+  } finally {
+    releaseLock();
+  }
+}
+const isDirectRun = process.argv[1]?.endsWith('judge-evaluations.ts') ||
+  process.argv[1]?.endsWith('judge-evaluations.js');
+if (isDirectRun) {
+  main().catch(err => {
+    console.error('Fatal error:', err);
+    safeExit(1);
+  });
+}
+
+================
+File: src/api/api-constants.ts
+================
+export const PERCENT_BASE = 100;
+export const LATENCY_P50 = 50;
+export const LATENCY_P95 = 95;
+export const LATENCY_DISPLAY_PRECISION = 1;
+export const RATE_DISPLAY_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const FILE_ACCESS_TOP_N = 30;
+export const CONCENTRATION_THRESHOLD = 0.2;
+export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
+export const COMMIT_BODY_START_LINE_INDEX = 2;
+export const MAX_TRACE_ID_LEN = 128;
+export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
+export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
+export const SCORE_ROUND_FACTOR = 10_000;
+export const LOG_SUMMARY_MAX_ENTRIES = 200;
+export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+export const NANOS_TO_MS = 1_000_000;
+export function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+export const HOOK_NAME = {
+  SESSION_START: 'session-start',
+  TOKEN_METRICS: 'token-metrics-extraction',
+  AGENT_POST_TOOL: 'agent-post-tool',
+  POST_COMMIT_REVIEW: 'post-commit-review',
+  ALERT_EVALUATION: 'telemetry-alert-evaluation',
+  CODE_STRUCTURE: 'code-structure',
+} as const;
+export function isValidParam(value: string | undefined, re: RegExp): boolean {
+  return !!value && re.test(value);
+}
+export function toDateOnly(d: Date): string;
+export function toDateOnly(d: string): string;
+export function toDateOnly(d: Date | string): string {
+  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0];
+}
+export type SpanLike = { attributes?: Record<string, unknown> };
+export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
+  const v = span.attributes?.[key];
+  return typeof v === 'string' ? v : fallback;
+}
+export function attrNum(span: SpanLike, key: string, fallback = 0): number {
+  const v = span.attributes?.[key];
+  return typeof v === 'number' ? v : fallback;
+}
+export function spanAttr<T>(span: SpanLike, key: string): T | undefined {
+  return span.attributes?.[key] as T | undefined;
+}
+export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals
+    .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
+    .map(e => e.scoreValue as number);
+}
+
+================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[] {
+  const nodeMap = new Map<string, SpanNode>();
+  const roots: SpanNode[] = [];
+  for (const s of spans) {
+    nodeMap.set(s.spanId, {
+      spanId: s.spanId,
+      name: s.name,
+      durationMs: s.durationMs,
+      status: s.status,
+      attributes: s.attributes,
+      children: [],
+      evalCount: evalsBySpan.get(s.spanId) ?? 0,
+    });
+  }
+  for (const s of spans) {
+    const node = nodeMap.get(s.spanId)!;
+    const parentId = (s as { parentSpanId?: string }).parentSpanId;
+    if (parentId && nodeMap.has(parentId)) {
+      nodeMap.get(parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
+}
+const STATUS_ICONS: Record<number, string> = {
+  0: '',      // UNSET
+  1: '\u2713',
+  2: '\u2717',
+};
+function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
+  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
+  const statusCode = node.status?.code ?? 0;
+  const isError = statusCode === OTEL_STATUS_ERROR_CODE;
+  const barStyle: CSSProperties = {
+    '--span-bar-width': `${barPct}%`,
+    '--span-bar-min-width': barPct > 0 ? 'var(--space-0-5)' : '0',
+  } as CSSProperties;
+  return (
+    <>
+      <div
+        className="flex-center gap-2 border-b span-row"
+        style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
+      >
+        <span className="text-base span-status-icon" data-error={isError || undefined}>
+          {STATUS_ICONS[statusCode]}
+        </span>
+        <div className="flex-1">
+          <div className="text-xs font-medium">{node.name}</div>
+          <div className="flex-center gap-2">
+            <div className="flex-1 bar-track">
+              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
+            </div>
+            {node.durationMs != null && (
+              <span className="mono-xs text-secondary nowrap">
+                {fmtDuration(node.durationMs, 2)}
+              </span>
+            )}
+          </div>
+        </div>
+        {node.evalCount > 0 && (
+          <span className="text-2xs chip font-semibold chip-accent">
+            {plural(node.evalCount, 'eval')}
+          </span>
+        )}
+      </div>
+      {node.children.map(child => (
+        <SpanRow key={child.spanId} node={child} depth={depth + 1} maxDuration={maxDuration} />
+      ))}
+    </>
+  );
+}
+export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
+  const roots = buildTree(spans, evalsBySpan);
+  if (roots.length === 0) {
+    return <EmptyState message="No spans found for this trace." />;
+  }
+  return (
+    <div>
+      {roots.map(node => (
+        <SpanRow key={node.spanId} node={node} depth={0} maxDuration={maxDuration} />
+      ))}
+    </div>
+  );
+}
+
+================
+File: src/lib/workflow-graph.ts
+================
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
+const ATTR_AGENT_NAME = 'gen_ai.agent.name';
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
+const SPAN_NAME_TOOL_CALL = 'tool_call';
+const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph {
+  if (evaluation !== null && Array.isArray(evaluation.turns)) {
+    return buildFromEvaluation(evaluation, spans);
+  }
+  return inferFromSpans(spans);
+}
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
+  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  let droppedTurns = 0;
+  let rootAgentName: string | null = null;
+  let minTurnIndex = Infinity;
+  for (const turn of evaluation.turns) {
+    if (turn.agentName == null) {
+      droppedTurns++;
+      continue;
+    }
+    const existing = agentTurns.get(turn.agentName);
+    if (existing) existing.push(turn);
+    else agentTurns.set(turn.agentName, [turn]);
+    if (
+      turn.turnIndex < minTurnIndex ||
+      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
+    ) {
+      minTurnIndex = turn.turnIndex;
+      rootAgentName = turn.agentName;
+    }
+  }
+  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
+  const nodes: WorkflowNode[] = [];
+  for (const [agentName, turns] of agentTurns) {
+    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
+    const evaluationScore = relevances.length > 0
+      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
+      : null;
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    for (const s of spansByAgent.get(agentName) ?? []) {
+      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
+      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof v === 'number' && isFinite(v)) {
+        tokenSum += v;
+        tokenCount++;
+      }
+      durationMs += s.durationMs ?? 0;
+    }
+    const totalTokens = tokenCount > 0 ? tokenSum : null;
+    nodes.push({
+      id: agentName,
+      label: agentName,
+      evaluationScore,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: turns.length,
+      hasError: turns.some(t => t.hasError),
+    });
+  }
+  const seenEdges = new Set<string>();
+  const edges: WorkflowEdge[] = [];
+  for (const h of evaluation.handoffs) {
+    const key = `${h.sourceAgent}->${h.targetAgent}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    const score = isFinite(h.score) ? h.score : 0;
+    edges.push({
+      id: key,
+      source: h.sourceAgent,
+      target: h.targetAgent,
+      handoffScore: score,
+      contextPreserved: h.contextPreserved,
+      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
+    });
+  }
+  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
+}
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
+  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
+  if (agentSpans.size === 0) {
+    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
+  }
+  const nodes: WorkflowNode[] = [];
+  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
+  for (const [agentId, group] of agentSpans) {
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    let hasError = false;
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.name.startsWith('tool:')) toolCallCount++;
+      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
+      durationMs += s.durationMs ?? 0;
+      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
+    nodes.push({
+      id: agentId,
+      label: agentId,
+      evaluationScore: null,
+      toolCallCount,
+      totalTokens: tokenCount > 0 ? tokenSum : null,
+      durationMs,
+      turnCount: group.length,
+      hasError,
+    });
+    agentTimings.push({ id: agentId, minStart, maxEnd });
+  }
+  agentTimings.sort((a, b) => a.minStart - b.minStart);
+  const edges: WorkflowEdge[] = [];
+  for (let i = 0; i < agentTimings.length - 1; i++) {
+    const curr = agentTimings[i];
+    const next = agentTimings[i + 1];
+    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
+      const key = `${curr.id}->${next.id}`;
+      edges.push({
+        id: key,
+        source: curr.id,
+        target: next.id,
+        handoffScore: null,
+        contextPreserved: false,
+        label: 'inferred',
+      });
+    }
+  }
+  const rootNodeId = agentTimings[0]?.id ?? null;
+  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
+}
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
+  const adjacency = new Map<string, string[]>();
+  for (const n of nodes) adjacency.set(n.id, []);
+  for (const e of edges) {
+    if (e.source !== e.target) {
+      adjacency.get(e.source)?.push(e.target);
+    }
+  }
+  const UNVISITED = 0;
+  const IN_STACK = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
+  function dfs(nodeId: string): boolean {
+    state.set(nodeId, IN_STACK);
+    for (const neighbor of adjacency.get(nodeId) ?? []) {
+      const neighborState = state.get(neighbor) ?? UNVISITED;
+      if (neighborState === IN_STACK) return true;
+      if (neighborState === UNVISITED && dfs(neighbor)) return true;
+    }
+    state.set(nodeId, DONE);
+    return false;
+  }
+  for (const n of nodes) {
+    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  }
+  return false;
+}
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
+  if (nodes.length <= 1) return 'single_agent';
+  if (edges.length === 0) return 'single_agent';
+  if (hasCycle(nodes, edges)) return 'cyclic';
+  const outDegree = new Map<string, number>();
+  for (const e of edges) {
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+  }
+  for (const count of outDegree.values()) {
+    if (count > 1) return 'branching';
+  }
+  return 'linear';
+}
+
+================
+File: src/components/CorrelationHeatmap.tsx
+================
+import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
+import { scaleSequential } from 'd3-scale';
+import { interpolateRdYlGn } from 'd3-scale-chromatic';
+import { formatScore } from '../lib/quality-utils.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { CorrelationFeature } from '../types.js';
+interface CorrelationHeatmapProps {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) => void;
+}
+const CONTRAST_DARK = '#111';
+const CONTRAST_LIGHT = '#fff';
+const SHORT_NAMES: Record<string, string> = {
+  faithfulness: 'Faith',
+  relevance: 'Relev',
+  coherence: 'Coher',
+  safety: 'Safety',
+  instruction_adherence: 'Instr',
+  tool_accuracy: 'Tool',
+  latency: 'Latency',
+};
+function shortName(metric: string): string {
+  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
+}
+function contrastText(pearsonR: number): string {
+  const bg = colorScale(pearsonR);
+  const m = bg.match(/(\d+)/g);
+  if (!m || m.length < 3) return CONTRAST_DARK;
+  const [r, g, b] = m.map(Number);
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
+}
+const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
+function corrKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
+  const n = metrics.length;
+  const cols = n + 1;
+  const corrMap = useMemo(
+    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
+    [correlations],
+  );
+  return (
+    <div
+      role="table"
+      aria-label="Metric correlation matrix"
+      className="gap-half w-full heatmap-grid"
+      style={{
+        '--heatmap-aspect': `${cols} / ${cols}`,
+        gridTemplateColumns: `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
+        gridTemplateRows: `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
+      } as CSSProperties}
+    >
+      <div role="cell" />
+      {metrics.map((m) => (
+        <div
+          key={`col-${m}`}
+          role="columnheader"
+          className="text-secondary text-xs font-semibold truncate flex-center"
+        >
+          {shortName(m)}
+        </div>
+      ))}
+      {metrics.map((rowMetric, ri) => (
+        <div key={`row-${rowMetric}`} role="presentation" className="contents">
+          <div
+            role="rowheader"
+            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
+          >
+            {shortName(rowMetric)}
+          </div>
+          {metrics.map((colMetric, ci) => {
+            const isDiag = ri === ci;
+            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
+            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
+            const isToxic = corr?.isKnownToxicCombo ?? false;
+            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
+            const tooltip = isDiag
+              ? `${rowMetric}: diagonal (1.00)`
+              : corr
+                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
+                : `${rowMetric} vs ${colMetric}: no data`;
+            return (
+              <div
+                key={`${ri}-${ci}`}
+                role="cell"
+                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
+                data-toxic={isToxic ? 'true' : undefined}
+                title={tooltip}
+                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
+                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
+                style={{
+                  '--heatmap-cell-bg': bg,
+                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
+                } as CSSProperties}
+              >
+                {value.toFixed(SCORE_CHIP_PRECISION)}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+================
+File: src/components/CoverageGrid.tsx
+================
+import { memo, useState, useMemo, type CSSProperties } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
+  COVERAGE_GRID_MAX_INPUTS,
+} from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
+}
+const STATUS_COLORS: Record<CoverageStatus, string> = {
+  covered: 'var(--score-good, #0072B2)',
+  partial: 'var(--score-fair, #E69F00)',
+  missing: 'var(--score-poor, #D55E00)',
+};
+const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
+function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
+  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
+  const cellMap = useMemo(() => {
+    const map = new Map<string, CoverageCell>();
+    if (!Array.isArray(cells)) return map;
+    for (const cell of cells) {
+      map.set(`${cell.metric}|${cell.input}`, cell);
+    }
+    return map;
+  }, [cells]);
+  if (metrics.length === 0 || inputs.length === 0) {
+    return <EmptyState message="No coverage data available." />;
+  }
+  const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
+  const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
+  return (
+    <div role="region" aria-label="Evaluation coverage heatmap">
+      <div className="flex-center mb-3 gap-3">
+        <span className="mono-xl font-semibold">
+          {formatPercent(overallCoveragePercent)}
+        </span>
+        <span className="text-secondary text-base">
+          coverage ({metrics.length} metrics x {inputs.length} inputs)
+        </span>
+      </div>
+      <div className="mb-3 text-xs flex-wrap gap-4">
+        {COVERAGE_STATUSES.map(status => (
+          <div key={status} className="flex-center gap-1">
+            <div
+              className="coverage-legend-swatch"
+              style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
+            />
+            <span>{status}</span>
+          </div>
+        ))}
+      </div>
+      <div className="overflow-x-auto">
+        <div
+          role="table"
+          aria-label="Coverage matrix"
+          className="coverage-grid gap-half"
+          style={{
+            gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
+          }}
+        >
+          <div role="row" className="contents">
+            <div role="columnheader" className="text-xs font-semibold" />
+            {displayInputs.map(input => (
+              <div
+                key={input}
+                role="columnheader"
+                title={input}
+                className="text-secondary text-2xs coverage-header-cell"
+              >
+                {truncateId(input, 8)}
+              </div>
+            ))}
+          </div>
+          {metrics.map(metric => (
+            <div key={metric} role="row" className="contents">
+              <div
+                role="rowheader"
+                className="text-xs flex-center truncate font-medium"
+                title={metric}
+              >
+                {metric}
+              </div>
+              {displayInputs.map(input => {
+                const cell = cellMap.get(`${metric}|${input}`);
+                const status = cell?.status ?? 'missing';
+                const count = cell?.count ?? 0;
+                const isHovered = hovered?.metric === metric && hovered?.input === input;
+                return (
+                  <div
+                    key={input}
+                    role="cell"
+                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
+                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
+                    onMouseEnter={() => setHovered({ metric, input })}
+                    onMouseLeave={() => setHovered(null)}
+                    className="mono text-2xs flex-center justify-center coverage-cell"
+                    data-hovered={isHovered || undefined}
+                    style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
+                  >
+                    {count > 0 ? count : ''}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      {truncated && (
+        <p className="text-secondary text-xs mt-2">
+          Showing {COVERAGE_GRID_MAX_INPUTS} of {inputs.length} inputs.
+        </p>
+      )}
+      {gaps.length > 0 && (
+        <div className="mt-4">
+          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
+          <ul className="m-0 text-xs coverage-gap-list">
+            {gaps.map(gap => (
+              <li key={gap.metric} className="mb-1">
+                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
+                ({plural(gap.missingInputs.length, 'input')} missing)
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+export const CoverageGrid = memo(CoverageGridInner);
 
 ================
 File: scripts/sync-to-kv.ts
@@ -17432,625 +18044,157 @@ main().catch((err) => {
 });
 
 ================
-File: src/components/SpanTree.tsx
+File: src/api/routes/trends.ts
 ================
-import type { CSSProperties } from 'react';
-import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[] {
-  const nodeMap = new Map<string, SpanNode>();
-  const roots: SpanNode[] = [];
-  for (const s of spans) {
-    nodeMap.set(s.spanId, {
-      spanId: s.spanId,
-      name: s.name,
-      durationMs: s.durationMs,
-      status: s.status,
-      attributes: s.attributes,
-      children: [],
-      evalCount: evalsBySpan.get(s.spanId) ?? 0,
-    });
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
+const TREND_PADDING_RATIO = 0.1;
+const TREND_PADDING_MIN_MS = 60_000;
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
-  for (const s of spans) {
-    const node = nodeMap.get(s.spanId)!;
-    const parentId = (s as { parentSpanId?: string }).parentSpanId;
-    if (parentId && nodeMap.has(parentId)) {
-      nodeMap.get(parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
-  return roots;
-}
-const STATUS_ICONS: Record<number, string> = {
-  0: '',      // UNSET
-  1: '\u2713',
-  2: '\u2717',
-};
-function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
-  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
-  const statusCode = node.status?.code ?? 0;
-  const isError = statusCode === OTEL_STATUS_ERROR_CODE;
-  const barStyle: CSSProperties = {
-    '--span-bar-width': `${barPct}%`,
-    '--span-bar-min-width': barPct > 0 ? 'var(--space-0-5)' : '0',
-  } as CSSProperties;
-  return (
-    <>
-      <div
-        className="flex-center gap-2 border-b span-row"
-        style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
-      >
-        <span className="text-base span-status-icon" data-error={isError || undefined}>
-          {STATUS_ICONS[statusCode]}
-        </span>
-        <div className="flex-1">
-          <div className="text-xs font-medium">{node.name}</div>
-          <div className="flex-center gap-2">
-            <div className="flex-1 bar-track">
-              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
-            </div>
-            {node.durationMs != null && (
-              <span className="mono-xs text-secondary nowrap">
-                {fmtDuration(node.durationMs, 2)}
-              </span>
-            )}
-          </div>
-        </div>
-        {node.evalCount > 0 && (
-          <span className="text-2xs chip font-semibold chip-accent">
-            {plural(node.evalCount, 'eval')}
-          </span>
-        )}
-      </div>
-      {node.children.map(child => (
-        <SpanRow key={child.spanId} node={child} depth={depth + 1} maxDuration={maxDuration} />
-      ))}
-    </>
-  );
-}
-export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
-  const roots = buildTree(spans, evalsBySpan);
-  if (roots.length === 0) {
-    return <EmptyState message="No spans found for this trace." />;
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
   }
-  return (
-    <div>
-      {roots.map(node => (
-        <SpanRow key={node.spanId} node={node} depth={0} maxDuration={maxDuration} />
-      ))}
-    </div>
-  );
-}
-
-================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-import { groupBy } from './quality-utils.js';
-const ATTR_AGENT_NAME = 'gen_ai.agent.name';
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
-const SPAN_NAME_TOOL_CALL = 'tool_call';
-const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph {
-  if (evaluation !== null && Array.isArray(evaluation.turns)) {
-    return buildFromEvaluation(evaluation, spans);
-  }
-  return inferFromSpans(spans);
-}
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
-  let droppedTurns = 0;
-  let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
-  for (const turn of evaluation.turns) {
-    if (turn.agentName == null) {
-      droppedTurns++;
-      continue;
-    }
-    const existing = agentTurns.get(turn.agentName);
-    if (existing) existing.push(turn);
-    else agentTurns.set(turn.agentName, [turn]);
-    if (
-      turn.turnIndex < minTurnIndex ||
-      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
-    ) {
-      minTurnIndex = turn.turnIndex;
-      rootAgentName = turn.agentName;
-    }
-  }
-  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
-  const nodes: WorkflowNode[] = [];
-  for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
-    const evaluationScore = relevances.length > 0
-      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
-      : null;
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    for (const s of spansByAgent.get(agentName) ?? []) {
-      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
-      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && isFinite(v)) {
-        tokenSum += v;
-        tokenCount++;
-      }
-      durationMs += s.durationMs ?? 0;
-    }
-    const totalTokens = tokenCount > 0 ? tokenSum : null;
-    nodes.push({
-      id: agentName,
-      label: agentName,
-      evaluationScore,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: turns.length,
-      hasError: turns.some(t => t.hasError),
-    });
-  }
-  const seenEdges = new Set<string>();
-  const edges: WorkflowEdge[] = [];
-  for (const h of evaluation.handoffs) {
-    const key = `${h.sourceAgent}->${h.targetAgent}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
-    const score = isFinite(h.score) ? h.score : 0;
-    edges.push({
-      id: key,
-      source: h.sourceAgent,
-      target: h.targetAgent,
-      handoffScore: score,
-      contextPreserved: h.contextPreserved,
-      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
-    });
-  }
-  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
-}
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
-  if (agentSpans.size === 0) {
-    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
-  }
-  const nodes: WorkflowNode[] = [];
-  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
-  for (const [agentId, group] of agentSpans) {
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    let hasError = false;
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of group) {
-      if (s.name.startsWith('tool:')) toolCallCount++;
-      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
-      durationMs += s.durationMs ?? 0;
-      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
-      if (end > maxEnd) maxEnd = end;
-    }
-    nodes.push({
-      id: agentId,
-      label: agentId,
-      evaluationScore: null,
-      toolCallCount,
-      totalTokens: tokenCount > 0 ? tokenSum : null,
-      durationMs,
-      turnCount: group.length,
-      hasError,
-    });
-    agentTimings.push({ id: agentId, minStart, maxEnd });
-  }
-  agentTimings.sort((a, b) => a.minStart - b.minStart);
-  const edges: WorkflowEdge[] = [];
-  for (let i = 0; i < agentTimings.length - 1; i++) {
-    const curr = agentTimings[i];
-    const next = agentTimings[i + 1];
-    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
-      const key = `${curr.id}->${next.id}`;
-      edges.push({
-        id: key,
-        source: curr.id,
-        target: next.id,
-        handoffScore: null,
-        contextPreserved: false,
-        label: 'inferred',
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const validTs = evaluations
+      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
+      .filter(({ ts }) => Number.isFinite(ts));
+    const { dataMin, dataMax } = validTs.length > 0
+      ? validTs.reduce(
+          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
+          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
+        )
+      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
+    const dataSpan = dataMax - dataMin;
+    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+        evals: [],
       });
     }
-  }
-  const rootNodeId = agentTimings[0]?.id ?? null;
-  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
-}
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
-  const adjacency = new Map<string, string[]>();
-  for (const n of nodes) adjacency.set(n.id, []);
-  for (const e of edges) {
-    if (e.source !== e.target) {
-      adjacency.get(e.source)?.push(e.target);
+    for (const { ev, ts } of validTs) {
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
+      }
     }
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+        : undefined;
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = extractFiniteScores(evaluations);
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
-  const UNVISITED = 0;
-  const IN_STACK = 1;
-  const DONE = 2;
-  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
-  function dfs(nodeId: string): boolean {
-    state.set(nodeId, IN_STACK);
-    for (const neighbor of adjacency.get(nodeId) ?? []) {
-      const neighborState = state.get(neighbor) ?? UNVISITED;
-      if (neighborState === IN_STACK) return true;
-      if (neighborState === UNVISITED && dfs(neighbor)) return true;
-    }
-    state.set(nodeId, DONE);
-    return false;
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
-  for (const n of nodes) {
-    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
-  return false;
-}
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
-  if (nodes.length <= 1) return 'single_agent';
-  if (edges.length === 0) return 'single_agent';
-  if (hasCycle(nodes, edges)) return 'cyclic';
-  const outDegree = new Map<string, number>();
-  for (const e of edges) {
-    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
-  }
-  for (const count of outDegree.values()) {
-    if (count > 1) return 'branching';
-  }
-  return 'linear';
-}
-
-================
-File: src/api/api-constants.ts
-================
-export const PERCENT_BASE = 100;
-export const LATENCY_P50 = 50;
-export const LATENCY_P95 = 95;
-export const LATENCY_DISPLAY_PRECISION = 1;
-export const RATE_DISPLAY_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const FILE_ACCESS_TOP_N = 30;
-export const CONCENTRATION_THRESHOLD = 0.2;
-export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
-export const COMMIT_BODY_START_LINE_INDEX = 2;
-export const MAX_TRACE_ID_LEN = 128;
-export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
-export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
-export const SCORE_ROUND_FACTOR = 10_000;
-export const LOG_SUMMARY_MAX_ENTRIES = 200;
-export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-export const NANOS_TO_MS = 1_000_000;
-export function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
-}
-export const HOOK_NAME = {
-  SESSION_START: 'session-start',
-  TOKEN_METRICS: 'token-metrics-extraction',
-  AGENT_POST_TOOL: 'agent-post-tool',
-  POST_COMMIT_REVIEW: 'post-commit-review',
-  ALERT_EVALUATION: 'telemetry-alert-evaluation',
-  CODE_STRUCTURE: 'code-structure',
-} as const;
-export function isValidParam(value: string | undefined, re: RegExp): boolean {
-  return !!value && re.test(value);
-}
-export function toDateOnly(d: Date): string;
-export function toDateOnly(d: string): string;
-export function toDateOnly(d: Date | string): string {
-  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0];
-}
-export type SpanLike = { attributes?: Record<string, unknown> };
-export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
-  const v = span.attributes?.[key];
-  return typeof v === 'string' ? v : fallback;
-}
-export function attrNum(span: SpanLike, key: string, fallback = 0): number {
-  const v = span.attributes?.[key];
-  return typeof v === 'number' ? v : fallback;
-}
-export function spanAttr<T>(span: SpanLike, key: string): T | undefined {
-  return span.attributes?.[key] as T | undefined;
-}
-export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals.reduce<number[]>((acc, e) => {
-    if (e.scoreValue != null && Number.isFinite(e.scoreValue)) acc.push(e.scoreValue);
-    return acc;
-  }, []);
-}
-
-================
-File: src/components/CorrelationHeatmap.tsx
-================
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
-import { scaleSequential } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import { formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { CorrelationFeature } from '../types.js';
-interface CorrelationHeatmapProps {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-  onCellClick?: (rowMetric: string, colMetric: string) => void;
-}
-const CONTRAST_DARK = '#111';
-const CONTRAST_LIGHT = '#fff';
-const SHORT_NAMES: Record<string, string> = {
-  faithfulness: 'Faith',
-  relevance: 'Relev',
-  coherence: 'Coher',
-  safety: 'Safety',
-  instruction_adherence: 'Instr',
-  tool_accuracy: 'Tool',
-  latency: 'Latency',
-};
-function shortName(metric: string): string {
-  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
-}
-function contrastText(pearsonR: number): string {
-  const bg = colorScale(pearsonR);
-  const m = bg.match(/(\d+)/g);
-  if (!m || m.length < 3) return CONTRAST_DARK;
-  const [r, g, b] = m.map(Number);
-  const toLinear = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
-}
-const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
-function corrKey(a: string, b: string): string {
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
-}
-export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
-  const n = metrics.length;
-  const cols = n + 1;
-  const corrMap = useMemo(
-    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
-    [correlations],
-  );
-  return (
-    <div
-      role="table"
-      aria-label="Metric correlation matrix"
-      className="gap-half w-full heatmap-grid"
-      style={{
-        '--heatmap-aspect': `${cols} / ${cols}`,
-        gridTemplateColumns: `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
-        gridTemplateRows: `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
-      } as CSSProperties}
-    >
-      <div role="cell" />
-      {metrics.map((m) => (
-        <div
-          key={`col-${m}`}
-          role="columnheader"
-          className="text-secondary text-xs font-semibold truncate flex-center"
-        >
-          {shortName(m)}
-        </div>
-      ))}
-      {metrics.map((rowMetric, ri) => (
-        <div key={`row-${rowMetric}`} role="presentation" className="contents">
-          <div
-            role="rowheader"
-            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
-          >
-            {shortName(rowMetric)}
-          </div>
-          {metrics.map((colMetric, ci) => {
-            const isDiag = ri === ci;
-            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
-            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
-            const isToxic = corr?.isKnownToxicCombo ?? false;
-            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
-            const tooltip = isDiag
-              ? `${rowMetric}: diagonal (1.00)`
-              : corr
-                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
-                : `${rowMetric} vs ${colMetric}: no data`;
-            return (
-              <div
-                key={`${ri}-${ci}`}
-                role="cell"
-                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
-                data-toxic={isToxic ? 'true' : undefined}
-                title={tooltip}
-                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
-                style={{
-                  '--heatmap-cell-bg': bg,
-                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
-                } as CSSProperties}
-              >
-                {value.toFixed(SCORE_CHIP_PRECISION)}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo, type CSSProperties } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
-  COVERAGE_GRID_MAX_INPUTS,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-const STATUS_COLORS: Record<CoverageStatus, string> = {
-  covered: 'var(--score-good, #0072B2)',
-  partial: 'var(--score-fair, #E69F00)',
-  missing: 'var(--score-poor, #D55E00)',
-};
-const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
-function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
-  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
-  const cellMap = useMemo(() => {
-    const map = new Map<string, CoverageCell>();
-    if (!Array.isArray(cells)) return map;
-    for (const cell of cells) {
-      map.set(`${cell.metric}|${cell.input}`, cell);
-    }
-    return map;
-  }, [cells]);
-  if (metrics.length === 0 || inputs.length === 0) {
-    return <EmptyState message="No coverage data available." />;
-  }
-  const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
-  const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
-  return (
-    <div role="region" aria-label="Evaluation coverage heatmap">
-      <div className="flex-center mb-3 gap-3">
-        <span className="mono-xl font-semibold">
-          {formatPercent(overallCoveragePercent)}
-        </span>
-        <span className="text-secondary text-base">
-          coverage ({metrics.length} metrics x {inputs.length} inputs)
-        </span>
-      </div>
-      <div className="mb-3 text-xs flex-wrap gap-4">
-        {COVERAGE_STATUSES.map(status => (
-          <div key={status} className="flex-center gap-1">
-            <div
-              className="coverage-legend-swatch"
-              style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
-            />
-            <span>{status}</span>
-          </div>
-        ))}
-      </div>
-      <div className="overflow-x-auto">
-        <div
-          role="table"
-          aria-label="Coverage matrix"
-          className="coverage-grid gap-half"
-          style={{
-            gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
-          }}
-        >
-          <div role="row" className="contents">
-            <div role="columnheader" className="text-xs font-semibold" />
-            {displayInputs.map(input => (
-              <div
-                key={input}
-                role="columnheader"
-                title={input}
-                className="text-secondary text-2xs coverage-header-cell"
-              >
-                {truncateId(input, 8)}
-              </div>
-            ))}
-          </div>
-          {metrics.map(metric => (
-            <div key={metric} role="row" className="contents">
-              <div
-                role="rowheader"
-                className="text-xs flex-center truncate font-medium"
-                title={metric}
-              >
-                {metric}
-              </div>
-              {displayInputs.map(input => {
-                const cell = cellMap.get(`${metric}|${input}`);
-                const status = cell?.status ?? 'missing';
-                const count = cell?.count ?? 0;
-                const isHovered = hovered?.metric === metric && hovered?.input === input;
-                return (
-                  <div
-                    key={input}
-                    role="cell"
-                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
-                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
-                    onMouseEnter={() => setHovered({ metric, input })}
-                    onMouseLeave={() => setHovered(null)}
-                    className="mono text-2xs flex-center justify-center coverage-cell"
-                    data-hovered={isHovered || undefined}
-                    style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
-                  >
-                    {count > 0 ? count : ''}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-      {truncated && (
-        <p className="text-secondary text-xs mt-2">
-          Showing {COVERAGE_GRID_MAX_INPUTS} of {inputs.length} inputs.
-        </p>
-      )}
-      {gaps.length > 0 && (
-        <div className="mt-4">
-          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
-          <ul className="m-0 text-xs coverage-gap-list">
-            {gaps.map(gap => (
-              <li key={gap.metric} className="mb-1">
-                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
-                ({plural(gap.missingInputs.length, 'input')} missing)
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-export const CoverageGrid = memo(CoverageGridInner);
+});
 
 ================
 File: src/pages/SessionDetailPage.tsx
@@ -18494,159 +18638,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
     </div>
   );
 }
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
-const TREND_PADDING_RATIO = 0.1;
-const TREND_PADDING_MIN_MS = 60_000;
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const validTs = evaluations
-      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
-      .filter(({ ts }) => Number.isFinite(ts));
-    const { dataMin, dataMax } = validTs.length > 0
-      ? validTs.reduce(
-          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
-          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
-        )
-      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
-    const dataSpan = dataMax - dataMin;
-    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-    for (const { ev, ts } of validTs) {
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
-        }
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
 
 ================
 File: src/components/AgentActivityPanel.tsx

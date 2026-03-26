@@ -1,3 +1,39 @@
+d78a765 2026-03-26 refactor(worker): ERR_UNAUTHORIZED constant; VALID_ROLES for allowedViews; remove WHAT comment
+  worker/index.ts
+
+c625ad9 2026-03-26 refactor(judge): remove remaining what-comments inside function bodies
+  scripts/judge-evaluations.ts
+
+672a198 2026-03-26 refactor(worker): extract remaining inline literals/arrays to named constants
+  worker/index.ts
+
+ba1460e 2026-03-26 refactor(judge): remove metric section header comments in evaluateTurn
+  scripts/judge-evaluations.ts
+
+56cb5c8 2026-03-26 refactor(worker): extract repeated error message string literals to constants
+  worker/index.ts
+
+54ee7fe 2026-03-26 refactor(judge): remove remaining section header comments
+  scripts/judge-evaluations.ts
+
+a8895a0 2026-03-26 refactor(judge): remove section header comments
+  scripts/judge-evaluations.ts
+
+5a146c8 2026-03-26 fix(worker): validate sortBy param against enum constant
+  worker/index.ts
+
+f720297 2026-03-26 docs(backlog): add worker API validation/security code review items (CR-WK-1 through CR-WK-9)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+977bd3c 2026-03-26 refactor(sync-to-kv): remove what-comment before composite priority calculation
+  scripts/sync-to-kv.ts
+
+06d0de7 2026-03-26 refactor(scripts): trim what-prefixes from comments in judge and sync-to-kv
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
 f16648a 2026-03-26 refactor(judge): remove what-comments in directory scan and turn conversion
   scripts/judge-evaluations.ts
 
@@ -297,39 +333,3 @@ b8d3281 2026-03-26 refactor(ui): replace inline display/align styles with CSS ut
 
 939242d 2026-03-26 refactor(evaluation-detail): replace inline button styles with btn-xs class
   src/theme.css
-
-7d574ad 2026-03-26 refactor(turn-timeline): extract static card styles to turn-card CSS class
-  src/theme.css
-
-4788c91 2026-03-26 refactor(components): replace inline styles with CSS utilities across multiple components
-  src/theme.css
-
-bf9fd85 2026-03-26 refactor(issue-callout): replace inline styles with issue-callout CSS class using data-status
-  src/theme.css
-
-66cfab6 2026-03-26 refactor(agent-panel): replace inline width 30% with col-agent CSS class
-  src/theme.css
-
-43a9f5d 2026-03-26 refactor(constants): promote SCORE_ROUND_FACTOR to shared api-constants
-  scripts/sync-to-kv.ts
-
-813179b 2026-03-26 refactor(pages): clean up remaining inline styles in SessionDetailPage
-  src/theme.css
-
-5e9ebfb 2026-03-26 refactor(sync): add MAX_RECENT_SESSIONS constant and simplify ISO date sort
-  scripts/sync-to-kv.ts
-
-35e105d 2026-03-26 refactor(pages): replace inline styles in SessionDetailPage commit section and labels
-  src/theme.css
-
-16a61a0 2026-03-26 refactor(pages): replace inline styles in SessionDetailPage agent cards and issue list
-  src/theme.css
-
-dea5fe0 2026-03-26 refactor(pages): replace inline styles with CSS classes in SessionDetailPage header/vitals
-  src/theme.css
-
-f4389f8 2026-03-26 chore: regenerate repomix docs after simplification round 1
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
