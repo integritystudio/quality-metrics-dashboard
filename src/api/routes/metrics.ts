@@ -22,12 +22,20 @@ const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
 const OffsetSchema = z.coerce.number().int().min(0).default(0);
 const ScoreLabelSchema = z.string().max(100).optional();
 
+const ERR_INVALID_METRIC_NAME_FORMAT = 'Invalid metric name format';
+const ERR_INVALID_TOP_N = 'Invalid topN parameter. Must be integer 1-50.';
+const ERR_INVALID_BUCKET_COUNT = 'Invalid bucketCount parameter. Must be integer 2-20.';
+const ERR_INVALID_LIMIT = 'Invalid limit. Must be integer 1-200.';
+const ERR_INVALID_OFFSET = 'Invalid offset. Must be non-negative integer.';
+const ERR_INVALID_SORT_BY = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.';
+const ERR_INVALID_SCORE_LABEL = 'Invalid scoreLabel. Max 100 characters.';
+
 export const metricsRoutes = new Hono();
 
 metricsRoutes.get('/metrics/:name', async (c) => {
   const name = c.req.param('name');
   if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: 'Invalid metric name format' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_METRIC_NAME_FORMAT }, HttpStatus.BadRequest);
   }
   const config = getQualityMetric(name);
   if (!config) {
@@ -40,11 +48,11 @@ metricsRoutes.get('/metrics/:name', async (c) => {
   }
   const topNResult = TopNSchema.safeParse(c.req.query('topN'));
   if (!topNResult.success) {
-    return c.json({ error: 'Invalid topN parameter. Must be integer 1-50.' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_TOP_N }, HttpStatus.BadRequest);
   }
   const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
   if (!bucketResult.success) {
-    return c.json({ error: 'Invalid bucketCount parameter. Must be integer 2-20.' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_BUCKET_COUNT }, HttpStatus.BadRequest);
   }
 
   try {
@@ -81,7 +89,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   const name = c.req.param('name');
   if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: 'Invalid metric name format' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_METRIC_NAME_FORMAT }, HttpStatus.BadRequest);
   }
   const config = getQualityMetric(name);
   if (!config) {
@@ -94,19 +102,19 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   }
   const limitResult = LimitSchema.safeParse(c.req.query('limit'));
   if (!limitResult.success) {
-    return c.json({ error: 'Invalid limit. Must be integer 1-200.' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_LIMIT }, HttpStatus.BadRequest);
   }
   const offsetResult = OffsetSchema.safeParse(c.req.query('offset'));
   if (!offsetResult.success) {
-    return c.json({ error: 'Invalid offset. Must be non-negative integer.' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_OFFSET }, HttpStatus.BadRequest);
   }
   const sortByResult = SortBySchema.safeParse(c.req.query('sortBy'));
   if (!sortByResult.success) {
-    return c.json({ error: 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_SORT_BY }, HttpStatus.BadRequest);
   }
   const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
   if (!scoreLabelResult.success) {
-    return c.json({ error: 'Invalid scoreLabel. Max 100 characters.' }, HttpStatus.BadRequest);
+    return c.json({ error: ERR_INVALID_SCORE_LABEL }, HttpStatus.BadRequest);
   }
   const scoreLabel = scoreLabelResult.data;
 
