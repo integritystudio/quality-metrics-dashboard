@@ -66,6 +66,26 @@ export const HOOK_NAME = {
   CODE_STRUCTURE: 'code-structure',
 } as const;
 
+/** Span attribute accessor helpers — shared across API routes and scripts. */
+export type SpanLike = { attributes?: Record<string, unknown> };
+
+/** Extract a string span attribute with optional fallback. */
+export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
+  const v = span.attributes?.[key];
+  return typeof v === 'string' ? v : fallback;
+}
+
+/** Extract a numeric span attribute with optional fallback. */
+export function attrNum(span: SpanLike, key: string, fallback = 0): number {
+  const v = span.attributes?.[key];
+  return typeof v === 'number' ? v : fallback;
+}
+
+/** Extract a typed span attribute (no fallback). */
+export function spanAttr<T>(span: SpanLike, key: string): T | undefined {
+  return span.attributes?.[key] as T | undefined;
+}
+
 /** Extract finite numeric scores from an evaluation array, dropping null/undefined/NaN. */
 export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
   return evals.reduce<number[]>((acc, e) => {

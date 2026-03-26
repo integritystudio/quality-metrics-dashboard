@@ -5,22 +5,10 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS } from '../api-constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
-
-type SpanLike = { attributes?: Record<string, unknown> };
-
-function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
-  const v = span.attributes?.[key];
-  return typeof v === 'string' ? v : fallback;
-}
-
-function attrNum(span: SpanLike, key: string, fallback = 0): number {
-  const v = span.attributes?.[key];
-  return typeof v === 'number' ? v : fallback;
-}
 
 function toDateOnly(d: Date): string {
   return d.toISOString().split('T')[0];

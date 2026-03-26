@@ -66,6 +66,7 @@ import {
   LATENCY_P95,
   LATENCY_DISPLAY_PRECISION,
   RATE_DISPLAY_PRECISION,
+  spanAttr,
 } from '../src/api/api-constants.js';
 
 function resolveNamespaceId(): string {
@@ -341,9 +342,6 @@ type SessionSpan = {
   attributes?: Record<string, unknown>;
 };
 
-function spanAttr<T>(span: { attributes?: Record<string, unknown> }, key: string): T | undefined {
-  return span.attributes?.[key] as T | undefined;
-}
 
 function spanSessionId(span: { attributes?: Record<string, unknown> }): string | undefined {
   return (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
