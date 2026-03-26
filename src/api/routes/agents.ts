@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS } from '../api-constants.js';
+import { HOOK_NAME, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
@@ -74,7 +74,7 @@ agentRoutes.get('/agents', async (c) => {
 
   try {
     const result = await queryTraces({
-      attributeFilter: { 'hook.name': 'agent-post-tool' },
+      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
       startDate,
       endDate,
       limit: LIMIT_AGENT_SPANS,

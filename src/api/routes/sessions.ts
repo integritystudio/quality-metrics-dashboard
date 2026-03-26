@@ -7,6 +7,7 @@ import {
   COMMIT_BODY_START_LINE_INDEX,
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
   FILE_ACCESS_TOP_N,
+  HOOK_NAME,
   LATENCY_P50,
   LATENCY_P95,
   LOG_SUMMARY_FIELDS,
@@ -143,13 +144,13 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
       if (s.traceId) traceIds.add(s.traceId);
 
-      if (hookName === 'session-start') {
+      if (hookName === HOOK_NAME.SESSION_START) {
         if (!firstSessionStart) firstSessionStart = s;
         lastSessionStart = s;
         sessionStartCount++;
       }
 
-      if (hookName === 'token-metrics-extraction') {
+      if (hookName === HOOK_NAME.TOKEN_METRICS) {
         tokenProgressionRaw.push({
           messages: attr<number>(s, 'tokens.messages') ?? 0,
           inputTokens: attr<number>(s, 'tokens.input') ?? 0,
@@ -182,7 +183,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: attr<string>(s, 'builtin.file_path') });
       }
 
-      if (hookName === 'agent-post-tool') {
+      if (hookName === HOOK_NAME.AGENT_POST_TOOL) {
         const name = attr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
         if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
         agentAcc[name].invocations++;
@@ -194,7 +195,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       const fp = attr<string>(s, 'builtin.file_path');
       if (fp) incrementCount(fileCount, fp);
 
-      if (hookName === 'post-commit-review') {
+      if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
         const raw = attr<string>(s, 'git.command') ?? '';
         const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
         const files = filesMatch ? filesMatch[1].trim() : '';
@@ -207,12 +208,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         });
       }
 
-      if (hookName === 'telemetry-alert-evaluation') {
+      if (hookName === HOOK_NAME.ALERT_EVALUATION) {
         alertTotalFired += attr<number>(s, 'alerts.triggered_count') ?? 0;
         alertStopEvents++;
       }
 
-      if (hookName === 'code-structure') {
+      if (hookName === HOOK_NAME.CODE_STRUCTURE) {
         codeStructure.push({
           file: attr<string>(s, 'code.structure.file') ?? '',
           lines: attr<number>(s, 'code.structure.lines') ?? 0,

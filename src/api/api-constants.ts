@@ -51,6 +51,16 @@ export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js'
 /** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
 export const NANOS_TO_MS = 1_000_000;
 
+/** Hook name attribute values emitted by Claude Code hook handlers. */
+export const HOOK_NAME = {
+  SESSION_START: 'session-start',
+  TOKEN_METRICS: 'token-metrics-extraction',
+  AGENT_POST_TOOL: 'agent-post-tool',
+  POST_COMMIT_REVIEW: 'post-commit-review',
+  ALERT_EVALUATION: 'telemetry-alert-evaluation',
+  CODE_STRUCTURE: 'code-structure',
+} as const;
+
 /** Extract finite numeric scores from an evaluation array, dropping null/undefined/NaN. */
 export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
   return evals.reduce<number[]>((acc, e) => {
