@@ -67,7 +67,6 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
         })}
       </div>
 
-      {/* Screen reader summary table */}
       <table className="sr-only" aria-label="Pipeline stage details">
         <thead>
           <tr><th>Stage</th><th>Entry</th><th>Exit</th><th>Drop-off</th></tr>

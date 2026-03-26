@@ -24,8 +24,6 @@ import {
   CODE_QUALITY_WARN_THRESHOLD,
 } from '../lib/constants.js';
 
-// ─── Main page ───────────────────────────────────────────────────────────────
-
 export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useSessionDetail(sessionId);
   const isNotSynced = !isLoading && error instanceof Error && error.message.startsWith('API error: 404');

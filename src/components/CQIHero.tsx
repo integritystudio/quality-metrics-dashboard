@@ -38,7 +38,6 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
         </div>
       )}
 
-      {/* Screen reader breakdown table */}
       <table className="sr-only">
         <caption>CQI Metric Breakdown</caption>
         <thead>
