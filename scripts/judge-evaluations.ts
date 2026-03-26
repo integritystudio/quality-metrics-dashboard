@@ -175,7 +175,6 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
     }
   }
 
-  // Phase 2: Directory scan for transcripts not referenced in logs
   for (const dir of TRANSCRIPT_DIRS) {
     if (!existsSync(dir)) continue;
     let slugDirs: string[];
@@ -250,7 +249,6 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
     }
   }
 
-  // Convert to Turn[] with synthetic entries (one per session)
   const turns: Turn[] = [];
   for (const s of sessions.values()) {
     const timestamp = new Date(s.earliestTime * 1000).toISOString();
@@ -339,7 +337,6 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
     const content = message.content;
 
     if (type === 'user' && role === 'user') {
-      // Collect tool results from user messages (tool_result content)
       const toolRes = extractToolResults(content);
       if (toolRes.length > 0) {
         accumulatedToolResults.push(...toolRes);
