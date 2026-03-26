@@ -17,9 +17,7 @@ import type { TrendBucket } from '../hooks/useTrend.js';
 
 afterEach(cleanup);
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeTrend(overrides: Partial<MetricTrend> = {}): MetricTrend {
   return {
@@ -58,9 +56,7 @@ function makeTrendBucket(overrides: Partial<TrendBucket> = {}): TrendBucket {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Sparkline
-// ---------------------------------------------------------------------------
 
 describe('Sparkline', () => {
   it('renders null for fewer than 2 valid data points', () => {
@@ -127,9 +123,7 @@ describe('Sparkline', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // TrendChart
-// ---------------------------------------------------------------------------
 
 // Pinned epoch for all time-relative assertions in this describe block
 const PINNED_NOW = new Date('2026-02-22T12:00:00.000Z');
@@ -254,9 +248,7 @@ describe('TrendChart', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // TrendSeries
-// ---------------------------------------------------------------------------
 
 describe('TrendSeries', () => {
   it('renders empty state when data is empty array', () => {
@@ -311,9 +303,7 @@ describe('TrendSeries', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Role Views
-// ---------------------------------------------------------------------------
 
 function makeMetricResult(name: string, displayName: string, status: 'healthy' | 'warning' | 'critical' | 'no_data' = 'healthy') {
   return {
@@ -506,9 +496,7 @@ describe('OperatorView', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Trends API route — input validation
-// ---------------------------------------------------------------------------
 
 vi.mock('../../../../dist/lib/quality/quality-metrics.js', () => ({
   getQualityMetric: vi.fn((name: string) => name === 'relevance' ? { aggregations: ['avg'] } : null),

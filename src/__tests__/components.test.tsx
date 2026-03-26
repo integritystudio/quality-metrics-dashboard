@@ -12,9 +12,7 @@ import type {
   ConfidenceIndicator,
 } from '../types.js';
 
-// ---------------------------------------------------------------------------
 // Test Data Factories
-// ---------------------------------------------------------------------------
 
 function makeDashboard(overrides: Partial<QualityDashboardSummary> = {}): QualityDashboardSummary {
   return {
@@ -57,9 +55,7 @@ function makeSLA(overrides: Partial<SLAComplianceResult> = {}): SLAComplianceRes
   };
 }
 
-// ---------------------------------------------------------------------------
 // StatusBadge
-// ---------------------------------------------------------------------------
 
 describe('StatusBadge', () => {
   it('renders healthy status', () => {
@@ -79,9 +75,7 @@ describe('StatusBadge', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // TrendIndicator
-// ---------------------------------------------------------------------------
 
 describe('TrendIndicator', () => {
   it('renders nothing when trend is undefined', () => {
@@ -133,9 +127,7 @@ describe('TrendIndicator', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // ConfidenceBadge
-// ---------------------------------------------------------------------------
 
 describe('ConfidenceBadge', () => {
   it('renders nothing when confidence is undefined', () => {
@@ -156,9 +148,7 @@ describe('ConfidenceBadge', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // HealthOverview
-// ---------------------------------------------------------------------------
 
 describe('HealthOverview', () => {
   it('renders healthy banner text', () => {
@@ -196,9 +186,7 @@ describe('HealthOverview', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // AlertList
-// ---------------------------------------------------------------------------
 
 describe('AlertList', () => {
   it('renders nothing for empty alerts', () => {
@@ -240,9 +228,7 @@ describe('AlertList', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // SLATable
-// ---------------------------------------------------------------------------
 
 describe('SLATable', () => {
   it('renders nothing for empty SLAs', () => {
