@@ -17,10 +17,7 @@ import {
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION } from './judge-evaluations.js';
-
-const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
-const SESSION_ID_PREVIEW_LEN = 8;
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN } from './judge-evaluations.js';
 
 export interface EvalRecord {
   timestamp: string;
