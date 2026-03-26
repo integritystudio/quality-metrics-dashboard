@@ -197,7 +197,6 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
     if (!data.lastSpan) continue;
     const lastSpan = data.lastSpan;
 
-    // Use explicit status transitions when available
     if (data.tasks.size > 0) {
       const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
       const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -241,7 +240,6 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
   return evals;
 }
 
-// Derive agent completion rate and handoff correctness
 interface AgentSessionData {
   pre: number;
   post: number;
@@ -307,11 +305,9 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   for (const [sessionId, data] of sessionAgents) {
     if (data.agentSequence.length < MIN_HANDOFF_AGENTS) continue;
 
-    // Check for >= 2 distinct agent names
     const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
     if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
 
-    // Detect handoffs: consecutive spans with different agent names
     const handoffScores: number[] = [];
     for (let i = 1; i < data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
@@ -344,7 +340,6 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   return evals;
 }
 
-// Main
 function main(): void {
   const traceFiles = readdirSync(TELEMETRY_DIR)
     .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
@@ -367,18 +362,15 @@ function main(): void {
       const latency = deriveEvaluationLatency(span);
       if (latency) allEvals.push(latency);
 
-      // Track session-level aggregates
       trackTaskActivity(span);
       trackAgentActivity(span);
     }
   }
 
-  // Derive session-level evaluations
   allEvals.push(...deriveTaskCompletionPerSession());
   allEvals.push(...deriveAgentCompletionPerSession());
   allEvals.push(...deriveHandoffCorrectnessPerSession());
 
-  // Group evaluations by date for output files
   const byDate = new Map<string, EvalRecord[]>();
   for (const ev of allEvals) {
     const date = ev.timestamp.slice(0, 10); // YYYY-MM-DD
@@ -386,7 +378,6 @@ function main(): void {
     byDate.get(date)!.push(ev);
   }
 
-  // Write evaluation files, preserving existing non-rule (LLM judge) evaluations
   const RULE_EVALUATOR = 'telemetry-rule-engine';
   let _totalWritten = 0;
   let preservedCount = 0;
@@ -439,7 +430,6 @@ function main(): void {
     }
   }
 
-  // Summary
   const byCat = new Map<string, number>();
   for (const ev of allEvals) {
     byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
