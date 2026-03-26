@@ -120,6 +120,12 @@ const SPAN_QUERY_LIMIT = 1_000_000;
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
 
+/** Maximum evaluation rows stored per metric × period in KV. */
+const MAX_EVAL_ROWS = 200;
+
+/** Number of time buckets per trend series. */
+const TREND_BUCKETS = 10;
+
 /** Transform CalibrationState → meta:calibration KV entry, or null if no data. */
 export function buildCalibrationEntry(
   state: CalibrationState | null,
@@ -817,7 +823,6 @@ async function main(): Promise<void> {
   }
 
   // Metric evaluation rows per period (for /api/metrics/:name/evaluations)
-  const MAX_EVAL_ROWS = 200;
   for (const period of PERIODS) {
     const ms = PERIOD_MS[period];
     if (ms > MAX_DAYS_MS) continue;
@@ -864,8 +869,7 @@ async function main(): Promise<void> {
     } catch { /* skip malformed */ }
   }
 
-  // Trend data per metric × period (10 buckets) — reuses cached grouped evals
-  const TREND_BUCKETS = 10;
+  // Trend data per metric × period (TREND_BUCKETS buckets) — reuses cached grouped evals
   // R5: Collect time buckets per period×metric for degradation signal computation
   const degradationBuckets = new Map<string, Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>>>();
   for (const period of PERIODS) {
@@ -909,7 +913,7 @@ async function main(): Promise<void> {
       const trendData = timeBuckets.map((bucket, idx) => {
         const { scores } = bucket;
         const percentiles = computePercentileDistribution(scores);
-        const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+        const avg = arrayAvg(scores);
         const previousValues = (idx > 0 && timeBuckets[idx - 1].scores.length > 0)
           ? computeAggregations(timeBuckets[idx - 1].scores, config.aggregations)
           : undefined;
