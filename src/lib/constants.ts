@@ -7,7 +7,7 @@ export const enum HttpStatus {
   InternalServerError = 500,
 }
 
-/** Reusable error messages for response validation. */
+/** Reusable error messages for API and response validation. */
 export const enum ErrorMessage {
   InvalidResponseShape = 'Invalid response shape',
   MissingPeriodOrAgents = 'Invalid response: missing period or agents',
@@ -20,6 +20,7 @@ export const enum ErrorMessage {
   InvalidOffset = 'Invalid offset. Must be non-negative integer.',
   InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
   InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
+  InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
 }
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
 export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
@@ -69,7 +70,6 @@ export function computePeriodDates(period: string): { start: string; end: string
 }
 
 
-/** Percentage of events sampled for T2 LLM evaluation. */
 export const LLM_SAMPLE_RATE = 10;
 /** Score band thresholds for quality indicator color coding. */
 export const SCORE_THRESHOLD_GREEN = 0.8;
@@ -78,28 +78,20 @@ export const SCORE_THRESHOLD_YELLOW = 0.5;
 export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
 /** Score below which a hallucination evaluation is flagged. */
 export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-/** Maximum rows shown in session detail tables. */
 export const MAX_ERROR_ROWS = 10;
 export const MAX_HALLUCINATION_ROWS = 8;
 export const MAX_FAILED_EVAL_ROWS = 6;
 /** Rolling window for live quality endpoint (24 h). */
 export const LIVE_WINDOW_MS = TIME_MS.DAY;
-/** Default React Query retry count for data fetching. */
 export const QUERY_RETRY_COUNT = 2;
-/** Polling / refetch interval for live and dashboard queries (ms). */
 export const POLL_INTERVAL_MS = 30_000;
 /** Exponential backoff base and cap for retry delays (ms). */
 export const RETRY_DELAY_BASE = 1_000;
 export const RETRY_DELAY_CAP = 30_000;
-/** Max session/trace IDs returned per agent in stats response. */
 export const MAX_IDS = 50;
-/** Max evaluations returned by the live quality endpoint. */
 export const EVAL_LIMIT = 100;
-/** Decimal places for displayed score values in API responses. */
 export const SCORE_DISPLAY_PRECISION = 3;
-/** Decimal places for compact score display in chips and table cells. */
 export const SCORE_CHIP_PRECISION = 2;
-/** Decimal places for formatted raw score values in formatScore. */
 export const SCORE_FORMAT_PRECISION = 4;
 
 /** OpenTelemetry span status code for errors. */

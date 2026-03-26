@@ -46,7 +46,7 @@ trendRoutes.get('/trends/:name', async (c) => {
   }
   const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
   if (!bucketsResult.success) {
-    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
+    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
   }
 
   try {
