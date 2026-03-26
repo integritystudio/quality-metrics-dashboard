@@ -38,7 +38,6 @@ import { getQualityMetric, computeMetricDetail, computeAggregations } from '../.
 import { computeMetricDynamics } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
 
-// Helpers
 
 function makeMockConfig() {
   return {

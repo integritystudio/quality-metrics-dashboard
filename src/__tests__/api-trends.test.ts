@@ -41,7 +41,6 @@ import { loadEvaluationsForMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);
 
-// Helpers
 
 function makeMockConfig() {
   return {
