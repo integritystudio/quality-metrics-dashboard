@@ -30,7 +30,6 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             <Link href={`/workflows/${sessionId}`} className="text-xs text-link">View Workflow</Link>
           </DetailPageHeader>
 
-          {/* Summary scores */}
           <div className="card flex-wrap gap-6 p-4 mb-4 align-start">
             <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
             {evaluation.errorPropagationTurns > 0 && (
@@ -43,14 +42,12 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             )}
           </div>
 
-          {/* Turn timeline */}
           <ViewSection title="Turn Timeline">
             <div className="card">
               <TurnTimeline turns={turns} agentNames={agentNames} />
             </div>
           </ViewSection>
 
-          {/* Handoffs */}
           {handoffs.length > 0 && (
             <ViewSection title="Handoffs">
               <div className="flex-col gap-2">

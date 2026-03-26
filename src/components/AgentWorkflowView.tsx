@@ -46,7 +46,6 @@ export function AgentWorkflowView({
 
   return (
     <div>
-      {/* ARIA tablist */}
       <div
         role="tablist"
         aria-label="Workflow view"
