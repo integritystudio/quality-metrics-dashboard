@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { scoreColor, formatPercent } from '../lib/quality-utils.js';
+import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
 import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-import { SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
 
 function segmentColor(contribution: CQIContribution): string {
   return scoreColor(contribution.rawScore, 'maximize');
@@ -31,7 +31,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
             <div
               key={c.metric}
               className="cqi-segment"
-              title={`${c.metric}: ${c.rawScore.toFixed(SCORE_CHIP_PRECISION)} (weight ${formatPercent(c.weight * 100, 0)})`}
+              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * 100, 0)})`}
               style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
             />
           ))}
@@ -52,7 +52,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
           {cqi.contributions.map((c) => (
             <tr key={c.metric}>
               <td>{c.metric}</td>
-              <td>{c.rawScore.toFixed(SCORE_CHIP_PRECISION)}</td>
+              <td>{formatScore(c.rawScore)}</td>
               <td>{formatPercent(c.weight * 100, 0)}</td>
               <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
             </tr>
