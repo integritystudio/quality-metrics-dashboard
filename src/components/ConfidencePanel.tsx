@@ -95,7 +95,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
         <span className="confidence-method">({method})</span>
       </div>
 
-      <div className="mb-3 text-xs" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 'var(--space-1) var(--space-4)' }}>
+      <div className="confidence-stats-grid mb-3 text-xs">
         <span className="text-secondary">Sample Count</span>
         <span className="mono">{sampleCount}</span>
 
