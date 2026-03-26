@@ -82,9 +82,9 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           />
           <Tooltip
             contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-            formatter={(v: number | string | undefined, name?: string) => [
+            formatter={(v, name) => [
               formatScore(typeof v === 'number' ? v : null),
-              name === 'avg' ? 'Average' : (name ?? '').toUpperCase(),
+              name === 'avg' ? 'Average' : (String(name ?? '')).toUpperCase(),
             ]}
             labelStyle={CHART_TOOLTIP_LABEL_STYLE}
           />

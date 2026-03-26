@@ -39,12 +39,12 @@ export default defineConfig(({ command }) => {
       ...(process.env.VITEST ? [parentDistStub()] : []),
     ],
     build: {
-      rollupOptions: {
+      rolldownOptions: {
         output: {
-          manualChunks: {
-            react: ['react', 'react-dom'],
-            query: ['@tanstack/react-query'],
-            'workflow-viz': ['@xyflow/react', 'elkjs'],
+          manualChunks: (id) => {
+            if (id.includes('react') && id.includes('react-dom')) return 'react';
+            if (id.includes('@tanstack/react-query')) return 'query';
+            if (id.includes('@xyflow') || id.includes('elkjs')) return 'workflow-viz';
           },
         },
       },

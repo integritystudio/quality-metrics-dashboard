@@ -1,6 +1,6 @@
 import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import { Route, Switch, Link, useLocation, Router } from 'wouter';
-import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
@@ -233,11 +233,11 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   );
 }
 
-function RouteErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+function RouteErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
     <div className="error-state">
       <h2>Something went wrong</h2>
-      <p>{error.message}</p>
+      <p>{error instanceof Error ? error.message : String(error)}</p>
       <div className="error-actions">
         <button onClick={resetErrorBoundary}>Try again</button>
         <Link href="/">Back to dashboard</Link>

@@ -98,7 +98,7 @@ export function TrendChart({
             />
             <Tooltip
               contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-              formatter={(v: number | undefined) => [v != null ? formatValue(v) : 'N/A', '']}
+              formatter={(v) => [typeof v === 'number' ? formatValue(v) : 'N/A', '']}
               labelStyle={CHART_TOOLTIP_LABEL_STYLE}
             />
             {warningThreshold != null && (
