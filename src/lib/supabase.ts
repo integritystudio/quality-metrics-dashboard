@@ -57,6 +57,12 @@ function clearSession(): void {
   }
 }
 
+function clearSessionAndNotify(): null {
+  clearSession();
+  notifyListeners(null, 'SIGNED_OUT');
+  return null;
+}
+
 function isValidSession(value: unknown): value is SupabaseSession {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
@@ -173,26 +179,17 @@ export async function refreshSession(): Promise<SupabaseSession | null> {
       body: JSON.stringify({ refresh_token: stored.refresh_token }),
     });
 
-    if (!res.ok) {
-      clearSession();
-      notifyListeners(null, 'SIGNED_OUT');
-      return null;
-    }
+    if (!res.ok) return clearSessionAndNotify();
 
     const refreshBody: unknown = await res.json().catch(() => null);
-    if (!isValidTokenResponse(refreshBody)) {
-      clearSession();
-      notifyListeners(null, 'SIGNED_OUT');
-      return null;
-    }
+    if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
+
     const refreshed = sessionFromTokenResponse(refreshBody);
     saveSession(refreshed);
     notifyListeners(refreshed, 'TOKEN_REFRESHED');
     return refreshed;
   } catch {
-    clearSession();
-    notifyListeners(null, 'SIGNED_OUT');
-    return null;
+    return clearSessionAndNotify();
   }
 }
 

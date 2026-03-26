@@ -118,65 +118,49 @@ app.use('/api/*', async (c, next) => {
 
   try {
     // Verify JWT via Supabase /auth/v1/user
-    let authUserId: string;
-    try {
-      const verifyRes = await fetch(`${c.env.SUPABASE_URL}/auth/v1/user`, {
-        headers: userAuthHeaders(c.env, jwt),
-        signal: controller.signal,
-      });
-      if (!verifyRes.ok) return c.json({ error: 'Unauthorized' }, 401);
-      const authUserResult = AuthUserResponseSchema.safeParse(await verifyRes.json());
-      if (!authUserResult.success) return c.json({ error: 'Unauthorized' }, 401);
-      authUserId = authUserResult.data.id;
-    } catch {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
+    const verifyRes = await fetch(`${c.env.SUPABASE_URL}/auth/v1/user`, {
+      headers: userAuthHeaders(c.env, jwt),
+      signal: controller.signal,
+    }).catch(() => null);
+    if (!verifyRes?.ok) return c.json({ error: 'Unauthorized' }, 401);
+    const authUserResult = AuthUserResponseSchema.safeParse(await verifyRes.json().catch(() => null));
+    if (!authUserResult.success) return c.json({ error: 'Unauthorized' }, 401);
+    const authUserId = authUserResult.data.id;
 
     // Fetch public.users row — required; auth users with no app record are rejected with 401
-    let email = '';
-    let appUserId = '';
-    try {
-      const userRes = await fetch(
-        `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
-        { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
-      );
-      if (!userRes.ok) return c.json({ error: 'Unauthorized' }, 401);
-      const users = await userRes.json() as Array<unknown>;
-      if (!Array.isArray(users) || !users[0]) return c.json({ error: 'Unauthorized' }, 401);
-      const userResult = PublicUserSchema.safeParse(users[0]);
-      if (!userResult.success) return c.json({ error: 'Unauthorized' }, 401);
-      appUserId = userResult.data.id;
-      email = userResult.data.email;
-    } catch {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
+    const userRes = await fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
+      { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
+    ).catch(() => null);
+    if (!userRes?.ok) return c.json({ error: 'Unauthorized' }, 401);
+    const users = await userRes.json().catch(() => null) as Array<unknown> | null;
+    if (!Array.isArray(users) || !users[0]) return c.json({ error: 'Unauthorized' }, 401);
+    const userResult = PublicUserSchema.safeParse(users[0]);
+    if (!userResult.success) return c.json({ error: 'Unauthorized' }, 401);
+    const appUserId = userResult.data.id;
+    const email = userResult.data.email;
 
     const roles: string[] = [];
     const permissionSet = new Set<DashboardPermission>();
-    try {
-      const rolesRes = await fetch(
-        `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
-        { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
-      );
-      if (rolesRes.ok) {
-        const rows = await rolesRes.json() as Array<unknown>;
-        for (const row of rows) {
-          const rowResult = UserRoleRowSchema.safeParse(row);
-          if (!rowResult.success || !rowResult.data.roles) continue;
-          roles.push(rowResult.data.roles.name);
-          for (const perm of rowResult.data.roles.permissions) {
-            if (VALID_PERMISSIONS.has(perm)) {
-              permissionSet.add(perm as DashboardPermission);
-            }
-          }
+    // Non-fatal — fetch failure leaves user with no permissions; routes will deny
+    const rolesRes = await fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
+      { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
+    ).catch(() => null);
+    if (rolesRes?.ok) {
+      const rows = await rolesRes.json().catch(() => []) as Array<unknown>;
+      for (const row of rows) {
+        const rowResult = UserRoleRowSchema.safeParse(row);
+        if (!rowResult.success || !rowResult.data.roles) continue;
+        roles.push(rowResult.data.roles.name);
+        for (const perm of rowResult.data.roles.permissions) {
+          if (VALID_PERMISSIONS.has(perm)) permissionSet.add(perm as DashboardPermission);
         }
       }
-    } catch {
-      // Non-fatal — user will have no permissions, routes will deny
     }
+
     const permissions = [...permissionSet];
-    const isAdmin = permissionSet.has('dashboard.admin');
-    const allowedViews: DashboardView[] = isAdmin
+    const allowedViews: DashboardView[] = permissionSet.has('dashboard.admin')
       ? ['executive', 'operator', 'auditor']
       : VIEW_PERMISSION_MAP
           .filter(([perm]) => permissionSet.has(perm))
@@ -454,10 +438,11 @@ app.get('/api/compliance/sla', async (c) => {
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
   logActivity(session.appUserId ?? '', 'compliance_view', c.env, jwt);
+  const slaResults = (dashboard['slaCompliance'] as unknown[]) ?? [];
   return c.json({
     period,
-    results: (dashboard['slaCompliance'] as unknown[]) ?? [],
-    noSLAsConfigured: !dashboard['slaCompliance'] || (dashboard['slaCompliance'] as unknown[]).length === 0,
+    results: slaResults,
+    noSLAsConfigured: slaResults.length === 0,
   });
 });
 
@@ -576,7 +561,7 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
 
   const res = await fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles`, {
     method: 'POST',
-    headers: { ...serviceRoleHeaders(c.env) as Record<string, string>, 'Prefer': 'return=minimal' },
+    headers: { ...(serviceRoleHeaders(c.env) as Record<string, string>), 'Prefer': 'return=minimal' },
     body: JSON.stringify({ user_id: userId, role_id: result.data.role_id }),
   });
   if (!res.ok) return c.json({ error: 'Failed to assign role' }, 500);

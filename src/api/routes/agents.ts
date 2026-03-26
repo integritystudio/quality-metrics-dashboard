@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus } from '../../lib/constants.js';
-import { PARAM_ID_RE } from '../api-constants.js';
+import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 export const agentRoutes = new Hono();
@@ -109,8 +109,8 @@ agentRoutes.get('/agents', async (c) => {
         };
       }
 
-      const allSessionIds = [...d.sessions];
-      const allTraceIdsList = [...d.traceIds];
+      const sessionIdList = [...d.sessions];
+      const traceIdList = [...d.traceIds];
 
       return {
         agentName,
@@ -120,11 +120,11 @@ agentRoutes.get('/agents', async (c) => {
         rateLimitCount: d.rateLimitCount,
         avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
         sessionCount: d.sessions.size,  // total unique sessions (invariant: >= sessionIds.length)
-        sessionIds: allSessionIds.slice(0, MAX_IDS),
-        sessionIdsTruncated: allSessionIds.length > MAX_IDS,
-        traceIdsTotal: allTraceIdsList.length,
-        traceIds: allTraceIdsList.slice(0, MAX_IDS),
-        traceIdsTruncated: allTraceIdsList.length > MAX_IDS,
+        sessionIds: sessionIdList.slice(0, MAX_IDS),
+        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
+        traceIdsTotal: traceIdList.length,
+        traceIds: traceIdList.slice(0, MAX_IDS),
+        traceIdsTruncated: traceIdList.length > MAX_IDS,
         sourceTypes: d.sourceTypes,
         dailyCounts: d.dailyCounts,
         evalSummary,
@@ -171,7 +171,7 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
       step: i,
       score: typeof span.attributes?.['evaluation.score'] === 'number'
         ? span.attributes['evaluation.score'] as number
-        : (span.status?.code === 2 ? 0 : 1),
+        : (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
       explanation: span.name,
     }));
 

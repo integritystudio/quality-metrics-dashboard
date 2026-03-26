@@ -25,6 +25,10 @@ export function buildWorkflowGraph(
 function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
   const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
   let droppedTurns = 0;
+  // Root: agent with lowest turnIndex, lexicographic tiebreak (WG-7)
+  let rootAgentName: string | null = null;
+  let minTurnIndex = Infinity;
+
   for (const turn of evaluation.turns) {
     if (turn.agentName == null) {
       droppedTurns++;
@@ -33,13 +37,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     const existing = agentTurns.get(turn.agentName) ?? [];
     existing.push(turn);
     agentTurns.set(turn.agentName, existing);
-  }
 
-  // Root: agent with lowest turnIndex, lexicographic tiebreak (WG-7)
-  let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
-  for (const turn of evaluation.turns) {
-    if (turn.agentName == null) continue;
     if (
       turn.turnIndex < minTurnIndex ||
       (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))

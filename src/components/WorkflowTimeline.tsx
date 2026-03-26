@@ -1,8 +1,7 @@
 import { AGENT_PALETTE } from '../lib/constants.js';
 import { scoreColor } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult } from '../types.js';
-import type { HandoffEvaluation } from '../types.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Constants

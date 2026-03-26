@@ -27,8 +27,6 @@ import {
   FILE_ACCESS_COL_MIN,
 } from '../lib/constants.js';
 
-
-
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export function SessionDetailPage({ sessionId }: { sessionId: string }) {
@@ -95,11 +93,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const errorCount = errorDetails.length;
   const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
     hallucinationEvals.length > 0 || failedEvals.length > 0;
-  const issueHealth: SectionHealth = errorCount > 0 || hallucinationEvals.length > 0
-    ? 'crit'
-    : alertSummary.totalFired > 0 || failedEvals.length > 0
-    ? 'warn'
-    : 'ok';
+  let issueHealth: SectionHealth = 'ok';
+  if (errorCount > 0 || hallucinationEvals.length > 0) issueHealth = 'crit';
+  else if (alertSummary.totalFired > 0 || failedEvals.length > 0) issueHealth = 'warn';
 
   // Score interpretation
   const evaluation = multiAgentEvaluation;

@@ -39,8 +39,6 @@ export const DEFAULT_ROLE: Role = 'executive';
 /** Recognized agent source type values. */
 export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
-
-
 const TIME_MS = {
   DAY: 24 * 60 * 60 * 1000,
 } as const;

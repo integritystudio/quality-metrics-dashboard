@@ -37,5 +37,4 @@ app.route('/api', agentRoutes);
 app.route('/api', sessionRoutes);
 app.route('/api', qualityRoutes);
 
-
 serve({ fetch: app.fetch, hostname: API_HOST, port: API_PORT });
