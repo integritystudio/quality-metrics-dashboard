@@ -1,3 +1,8 @@
+0d40ca0 2026-03-26 chore: regenerate repomix docs after Round 11 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 690d5d9 2026-03-26 refactor(tests): remove standalone label comments from dr13-coverage
   src/__tests__/dr13-coverage.test.tsx
 
@@ -324,6 +329,3 @@ b265898 2026-03-26 refactor(components): extract ConfidencePanel grid inline sty
 
 80d9b06 2026-03-26 refactor(components): replace inline styles with CSS classes in AgentActivityPanel
   src/theme.css
-
-1dbf84c 2026-03-26 refactor(sync-to-kv): replace magic millisecond literals with TIME_MS constants
-  scripts/sync-to-kv.ts
