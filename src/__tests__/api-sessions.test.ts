@@ -41,9 +41,7 @@ import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loa
 
 beforeEach(vi.clearAllMocks);
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> = {}) {
   return {
@@ -62,9 +60,7 @@ function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown
   };
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 describe('GET /sessions/:sessionId', () => {
   beforeEach(() => {

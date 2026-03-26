@@ -44,9 +44,7 @@ import { computeDashboardSummary, computeRoleView } from '../../../dist/lib/qual
 import { computeCQI } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeMockEval(name = 'relevance', score = 0.85, timestamp = '2026-01-15T12:00:00.000Z') {
   return {
@@ -77,9 +75,7 @@ function makeMockDashboard() {
 // across describe blocks (dashboard → health → quality/live).
 beforeEach(vi.clearAllMocks);
 
-// ---------------------------------------------------------------------------
 // /dashboard route
-// ---------------------------------------------------------------------------
 
 describe('GET /dashboard', () => {
   beforeEach(() => {
@@ -168,9 +164,7 @@ describe('GET /dashboard', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // /health route
-// ---------------------------------------------------------------------------
 
 describe('GET /health', () => {
   it('returns 200 with status and hasData', async () => {
@@ -189,9 +183,7 @@ describe('GET /health', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // /quality/live route
-// ---------------------------------------------------------------------------
 
 describe('GET /quality/live', () => {
   beforeEach(() => {

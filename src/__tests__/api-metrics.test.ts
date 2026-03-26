@@ -38,9 +38,7 @@ import { getQualityMetric, computeMetricDetail, computeAggregations } from '../.
 import { computeMetricDynamics } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeMockConfig() {
   return {
@@ -84,9 +82,7 @@ function makeMockDetail() {
   };
 }
 
-// ---------------------------------------------------------------------------
 // /metrics/:name route
-// ---------------------------------------------------------------------------
 
 describe('GET /metrics/:name', () => {
   beforeEach(() => {
@@ -164,9 +160,7 @@ describe('GET /metrics/:name', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // /metrics/:name/evaluations route
-// ---------------------------------------------------------------------------
 
 describe('GET /metrics/:name/evaluations', () => {
   const evals = [
