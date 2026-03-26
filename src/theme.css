@@ -1412,6 +1412,9 @@ summary.section-rail {
   background-color: color-mix(in srgb, var(--chip-color) 19%, transparent);
   opacity: 1;
 }
+.workflow-legend {
+  padding-left: 120px;
+}
 .file-access-columns {
   columns: 2 320px;
   column-gap: var(--space-8);

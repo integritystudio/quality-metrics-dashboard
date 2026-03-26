@@ -311,7 +311,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
       </svg>
 
       {/* Legend */}
-      <div className="flex-wrap gap-4 mt-2" style={{ paddingLeft: LABEL_WIDTH }}>
+      <div className="flex-wrap gap-4 mt-2 workflow-legend">
         <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
         {handoffs.length > 0 && (
           <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
