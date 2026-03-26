@@ -32,9 +32,7 @@ import { loadEvaluationsByMetric, loadVerifications } from '../api/data-loader.j
 
 beforeEach(vi.clearAllMocks);
 
-// ---------------------------------------------------------------------------
 // /compliance/sla
-// ---------------------------------------------------------------------------
 
 describe('GET /compliance/sla', () => {
   beforeEach(() => {
@@ -65,9 +63,7 @@ describe('GET /compliance/sla', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // /compliance/verifications
-// ---------------------------------------------------------------------------
 
 describe('GET /compliance/verifications', () => {
   beforeEach(() => {

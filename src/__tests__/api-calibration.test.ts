@@ -6,9 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import app from '../../worker/index.js';
 
-// ---------------------------------------------------------------------------
 // KV mock helper
-// ---------------------------------------------------------------------------
 
 function makeKV(store: Record<string, unknown> = {}): KVNamespace {
   return {
@@ -41,9 +39,7 @@ function makeCalibrationData() {
   };
 }
 
-// ---------------------------------------------------------------------------
 // GET /api/calibration
-// ---------------------------------------------------------------------------
 
 describe('GET /api/calibration', () => {
   it('returns 200 with calibration state from KV key meta:calibration', async () => {

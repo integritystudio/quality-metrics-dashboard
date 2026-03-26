@@ -44,9 +44,7 @@ import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-m
 import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
 import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}) {
   return {
@@ -86,9 +84,7 @@ function makeMockEval(traceId = 'trace-001') {
   } as any;
 }
 
-// ---------------------------------------------------------------------------
 // /agents route
-// ---------------------------------------------------------------------------
 
 describe('GET /agents', () => {
   beforeEach(() => {
@@ -196,9 +192,7 @@ describe('GET /agents', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // /agents/:sessionId route
-// ---------------------------------------------------------------------------
 
 describe('GET /agents/:sessionId', () => {
   beforeEach(() => {
