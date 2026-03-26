@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import React, { memo, useCallback, useEffect, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -107,36 +107,32 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
 
   return (
     <div
+      className="workflow-node"
       style={{
-        width: NODE_WIDTH,
-        height: NODE_HEIGHT,
-        border: `2px solid ${band?.border ?? '#d1d5db'}`,
-        borderRadius: 8,
-        background: band?.bg ?? '#f9fafb',
-        padding: 12,
-        fontSize: 13,
-      }}
+        // Score-band colors are data-driven and cannot be expressed as static classes
+        '--workflow-node-border': band?.border ?? '#d1d5db',
+        '--workflow-node-bg': band?.bg ?? '#f9fafb',
+        '--workflow-node-score-color': band?.text ?? 'inherit',
+      } as React.CSSProperties}
       role="group"
       aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
     >
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>{d.label}</div>
+      <div className="workflow-node__label">{d.label}</div>
       {band && (
-        <div style={{ color: band.text, fontSize: 12 }}>
+        <div className="workflow-node__score">
           <span>{band.label}</span>: {d.evaluationScore?.toFixed(2)}
         </div>
       )}
-      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+      <div className="workflow-node__meta">
         <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
         {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
       </div>
-      <div style={{ fontSize: 11, color: '#6b7280' }}>
+      <div className="workflow-node__duration">
         {d.durationMs < 1000
           ? `${d.durationMs}ms`
           : `${(d.durationMs / 1000).toFixed(1)}s`}
       </div>
-      {d.hasError && (
-        <div style={{ color: '#dc2626', fontSize: 11, fontWeight: 600 }}>Error</div>
-      )}
+      {d.hasError && <div className="workflow-node__error">Error</div>}
       <Handle type="target" position={Position.Top} />
       <Handle type="source" position={Position.Bottom} />
     </div>
@@ -191,14 +187,14 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   if (graph.nodes.length > MAX_ELK_NODES) {
     return (
       <div style={{ height }} role="img" aria-label="Agent workflow graph">
-        <div className="text-secondary text-xs" style={{ padding: 24 }}>
-          <div className="font-semibold mb-2">
+        <div className="workflow-oversize text-secondary text-xs">
+          <div className="workflow-oversize__heading">
             Graph too large to render ({graph.nodes.length} agents)
           </div>
-          <div className="text-muted mb-3">
+          <div className="workflow-oversize__note text-muted">
             ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
           </div>
-          <ul style={{ listStyle: 'disc', paddingLeft: 20 }}>
+          <ul className="workflow-oversize__list">
             {graph.nodes.map(n => (
               <li key={n.id} className="mono-xs mb-1">
                 {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
@@ -216,16 +212,16 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
     const node = graph.nodes[0];
     return (
       <div style={{ height }} role="img" aria-label="Agent workflow graph">
-        <div style={{ padding: 24, textAlign: 'center' }}>
+        <div className="workflow-fallback">
           {node ? (
             <>
-              <div style={{ fontSize: 18, fontWeight: 600 }}>{node.label}</div>
-              <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
+              <div className="workflow-fallback__title">{node.label}</div>
+              <div className="workflow-fallback__subtitle">
                 {node.turnCount} turns | {node.toolCallCount} tools
               </div>
             </>
           ) : (
-            <div style={{ color: '#9ca3af' }}>No agent data</div>
+            <div className="workflow-fallback__empty">No agent data</div>
           )}
         </div>
       </div>
@@ -235,7 +231,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   if (layoutError) {
     return (
       <div style={{ height }} role="img" aria-label="Agent workflow graph">
-        <div className="error-state" style={{ padding: 24, textAlign: 'center' }}>
+        <div className="error-state workflow-fallback">
           Failed to compute workflow layout: {layoutError}
         </div>
       </div>

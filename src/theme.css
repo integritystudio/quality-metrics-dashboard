@@ -1095,3 +1095,92 @@ details[open] > .cot-summary::before {
   background: var(--bg-card);
   border-left: 3px solid var(--section-rail-color, var(--border-accent));
 }
+
+/* ─── Workflow components (CR-STYLE-1) ────────────────────────────────────── */
+
+/* WorkflowGraph: agent node card */
+.workflow-node {
+  width: 220px;
+  height: 120px;
+  border: 2px solid var(--workflow-node-border, #d1d5db);
+  border-radius: 8px;
+  background: var(--workflow-node-bg, #f9fafb);
+  padding: 12px;
+  font-size: 13px;
+}
+.workflow-node__label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.workflow-node__score {
+  font-size: 12px;
+  color: var(--workflow-node-score-color, inherit);
+}
+.workflow-node__meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+.workflow-node__duration {
+  font-size: 11px;
+  color: #6b7280;
+}
+.workflow-node__error {
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* WorkflowGraph: fallback containers */
+.workflow-fallback {
+  padding: 24px;
+  text-align: center;
+}
+.workflow-fallback__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.workflow-fallback__subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 8px;
+}
+.workflow-fallback__empty {
+  color: #9ca3af;
+}
+
+/* WorkflowGraph: large-graph degraded list fallback */
+.workflow-oversize {
+  padding: 24px;
+}
+.workflow-oversize__heading {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.workflow-oversize__note {
+  margin-bottom: 12px;
+}
+.workflow-oversize__list {
+  list-style: disc;
+  padding-left: 20px;
+}
+
+/* AgentWorkflowView: tab bar */
+.workflow-tabs {
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-3);
+}
+/* AgentWorkflowView: tab button — active and inactive states via data attribute */
+.workflow-tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.workflow-tab[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}

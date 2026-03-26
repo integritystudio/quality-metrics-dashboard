@@ -50,11 +50,7 @@ export function AgentWorkflowView({
       <div
         role="tablist"
         aria-label="Workflow view"
-        className="flex-center gap-0"
-        style={{
-          borderBottom: '1px solid var(--border-subtle)',
-          marginBottom: 'var(--space-3)',
-        }}
+        className="flex-center gap-0 workflow-tabs"
       >
         {TABS.map(tab => (
           <button
@@ -65,15 +61,7 @@ export function AgentWorkflowView({
             aria-selected={activeTab === tab}
             aria-controls={`workflow-panel-${tab}`}
             onClick={() => setActiveTab(tab)}
-            className="text-xs font-semibold cursor-pointer btn-reset"
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              borderBottom: activeTab === tab
-                ? '2px solid var(--accent)'
-                : '2px solid transparent',
-              color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)',
-              transition: 'color var(--transition-fast), border-color var(--transition-fast)',
-            }}
+            className="btn-reset workflow-tab"
           >
             {TAB_LABELS[tab]}
           </button>
