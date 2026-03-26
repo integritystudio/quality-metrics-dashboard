@@ -310,7 +310,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     }
 
     // ---- Multi-agent Evaluation ----
-    // WG-C1: check both 'agent.name' (hooks context) and 'gen_gi.agent.name' (OTel GenAI).
+    // WG-C1: check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
     const agentMapForEval = new Map<number, string>();
     spans.forEach((span, i) => {
       const agent =
