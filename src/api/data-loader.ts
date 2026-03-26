@@ -3,6 +3,7 @@ import type { EvaluationResult } from '../../../dist/backends/index.js';
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
 import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { toDateOnly } from './api-constants.js';
 
 /** Default lookback windows */
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
@@ -33,10 +34,6 @@ function getBackend(): MultiDirectoryBackend {
   return backend;
 }
 
-/** Convert ISO timestamp or date string to YYYY-MM-DD */
-function toDateOnly(d: string): string {
-  return d.split('T')[0];
-}
 
 function defaultRange(lookbackMs: number): { start: string; end: string } {
   const now = new Date();
