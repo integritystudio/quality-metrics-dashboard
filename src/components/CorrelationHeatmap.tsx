@@ -72,13 +72,12 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
     <div
       role="table"
       aria-label="Metric correlation matrix"
-      className="gap-half w-full"
+      className="gap-half w-full heatmap-grid"
       style={{
-        display: 'grid',
+        '--heatmap-aspect': `${cols} / ${cols}`,
         gridTemplateColumns: `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
         gridTemplateRows: `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
-        aspectRatio: `${cols} / ${cols}`,
-      }}
+      } as CSSProperties}
     >
       <div role="cell" />
 
