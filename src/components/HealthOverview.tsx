@@ -23,8 +23,7 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
   const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
 
   const period = dashboard.metrics[0]?.period;
-  const DEFAULT_PERIOD_HOURS = PERIOD_MS['7d'] / TIME_MS.HOUR;
-  let periodHours = DEFAULT_PERIOD_HOURS;
+  let periodHours = PERIOD_MS['7d'] / TIME_MS.HOUR;
   if (period) {
     const diffMs = new Date(period.end).getTime() - new Date(period.start).getTime();
     periodHours = Math.max(1, diffMs / TIME_MS.HOUR);
