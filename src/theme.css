@@ -742,6 +742,7 @@ body {
   padding: var(--space-px) 0;
   color: var(--text-primary);
 }
+.tooltip-row--col { flex-direction: column; }
 .tooltip-link {
   display: block;
   margin-top: var(--space-2);
@@ -965,6 +966,12 @@ details[open] > .cot-summary::before {
 .variance-bar {
   gap: var(--space-2);
 }
+/* Reusable bar track (background rail for progress/duration bars) */
+.bar-track {
+  height: var(--space-1);
+  background: var(--bg-surface);
+  border-radius: var(--radius-xs);
+}
 .variance-bar-track {
   flex: 1;
   height: var(--space-1);
@@ -1051,6 +1058,7 @@ details[open] > .cot-summary::before {
 /* Margin */
 .m-0    { margin: 0; }
 .ml-auto { margin-left: auto; }
+.mr-1   { margin-right: var(--space-1); }
 
 /* Margin-bottom */
 .mb-0   { margin-bottom: 0; }
@@ -1131,6 +1139,7 @@ details[open] > .cot-summary::before {
 /* Button reset */
 .btn-reset { background: none; border: none; padding: 0; }
 .btn-xs { border: 1px solid var(--border); padding: var(--space-1-5) var(--space-3); border-radius: var(--radius); }
+.btn-expand { padding: var(--space-px) var(--space-1-5); }
 
 /* Expand chevron */
 .expand-chevron {

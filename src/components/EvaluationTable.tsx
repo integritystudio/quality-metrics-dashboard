@@ -72,10 +72,9 @@ const columns = [
     cell: ({ row }) => (
       <button
         type="button"
-        className="cursor-pointer btn-reset"
+        className="cursor-pointer btn-reset btn-expand"
         onClick={row.getToggleExpandedHandler()}
         aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
-        style={{ padding: 'var(--space-px) var(--space-1-5)' }}
       >
         <ExpandChevron expanded={row.getIsExpanded()} className="text-secondary text-xs" />
       </button>
