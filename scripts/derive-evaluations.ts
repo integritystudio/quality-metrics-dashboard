@@ -167,7 +167,6 @@ export function trackTaskActivity(span: TraceSpan): void {
   if (tool === 'TaskCreate') entry.creates++;
   if (tool === 'TaskUpdate') entry.updates++;
 
-  // Track explicit status transitions when available
   const taskStatus = span.attributes['builtin.task_status'];
   const taskId = span.attributes['builtin.task_id'];
 
@@ -355,7 +354,6 @@ function main(): void {
     for (const span of spans) {
       _spanCount++;
 
-      // Derive per-span evaluations
       const toolCorr = deriveToolCorrectness(span);
       if (toolCorr) allEvals.push(toolCorr);
 
@@ -391,7 +389,6 @@ function main(): void {
       for (const rec of existingRecs) {
         const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
         if (evaluator && evaluator !== RULE_EVALUATOR) {
-          // Preserve non-rule evaluations by re-serializing
           preserved.push(JSON.stringify(rec));
         }
       }
