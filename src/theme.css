@@ -863,7 +863,7 @@ details[open] > .cot-summary::before {
   line-height: 1.2;
   color: var(--cqi-color, var(--text-primary));
 }
-.cqi-segment { min-width: var(--space-0-5); }
+.cqi-segment { min-width: var(--space-0-5); flex: var(--cqi-segment-flex); background-color: var(--cqi-segment-bg); }
 .cqi-segment-bar {
   height: var(--space-2);
   border-radius: var(--radius-sm);

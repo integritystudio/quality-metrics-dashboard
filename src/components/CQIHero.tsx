@@ -32,7 +32,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
               key={c.metric}
               className="cqi-segment"
               title={`${c.metric}: ${c.rawScore.toFixed(SCORE_CHIP_PRECISION)} (weight ${formatPercent(c.weight * 100, 0)})`}
-              style={{ flex: c.weight, backgroundColor: segmentColor(c) }}
+              style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
             />
           ))}
         </div>
