@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 import { API_BASE, STALE_TIME, ErrorName } from '../lib/constants.js';
+import { useAuth } from '../contexts/AuthContext.js';
 
 export interface SessionInfo {
   projectName: string;
@@ -139,10 +140,19 @@ export class SessionNotFoundError extends Error {
 }
 
 export function useSessionDetail(sessionId: string | undefined) {
+  const { getAccessToken } = useAuth();
   return useQuery<SessionDetailResponse>({
     queryKey: ['session-detail', sessionId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`);
+      let token: string;
+      try {
+        token = await getAccessToken();
+      } catch {
+        throw new Error('AUTH_REQUIRED');
+      }
+      const res = await fetch(`${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.status === 404) throw new SessionNotFoundError(sessionId!);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();

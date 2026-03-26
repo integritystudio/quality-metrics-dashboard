@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
 import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useAuth } from '../contexts/AuthContext.js';
 
 interface TraceSpanResponse {
   traceId: string;
@@ -19,11 +20,20 @@ interface TraceResponse {
 }
 
 export function useTrace(traceId: string | undefined) {
+  const { getAccessToken } = useAuth();
   return useQuery<TraceResponse>({
     queryKey: ['trace', traceId],
     queryFn: async () => {
       if (!traceId) throw new Error('traceId is required');
-      const res = await fetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId)}`);
+      let token: string;
+      try {
+        token = await getAccessToken();
+      } catch {
+        throw new Error('AUTH_REQUIRED');
+      }
+      const res = await fetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) {
         // Worker returns 404 with JSON body when trace not in KV — return empty data
         if (res.status === 404) return { traceId, spans: [], evaluations: [] };
