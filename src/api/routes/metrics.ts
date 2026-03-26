@@ -58,7 +58,6 @@ metricsRoutes.get('/metrics/:name', async (c) => {
       loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
     ]);
 
-    // Compute previous-period aggregations for trend calculation
     const previousValues = prevEvaluations.length > 0
       ? computeAggregations(
           prevEvaluations

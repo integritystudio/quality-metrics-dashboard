@@ -26,18 +26,15 @@ qualityRoutes.get('/quality/live', async (c) => {
     let latestTimestamp = '';
 
     for (const [name, evals] of evaluationsByMetric) {
-      // Take last EVAL_LIMIT records, sorted by timestamp desc
       const sorted = evals
         .slice()
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
         .slice(0, EVAL_LIMIT);
 
-      // Track sessions
       for (const ev of sorted) {
         if (ev.traceId) sessionIds.add(ev.traceId);
       }
 
-      // Latest eval for this metric
       const latest = sorted[0];
       if (latest && latest.scoreValue != null) {
         metrics.push({
