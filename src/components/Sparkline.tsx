@@ -40,7 +40,7 @@ function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-sec
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label={label ?? 'Score trend sparkline'}
-      style={{ display: 'block' }}
+      className="d-block"
     >
       <polyline
         points={points}

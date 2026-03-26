@@ -26,11 +26,7 @@ export function MetricCompare({ metricName, period, availableMetrics, onMetricCh
       <select
         value={metricName}
         onChange={(e) => onMetricChange(e.target.value)}
-        className="mb-3 text-primary text-xs surface-elevated"
-        style={{
-          padding: 'var(--space-1) var(--space-2)',
-          borderRadius: 'var(--radius-sm)',
-        }}
+        className="mb-3 text-primary text-xs surface-elevated form-select"
       >
         {availableMetrics.map(m => <option key={m} value={m}>{m}</option>)}
       </select>

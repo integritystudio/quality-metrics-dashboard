@@ -1041,6 +1041,7 @@ details[open] > .cot-summary::before {
 .d-flex         { display: flex; }
 .d-grid         { display: grid; }
 .d-inline-block { display: inline-block; }
+.d-block        { display: block; }
 .flex-center    { display: flex; align-items: center; }
 .align-start    { align-items: flex-start; }
 
