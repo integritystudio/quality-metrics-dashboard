@@ -70,6 +70,7 @@ export function computePeriodDates(period: string): { start: string; end: string
 }
 
 
+/** Percentage of events sampled for T2 LLM evaluation. */
 export const LLM_SAMPLE_RATE = 10;
 /** Score band thresholds for quality indicator color coding. */
 export const SCORE_THRESHOLD_GREEN = 0.8;
@@ -90,8 +91,11 @@ export const RETRY_DELAY_BASE = 1_000;
 export const RETRY_DELAY_CAP = 30_000;
 export const MAX_IDS = 50;
 export const EVAL_LIMIT = 100;
+/** Decimal places for displayed score values in API responses. */
 export const SCORE_DISPLAY_PRECISION = 3;
+/** Decimal places for compact score display in chips and table cells. */
 export const SCORE_CHIP_PRECISION = 2;
+/** Decimal places for formatted raw score values in formatScore. */
 export const SCORE_FORMAT_PRECISION = 4;
 
 /** OpenTelemetry span status code for errors. */
