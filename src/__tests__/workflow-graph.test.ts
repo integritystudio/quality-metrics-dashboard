@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult } from '../types.js';
-import type { TraceSpan } from '../types.js';
+import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult, TraceSpan } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Factory helpers

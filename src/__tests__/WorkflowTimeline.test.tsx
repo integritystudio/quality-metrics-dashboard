@@ -21,8 +21,7 @@ vi.mock('../components/WorkflowGraph.js', () => ({
 import { WorkflowTimeline } from '../components/WorkflowTimeline.js';
 import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
 import { makeNode, makeGraph } from './workflow-fixtures.js';
-import type { TurnLevelResult } from '../types.js';
-import type { HandoffEvaluation } from '../types.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
