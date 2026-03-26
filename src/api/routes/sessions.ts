@@ -8,6 +8,7 @@ import {
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
   FILE_ACCESS_TOP_N,
   HOOK_NAME,
+  incrementCount,
   LATENCY_P50,
   LATENCY_P95,
   LOG_SUMMARY_FIELDS,
@@ -48,9 +49,6 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
-}
 
 type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
 

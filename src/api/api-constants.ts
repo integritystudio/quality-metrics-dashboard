@@ -51,6 +51,11 @@ export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js'
 /** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
 export const NANOS_TO_MS = 1_000_000;
 
+/** Increment a numeric counter in a record, initializing to 1 on first use. */
+export function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+
 /** Hook name attribute values emitted by Claude Code hook handlers. */
 export const HOOK_NAME = {
   SESSION_START: 'session-start',
