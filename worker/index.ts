@@ -20,6 +20,9 @@ const Http = {
   InternalServerError: 500 as const,
 };
 
+const VALID_PERIOD_KEYS = ['24h', '7d', '30d'] as const;
+const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
+
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
 // Auth: uses service role key (Auth0 JWTs are not valid Supabase session tokens for RLS).
@@ -246,8 +249,8 @@ app.get('/api/dashboard', async (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const role = c.req.query('role');
   if (role && !['executive', 'operator', 'auditor'].includes(role)) {
@@ -269,8 +272,8 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
   const name = c.req.param('name');
   if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '50', 10) || 50, 1), 200);
   const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
@@ -317,8 +320,8 @@ app.get('/api/trends/:name', async (c) => {
   const name = c.req.param('name');
   if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const data = await c.env.DASHBOARD.get(`trend:${name}:${period}`, 'json');
   if (!data) return c.json({ metric: name, period, points: [], bucketCount: 0 });
@@ -350,8 +353,8 @@ app.get('/api/traces/:traceId', async (c) => {
 app.get('/api/correlations', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '30d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const data = await c.env.DASHBOARD.get(`correlations:${period}`, 'json');
   if (!data) return c.json({ correlations: [], metrics: [] });
@@ -361,8 +364,8 @@ app.get('/api/correlations', async (c) => {
 app.get('/api/degradation-signals', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   // Key matches DEGRADATION_KV_KEY in src/lib/quality/quality-constants.ts + period suffix
   const data = await c.env.DASHBOARD.get(`meta/dashboard/degradation-signals:${period}`, 'json');
@@ -373,8 +376,8 @@ app.get('/api/degradation-signals', async (c) => {
 app.get('/api/coverage', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const inputKey = c.req.query('inputKey') ?? 'traceId';
   if (!['traceId', 'sessionId'].includes(inputKey)) {
@@ -388,8 +391,8 @@ app.get('/api/coverage', async (c) => {
 app.get('/api/pipeline', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.pipeline.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const data = await c.env.DASHBOARD.get(`pipeline:${period}`, 'json');
   if (!data) return c.json({ period, stages: [], totalEvaluations: 0 });
@@ -444,8 +447,8 @@ app.get('/api/compliance/sla', async (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
@@ -462,8 +465,8 @@ app.get('/api/compliance/verifications', async (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   logActivity(session.appUserId ?? '', 'compliance_view', c.env);
   return c.json({ period, count: 0, verifications: [] });
@@ -479,8 +482,8 @@ app.get('/api/calibration', async (c) => {
 app.get('/api/routing-telemetry', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
-  if (!['24h', '7d', '30d'].includes(period)) {
-    return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, Http.BadRequest);
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const raw = await c.env.DASHBOARD.get(`routing-telemetry:${period}`, 'json');
   const result = routingTelemetryKvSchema.safeParse(raw ?? {});
