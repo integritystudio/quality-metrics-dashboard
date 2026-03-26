@@ -44,7 +44,6 @@ import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-m
 import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
 import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 
-// Helpers
 
 function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}) {
   return {

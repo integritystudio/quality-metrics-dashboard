@@ -15,7 +15,6 @@ const PUBLIC_FONTS_DIR = resolve(DASHBOARD_ROOT, 'public/fonts');
 const REQUIRED_FAMILIES = ['JetBrains Mono', 'IBM Plex Sans'] as const;
 const REQUIRED_WEIGHTS = [400, 500, 600] as const;
 
-// Font files expected per family (at minimum one file per weight variant)
 const EXPECTED_FONT_FILES: Record<string, string[]> = {
   'JetBrains Mono': [
     'JetBrainsMono-Regular.woff2',
@@ -29,7 +28,6 @@ const EXPECTED_FONT_FILES: Record<string, string[]> = {
   ],
 };
 
-// theme.css — external import removed
 
 describe('DR-L4: theme.css — no external Google Fonts import', () => {
   it('should not contain a fonts.googleapis.com @import', () => {
@@ -45,7 +43,6 @@ describe('DR-L4: theme.css — no external Google Fonts import', () => {
   });
 });
 
-// Local @font-face declarations
 
 describe('DR-L4: local @font-face declarations exist', () => {
   function getFontFaceSource(): string {
@@ -90,7 +87,6 @@ describe('DR-L4: local @font-face declarations exist', () => {
   });
 });
 
-// public/fonts/ — font files exist on disk
 
 describe('DR-L4: public/fonts/ directory and font files exist', () => {
   it('should have a public/fonts/ directory', () => {
