@@ -57,6 +57,9 @@ type Bindings = {
   // Service role key required for admin routes (bypasses RLS).
   // Set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
   SUPABASE_SERVICE_ROLE_KEY: string;
+  // Must be explicitly set to 'true' to enable the test-token bypass.
+  // Never set this in production wrangler.toml — leave absent.
+  ALLOW_TEST_BYPASS?: string;
 };
 
 type Variables = {
@@ -95,9 +98,9 @@ app.use('/api/*', async (c, next) => {
   const authHeader = c.req.header('Authorization');
   const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  // Test mode: bypass auth when Authorization header is exactly "Bearer test-token"
-  // Used in unit tests where Supabase auth can't be mocked easily.
-  if (jwt === 'test-token') {
+  // Test mode: bypass auth when ALLOW_TEST_BYPASS is explicitly enabled in the environment.
+  // Never set ALLOW_TEST_BYPASS in production — leave the binding absent.
+  if (c.env.ALLOW_TEST_BYPASS === 'true' && jwt === 'test-token') {
     c.set('session', {
       authUserId: 'a0000000-0000-4000-8000-000000000001',
       appUserId: 'a0000000-0000-4000-8000-000000000002',
@@ -133,8 +136,9 @@ app.use('/api/*', async (c, next) => {
       { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
     ).catch(() => null);
     if (!userRes?.ok) return c.json({ error: 'Unauthorized' }, 401);
-    const users = await userRes.json().catch(() => null) as Array<unknown> | null;
-    if (!Array.isArray(users) || !users[0]) return c.json({ error: 'Unauthorized' }, 401);
+    const rawUsers: unknown = await userRes.json().catch(() => null);
+    if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: 'Unauthorized' }, 401);
+    const users = rawUsers;
     const userResult = PublicUserSchema.safeParse(users[0]);
     if (!userResult.success) return c.json({ error: 'Unauthorized' }, 401);
     const appUserId = userResult.data.id;
@@ -148,7 +152,8 @@ app.use('/api/*', async (c, next) => {
       { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
     ).catch(() => null);
     if (rolesRes?.ok) {
-      const rows = await rolesRes.json().catch(() => []) as Array<unknown>;
+      const rawRows: unknown = await rolesRes.json().catch(() => []);
+      const rows = Array.isArray(rawRows) ? rawRows : [];
       for (const row of rows) {
         const rowResult = UserRoleRowSchema.safeParse(row);
         if (!rowResult.success || !rowResult.data.roles) continue;
@@ -168,8 +173,6 @@ app.use('/api/*', async (c, next) => {
 
     c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
     c.set('jwt', jwt);
-    // Log login activity (fire-and-forget, non-blocking)
-    logActivity(appUserId, 'login', c.env, jwt);
     return next();
   } finally {
     clearTimeout(timeout);
@@ -206,7 +209,10 @@ app.get('/api/me', (c) => {
   };
 
   const meResult = MeResponseSchema.safeParse(me);
-  if (!meResult.success) return c.json({ error: 'Internal server error' }, 500);
+  if (!meResult.success) {
+    console.error('[/api/me] MeResponseSchema validation failed:', meResult.error.issues);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
   return c.json(meResult.data);
 });
 
@@ -473,7 +479,10 @@ app.get('/api/routing-telemetry', async (c) => {
   }
   const raw = await c.env.DASHBOARD.get(`routing-telemetry:${period}`, 'json');
   const result = routingTelemetryKvSchema.safeParse(raw ?? {});
-  if (!result.success) return c.json({ error: 'Routing telemetry data is malformed' }, 500);
+  if (!result.success) {
+    console.error('[/api/routing-telemetry] schema validation failed:', result.error.issues);
+    return c.json({ error: 'Routing telemetry data is malformed' }, 500);
+  }
   return c.json({ ...result.data, period });
 });
 
@@ -505,8 +514,11 @@ app.get('/api/admin/users', async (c) => {
   ]);
 
   if (!usersRes.ok) return c.json({ error: 'Failed to fetch users' }, 500);
-  const rawUsers = await usersRes.json() as Array<unknown>;
-  const rawRoleRows = roleRowsRes.ok ? await roleRowsRes.json() as Array<unknown> : [];
+  if (!roleRowsRes.ok) return c.json({ error: 'Failed to fetch role assignments' }, 500);
+  const rawUsersJson: unknown = await usersRes.json().catch(() => null);
+  const rawUsers = Array.isArray(rawUsersJson) ? rawUsersJson : [];
+  const rawRoleRowsJson: unknown = await roleRowsRes.json().catch(() => []);
+  const rawRoleRows = Array.isArray(rawRoleRowsJson) ? rawRoleRowsJson : [];
 
   // Build userId → roles map
   const rolesByUser = new Map<string, { id: string; name: string }[]>();
@@ -540,7 +552,8 @@ app.get('/api/admin/roles', async (c) => {
   );
   if (!res.ok) return c.json({ error: 'Failed to fetch roles' }, 500);
 
-  const rows = await res.json() as Array<unknown>;
+  const rawJson: unknown = await res.json().catch(() => null);
+  const rows = Array.isArray(rawJson) ? rawJson : [];
   const roles = rows.flatMap((row) => {
     const parsed = AdminRoleSchema.safeParse(row);
     return parsed.success ? [parsed.data] : [];
