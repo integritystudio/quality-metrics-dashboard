@@ -15,7 +15,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
   }
 
   return (
-    <div className="d-flex gap-2 overflow-x-auto" style={{ padding: 'var(--space-2) 0' }}>
+    <div className="d-flex gap-2 overflow-x-auto py-2">
       {turns.map((turn) => {
         const agent = turn.agentName ?? 'unknown';
         const color = agentColor(agent, agentNames);
@@ -24,12 +24,10 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
         return (
           <div
             key={turn.turnIndex}
-            className="p-4 shrink-0"
+            className="p-4 shrink-0 turn-card"
             style={{
               minWidth: TURN_CARD_MIN_WIDTH,
-              borderRadius: 'var(--radius-lg)',
               border: `var(--border-width-thick) solid ${color}`,
-              background: 'var(--bg-elevated)',
             }}
           >
             <div className="flex-center mb-1-5 justify-between">

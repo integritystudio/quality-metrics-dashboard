@@ -372,6 +372,12 @@ body {
 .sla-table td { padding: var(--space-2) var(--space-3); }
 .sla-table .col-agent { width: 30%; }
 
+/* Turn timeline card — dynamic border color set via inline style; static layout via class */
+.turn-card {
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+}
+
 /* Histogram */
 .histogram {
   display: flex;
