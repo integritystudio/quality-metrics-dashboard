@@ -11,7 +11,9 @@ export const LATENCY_DISPLAY_PRECISION = 1;
 /** Decimal places for rate values (error rate, truncation rate, etc.) */
 export const RATE_DISPLAY_PRECISION = 4;
 
-/** OpenTelemetry status code representing an error. */
+/** OpenTelemetry status code representing an error.
+ * Intentionally duplicated in lib/constants.ts — api-constants.ts serves the Node API server
+ * which cannot import lib/constants.ts (Vite-specific import.meta.env). */
 export const OTEL_STATUS_ERROR_CODE = 2;
 
 /** Maximum number of file-access entries returned in session detail. */
