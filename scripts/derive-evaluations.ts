@@ -19,6 +19,7 @@ import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
+const SESSION_ID_PREVIEW_LEN = 8;
 
 export interface EvalRecord {
   timestamp: string;
@@ -212,7 +213,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         timestamp: hrtToISO(lastSpan.startTime),
         evaluationName: 'task_completion',
         scoreValue: parseFloat(avg.toFixed(4)),
-        explanation: `Session ${sessionId.slice(0, 8)}: ${data.tasks.size} tasks (${parts.join(', ')})`,
+        explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.tasks.size} tasks (${parts.join(', ')})`,
         evaluator: 'telemetry-rule-engine',
         evaluatorType: 'rule',
         traceId: lastSpan.traceId,
@@ -227,7 +228,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         timestamp: hrtToISO(lastSpan.startTime),
         evaluationName: 'task_completion',
         scoreValue: parseFloat(completionRatio.toFixed(4)),
-        explanation: `Session ${sessionId.slice(0, 8)}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
+        explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
         evaluator: 'telemetry-rule-engine',
         evaluatorType: 'rule',
         traceId: lastSpan.traceId,
@@ -281,7 +282,7 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
       timestamp: hrtToISO(lastSpan.startTime),
       evaluationName: 'task_completion',
       scoreValue: parseFloat(rate.toFixed(4)),
-      explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, 8)}`,
+      explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
       evaluator: 'telemetry-rule-engine',
       evaluatorType: 'rule',
       traceId: lastSpan.traceId,
@@ -331,7 +332,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       evaluationName: 'handoff_correctness',
       scoreValue: parseFloat(avgScore.toFixed(4)),
       scoreUnit: 'ratio_0_1',
-      explanation: `Session ${sessionId.slice(0, 8)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
+      explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
       evaluator: 'telemetry-rule-engine',
       evaluatorType: 'rule',
       traceId: lastSpan.traceId,
