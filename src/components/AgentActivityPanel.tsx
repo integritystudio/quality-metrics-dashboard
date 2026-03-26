@@ -128,8 +128,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
             return (
               <Fragment key={agent.agentName}>
                 <tr
-                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}`}
-                  style={{ cursor: hasLinks ? 'pointer' : undefined }}
+                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
                   onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
                 >
                   {/* Agent name with color accent */}
