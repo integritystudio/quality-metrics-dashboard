@@ -14,7 +14,7 @@ import {
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
 
 /** Fraction of data span added as padding on each side when auto-narrowing the time axis. */
 const TREND_PADDING_RATIO = 0.1;
@@ -35,6 +35,9 @@ export const trendRoutes = new Hono();
  */
 trendRoutes.get('/trends/:name', async (c) => {
   const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
   const config = getQualityMetric(name);
   if (!config) {
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
