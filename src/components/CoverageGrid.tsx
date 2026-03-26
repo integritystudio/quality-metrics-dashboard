@@ -40,9 +40,8 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   }
 
   // Limit displayed inputs to avoid huge grids
-  const maxInputs = COVERAGE_GRID_MAX_INPUTS;
-  const displayInputs = inputs.slice(0, maxInputs);
-  const truncated = inputs.length > maxInputs;
+  const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
+  const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
 
   return (
     <div role="region" aria-label="Evaluation coverage heatmap">
@@ -60,10 +59,14 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       <div className="mb-3 text-xs flex-wrap gap-4">
         {COVERAGE_STATUSES.map(status => (
           <div key={status} className="flex-center gap-1">
-            <div style={{
-              width: COVERAGE_GRID_LEGEND_SIZE, height: COVERAGE_GRID_LEGEND_SIZE, borderRadius: 'var(--radius-xs)',
-              background: STATUS_COLORS[status],
-            }} />
+            <div
+              className="coverage-legend-swatch"
+              style={{
+                width: COVERAGE_GRID_LEGEND_SIZE,
+                height: COVERAGE_GRID_LEGEND_SIZE,
+                background: STATUS_COLORS[status],
+              }}
+            />
             <span>{status}</span>
           </div>
         ))}
@@ -74,9 +77,8 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
         <div
           role="table"
           aria-label="Coverage matrix"
-          className="gap-half"
+          className="coverage-grid gap-half"
           style={{
-            display: 'grid',
             gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
           }}
         >
@@ -88,13 +90,8 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                 key={input}
                 role="columnheader"
                 title={input}
-                className="text-secondary text-2xs"
-                style={{
-                  writingMode: 'vertical-lr',
-                  textAlign: 'end',
-                  overflow: 'hidden',
-                  maxHeight: COVERAGE_GRID_HEADER_MAX_HEIGHT,
-                }}
+                className="text-secondary text-2xs coverage-header-cell"
+                style={{ maxHeight: COVERAGE_GRID_HEADER_MAX_HEIGHT }}
               >
                 {truncateId(input, 8)}
               </div>
@@ -125,16 +122,12 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
                     onMouseEnter={() => setHovered({ metric, input })}
                     onMouseLeave={() => setHovered(null)}
-                    className="mono text-2xs flex-center justify-center"
+                    className="mono text-2xs flex-center justify-center coverage-cell"
                     style={{
                       width: COVERAGE_GRID_CELL_SIZE,
                       height: COVERAGE_GRID_CELL_SIZE,
-                      borderRadius: 'var(--radius-bar)',
                       background: STATUS_COLORS[status],
                       opacity: isHovered ? 1 : 0.8,
-                      cursor: 'default',
-                      color: 'var(--text-on-accent)',
-                      transition: 'opacity var(--transition-fast)',
                     }}
                   >
                     {count > 0 ? count : ''}
@@ -148,7 +141,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
 
       {truncated && (
         <p className="text-secondary text-xs mt-2">
-          Showing {maxInputs} of {inputs.length} inputs.
+          Showing {COVERAGE_GRID_MAX_INPUTS} of {inputs.length} inputs.
         </p>
       )}
 
@@ -156,7 +149,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
       {gaps.length > 0 && (
         <div className="mt-4">
           <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
-          <ul className="m-0 text-xs" style={{ paddingLeft: 'var(--space-5)' }}>
+          <ul className="m-0 text-xs coverage-gap-list">
             {gaps.map(gap => (
               <li key={gap.metric} className="mb-1">
                 <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered

@@ -1369,3 +1369,23 @@ summary.section-rail {
   padding: var(--space-0-5) var(--space-1-5);
   border-radius: var(--radius-sm);
 }
+
+/* CoverageGrid */
+.coverage-grid { display: grid; }
+.coverage-header-cell {
+  writing-mode: vertical-lr;
+  text-align: end;
+  overflow: hidden;
+}
+.coverage-cell {
+  border-radius: var(--radius-bar);
+  cursor: default;
+  color: var(--text-on-accent);
+  transition: opacity var(--transition-fast);
+}
+.coverage-legend-swatch {
+  border-radius: var(--radius-xs);
+}
+.coverage-gap-list {
+  padding-left: var(--space-5);
+}
