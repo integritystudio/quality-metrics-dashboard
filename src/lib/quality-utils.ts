@@ -20,7 +20,6 @@ export interface LabelOrdinal {
 import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
 export type FeatureRoleType = Role;
 
-/** Maps an agent name to a color from the shared palette, based on its position in the agent list. */
 export function agentColor(agentName: string, agentNames: string[]): string {
   const idx = agentNames.indexOf(agentName);
   return AGENT_PALETTE[idx % AGENT_PALETTE.length];
@@ -65,8 +64,7 @@ export function plural(count: number, singular: string, suffix = 's'): string {
   return `${count} ${singular}${count !== 1 ? suffix : ''}`;
 }
 
-/** Descending comparator for `Object.entries()` result tuples sorted by numeric value. */
-export const byValueDesc = ([, a]: [string, number], [, b]: [string, number]): number => b - a;
+export const byValueDesc =([, a]: [string, number], [, b]: [string, number]): number => b - a;
 
 export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
   excellent: '#26d97f',
@@ -77,7 +75,6 @@ export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
   no_data: '#6b7280',
 };
 
-/** Shorthand: returns the hex color for a given score + direction. */
 export function scoreColor(value: number, direction?: ScoreDirection): string {
   return SCORE_COLORS[scoreColorBand(value, direction)];
 }
@@ -210,7 +207,6 @@ export function shortPath(fullPath: string): string {
   return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
 }
 
-/** Format a duration in milliseconds as a human-readable string (e.g. "42ms" or "1.5s"). */
 export function fmtDuration(ms: number, secDecimals = 1): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
 }
