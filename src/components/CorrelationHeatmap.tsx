@@ -54,19 +54,15 @@ function contrastText(pearsonR: number): string {
 
 const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
 
-function lookupCorrelation(
-  correlations: CorrelationFeature[],
-  a: string,
-  b: string,
-): CorrelationFeature | undefined {
-  return correlations.find(
-    (c) => (c.metricA === a && c.metricB === b) || (c.metricA === b && c.metricB === a),
-  );
+function corrKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
 export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
   const n = metrics.length;
   const cols = n + 1;
+
+  const corrMap = new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c]));
 
   return (
     <div
@@ -103,7 +99,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
 
           {metrics.map((colMetric, ci) => {
             const isDiag = ri === ci;
-            const corr = isDiag ? undefined : lookupCorrelation(correlations, rowMetric, colMetric);
+            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
             const value = isDiag ? 1 : corr?.pearsonR ?? 0;
             const isToxic = corr?.isKnownToxicCombo ?? false;
             const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
