@@ -91,8 +91,7 @@ trendRoutes.get('/trends/:name', async (c) => {
       });
     }
 
-    for (const { ev, ts } of evWithTs) {
-      if (!Number.isFinite(ts)) continue;
+    for (const { ev, ts } of validTs) {
       const bucketIdx = Math.min(
         Math.floor((ts - start.getTime()) / bucketMs),
         bucketCount - 1,
