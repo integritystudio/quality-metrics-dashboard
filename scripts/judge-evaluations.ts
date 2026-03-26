@@ -200,8 +200,6 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   return transcripts;
 }
 
-// Trace-Based Session Discovery (for --backfill)
-
 interface TraceSession {
   sessionId: string;
   traceId: string;
@@ -380,8 +378,6 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
   return turns;
 }
 
-// Anthropic LLM Provider
-
 async function createAnthropicProvider(): Promise<LLMProvider> {
   // Dynamic import to avoid requiring @anthropic-ai/sdk when using --seed
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
@@ -411,8 +407,6 @@ async function createAnthropicProvider(): Promise<LLMProvider> {
     },
   };
 }
-
-// Seed Mode (deterministic scores from turn content, no API calls)
 
 export function hashToScore(input: string, min: number, max: number): number {
   const hash = createHash('sha256').update(input).digest();
@@ -718,8 +712,6 @@ export async function evaluateTurn(
 
   return evals;
 }
-
-// OTel Serialization
 
 export function toOTelRecord(ev: EvalRecord): object {
   const attrs: Record<string, unknown> = {
