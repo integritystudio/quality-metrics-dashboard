@@ -27,10 +27,8 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
     const meResult = MeResponseSchema.safeParse(data);
     if (!meResult.success) return null;
     const me = meResult.data;
-    // authUserId/appUserId are set to '' because /api/me never returns internal IDs.
+    // authUserId/appUserId are omitted — /api/me never returns internal IDs.
     return {
-      authUserId: '',
-      appUserId: '',
       email: me.email,
       roles: me.roles,
       permissions: me.permissions,
