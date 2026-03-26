@@ -19,8 +19,7 @@ export function CoveragePage({ period }: { period: Period }) {
               value={inputKey}
               onChange={(e) => setInputKey(e.target.value as InputKey)}
               aria-label="Group by"
-              className="text-xs"
-              style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}
+              className="text-xs form-select"
             >
               <option value="traceId">By Trace</option>
               <option value="sessionId">By Session</option>

@@ -206,7 +206,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               total={errorCount}
               renderItem={(e, i) => (
                 <div key={i} className="mono-xs mb-1">
-                  <span style={{ color: 'var(--status-critical)' }}>✗</span>{' '}
+                  <span className="text-critical">✗</span>{' '}
                   {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
                   {e.errorType && e.errorType !== 'unknown' && <span className="text-muted"> — {e.errorType}</span>}
                 </div>

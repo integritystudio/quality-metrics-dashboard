@@ -83,7 +83,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
 
               <details open className="mt-3">
                 <summary className="cot-summary text-xs">Provenance &amp; Audit Trail</summary>
-                <div style={{ paddingTop: 'var(--space-2)' }}>
+                <div className="pt-2">
                   <ProvenancePanel
                     evaluationName={ev.evaluationName}
                     scoreValue={ev.scoreValue}
