@@ -1,3 +1,11 @@
+fd57a5c 2026-03-26 refactor(components): extract shared helpers, replace magic numbers, and consolidate CSS
+  src/theme.css
+
+eaa394b 2026-03-26 chore(docs): regenerate repomix snapshots and token tree
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 e676e88 2026-03-26 refactor(api): extract computePeriodDates helper and remove duplicate wrappers
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-docs.xml
@@ -332,10 +340,4 @@ d165340 2026-03-01 refactor(theme): replace hardcoded px values with space token
   src/theme.css
 
 5bf70ab 2026-03-01 refactor(theme): extract shared font-size to tooltip popup base rule (M4)
-  src/theme.css
-
-23e30f9 2026-03-01 refactor(theme): consolidate duplicate sla-table/eval-table th selectors (M3)
-  src/theme.css
-
-f1d36ee 2026-03-01 fix(theme): add info token rule for data-status attribute
   src/theme.css
