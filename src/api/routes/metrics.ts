@@ -12,7 +12,6 @@ import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
-/** Period hours used for dynamics computation: 1h buckets for 24h window, daily (24h) buckets for longer windows. */
 const DYNAMICS_PERIOD_HOURS_24H = 1;
 const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
 
