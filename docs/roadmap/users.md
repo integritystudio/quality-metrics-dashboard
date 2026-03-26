@@ -1,6 +1,6 @@
-## Status: Phase 1 + Phase 2 + Phase 3 Complete (v3.0.4–current)
+## Status: Phase 1 + Phase 2 + Phase 3 + Phase 4 (Partial) Complete (v3.0.4–current)
 
-As of 2026-03-20, **Phase 1, Phase 2, and Phase 3 are implemented**:
+As of 2026-03-25, **Phase 1, Phase 2, Phase 3, and Phase 4 (partial) are implemented**:
 
 ### Phase 1 (v3.0.4)
 - ✅ Supabase Auth for sign-in with JWT verification
@@ -726,16 +726,20 @@ All items resolved across 5 commits (27e7f2c through 398d6eb):
 - ✅ Replace public role selector with permission-driven view selector (**ce1cb6a**: gate RoleSelector tabs and /role routes on allowedViews)
 - ✅ Protect `/api/dashboard` with server-side `allowedViews` check (**34195c9**: close role gate bypass)
 - ✅ Clean up MeResponse imports (**3fddbb4**: remove dead MeResponse import)
-- ⏳ Add activity/session audit logging to `user_activity` table (deferred to Phase 4)
-- ⏳ Document admin role assignment workflows (deferred to Phase 4)
+- ✅ Add activity/session audit logging to `user_activity` table (completed in Phase 4)
+- ✅ Document admin role assignment workflows (completed in Phase 4)
 
-### Phase 4: Legacy Cleanup (Partial)
+### Phase 4: Legacy Cleanup & Hardening (Partial)
 - ✅ Add activity/session audit logging to `user_activity` table (**0a5cb35**, **c9ecaac**: fire-and-forget logActivity on dashboard_view, trace_view, session_view, compliance_view)
-- ✅ Add login/logout activity logging (**251b8d5**, **daef5a2**: POST /api/activity endpoint, AuthEvent type, SIGNED_IN/SIGNED_OUT hooks in AuthContext)
-- [ ] Align older users to `auth.users.id` if needed — **INVESTIGATION pending**
-- [ ] Rename `auth0_id` to neutral name like `identity_subject` — **INVESTIGATION pending**
+- ✅ Add login/logout activity logging (**251b8d5**, **daef5a2**, **0ef55ee**: POST /api/activity endpoint, POST /api/logout endpoint, AuthEvent type, SIGNED_IN/SIGNED_OUT hooks in AuthContext)
 - ✅ Add admin tooling for role/permission assignment (**d420e6c**, **c9a38dc**: GET/POST/DELETE /api/admin/* routes gated by dashboard.admin, AdminPage.tsx with user list + role assign/revoke, AdminGuard frontend permission check, service role key for RLS bypass)
-- [ ] Remove deprecated columns from `user_profiles` — **INVESTIGATION pending**
+- ✅ Document admin route error handling policy (**3c1273c**: ADMIN-P4-3)
+- ✅ Proactive auto-refresh timer in AuthContext (**5f60b82**: token refresh before expiry)
+- ✅ Extract Supabase REST client helpers to `supabase-rest.ts` (**88c7605**: AUTH-P4-1)
+- ✅ Make `authUserId`/`appUserId` optional in AppSession (**9e7bb4e**: AUTH-P3-3)
+- ✅ Align older users to `auth.users.id` — verified and resolved (2026-03-26): 2 orphaned `public.users` rows deleted, 7 `auth.users`-only accounts provisioned into `public.users`
+- ~~Rename `auth0_id` to neutral name~~ — **Permanently dropped**: Auth0 will remain the canonical identity provider for external/enterprise user support. `auth0_id` is the correct column name; it will hold Auth0 subject identifiers (`auth0|...`) once Auth0 becomes canonical. See [phase4-legacy-cleanup.md](phase4-legacy-cleanup.md).
+- ✅ Remove deprecated columns from `user_profiles` — `user_profiles.role` dropped (2026-03-26): zero non-null rows, no dependent views, RLS policies, or column-specific triggers
 
 ---
 

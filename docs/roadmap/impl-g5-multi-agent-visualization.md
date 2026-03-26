@@ -259,18 +259,18 @@ Data source: `TurnLevelResult[]` from `MultiAgentEvaluation.turns`, grouped by `
 
 ## Acceptance Criteria
 
-- [ ] Graph view renders agents as nodes and handoffs as directed edges
-- [ ] Each node shows: agent name, evaluation score, tool call count, token count, duration
-- [ ] Each edge shows: handoff score, context-preserved indicator
-- [ ] Cyclic workflows (agent loops, retries) render without layout errors
-- [ ] Timeline view shows parallel/sequential agent execution with swimlanes
-- [ ] Clicking a node navigates to agent-level metric detail
-- [ ] Single-agent sessions show simplified view (no graph, just timeline)
-- [ ] Span-inference fallback works when `MultiAgentEvaluation` is absent
-- [ ] Components render without errors on empty data
-- [ ] Minimap shown for graphs with 5+ nodes
-- [ ] Graph library lazy-loaded (no bundle size impact on other pages)
-- [ ] Graph container has `aria-label`; score indicators include text labels (not color-only)
+- [x] Graph view renders agents as nodes and handoffs as directed edges
+- [x] Each node shows: agent name, evaluation score, tool call count, token count, duration
+- [x] Each edge shows: handoff score, context-preserved indicator
+- [x] Cyclic workflows (agent loops, retries) render without layout errors
+- [x] Timeline view shows parallel/sequential agent execution with swimlanes
+- [x] Clicking a node navigates to agent-level metric detail
+- [x] Single-agent sessions show simplified view (no graph, just timeline)
+- [x] Span-inference fallback works when `MultiAgentEvaluation` is absent
+- [x] Components render without errors on empty data
+- [x] Minimap shown for graphs with 5+ nodes
+- [x] Graph library lazy-loaded (no bundle size impact on other pages)
+- [x] Graph container has `aria-label`; score indicators include text labels (not color-only)
 - [ ] Interactive nodes are keyboard-focusable and operable via Enter
 
 ---

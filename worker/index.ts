@@ -1,30 +1,27 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { DashboardPermission, AppSession, DashboardView } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
-import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
+import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
 import { routingTelemetryKvSchema } from '../src/lib/validation/dashboard-schemas.js';
-import { userAuthHeaders, supabasePost } from '../src/lib/supabase-rest.js';
+import { supabasePost } from '../src/lib/supabase-rest.js';
 
 export type { DashboardPermission, AppSession };
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
-// Auth: uses the user's JWT (not service-role). Requires RLS policy:
-//   create policy "users can insert own activity" on public.user_activity for insert
-//   to authenticated with check (user_id = auth.uid());
+// Auth: uses service role key (Auth0 JWTs are not valid Supabase session tokens for RLS).
 function logActivity(
   appUserId: string,
   activityType: UserActivityEvent,
-  env: { SUPABASE_URL: string; SUPABASE_ANON_KEY: string },
-  jwt: string,
+  env: { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string },
 ): void {
   supabasePost(
     `${env.SUPABASE_URL}/rest/v1/user_activity`,
     { user_id: appUserId, activity_type: activityType },
-    env,
-    jwt,
+    env.SUPABASE_SERVICE_ROLE_KEY,
   );
 }
 
@@ -53,10 +50,11 @@ type Bindings = {
   DASHBOARD: KVNamespace;
   ASSETS: Fetcher;
   SUPABASE_URL: string;
-  SUPABASE_ANON_KEY: string;
-  // Service role key required for admin routes (bypasses RLS).
+  // Service role key for all Supabase DB calls (Auth0 JWTs cannot satisfy Supabase RLS).
   // Set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
   SUPABASE_SERVICE_ROLE_KEY: string;
+  AUTH0_DOMAIN: string;    // e.g. "integritystudio.us.auth0.com"
+  AUTH0_AUDIENCE: string;  // e.g. "https://api.integritystudio.dev"
   // Must be explicitly set to 'true' to enable the test-token bypass.
   // Never set this in production wrangler.toml — leave absent.
   ALLOW_TEST_BYPASS?: string;
@@ -102,7 +100,7 @@ app.use('/api/*', async (c, next) => {
   // Never set ALLOW_TEST_BYPASS in production — leave the binding absent.
   if (c.env.ALLOW_TEST_BYPASS === 'true' && jwt === 'test-token') {
     c.set('session', {
-      authUserId: 'a0000000-0000-4000-8000-000000000001',
+      authUserId: 'auth0|test-user',
       appUserId: 'a0000000-0000-4000-8000-000000000002',
       email: 'test@example.com',
       roles: ['test'],
@@ -120,36 +118,43 @@ app.use('/api/*', async (c, next) => {
   const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
 
   try {
-    // Verify JWT via Supabase /auth/v1/user
-    const verifyRes = await fetch(`${c.env.SUPABASE_URL}/auth/v1/user`, {
-      headers: userAuthHeaders(c.env, jwt),
-      signal: controller.signal,
-    }).catch(() => null);
-    if (!verifyRes?.ok) return c.json({ error: 'Unauthorized' }, 401);
-    const authUserResult = AuthUserResponseSchema.safeParse(await verifyRes.json().catch(() => null));
-    if (!authUserResult.success) return c.json({ error: 'Unauthorized' }, 401);
-    const authUserId = authUserResult.data.id;
+    // Verify JWT via Auth0 JWKS (validates signature, expiry, issuer, audience)
+    const JWKS = createRemoteJWKSet(
+      new URL(`https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`),
+    );
+    let jwtPayload: Record<string, unknown>;
+    try {
+      const { payload } = await jwtVerify(jwt, JWKS, {
+        issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+        audience: c.env.AUTH0_AUDIENCE,
+      });
+      jwtPayload = payload as Record<string, unknown>;
+    } catch {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    const auth0Id = typeof jwtPayload['sub'] === 'string' ? jwtPayload['sub'] : null;
+    if (!auth0Id) return c.json({ error: 'Unauthorized' }, 401);
 
-    // Fetch public.users row — required; auth users with no app record are rejected with 401
+    // Fetch public.users row by auth0_id — required; users with no app record are rejected
     const userRes = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
-      { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
+      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&auth0_id=eq.${encodeURIComponent(auth0Id)}&limit=1`,
+      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
     ).catch(() => null);
     if (!userRes?.ok) return c.json({ error: 'Unauthorized' }, 401);
     const rawUsers: unknown = await userRes.json().catch(() => null);
     if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: 'Unauthorized' }, 401);
-    const users = rawUsers;
-    const userResult = PublicUserSchema.safeParse(users[0]);
+    const userResult = PublicUserSchema.safeParse(rawUsers[0]);
     if (!userResult.success) return c.json({ error: 'Unauthorized' }, 401);
     const appUserId = userResult.data.id;
     const email = userResult.data.email;
+    const authUserId = auth0Id;
 
     const roles: string[] = [];
     const permissionSet = new Set<DashboardPermission>();
     // Non-fatal — fetch failure leaves user with no permissions; routes will deny
     const rolesRes = await fetch(
       `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
-      { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
+      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
     ).catch(() => null);
     if (rolesRes?.ok) {
       const rawRows: unknown = await rolesRes.json().catch(() => []);
@@ -219,7 +224,7 @@ app.get('/api/me', (c) => {
 app.post('/api/logout', (c) => {
   const session = c.get('session');
   const jwt = c.get('jwt');
-  logActivity(session.appUserId ?? '', 'logout', c.env, jwt);
+  logActivity(session.appUserId ?? '', 'logout', c.env);
   return c.body(null, 204);
 });
 
@@ -227,7 +232,7 @@ app.post('/api/activity', async (c) => {
   const body: unknown = await c.req.json().catch(() => null);
   const result = ActivityRequestSchema.safeParse(body);
   if (!result.success) return c.json({ error: 'Invalid request body' }, 400);
-  logActivity(c.get('session').appUserId ?? '', result.data.activity_type as UserActivityEvent, c.env, c.get('jwt'));
+  logActivity(c.get('session').appUserId ?? '', result.data.activity_type as UserActivityEvent, c.env);
   return c.body(null, 204);
 });
 
@@ -250,7 +255,7 @@ app.get('/api/dashboard', async (c) => {
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await c.env.DASHBOARD.get(key, 'json');
   if (!data) return c.json({ error: 'No data available' }, 404);
-  logActivity(session.appUserId ?? '', 'dashboard_view', c.env, jwt);
+  logActivity(session.appUserId ?? '', 'dashboard_view', c.env);
   return c.json(data);
 });
 
@@ -323,7 +328,7 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
-  logActivity(session.appUserId ?? '', 'trace_view', c.env, jwt);
+  logActivity(session.appUserId ?? '', 'trace_view', c.env);
   return c.json(data);
 });
 
@@ -335,7 +340,7 @@ app.get('/api/traces/:traceId', async (c) => {
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, 404);
-  logActivity(session.appUserId ?? '', 'trace_view', c.env, jwt);
+  logActivity(session.appUserId ?? '', 'trace_view', c.env);
   return c.json(data);
 });
 
@@ -396,7 +401,7 @@ app.get('/api/sessions/:sessionId', async (c) => {
   if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, 400);
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, 404);
-  logActivity(session.appUserId ?? '', 'session_view', c.env, jwt);
+  logActivity(session.appUserId ?? '', 'session_view', c.env);
   return c.json(data);
 });
 
@@ -443,7 +448,7 @@ app.get('/api/compliance/sla', async (c) => {
   }
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
-  logActivity(session.appUserId ?? '', 'compliance_view', c.env, jwt);
+  logActivity(session.appUserId ?? '', 'compliance_view', c.env);
   const slaResults = (dashboard['slaCompliance'] as unknown[]) ?? [];
   return c.json({
     period,
@@ -460,7 +465,7 @@ app.get('/api/compliance/verifications', async (c) => {
   if (!['24h', '7d', '30d'].includes(period)) {
     return c.json({ error: 'Invalid period. Must be 24h, 7d, or 30d.' }, 400);
   }
-  logActivity(session.appUserId ?? '', 'compliance_view', c.env, jwt);
+  logActivity(session.appUserId ?? '', 'compliance_view', c.env);
   return c.json({ period, count: 0, verifications: [] });
 });
 

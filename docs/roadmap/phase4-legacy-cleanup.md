@@ -2,7 +2,7 @@
 
 Parent roadmap: [`docs/roadmap/users.md`](users.md) (Phase 4 open items at lines 735–738)
 
-Last updated: 2026-03-21
+Last updated: 2026-03-26
 
 ---
 
@@ -10,13 +10,12 @@ Last updated: 2026-03-21
 
 | Task | Type | Status |
 |------|------|--------|
-| Verify `public.users.id` = `auth.users.id` alignment | SQL (read-only) | [ ] Pending |
-| Rename `auth0_id` → `identity_subject` | DB migration | [ ] Pending |
-| Drop `user_profiles.role` column | DB migration | [ ] Pending |
+| Verify `public.users.id` = `auth.users.id` alignment | SQL (read-only) | ✅ Done (2026-03-26) |
+| Rename `auth0_id` → `identity_subject` | DB migration | ~~Permanently dropped~~ |
+| Drop `user_profiles.role` column | DB migration | ✅ Done (2026-03-26) |
 | AppSession code simplification (optional) | TypeScript | [ ] Optional |
 
-**Execution order**: verify ID alignment first → rename `auth0_id` → drop `user_profiles.role`.
-Do not run destructive steps before verification passes.
+> **Task 2 permanently dropped**: Auth0 will remain the canonical identity provider to support external/enterprise users (SSO, SAML/OIDC, org isolation, MFA enforcement). `auth0_id` is the correct column name — it will hold Auth0 subject identifiers (`auth0|...`) once Auth0 becomes canonical. The 7 users provisioned on 2026-03-26 currently have `auth0_id = public.users.id` (Supabase UUIDs as stand-ins); these will be updated when those users authenticate via Auth0 for the first time. The NOT NULL constraint on `auth0_id` is correct to retain.
 
 ---
 

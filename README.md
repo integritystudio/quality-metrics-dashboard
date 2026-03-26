@@ -2,7 +2,7 @@
 
 v3.0.4
 
-React 19 + Vite 6 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. **Auth: Supabase JWT-based sign-in with role-based access control.**
+React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. **Auth: Supabase JWT-based sign-in with role-based access control.**
 
 ## Quick Start
 
@@ -51,7 +51,10 @@ VITE_SUPABASE_ANON_KEY=eyJhbGc...
 ```
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=eyJhbGc...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...   # admin routes only — bypasses RLS
 ```
+
+> **Never set `ALLOW_TEST_BYPASS` in production.** This binding enables the `Bearer test-token` auth bypass used in worker unit tests (`makeEnv()` sets it to `'true'`). Leave the binding absent in wrangler.toml and production secrets.
 
 ## Populating Data
 
@@ -86,7 +89,10 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run sync` | KV sync only (`--budget=450` default, `--budget=5000` for bulk) |
 | `npm test` | Vitest |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run test:e2e` | Playwright E2E tests (mocked auth) |
+| `npm run test:e2e:integration` | Integration tests against deployed worker (requires Doppler) |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
+| `npm run deploy:secrets` | Sync Supabase secrets from Doppler to both workers |
 
 ## AlephAuto Integration
 
@@ -109,12 +115,16 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Su
 | Route | Auth | Description |
 |-------|------|-------------|
 | `GET /api/me` | ✓ | Current user session (`email`, `roles`, `permissions`, `allowedViews`) |
+| `POST /api/logout` | ✓ | Logout + activity logging |
+| `POST /api/activity` | ✓ | Log user activity event |
 | `GET /api/dashboard` | ✓ | Dashboard summary (`?period=7d&role=executive`) |
+| `GET /api/metrics/:name/evaluations` | ✓ | Metric evaluations (`?period=7d`) |
 | `GET /api/metrics/:name` | ✓ | Metric detail |
 | `GET /api/trends/:name` | ✓ | Metric trend data (`?period=7d`) |
 | `GET /api/evaluations/trace/:traceId` | ✓ | Evaluations for a trace |
 | `GET /api/traces/:traceId` | ✓ | Trace spans + evaluations |
 | `GET /api/correlations` | ✓ | Metric correlation matrix (`?period=30d`) |
+| `GET /api/degradation-signals` | ✓ | Quality degradation signals (`?period=7d`) |
 | `GET /api/coverage` | ✓ | Evaluation coverage heatmap (`?period=7d&inputKey=traceId`) |
 | `GET /api/pipeline` | ✓ | Populate pipeline status (`?period=7d`) |
 | `GET /api/sessions/:sessionId` | ✓ | Session detail |
@@ -123,76 +133,90 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Su
 | `GET /api/agents/:sessionId` | ✓ | Per-session agent activity |
 | `GET /api/compliance/sla` | ✓ | SLA compliance (`?period=7d`) |
 | `GET /api/compliance/verifications` | ✓ | Human verifications (`?period=7d`) |
+| `GET /api/calibration` | ✓ | Score calibration metadata |
+| `GET /api/routing-telemetry` | ✓ | Agent routing telemetry (`?period=7d`) |
+| `GET /api/admin/users` | admin | List users with roles |
+| `GET /api/admin/roles` | admin | List available roles |
+| `POST /api/admin/users/:userId/roles` | admin | Assign role to user |
+| `DELETE /api/admin/users/:userId/roles/:roleId` | admin | Remove role from user |
 | `GET /api/health` | ✗ | Health check + last sync timestamp |
 
-## Project Structure (126,820 tokens)
+## Project Structure (94,429 tokens)
 
 ```
-└── src/ (126,820 tokens)
-    ├── App.tsx (4,811 tokens)
-    ├── main.tsx (335 tokens)
-    ├── theme.css (11,825 tokens)
-    ├── types.ts (431 tokens)
-    ├── vite-env.d.ts (11 tokens)
-    ├── api/ (20,025 tokens)
-    │   ├── api-constants.ts (513 tokens)
-    │   ├── config.ts (72 tokens)
-    │   ├── data-loader.ts (2,517 tokens)
-    │   ├── server.ts (502 tokens)
-    │   └── routes/ (16,421 tokens)
-    │       ├── agents.ts (2,571 tokens)
-    │       ├── dashboard.ts (1,268 tokens)
-    │       ├── metrics.ts (2,070 tokens)
-    │       ├── sessions.ts (4,693 tokens)
-    │       ├── trends.ts (2,279 tokens)
-    ├── ... (7 more)
-    ├── components/ (44,126 tokens)
-    │   ├── AgentActivityPanel.tsx (3,985 tokens)
-    │   ├── CorrelationHeatmap.tsx (1,880 tokens)
-    │   ├── EvaluationTable.tsx (3,021 tokens)
-    │   ├── TrendChart.tsx (2,059 tokens)
-    │   ├── WorkflowGraph.tsx (2,484 tokens)
-    ├── ... (50 more)
-    │   └── views/ (1,683 tokens)
-    │       ├── AuditorView.tsx (418 tokens)
-    │       ├── ExecutiveView.tsx (732 tokens)
-    │       └── OperatorView.tsx (533 tokens)
-    ├── context/ (343 tokens)
-    │   └── CalibrationContext.tsx (343 tokens)
-    ├── contexts/ (3,574 tokens)
-    │   ├── AuthContext.tsx (1,203 tokens)
-    │   ├── KeyboardNavContext.tsx (1,751 tokens)
-    │   └── RoleContext.tsx (620 tokens)
-    ├── hooks/ (6,206 tokens)
-    │   ├── useAgentStats.ts (516 tokens)
-    │   ├── useApiQuery.ts (923 tokens)
-    │   ├── useMetricEvaluations.ts (384 tokens)
-    │   ├── useRoutingTelemetry.ts (381 tokens)
-    │   ├── useSessionDetail.ts (1,331 tokens)
-    ├── ... (11 more)
-    ├── lib/ (17,256 tokens)
-    │   ├── constants.ts (2,963 tokens)
-    │   ├── dashboard-file-utils.ts (1,617 tokens)
-    │   ├── quality-utils.ts (3,733 tokens)
-    │   ├── supabase.ts (2,097 tokens)
-    │   ├── workflow-graph.ts (2,105 tokens)
-    ├── ... (3 more)
-    │   └── validation/ (4,034 tokens)
-    │       ├── auth-schemas.ts (1,677 tokens)
-    │       └── dashboard-schemas.ts (2,357 tokens)
-    ├── pages/ (17,274 tokens)
-    │   ├── AdminPage.tsx (2,004 tokens)
-    │   ├── EvaluationDetailPage.tsx (1,304 tokens)
-    │   ├── RoutingTelemetryPage.tsx (1,899 tokens)
-    │   ├── SessionDetailPage.tsx (6,437 tokens)
-    │   ├── TraceDetailPage.tsx (803 tokens)
-    ├── ... (8 more)
-    ├── stubs/ (36 tokens)
-    │   └── web-worker.ts (36 tokens)
-    └── types/ (567 tokens)
-        ├── activity.ts (109 tokens)
-        ├── auth.ts (236 tokens)
-        └── workflow-graph.ts (222 tokens)
+└── src/ (94,429 tokens)
+    ├── App.tsx (3,796 tokens)
+    ├── main.tsx (253 tokens)
+    ├── theme.css (7,616 tokens)
+    ├── types.ts (321 tokens)
+    ├── api/ (14,474 tokens)
+    │   ├── api-constants.ts (210 tokens)
+    │   ├── config.ts (30 tokens)
+    │   ├── data-loader.ts (1,750 tokens)
+    │   ├── server.ts (406 tokens)
+    │   └── routes/ (12,078 tokens)
+    │       ├── agents.ts (1,909 tokens)
+    │       ├── compliance.ts (505 tokens)
+    │       ├── correlations.ts (334 tokens)
+    │       ├── coverage.ts (474 tokens)
+    │       ├── dashboard.ts (854 tokens)
+    │       ├── evaluations.ts (206 tokens)
+    │       ├── metrics.ts (1,594 tokens)
+    │       ├── pipeline.ts (292 tokens)
+    │       ├── quality.ts (439 tokens)
+    │       ├── sessions.ts (3,687 tokens)
+    │       ├── traces.ts (227 tokens)
+    │       └── trends.ts (1,557 tokens)
+    ├── components/ (35,514 tokens)
+    │   ├── AgentActivityPanel.tsx (3,003 tokens)
+    │   ├── AgentWorkflowView.tsx (634 tokens)
+    │   ├── CorrelationHeatmap.tsx (1,238 tokens)
+    │   ├── EvaluationTable.tsx (2,299 tokens)
+    │   ├── TrendChart.tsx (1,528 tokens)
+    │   ├── WorkflowGraph.tsx (1,845 tokens)
+    │   ├── WorkflowTimeline.tsx (2,016 tokens)
+    │   ├── ... (46 more)
+    │   └── views/ (1,337 tokens)
+    │       ├── AuditorView.tsx (327 tokens)
+    │       ├── ExecutiveView.tsx (589 tokens)
+    │       └── OperatorView.tsx (421 tokens)
+    ├── context/ (259 tokens)
+    │   └── CalibrationContext.tsx (259 tokens)
+    ├── contexts/ (2,496 tokens)
+    │   ├── AuthContext.tsx (839 tokens)
+    │   ├── KeyboardNavContext.tsx (1,221 tokens)
+    │   └── RoleContext.tsx (436 tokens)
+    ├── hooks/ (4,380 tokens)
+    │   ├── useAgentStats.ts (374 tokens)
+    │   ├── useApiQuery.ts (532 tokens)
+    │   ├── useRoutingTelemetry.ts (280 tokens)
+    │   ├── useSessionDetail.ts (898 tokens)
+    │   └── ... (12 more)
+    ├── lib/ (11,211 tokens)
+    │   ├── activity-logger.ts (160 tokens)
+    │   ├── constants.ts (1,626 tokens)
+    │   ├── dashboard-file-utils.ts (641 tokens)
+    │   ├── quality-utils.ts (2,807 tokens)
+    │   ├── supabase-rest.ts (192 tokens)
+    │   ├── supabase.ts (1,599 tokens)
+    │   ├── workflow-graph.ts (1,776 tokens)
+    │   └── validation/ (2,130 tokens)
+    │       ├── auth-schemas.ts (895 tokens)
+    │       └── dashboard-schemas.ts (1,235 tokens)
+    ├── pages/ (13,720 tokens)
+    │   ├── AdminPage.tsx (1,657 tokens)
+    │   ├── EvaluationDetailPage.tsx (969 tokens)
+    │   ├── RoutingTelemetryPage.tsx (1,458 tokens)
+    │   ├── SessionDetailPage.tsx (5,216 tokens)
+    │   ├── TraceDetailPage.tsx (641 tokens)
+    │   ├── WorkflowPage.tsx (355 tokens)
+    │   └── ... (7 more)
+    ├── stubs/ (13 tokens)
+    │   └── web-worker.ts (13 tokens)
+    └── types/ (376 tokens)
+        ├── activity.ts (74 tokens)
+        ├── auth.ts (140 tokens)
+        └── workflow-graph.ts (162 tokens)
 ```
 
 ## Production Deployment

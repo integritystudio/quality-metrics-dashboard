@@ -7,7 +7,7 @@
  * until the catch-all route is implemented.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
 
 const SPA_HTML = '<!DOCTYPE html><html><body>SPA</body></html>';
@@ -25,7 +25,29 @@ const mockKV = {
 };
 
 function makeEnv() {
-  return { DASHBOARD: mockKV, ASSETS: mockAssets };
+  return {
+    DASHBOARD: mockKV,
+    ASSETS: mockAssets,
+    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_ANON_KEY: 'test-anon-key',
+  };
+}
+
+// Minimal auth stub for API route tests — handles the 3 middleware fetch calls
+// so requests reach the route handler. Not needed for non-API (SPA) route tests.
+function stubAuthFetch(): void {
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (url.includes('/auth/v1/user')) {
+      return Promise.resolve(new Response(JSON.stringify({ id: 'a0000000-0000-4000-8000-000000000001', email: 'test@example.com' }), { status: 200 }));
+    }
+    if (url.includes('/rest/v1/users')) {
+      return Promise.resolve(new Response(JSON.stringify([{ id: 'a0000000-0000-4000-8000-000000000002', email: 'test@example.com' }]), { status: 200 }));
+    }
+    if (url.includes('/rest/v1/user_roles')) {
+      return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ['dashboard.admin'] } }]), { status: 200 }));
+    }
+    return Promise.resolve(new Response(null, { status: 200 }));
+  }));
 }
 
 beforeEach(() => {
@@ -37,6 +59,10 @@ beforeEach(() => {
     })
   );
   mockKV.get.mockResolvedValue(null);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -111,13 +137,15 @@ describe('API routes: unaffected by SPA fallback', () => {
     expect(body).toHaveProperty('status');
   });
 
-  it('GET /api/nonexistent returns 404', async () => {
-    const res = await app.request('/api/nonexistent', { headers: { Authorization: 'Bearer test-token' } }, makeEnv());
+  it('GET /api/nonexistent returns 404 for authenticated requests', async () => {
+    stubAuthFetch();
+    const res = await app.request('/api/nonexistent', { headers: { Authorization: 'Bearer mock-jwt' } }, makeEnv());
     expect(res.status).toBe(404);
   });
 
   it('GET /api (no trailing slash) returns 404, not SPA HTML', async () => {
-    const res = await app.request('/api', { headers: { Authorization: 'Bearer test-token' } }, makeEnv());
+    stubAuthFetch();
+    const res = await app.request('/api', { headers: { Authorization: 'Bearer mock-jwt' } }, makeEnv());
     expect(res.status).toBe(404);
     expect(mockAssets.fetch).not.toHaveBeenCalled();
   });

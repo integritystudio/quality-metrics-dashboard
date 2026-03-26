@@ -10,4 +10,5 @@ docs/repomix/docs-compressed.xml
 worker-configuration.d.ts
 playwright-report/
 test-results/
+e2e/integration/.integration-state.json
 tsconfig.tsbuildinfo

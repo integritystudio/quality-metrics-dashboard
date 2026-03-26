@@ -77,9 +77,7 @@ Open items from code reviews and deferred work.
 
 ### E2E & Integration Testing
 
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| E2E-1 | Create production-aligned integration tests that remove mocked APIs and run E2E tests with Doppler-injected credentials against real dev environment. Current E2E suite uses placeholder Supabase credentials + custom fixture that mocks `/api/me` endpoint (suitable for unit-like testing). Separate integration tests would validate API contracts and auth flow with real Supabase. | P3 | e2e-auth-setup session |
+**Status**: E2E-1 — Done. 23 integration tests in `e2e/integration/api-contracts.spec.ts` hitting deployed worker with real Supabase JWT. Setup creates ephemeral test user with `e2e-dashboard-reader` role; teardown cleans up. Run: `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration`
 
 ## Completed
 

@@ -2,25 +2,22 @@ import { z } from 'zod';
 import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
 
 /**
- * Supabase /auth/v1/user endpoint response
- * Required for JWT verification after bearer token is validated.
- * See: https://supabase.com/docs/reference/auth-api#get-user
+ * Auth0 JWT payload — result of jwtVerify() in the worker.
+ * The `sub` claim is the Auth0 subject identifier (e.g. "auth0|abc123").
  */
-export const AuthUserResponseSchema = z.object({
-  id: z.string().uuid(),
+export const Auth0JwtPayloadSchema = z.object({
+  sub: z.string(),
   email: z.email().optional(),
-  email_confirmed_at: z.iso.datetime().optional().nullable(),
-  user_metadata: z.record(z.string(), z.unknown()).optional(),
-  app_metadata: z.record(z.string(), z.unknown()).optional(),
-  identities: z.array(z.unknown()).optional(),
-  created_at: z.iso.datetime().optional(),
-  updated_at: z.iso.datetime().optional(),
-  last_sign_in_at: z.iso.datetime().optional().nullable(),
-  phone: z.string().optional().nullable(),
-  confirmed_at: z.iso.datetime().optional().nullable(),
+  email_verified: z.boolean().optional(),
+  name: z.string().optional(),
+  picture: z.string().optional(),
+  iss: z.string(),
+  aud: z.union([z.string(), z.array(z.string())]),
+  iat: z.number(),
+  exp: z.number(),
 });
 
-export type AuthUserResponse = z.infer<typeof AuthUserResponseSchema>;
+export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
 
 /**
  * public.users table row — app-level user record linked to auth.users
@@ -45,52 +42,6 @@ export const UserRoleRowSchema = z.object({
 });
 
 export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
-
-/**
- * Supabase sign-in/sign-up response
- * From: AuthContext.tsx signIn() / signUp() via supabase.auth.signInWithPassword, etc.
- */
-export const AuthTokenResponseSchema = z.object({
-  session: z.object({
-    access_token: z.string(),
-    refresh_token: z.string().optional(),
-    user: z.object({
-      id: z.string().uuid(),
-      email: z.email().optional(),
-      user_metadata: z.record(z.string(), z.unknown()).optional(),
-    }).optional(),
-  }).nullable().optional(),
-  user: z.object({
-    id: z.string().uuid(),
-    email: z.email().optional(),
-    user_metadata: z.record(z.string(), z.unknown()).optional(),
-  }).optional(),
-  error: z.string().optional(),
-  error_description: z.string().optional(),
-});
-
-export type AuthTokenResponse = z.infer<typeof AuthTokenResponseSchema>;
-
-/**
- * Frontend login/signin request payload
- * Sent to Supabase /auth/v1/token endpoint
- */
-export const LoginRequestSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1, 'Password is required'),
-});
-
-export type LoginRequest = z.infer<typeof LoginRequestSchema>;
-
-/**
- * Refresh token request payload
- * Sent to Supabase /auth/v1/token endpoint with grant_type=refresh_token
- */
-export const RefreshTokenRequestSchema = z.object({
-  refresh_token: z.string().min(1, 'Refresh token is required'),
-});
-
-export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
 
 /**
  * POST /api/activity request body — frontend-initiated audit events

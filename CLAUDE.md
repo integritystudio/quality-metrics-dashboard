@@ -1,6 +1,6 @@
 # Quality Metrics Dashboard
 
-React 19 + Vite 6 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Supabase JWT-based sign-in with role-based access control.
+React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Supabase JWT-based sign-in with role-based access control.
 
 ## Commands
 
@@ -15,7 +15,7 @@ npm run deploy:worker        # Deploy Cloudflare Worker
 
 ## Architecture
 
-- **Frontend**: `src/` — React 19 + Vite 6, React Router, Supabase Auth
+- **Frontend**: `src/` — React 19 + Vite 8, React Router, Supabase Auth
 - **API server**: `src/api/` — Hono server on :3001, reads from Cloudflare KV via worker
 - **Worker**: `worker/index.ts` — JWT verification (Supabase), KV read-through cache, protected `/api/*` routes
 - **Auth**: Supabase JWT + role-based permissions from `user_roles -> roles.permissions`

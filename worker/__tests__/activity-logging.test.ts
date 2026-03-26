@@ -53,8 +53,8 @@ function mockAuthSequence(fetchMock: ReturnType<typeof vi.fn>, options?: { rejec
         new Response(JSON.stringify({ id: MOCK_AUTH_USER_ID, email: 'user@test.com' }), { status: 200 })
       );
     }
-    // Get app users (by auth ID)
-    if (url.includes('/rest/v1/users') && url.includes('auth_id')) {
+    // Get app user by auth ID — has limit=1 to distinguish from admin's order=created_at query
+    if (url.includes('/rest/v1/users') && url.includes('limit=1')) {
       return Promise.resolve(
         new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'user@test.com' }]), { status: 200 })
       );
