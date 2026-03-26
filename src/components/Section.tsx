@@ -31,14 +31,13 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
     : 'var(--border-accent)';
 
   return (
-    <details open={defaultOpen} className="mb-1">
+    <details open={defaultOpen} className="mb-1" style={{ '--section-rail-color': railColor } as CSSProperties}>
       <summary
         className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail"
         style={{
-          '--section-rail-color': railColor,
           padding: 'var(--space-3) var(--space-5)',
           transition: 'background var(--transition-fast)',
-        } as CSSProperties}
+        }}
       >
         <span className="mono text-2xs d-inline-block" style={{
           color: railColor,
@@ -51,10 +50,7 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
       </summary>
       <div
         className="border-b-subtle section-rail"
-        style={{
-          '--section-rail-color': railColor,
-          padding: 'var(--space-4) var(--space-5) var(--space-5)',
-        } as CSSProperties}
+        style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)' }}
       >
         {children}
       </div>

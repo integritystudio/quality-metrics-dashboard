@@ -15,14 +15,8 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
 
   for (const m of dashboard.metrics) {
     totalSamples += m.sampleCount;
-  }
-
-  // Find most recent evaluation timestamp from worst explanations
-  for (const m of dashboard.metrics) {
     const worst = (m as QualityDashboardSummary['metrics'][number] & { worstExplanation?: { timestamp?: string } }).worstExplanation;
-    if (worst?.timestamp) {
-      if (!latestTs || worst.timestamp > latestTs) latestTs = worst.timestamp;
-    }
+    if (worst?.timestamp && (!latestTs || worst.timestamp > latestTs)) latestTs = worst.timestamp;
   }
 
   const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
@@ -43,7 +37,6 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
 }
 
 function formatVolume(n: number): string {
-  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
 }

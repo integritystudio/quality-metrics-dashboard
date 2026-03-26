@@ -1,13 +1,8 @@
-import { scoreColor } from '../lib/quality-utils.js';
-import { AGENT_PALETTE, TURN_CARD_MIN_WIDTH } from '../lib/constants.js';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { TURN_CARD_MIN_WIDTH } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult } from '../types.js';
-
-function agentColor(agentName: string, agentNames: string[]): string {
-  const idx = agentNames.indexOf(agentName);
-  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
-}
 
 interface TurnTimelineProps {
   turns: TurnLevelResult[];

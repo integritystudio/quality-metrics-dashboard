@@ -1031,6 +1031,9 @@ details[open] > .cot-summary::before {
   transition: transform var(--transition-fast);
   line-height: 1;
 }
+.expand-chevron--open {
+  transform: rotate(90deg);
+}
 
 /* Status colors */
 .text-healthy  { color: var(--status-healthy); }

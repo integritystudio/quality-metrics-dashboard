@@ -331,7 +331,8 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
   const totalInvocations = agents.reduce((s, a) => s + a.invocations, 0);
   const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
   const totalRateLimits = agents.reduce((s, a) => s + a.rateLimitCount, 0);
-  const overallErrorRate = totalInvocations > 0 ? (totalErrors / totalInvocations) * 100 : 0;
+  const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
+  const overallErrorRate = rawErrorRate * 100;
 
   return (
     <div className="d-flex flex-wrap gap-8 surface-elevated mb-5" style={{
@@ -343,11 +344,7 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
         {
           label: 'Error Rate',
           value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
-          color: overallErrorRate === 0
-            ? 'var(--status-healthy)'
-            : overallErrorRate < ERROR_RATE_WARNING_THRESHOLD * 100
-              ? 'var(--status-warning)'
-              : 'var(--status-critical)',
+          color: errorRateColor(rawErrorRate),
         },
         {
           label: 'Rate Limits',

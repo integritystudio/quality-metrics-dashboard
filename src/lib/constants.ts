@@ -109,6 +109,7 @@ export const DEFAULT_TOP_N = 5;
 export const DEFAULT_BUCKET_COUNT = 10;
 
 /** Page UI values */
+export const METRIC_CARD_SKELETON_HEIGHT = 180;
 export const SKELETON_HEIGHT_SM = 200;
 export const SKELETON_HEIGHT_MD = 300;
 export const SKELETON_HEIGHT_LG = 400;

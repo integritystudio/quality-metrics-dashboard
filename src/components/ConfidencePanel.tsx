@@ -86,38 +86,44 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
         )}
       </div>
 
-      {hasMultiJudge && (
-        <div>
-          <div className="uppercase text-xs text-muted mb-1-5">Judge Panel</div>
-          <div className="agreement-grid">
-            <span className="ag-header">Evaluator</span>
-            <span className="ag-header">Score</span>
-            <span className="ag-header">Label</span>
-            {evaluatorScores!.map((es) => (
-              <div key={es.evaluator} className="contents">
-                <span className="mono-xs">{es.evaluator}</span>
-                <span className="mono-xs">{formatScore(es.score)}</span>
-                <span className="text-secondary text-xs">{es.label ?? '-'}</span>
-              </div>
-            ))}
-          </div>
+      {evaluatorScores && evaluatorScores.length > 1 && (() => {
+        const scores = evaluatorScores;
+        const scoreValues = scores.map(s => s.score);
+        const minScore = Math.min(...scoreValues);
+        const maxScore = Math.max(...scoreValues);
+        return (
+          <div>
+            <div className="uppercase text-xs text-muted mb-1-5">Judge Panel</div>
+            <div className="agreement-grid">
+              <span className="ag-header">Evaluator</span>
+              <span className="ag-header">Score</span>
+              <span className="ag-header">Label</span>
+              {scores.map((es) => (
+                <div key={es.evaluator} className="contents">
+                  <span className="mono-xs">{es.evaluator}</span>
+                  <span className="mono-xs">{formatScore(es.score)}</span>
+                  <span className="text-secondary text-xs">{es.label ?? '-'}</span>
+                </div>
+              ))}
+            </div>
 
-          <div className="agreement-summary">
-            <div>
-              Agreement: <span className="summary-value">
-                {evaluatorScores!.every(s => s.label === evaluatorScores![0].label) ? '100%' : 'partial'}
-              </span>
-              {' '}({evaluatorScores!.filter(s => s.label === evaluatorScores![0].label).length}/{evaluatorScores!.length} same label)
-            </div>
-            <div>
-              Score Range: <span className="summary-value">
-                {Math.min(...evaluatorScores!.map(s => s.score)).toFixed(2)} &ndash; {Math.max(...evaluatorScores!.map(s => s.score)).toFixed(2)}
-              </span>
-              {' '}(spread: {(Math.max(...evaluatorScores!.map(s => s.score)) - Math.min(...evaluatorScores!.map(s => s.score))).toFixed(3)})
+            <div className="agreement-summary">
+              <div>
+                Agreement: <span className="summary-value">
+                  {scores.every(s => s.label === scores[0].label) ? '100%' : 'partial'}
+                </span>
+                {' '}({scores.filter(s => s.label === scores[0].label).length}/{scores.length} same label)
+              </div>
+              <div>
+                Score Range: <span className="summary-value">
+                  {minScore.toFixed(2)} &ndash; {maxScore.toFixed(2)}
+                </span>
+                {' '}(spread: {(maxScore - minScore).toFixed(3)})
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

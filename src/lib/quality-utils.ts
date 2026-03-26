@@ -19,7 +19,14 @@ export interface LabelOrdinal {
 }
 
 import type { Role } from './constants.js';
+import { AGENT_PALETTE } from './constants.js';
 export type FeatureRoleType = Role;
+
+/** Maps an agent name to a color from the shared palette, based on its position in the agent list. */
+export function agentColor(agentName: string, agentNames: string[]): string {
+  const idx = agentNames.indexOf(agentName);
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+}
 
 export interface RoleFeatureConfig {
   showCQI: boolean;

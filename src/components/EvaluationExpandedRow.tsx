@@ -94,7 +94,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
 
       {/* back-link inline — uses mb-0 to reset default margin */}
       {(row.traceId || row.sessionId) && (
-        <div className="d-flex gap-4 mt-3 border-t" style={{ paddingTop: 12 }}>
+        <div className="d-flex gap-4 mt-3 border-t" style={{ paddingTop: 'var(--space-3)' }}>
           {row.traceId && (
             <Link href={routes.evaluationDetail(row.traceId)} className="back-link inline-flex-center mb-0">
               View full evaluation detail &rarr;

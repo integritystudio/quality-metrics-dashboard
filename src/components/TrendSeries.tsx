@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { format, differenceInMilliseconds } from 'date-fns';
 import type { TrendBucket } from '../hooks/useTrend.js';
-import { CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
 import { formatScore } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -65,7 +65,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
 
   return (
     <div role="img" aria-label={`Time series trend for ${metricName}`}>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <ComposedChart data={chartData} margin={CHART_MARGIN}>
           <CartesianGrid {...CHART_GRID_PROPS} />
           <XAxis

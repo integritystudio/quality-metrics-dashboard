@@ -30,9 +30,12 @@ const MINIMAP_THRESHOLD = 5;
  */
 const MAX_ELK_NODES = 50;
 
+const WORKFLOW_SCORE_HIGH_MIN = 0.7;
+const WORKFLOW_SCORE_MID_MIN = 0.4;
+
 const SCORE_BANDS = {
-  HIGH: { min: 0.7, label: 'Good', bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
-  MID: { min: 0.4, label: 'Fair', bg: '#fef9c3', border: '#ca8a04', text: '#a16207' },
+  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: 'Good', bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
+  MID: { min: WORKFLOW_SCORE_MID_MIN, label: 'Fair', bg: '#fef9c3', border: '#ca8a04', text: '#a16207' },
   LOW: { min: 0, label: 'Poor', bg: '#fee2e2', border: '#dc2626', text: '#b91c1c' },
 } as const;
 

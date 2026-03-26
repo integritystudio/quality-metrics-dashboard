@@ -1,5 +1,4 @@
-import { AGENT_PALETTE } from '../lib/constants.js';
-import { scoreColor } from '../lib/quality-utils.js';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
 
@@ -25,11 +24,6 @@ const MAX_VISIBLE_TURNS = 200;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function agentColor(agentName: string, agentNames: string[]): string {
-  const idx = agentNames.indexOf(agentName);
-  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
-}
 
 interface LaneSegment {
   agentName: string;

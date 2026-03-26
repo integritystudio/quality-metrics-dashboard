@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { QualityMetricResult } from '../types.js';
 import { MetricCard } from './MetricCard.js';
+import { METRIC_CARD_SKELETON_HEIGHT } from '../lib/constants.js';
 
 export function MetricGrid({ metrics, sparklines, children }: {
   metrics?: QualityMetricResult[];
@@ -20,7 +21,7 @@ export function MetricGridSkeleton() {
   return (
     <div className="metric-grid">
       {Array.from({ length: 7 }, (_, i) => (
-        <div key={i} className="card skeleton" style={{ height: 180 }} />
+        <div key={i} className="card skeleton" style={{ height: METRIC_CARD_SKELETON_HEIGHT }} />
       ))}
     </div>
   );
