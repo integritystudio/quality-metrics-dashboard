@@ -141,10 +141,7 @@ export function TrendChart({
         </ResponsiveContainer>
       </div>
       {dynamics && (
-        <div className="flex-wrap text-xs gap-6 mt-2" style={{
-          padding: 'var(--space-2) 0',
-          color: CHART_COLORS.text,
-        }}>
+        <div className="flex-wrap text-xs gap-6 mt-2 py-2" style={{ color: CHART_COLORS.text }}>
           <div>
             <span className="font-semibold">Velocity:</span>{' '}
             <span className="mono">

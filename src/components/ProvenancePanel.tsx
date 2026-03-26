@@ -101,7 +101,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
         ) : null)}
       </div>
       {evaluatorTypeCounts && (
-        <div className="flex-wrap gap-1-5" style={{ margin: 'var(--space-2) 0' }}>
+        <div className="flex-wrap gap-1-5 my-2">
           {(Object.entries(evaluatorTypeCounts) as Array<[keyof EvaluatorTypeCounts, number]>)
             .filter(([, count]) => count > 0)
             .map(([type, count]) => (

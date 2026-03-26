@@ -14,7 +14,7 @@ export function EmptyState({ message, title, description, showSyncHint }: EmptyS
         {title && <h2>{title}</h2>}
         {description && <p>{description}</p>}
         {showSyncHint && (
-          <p className="text-muted text-xs" style={{ marginTop: 'var(--space-2)' }}>
+          <p className="text-muted text-xs mt-2">
             Data may not have been synced yet. Try again after the next sync cycle.
           </p>
         )}

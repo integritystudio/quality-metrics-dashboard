@@ -322,9 +322,7 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
   const overallErrorRate = rawErrorRate * 100;
 
   return (
-    <div className="d-flex flex-wrap gap-8 surface-elevated mb-5" style={{
-      padding: 'var(--space-4) var(--space-5)',
-    }}>
+    <div className="d-flex flex-wrap gap-8 surface-elevated mb-5 p-4-5">
       {[
         { label: 'Agents', value: agents.length },
         { label: 'Invocations', value: totalInvocations.toLocaleString() },
