@@ -143,6 +143,12 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   color: 'var(--accent-hover)',
                 }}>RESUMED ×{si.resumeCount}</span>
               )}
+              {agentActivity.length > 1 && (
+                <span className="mono text-2xs chip uppercase" style={{
+                  background: 'var(--status-healthy-muted, rgba(34,197,94,0.12))',
+                  color: 'var(--status-healthy)',
+                }}>MULTI-AGENT ×{agentActivity.length}</span>
+              )}
               {models.map(m => (
                 <span key={m} className="mono text-2xs text-muted chip chip-badge">{m}</span>
               ))}
