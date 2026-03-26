@@ -3,10 +3,6 @@ import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const LANE_HEIGHT = 64;
 const LANE_PADDING_TOP = 12;
 const TURN_BLOCK_HEIGHT = 32;
@@ -23,10 +19,6 @@ const HEADER_HEIGHT = 28;
  * Excess turns are hidden with a truncation notice below the timeline.
  */
 const MAX_VISIBLE_TURNS = 200;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 interface LaneSegment {
   agentName: string;
@@ -60,10 +52,6 @@ function findHandoffTurnIndex(
   }
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 interface TurnBlockProps {
   turn: TurnLevelResult;
@@ -117,10 +105,6 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
     </g>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export interface WorkflowTimelineProps {
   turns: TurnLevelResult[];
