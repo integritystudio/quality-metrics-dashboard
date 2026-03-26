@@ -2,7 +2,7 @@
 
 **Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
 **Date**: 2026-03-26
-**Status**: Code + tenant setup complete (2026-03-26). Worker secret provisioning and deployment remain.
+**Status**: Code complete (commits `6a53313`, `37f71c0`, 2026-03-26). Worker secret provisioning and deployment remain.
 **Parent**: [`docs/roadmap/users.md`](users.md) (Phase 4 — Auth0 canonical decision)
 
 ---
@@ -38,7 +38,7 @@ Supabase Auth (JWT verification via `/auth/v1/user`) has been replaced with Auth
 | Tests: update worker auth mocks | `worker/__tests__/` | ✅ Done (2026-03-26) |
 | DB: fix permissions mismatch (`dashboard.*` format) | Supabase `public.roles` | ✅ Done (2026-03-26) |
 
-**Remaining**: provision worker secrets → deploy both workers → smoke test → delete `src/lib/supabase.ts`.
+**Remaining**: deploy both workers → smoke test → delete `src/lib/supabase.ts`.
 
 ---
 
@@ -558,7 +558,6 @@ Permissions are now stored in the DB as the source of truth and the Post-Login A
 - ✅ Tests: worker auth mocks updated, `auth-context-refresh` rewritten (section 8)
 - ✅ Auth0 tenant setup + Post-Login Action (section 1–2) — deployed via `.auth0_cli` / `a0deploy` (2026-03-26)
 - ✅ Set frontend `.env`: generated from Doppler via `.auth0_cli` (2026-03-26)
-- [ ] Provision worker secrets: `wrangler secret put SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY` for both workers
 - [ ] Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`)
 - [ ] Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging
 - [ ] Monitor Supabase logs for auth errors for 48h

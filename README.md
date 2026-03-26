@@ -2,7 +2,7 @@
 
 v3.0.4
 
-React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. **Auth: Supabase JWT-based sign-in with role-based access control.**
+React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. **Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.**
 
 ## Quick Start
 
@@ -13,14 +13,15 @@ npm run dev          # Vite + Hono API on :3001
 
 ## Authentication
 
-The dashboard uses **Supabase Auth** for sign-in and **JWT verification** on the worker.
+The dashboard uses **Auth0 Universal Login** for sign-in and **JWKS JWT verification** on the worker. Supabase remains the application database.
 
-- **Login**: `/login` page with email/password sign-in
-- **Session storage**: Browser localStorage (JWT + refresh token)
+- **Login**: Auth0 Universal Login redirect from `/login` (PKCE flow)
+- **Token management**: Auth0 React SDK (`@auth0/auth0-react`) — silent refresh via `getAccessTokenSilently`
 - **Token injection**: All data hooks include `Authorization: Bearer <token>` header
-- **Worker verification**: JWT verified via Supabase `/auth/v1/user` endpoint with Zod schema validation
+- **Worker verification**: JWT verified via Auth0 JWKS (`jose` — `createRemoteJWKSet` + `jwtVerify`), no Supabase Auth dependency
+- **User lookup**: Worker looks up `public.users` by `auth0_id` using Supabase service role key
 - **Validation**: Request/response types validated using Zod schemas (`src/lib/validation/auth-schemas.ts`)
-- **Permissions**: Loaded from `user_roles -> roles.permissions` (database-driven RBAC)
+- **Permissions**: Loaded from `user_roles -> roles.permissions` (database-driven RBAC); enriched into JWT via Auth0 Post-Login Action
 
 ### Permissions
 
@@ -41,17 +42,22 @@ dashboard.admin                # Admin access (bypasses all checks)
 
 ### Environment Variables
 
-**Frontend (.env or .env.local):**
+**Frontend (`.env` — generated from Doppler by running `zsh .auth0_cli`):**
 ```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGc...
+VITE_AUTH0_DOMAIN=dev-68gg87ow4mg4kzyo.us.auth0.com
+VITE_AUTH0_CLIENT_ID=CNfd6xPPr2aLmvNyiearhmaLknAYvtnq
+VITE_AUTH0_AUDIENCE=https://api.integritystudio.dev
 ```
 
-**Worker (wrangler.toml secrets):**
+**Worker (wrangler.toml vars + secrets):**
 ```
+# wrangler.toml [vars]:
+AUTH0_DOMAIN=dev-68gg87ow4mg4kzyo.us.auth0.com
+AUTH0_AUDIENCE=https://api.integritystudio.dev
+
+# secrets (wrangler secret put):
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=eyJhbGc...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...   # admin routes only — bypasses RLS
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...   # all DB access — Auth0 JWTs not valid for RLS
 ```
 
 > **Never set `ALLOW_TEST_BYPASS` in production.** This binding enables the `Bearer test-token` auth bypass used in worker unit tests (`makeEnv()` sets it to `'true'`). Leave the binding absent in wrangler.toml and production secrets.
@@ -92,7 +98,7 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run test:e2e` | Playwright E2E tests (mocked auth) |
 | `npm run test:e2e:integration` | Integration tests against deployed worker (requires Doppler) |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
-| `npm run deploy:secrets` | Sync Supabase secrets from Doppler to both workers |
+| `npm run deploy:secrets` | Sync secrets from Doppler to both workers |
 
 ## AlephAuto Integration
 
@@ -110,7 +116,7 @@ See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
 
 ## API Routes (Worker)
 
-All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Supabase access token).
+All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Auth0 access token).
 
 | Route | Auth | Description |
 |-------|------|-------------|
