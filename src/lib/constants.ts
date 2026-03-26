@@ -112,44 +112,25 @@ export const DEFAULT_TOP_N = 5;
 export const DEFAULT_BUCKET_COUNT = 10;
 
 /** Page UI values */
-export const METRIC_CARD_SKELETON_HEIGHT = 180;
 export const SKELETON_HEIGHT_SM = 200;
 export const SKELETON_HEIGHT_MD = 300;
 export const SKELETON_HEIGHT_LG = 400;
-export const SKELETON_HEIGHT_XL = 600;
-export const ICON_BADGE_SIZE = 24;
 export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
-export const AGENT_CARD_MIN_WIDTH = '220px';
-export const FILE_ACCESS_COL_MIN = '320px';
 export const DEFAULT_PAGE_LIMIT = 50;
 
 // ─── Component layout constants ───────────────────────────────────────────────
-/** CorrelationHeatmap row-header column width, column-header row height, and cell min-height (px). */
+/** CorrelationHeatmap row-header column width and column-header row height (px). */
 export const HEATMAP_ROW_HEADER_WIDTH = 80;
 export const HEATMAP_COL_HEADER_HEIGHT = 32;
-export const HEATMAP_CELL_MIN_HEIGHT = 36;
 /** CoverageGrid layout dimensions (px) and max displayed input columns. */
 export const COVERAGE_GRID_HEADER_WIDTH = 120;
 export const COVERAGE_GRID_CELL_SIZE = 28;
-export const COVERAGE_GRID_LEGEND_SIZE = 12;
 export const COVERAGE_GRID_MAX_INPUTS = 30;
-export const COVERAGE_GRID_HEADER_MAX_HEIGHT = 60;
-/** PipelineFunnel stage bar height and minimum width (px), dropoff warning threshold (%). */
-export const FUNNEL_BAR_HEIGHT = 32;
-export const FUNNEL_BAR_MIN_WIDTH = 40;
+/** PipelineFunnel dropoff warning threshold (%). */
 export const FUNNEL_DROPOFF_WARN_PCT = 20;
 /** SpanTree indentation per depth level and base left padding (px). */
 export const SPAN_TREE_INDENT = 20;
 export const SPAN_TREE_BASE_PADDING = 8;
-/** SplitPane drag-handle width and minimum container height (px). */
-export const SPLIT_PANE_DIVIDER_WIDTH = 6;
-export const SPLIT_PANE_MIN_HEIGHT = 300;
-/** TurnTimeline card minimum width (px). */
-export const TURN_CARD_MIN_WIDTH = 120;
-/** AgentActivityPanel table minimum width, bar minimum width, eval card minimum width (px). */
-export const AGENT_TABLE_MIN_WIDTH = 640;
-export const AGENT_BAR_MIN_WIDTH = 48;
-export const AGENT_EVAL_CARD_MIN_WIDTH = 140;
 /** Sparkline canvas dimensions (px). */
 export const SPARKLINE_WIDTH = 160;
 export const SPARKLINE_HEIGHT = 28;
@@ -160,8 +141,6 @@ export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
 /** ConfidencePanel VarianceBar: band thresholds (pct). */
 export const VARIANCE_LOW_PCT = 20;
 export const VARIANCE_MEDIUM_PCT = 50;
-/** VarianceBar score display minimum width (px). */
-export const VARIANCE_DISPLAY_MIN_WIDTH = 36;
 
 // ─── Chart constants ──────────────────────────────────────────────────────────
 /** TrendChart: responsive container height (px). */
