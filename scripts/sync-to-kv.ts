@@ -54,6 +54,7 @@ import {
   loadJsonWithValidationSafe,
   loadJsonWithValidation,
 } from '../src/lib/dashboard-file-utils.js';
+import { PERIOD_MS, ROLES } from '../src/lib/constants.js';
 
 function resolveNamespaceId(): string {
   if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
@@ -81,12 +82,6 @@ const MAX_DAYS_MS = maxDays * 24 * 60 * 60 * 1000;
 const WRITE_BUDGET = parseIntArg(args, 'budget', 450);
 
 const PERIODS = ['24h', '7d', '30d'] as const;
-const ROLES: RoleViewType[] = ['executive', 'operator', 'auditor'];
-const PERIOD_MS: Record<string, number> = {
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
 
 const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
