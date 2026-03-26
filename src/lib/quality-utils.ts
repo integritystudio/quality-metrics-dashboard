@@ -156,6 +156,13 @@ export function ordinalToCategory(ordinal: number): LabelFilterCategory {
 
 // -- Role feature config ----------------------------------------------------
 
+const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
+const OPERATOR_EXPLANATION_TRUNCATION = 500;
+const AUDITOR_EXPLANATION_TRUNCATION = 2000;
+const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
+const OPERATOR_MAX_WORST_EVALUATIONS = 5;
+const AUDITOR_MAX_WORST_EVALUATIONS = 10;
+
 export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
   executive: {
     showCQI: true,
@@ -168,8 +175,8 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
     showPipelineFunnel: false,
     showProvenance: false,
     showRawExport: false,
-    explanationTruncation: 80,
-    maxWorstEvaluations: 1,
+    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
   },
   operator: {
     showCQI: false,
@@ -182,8 +189,8 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
     showPipelineFunnel: true,
     showProvenance: false,
     showRawExport: false,
-    explanationTruncation: 500,
-    maxWorstEvaluations: 5,
+    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
   },
   auditor: {
     showCQI: true,
@@ -196,8 +203,8 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
     showPipelineFunnel: true,
     showProvenance: true,
     showRawExport: true,
-    explanationTruncation: 2000,
-    maxWorstEvaluations: 10,
+    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
   },
 };
 
