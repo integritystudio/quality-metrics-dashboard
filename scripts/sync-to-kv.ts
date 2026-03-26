@@ -92,6 +92,7 @@ const PERIODS = ['24h', '7d', '30d'] as const;
 
 const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
+const MAX_RECENT_SESSIONS = 20;
 
 const HOOK_NAMES = {
   SESSION_START: 'session-start',
@@ -1122,16 +1123,11 @@ async function main(): Promise<void> {
   const computedAt = now.toISOString();
 
   for (const [agentName, acc] of agentCrossSession) {
-    // Sort sessions by date descending, take last 20
+    // Sort sessions by date descending (ISO 8601 sorts lexicographically), take most recent
     const sessions = acc.sessions
       .slice()
-      .sort((a, b) => {
-        if (!a.date && !b.date) return 0;
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return b.date < a.date ? -1 : b.date > a.date ? 1 : 0;
-      })
-      .slice(0, 20);
+      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+      .slice(0, MAX_RECENT_SESSIONS);
     const lastSeen = acc.lastSeenDate;
     const totalSessions = acc.totalSessionCount;
     const sortedSessionDurations = acc.sessionDurations.slice().sort((a, b) => a - b);
