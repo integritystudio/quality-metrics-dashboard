@@ -100,8 +100,7 @@ export function spanAttr<T>(span: SpanLike, key: string): T | undefined {
 
 /** Extract finite numeric scores from an evaluation array, dropping null/undefined/NaN. */
 export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals.reduce<number[]>((acc, e) => {
-    if (e.scoreValue != null && Number.isFinite(e.scoreValue)) acc.push(e.scoreValue);
-    return acc;
-  }, []);
+  return evals
+    .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
+    .map(e => e.scoreValue as number);
 }
