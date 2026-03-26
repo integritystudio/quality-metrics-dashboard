@@ -62,6 +62,9 @@ import {
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
   COMMIT_BODY_START_LINE_INDEX,
   SCORE_ROUND_FACTOR,
+  LATENCY_P50,
+  LATENCY_P95,
+  LATENCY_DISPLAY_PRECISION,
 } from '../src/api/api-constants.js';
 
 function resolveNamespaceId(): string {
@@ -478,10 +481,10 @@ function computeSpanLatency(spans: SessionSpan[]) {
     const sorted = durations.sort((a, b) => a - b);
     hookLatency[name] = {
       count: sorted.length,
-      avg: +(arrayAvg(sorted) ?? 0).toFixed(1),
-      p50: +percentile(sorted, 50).toFixed(1),
-      p95: +percentile(sorted, 95).toFixed(1),
-      max: +sorted[sorted.length - 1].toFixed(1),
+      avg: +(arrayAvg(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
+      p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
+      p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
+      max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
     };
   }
   return { spanBreakdown, hookLatency };
@@ -1144,7 +1147,7 @@ async function main(): Promise<void> {
       avgDurationMs: acc.totalInvocations > 0
         ? Math.round(acc.weightedDurationSum / acc.totalInvocations)
         : 0,
-      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(percentile(sortedSessionDurations, 95)) : 0,
+      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(percentile(sortedSessionDurations, LATENCY_P95)) : 0,
       truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(4) : 0,
       emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(4) : 0,
       lastSeen,
