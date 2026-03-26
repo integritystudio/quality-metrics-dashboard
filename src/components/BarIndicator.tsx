@@ -28,25 +28,19 @@ export function BarIndicator({
 }: BarIndicatorProps) {
   const trackStyle: CSSProperties = {
     ...style,
+    '--bar-fill-width': `${value}%`,
     ...(height != null && { '--bar-h': `${height}px` } as CSSProperties),
-    ...(trackColor && { background: trackColor }),
-  };
-
-  const fillStyle: CSSProperties = {
-    width: `${value}%`,
-  };
-  if (color) fillStyle.background = color;
-  if (opacity != null) fillStyle.opacity = opacity;
+    ...(trackColor && { '--bar-track-color': trackColor } as CSSProperties),
+    ...(color && { '--bar-fill-color': color } as CSSProperties),
+    ...(opacity != null && { '--bar-fill-opacity': opacity } as CSSProperties),
+  } as CSSProperties;
 
   return (
     <div
       className={className ? `mini-bar ${className}` : 'mini-bar'}
       style={trackStyle}
     >
-      <div
-        className="mini-bar-fill"
-        style={fillStyle}
-      />
+      <div className="mini-bar-fill" />
     </div>
   );
 }

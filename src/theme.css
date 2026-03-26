@@ -1127,12 +1127,15 @@ details[open] > .cot-summary::before {
 /* Mini progress bar — track + fill */
 .mini-bar {
   height: var(--bar-h, 4px);
-  background: var(--bg-surface);
+  background: var(--bar-track-color, var(--bg-surface));
   border-radius: var(--radius-xs);
   overflow: hidden;
 }
 .mini-bar-fill {
   height: 100%;
+  width: var(--bar-fill-width);
+  background: var(--bar-fill-color, var(--accent));
+  opacity: var(--bar-fill-opacity, 1);
   border-radius: var(--radius-xs);
   transition: var(--transition-bar);
 }
