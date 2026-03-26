@@ -1,5 +1,4 @@
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
+import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 
 export function LoginPage() {
   const { loginWithRedirect } = useAuth0();
