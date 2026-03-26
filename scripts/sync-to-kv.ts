@@ -1001,7 +1001,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Single pass: group spans by session and build traceId → sessionId mapping
   type Span = (typeof allSpans)[number];
   const spansBySession = new Map<string, Span[]>();
   const traceToSession = new Map<string, string>();
@@ -1172,7 +1171,6 @@ async function main(): Promise<void> {
   const traceChanged = changed.filter(isTraceKey);
   const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, WRITE_BUDGET);
 
-  // Phase 3: prioritize traces by evaluation quality
   const prioritizedTraces = prioritizeTraces(traceChanged, evalsByTrace, referencedTraceIds);
 
   const toWrite: KVEntry[] = [
