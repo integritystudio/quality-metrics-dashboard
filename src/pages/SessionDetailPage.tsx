@@ -75,13 +75,17 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const maxFileCount = fileAccess[0]?.count ?? 1;
   const maxSpanCount = Math.max(...spanBreakdownValues, 1);
 
-  const hallucinationEvals = evaluations.filter(e =>
-    (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
-    ((e.scoreLabel ?? '').toLowerCase() === 'fail' && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
-  );
-  const failedEvals = evaluations.filter(e =>
-    (e.scoreLabel ?? '').toLowerCase() === 'fail'
-  );
+  const hallucinationEvals: typeof evaluations = [];
+  const failedEvals: typeof evaluations = [];
+  for (const e of evaluations) {
+    const label = (e.scoreLabel ?? '').toLowerCase();
+    const isFail = label === 'fail';
+    if (isFail) failedEvals.push(e);
+    if (
+      (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
+      (isFail && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
+    ) hallucinationEvals.push(e);
+  }
   const errorCount = errorDetails.length;
   const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
     hallucinationEvals.length > 0 || failedEvals.length > 0;
