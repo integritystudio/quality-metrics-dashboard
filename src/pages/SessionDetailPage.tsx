@@ -41,7 +41,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
     return (
       <div>
         <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-        <div className="card text-center" style={{ padding: 'var(--space-8) var(--space-6)' }}>
+        <div className="card card-spacious text-center">
           <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
           <div className="mono-xs text-secondary leading-relaxed" style={{
             maxWidth: CALLOUT_MAX_WIDTH,
@@ -229,7 +229,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                   <div>
                     <div className="mono-xs">{e.evaluationName}</div>
                     {e.explanation && (
-                      <div className="text-muted text-xs" style={{ marginTop: 'var(--space-0-5)' }}>
+                      <div className="text-muted text-xs mt-0-5">
                         {truncateText(e.explanation, 200)}
                       </div>
                     )}

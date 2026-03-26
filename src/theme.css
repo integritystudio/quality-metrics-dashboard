@@ -583,6 +583,15 @@ body {
 /* Session detail — stat item, stat value, stat label, vitals divider, frequency grid */
 /* ID display: subtle letter-spacing for session/trace ID labels */
 .ls-id { letter-spacing: var(--letter-spacing-id); }
+/* Centered constrained text block (e.g. not-yet-available callout) */
+.centered-callout {
+  max-width: var(--callout-max-width, 480px);
+  margin: 0 auto;
+}
+/* Card with extra vertical padding for hero/empty states */
+.card-spacious {
+  padding: var(--space-8) var(--space-6);
+}
 /* Stat label with wide letter-spacing used as section sub-header */
 .stat-label-section {
   letter-spacing: var(--label-letter-spacing-wide);
@@ -1039,6 +1048,7 @@ details[open] > .cot-summary::before {
 .mb-6   { margin-bottom: var(--space-6); }
 
 /* Margin-top */
+.mt-0-5 { margin-top: var(--space-0-5); }
 .mt-1   { margin-top: var(--space-1); }
 .mt-2   { margin-top: var(--space-2); }
 .mt-3   { margin-top: var(--space-3); }
