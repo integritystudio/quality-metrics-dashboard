@@ -2,7 +2,6 @@ import type { MouseEvent } from 'react';
 import { Link } from 'wouter';
 import { truncateId } from '../lib/quality-utils.js';
 
-/** A link that displays a truncated ID, with the full ID in the title attribute. */
 export function TruncatedIdLink({ id, href, maxLen = 8, className = 'mono-xs link-accent', onClick }: {
   id: string;
   href: string;
