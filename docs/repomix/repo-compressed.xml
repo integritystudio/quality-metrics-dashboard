@@ -1910,30 +1910,6 @@ const sortIndicator = (key: SortKey)
 onClick=
 
 ================
-File: src/components/ConfidencePanel.tsx
-================
-import type { ConfidenceIndicator } from '../types.js';
-import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
-import {
-  SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
-  VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT, VARIANCE_DISPLAY_MIN_WIDTH,
-  CONFIDENCE_MIN_SAMPLE_SIZE,
-} from '../lib/constants.js';
-import { BarIndicator } from './BarIndicator.js';
-interface EvaluatorScore {
-  evaluator: string;
-  score: number;
-  label?: string;
-}
-interface ConfidencePanelProps {
-  confidence: ConfidenceIndicator;
-  evaluatorScores?: EvaluatorScore[];
-}
-function levelColor(level: string): string
-function levelShape(level: string): string
-function VarianceBar(
-
-================
 File: src/components/EvaluationDetail.tsx
 ================
 import { useState } from 'react';
@@ -2323,27 +2299,6 @@ export function makeChainGraph(
 ): WorkflowGraph
 
 ================
-File: src/api/routes/dashboard.ts
-================
-import { Hono } from 'hono';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-  type RoleViewType,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
-function computeSparklineData(
-  evaluations: EvaluationResult[],
-  startMs: number,
-  endMs: number,
-  buckets: number,
-): (number | null)[]
-
-================
 File: src/api/routes/metrics.ts
 ================
 import { Hono } from 'hono';
@@ -2679,61 +2634,50 @@ function makeKV(store: Record<string, unknown> =
 function makeCalibrationData()
 
 ================
-File: src/api/data-loader.ts
+File: src/api/routes/dashboard.ts
 ================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-⋮----
-function getBackend(): MultiDirectoryBackend
-function toDateOnly(d: string): string
-function defaultRange(lookbackMs: number):
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>>
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]>
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
-⋮----
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]>
-function traceQueryDates(startDate?: string, endDate?: string):
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string)
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string)
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]>
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
-export async function checkHealth(): Promise<
+import { Hono } from 'hono';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  type RoleViewType,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
+import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+function computeSparklineData(
+  evaluations: EvaluationResult[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): (number | null)[]
+
+================
+File: src/components/ConfidencePanel.tsx
+================
+import type { ConfidenceIndicator } from '../types.js';
+import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
+import {
+  SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
+  VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT, VARIANCE_DISPLAY_MIN_WIDTH,
+  CONFIDENCE_MIN_SAMPLE_SIZE,
+} from '../lib/constants.js';
+import { BarIndicator } from './BarIndicator.js';
+interface EvaluatorScore {
+  evaluator: string;
+  score: number;
+  label?: string;
+}
+interface ConfidencePanelProps {
+  confidence: ConfidenceIndicator;
+  evaluatorScores?: EvaluatorScore[];
+}
+function levelColor(level: string): string
+function levelShape(level: string): string
+function VarianceBar(
+function JudgePanel(
 
 ================
 File: src/components/RequireAuth.tsx
@@ -2860,6 +2804,11 @@ import type { Period } from '../types.js';
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
 
 ================
+File: scripts/.kv-sync-coverage.json
+================
+{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
+
+================
 File: scripts/derive-evaluations.ts
 ================
 import { writeFileSync, readdirSync, existsSync } from 'fs';
@@ -2926,6 +2875,161 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[]
 function main(): void
 
 ================
+File: scripts/sync-to-kv.ts
+================
+import { execFileSync } from 'child_process';
+import { createHash, randomBytes } from 'crypto';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+} from '../../src/lib/quality/quality-metrics.js';
+import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
+import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+  computeCorrelationMatrix,
+  computeRollingDegradationSignals,
+  loadDegradationState,
+  saveDegradationState,
+  loadCalibrationState,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import type { CalibrationState } from '../../src/lib/quality/quality-feature-engineering.js';
+import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
+import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
+import {
+  kvSyncStateSchema,
+  metricDetailValueSchema,
+  coverageHeatmapSchema,
+  type KvSyncState,
+  type CoverageHeatmap,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import {
+  loadJsonWithValidationSafe,
+  loadJsonWithValidation,
+} from '../src/lib/dashboard-file-utils.js';
+function resolveNamespaceId(): string
+⋮----
+function parseIntArg(args: string[], flag: string, defaultValue: number): number
+⋮----
+type KVEntry = { key: string; value: string };
+function filterCanary(evals: EvaluationResult[]): EvaluationResult[]
+⋮----
+export function buildCalibrationEntry(
+  state: CalibrationState | null,
+): KVEntry | null
+⋮----
+export interface BudgetAllocation {
+  highPriorityBudget: number;
+  traceBudget: number;
+}
+export function computeBudgetAllocation(
+  highPriorityCount: number,
+  writeBudget: number,
+): BudgetAllocation
+function loadSyncState(): KvSyncState
+function saveSyncState(state: KvSyncState): void
+function loadLastCoverage(): CoverageHeatmap | null
+function saveLastCoverage(coverage: CoverageData): void
+function hashValue(value: string): string
+function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[]
+function kvBulkPut(entries: KVEntry[]): number
+function extractTraceId(key: string): string | null
+interface TracePriorityScore {
+  traceId: string;
+  priority: number;
+  worstScore: number;
+  latestTimestamp: number;
+  isReferencedByWorst: boolean;
+}
+export function prioritizeTraces(
+  traceEntries: KVEntry[],
+  evalsByTrace: Map<string, EvaluationResult[]>,
+  referencedTraceIds: Set<string>,
+): KVEntry[]
+type SessionSpan = {
+  name: string;
+  traceId?: string;
+  durationMs?: number;
+  status?: { code?: number };
+  attributes?: Record<string, unknown>;
+};
+function spanAttr<T>(span:
+function spanSessionId(span:
+function isValidScore(v: number | null | undefined): v is number
+function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void
+function arrayAvg(nums: number[]): number | null
+function percentile(sorted: number[], p: number): number
+function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[])
+function computeTimespan(evaluations: EvaluationResult[])
+function computeSessionInfo(spans: SessionSpan[])
+function computeTokenMetrics(spans: SessionSpan[])
+function computeUsageCounts(spans: SessionSpan[])
+function computeSpanLatency(spans: SessionSpan[])
+function computeErrorSummary(spans: SessionSpan[])
+interface AgentActivityEntry {
+  agentName: string;
+  invocations: number;
+  errors: number;
+  hasRateLimit: boolean;
+  rateLimitEvents: number;
+  totalOutputSize: number;
+  avgOutputSize: number;
+  avgDurationMs: number;
+  truncatedCount: number;
+  emptyCount: number;
+}
+interface AgentAccumulator {
+  totalInvocations: number;
+  totalErrors: number;
+  rateLimitEvents: number;
+  totalOutputSize: number;
+  weightedDurationSum: number;
+  sessionDurations: number[];
+  truncatedCount: number;
+  emptyCount: number;
+  totalSessionCount: number;
+  lastSeenDate: string | null;
+  sessions: Array<{
+    sessionId: string;
+    invocations: number;
+    errors: number;
+    hasRateLimit: boolean;
+    avgDurationMs: number;
+    date: string | null;
+    project: string | null;
+  }>;
+}
+function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[]
+function computeEvalBreakdown(evaluations: EvaluationResult[])
+function computeSessionDetail(
+  sessionId: string,
+  spans: SessionSpan[],
+  evaluations: EvaluationResult[],
+)
+⋮----
+// Alert summary
+⋮----
+// Multi-agent evaluation
+⋮----
+async function main(): Promise<void>
+⋮----
+// Update breach counts from this period's reports (latest period wins)
+⋮----
+type Span = (typeof allSpans)[number];
+⋮----
+const isTraceKey = (e: KVEntry)
+
+================
 File: src/__tests__/WorkflowPage.test.tsx
 ================
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
@@ -2935,6 +3039,68 @@ import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShel
 onClick=
 ⋮----
 function makeEvaluation(overrides: Record<string, unknown> =
+
+================
+File: src/api/data-loader.ts
+================
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+⋮----
+function getBackend(): MultiDirectoryBackend
+function toDateOnly(d: string): string
+function defaultRange(lookbackMs: number):
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>>
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]>
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
+⋮----
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]>
+function traceQueryDates(startDate?: string, endDate?: string):
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string)
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string)
+async function queryLogsWithDefaultRange(
+  filter: { traceId?: string; sessionId?: string },
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]>
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
+export async function checkHealth(): Promise<
 
 ================
 File: src/api/server.ts
@@ -3500,14 +3666,99 @@ details[open] > .cot-summary::before {
 .workflow-tab[aria-selected='true'] {
 
 ================
+File: src/components/WorkflowTimeline.tsx
+================
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+⋮----
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[]
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock(
+⋮----
+const turnX = (turnIndex: number): number
+const laneY = (laneIndex: number): number
+
+================
+File: src/__tests__/workflow-graph.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult } from '../types.js';
+import type { TraceSpan } from '../types.js';
+function makeHandoff(overrides: Partial<HandoffEvaluation> =
+function makeTurn(overrides: Partial<TurnLevelResult> =
+function makeEvaluation(overrides: Partial<MultiAgentEvaluation> =
+function makeSpan(overrides: Partial<TraceSpan> =
+
+================
+File: src/api/routes/agents.ts
+================
+import { Hono } from 'hono';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus } from '../../lib/constants.js';
+import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+
+================
+File: src/contexts/KeyboardNavContext.tsx
+================
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+type ShortcutKey = string;
+type ComboKey = `${string} ${string}`;
+interface Shortcut {
+  key: ShortcutKey;
+  description: string;
+  scope: string;
+  action: () => void;
+}
+function isComboKey(key: string): key is ComboKey
+function comboPrefix(key: ComboKey): string
+interface KeyboardNavContextValue {
+  shortcuts: Shortcut[];
+  register: (key: ShortcutKey, description: string, scope: string, action: () => void) => () => void;
+  overlayOpen: boolean;
+  toggleOverlay: () => void;
+}
+⋮----
+export function useShortcut(key: ShortcutKey, description: string, scope: string, action: () => void)
+export function useKeyboardNav()
+⋮----
+export function KeyboardNavProvider(
+⋮----
+function handleKeydown(e: KeyboardEvent)
+
+================
 File: scripts/judge-evaluations.ts
 ================
 import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
-import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
+import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import {
   LLMJudge,
 } from '../../src/lib/judge/llm-judge-config.js';
@@ -3547,12 +3798,6 @@ export interface EvalRecord {
   traceId: string;
   sessionId: string;
 }
-⋮----
-/**
- * Alternate directories where session transcripts may exist.
- * Checked in order when a log-referenced path is missing, and scanned
- * directly to discover transcripts not referenced in logs at all.
- */
 ⋮----
 function resolveTranscriptPath(originalPath: string): string | null
 async function _discoverTranscripts(): Promise<TranscriptInfo[]>
@@ -3631,252 +3876,6 @@ export async function processBatch<T, R>(
   fn: (item: T) => Promise<R>,
 ): Promise<R[]>
 async function main()
-
-================
-File: scripts/sync-to-kv.ts
-================
-import { execFileSync } from 'child_process';
-import { createHash, randomBytes } from 'crypto';
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-} from '../../src/lib/quality/quality-metrics.js';
-import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
-import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
-import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-  computeCorrelationMatrix,
-  computeRollingDegradationSignals,
-  loadDegradationState,
-  saveDegradationState,
-  loadCalibrationState,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import type { CalibrationState } from '../../src/lib/quality/quality-feature-engineering.js';
-import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
-import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
-import {
-  kvSyncStateSchema,
-  metricDetailValueSchema,
-  coverageHeatmapSchema,
-  type KvSyncState,
-  type CoverageHeatmap,
-} from '../../src/lib/validation/dashboard-schemas.js';
-import {
-  loadJsonWithValidationSafe,
-  loadJsonWithValidation,
-} from '../src/lib/dashboard-file-utils.js';
-function resolveNamespaceId(): string
-⋮----
-function parseIntArg(args: string[], flag: string, defaultValue: number): number
-⋮----
-type KVEntry = { key: string; value: string };
-function filterCanary(evals: EvaluationResult[]): EvaluationResult[]
-⋮----
-export function buildCalibrationEntry(
-  state: CalibrationState | null,
-): KVEntry | null
-⋮----
-export interface BudgetAllocation {
-  highPriorityBudget: number;
-  traceBudget: number;
-}
-export function computeBudgetAllocation(
-  highPriorityCount: number,
-  writeBudget: number,
-): BudgetAllocation
-function loadSyncState(): KvSyncState
-function saveSyncState(state: KvSyncState): void
-function loadLastCoverage(): CoverageHeatmap | null
-function saveLastCoverage(coverage: CoverageData): void
-function hashValue(value: string): string
-function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[]
-function kvBulkPut(entries: KVEntry[]): number
-function extractTraceId(key: string): string | null
-interface TracePriorityScore {
-  traceId: string;
-  priority: number;
-  worstScore: number;
-  latestTimestamp: number;
-  isReferencedByWorst: boolean;
-}
-export function prioritizeTraces(
-  traceEntries: KVEntry[],
-  evalsByTrace: Map<string, EvaluationResult[]>,
-  referencedTraceIds: Set<string>,
-): KVEntry[]
-type SessionSpan = {
-  name: string;
-  traceId?: string;
-  durationMs?: number;
-  status?: { code?: number };
-  attributes?: Record<string, unknown>;
-};
-function spanAttr<T>(span:
-function spanSessionId(span:
-function isValidScore(v: number | null | undefined): v is number
-function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void
-function arrayAvg(nums: number[]): number | null
-function percentile(sorted: number[], p: number): number
-function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[])
-function computeTimespan(evaluations: EvaluationResult[])
-function computeSessionInfo(spans: SessionSpan[])
-function computeTokenMetrics(spans: SessionSpan[])
-function computeUsageCounts(spans: SessionSpan[])
-function computeSpanLatency(spans: SessionSpan[])
-function computeErrorSummary(spans: SessionSpan[])
-interface AgentActivityEntry {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  hasRateLimit: boolean;
-  rateLimitEvents: number;
-  totalOutputSize: number;
-  avgOutputSize: number;
-  avgDurationMs: number;
-  truncatedCount: number;
-  emptyCount: number;
-}
-interface AgentAccumulator {
-  totalInvocations: number;
-  totalErrors: number;
-  rateLimitEvents: number;
-  totalOutputSize: number;
-  weightedDurationSum: number;
-  sessionDurations: number[];
-  truncatedCount: number;
-  emptyCount: number;
-  totalSessionCount: number;
-  lastSeenDate: string | null;
-  sessions: Array<{
-    sessionId: string;
-    invocations: number;
-    errors: number;
-    hasRateLimit: boolean;
-    avgDurationMs: number;
-    date: string | null;
-    project: string | null;
-  }>;
-}
-function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[]
-function computeEvalBreakdown(evaluations: EvaluationResult[])
-function computeSessionDetail(
-  sessionId: string,
-  spans: SessionSpan[],
-  evaluations: EvaluationResult[],
-)
-⋮----
-// Alert summary
-⋮----
-// Multi-agent evaluation
-⋮----
-async function main(): Promise<void>
-⋮----
-// Update breach counts from this period's reports (latest period wins)
-⋮----
-type Span = (typeof allSpans)[number];
-⋮----
-const isTraceKey = (e: KVEntry)
-
-================
-File: src/components/WorkflowTimeline.tsx
-================
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-⋮----
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[]
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock(
-⋮----
-const turnX = (turnIndex: number): number
-const laneY = (laneIndex: number): number
-
-================
-File: scripts/.kv-sync-coverage.json
-================
-{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
-
-================
-File: src/__tests__/workflow-graph.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult } from '../types.js';
-import type { TraceSpan } from '../types.js';
-function makeHandoff(overrides: Partial<HandoffEvaluation> =
-function makeTurn(overrides: Partial<TurnLevelResult> =
-function makeEvaluation(overrides: Partial<MultiAgentEvaluation> =
-function makeSpan(overrides: Partial<TraceSpan> =
-
-================
-File: src/api/routes/agents.ts
-================
-import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus } from '../../lib/constants.js';
-import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-
-================
-File: src/contexts/KeyboardNavContext.tsx
-================
-import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-type ShortcutKey = string;
-type ComboKey = `${string} ${string}`;
-interface Shortcut {
-  key: ShortcutKey;
-  description: string;
-  scope: string;
-  action: () => void;
-}
-function isComboKey(key: string): key is ComboKey
-function comboPrefix(key: ComboKey): string
-interface KeyboardNavContextValue {
-  shortcuts: Shortcut[];
-  register: (key: ShortcutKey, description: string, scope: string, action: () => void) => () => void;
-  overlayOpen: boolean;
-  toggleOverlay: () => void;
-}
-⋮----
-export function useShortcut(key: ShortcutKey, description: string, scope: string, action: () => void)
-export function useKeyboardNav()
-⋮----
-export function KeyboardNavProvider(
-⋮----
-function handleKeydown(e: KeyboardEvent)
 
 ================
 File: src/api/routes/sessions.ts
@@ -4137,28 +4136,6 @@ export function startAutoRefresh(): void
 export function stopAutoRefresh(): void
 
 ================
-File: src/contexts/AuthContext.tsx
-================
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
-import { API_BASE } from '../lib/constants.js';
-import { postActivityEvent } from '../lib/activity-logger.js';
-import type { AppSession } from '../types/auth.js';
-import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
-interface AuthContextValue {
-  session: AppSession | null;
-  isLoading: boolean;
-  signOut: () => Promise<void>;
-  getAccessToken: () => Promise<string>;
-}
-⋮----
-async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null>
-export function AuthProvider(
-export function useAuth(): AuthContextValue
-
-================
 File: src/App.tsx
 ================
 import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
@@ -4210,6 +4187,28 @@ import type {
   MetricDetailResult,
   MetricDynamics,
 } from './types.js';
+
+================
+File: src/contexts/AuthContext.tsx
+================
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import { useAuth0 } from '../lib/auth0.js';
+import { AUTH0_AUDIENCE } from '../lib/auth0.js';
+import { API_BASE } from '../lib/constants.js';
+import { postActivityEvent } from '../lib/activity-logger.js';
+import type { AppSession } from '../types/auth.js';
+import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
+interface AuthContextValue {
+  session: AppSession | null;
+  isLoading: boolean;
+  signOut: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
+}
+⋮----
+async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null>
+export function AuthProvider(
+export function useAuth(): AuthContextValue
 
 
 

@@ -1,3 +1,12 @@
+840bf0a 2026-03-26 refactor(components,scripts): extract JudgePanel sub-component and remove dead _logCount
+  scripts/judge-evaluations.ts
+
+bb1713a 2026-03-26 fix(auth,dashboard): defer auth state reset and remove unused vars
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  scripts/judge-evaluations.ts
+
 2172425 2026-03-26 refactor(judge,auth): replace magic numbers with constants and fix Auth0 redirect URI
   scripts/judge-evaluations.ts
 
@@ -336,10 +345,4 @@ a45936c 2026-03-01 fix(review-followups): address M1/M2/L1/L2 from final review
   src/theme.css
 
 d66fac9 2026-03-01 refactor(FreqBar): replace hardcoded widths with CSS grid layout (FR6)
-  src/theme.css
-
-371f663 2026-03-01 refactor(Stat): move magic number styles to theme.css classes (FR3)
-  src/theme.css
-
-1a11f57 2026-03-01 refactor(theme): complete mono matrix and fill gap/margin utility gaps (L3, L4)
   src/theme.css

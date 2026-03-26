@@ -1073,7 +1073,7 @@ async function main() {
     writeEvaluations(flatEvals);
 
     // Write dataset run record if scoped to a dataset
-    if (datasetId && flatEvals.length > 0) {
+    if (datasetId) {
       const backend = new LocalJsonlBackend(TELEMETRY_DIR);
       const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
       // Look up current dataset version
@@ -1094,18 +1094,6 @@ async function main() {
       await backend.appendDatasetRun(runRecord);
     }
 
-    // Summary
-    const byCat = new Map<string, number>();
-    for (const ev of flatEvals) {
-      byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
-    }
-    for (const [_name, _count] of byCat) { /* summary output */ }
-
-    // P1-6: Report failures
-    const failureEntries = Object.entries(evalFailures).filter(([, n]) => n > 0);
-    if (failureEntries.length > 0) {
-      for (const [_name, _count] of failureEntries) { /* failure report */ }
-    }
   } finally {
     releaseLock();
   }
