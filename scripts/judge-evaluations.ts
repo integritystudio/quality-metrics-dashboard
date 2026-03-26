@@ -61,9 +61,7 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
   evaluationParams: ['input', 'output', 'context'],
 };
 
-// ============================================================================
 // Constants
-// ============================================================================
 
 const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
@@ -82,9 +80,7 @@ export function normalizeScore(score: number): number {
   return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
 }
 
-// ============================================================================
 // Types
-// ============================================================================
 
 export interface TranscriptInfo {
   path: string;
@@ -112,9 +108,7 @@ export interface EvalRecord {
   sessionId: string;
 }
 
-// ============================================================================
 // Transcript Discovery
-// ============================================================================
 
 /**
  * Alternate directories where session transcripts may exist.
@@ -213,9 +207,7 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   return transcripts;
 }
 
-// ============================================================================
 // Trace-Based Session Discovery (for --backfill)
-// ============================================================================
 
 interface TraceSession {
   sessionId: string;
@@ -275,9 +267,7 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
   return turns;
 }
 
-// ============================================================================
 // Turn Extraction
-// ============================================================================
 
 /** B8: Discriminated union for transcript content blocks */
 export interface TextBlock { type: 'text'; text: string }
@@ -401,9 +391,7 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
   return turns;
 }
 
-// ============================================================================
 // Anthropic LLM Provider
-// ============================================================================
 
 async function createAnthropicProvider(): Promise<LLMProvider> {
   // Dynamic import to avoid requiring @anthropic-ai/sdk when using --seed
@@ -435,9 +423,7 @@ async function createAnthropicProvider(): Promise<LLMProvider> {
   };
 }
 
-// ============================================================================
 // Seed Mode (deterministic scores from turn content, no API calls)
-// ============================================================================
 
 export function hashToScore(input: string, min: number, max: number): number {
   const hash = createHash('sha256').update(input).digest();
@@ -567,9 +553,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
   return { evals, canaryCount };
 }
 
-// ============================================================================
 // Evaluation
-// ============================================================================
 
 /** Track evaluation failures for summary reporting (P1-6) */
 export const evalFailures: Record<string, number> = {};
@@ -748,9 +732,7 @@ export async function evaluateTurn(
   return evals;
 }
 
-// ============================================================================
 // OTel Serialization
-// ============================================================================
 
 export function toOTelRecord(ev: EvalRecord): object {
   const attrs: Record<string, unknown> = {
@@ -769,9 +751,7 @@ export function toOTelRecord(ev: EvalRecord): object {
   };
 }
 
-// ============================================================================
 // Deduplication
-// ============================================================================
 
 function _loadExistingKeys(): Set<string> {
   const keys = new Set<string>();
@@ -800,9 +780,7 @@ function _loadExistingKeys(): Set<string> {
   return keys;
 }
 
-// ============================================================================
 // Output
-// ============================================================================
 
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 
@@ -881,9 +859,7 @@ function writeEvaluations(evals: EvalRecord[]): void {
   appendFileSync(outFile, content);
 }
 
-// ============================================================================
 // Batching
-// ============================================================================
 
 export async function processBatch<T, R>(
   items: T[],
@@ -911,9 +887,7 @@ export async function processBatch<T, R>(
   return results;
 }
 
-// ============================================================================
 // Main
-// ============================================================================
 
 async function main() {
   const args = process.argv.slice(2);
