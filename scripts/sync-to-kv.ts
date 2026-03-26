@@ -711,10 +711,8 @@ async function main(): Promise<void> {
   const now = new Date();
   const entries: KVEntry[] = [];
 
-  // Cache grouped evals per period for reuse in trend loop
   const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
 
-  // Dashboard summaries and role views per period
   for (const period of PERIODS) {
     const ms = PERIOD_MS[period];
     if (ms > MAX_DAYS_MS) continue;
@@ -747,7 +745,6 @@ async function main(): Promise<void> {
       entries.push({ key: `dashboard:${period}:${role}`, value: JSON.stringify(view) });
     }
 
-    // Correlations
     const metricTimeSeries = new Map<string, number[]>();
     const corrMetricNames: string[] = [];
     for (const [name, metricEvals] of grouped) {
@@ -769,7 +766,6 @@ async function main(): Promise<void> {
     //   });
     // }
 
-    // Pipeline
     const pipeline = computePipelineView(grouped, dashboard);
     entries.push({
       key: `pipeline:${period}`,
@@ -777,7 +773,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Metric details (7d window with previous-period trend)
   const weekAgo = new Date(now.getTime() - PERIOD_MS['7d']);
   const twoWeeksAgo = new Date(now.getTime() - 2 * PERIOD_MS['7d']);
   const metricNames = Object.keys(QUALITY_METRICS);
@@ -794,7 +789,6 @@ async function main(): Promise<void> {
     const evals = filterCanary(rawEvals);
     if (evals.length === 0) continue;
 
-    // Query prior week for trend comparison
     const prevRawEvals = await backend.queryEvaluations({
       startDate: twoWeeksAgo.toISOString(),
       endDate: weekAgo.toISOString(),
@@ -818,7 +812,6 @@ async function main(): Promise<void> {
     entries.push({ key: `metric:${name}`, value: JSON.stringify(detail) });
   }
 
-  // Metric evaluation rows per period (for /api/metrics/:name/evaluations)
   for (const period of PERIODS) {
     const ms = PERIOD_MS[period];
     if (ms > MAX_DAYS_MS) continue;
@@ -850,7 +843,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // Collect trace IDs referenced by metric detail worstEvaluations
   const referencedTraceIds = new Set<string>();
   for (const entry of entries) {
     if (!entry.key.startsWith('metric:')) continue;
@@ -865,7 +857,6 @@ async function main(): Promise<void> {
     } catch { /* skip malformed */ }
   }
 
-  // Trend data per metric × period (TREND_BUCKETS buckets) — reuses cached grouped evals
   // R5: Collect time buckets per period×metric for degradation signal computation
   const degradationBuckets = new Map<string, Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>>>();
   for (const period of PERIODS) {
