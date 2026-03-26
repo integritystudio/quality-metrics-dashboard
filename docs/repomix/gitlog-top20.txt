@@ -1,3 +1,53 @@
+1609a58 2026-03-26 refactor(worker): extract remaining inline error strings to ERR_ constants
+  worker/index.ts
+
+c1ba1fc 2026-03-26 refactor(constants): extract inline error strings into ErrorMessage enum
+  worker/index.ts
+
+7a046d1 2026-03-26 refactor(worker): split userId/roleId validation for precise error messages
+  worker/index.ts
+
+bb8d081 2026-03-26 refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants
+  worker/index.ts
+
+d98d147 2026-03-26 refactor(worker): extract safeArray helper for Array.isArray KV guard pattern
+  worker/index.ts
+
+488b543 2026-03-26 fix(worker): replace unsafe KV payload casts with Array.isArray guards
+  worker/index.ts
+
+a3b4012 2026-03-26 chore: regenerate repomix docs
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+af4a3a0 2026-03-26 fix(worker): guard logActivity against undefined appUserId instead of passing empty string
+  worker/index.ts
+
+a660547 2026-03-26 refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore
+  scripts/judge-evaluations.ts
+
+792c364 2026-03-26 refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants
+  scripts/sync-to-kv.ts
+
+31fb8f1 2026-03-26 refactor(components,worker): remove WHAT JSDoc prop comments and route comment
+  worker/index.ts
+
+b6a7361 2026-03-26 refactor(worker): remove WHAT comments from admin route handlers
+  worker/index.ts
+
+26bab40 2026-03-26 refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants
+  scripts/sync-to-kv.ts
+
+9d197f5 2026-03-26 refactor(sync-to-kv): eliminate double Map.get() in degradationBuckets
+  scripts/sync-to-kv.ts
+
+257cd0e 2026-03-26 refactor(scripts): eliminate double Map.get() in pushToGroup and byDate grouping
+  scripts/sync-to-kv.ts
+
+b27a65e 2026-03-26 refactor(judge): remove two more what-comments in turn extraction and sub-criteria
+  scripts/judge-evaluations.ts
+
 d78a765 2026-03-26 refactor(worker): ERR_UNAUTHORIZED constant; VALID_ROLES for allowedViews; remove WHAT comment
   worker/index.ts
 
@@ -280,56 +330,4 @@ dd6171f 2026-03-26 refactor(constants): use RATE_DISPLAY_PRECISION and QUERY_RET
 
 6eeab8c 2026-03-26 refactor(session-detail): use page-content CSS class; add no-inline-styles note to CLAUDE.md
   scripts/sync-to-kv.ts
-  src/theme.css
-
-cbabf37 2026-03-26 chore: regenerate repomix docs after Round 2 simplifications
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-713c10f 2026-03-26 refactor(section): extract summary padding/transition to section-rail CSS selectors
-  src/theme.css
-
-af87537 2026-03-26 refactor(pipeline-funnel): extract static funnel-bar and funnel-dropoff CSS classes
-  src/theme.css
-
-f878c02 2026-03-26 refactor(judge): add SESSION_ID_PREVIEW_LEN constant for slice(0, 8) pattern
-  scripts/judge-evaluations.ts
-
-7cb23b9 2026-03-26 refactor(app): replace fontWeight/marginLeft inline styles with font-normal/ml-2 classes
-  src/theme.css
-
-49a5cd5 2026-03-26 refactor(main): replace error button inline padding with btn-sm class
-  src/theme.css
-
-86f9401 2026-03-26 chore: regenerate repomix docs after simplification round 2
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-9c64a2d 2026-03-26 refactor(ui): replace static inline styles in MetricCompare and Sparkline
-  src/theme.css
-
-01233d5 2026-03-26 refactor(shortcut-overlay): replace inline styles with shortcut-row and kbd-chip CSS classes
-  src/theme.css
-
-6ec68ec 2026-03-26 refactor(pipeline-page): replace T2 stage inline styles with t2-stage-notice/badge classes
-  src/theme.css
-
-5fffcc8 2026-03-26 refactor(sync): replace percentile/latency magic numbers with named constants
-  scripts/sync-to-kv.ts
-
-624f56d 2026-03-26 refactor(pages): replace static inline styles with CSS classes (text-critical, pt-2, form-select)
-  src/theme.css
-
-b8d3281 2026-03-26 refactor(ui): replace inline display/align styles with CSS utility classes
-  src/theme.css
-
-27c6fe5 2026-03-26 refactor(evaluation-table): replace sort indicator inline styles with ml-1 text-2xs classes
-  src/theme.css
-
-4a610c9 2026-03-26 refactor(evaluation-table): replace expand button inline padding with btn-expand class
-  src/theme.css
-
-939242d 2026-03-26 refactor(evaluation-detail): replace inline button styles with btn-xs class
   src/theme.css
