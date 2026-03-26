@@ -272,11 +272,10 @@ describe('SLATable', () => {
     expect(screen.getByText('N/A')).toBeInTheDocument();
   });
 
-  it('renders non-compliant gap in critical color', () => {
+  it('renders non-compliant gap with data-noncompliant attribute', () => {
     const slas = [makeSLA({ compliant: false, gap: -0.1, status: 'non_compliant' })];
     render(<SLATable slas={slas} />);
-    // Gap cell should have critical color style
     const gapCell = screen.getByText('-0.1000');
-    expect(gapCell).toHaveStyle({ color: 'var(--status-critical)' });
+    expect(gapCell.closest('td')).toHaveAttribute('data-noncompliant');
   });
 });
