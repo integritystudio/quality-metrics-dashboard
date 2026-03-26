@@ -1,5 +1,6 @@
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION } from './constants.js';
 
 const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 const ATTR_AGENT_ID = 'gen_ai.agent.id';
@@ -91,7 +92,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       target: h.targetAgent,
       handoffScore: score,
       contextPreserved: h.contextPreserved,
-      label: `score: ${score.toFixed(2)}`,
+      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
     });
   }
 

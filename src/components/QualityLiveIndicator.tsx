@@ -1,6 +1,6 @@
 import { useQualityLive } from '../hooks/useQualityLive.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
-import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_BADGE_ALPHA_HEX } from '../lib/constants.js';
+import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_BADGE_ALPHA_HEX, SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 function scoreToBadgeColor(score: number): string {
   if (score >= SCORE_THRESHOLD_GREEN) return 'var(--status-healthy)';
@@ -40,7 +40,7 @@ export function QualityLiveIndicator() {
       {data.metrics.map((m) => (
         <span
           key={m.name}
-          title={`${m.name}: ${m.score.toFixed(2)} (${m.evaluatorType})`}
+          title={`${m.name}: ${m.score.toFixed(SCORE_CHIP_PRECISION)} (${m.evaluatorType})`}
           className="mono text-xs chip gap-1 font-medium inline-flex-center"
           style={{
             background: scoreToBadgeColor(m.score) + SCORE_BADGE_ALPHA_HEX,
@@ -49,7 +49,7 @@ export function QualityLiveIndicator() {
         >
           <span className="dot-xs" style={{ background: scoreToBadgeColor(m.score) }} />
           {m.name.replace(/_/g, ' ')}
-          <span className="font-bold">{m.score.toFixed(2)}</span>
+          <span className="font-bold">{m.score.toFixed(SCORE_CHIP_PRECISION)}</span>
         </span>
       ))}
       <span className="text-secondary text-2xs ml-auto">
