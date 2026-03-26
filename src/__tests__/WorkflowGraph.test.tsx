@@ -216,16 +216,18 @@ const ST_G5_DEEP_CHAIN_SIZE = 20;
 const ST_G5_DISCONNECTED_SIZE = 10;
 
 describe('WorkflowGraphView stress (ST-G5)', () => {
-  it('renders 100+ node graph without error and shows all nodes', async () => {
+  // CR-PERF-2: graphs with more than MAX_ELK_NODES (50) render a degraded list fallback
+  // instead of going through ELK layout to avoid blocking the main thread.
+  it('renders 100+ node graph without error using degraded list fallback', () => {
     const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, 'agent', 'branching');
 
     render(<WorkflowGraphView graph={graph} />);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('rf-node-agent-0')).toBeInTheDocument();
-      expect(screen.getByTestId(`rf-node-agent-${ST_G5_LARGE_GRAPH_SIZE - 1}`)).toBeInTheDocument();
-    });
-    expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_LARGE_GRAPH_SIZE);
+    // Should show the oversize fallback heading instead of ReactFlow nodes
+    expect(screen.getByText(`Graph too large to render (${ST_G5_LARGE_GRAPH_SIZE} agents)`)).toBeInTheDocument();
+    // All agent labels should appear in the fallback list
+    expect(screen.getByText(/agent-0 —/)).toBeInTheDocument();
+    expect(screen.getByText(/agent-99 —/)).toBeInTheDocument();
   });
 
   it('renders deeply nested delegation chain without error', async () => {
