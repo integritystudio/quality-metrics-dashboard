@@ -392,6 +392,7 @@ body {
 .turn-card {
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
+  min-width: 120px;
 }
 
 /* Histogram */

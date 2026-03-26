@@ -1,5 +1,4 @@
 import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { TURN_CARD_MIN_WIDTH } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult } from '../types.js';
@@ -25,10 +24,7 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
           <div
             key={turn.turnIndex}
             className="p-4 shrink-0 turn-card"
-            style={{
-              minWidth: TURN_CARD_MIN_WIDTH,
-              border: `var(--border-width-thick) solid ${color}`,
-            }}
+            style={{ border: `var(--border-width-thick) solid ${color}` }}
           >
             <div className="flex-center mb-1-5 justify-between">
               <span className="text-2xs uppercase font-semibold" style={{ color }}>{agent}</span>
