@@ -47,7 +47,6 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
 }
 
-
 type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
 
 function computeLatencyStats(durations: number[]): LatencyStats {
