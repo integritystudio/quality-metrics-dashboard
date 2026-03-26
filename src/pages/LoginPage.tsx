@@ -1,67 +1,24 @@
-import { useState, type FormEvent } from 'react';
-import { useLocation, useSearch } from 'wouter';
-import { signIn } from '../lib/supabase.js';
-
-// Only allow absolute-path redirects (e.g. /dashboard). Blocks open redirects:
-// - external URLs: must start with /
-// - protocol-relative URLs (//evil.com): startsWith('/') passes but '//' must be blocked
-function safeRedirectPath(raw: string): string {
-  return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
-}
+import { useAuth0 } from '../lib/auth0.js';
+import { AUTH0_AUDIENCE } from '../lib/auth0.js';
 
 export function LoginPage() {
-  const [, navigate] = useLocation();
-  const search = useSearch();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { loginWithRedirect } = useAuth0();
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
-
-    try {
-      await signIn(email, password);
-      navigate(safeRedirectPath(new URLSearchParams(search).get('redirect') ?? '/'));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
+  const handleLogin = () =>
+    loginWithRedirect({
+      authorizationParams: {
+        audience: AUTH0_AUDIENCE,
+        redirect_uri: `${window.location.origin}/callback`,
+      },
+    });
 
   return (
     <div className="login-page">
       <div className="login-card">
         <h1 className="login-title">Sign in</h1>
-        <form onSubmit={handleSubmit} className="login-form">
-          <label className="login-label" htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            className="login-input"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-          <label className="login-label" htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            className="login-input"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
-          {error && <p className="login-error">{error}</p>}
-          <button type="submit" className="login-btn" disabled={isSubmitting}>
-            {isSubmitting ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+        <button className="login-btn" onClick={handleLogin}>
+          Sign in
+        </button>
       </div>
     </div>
   );

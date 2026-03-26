@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { getSession, signOut as supabaseSignOut, onAuthStateChange, refreshSession, startAutoRefresh, stopAutoRefresh } from '../lib/supabase.js';
-import type { SupabaseSession } from '../lib/supabase.js';
+import { useAuth0 } from '../lib/auth0.js';
+import { AUTH0_AUDIENCE } from '../lib/auth0.js';
 import { API_BASE } from '../lib/constants.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
 import type { AppSession } from '../types/auth.js';
@@ -11,6 +11,7 @@ interface AuthContextValue {
   session: AppSession | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -27,7 +28,6 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
     const meResult = MeResponseSchema.safeParse(data);
     if (!meResult.success) return null;
     const me = meResult.data;
-    // authUserId/appUserId are omitted — /api/me never returns internal IDs.
     return {
       email: me.email,
       roles: me.roles,
@@ -40,68 +40,58 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
   const [session, setSession] = useState<AppSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const loadSeqRef = useRef(0);
 
-  const loadSession = useCallback(async (supabaseSession: SupabaseSession | null, signal?: AbortSignal) => {
-    const seq = ++loadSeqRef.current;
-    if (!supabaseSession) {
-      if (seq === loadSeqRef.current) {
-        setSession(null);
-        setIsLoading(false);
-      }
-      return;
-    }
-    const appSession = await fetchAppSession(supabaseSession.access_token, signal);
-    if (seq === loadSeqRef.current) {
-      setSession(appSession);
-      setIsLoading(false);
-    }
-  }, []);
+  const getAccessToken = useCallback(
+    () => getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
+    [getAccessTokenSilently],
+  );
 
   useEffect(() => {
+    if (auth0Loading) return;
+    if (!isAuthenticated) {
+      setSession(null);
+      setIsLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     let cancelled = false;
-    const seqSnapshot = ++loadSeqRef.current;
 
-    const initializeSession = async () => {
-      const current = getSession();
-      const session = current ?? (await refreshSession());
-      if (!cancelled && seqSnapshot === loadSeqRef.current) {
-        await loadSession(session, controller.signal);
-      }
-    };
-
-    void initializeSession();
-    startAutoRefresh();
-
-    const unsubscribe = onAuthStateChange((supabaseSession, event) => {
-      if (event === 'SIGNED_IN' && supabaseSession) {
-        void postActivityEvent('login', supabaseSession.access_token);
-      }
-      if (!cancelled) {
-        void loadSession(supabaseSession, controller.signal);
-      }
-    });
+    getAccessToken()
+      .then((jwt) => (cancelled ? null : fetchAppSession(jwt, controller.signal)))
+      .then((appSession) => {
+        if (!cancelled) {
+          setSession(appSession);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+      });
 
     return () => {
       cancelled = true;
       controller.abort();
-      unsubscribe();
-      stopAutoRefresh();
     };
-  }, [loadSession]);
+  }, [auth0Loading, isAuthenticated, getAccessToken]);
 
   const handleSignOut = useCallback(async () => {
-    const currentSession = getSession();
-    if (currentSession) void postActivityEvent('logout', currentSession.access_token);
-    await supabaseSignOut();
+    if (session) {
+      const jwt = await getAccessToken().catch(() => null);
+      if (jwt) void postActivityEvent('logout', jwt);
+    }
+    logout({ logoutParams: { returnTo: window.location.origin } });
     setSession(null);
-  }, []);
+  }, [session, logout, getAccessToken]);
 
   return (
-    <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut }}>
+    <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}>
       {children}
     </AuthContext.Provider>
   );

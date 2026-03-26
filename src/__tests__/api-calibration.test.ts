@@ -49,14 +49,14 @@ describe('GET /api/calibration', () => {
   it('returns 200 with calibration state from KV key meta:calibration', async () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     expect(res.status).toBe(200);
   });
 
   it('returns distributions field in response body', async () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json() as Record<string, unknown>;
     expect(body).toHaveProperty('distributions');
   });
@@ -64,7 +64,7 @@ describe('GET /api/calibration', () => {
   it('returns lastCalibrated field in response body', async () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json() as Record<string, unknown>;
     expect(body).toHaveProperty('lastCalibrated');
   });
@@ -72,7 +72,7 @@ describe('GET /api/calibration', () => {
   it('returns distributions with per-metric percentile data', async () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json() as { distributions: Record<string, unknown> };
     expect(body.distributions).toHaveProperty('relevance');
     const relDist = body.distributions['relevance'] as Record<string, number>;
@@ -85,7 +85,7 @@ describe('GET /api/calibration', () => {
 
   it('returns 404 with error field when no calibration data exists in KV', async () => {
     const kv = makeKV({});
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
     expect(body).toHaveProperty('error');
@@ -94,7 +94,7 @@ describe('GET /api/calibration', () => {
   it('returns exact lastCalibrated value from KV', async () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json() as { lastCalibrated: string };
     expect(body.lastCalibrated).toBe('2026-03-10T06:00:00.000Z');
   });

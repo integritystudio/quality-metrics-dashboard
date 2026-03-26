@@ -10,6 +10,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
 
+vi.mock('jose', () => ({
+  createRemoteJWKSet: vi.fn(),
+  jwtVerify: vi.fn(),
+}));
+
 const SPA_HTML = '<!DOCTYPE html><html><body>SPA</body></html>';
 
 const mockAssets = {
@@ -29,18 +34,17 @@ function makeEnv() {
     DASHBOARD: mockKV,
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_ANON_KEY: 'test-anon-key',
+    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+    AUTH0_DOMAIN: 'test.us.auth0.com',
+    AUTH0_AUDIENCE: 'https://test.api.dev',
   };
 }
 
-// Minimal auth stub for API route tests — handles the 3 middleware fetch calls
-// so requests reach the route handler. Not needed for non-API (SPA) route tests.
+// Minimal auth stub for API route tests — handles the 2 middleware fetch calls
+// (jose.jwtVerify is mocked at module level; vi.mock is hoisted).
 function stubAuthFetch(): void {
   vi.stubGlobal('fetch', vi.fn((url: string) => {
-    if (url.includes('/auth/v1/user')) {
-      return Promise.resolve(new Response(JSON.stringify({ id: 'a0000000-0000-4000-8000-000000000001', email: 'test@example.com' }), { status: 200 }));
-    }
-    if (url.includes('/rest/v1/users')) {
+    if (url.includes('/rest/v1/users') && url.includes('auth0_id=')) {
       return Promise.resolve(new Response(JSON.stringify([{ id: 'a0000000-0000-4000-8000-000000000002', email: 'test@example.com' }]), { status: 200 }));
     }
     if (url.includes('/rest/v1/user_roles')) {
@@ -50,8 +54,10 @@ function stubAuthFetch(): void {
   }));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  const jose = vi.mocked(await import('jose'));
+  jose.jwtVerify.mockResolvedValue({ payload: { sub: 'auth0|test-user' } } as never);
   mockAssets.fetch.mockResolvedValue(
     new Response(SPA_HTML, {
       status: 200,

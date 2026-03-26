@@ -62,7 +62,6 @@ type Bindings = {
 
 type Variables = {
   session: AppSession;
-  jwt: string;
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -107,7 +106,6 @@ app.use('/api/*', async (c, next) => {
       permissions: ['dashboard.admin'],
       allowedViews: ['executive', 'operator', 'auditor'],
     });
-    c.set('jwt', jwt);
     return next();
   }
 
@@ -177,7 +175,6 @@ app.use('/api/*', async (c, next) => {
           .map(([, view]) => view);
 
     c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
-    c.set('jwt', jwt);
     return next();
   } finally {
     clearTimeout(timeout);
@@ -223,7 +220,6 @@ app.get('/api/me', (c) => {
 
 app.post('/api/logout', (c) => {
   const session = c.get('session');
-  const jwt = c.get('jwt');
   logActivity(session.appUserId ?? '', 'logout', c.env);
   return c.body(null, 204);
 });
@@ -238,7 +234,6 @@ app.post('/api/activity', async (c) => {
 
 app.get('/api/dashboard', async (c) => {
   const session = c.get('session');
-  const jwt = c.get('jwt');
   if (!hasPermission(session, 'dashboard.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
@@ -322,7 +317,6 @@ app.get('/api/trends/:name', async (c) => {
 
 app.get('/api/evaluations/trace/:traceId', async (c) => {
   const session = c.get('session');
-  const jwt = c.get('jwt');
   if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
@@ -334,7 +328,6 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
 
 app.get('/api/traces/:traceId', async (c) => {
   const session = c.get('session');
-  const jwt = c.get('jwt');
   if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, 403);
   const traceId = c.req.param('traceId');
   if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, 400);
@@ -395,7 +388,6 @@ app.get('/api/pipeline', async (c) => {
 
 app.get('/api/sessions/:sessionId', async (c) => {
   const session = c.get('session');
-  const jwt = c.get('jwt');
   if (!hasPermission(session, 'dashboard.sessions.read')) return c.json({ error: 'Forbidden' }, 403);
   const sessionId = c.req.param('sessionId');
   if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, 400);
@@ -440,7 +432,6 @@ app.get('/api/agents/:sessionId', async (c) => {
 
 app.get('/api/compliance/sla', async (c) => {
   const session = c.get('session');
-  const jwt = c.get('jwt');
   if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {
@@ -459,7 +450,6 @@ app.get('/api/compliance/sla', async (c) => {
 
 app.get('/api/compliance/verifications', async (c) => {
   const session = c.get('session');
-  const jwt = c.get('jwt');
   if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, 403);
   const period = c.req.query('period') ?? '7d';
   if (!['24h', '7d', '30d'].includes(period)) {

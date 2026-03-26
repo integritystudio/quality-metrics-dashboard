@@ -5,6 +5,7 @@ import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
 import { AuthProvider } from './contexts/AuthContext.js';
+import { Auth0Provider, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { HealthOverview } from './components/HealthOverview.js';
@@ -292,6 +293,14 @@ export function App() {
 
   return (
     <Router base={BASE_PATH}>
+      <Auth0Provider
+        domain={AUTH0_DOMAIN}
+        clientId={AUTH0_CLIENT_ID}
+        authorizationParams={{
+          redirect_uri: `${window.location.origin}/callback`,
+          audience: AUTH0_AUDIENCE,
+        }}
+      >
       <AuthProvider>
         <KeyboardNavProvider>
           <RoleProvider>
@@ -300,6 +309,10 @@ export function App() {
               <Switch>
                 <Route path="/login">
                   <LoginPage />
+                </Route>
+                <Route path="/callback">
+                  {/* Auth0 handles the token exchange on mount via Auth0Provider */}
+                  <div className="auth-loading" role="status" aria-label="Loading" />
                 </Route>
                 <RequireAuth>
                   <Layout period={period} onPeriodChange={setPeriod}>
@@ -413,6 +426,7 @@ export function App() {
           </RoleProvider>
         </KeyboardNavProvider>
       </AuthProvider>
+      </Auth0Provider>
     </Router>
   );
 }

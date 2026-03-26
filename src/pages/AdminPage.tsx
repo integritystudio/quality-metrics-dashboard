@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useAuth } from '../contexts/AuthContext.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
-import { getSession, refreshSession } from '../lib/supabase.js';
 import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
 import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
 
@@ -14,20 +14,6 @@ const ADMIN_TABLE_COLUMNS = [
   { label: 'Assign Role', align: 'left' as const },
   { label: 'Joined', align: 'right' as const },
 ];
-
-async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
-  let session = getSession();
-  if (!session) session = await refreshSession();
-  if (!session?.access_token) throw new Error('AUTH_REQUIRED');
-  return fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-    },
-    ...(body !== undefined && { body: JSON.stringify(body) }),
-  });
-}
 
 function RoleChip({
   role,
@@ -67,10 +53,23 @@ function UserRow({
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { getAccessToken } = useAuth();
 
   const assignableRoles = availableRoles.filter(
     (r) => !user.roles.some((ur) => ur.id === r.id),
   );
+
+  async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
+    const token = await getAccessToken();
+    return fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+  }
 
   async function handleAssign() {
     if (!selectedRoleId) return;

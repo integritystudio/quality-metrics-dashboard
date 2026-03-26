@@ -8,8 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
 
-const MOCK_JWT = 'test-token';
-const MOCK_AUTH_USER_ID = 'a0000000-0000-4000-8000-000000000001';
+const MOCK_AUTH0_ID = 'auth0|test-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 
 const AUDITOR_PERMISSIONS = ['dashboard.read', 'dashboard.auditor', 'dashboard.compliance.read', 'dashboard.traces.read', 'dashboard.sessions.read'];
@@ -31,30 +30,25 @@ function makeEnv() {
     DASHBOARD: mockKV,
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_ANON_KEY: 'test-anon-key',
+    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+    AUTH0_DOMAIN: 'test.us.auth0.com',
+    AUTH0_AUDIENCE: 'https://test.api.dev',
   };
 }
 
 function authHeaders() {
-  return { Authorization: `Bearer ${MOCK_JWT}` };
+  return { Authorization: 'Bearer mock-jwt' };
 }
 
 function mockAuthSequence(fetchMock: ReturnType<typeof vi.fn>, options?: { rejectActivity?: boolean }) {
-  // Set up a reusable implementation that returns appropriate responses based on URL
   const callCount = new Map<string, number>();
 
   fetchMock.mockImplementation((url: string) => {
     const count = (callCount.get(url) ?? 0) + 1;
     callCount.set(url, count);
 
-    // Auth user endpoint
-    if (url.includes('/auth/v1/user')) {
-      return Promise.resolve(
-        new Response(JSON.stringify({ id: MOCK_AUTH_USER_ID, email: 'user@test.com' }), { status: 200 })
-      );
-    }
-    // Get app user by auth ID — has limit=1 to distinguish from admin's order=created_at query
-    if (url.includes('/rest/v1/users') && url.includes('limit=1')) {
+    // Get app user by auth0_id — has auth0_id= and limit=1
+    if (url.includes('/rest/v1/users') && url.includes('auth0_id=') && url.includes('limit=1')) {
       return Promise.resolve(
         new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'user@test.com' }]), { status: 200 })
       );
@@ -74,10 +68,17 @@ function mockAuthSequence(fetchMock: ReturnType<typeof vi.fn>, options?: { rejec
   });
 }
 
+vi.mock('jose', () => ({
+  createRemoteJWKSet: vi.fn(),
+  jwtVerify: vi.fn(),
+}));
+
 let fetchMock: ReturnType<typeof vi.fn>;
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  const jose = vi.mocked(await import('jose'));
+  jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
 });

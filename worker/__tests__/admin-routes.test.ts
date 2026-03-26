@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
 
-const MOCK_AUTH_USER_ID = 'a0000000-0000-4000-8000-000000000001';
+const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 
 // Auditor has no dashboard.admin permission
@@ -37,8 +37,9 @@ function makeEnv(overrides?: Partial<Record<string, unknown>>) {
     DASHBOARD: mockKV,
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_ANON_KEY: 'test-anon-key',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+    AUTH0_DOMAIN: 'test.us.auth0.com',
+    AUTH0_AUDIENCE: 'https://test.api.dev',
     ...overrides,
   };
 }
@@ -49,25 +50,21 @@ function adminHeaders() {
 
 /**
  * Wraps a route-level fetch handler with auth middleware responses.
- * The auth middleware makes 3 sequential Supabase calls before the route handler runs:
- *   1. GET /auth/v1/user — verify JWT, get authUserId
- *   2. GET /rest/v1/users?...&limit=1 — resolve appUserId
- *   3. GET /rest/v1/user_roles?select=roles(name,permissions)&... — load permissions
- * This helper intercepts those three by URL pattern and delegates everything else
+ * The auth middleware makes 2 sequential Supabase calls (jose.jwtVerify is mocked separately):
+ *   1. GET /rest/v1/users?auth0_id=eq.{auth0Id}&limit=1 — resolve appUserId
+ *   2. GET /rest/v1/user_roles?select=roles(name,permissions)&... — load permissions
+ * This helper intercepts those two by URL pattern and delegates everything else
  * to the provided routeHandler.
  */
 function withAdminAuth(
   routeHandler: (url: string, init?: RequestInit) => Promise<Response>,
 ): (url: string, init?: RequestInit) => Promise<Response> {
   return (url: string, init?: RequestInit) => {
-    if (url.includes('/auth/v1/user')) {
-      return Promise.resolve(new Response(JSON.stringify({ id: MOCK_AUTH_USER_ID, email: 'admin@test.com' }), { status: 200 }));
-    }
-    // Auth user lookup: has limit=1 (distinguishes from admin's order=created_at.desc query)
-    if (url.includes('/rest/v1/users') && url.includes('limit=1')) {
+    // Auth user lookup: has auth0_id= and limit=1
+    if (url.includes('/rest/v1/users') && url.includes('auth0_id=') && url.includes('limit=1')) {
       return Promise.resolve(new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'admin@test.com' }]), { status: 200 }));
     }
-    // Auth roles: has roles(name,permissions) (distinguishes from admin's user_id,role_id query)
+    // Auth roles: has roles(name,permissions)
     if (url.includes('/rest/v1/user_roles') && url.includes('roles(name,permissions)')) {
       return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: 200 }));
     }
@@ -78,12 +75,7 @@ function withAdminAuth(
 /** Mock a non-admin auth sequence (auditor permissions, no dashboard.admin). */
 function mockAuditorAuthSequence(fetchMock: ReturnType<typeof vi.fn>) {
   fetchMock.mockImplementation((url: string) => {
-    if (url.includes('/auth/v1/user')) {
-      return Promise.resolve(
-        new Response(JSON.stringify({ id: MOCK_AUTH_USER_ID, email: 'auditor@test.com' }), { status: 200 }),
-      );
-    }
-    if (url.includes('/rest/v1/users')) {
+    if (url.includes('/rest/v1/users') && url.includes('auth0_id=')) {
       return Promise.resolve(
         new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'auditor@test.com' }]), { status: 200 }),
       );
@@ -99,12 +91,18 @@ function mockAuditorAuthSequence(fetchMock: ReturnType<typeof vi.fn>) {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
-beforeEach(() => {
+vi.mock('jose', () => ({
+  createRemoteJWKSet: vi.fn(),
+  jwtVerify: vi.fn(),
+}));
+
+beforeEach(async () => {
   vi.clearAllMocks();
+  const jose = vi.mocked(await import('jose'));
+  jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   // Default: admin auth succeeds; route handler returns 200 for unmatched calls.
-  // Tests that need specific route responses override via fetchMock.mockImplementation.
   fetchMock.mockImplementation(withAdminAuth(() => Promise.resolve(new Response(null, { status: 200 }))));
 });
 

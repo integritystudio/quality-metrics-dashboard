@@ -6,6 +6,10 @@ account_id = "b3868dd0fd5c0faa7d98aa325a9c2377"
 [observability]
 enabled = true
 
+[vars]
+AUTH0_DOMAIN = "dev-68gg87ow4mg4kzyo.us.auth0.com"
+AUTH0_AUDIENCE = "https://api.integritystudio.dev"
+
 [[kv_namespaces]]
 binding = "DASHBOARD"
 id = "902fc8a43e7147b486b6376c485c4506"
