@@ -5,6 +5,7 @@ import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
 const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 const ATTR_AGENT_ID = 'gen_ai.agent.id';
 const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
+const SPAN_NAME_TOOL_CALL = 'tool_call';
 /**
  * Epsilon tolerance (nanoseconds) for near-concurrent span edge inference.
  * Spans whose end and start differ by less than this value are treated as
@@ -50,6 +51,16 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     }
   }
 
+  // Pre-group spans by agent name in a single O(M) pass to avoid O(N*M) nested iteration
+  const spansByAgent = new Map<string, TraceSpan[]>();
+  for (const s of spans) {
+    const name = s.attributes?.[ATTR_AGENT_NAME] as string | undefined;
+    if (!name) continue;
+    const group = spansByAgent.get(name);
+    if (group) group.push(s);
+    else spansByAgent.set(name, [s]);
+  }
+
   const nodes: WorkflowNode[] = [];
   for (const [agentName, turns] of agentTurns) {
     const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
@@ -61,9 +72,8 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     let tokenSum = 0;
     let tokenCount = 0;
     let durationMs = 0;
-    for (const s of spans) {
-      if (s.attributes?.[ATTR_AGENT_NAME] !== agentName) continue;
-      if (s.name === 'tool_call') toolCallCount++;
+    for (const s of spansByAgent.get(agentName) ?? []) {
+      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
       const v = s.attributes?.[ATTR_TOTAL_TOKENS];
       if (typeof v === 'number' && isFinite(v)) {
         tokenSum += v;
