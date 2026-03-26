@@ -2,7 +2,7 @@ import { memo } from 'react';
 import type { PipelineStage, PipelineDropoff } from '../types.js';
 import { EmptyState } from './EmptyState.js';
 import { formatPercent } from '../lib/quality-utils.js';
-import { FUNNEL_BAR_HEIGHT, FUNNEL_BAR_MIN_WIDTH, FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
+import { FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
 
 interface PipelineFunnelProps {
   stages: PipelineStage[];
@@ -38,8 +38,6 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                   className="d-flex funnel-bar"
                   style={{
                     width: `${widthPct}%`,
-                    minWidth: FUNNEL_BAR_MIN_WIDTH,
-                    height: FUNNEL_BAR_HEIGHT,
                     background: `var(--stage-${stage.name}, var(--accent))`,
                   }}
                   role="meter"
@@ -61,7 +59,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
               {showDropoff && (
                 <div
                   className="text-xs funnel-dropoff"
-                  style={{ color: dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT ? 'var(--status-warning)' : 'var(--text-secondary)' }}
+                  data-warn={dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT || undefined}
                 >
                   {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
                 </div>

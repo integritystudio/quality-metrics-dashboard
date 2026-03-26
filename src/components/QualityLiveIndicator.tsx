@@ -28,11 +28,6 @@ export function QualityLiveIndicator() {
       className="quality-live-bar flex-center gap-2 text-xs surface-elevated"
       role="status"
       aria-label="Live quality signals"
-      style={{
-        flexWrap: 'wrap',
-        padding: 'var(--space-1-5) var(--space-3)',
-        borderRadius: 'var(--radius)',
-      }}
     >
       <span className="text-secondary font-semibold mr-1">
         Quality

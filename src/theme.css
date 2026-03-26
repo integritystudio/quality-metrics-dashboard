@@ -837,6 +837,11 @@ details[open] > .cot-summary::before {
 .span-status-icon[data-error] {
   color: var(--status-critical);
 }
+.quality-live-bar {
+  flex-wrap: wrap;
+  padding: var(--space-1-5) var(--space-3);
+  border-radius: var(--radius);
+}
 .cqi-value {
   font-size: var(--font-size-3xl);
   line-height: 1.2;
@@ -951,11 +956,17 @@ details[open] > .cot-summary::before {
   justify-content: space-between;
   padding: 0 var(--space-2-5);
   transition: width 0.3s ease;
+  min-width: 40px;
+  height: 32px;
 }
-/* Funnel drop-off indicator — dynamic color set via inline style */
+/* Funnel drop-off indicator — color driven by data-warn attribute */
 .funnel-dropoff {
   padding-left: var(--space-2-5);
   margin: var(--space-0-5) 0;
+  color: var(--text-secondary);
+}
+.funnel-dropoff[data-warn] {
+  color: var(--status-warning);
 }
 
 /* Worst explanation preview on MetricCard */
