@@ -222,7 +222,6 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       )}
 
                       <div className="agent-expanded-grid">
-                        {/* sessionCount === total unique sessions; sessionIds is capped at 50 */}
                         <IdListColumn
                           label="Sessions"
                           ids={agent.sessionIds}
@@ -250,7 +249,6 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
   );
 }
 
-/** Per-agent evaluation metrics (relevance, coherence, faithfulness, etc.) */
 function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetricSummary> }) {
   const metrics = Object.entries(evalSummary);
   if (metrics.length === 0) {
@@ -293,7 +291,6 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
   );
 }
 
-/** Summary bar above the table -- totals at a glance */
 export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
   const totalInvocations = agents.reduce((s, a) => s + a.invocations, 0);
   const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
