@@ -1,3 +1,20 @@
+f16648a 2026-03-26 refactor(judge): remove what-comments in directory scan and turn conversion
+  scripts/judge-evaluations.ts
+
+81cc510 2026-03-26 refactor(sync-to-kv): remove what-comments in session grouping and phase 3
+  scripts/sync-to-kv.ts
+
+72b0798 2026-03-26 refactor(sync-to-kv): remove section separators and what-comments
+  scripts/sync-to-kv.ts
+
+406095a 2026-03-26 refactor(api): consolidate attrStr/attrNum/spanAttr helpers into api-constants
+  scripts/sync-to-kv.ts
+
+5c57a9d 2026-03-26 chore: regenerate repomix docs after Round 13 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 ce7da7d 2026-03-26 chore: regenerate repomix docs after Round 12 simplifications
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -316,18 +333,3 @@ f4389f8 2026-03-26 chore: regenerate repomix docs after simplification round 1
   docs/repomix/repomix-docs.xml
   docs/repomix/repomix-git-ranked.xml
   docs/repomix/repomix.xml
-
-d5649a4 2026-03-26 refactor(sync-to-kv): hoist inline constants to module level, use arrayAvg helper
-  scripts/sync-to-kv.ts
-
-77efc6d 2026-03-26 refactor(components): replace inline styles with CSS classes in HandoffCard and EvaluationExpandedRow
-  src/theme.css
-
-4f15191 2026-03-26 refactor(sync-to-kv): replace hardcoded period calculations and inline options with constants
-  scripts/sync-to-kv.ts
-
-b265898 2026-03-26 refactor(components): extract ConfidencePanel grid inline style to .confidence-stats-grid CSS class
-  src/theme.css
-
-85a34fc 2026-03-26 refactor(sync-to-kv): replace magic numbers with named constants from api-constants
-  scripts/sync-to-kv.ts

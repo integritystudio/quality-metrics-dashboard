@@ -45,6 +45,20 @@ Open items from code reviews and deferred work.
 
 **Status**: TF-4 — Audited: mocks defined only in `WorkflowGraph.test.tsx`; no duplicates. TF-5 — Audited: banners appear alongside `describe` blocks throughout; retained as visual separators (low value to remove).
 
+### CR: Worker API — Validation / Security
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| CR-WK-1 | **KV reads cast without Zod validation** — `worker/index.ts:289-290` casts KV result to `{ rows: Record<string, unknown>[] } \| null` and accesses `.rows` directly; `worker/index.ts:457-460` casts to `Record<string, unknown>` and accesses `dashboard['slaCompliance']` — both should parse through a Zod schema before property access to catch schema drift early | P1 | code-review 2026-03-26 |
+| CR-WK-2 | **Logout audit event drops user ID on unauthenticated-path sessions** — `worker/index.ts:242` passes `session.appUserId ?? ''` to `logActivity`; passing empty string silently creates an audit record with no user link if `appUserId` is absent (e.g. test-bypass or partially-constructed session) | P1 | code-review 2026-03-26 |
+| CR-WK-3 | **Pagination params use `parseInt` instead of Zod coerce; `sortBy` has no enum validation** — `worker/index.ts:284-286`: `limit`/`offset` parsed with `parseInt()` (no schema, silent coercion); `sortBy` accepted as raw string with only an if-chain guard (lines 295-296), not validated against an enum — invalid values fall through to default sort silently | P2 | code-review 2026-03-26 |
+| CR-WK-4 | **`tsMin`/`tsMax` extreme-value edge case** — `sessions.ts:238-265`: `parseTimestamp` guards `NaN` but not values outside `Date.toISOString()` safe range (±100 million days from epoch); a malformed far-future timestamp would pass the `tsMin < Infinity` guard at line 262 and cause `new Date(tsMax).toISOString()` to throw a `RangeError` | P2 | code-review 2026-03-26 |
+| CR-WK-5 | **Log severity cast should use `typeof` check** — `sessions.ts:260`: `(l as { severity?: string }).severity` casts without verifying shape; replace with explicit check `typeof (l as Record<string, unknown>).severity === 'string'` or a Zod schema | P3 | code-review 2026-03-26 |
+| CR-WK-6 | **KV data lacks schema versioning** — no version field in KV payloads; schema changes during deploy can cause old cached data to be read with the new schema without detection | P3 | code-review 2026-03-26 |
+| CR-WK-7 | **Admin user spread via `...(raw as object)` is a weak pattern** — `worker/index.ts:548`: spreading `raw as object` before Zod parse allows prototype pollution if `raw` contains inherited properties; prefer explicit field selection before passing to `AdminUserSchema.safeParse` | P3 | code-review 2026-03-26 |
+| CR-WK-8 | **Inconsistent error response shapes across routes** — some routes return `{ error: string }`, others return plain status codes; standardise on a single error envelope | P4 | code-review 2026-03-26 |
+| CR-WK-9 | **Fire-and-forget audit logging can lose events** — `logActivity` is not awaited (intentionally, for latency); network or Supabase failures are silently swallowed — consider a best-effort retry or dead-letter queue for compliance-critical events | P4 | code-review 2026-03-26 |
+
 ### CR: Security — Critical
 
 | # | Item | Priority | Source |
