@@ -76,7 +76,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     const rangeMs = end.getTime() - start.getTime();
     const bucketMs = rangeMs / bucketCount;
 
-    // Group evaluations into time buckets (single pass — avoids O(n*buckets) re-filter later)
+    // single pass — avoids O(n*buckets) re-filter later
     type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
     const buckets: BucketEntry[] = [];
 
