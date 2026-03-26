@@ -395,7 +395,9 @@ body {
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   min-width: 120px;
+  border: var(--border-width-thick) solid var(--turn-color, var(--border));
 }
+.turn-card-agent { color: var(--turn-color, var(--text-secondary)); }
 
 /* Histogram */
 .histogram {
