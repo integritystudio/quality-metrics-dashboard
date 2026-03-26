@@ -25,6 +25,16 @@ type AgentAcc = {
   dailyCounts: number[];
 };
 
+function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+    count: sorted.length,
+  };
+}
+
 function createAgentAccumulator(periodDays: number): AgentAcc {
   return {
     invocations: 0,
@@ -125,13 +135,7 @@ agentRoutes.get('/agents', async (c) => {
       const evalMetrics = agentEvalAcc[agentName] ?? {};
       const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
       for (const [metric, scores] of Object.entries(evalMetrics)) {
-        const sorted = [...scores].sort((a, b) => a - b);
-        evalSummary[metric] = {
-          avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-          min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-          max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
-          count: sorted.length,
-        };
+        evalSummary[metric] = computeEvalMetricSummary(scores);
       }
 
       const sessionIdList = [...d.sessions];
