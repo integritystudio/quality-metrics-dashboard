@@ -44,7 +44,7 @@ function parseTimestamp(value: string | undefined | null): number | null {
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
-  return sorted[Math.max(0, idx)];
+  return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
 }
 
 

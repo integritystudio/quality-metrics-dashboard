@@ -45,6 +45,7 @@ const ERR_INTERNAL = 'Internal server error';
 const ERR_NO_DATA = 'No data available';
 const ERR_NO_CALIBRATION_DATA = 'No calibration data available';
 const ERR_ROUTING_TELEMETRY_MALFORMED = 'Routing telemetry data is malformed';
+const ERR_FAILED_LOAD_USER_ROLES = 'Failed to load user roles';
 
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
@@ -201,7 +202,7 @@ app.use('/api/*', async (c, next) => {
     ).catch(() => null);
     if (!rolesRes?.ok) {
       console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes?.status ?? 'network error');
-      return c.json({ error: 'Failed to load user roles' }, Http.InternalServerError);
+      return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, Http.InternalServerError);
     }
     const rawRows: unknown = await rolesRes.json().catch(() => []);
     const rows = safeArray(rawRows);
