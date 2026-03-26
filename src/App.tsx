@@ -39,7 +39,7 @@ import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './context/CalibrationContext.js';
 import { useAuth } from './contexts/AuthContext.js';
-import { ROLES } from './lib/constants.js';
+import { ROLES, SKELETON_HEIGHT_MD, SKELETON_HEIGHT_XL } from './lib/constants.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -132,7 +132,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
     return (
       <div>
         <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-        <div className="card skeleton" style={{ height: 300 }} />
+        <div className="card skeleton" style={{ height: SKELETON_HEIGHT_MD }} />
       </div>
     );
   }
@@ -151,7 +151,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   return (
     <div>
       <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-      <div className="card" style={{ marginBottom: 24 }}>
+      <div className="card mb-6">
         <div className="metric-card-header flex-center">
           <h2 className="text-lg">{detail.displayName}</h2>
           <StatusBadge status={detail.status} />
@@ -394,7 +394,7 @@ export function App() {
                       <Route path="/workflows/:sessionId">
                         {(params) => (
                           <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <Suspense fallback={<div className="card skeleton" style={{ height: 600 }} />}>
+                            <Suspense fallback={<div className="card skeleton" style={{ height: SKELETON_HEIGHT_XL }} />}>
                               <WorkflowPage sessionId={params.sessionId} />
                             </Suspense>
                           </ErrorBoundary>

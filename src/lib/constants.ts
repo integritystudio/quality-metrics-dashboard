@@ -109,6 +109,7 @@ export const METRIC_CARD_SKELETON_HEIGHT = 180;
 export const SKELETON_HEIGHT_SM = 200;
 export const SKELETON_HEIGHT_MD = 300;
 export const SKELETON_HEIGHT_LG = 400;
+export const SKELETON_HEIGHT_XL = 600;
 export const ICON_BADGE_SIZE = 24;
 export const CALLOUT_MAX_WIDTH = 480;
 export const PAGE_CONTENT_MAX_WIDTH = 1100;
