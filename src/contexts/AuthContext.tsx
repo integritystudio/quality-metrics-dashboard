@@ -52,8 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (auth0Loading) return;
     if (!isAuthenticated) {
-      setSession(null);
-      setIsLoading(false);
+      Promise.resolve().then(() => {
+        setSession(null);
+        setIsLoading(false);
+      });
       return;
     }
 

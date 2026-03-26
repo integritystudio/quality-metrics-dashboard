@@ -181,7 +181,7 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
     }
   }
 
-  const logCount = transcripts.length;
+  const _logCount = transcripts.length;
 
   // Phase 2: Directory scan for transcripts not referenced in logs
   for (const dir of TRANSCRIPT_DIRS) {

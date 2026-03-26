@@ -8,7 +8,7 @@ import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 /** Bucket evaluations into N time bins and return avg scores per bucket */
 function computeSparklineData(

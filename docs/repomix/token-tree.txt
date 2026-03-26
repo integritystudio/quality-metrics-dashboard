@@ -1,6 +1,6 @@
 🔢 Token Count Tree:
 ────────────────────
-├── scripts/ (31,419 tokens)
+├── scripts/ (31,496 tokens)
 │   ├── .degradation-incidents.json (277 tokens)
 │   ├── .kv-sync-coverage.json (71 tokens)
 │   ├── backtest-degradation.ts (2,696 tokens)
@@ -9,12 +9,12 @@
 │   ├── find_duplication_tsx.sh (2,219 tokens)
 │   ├── generate-token-tree.js (390 tokens)
 │   ├── generate-token-tree.sh (128 tokens)
-│   ├── judge-evaluations.ts (8,604 tokens)
+│   ├── judge-evaluations.ts (8,681 tokens)
 │   ├── populate-dashboard.ts (583 tokens)
 │   ├── sync-to-kv.ts (11,323 tokens)
 │   └── update-readme-tree.sh (1,175 tokens)
-└── src/ (94,651 tokens)
-    ├── App.tsx (3,912 tokens)
+└── src/ (94,648 tokens)
+    ├── App.tsx (3,909 tokens)
     ├── main.tsx (253 tokens)
     ├── theme.css (8,127 tokens)
     ├── types.ts (321 tokens)

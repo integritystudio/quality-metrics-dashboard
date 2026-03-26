@@ -49,8 +49,6 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
   const { level, sampleCount, scoreStdDev, evaluatorCount, evaluatorAgreement } = confidence;
   const method = evaluatorCount > 1 ? 'multi-judge agreement' : sampleCount > CONFIDENCE_MIN_SAMPLE_SIZE ? 'sample size' : 'sample count';
 
-  const hasMultiJudge = evaluatorScores && evaluatorScores.length > 1;
-
   return (
     <div className="text-xs">
       <div className="confidence-header flex-center">

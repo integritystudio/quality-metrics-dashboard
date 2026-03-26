@@ -1,3 +1,14 @@
+2172425 2026-03-26 refactor(judge,auth): replace magic numbers with constants and fix Auth0 redirect URI
+  scripts/judge-evaluations.ts
+
+1c8a6fd 2026-03-26 refactor(judge): clean up dead code and extract toolContext variable
+  scripts/judge-evaluations.ts
+
+0b068d9 2026-03-26 test(auth,constants): add regression tests for auth0 env validation and API_BASE double-path bug
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 fd57a5c 2026-03-26 refactor(components): extract shared helpers, replace magic numbers, and consolidate CSS
   src/theme.css
 
@@ -331,13 +342,4 @@ d66fac9 2026-03-01 refactor(FreqBar): replace hardcoded widths with CSS grid lay
   src/theme.css
 
 1a11f57 2026-03-01 refactor(theme): complete mono matrix and fill gap/margin utility gaps (L3, L4)
-  src/theme.css
-
-d535ad7 2026-03-01 refactor(theme): standardize fade-in animation to var(--transition-fast) (L2)
-  src/theme.css
-
-d165340 2026-03-01 refactor(theme): replace hardcoded px values with space tokens (L1)
-  src/theme.css
-
-5bf70ab 2026-03-01 refactor(theme): extract shared font-size to tooltip popup base rule (M4)
   src/theme.css
