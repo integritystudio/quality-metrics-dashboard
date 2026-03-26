@@ -171,7 +171,11 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
         }
       });
     return () => { cancelled = true; };
-  }, [graph.nodes, graph.edges, setNodes, setEdges]);
+    // CR-PERF-3: setNodes/setEdges are stable refs from useNodesState/useEdgesState but
+    // were in the dep array, causing unnecessary ELK re-runs each render cycle.
+    // Omitted here — layout should only recompute when graph data actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph.nodes, graph.edges]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onNodeClick?.(node.id);
