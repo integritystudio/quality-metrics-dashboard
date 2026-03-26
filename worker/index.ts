@@ -11,17 +11,23 @@ import { supabasePost } from '../src/lib/supabase-rest.js';
 export type { DashboardPermission, AppSession };
 
 const Http = {
-  Ok: 200 as const,
-  NoContent: 204 as const,
-  BadRequest: 400 as const,
-  Unauthorized: 401 as const,
-  Forbidden: 403 as const,
-  NotFound: 404 as const,
-  InternalServerError: 500 as const,
-};
+  Ok: 200,
+  NoContent: 204,
+  BadRequest: 400,
+  Unauthorized: 401,
+  Forbidden: 403,
+  NotFound: 404,
+  InternalServerError: 500,
+} as const satisfies Record<string, number>;
 
 const VALID_PERIOD_KEYS = ['24h', '7d', '30d'] as const;
 const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
+
+const PARAM_RE = /^[\w:.-]+$/;
+const MAX_PARAM_LEN = 200;
+function isValidId(id: string | undefined): id is string {
+  return !!id && id.length <= MAX_PARAM_LEN && PARAM_RE.test(id);
+}
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
@@ -270,7 +276,7 @@ app.get('/api/dashboard', async (c) => {
 app.get('/api/metrics/:name/evaluations', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const name = c.req.param('name');
-  if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -297,7 +303,7 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
 app.get('/api/metrics/:name', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const name = c.req.param('name');
-  if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`metric:${name}`, 'json');
   if (!data) {
     return c.json({
@@ -318,7 +324,7 @@ app.get('/api/metrics/:name', async (c) => {
 app.get('/api/trends/:name', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const name = c.req.param('name');
-  if (!name || name.length > 200 || !/^[\w:.-]+$/.test(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -332,7 +338,7 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const traceId = c.req.param('traceId');
-  if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, Http.BadRequest);
+  if (!isValidId(traceId)) return c.json({ error: 'Invalid traceId' }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
   logActivity(session.appUserId ?? '', 'trace_view', c.env);
@@ -343,7 +349,7 @@ app.get('/api/traces/:traceId', async (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const traceId = c.req.param('traceId');
-  if (!traceId || traceId.length > 200 || !/^[\w:.-]+$/.test(traceId)) return c.json({ error: 'Invalid traceId' }, Http.BadRequest);
+  if (!isValidId(traceId)) return c.json({ error: 'Invalid traceId' }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, Http.NotFound);
   logActivity(session.appUserId ?? '', 'trace_view', c.env);
@@ -403,7 +409,7 @@ app.get('/api/sessions/:sessionId', async (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.sessions.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const sessionId = c.req.param('sessionId');
-  if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, Http.BadRequest);
+  if (!isValidId(sessionId)) return c.json({ error: 'Invalid sessionId' }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
   logActivity(session.appUserId ?? '', 'session_view', c.env);
@@ -420,9 +426,7 @@ app.get('/api/agents', async (c) => {
 app.get('/api/agents/detail/:agentId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const agentId = c.req.param('agentId');
-  if (!agentId || agentId.length > 200 || !/^[\w:.-]+$/.test(agentId)) {
-    return c.json({ error: 'Invalid agentId' }, Http.BadRequest);
-  }
+  if (!isValidId(agentId)) return c.json({ error: 'Invalid agentId' }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`agent:${agentId}`, 'json');
   if (!data) return c.json({ error: `No data for agent: ${agentId}` }, Http.NotFound);
   return c.json(data);
@@ -431,7 +435,7 @@ app.get('/api/agents/detail/:agentId', async (c) => {
 app.get('/api/agents/:sessionId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
   const sessionId = c.req.param('sessionId');
-  if (!sessionId || sessionId.length > 200 || !/^[\w:.-]+$/.test(sessionId)) return c.json({ error: 'Invalid sessionId' }, Http.BadRequest);
+  if (!isValidId(sessionId)) return c.json({ error: 'Invalid sessionId' }, Http.BadRequest);
   const session = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json') as Record<string, unknown> | null;
   if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
   return c.json({
