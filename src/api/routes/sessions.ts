@@ -88,12 +88,6 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
   return result.traces;
 }
 
-/**
- * GET /api/sessions/:sessionId
- *
- * Returns structured session data from all available telemetry sources:
- * traces, logs, and evaluations — queried in parallel by sessionId.
- */
 sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidParam(sessionId, PARAM_ID_RE)) {
