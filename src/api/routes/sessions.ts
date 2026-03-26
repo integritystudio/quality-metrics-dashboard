@@ -15,6 +15,7 @@ import {
   OTEL_STATUS_ERROR_CODE,
   PARAM_ID_RE,
   PERCENT_BASE,
+  LATENCY_DISPLAY_PRECISION,
 } from '../api-constants.js';
 import {
   loadEvaluationsBySessionId,
@@ -116,7 +117,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const timespan = tsMin < Infinity ? {
       start: new Date(tsMin).toISOString(),
       end: new Date(tsMax).toISOString(),
-      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(1),
+      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
     } : null;
 
     // ---- Session Info from session-start spans ----
@@ -198,10 +199,10 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       const sorted = durations.sort((a, b) => a - b);
       hookLatency[name] = {
         count: sorted.length,
-        avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(1),
-        p50: +percentile(sorted, LATENCY_P50).toFixed(1),
-        p95: +percentile(sorted, LATENCY_P95).toFixed(1),
-        max: +sorted[sorted.length - 1].toFixed(1),
+        avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
+        p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
+        p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
+        max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
       };
     }
 

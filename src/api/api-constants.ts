@@ -5,6 +5,9 @@ export const PERCENT_BASE = 100;
 export const LATENCY_P50 = 50;
 export const LATENCY_P95 = 95;
 
+/** Decimal places for displaying latency/duration values. */
+export const LATENCY_DISPLAY_PRECISION = 1;
+
 /** OpenTelemetry status code representing an error. */
 export const OTEL_STATUS_ERROR_CODE = 2;
 
