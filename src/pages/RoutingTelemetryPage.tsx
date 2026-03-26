@@ -5,6 +5,8 @@ import type { Period } from '../types.js';
 
 const PERCENT_MULTIPLIER = 100;
 
+const byValueDesc = ([, a]: [string, number], [, b]: [string, number]) => b - a;
+
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
   return 'strategy' in g && !('pair' in g);
 }
@@ -59,7 +61,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                 </thead>
                 <tbody>
                   {Object.entries(data.providerDistribution)
-                    .sort(([, a], [, b]) => b - a)
+                    .sort(byValueDesc)
                     .map(([provider, count]) => (
                       <tr key={provider}>
                         <td className="mono">{provider}</td>
@@ -89,7 +91,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                 </thead>
                 <tbody>
                   {Object.entries(data.modelDistribution)
-                    .sort(([, a], [, b]) => b - a)
+                    .sort(byValueDesc)
                     .map(([model, count]) => (
                       <tr key={model}>
                         <td className="mono">{model}</td>
