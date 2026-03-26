@@ -139,8 +139,8 @@ export async function loadTracesBySessionId(sessionId: string, startDate?: strin
   return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
 }
 
-export async function loadLogsByTraceId(
-  traceId: string,
+async function queryLogsWithDefaultRange(
+  filter: { traceId?: string; sessionId?: string },
   startDate?: string,
   endDate?: string,
 ): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
@@ -148,13 +148,16 @@ export async function loadLogsByTraceId(
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
   const start = toDateOnly(startDate ?? defStart);
   const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({
-    traceId,
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_LOGS,
-  });
+  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
   return result.logs;
+}
+
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
 }
 
 export async function loadVerifications(opts: {
@@ -177,17 +180,7 @@ export async function loadLogsBySessionId(
   startDate?: string,
   endDate?: string,
 ): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({
-    sessionId,
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_LOGS,
-  });
-  return result.logs;
+  return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
 }
 
 export async function loadEvaluationsBySessionId(
