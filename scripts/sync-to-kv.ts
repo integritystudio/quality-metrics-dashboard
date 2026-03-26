@@ -886,8 +886,9 @@ async function main(): Promise<void> {
       }
 
       // R5: Save buckets for degradation signal computation
-      if (!degradationBuckets.has(period)) degradationBuckets.set(period, {});
-      degradationBuckets.get(period)![name] = timeBuckets.map(b => ({
+      let degradBucket = degradationBuckets.get(period);
+      if (!degradBucket) degradationBuckets.set(period, degradBucket = {});
+      degradBucket[name] = timeBuckets.map(b => ({
         scores: b.scores,
         startTime: b.startTime,
         endTime: b.endTime,
