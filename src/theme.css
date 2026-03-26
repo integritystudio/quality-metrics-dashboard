@@ -581,6 +581,15 @@ body {
 }
 
 /* Session detail — stat item, stat value, stat label, vitals divider, frequency grid */
+.agent-stat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: var(--space-2-5) var(--space-3-5);
+}
+.agent-stat-card[data-has-error='true'] {
+  border-color: var(--status-warning);
+}
 .session-detail-header {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);

@@ -248,7 +248,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               items={failedEvals}
               max={MAX_FAILED_EVAL_ROWS}
               renderItem={(e, i) => (
-                <div key={i} className="mono-xs" style={{ marginBottom: 'var(--space-1)' }}>
+                <div key={i} className="mono-xs mb-1">
                   <span className="text-warning">⚠</span>{' '}
                   {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
                 </div>
@@ -321,14 +321,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={agentActivity.map(a => `${a.agentName} ×${a.invocations}`).join(' · ')}
           health={agentActivity.some(a => a.errors > 0) ? 'warn' : 'neutral'}
         >
-          <div className="gap-2-5" style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${AGENT_CARD_MIN_WIDTH}, 1fr))` }}>
+          <div className="d-grid gap-2-5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${AGENT_CARD_MIN_WIDTH}, 1fr))` }}>
             {agentActivity.map(a => (
-              <div key={a.agentName} style={{
-                background: 'var(--bg-elevated)',
-                border: `1px solid ${a.errors > 0 ? 'var(--status-warning)' : 'var(--border-subtle)'}`,
-                borderRadius: 'var(--radius)',
-                padding: 'var(--space-2-5) var(--space-3-5)',
-              }}>
+              <div key={a.agentName} className="agent-stat-card" data-has-error={a.errors > 0 ? 'true' : undefined}>
                 <div className="mono-xs mb-1-5 font-semibold">
                   {a.agentName}
                 </div>
