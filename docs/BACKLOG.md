@@ -24,11 +24,15 @@ Open items from code reviews and deferred work.
 | G5-M2 | `inferFromSpans` strict `<=` for edge inference misses near-concurrent spans — consider epsilon tolerance | P4 | WG-M2 |
 | G5-M4 | `WorkflowEdge.handoffScore` typed as `number` but inferred edges use `0` — consider `number | null` to distinguish from real zero scores | P4 | WG-M4 |
 
+**Status**: G5-C (b30c9f5, pre-existing), G5-C1 (e3c7158), G5-M2 (3e89a64), G5-M4 (ae5a055), G5-WG5 (b30c9f5), G5-WG9 (09640d7) — all Done.
+
 ### Phase 4 Admin: Code Review Deferred Items
 
 | # | Item | Priority | Source |
 |---|------|----------|--------|
 | ADMIN-P4-3 | Admin routes return generic error messages on Supabase REST failures — currently safe (no body exposure), but document error handling policy for consistency with other endpoints | P4 | code-reviewer feedback on c9a38dc |
+
+**Status**: ADMIN-P4-3 (3c1273c) — Done.
 
 ### Test Fixture Consolidation
 
@@ -36,6 +40,8 @@ Open items from code reviews and deferred work.
 |---|------|----------|--------|
 | TF-4 | Audit test files for duplicated `@xyflow/react` or `elkjs` mock definitions that could be extracted to a shared mock module | P4 | 431e456 simplify review |
 | TF-5 | Audit test files for redundant section-banner comments (`// ---`, `// ===`) where `describe` blocks already provide structure | P4 | 431e456 simplify review |
+
+**Status**: TF-4 — Audited: mocks defined only in `WorkflowGraph.test.tsx`; no duplicates. TF-5 — Audited: banners appear alongside `describe` blocks throughout; retained as visual separators (low value to remove).
 
 ### E2E & Integration Testing
 
