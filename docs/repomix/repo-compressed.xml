@@ -3052,40 +3052,6 @@ import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
 
 ================
-File: src/api/api-constants.ts
-================
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-
-================
-File: src/components/AgentActivityPanel.tsx
-================
-import { Fragment, useCallback, useMemo, useState } from 'react';
-import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
-import { TruncatedIdLink } from './TruncatedIdLink.js';
-import {
-  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
-  AGENT_TABLE_MIN_WIDTH, AGENT_BAR_MIN_WIDTH, AGENT_EVAL_CARD_MIN_WIDTH,
-  SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
-} from '../lib/constants.js';
-import { routes } from '../lib/routes.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { Sparkline } from './Sparkline.js';
-import { StatDisplay } from './StatDisplay.js';
-⋮----
-type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
-function errorRateColor(rate: number): string
-interface AgentActivityPanelProps {
-  agents: AgentStat[];
-}
-⋮----
-const sortIndicator = (key: SortKey)
-⋮----
-onClick=
-
-================
 File: src/components/ConfidencePanel.tsx
 ================
 import type { ConfidenceIndicator } from '../types.js';
@@ -3172,6 +3138,41 @@ import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR } from '../api-constants.js
 function extractFiniteScores(evals: Array<
 ⋮----
 type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
+File: src/api/api-constants.ts
+================
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+
+================
+File: src/components/AgentActivityPanel.tsx
+================
+import { Fragment, useCallback, useMemo, useState } from 'react';
+import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
+import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
+import { TruncatedIdLink } from './TruncatedIdLink.js';
+import {
+  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
+  AGENT_TABLE_MIN_WIDTH, AGENT_BAR_MIN_WIDTH, AGENT_EVAL_CARD_MIN_WIDTH,
+  SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
+} from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { Sparkline } from './Sparkline.js';
+import { StatDisplay } from './StatDisplay.js';
+⋮----
+type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
+interface IdListColumnProps {
+  label: string;
+  ids: string[];
+  totalCount: number;
+  isTruncated: boolean;
+  routeFn: (id: string) => string;
+}
+⋮----
+onClick=
 
 ================
 File: src/components/WorkflowTimeline.tsx
