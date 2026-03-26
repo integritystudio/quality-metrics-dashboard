@@ -10,6 +10,8 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
 import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
+const SPARKLINE_BUCKET_COUNT = 24;
+
 /** Bucket evaluations into N time bins and return avg scores per bucket */
 function computeSparklineData(
   evaluations: EvaluationResult[],
@@ -62,7 +64,7 @@ dashboardRoutes.get('/dashboard', async (c) => {
     const endMs = new Date(dates.end).getTime();
     const sparklines: Record<string, (number | null)[]> = {};
     for (const [metricName, evals] of evaluationsByMetric) {
-      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, 24);
+      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
     }
 
     if (role) {
