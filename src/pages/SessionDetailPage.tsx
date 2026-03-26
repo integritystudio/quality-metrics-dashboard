@@ -69,13 +69,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const errorDetails = errors.details;
 
   // Derive computed values
-  const totalToolCalls = Object.values(toolUsage).reduce((a, b) => a + b, 0);
-  const totalMcpCalls = Object.values(mcpUsage).reduce((a, b) => a + b, 0);
+  const toolUsageValues = Object.values(toolUsage);
+  const mcpUsageValues = Object.values(mcpUsage);
+  const spanBreakdownValues = Object.values(spanBreakdown);
+  const totalToolCalls = toolUsageValues.reduce((a, b) => a + b, 0);
+  const totalMcpCalls = mcpUsageValues.reduce((a, b) => a + b, 0);
   const maxTokenSnapshot = tokenProgression.at(-1);
-  const maxToolCount = Math.max(...Object.values(toolUsage), 1);
-  const maxMcpCount = Math.max(...Object.values(mcpUsage), 1);
+  const maxToolCount = Math.max(...toolUsageValues, 1);
+  const maxMcpCount = Math.max(...mcpUsageValues, 1);
   const maxFileCount = fileAccess[0]?.count ?? 1;
-  const maxSpanCount = Math.max(...Object.values(spanBreakdown), 1);
+  const maxSpanCount = Math.max(...spanBreakdownValues, 1);
 
   // Issue detection
   const hallucinationEvals = evaluations.filter(e =>
@@ -292,7 +295,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       {/* ── Tool Activity ── */}
       <Section
         title="Tool Activity"
-        badge={`${totalToolCalls} calls · ${Object.keys(toolUsage).length} tools`}
+        badge={`${totalToolCalls} calls · ${toolUsageValues.length} tools`}
         health="neutral"
       >
         <FreqBarGrid entries={Object.entries(toolUsage)} max={maxToolCount} />
@@ -455,7 +458,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       {/* ── Span Breakdown ── */}
       <Section
         title="Span Breakdown"
-        badge={`${spanCount} total · ${Object.keys(spanBreakdown).length} types`}
+        badge={`${spanCount} total · ${spanBreakdownValues.length} types`}
         health="neutral"
       >
         <FreqBarGrid entries={Object.entries(spanBreakdown)} max={maxSpanCount} color="var(--border-accent)" />
