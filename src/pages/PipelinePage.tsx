@@ -6,26 +6,15 @@ import type { Period } from '../types.js';
 
 function T2SamplingStage() {
   return (
-    <div
-      className="flex-center text-secondary text-xs gap-2-5 mt-3"
-      style={{
-        padding: 'var(--space-2-5) var(--space-3-5)',
-        borderRadius: 'var(--radius)',
-        border: '1px dashed var(--border)',
-        background: 'var(--bg-surface)',
-      }}
-    >
-      <span className="inline-flex-center justify-center shrink-0 text-2xs font-bold" style={{
-        width: ICON_BADGE_SIZE,
-        height: ICON_BADGE_SIZE,
-        borderRadius: 'var(--radius-full)',
-        background: 'var(--accent)',
-        color: 'var(--text-on-accent)',
-      }}>
+    <div className="flex-center text-secondary text-xs gap-2-5 mt-3 t2-stage-notice">
+      <span
+        className="inline-flex-center justify-center shrink-0 text-2xs font-bold t2-stage-badge"
+        style={{ width: ICON_BADGE_SIZE, height: ICON_BADGE_SIZE }}
+      >
         T2
       </span>
       <span>
-        <strong style={{ color: 'var(--text-primary)' }}>LLM Sampling</strong>
+        <strong className="text-primary">LLM Sampling</strong>
         {' \u2014 '}
         {LLM_SAMPLE_RATE}% sampled for LLM evaluation (relevance, coherence, faithfulness, hallucination)
       </span>
