@@ -997,6 +997,8 @@ details[open] > .cot-summary::before {
 
 /* Funnel bar — dynamic width/height/background set via inline style */
 .funnel-bar {
+  width: var(--funnel-width);
+  background: var(--funnel-bg, var(--accent));
   border-radius: var(--radius-sm);
   align-items: center;
   justify-content: space-between;

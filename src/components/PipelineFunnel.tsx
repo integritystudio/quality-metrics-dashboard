@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type CSSProperties } from 'react';
 import type { PipelineStage, PipelineDropoff } from '../types.js';
 import { EmptyState } from './EmptyState.js';
 import { formatPercent } from '../lib/quality-utils.js';
@@ -36,9 +36,9 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
                 <div
                   className="d-flex funnel-bar"
                   style={{
-                    width: `${widthPct}%`,
-                    background: `var(--stage-${stage.name}, var(--accent))`,
-                  }}
+                    '--funnel-width': `${widthPct}%`,
+                    '--funnel-bg': `var(--stage-${stage.name}, var(--accent))`,
+                  } as CSSProperties}
                   role="meter"
                   aria-label={`${stage.displayName}: ${stage.entryCount} evaluations`}
                   aria-valuenow={stage.entryCount}
