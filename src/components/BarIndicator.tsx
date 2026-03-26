@@ -5,6 +5,7 @@ interface BarIndicatorProps {
   value: number;
   /** Fill color (default: CSS var(--accent)) */
   color?: string;
+  /** Fill opacity (default: 1, set in CSS) */
   opacity?: number;
   /** Track height override via --bar-h CSS custom prop (default: CSS 4px) */
   height?: number;

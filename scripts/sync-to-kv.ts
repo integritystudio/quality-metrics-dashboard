@@ -111,7 +111,6 @@ const HOOK_NAMES = {
 
 type KVEntry = { key: string; value: string };
 
-/** Filter out canary evaluations (intentionally degraded scores for testing). */
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev => (ev as Record<string, unknown>).evaluatorType !== 'canary');
 }
@@ -127,13 +126,10 @@ const SPAN_QUERY_LIMIT = 1_000_000;
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
 
-/** Maximum evaluation rows stored per metric × period in KV. */
 const MAX_EVAL_ROWS = 200;
 
-/** Number of time buckets per trend series. */
 const TREND_BUCKETS = 10;
 
-/** Transform CalibrationState → meta:calibration KV entry, or null if no data. */
 export function buildCalibrationEntry(
   state: CalibrationState | null,
 ): KVEntry | null {
@@ -152,7 +148,6 @@ export function buildCalibrationEntry(
   };
 }
 
-/** Trace priority weights */
 const TRACE_PRIORITY_WEIGHTS = {
   worstScore: 0.5,   // lower score = higher priority
   recency: 0.3,      // newer = higher priority
@@ -201,7 +196,6 @@ function hashValue(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
 
-/** Filter to only entries whose content changed since last sync. */
 function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   return entries.filter(e => {
     const hash = hashValue(e.value);
@@ -210,7 +204,6 @@ function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
 }
 
 
-/** Returns the number of entries successfully written. */
 function kvBulkPut(entries: KVEntry[]): number {
   if (entries.length === 0) return 0;
   let written = 0;
