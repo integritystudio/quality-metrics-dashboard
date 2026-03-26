@@ -80,7 +80,6 @@ agentRoutes.get('/agents', async (c) => {
       limit: LIMIT_AGENT_SPANS,
     });
 
-    // Build date bucket keys for the period (YYYY-MM-DD strings)
     const dateBuckets: string[] = [];
     for (let d = 0; d < periodDays; d++) {
       const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
@@ -91,7 +90,6 @@ agentRoutes.get('/agents', async (c) => {
     // Phase 1: aggregate agent stats from spans (prototype-safe accumulators)
     const acc: Record<string, AgentAcc> = Object.create(null);
 
-    // Build traceId -> agent names mapping for evaluation join
     const traceToAgents = new Map<string, Set<string>>();
 
     for (const span of result.traces) {
@@ -100,7 +98,6 @@ agentRoutes.get('/agents', async (c) => {
         acc[name] = createAgentAccumulator(periodDays);
       }
       acc[name].invocations++;
-      // Bucket into daily counts
       if (span.startTimeUnixNano) {
         const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
         const idx = bucketIndex.get(dayKey);
@@ -139,7 +136,6 @@ agentRoutes.get('/agents', async (c) => {
     }
 
     const agents = Object.entries(acc).map(([agentName, d]) => {
-      // Compute evaluation summary for this agent
       const evalMetrics = agentEvalAcc[agentName] ?? {};
       const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
       for (const [metric, scores] of Object.entries(evalMetrics)) {
@@ -187,7 +183,6 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
   try {
     const spans = await loadTracesBySessionId(sessionId);
 
-    // Build agentMap from span attributes.
     // WG-C1: Real spans may carry the agent name under either 'agent.name' (hooks
     // context) or 'gen_ai.agent.name' (OTel GenAI semantic conventions). Both are
     // checked here so the agentMap is populated regardless of which attribute the
@@ -201,17 +196,13 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
       if (span.traceId) traceIds.add(span.traceId);
     });
 
-    // Build step scores from spans
     const stepScores: StepScore[] = spans.map((span, i) => ({
       step: i,
       score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
       explanation: span.name,
     }));
 
-    // Compute multi-agent evaluation
     const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
-
-    // Bulk-load evaluations for all traces in the session
     const evaluations = await loadEvaluationsByTraceIds([...traceIds]);
 
     const serializedAgentMap = Object.fromEntries(agentMap);
