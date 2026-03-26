@@ -67,6 +67,7 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
 
 const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
+export const SESSION_ID_PREVIEW_LEN = 8;
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -472,8 +473,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
           : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
         explanation: canary
-          ? `Relevance (canary) for session ${turn.sessionId.slice(0, 8)}`
-          : `Relevance (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+          ? `Relevance (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+          : `Relevance (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
         evaluator: 'llm-judge',
         evaluatorType: canary ? 'canary' : 'seed',
         traceId: turn.traceId,
@@ -491,8 +492,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
           : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
         explanation: canary
-          ? `Coherence (canary) for session ${turn.sessionId.slice(0, 8)}`
-          : `Coherence (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+          ? `Coherence (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+          : `Coherence (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
         evaluator: 'llm-judge',
         evaluatorType: canary ? 'canary' : 'seed',
         traceId: turn.traceId,
@@ -514,8 +515,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           evaluationName: 'faithfulness',
           scoreValue: faithScore,
           explanation: canary
-            ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, 8)}`
-            : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+            ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
           evaluator: 'llm-judge',
           evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
@@ -530,8 +531,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           evaluationName: 'hallucination',
           scoreValue: halScore,
           explanation: canary
-            ? `Hallucination (canary) for session ${turn.sessionId.slice(0, 8)}`
-            : `Hallucination (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+            ? `Hallucination (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Hallucination (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
           evaluator: 'llm-judge',
           evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
@@ -551,8 +552,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
             : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
           explanation: canary
-            ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, 8)}`
-            : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
+            ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
           evaluator: 'llm-judge',
           evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
@@ -598,7 +599,7 @@ export async function evaluateTurn(
         timestamp: turn.timestamp,
         evaluationName: 'relevance',
         scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
         traceId: turn.traceId,
@@ -606,7 +607,7 @@ export async function evaluateTurn(
       });
     } catch (err) {
       trackFailure('relevance');
-      console.warn(`  [relevance] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+      console.warn(`  [relevance] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
     }
   }
 
@@ -619,7 +620,7 @@ export async function evaluateTurn(
         timestamp: turn.timestamp,
         evaluationName: 'coherence',
         scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
         traceId: turn.traceId,
@@ -627,7 +628,7 @@ export async function evaluateTurn(
       });
     } catch (err) {
       trackFailure('coherence');
-      console.warn(`  [coherence] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+      console.warn(`  [coherence] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
     }
   }
 
@@ -650,7 +651,7 @@ export async function evaluateTurn(
           timestamp: turn.timestamp,
           evaluationName: 'faithfulness',
           scoreValue: normalizeScore(faithResult.score),
-          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
           evaluator: 'llm-judge',
           evaluatorType: 'llm',
           traceId: turn.traceId,
@@ -658,7 +659,7 @@ export async function evaluateTurn(
         });
       } catch (err) {
         trackFailure('faithfulness');
-        console.warn(`  [faithfulness] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+        console.warn(`  [faithfulness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
       }
     }
 
@@ -676,7 +677,7 @@ export async function evaluateTurn(
           timestamp: turn.timestamp,
           evaluationName: 'hallucination',
           scoreValue: halScore,
-          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
           evaluator: 'llm-judge',
           evaluatorType: 'llm',
           traceId: turn.traceId,
@@ -684,7 +685,7 @@ export async function evaluateTurn(
         });
       } catch (err) {
         trackFailure('hallucination');
-        console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+        console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
       }
     }
 
@@ -702,7 +703,7 @@ export async function evaluateTurn(
           timestamp: turn.timestamp,
           evaluationName: 'tool_correctness',
           scoreValue: normalizeScore(tcResult.score),
-          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
           evaluator: 'llm-judge',
           evaluatorType: 'llm',
           traceId: turn.traceId,
@@ -710,7 +711,7 @@ export async function evaluateTurn(
         });
       } catch (err) {
         trackFailure('tool_correctness');
-        console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+        console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
       }
 
       // Structured sub-criteria: selection, arguments, integration
@@ -729,7 +730,7 @@ export async function evaluateTurn(
             timestamp: turn.timestamp,
             evaluationName: name,
             scoreValue: normalizeScore(result.score),
-            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
+            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
             evaluator: 'llm-judge',
             evaluatorType: 'llm',
             traceId: turn.traceId,
@@ -737,7 +738,7 @@ export async function evaluateTurn(
           });
         } catch (err) {
           trackFailure(name);
-          console.warn(`  [${name}] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
+          console.warn(`  [${name}] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
         }
       }
     }
@@ -1009,7 +1010,7 @@ async function main() {
 
     const bySession = new Map<string, number>();
     for (const t of allTurns) {
-      const sid = t.sessionId.slice(0, 8);
+      const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
       bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
     }
     const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
