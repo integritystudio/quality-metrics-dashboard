@@ -248,7 +248,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
 
   return (
-    <div style={{ height }} role="img" aria-label="Agent workflow graph">
+    <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
       <ReactFlow
         nodes={nodes}
         edges={edges}
