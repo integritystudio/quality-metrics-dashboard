@@ -12,6 +12,13 @@ import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
+function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals.reduce<number[]>((acc, e) => {
+    if (e.scoreValue != null && Number.isFinite(e.scoreValue)) acc.push(e.scoreValue);
+    return acc;
+  }, []);
+}
+
 /** Period hours used for dynamics computation: 1h buckets for 24h window, daily (24h) buckets for longer windows. */
 const DYNAMICS_PERIOD_HOURS_24H = 1;
 const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
@@ -59,12 +66,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
     ]);
 
     const previousValues = prevEvaluations.length > 0
-      ? computeAggregations(
-          prevEvaluations
-            .map(e => e.scoreValue)
-            .filter((v): v is number => v != null && Number.isFinite(v)),
-          config.aggregations,
-        )
+      ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
       : undefined;
 
     const detail = computeMetricDetail(evaluations, config, {
@@ -120,14 +122,10 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
     const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
     const start = subMilliseconds(now, periodMs);
 
-    let evaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
-
-    if (scoreLabel) {
-      evaluations = evaluations.filter(e => e.scoreLabel === scoreLabel);
-    }
-
+    const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
     const sortBy = sortByResult.data;
-    evaluations = evaluations.slice().sort((a, b) => {
+    const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
+      .slice().sort((a, b) => {
       if (sortBy === 'score_asc' || sortBy === 'score_desc') {
         const aVal = a.scoreValue ?? null;
         const bVal = b.scoreValue ?? null;
