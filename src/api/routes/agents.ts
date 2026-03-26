@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, toDateOnly, isValidParam } from '../api-constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
@@ -85,15 +85,16 @@ agentRoutes.get('/agents', async (c) => {
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) entry.dailyCounts[idx]++;
       }
-      if (span.attributes?.['agent.has_error']) entry.errors++;
-      if (span.attributes?.['agent.has_rate_limit']) entry.rateLimitCount++;
+      if (spanAttr<boolean>(span, 'agent.has_error')) entry.errors++;
+      if (spanAttr<boolean>(span, 'agent.has_rate_limit')) entry.rateLimitCount++;
       entry.totalOutputSize += attrNum(span, 'agent.output_size');
       const sid = attrStr(span, 'session.id', '');
       if (sid) entry.sessions.add(sid);
       if (span.traceId) {
         entry.traceIds.add(span.traceId);
-        if (!traceToAgents.has(span.traceId)) traceToAgents.set(span.traceId, new Set());
-        traceToAgents.get(span.traceId)!.add(name);
+        let agentSet = traceToAgents.get(span.traceId);
+        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
+        agentSet.add(name);
       }
       const rawSrc = attrStr(span, 'agent.source_type');
       const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
