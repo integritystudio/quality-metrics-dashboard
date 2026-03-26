@@ -9,15 +9,8 @@ import {
 import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE } from '../api-constants.js';
+import { PARAM_METRIC_NAME_RE, extractFiniteScores } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-
-function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals.reduce<number[]>((acc, e) => {
-    if (e.scoreValue != null && Number.isFinite(e.scoreValue)) acc.push(e.scoreValue);
-    return acc;
-  }, []);
-}
 
 /** Period hours used for dynamics computation: 1h buckets for 24h window, daily (24h) buckets for longer windows. */
 const DYNAMICS_PERIOD_HOURS_24H = 1;

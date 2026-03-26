@@ -14,7 +14,7 @@ import {
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR } from '../api-constants.js';
+import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
 
 /** Fraction of data span added as padding on each side when auto-narrowing the time axis. */
 const TREND_PADDING_RATIO = 0.1;
@@ -22,12 +22,6 @@ const TREND_PADDING_RATIO = 0.1;
 const TREND_PADDING_MIN_MS = 60_000;
 
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-
-function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals
-    .map(e => e.scoreValue)
-    .filter((v): v is number => v != null && Number.isFinite(v));
-}
 
 export const trendRoutes = new Hono();
 

@@ -3,6 +3,7 @@ import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-f
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+import { extractFiniteScores } from '../api-constants.js';
 
 export const correlationRoutes = new Hono();
 
@@ -19,7 +20,7 @@ correlationRoutes.get('/correlations', async (c) => {
     const metricTimeSeries = new Map<string, number[]>();
     const metricNames: string[] = [];
     for (const [name, evals] of evaluationsByMetric) {
-      metricTimeSeries.set(name, evals.reduce<number[]>((acc, e) => { if (e.scoreValue != null) acc.push(e.scoreValue); return acc; }, []));
+      metricTimeSeries.set(name, extractFiniteScores(evals));
       metricNames.push(name);
     }
 

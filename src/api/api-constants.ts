@@ -50,3 +50,11 @@ export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js'
 
 /** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
 export const NANOS_TO_MS = 1_000_000;
+
+/** Extract finite numeric scores from an evaluation array, dropping null/undefined/NaN. */
+export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals.reduce<number[]>((acc, e) => {
+    if (e.scoreValue != null && Number.isFinite(e.scoreValue)) acc.push(e.scoreValue);
+    return acc;
+  }, []);
+}
