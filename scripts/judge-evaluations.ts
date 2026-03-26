@@ -919,7 +919,6 @@ async function main() {
     try {
       const existingKeys = _loadExistingKeys();
 
-      // Filter to sessions where at least one seed metric key is missing.
       // Checking only hallucination would skip sessions with partial coverage.
       const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
       const newTurns = traceTurns.filter(t => {

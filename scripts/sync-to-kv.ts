@@ -274,7 +274,7 @@ export function prioritizeTraces(
   const now = Date.now();
   const thirtyDaysMs = PERIOD_MS['30d'];
 
-  // Group entries by traceId (each trace has 2 entries: evaluations:trace:X and trace:X)
+  // each trace has 2 entries: evaluations:trace:X and trace:X
   const traceGroups = new Map<string, KVEntry[]>();
   let skippedCount = 0;
   for (const entry of traceEntries) {
@@ -1100,7 +1100,7 @@ async function main(): Promise<void> {
   const computedAt = now.toISOString();
 
   for (const [agentName, acc] of agentCrossSession) {
-    // Sort sessions by date descending (ISO 8601 sorts lexicographically), take most recent
+    // ISO 8601 sorts lexicographically — take most recent sessions first
     const sessions = acc.sessions
       .slice()
       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
