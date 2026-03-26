@@ -82,12 +82,11 @@ vi.mock('elkjs/lib/elk.bundled.js', () => ({
 
 import { WorkflowGraphView } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
 
 afterEach(cleanup);
 
 describe('WorkflowGraphView', () => {
-  const twoNodeGraph: WorkflowGraph = {
+  const twoNodeGraph = makeGraph({
     nodes: [
       makeNode({ id: 'node-1', label: 'planner' }),
       makeNode({ id: 'node-2', label: 'executor' }),
@@ -95,27 +94,25 @@ describe('WorkflowGraphView', () => {
     edges: [makeEdge({ id: 'edge-1', source: 'node-1', target: 'node-2' })],
     rootNodeId: 'node-1',
     workflowShape: 'linear',
-  };
+  });
 
-  const threeNodeGraph: WorkflowGraph = {
+  const threeNodeGraph = makeGraph({
     nodes: [
       makeNode({ id: 'node-1' }),
       makeNode({ id: 'node-2' }),
       makeNode({ id: 'node-3' }),
     ],
-    edges: [],
     rootNodeId: 'node-1',
     workflowShape: 'linear',
-  };
+  });
 
-  const fiveNodeGraph: WorkflowGraph = {
+  const fiveNodeGraph = makeGraph({
     nodes: Array.from({ length: 5 }, (_, i) =>
       makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
     ),
-    edges: [],
     rootNodeId: 'node-1',
     workflowShape: 'branching',
-  };
+  });
   it('renders container with role=img and aria-label', async () => {
     render(<WorkflowGraphView graph={twoNodeGraph} />);
     const container = await waitFor(() =>
@@ -209,12 +206,7 @@ describe('WorkflowGraphView', () => {
   });
 
   it('renders without error when graph has 0 nodes and 0 edges', async () => {
-    const graph: WorkflowGraph = {
-      nodes: [],
-      edges: [],
-      rootNodeId: null,
-      workflowShape: 'linear',
-    };
+    const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
     expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
   });
 });
