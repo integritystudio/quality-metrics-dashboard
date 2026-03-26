@@ -59,6 +59,25 @@ function getScoreBand(score: number | null) {
 
 const elk = new ELK();
 
+/**
+ * Type guard for WorkflowNode.
+ * CR-TS-4: replaces `data as unknown as WorkflowNode` double-cast in AgentNodeComponent.
+ * Validates the minimum fields needed for rendering; avoids silent mismatches if ReactFlow
+ * passes unexpected data to a node component.
+ */
+function isWorkflowNode(value: unknown): value is WorkflowNode {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['id'] === 'string' &&
+    typeof v['label'] === 'string' &&
+    typeof v['toolCallCount'] === 'number' &&
+    typeof v['turnCount'] === 'number' &&
+    typeof v['durationMs'] === 'number' &&
+    typeof v['hasError'] === 'boolean'
+  );
+}
+
 function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
   return new Map(nodes.map(n => [n.id, n]));
 }
@@ -102,7 +121,8 @@ async function computeLayout(
 // ---------------------------------------------------------------------------
 
 const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
-  const d = data as unknown as WorkflowNode;
+  if (!isWorkflowNode(data)) return null;
+  const d = data;
   const band = getScoreBand(d.evaluationScore);
 
   return (
