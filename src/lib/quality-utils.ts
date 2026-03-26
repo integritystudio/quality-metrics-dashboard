@@ -18,7 +18,7 @@ export interface LabelOrdinal {
   mapped: boolean;
 }
 
-import { type Role, AGENT_PALETTE } from './constants.js';
+import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
 export type FeatureRoleType = Role;
 
 /** Maps an agent name to a color from the shared palette, based on its position in the agent list. */
@@ -55,7 +55,7 @@ export function truncateId(id: string, max = 10): string {
 
 export function formatScore(val: number | null | undefined): string {
   if (val === null || val === undefined) return 'N/A';
-  return val.toFixed(4);
+  return val.toFixed(SCORE_FORMAT_PRECISION);
 }
 
 export function formatPercent(value: number, decimals = 1): string {

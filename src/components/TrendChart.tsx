@@ -13,7 +13,7 @@ import {
   CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
   CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
   CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
-  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS,
+  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
 } from '../lib/constants.js';
 import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
@@ -27,7 +27,7 @@ interface TrendChartProps {
 }
 
 function formatValue(v: number): string {
-  return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(4);
+  return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
 }
 
 function formatBreachTime(iso: string): string {

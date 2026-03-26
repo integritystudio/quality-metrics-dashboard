@@ -90,6 +90,8 @@ export const MAX_IDS = 50;
 export const EVAL_LIMIT = 100;
 /** Decimal places for displayed score values. */
 export const SCORE_DISPLAY_PRECISION = 3;
+/** Decimal places for formatted raw score values in formatScore. */
+export const SCORE_FORMAT_PRECISION = 4;
 
 /** React Query staleTime tiers (ms). */
 export const STALE_TIME = {
