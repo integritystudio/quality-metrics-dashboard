@@ -128,7 +128,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
     }
 
     const sortBy = sortByResult.data;
-    evaluations.sort((a, b) => {
+    evaluations = evaluations.slice().sort((a, b) => {
       if (sortBy === 'score_asc' || sortBy === 'score_desc') {
         const aVal = a.scoreValue ?? null;
         const bVal = b.scoreValue ?? null;
