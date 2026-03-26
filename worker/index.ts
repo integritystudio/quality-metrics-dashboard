@@ -27,9 +27,17 @@ const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
 const ERR_INVALID_SORT_BY = 'Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.';
 
 const ERR_FORBIDDEN = 'Forbidden';
+const ERR_INVALID_REQUEST_BODY = 'Invalid request body';
 const ERR_INVALID_METRIC_NAME = 'Invalid metric name';
 const ERR_INVALID_TRACE_ID = 'Invalid traceId';
 const ERR_INVALID_SESSION_ID = 'Invalid sessionId';
+const ERR_INVALID_AGENT_ID = 'Invalid agentId';
+
+const VALID_ROLES = ['executive', 'operator', 'auditor'] as const;
+const ERR_INVALID_ROLE = 'Invalid role. Must be executive, operator, or auditor.';
+
+const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
+const ERR_INVALID_INPUT_KEY = 'Invalid inputKey. Must be traceId or sessionId.';
 
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
@@ -254,7 +262,7 @@ app.post('/api/logout', (c) => {
 app.post('/api/activity', async (c) => {
   const body: unknown = await c.req.json().catch(() => null);
   const result = ActivityRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: 'Invalid request body' }, Http.BadRequest);
+  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
   logActivity(c.get('session').appUserId ?? '', result.data.activity_type as UserActivityEvent, c.env);
   return c.body(null, Http.NoContent);
 });
@@ -267,8 +275,8 @@ app.get('/api/dashboard', async (c) => {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const role = c.req.query('role');
-  if (role && !['executive', 'operator', 'auditor'].includes(role)) {
-    return c.json({ error: 'Invalid role. Must be executive, operator, or auditor.' }, Http.BadRequest);
+  if (role && !VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
+    return c.json({ error: ERR_INVALID_ROLE }, Http.BadRequest);
   }
   if (role && !session.allowedViews.includes(role as DashboardView)) {
     return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
@@ -397,8 +405,8 @@ app.get('/api/coverage', async (c) => {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   const inputKey = c.req.query('inputKey') ?? 'traceId';
-  if (!['traceId', 'sessionId'].includes(inputKey)) {
-    return c.json({ error: 'Invalid inputKey. Must be traceId or sessionId.' }, Http.BadRequest);
+  if (!VALID_INPUT_KEYS.includes(inputKey as typeof VALID_INPUT_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_INPUT_KEY }, Http.BadRequest);
   }
   const data = await c.env.DASHBOARD.get(`coverage:${period}:${inputKey}`, 'json');
   if (!data) return c.json({ period, metrics: [], inputs: [], heatmap: [] });
@@ -437,7 +445,7 @@ app.get('/api/agents', async (c) => {
 app.get('/api/agents/detail/:agentId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const agentId = c.req.param('agentId');
-  if (!isValidId(agentId)) return c.json({ error: 'Invalid agentId' }, Http.BadRequest);
+  if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`agent:${agentId}`, 'json');
   if (!data) return c.json({ error: `No data for agent: ${agentId}` }, Http.NotFound);
   return c.json(data);
@@ -593,7 +601,7 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
 
   const body: unknown = await c.req.json().catch(() => null);
   const result = AssignRoleRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: 'Invalid request body' }, Http.BadRequest);
+  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
 
   const res = await fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles`, {
     method: 'POST',
