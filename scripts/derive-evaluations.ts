@@ -127,8 +127,6 @@ function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
   };
 }
 
-// Track per-session task status transitions for task_completion scoring
-// Graduated: pending=0.0, in_progress=0.5, completed=1.0
 interface TaskState {
   statuses: Set<string>;
   lastSpan: TraceSpan;
@@ -178,7 +176,6 @@ export function trackTaskActivity(span: TraceSpan): void {
 }
 
 export function scoreTask(statuses: Set<string>): number {
-  // Highest status reached determines score
   if (statuses.has('completed')) return STATUS_SCORES.completed;
   if (statuses.has('in_progress')) return STATUS_SCORES.in_progress;
   return STATUS_SCORES.pending;
