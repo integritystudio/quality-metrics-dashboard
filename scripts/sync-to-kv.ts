@@ -288,7 +288,6 @@ export function prioritizeTraces(
     console.warn(`[prioritizeTraces] Skipped ${skippedCount} entries with non-trace key format`);
   }
 
-  // Score each trace
   const scored: TracePriorityScore[] = [];
   for (const [traceId] of traceGroups) {
     const evals = evalsByTrace.get(traceId) ?? [];
@@ -625,7 +624,6 @@ function computeSessionDetail(
   const agentActivity = computeAgentActivity(spans);
   const evaluationBreakdown = computeEvalBreakdown(evaluations);
 
-  // File access (top 30)
   const fileCount: Record<string, number> = {};
   for (const s of spans) {
     const fp = spanAttr<string>(s, 'builtin.file_path');
@@ -636,7 +634,6 @@ function computeSessionDetail(
     .sort((a, b) => b.count - a.count)
     .slice(0, FILE_ACCESS_TOP_N);
 
-  // Git commits
   const gitCommits = spans
     .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.POST_COMMIT_REVIEW)
     .map(s => {
@@ -650,14 +647,12 @@ function computeSessionDetail(
       return { subject, body, files };
     });
 
-  // Alert summary
   const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.ALERT_EVALUATION);
   const alertSummary = {
     totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr<number>(s, 'alerts.triggered_count') ?? 0), 0),
     stopEvents: alertSpans.length,
   };
 
-  // Code structure
   const codeStructure = spans
     .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.CODE_STRUCTURE)
     .map(s => ({
@@ -670,7 +665,6 @@ function computeSessionDetail(
       tool: spanAttr<string>(s, 'code.structure.tool') ?? '',
     }));
 
-  // Multi-agent evaluation
   const agentMapForEval = new Map<number, string>();
   spans.forEach((span, i) => {
     const agent = spanAttr<string>(span, 'agent.name');
