@@ -122,7 +122,6 @@ const TRANSCRIPT_DIRS = [
 function resolveTranscriptPath(originalPath: string): string | null {
   if (existsSync(originalPath)) return originalPath;
 
-  // Extract the slug/sessionId.jsonl suffix after the projects/ directory
   const projectsIdx = originalPath.indexOf('/projects/');
   if (projectsIdx === -1) return null;
   const suffix = originalPath.slice(projectsIdx + '/projects/'.length);
@@ -140,7 +139,6 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   const seen = new Set<string>();
   const transcripts: TranscriptInfo[] = [];
 
-  // Phase 1: Log-based discovery (has traceId correlation)
   const logFiles = readdirSync(TELEMETRY_DIR)
     .filter(f => f.startsWith('logs-') && f.endsWith('.jsonl'))
     .sort();
@@ -471,7 +469,6 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
       });
     }
 
-    // Faithfulness + Hallucination
     {
       const halScore = canary
         ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
@@ -978,7 +975,6 @@ async function main() {
   try {
     const existingKeys = _loadExistingKeys();
 
-    // Reset failure tracking
     for (const key of Object.keys(evalFailures)) delete evalFailures[key];
 
     let flatEvals: EvalRecord[];
@@ -1012,14 +1008,11 @@ async function main() {
       return;
     }
 
-    // Write results
     writeEvaluations(flatEvals);
 
-    // Write dataset run record if scoped to a dataset
     if (datasetId) {
       const backend = new LocalJsonlBackend(TELEMETRY_DIR);
       const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
-      // Look up current dataset version
       let datasetVersion = 1;
       try {
         const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
