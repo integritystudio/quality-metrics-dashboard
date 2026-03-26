@@ -49,7 +49,6 @@ qualityRoutes.get('/quality/live', async (c) => {
       }
     }
 
-    // Sort by metric name for stable ordering
     metrics.sort((a, b) => a.name.localeCompare(b.name));
 
     const response: QualityLiveData = {
