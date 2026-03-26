@@ -1389,6 +1389,8 @@ summary.section-rail {
 
 /* ─── Workflow components (CR-STYLE-1) ────────────────────────────────────── */
 
+.workflow-graph-container { height: var(--graph-height, 600px); }
+
 /* WorkflowGraph: agent node card */
 .workflow-node {
   width: 220px;

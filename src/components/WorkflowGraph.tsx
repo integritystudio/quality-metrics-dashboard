@@ -194,7 +194,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   // Large-graph fallback: skip ELK layout to avoid blocking the main thread (CR-PERF-2)
   if (graph.nodes.length > MAX_ELK_NODES) {
     return (
-      <div style={{ height }} role="img" aria-label="Agent workflow graph">
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
         <div className="workflow-oversize text-secondary text-xs">
           <div className="workflow-oversize__heading">
             Graph too large to render ({graph.nodes.length} agents)
@@ -218,7 +218,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
     const node = graph.nodes[0];
     return (
-      <div style={{ height }} role="img" aria-label="Agent workflow graph">
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
         <div className="workflow-fallback">
           {node ? (
             <>
@@ -237,7 +237,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
 
   if (layoutError) {
     return (
-      <div style={{ height }} role="img" aria-label="Agent workflow graph">
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
         <div className="error-state workflow-fallback">
           Failed to compute workflow layout: {layoutError}
         </div>
