@@ -144,12 +144,10 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
   const lanes = buildLanes(visibleTurns, agentNames);
   const totalTurns = visibleTurns.length;
 
-  // Each turn gets equal width
   const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
   const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
   const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
 
-  // Map turnIndex → x offset within the tracks area
   const turnX = (turnIndex: number): number =>
     LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
 

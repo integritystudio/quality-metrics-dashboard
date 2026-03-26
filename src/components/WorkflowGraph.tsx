@@ -231,7 +231,6 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
     );
   }
 
-  // Single-agent fallback
   if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
     const node = graph.nodes[0];
     return (
