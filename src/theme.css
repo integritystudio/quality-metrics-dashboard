@@ -1327,3 +1327,12 @@ details[open] > .cot-summary::before {
   border-bottom-color: var(--accent);
   color: var(--accent);
 }
+
+/* ShortcutOverlay */
+.shortcut-row {
+  padding: var(--space-1) 0;
+}
+.kbd-chip {
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
+}

@@ -26,12 +26,9 @@ export function ShortcutOverlay() {
               {scope}
             </div>
             {items.map(item => (
-              <div key={item.key} className="flex-center justify-between text-xs" style={{ padding: 'var(--space-1) 0' }}>
+              <div key={item.key} className="flex-center justify-between text-xs shortcut-row">
                 <span>{item.description}</span>
-                <kbd className="mono-xs surface-elevated" style={{
-                  padding: 'var(--space-0-5) var(--space-1-5)',
-                  borderRadius: 'var(--radius-sm)',
-                }}>
+                <kbd className="mono-xs surface-elevated kbd-chip">
                   {item.key}
                 </kbd>
               </div>
