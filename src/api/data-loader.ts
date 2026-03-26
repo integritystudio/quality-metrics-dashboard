@@ -2,6 +2,7 @@ import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
 import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+import { queryLogs } from '../../../dist/tools/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toDateOnly } from './api-constants.js';
 
@@ -139,7 +140,6 @@ async function queryLogsWithDefaultRange(
   startDate?: string,
   endDate?: string,
 ): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
   const start = toDateOnly(startDate ?? defStart);
   const end = toDateOnly(endDate ?? defEnd);
