@@ -61,6 +61,7 @@ import {
   FILE_ACCESS_TOP_N,
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
   COMMIT_BODY_START_LINE_INDEX,
+  SCORE_ROUND_FACTOR,
 } from '../src/api/api-constants.js';
 
 function resolveNamespaceId(): string {
@@ -930,7 +931,7 @@ async function main(): Promise<void> {
           startTime: bucket.startTime,
           endTime: bucket.endTime,
           count: scores.length,
-          avg: avg != null ? Math.round(avg * 10000) / 10000 : null,
+          avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
           percentiles,
           trend: detail?.trend ?? null,
           dynamics: dynamics ?? null,
