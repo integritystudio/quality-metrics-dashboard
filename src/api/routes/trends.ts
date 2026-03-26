@@ -14,7 +14,7 @@ import {
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD } from '../api-constants.js';
+import { CONCENTRATION_THRESHOLD, TIME_MS } from '../api-constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
 export const trendRoutes = new Hono();
@@ -66,12 +66,9 @@ trendRoutes.get('/trends/:name', async (c) => {
     const rangeMs = end.getTime() - start.getTime();
     const bucketMs = rangeMs / bucketCount;
 
-    // Group evaluations into time buckets
-    const buckets: Array<{
-      startTime: string;
-      endTime: string;
-      scores: number[];
-    }> = [];
+    // Group evaluations into time buckets (single pass — avoids O(n*buckets) re-filter later)
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
 
     for (let i = 0; i < bucketCount; i++) {
       const bucketStart = new Date(start.getTime() + i * bucketMs);
@@ -80,6 +77,7 @@ trendRoutes.get('/trends/:name', async (c) => {
         startTime: bucketStart.toISOString(),
         endTime: bucketEnd.toISOString(),
         scores: [],
+        evals: [],
       });
     }
 
@@ -89,13 +87,16 @@ trendRoutes.get('/trends/:name', async (c) => {
         Math.floor((ts - start.getTime()) / bucketMs),
         bucketCount - 1,
       );
-      if (bucketIdx >= 0 && ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-        buckets[bucketIdx].scores.push(ev.scoreValue);
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
       }
     }
 
     // Compute per-bucket aggregations and trends
-    const periodHours = rangeMs / (bucketCount * 3600000);
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
     let previousTrend: MetricTrend | undefined;
 
     const trendData = buckets.map((bucket, idx) => {
@@ -109,30 +110,14 @@ trendRoutes.get('/trends/:name', async (c) => {
         ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
         : undefined;
 
-      // Compute metric detail for trend
-      const detail = scores.length > 0
-        ? computeMetricDetail(
-            evaluations.filter(e => {
-              const ts = new Date(e.timestamp).getTime();
-              const bStart = new Date(bucket.startTime).getTime();
-              const bEnd = new Date(bucket.endTime).getTime();
-              return ts >= bStart && ts < bEnd;
-            }),
-            config,
-            { topN: 0, bucketCount: 0, previousValues },
-          )
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
         : undefined;
 
-      // Compute dynamics from current and previous trend
-      let dynamics = undefined;
-      if (detail?.trend) {
-        dynamics = computeMetricDynamics(
-          detail.trend,
-          previousTrend,
-          periodHours,
-        );
-        previousTrend = detail.trend;
-      }
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
 
       return {
         startTime: bucket.startTime,
