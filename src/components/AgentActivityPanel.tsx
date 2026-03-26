@@ -288,7 +288,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
               </div>
               <div className="flex-center mb-1 gap-2">
                 <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
-                <span className="mono-xs font-semibold text-right score-label-width" data-band={band}>
+                <span className="mono-xs font-semibold text-right score-label-width score-band" data-band={band}>
                   {m.avg.toFixed(SCORE_CHIP_PRECISION)}
                 </span>
               </div>

@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
+import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
@@ -76,14 +76,13 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
   const band = calibration
     ? adaptiveScoreColorBand(score, metricName, direction, calibration.distribution, calibration.sampleSize)
     : scoreColorBand(score, direction);
-  const color = SCORE_COLORS[band];
   const shape = SCORE_SHAPES[band];
   const directionHint = direction === 'minimize' ? 'lower is better' : 'higher is better';
 
   const badge = (
     <span
-      className="inline-flex-center gap-1"
-      style={{ color }}
+      className="inline-flex-center gap-1 score-band"
+      data-band={band}
       aria-label={`Score: ${score}, ${band} (${directionHint})`}
     >
       {shape} {label ?? score.toFixed(SCORE_CHIP_PRECISION)}
