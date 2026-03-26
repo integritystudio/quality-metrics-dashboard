@@ -118,7 +118,6 @@ agentRoutes.get('/agents', async (c) => {
       acc[name].sourceTypes[src] = (acc[name].sourceTypes[src] ?? 0) + 1;
     }
 
-    // Phase 2: load evaluations for all agent traceIds and join to agents
     const allTraceIds = [...traceToAgents.keys()];
     const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
 

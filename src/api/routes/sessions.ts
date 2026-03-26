@@ -233,7 +233,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       });
     }
 
-    // Derive values from the consolidated pass
     const dataSources = {
       traces: { count: spans.length, traceIds: traceIds.size },
       logs: { count: logs.length },
