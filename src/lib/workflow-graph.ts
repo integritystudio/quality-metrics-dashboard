@@ -16,7 +16,10 @@ export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
   spans: TraceSpan[],
 ): WorkflowGraph {
-  if (evaluation !== null) {
+  // CR-TS-5: guard against null/missing turns array before delegating to buildFromEvaluation.
+  // computeMultiAgentEvaluation always sets turns, but defensive check prevents a throw
+  // if the caller passes a partial or externally-sourced evaluation object.
+  if (evaluation !== null && Array.isArray(evaluation.turns)) {
     return buildFromEvaluation(evaluation, spans);
   }
   return inferFromSpans(spans);
