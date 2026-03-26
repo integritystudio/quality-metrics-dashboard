@@ -2,7 +2,7 @@ import { memo, useState, useMemo } from 'react';
 import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
 import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
 import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE, COVERAGE_GRID_LEGEND_SIZE,
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
   COVERAGE_GRID_MAX_INPUTS,
 } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
@@ -61,11 +61,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           <div key={status} className="flex-center gap-1">
             <div
               className="coverage-legend-swatch"
-              style={{
-                width: COVERAGE_GRID_LEGEND_SIZE,
-                height: COVERAGE_GRID_LEGEND_SIZE,
-                background: STATUS_COLORS[status],
-              }}
+              style={{ background: STATUS_COLORS[status] }}
             />
             <span>{status}</span>
           </div>
@@ -122,12 +118,8 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                     onMouseEnter={() => setHovered({ metric, input })}
                     onMouseLeave={() => setHovered(null)}
                     className="mono text-2xs flex-center justify-center coverage-cell"
-                    style={{
-                      width: COVERAGE_GRID_CELL_SIZE,
-                      height: COVERAGE_GRID_CELL_SIZE,
-                      background: STATUS_COLORS[status],
-                      opacity: isHovered ? 1 : 0.8,
-                    }}
+                    data-hovered={isHovered || undefined}
+                    style={{ background: STATUS_COLORS[status] }}
                   >
                     {count > 0 ? count : ''}
                   </div>

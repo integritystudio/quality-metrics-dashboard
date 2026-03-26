@@ -1440,12 +1440,20 @@ summary.section-rail {
   max-height: 60px;
 }
 .coverage-cell {
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-bar);
   cursor: default;
   color: var(--text-on-accent);
+  opacity: 0.8;
   transition: opacity var(--transition-fast);
 }
+.coverage-cell[data-hovered] {
+  opacity: 1;
+}
 .coverage-legend-swatch {
+  width: 12px;
+  height: 12px;
   border-radius: var(--radius-xs);
 }
 .coverage-gap-list {
