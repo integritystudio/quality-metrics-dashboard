@@ -1,5 +1,6 @@
 import { Link } from 'wouter';
 import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
 import { useMetricCalibration } from '../context/CalibrationContext.js';
@@ -86,7 +87,7 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
       style={{ color }}
       aria-label={`Score: ${score}, ${band} (${directionHint})`}
     >
-      {shape} {label ?? score.toFixed(2)}
+      {shape} {label ?? score.toFixed(SCORE_CHIP_PRECISION)}
     </span>
   );
 

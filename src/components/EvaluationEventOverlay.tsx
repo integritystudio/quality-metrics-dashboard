@@ -1,6 +1,7 @@
 import { Link } from 'wouter';
 import { ScoreBadge } from './ScoreBadge.js';
 import { routes } from '../lib/routes.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import type { EvaluationResult } from '../types.js';
 
 interface EvaluationEventOverlayProps {
@@ -30,7 +31,7 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
           className={traceId ? 'flex-center eval-summary-card gap-1-5 surface-elevated' : 'flex-center gap-1-5 surface-elevated'}
           >
             <span className="text-xs">{name}</span>
-            <ScoreBadge score={avg} metricName={name} label={avg.toFixed(2)} />
+            <ScoreBadge score={avg} metricName={name} label={avg.toFixed(SCORE_CHIP_PRECISION)} />
             <span className="text-muted text-2xs">({evs.length})</span>
           </div>
         );

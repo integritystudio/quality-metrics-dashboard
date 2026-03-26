@@ -5,6 +5,7 @@ import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
 import { ScoreBadge } from './ScoreBadge.js';
 import { Sparkline } from './Sparkline.js';
 import { inferScoreDirection, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 function MetricCardInner({ metric, sparklineData }: {
   metric: QualityMetricResult;
@@ -60,7 +61,7 @@ function MetricCardInner({ metric, sparklineData }: {
 
         {worst && worst.explanation && (
           <div className="metric-worst truncate" title={worst.explanation}>
-            <span className="worst-score">{worst.score.toFixed(2)}</span>{' '}
+            <span className="worst-score">{worst.score.toFixed(SCORE_CHIP_PRECISION)}</span>{' '}
             {truncateText(worst.explanation, 60)}
           </div>
         )}
