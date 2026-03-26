@@ -851,6 +851,14 @@ details[open] > .cot-summary::before {
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
+.heatmap-row-header {
+  justify-content: flex-end;
+  padding-right: var(--space-2);
+}
+.heatmap-cell {
+  border-radius: var(--radius-xs);
+  min-height: 36px;
+}
 
 /* Compact metric card used in agent eval summary and similar inline panels */
 .metric-card-compact {

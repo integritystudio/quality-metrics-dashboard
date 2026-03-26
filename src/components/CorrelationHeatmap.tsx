@@ -1,7 +1,7 @@
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { SCORE_COLORS, formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, HEATMAP_CELL_MIN_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
 import type { CorrelationFeature } from '../types.js';
 
 interface CorrelationHeatmapProps {
@@ -88,8 +88,6 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
           key={`col-${m}`}
           role="columnheader"
           className="text-secondary text-xs font-semibold truncate flex-center"
-          style={{
-          }}
         >
           {shortName(m)}
         </div>
@@ -101,11 +99,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
           {/* Row header */}
           <div
             role="rowheader"
-            className="text-secondary text-xs font-semibold truncate flex-center"
-            style={{
-              justifyContent: 'flex-end',
-              paddingRight: 'var(--space-2)',
-            }}
+            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
           >
             {shortName(rowMetric)}
           </div>
@@ -132,15 +126,12 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 data-toxic={isToxic ? 'true' : undefined}
                 title={tooltip}
                 onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className="mono-xs font-medium flex-center justify-center"
+                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
                 style={{
-                  cursor: !isDiag && onCellClick ? 'pointer' : 'default',
                   backgroundColor: bg,
                   color: isDiag ? 'var(--text-secondary)' : contrastText(value),
-                  borderRadius: 'var(--radius-xs)',
                   border: isToxic ? `var(--border-width-thick) solid ${SCORE_COLORS.failing}` : 'none',
                   animation: isToxic ? 'toxicPulse 2s ease-in-out infinite' : undefined,
-                  minHeight: HEATMAP_CELL_MIN_HEIGHT,
                 }}
               >
                 {value.toFixed(SCORE_CHIP_PRECISION)}
