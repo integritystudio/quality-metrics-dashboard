@@ -5,6 +5,12 @@ const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 const ATTR_AGENT_ID = 'gen_ai.agent.id';
 const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
 const SPAN_STATUS_ERROR = 2;
+/**
+ * Epsilon tolerance (nanoseconds) for near-concurrent span edge inference.
+ * Spans whose end and start differ by less than this value are treated as
+ * sequential (WG-M2). Set to 1 ms = 1_000_000 ns.
+ */
+const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
 
 export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
@@ -133,7 +139,8 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   for (let i = 0; i < agentTimings.length - 1; i++) {
     const curr = agentTimings[i];
     const next = agentTimings[i + 1];
-    if (curr.maxEnd <= next.minStart) {
+    // Use epsilon tolerance to catch near-concurrent spans that a strict <= would miss (WG-M2)
+    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
       const key = `${curr.id}->${next.id}`;
       edges.push({
         id: key,

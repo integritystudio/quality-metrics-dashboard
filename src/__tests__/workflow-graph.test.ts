@@ -421,6 +421,28 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
     expect(graph.edges).toHaveLength(0);
   });
 
+  it('infers edge between near-concurrent spans within epsilon tolerance (WG-M2)', () => {
+    // agentA ends at 2_000_000 ns, agentB starts at 2_500_000 ns — gap is 500_000 ns < 1_000_000 ns epsilon
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+
+  it('does not infer edge when spans overlap by more than epsilon', () => {
+    // agentA ends at 3_000_000 ns, agentB starts at 1_500_000 ns — truly concurrent, gap > epsilon
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeUndefined();
+  });
+
   it('counts tool calls from span names starting with "tool:"', () => {
     const spans: TraceSpan[] = [
       makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
