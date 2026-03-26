@@ -217,7 +217,6 @@ app.use('/api/*', async (c, next) => {
   }
 });
 
-// Permission guard helper — returns true if session has the required permission.
 // Admins bypass all permission checks via 'dashboard.admin'.
 function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
   return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
@@ -225,7 +224,6 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Returns headers for Supabase REST calls using the service role key (bypasses RLS).
 // Both apikey and Authorization use the service role key — the anon key is for browser clients only.
 function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
   return {
@@ -535,7 +533,6 @@ app.get('/api/health', async (c) => {
 // - Supabase errors are swallowed; failures are surfaced only via status code + generic message.
 // This policy aligns with sanitizeErrorForResponse used in API routes.
 
-// Admin: list all users with their assigned roles
 app.get('/api/admin/users', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
@@ -573,7 +570,6 @@ app.get('/api/admin/users', async (c) => {
   return c.json(users);
 });
 
-// Admin: list all available roles
 app.get('/api/admin/roles', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
@@ -592,7 +588,6 @@ app.get('/api/admin/roles', async (c) => {
   return c.json(roles);
 });
 
-// Admin: assign a role to a user
 app.post('/api/admin/users/:userId/roles', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
@@ -612,7 +607,6 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
   return c.body(null, Http.NoContent);
 });
 
-// Admin: revoke a role from a user
 app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
