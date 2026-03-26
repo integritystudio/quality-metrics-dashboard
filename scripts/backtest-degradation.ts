@@ -68,8 +68,8 @@ if (metricFilter !== null && !(metricFilter in QUALITY_METRICS)) {
 // ---- Incidents ----
 
 const labeledIncidentSchema = z.object({
-  startTime: z.string().datetime(),
-  endTime: z.string().datetime(),
+  startTime: z.iso.datetime({ local: true }),
+  endTime: z.iso.datetime({ local: true }),
   severity: z.enum(['minor', 'major', 'critical']),
 });
 

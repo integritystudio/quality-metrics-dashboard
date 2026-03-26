@@ -36,11 +36,11 @@ export const traceSpanSchema = z.object({
     code: z.number(),
     message: z.string().optional(),
   }).optional(),
-  attributes: z.record(z.unknown()).optional(),
+  attributes: z.record(z.string(), z.unknown()).optional(),
   events: z.array(z.object({
     name: z.string(),
     timestamp: z.number().optional(),
-    attributes: z.record(z.unknown()).optional(),
+    attributes: z.record(z.string(), z.unknown()).optional(),
   })).optional(),
 });
 
@@ -58,7 +58,7 @@ export const otelLogEntrySchema = z.object({
   timestamp: z.string().optional(),
   severity: z.string().optional(),
   body: z.string().optional(),
-  attributes: z.record(z.unknown()).optional(),
+  attributes: z.record(z.string(), z.unknown()).optional(),
   traceId: z.string().optional(),
   spanId: z.string().optional(),
 });
@@ -139,7 +139,7 @@ export type KvSyncEntry = z.infer<typeof kvSyncEntrySchema>;
  * KV sync state object (.kv-sync-state.json).
  * Maps entry keys to sync metadata.
  */
-export const kvSyncStateSchema = z.record(kvSyncEntrySchema);
+export const kvSyncStateSchema = z.record(z.string(), kvSyncEntrySchema);
 
 export type KvSyncState = z.infer<typeof kvSyncStateSchema>;
 
@@ -157,7 +157,7 @@ export const kvEntryValueSchema = z.object({
   value: z.number().optional(),
   count: z.number().optional(),
   unit: z.string().optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 
 export type KvEntryValue = z.infer<typeof kvEntryValueSchema>;
@@ -176,7 +176,7 @@ export const coverageHeatmapCellSchema = z.object({
   hitCount: z.number().optional(),
 });
 
-export const coverageHeatmapSchema = z.record(z.array(coverageHeatmapCellSchema));
+export const coverageHeatmapSchema = z.record(z.string(), z.array(coverageHeatmapCellSchema));
 
 export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 
@@ -185,7 +185,7 @@ export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 // ============================================================================
 
 const routingTelemetrySummarySchema = z.object({
-  routedSpans: z.number().int().min(0),
+  routedSpans: z.int().min(0),
   fallbackRate: z.number().min(0).max(1),
 });
 
@@ -194,13 +194,13 @@ const routingTelemetryModelPairGroupSchema = z.object({
   requestedModel: z.string(),
   actualModel: z.string(),
   provider: z.string().nullable(),
-  count: z.number().int().min(0),
+  count: z.int().min(0),
 });
 
 const routingTelemetryStrategyGroupSchema = z.object({
   strategy: z.string(),
-  count: z.number().int().min(0),
-  fallbackCount: z.number().int().min(0),
+  count: z.int().min(0),
+  fallbackCount: z.int().min(0),
   fallbackRate: z.number().min(0).max(1),
 });
 
@@ -211,10 +211,10 @@ const routingTelemetryGroupSchema = z.union([
 
 export const routingTelemetryKvSchema = z.object({
   period: z.string().optional(),
-  totalSpansScanned: z.number().int().min(0).default(0),
+  totalSpansScanned: z.int().min(0).default(0),
   summary: routingTelemetrySummarySchema.default({ routedSpans: 0, fallbackRate: 0 }),
-  modelDistribution: z.record(z.number().int().min(0)).default({}),
-  providerDistribution: z.record(z.number().int().min(0)).default({}),
+  modelDistribution: z.record(z.string(), z.int().min(0)).default({}),
+  providerDistribution: z.record(z.string(), z.int().min(0)).default({}),
   costSavings: z.number().min(0).default(0),
   routingLatency: z.object({
     p50: z.number().min(0),

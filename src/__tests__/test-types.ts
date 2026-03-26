@@ -30,7 +30,7 @@ export const WorkflowGraphViewPropsSchema = z.object({
     rootNodeId: z.string().nullable().optional(),
     workflowShape: z.string().optional(),
   }),
-  onNodeClick: z.function().optional(),
+  onNodeClick: z.custom<(nodeId: string) => void>().optional(),
 });
 
 export type WorkflowGraphViewProps = {

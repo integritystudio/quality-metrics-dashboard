@@ -26,11 +26,11 @@ export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ?
 /** Zod schema for coverage input key param. Single source for type, values, and default. */
 export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
 export type InputKey = z.infer<typeof InputKeySchema>;
-export const DEFAULT_INPUT_KEY: InputKey = InputKeySchema._def.defaultValue();
+export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
 /** Zod schema for evaluation sort order param. */
 export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
 export type SortBy = z.infer<typeof SortBySchema>;
-export const DEFAULT_SORT_BY: SortBy = SortBySchema._def.defaultValue();
+export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
 /** Zod schema for role param. */
 export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
 export type Role = z.infer<typeof RoleSchema>;

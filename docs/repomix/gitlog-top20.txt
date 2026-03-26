@@ -1,0 +1,343 @@
+80d1241 2026-03-25 chore(deps): upgrade TypeScript to 6.0.2
+  package-lock.json
+
+b9c9fb5 2026-03-25 chore(deps): upgrade eslint 10, fix eslint 10 breaking changes
+  package-lock.json
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+6888b88 2026-03-25 chore(deps): upgrade vite 8, plugin-react 6, error-boundary 6, minor bumps
+  package-lock.json
+  src/App.tsx
+
+4741f21 2026-03-25 fix(worker): resolve activity logging test mock exhaustion
+  worker/index.ts
+
+3c9c359 2026-03-25 refactor(date-fns): replace native Date APIs with date-fns utilities
+  package-lock.json
+  src/pages/SessionDetailPage.tsx
+
+0ef55ee 2026-03-25 feat(activity-logging): add login/logout activity logging and POST /api/logout endpoint
+  worker/index.ts
+
+fe6ac9b 2026-03-25 docs(worker): document RLS policy requirement for logActivity (FU-AUTH-RLS-VERIFY)
+  worker/index.ts
+
+1e47fd9 2026-03-24 fix(routing-telemetry): add Zod KV validation, guard division by zero, tighten type guard
+  worker/index.ts
+
+b434768 2026-03-24 feat(routing-telemetry): add /api/routing-telemetry endpoint and dashboard page (FU-R8-DASH)
+  src/App.tsx
+  worker/index.ts
+
+f61f047 2026-03-24 refactor(scripts): add Zod validation to sync-to-kv.ts
+  scripts/sync-to-kv.ts
+
+def7b17 2026-03-24 feat: integrate validated file I/O with Zod schemas
+  scripts/judge-evaluations.ts
+
+ac93407 2026-03-24 refactor(activity): consolidate activity logging patterns into shared module
+  worker/index.ts
+
+7941d36 2026-03-23 chore(dashboard): add e2e auth fixtures and react-compiler dependency
+  package-lock.json
+
+93cce89 2026-03-23 fix(lint): remove unused variables
+  worker/index.ts
+
+0fa0e73 2026-03-23 fix(lint): fix React hooks rules violations
+  src/App.tsx
+
+f6e18de 2026-03-22 test: add test-mode auth bypass and provide Bearer test-token in API tests
+  worker/index.ts
+
+b4a30bb 2026-03-21 docs(admin): mark admin tooling for role/permission assignment done in Phase 4 roadmap
+  docs/roadmap/users.md
+
+c9a38dc 2026-03-21 fix(admin): address code review findings — frontend guard and service role headers
+  src/App.tsx
+  worker/index.ts
+
+d420e6c 2026-03-21 feat(admin): add admin tooling for role/permission assignment (Phase 4)
+  src/App.tsx
+  worker/index.ts
+
+04e8206 2026-03-20 docs(auth): mark login/logout activity logging done in Phase 4 roadmap
+  docs/roadmap/users.md
+
+daef5a2 2026-03-20 refactor(auth): simplify activity logging — inline vars, drop redundant type annotations
+  worker/index.ts
+
+251b8d5 2026-03-20 feat(auth): add login/logout activity logging via POST /api/activity (Phase 4)
+  worker/index.ts
+
+a7ac806 2026-03-20 perf(auth): optimize activity logging for efficiency
+  worker/index.ts
+
+fdfd05f 2026-03-20 docs(auth): mark activity logging done in Phase 4 roadmap
+  docs/roadmap/users.md
+
+c9ecaac 2026-03-20 fix(auth): address code review findings in activity logging
+  worker/index.ts
+
+0a5cb35 2026-03-20 feat(auth): add user_activity audit logging on view routes (Phase 4)
+  docs/roadmap/users.md
+  worker/index.ts
+
+3fddbb4 2026-03-20 chore(auth): remove dead MeResponse import from worker
+  worker/index.ts
+
+34195c9 2026-03-20 fix(auth): close role gate bypass and add server-side allowedViews check on /api/dashboard
+  src/App.tsx
+  worker/index.ts
+
+ce1cb6a 2026-03-20 feat(auth): gate RoleSelector tabs and /role routes on allowedViews (Phase 3)
+  src/App.tsx
+  worker/index.ts
+
+ad2c40f 2026-03-20 docs: update auth documentation with Zod validation completion
+  docs/roadmap/users.md
+
+8b9898c 2026-03-20 feat(auth): add remaining Zod validation schemas (login, refresh, me endpoint)
+  worker/index.ts
+
+87e9ba3 2026-03-20 feat(auth): add Zod validation schemas for Supabase auth responses
+  docs/roadmap/users.md
+  worker/index.ts
+
+6e94d95 2026-03-20 fix(auth): validate DB permissions and path params in worker (final review H1/H2)
+  worker/index.ts
+
+beae4b7 2026-03-20 fix(auth): P3 hardening — token guard, CORS, comments, auth timeout (AUTH-12/13/16/17)
+  worker/index.ts
+
+398d6eb 2026-03-20 fix(auth): validate name path param in metrics and trends routes (AUTH-15)
+  worker/index.ts
+
+735ffc6 2026-03-20 fix(auth): add id cross-check and email validation on public.users row (AUTH-6 follow-up)
+  worker/index.ts
+
+6ae89a6 2026-03-20 fix(auth): return 401 when public.users row not found (AUTH-6)
+  worker/index.ts
+
+cfdbefa 2026-03-20 docs: update auth roadmap with PII leakage mitigation and type clarifications
+  docs/roadmap/users.md
+
+6c4b10a 2026-03-20 fix(auth): stop /api/me from leaking internal user IDs
+  worker/index.ts
+
+fedb21d 2026-03-20 refactor(auth): simplify phase 1 implementation per code-simplifier
+  src/App.tsx
+  worker/index.ts
+
+9c1d14b 2026-03-20 feat(app): wire AuthProvider, /login route, and RequireAuth into App
+  src/App.tsx
+
+e7afb28 2026-03-20 fix(types+worker): add authUserId and appUserId to MeResponse
+  worker/index.ts
+
+11f4c53 2026-03-20 fix(worker): change /api/me from POST to GET
+  worker/index.ts
+
+1e248bd 2026-03-20 fix(auth): enforce permissions on all routes and fix URL injection in worker
+  worker/index.ts
+
+e7e1390 2026-03-20 refactor(auth): use Set for permission deduplication in worker middleware
+  worker/index.ts
+
+6c76f10 2026-03-20 feat(auth): implement Phase 1 dashboard authentication
+  worker/index.ts
+
+0ef5976 2026-03-20 docs(roadmap): add Supabase auth and user tracking implementation guide
+  docs/roadmap/users.md
+
+a58bbdd 2026-03-18 fix: write evals to today's file and return empty response for missing KV metrics
+  scripts/judge-evaluations.ts
+  worker/index.ts
+
+6f3d844 2026-03-17 fix(G5): address code review findings WG-H1/H2/H3/M3/M5
+  src/App.tsx
+
+721ad33 2026-03-17 feat(G5): add WorkflowGraphView component with ReactFlow + ELKjs
+  package-lock.json
+  src/App.tsx
+
+b21a7be 2026-03-16 fix: override compromised undici dependency
+  package-lock.json
+
+d4590d4 2026-03-16 fix(DR-L4): self-host Google Fonts to prevent IP leak to CDN
+  public/fonts/IBMPlexSans-Medium.woff2
+  public/fonts/IBMPlexSans-Regular.woff2
+  public/fonts/IBMPlexSans-SemiBold.woff2
+  public/fonts/JetBrainsMono-Medium.woff2
+  public/fonts/JetBrainsMono-Regular.woff2
+  public/fonts/JetBrainsMono-SemiBold.woff2
+  src/theme.css
+
+0b8374b 2026-03-16 bump version to 3.0.3
+  scripts/sync-to-kv.ts
+  src/App.tsx
+
+6a661fc 2026-03-16 fix(DR-L6,L7,L8): clean up SPA fallback tests and fix /api guard
+  worker/index.ts
+
+5771486 2026-03-16 fix(AGENTS-404): add SPA fallback for client-side routes on deployed worker
+  worker/index.ts
+
+8e27662 2026-03-16 feat(FE-R1-UI): adaptive score color bands with calibration support
+  worker/index.ts
+
+d9f16e7 2026-03-16 fix(keyboard-nav): add shortcut conflict guards and consolidate ref/state tracking (CTX-M3, CTX-M4)
+  src/__tests__/keyboard-nav-context.test.tsx
+
+2a50a4c 2026-03-16 fix: resolve 4 code review backlog items (DR-M2, DR-M3, DR-L3, DR-L6)
+  src/App.tsx
+
+2cc6e3a 2026-03-16 fix(dashboard): resolve trivial backlog items CTX-L1, CTX-L2, CTX-M2, DR-L5
+  src/pages/SessionDetailPage.tsx
+
+a065d42 2026-03-11 fix(test): change const to let for mutated maxConcurrent/current in judge-evaluations
+  scripts/__tests__/judge-evaluations.test.ts
+
+01819df 2026-03-11 fix(review): address high/medium code review findings
+  scripts/sync-to-kv.ts
+
+30d3f1b 2026-03-11 fix(scripts): compute previous-period trend for metric detail KV entries
+  scripts/sync-to-kv.ts
+
+01de7ff 2026-03-10 chore: update wrangler 4.65->4.72, gitignore cleanup, backlog reset
+  package-lock.json
+
+b2c36d5 2026-03-10 chore(docs): regenerate repomix snapshot to fix invalid TIME_MS const syntax (L1)
+  docs/repomix/docs-compressed.xml
+  docs/repomix/docs.xml
+
+8297c91 2026-03-10 chore: hide Coverage tab until data compression is implemented
+  src/App.tsx
+
+049169e 2026-03-10 fix(worker): align degradation-signals fallback shape and document KV key
+  worker/index.ts
+
+5f61110 2026-03-10 feat(worker): add GET /api/degradation-signals route (R5-API)
+  worker/index.ts
+
+90e3a14 2026-03-06 chore(docs): update repomix snapshot and kv-sync coverage
+  docs/repomix/docs.xml
+
+e647e7e 2026-03-06 fix(H1): broaden backfill pre-filter to check all seed metrics
+  scripts/__tests__/judge-evaluations.test.ts
+  scripts/judge-evaluations.ts
+
+1c623c5 2026-03-06 fix dashboard imports for toolkit dist paths
+  src/__tests__/dr13-coverage.test.tsx
+
+73c2da5 2026-03-06 fix(tests): repair TIME_MS/constants imports and stabilize toxic-cell assertion
+  scripts/__tests__/judge-evaluations.test.ts
+  scripts/sync-to-kv.ts
+
+ad5f0c3 2026-03-03 (feat) update kv-sync for flexibility
+  docs/repomix/docs-compressed.xml
+  docs/repomix/docs.xml
+  src/pages/SessionDetailPage.tsx
+  src/theme.css
+
+b8d83e5 2026-03-03 fix(sync): respect --days flag and raise span query limit for sessions
+  scripts/sync-to-kv.ts
+
+c5bb728 2026-03-03 fix(dashboard): filter null metric stats and link executive statuses
+  src/App.tsx
+
+2446f81 2026-03-02 feat(judge): add --backfill flag to generate trace-based seed evaluations
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+9435af6 2026-03-02 feat(sync-to-kv): wire R5 degradation signals after trend loop
+  scripts/sync-to-kv.ts
+
+97158fb 2026-03-02 refactor(theme,pages): consolidate magic numbers and table base styles
+  src/pages/SessionDetailPage.tsx
+  src/theme.css
+
+0848f4f 2026-03-02 feat(sessions): display session timespan in detail page header
+  src/pages/SessionDetailPage.tsx
+
+1c7e799 2026-03-02 refactor(components): consolidate 5 small components into shared modules
+  docs/repomix/docs-compressed.xml
+  docs/repomix/docs.xml
+  docs/roadmap/impl-g5-workflow-visualization-update.md
+
+7cc9729 2026-03-02 fix(worker): add missing /api/metrics/:name/evaluations route and redeploy
+  scripts/sync-to-kv.ts
+  src/pages/SessionDetailPage.tsx
+  worker/index.ts
+
+c12c5c7 2026-03-02 fix(scripts): restore missing variable assignments broken by ESLint pass
+  scripts/judge-evaluations.ts
+
+27cf6a6 2026-03-02 chore(sync): full trace backlog drained to 100% KV coverage; fix const→let
+  scripts/sync-to-kv.ts
+
+c4276c8 2026-03-02 refactor(components): extract FreqBarGrid to shared component (L2)
+  src/pages/SessionDetailPage.tsx
+
+d8a0098 2026-03-02 refactor(css): migrate inline styles to utility classes (M1)
+  src/theme.css
+
+5c5810f 2026-03-02 refactor(components): consolidate repeated patterns across views, pages, and components
+  src/App.tsx
+  src/pages/SessionDetailPage.tsx
+  src/theme.css
+
+2645970 2026-03-02 refactor(css): add 18 utility classes and migrate inline styles
+  src/pages/SessionDetailPage.tsx
+  src/theme.css
+
+7a5db88 2026-03-02 refactor(css): add 18 utility classes and migrate inline styles
+  docs/repomix/docs-compressed.xml
+  docs/repomix/docs.xml
+  src/theme.css
+
+9ca1327 2026-03-01 refactor(css): add d-flex, w-full, m-0 utilities; replace repeated inline styles
+  src/App.tsx
+  src/pages/SessionDetailPage.tsx
+  src/theme.css
+
+9e7afb4 2026-03-01 refactor(css): migrate shared blocks to utility classes; fix undefined CSS vars
+  docs/repomix/docs-compressed.xml
+  docs/repomix/docs.xml
+  src/App.tsx
+  src/pages/SessionDetailPage.tsx
+  src/theme.css
+
+a45936c 2026-03-01 fix(review-followups): address M1/M2/L1/L2 from final review
+  src/theme.css
+
+d66fac9 2026-03-01 refactor(FreqBar): replace hardcoded widths with CSS grid layout (FR6)
+  src/theme.css
+
+371f663 2026-03-01 refactor(Stat): move magic number styles to theme.css classes (FR3)
+  src/theme.css
+
+1a11f57 2026-03-01 refactor(theme): complete mono matrix and fill gap/margin utility gaps (L3, L4)
+  src/theme.css
+
+d535ad7 2026-03-01 refactor(theme): standardize fade-in animation to var(--transition-fast) (L2)
+  src/theme.css
+
+d165340 2026-03-01 refactor(theme): replace hardcoded px values with space tokens (L1)
+  src/theme.css
+
+7a22356 2026-03-01 refactor(components): move Stat and FreqBar to components/ (M6)
+  src/pages/SessionDetailPage.tsx
+
+be078a3 2026-03-01 refactor(components): extract TruncatedList for slice+map+more pattern (M5)
+  src/pages/SessionDetailPage.tsx
+
+5bf70ab 2026-03-01 refactor(theme): extract shared font-size to tooltip popup base rule (M4)
+  src/theme.css
+
+23e30f9 2026-03-01 refactor(theme): consolidate duplicate sla-table/eval-table th selectors (M3)
+  src/theme.css
+
+f1d36ee 2026-03-01 fix(theme): add info token rule for data-status attribute
+  src/theme.css

@@ -125,12 +125,12 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Su
 | `GET /api/compliance/verifications` | ✓ | Human verifications (`?period=7d`) |
 | `GET /api/health` | ✗ | Health check + last sync timestamp |
 
-## Project Structure (126,816 tokens)
+## Project Structure (126,820 tokens)
 
 ```
-└── src/ (126,816 tokens)
-    ├── App.tsx (4,808 tokens)
-    ├── main.tsx (332 tokens)
+└── src/ (126,820 tokens)
+    ├── App.tsx (4,811 tokens)
+    ├── main.tsx (335 tokens)
     ├── theme.css (11,825 tokens)
     ├── types.ts (431 tokens)
     ├── vite-env.d.ts (11 tokens)
@@ -146,11 +146,11 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Su
     │       ├── sessions.ts (4,693 tokens)
     │       ├── trends.ts (2,279 tokens)
     ├── ... (7 more)
-    ├── components/ (44,133 tokens)
+    ├── components/ (44,126 tokens)
     │   ├── AgentActivityPanel.tsx (3,985 tokens)
     │   ├── CorrelationHeatmap.tsx (1,880 tokens)
     │   ├── EvaluationTable.tsx (3,021 tokens)
-    │   ├── TrendChart.tsx (2,060 tokens)
+    │   ├── TrendChart.tsx (2,059 tokens)
     │   ├── WorkflowGraph.tsx (2,484 tokens)
     ├── ... (50 more)
     │   └── views/ (1,683 tokens)
@@ -170,9 +170,9 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Su
     │   ├── useRoutingTelemetry.ts (381 tokens)
     │   ├── useSessionDetail.ts (1,331 tokens)
     ├── ... (11 more)
-    ├── lib/ (17,251 tokens)
+    ├── lib/ (17,256 tokens)
     │   ├── constants.ts (2,963 tokens)
-    │   ├── dashboard-file-utils.ts (1,612 tokens)
+    │   ├── dashboard-file-utils.ts (1,617 tokens)
     │   ├── quality-utils.ts (3,733 tokens)
     │   ├── supabase.ts (2,097 tokens)
     │   ├── workflow-graph.ts (2,105 tokens)

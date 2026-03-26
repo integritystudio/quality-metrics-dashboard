@@ -8,16 +8,16 @@ import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
  */
 export const AuthUserResponseSchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email().optional(),
-  email_confirmed_at: z.string().datetime().optional().nullable(),
-  user_metadata: z.record(z.unknown()).optional(),
-  app_metadata: z.record(z.unknown()).optional(),
+  email: z.email().optional(),
+  email_confirmed_at: z.iso.datetime().optional().nullable(),
+  user_metadata: z.record(z.string(), z.unknown()).optional(),
+  app_metadata: z.record(z.string(), z.unknown()).optional(),
   identities: z.array(z.unknown()).optional(),
-  created_at: z.string().datetime().optional(),
-  updated_at: z.string().datetime().optional(),
-  last_sign_in_at: z.string().datetime().optional().nullable(),
+  created_at: z.iso.datetime().optional(),
+  updated_at: z.iso.datetime().optional(),
+  last_sign_in_at: z.iso.datetime().optional().nullable(),
   phone: z.string().optional().nullable(),
-  confirmed_at: z.string().datetime().optional().nullable(),
+  confirmed_at: z.iso.datetime().optional().nullable(),
 });
 
 export type AuthUserResponse = z.infer<typeof AuthUserResponseSchema>;
@@ -27,9 +27,9 @@ export type AuthUserResponse = z.infer<typeof AuthUserResponseSchema>;
  */
 export const PublicUserSchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email(),
-  created_at: z.string().datetime().optional(),
-  updated_at: z.string().datetime().optional(),
+  email: z.email(),
+  created_at: z.iso.datetime().optional(),
+  updated_at: z.iso.datetime().optional(),
 });
 
 export type PublicUser = z.infer<typeof PublicUserSchema>;
@@ -56,14 +56,14 @@ export const AuthTokenResponseSchema = z.object({
     refresh_token: z.string().optional(),
     user: z.object({
       id: z.string().uuid(),
-      email: z.string().email().optional(),
-      user_metadata: z.record(z.unknown()).optional(),
+      email: z.email().optional(),
+      user_metadata: z.record(z.string(), z.unknown()).optional(),
     }).optional(),
   }).nullable().optional(),
   user: z.object({
     id: z.string().uuid(),
-    email: z.string().email().optional(),
-    user_metadata: z.record(z.unknown()).optional(),
+    email: z.email().optional(),
+    user_metadata: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
   error: z.string().optional(),
   error_description: z.string().optional(),
@@ -76,7 +76,7 @@ export type AuthTokenResponse = z.infer<typeof AuthTokenResponseSchema>;
  * Sent to Supabase /auth/v1/token endpoint
  */
 export const LoginRequestSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -130,8 +130,8 @@ export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
  */
 export const AdminUserSchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email(),
-  created_at: z.string().datetime().optional(),
+  email: z.email(),
+  created_at: z.iso.datetime().optional(),
   roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
 });
 
@@ -151,7 +151,7 @@ export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
  * Dashboard API authentication and permission resolution result
  */
 export const MeResponseSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   roles: z.array(z.string()),
   permissions: z.array(z.enum([
     'dashboard.read',
