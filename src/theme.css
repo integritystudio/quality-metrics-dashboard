@@ -1039,6 +1039,12 @@ details[open] > .cot-summary::before {
   grid-template-columns: auto 1fr;
   gap: var(--space-1) var(--space-4);
 }
+.confidence-level-indicator { color: var(--score-failing); }
+.confidence-level-indicator[data-level="high"] { color: var(--score-excellent); }
+.confidence-level-indicator[data-level="medium"] { color: var(--score-adequate); }
+.agreement-value { color: var(--score-failing); }
+.agreement-value[data-band="excellent"] { color: var(--score-excellent); }
+.agreement-value[data-band="adequate"] { color: var(--score-adequate); }
 .confidence-method {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);

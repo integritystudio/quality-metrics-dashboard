@@ -20,12 +20,6 @@ interface ConfidencePanelProps {
   evaluatorScores?: EvaluatorScore[];
 }
 
-function levelColor(level: string): string {
-  if (level === 'high') return SCORE_COLORS.excellent;
-  if (level === 'medium') return SCORE_COLORS.adequate;
-  return SCORE_COLORS.failing;
-}
-
 function levelShape(level: string): string {
   if (level === 'high') return '\u25CF'; // ●
   if (level === 'medium') return '\u25D0'; // ◐
@@ -89,7 +83,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
   return (
     <div className="text-xs">
       <div className="confidence-header flex-center">
-        <span className="text-base" style={{ color: levelColor(level) }}>
+        <span className="text-base confidence-level-indicator" data-level={level}>
           {levelShape(level)} {level}
         </span>
         <span className="confidence-method">({method})</span>
@@ -112,9 +106,10 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
         {evaluatorAgreement != null && (
           <>
             <span className="text-secondary">Agreement</span>
-            <span className="mono" style={{
-              color: evaluatorAgreement > SCORE_THRESHOLD_GREEN ? SCORE_COLORS.excellent : evaluatorAgreement > SCORE_THRESHOLD_YELLOW ? SCORE_COLORS.adequate : SCORE_COLORS.failing,
-            }}>
+            <span
+              className="mono agreement-value"
+              data-band={evaluatorAgreement > SCORE_THRESHOLD_GREEN ? 'excellent' : evaluatorAgreement > SCORE_THRESHOLD_YELLOW ? 'adequate' : undefined}
+            >
               {formatPercent(evaluatorAgreement * 100, 0)}
             </span>
           </>
