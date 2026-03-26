@@ -12,9 +12,7 @@ import type { PercentileDistribution } from '../lib/quality-utils.js';
 
 afterEach(cleanup);
 
-// ---------------------------------------------------------------------------
 // Test fixtures
-// ---------------------------------------------------------------------------
 
 function makeDistribution(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
   return {
@@ -32,9 +30,7 @@ function getBadgeLabel(container: HTMLElement): string {
   return container.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
 }
 
-// ---------------------------------------------------------------------------
 // ScoreBadge without calibration — existing behavior must be preserved
-// ---------------------------------------------------------------------------
 
 describe('ScoreBadge without calibration prop', () => {
   it('renders excellent band for score 0.95 without calibration', () => {
@@ -54,9 +50,7 @@ describe('ScoreBadge without calibration prop', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // ScoreBadge with calibration prop — new adaptive behavior
-// ---------------------------------------------------------------------------
 
 describe('ScoreBadge with calibration prop', () => {
   it('accepts calibration prop as part of the component interface', () => {

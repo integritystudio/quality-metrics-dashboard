@@ -2,18 +2,14 @@ import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 
-// ---------------------------------------------------------------------------
 // Mock useAgentSession
-// ---------------------------------------------------------------------------
 
 const mockUseAgentSession = vi.fn();
 vi.mock('../hooks/useAgentSession.js', () => ({
   useAgentSession: (...args: unknown[]) => mockUseAgentSession(...args),
 }));
 
-// ---------------------------------------------------------------------------
 // Mock wouter — capture navigate calls
-// ---------------------------------------------------------------------------
 
 const mockNavigate = vi.fn();
 vi.mock('wouter', () => ({
@@ -23,9 +19,7 @@ vi.mock('wouter', () => ({
   ),
 }));
 
-// ---------------------------------------------------------------------------
 // Mock WorkflowGraphView — stub renders testid, fires onNodeClick
-// ---------------------------------------------------------------------------
 
 vi.mock('../components/WorkflowGraph.js', () => ({
   WorkflowGraphView: ({ graph, onNodeClick }: WorkflowGraphViewProps) => (
@@ -43,9 +37,7 @@ vi.mock('../components/WorkflowGraph.js', () => ({
   ),
 }));
 
-// ---------------------------------------------------------------------------
 // Mock DetailPageHeader — renders title and children
-// ---------------------------------------------------------------------------
 
 vi.mock('../components/DetailPageHeader.js', () => ({
   DetailPageHeader: ({ title, id, children }: DetailPageHeaderProps) => (
@@ -57,10 +49,8 @@ vi.mock('../components/DetailPageHeader.js', () => ({
   ),
 }));
 
-// ---------------------------------------------------------------------------
 // Mock PageShell — renders children directly (no loading/error state needed
 // for most tests; tests that need loading/error states override the mock)
-// ---------------------------------------------------------------------------
 
 vi.mock('../components/PageShell.js', () => ({
   PageShell: ({ isLoading, error, children }: PageShellProps) => {
@@ -70,9 +60,7 @@ vi.mock('../components/PageShell.js', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
 // Imports (after mocks)
-// ---------------------------------------------------------------------------
 
 import { WorkflowPage } from '../pages/WorkflowPage.js';
 import { AgentSessionPage } from '../pages/AgentSessionPage.js';
@@ -103,9 +91,7 @@ function makeAgentSessionData(graph: WorkflowGraph | null | undefined = makeGrap
   };
 }
 
-// ---------------------------------------------------------------------------
 // WorkflowPage tests
-// ---------------------------------------------------------------------------
 
 describe('WorkflowPage', () => {
   describe('when data has a valid graph', () => {
@@ -239,9 +225,7 @@ describe('WorkflowPage', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // AgentSessionPage — "View Workflow" nav link
-// ---------------------------------------------------------------------------
 
 describe('AgentSessionPage', () => {
   const SESSION_ID = 'session-xyz';

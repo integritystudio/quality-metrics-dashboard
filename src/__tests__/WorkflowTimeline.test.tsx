@@ -6,25 +6,19 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// ---------------------------------------------------------------------------
 // Mock WorkflowGraph — prevents ELK/ReactFlow instantiation in AgentWorkflowView tests
-// ---------------------------------------------------------------------------
 
 vi.mock('../components/WorkflowGraph.js', () => ({
   WorkflowGraphView: () => <div data-testid="workflow-graph-view" />,
 }));
 
-// ---------------------------------------------------------------------------
 // Imports (after mocks)
-// ---------------------------------------------------------------------------
 
 import { WorkflowTimeline } from '../components/WorkflowTimeline.js';
 import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
 import { makeNode, makeGraph, makeTurn, makeHandoff } from './workflow-fixtures.js';
 
-// ---------------------------------------------------------------------------
 // WorkflowTimeline tests
-// ---------------------------------------------------------------------------
 
 describe('WorkflowTimeline', () => {
   it('renders empty state when no turns', () => {
@@ -113,9 +107,7 @@ describe('WorkflowTimeline', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // AgentWorkflowView tests
-// ---------------------------------------------------------------------------
 
 describe('AgentWorkflowView', () => {
   const graph = makeGraph({ nodes: [makeNode()] });
