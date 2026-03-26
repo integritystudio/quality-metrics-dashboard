@@ -75,7 +75,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
     background: isError ? 'var(--status-critical)' : 'var(--status-healthy)',
     borderRadius: 'var(--radius-xs)',
     marginTop: 'var(--space-1)',
-    minWidth: barPct > 0 ? 'var(--space-0-5)' : 0,
+    minWidth: barPct > 0 ? 'var(--space-0-5)' : '0',
   };
 
   return (
