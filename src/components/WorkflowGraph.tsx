@@ -15,6 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -143,7 +144,7 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
       <div className="workflow-node__label">{d.label}</div>
       {band && (
         <div className="workflow-node__score">
-          <span>{band.label}</span>: {d.evaluationScore?.toFixed(2)}
+          <span>{band.label}</span>: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
         </div>
       )}
       <div className="workflow-node__meta">

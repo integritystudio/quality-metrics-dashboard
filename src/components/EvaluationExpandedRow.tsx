@@ -1,6 +1,7 @@
 import { Link } from 'wouter';
 import { SCORE_COLORS } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { ScoreChip, ColoredChip } from './Chip.js';
 import { MetaItem } from './MetaItem.js';
 import { SectionBlock } from './SectionBlock.js';
@@ -12,8 +13,8 @@ export function StepScoreChip({ step, score, explanation }: {
   explanation?: string;
 }) {
   return (
-    <ScoreChip score={score} direction="maximize" title={explanation ?? `Step ${step}: ${score.toFixed(2)}`}>
-      {step}: {score.toFixed(2)}
+    <ScoreChip score={score} direction="maximize" title={explanation ?? `Step ${step}: ${score.toFixed(SCORE_CHIP_PRECISION)}`}>
+      {step}: {score.toFixed(SCORE_CHIP_PRECISION)}
     </ScoreChip>
   );
 }
@@ -29,9 +30,9 @@ export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score
   return (
     <ColoredChip
       color={color}
-      title={`tool: ${toolCorrect ? 'correct' : 'wrong'}, args: ${argsCorrect ? 'correct' : 'wrong'}, score: ${score.toFixed(2)}`}
+      title={`tool: ${toolCorrect ? 'correct' : 'wrong'}, args: ${argsCorrect ? 'correct' : 'wrong'}, score: ${score.toFixed(SCORE_CHIP_PRECISION)}`}
     >
-      {toolName} {score.toFixed(2)}
+      {toolName} {score.toFixed(SCORE_CHIP_PRECISION)}
     </ColoredChip>
   );
 }

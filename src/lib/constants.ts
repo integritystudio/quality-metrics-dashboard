@@ -88,8 +88,10 @@ export const RETRY_DELAY_CAP = 30_000;
 export const MAX_IDS = 50;
 /** Max evaluations returned by the live quality endpoint. */
 export const EVAL_LIMIT = 100;
-/** Decimal places for displayed score values. */
+/** Decimal places for displayed score values in API responses. */
 export const SCORE_DISPLAY_PRECISION = 3;
+/** Decimal places for compact score display in chips and table cells. */
+export const SCORE_CHIP_PRECISION = 2;
 /** Decimal places for formatted raw score values in formatScore. */
 export const SCORE_FORMAT_PRECISION = 4;
 

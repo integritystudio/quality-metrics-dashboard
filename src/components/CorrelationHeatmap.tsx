@@ -1,7 +1,7 @@
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { SCORE_COLORS, formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, HEATMAP_CELL_MIN_HEIGHT } from '../lib/constants.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, HEATMAP_CELL_MIN_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
 import type { CorrelationFeature } from '../types.js';
 
 interface CorrelationHeatmapProps {
@@ -121,14 +121,14 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
             const tooltip = isDiag
               ? `${rowMetric}: diagonal (1.00)`
               : corr
-                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(3)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
+                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
                 : `${rowMetric} vs ${colMetric}: no data`;
 
             return (
               <div
                 key={`${ri}-${ci}`}
                 role="cell"
-                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(2)}`}
+                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
                 data-toxic={isToxic ? 'true' : undefined}
                 title={tooltip}
                 onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
@@ -143,7 +143,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                   minHeight: HEATMAP_CELL_MIN_HEIGHT,
                 }}
               >
-                {value.toFixed(2)}
+                {value.toFixed(SCORE_CHIP_PRECISION)}
               </div>
             );
           })}

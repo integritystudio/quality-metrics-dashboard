@@ -3,7 +3,7 @@ import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '.
 import {
   SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
   VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT, VARIANCE_DISPLAY_MIN_WIDTH,
-  CONFIDENCE_MIN_SAMPLE_SIZE,
+  CONFIDENCE_MIN_SAMPLE_SIZE, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION,
 } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 
@@ -39,7 +39,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
     <div className="variance-bar flex-center">
       <BarIndicator value={pct} color={SCORE_COLORS[band]} className="flex-1" />
       <span className="mono-xs text-secondary" style={{ minWidth: VARIANCE_DISPLAY_MIN_WIDTH }}>
-        {value.toFixed(3)}
+        {value.toFixed(SCORE_DISPLAY_PRECISION)}
       </span>
     </div>
   );
@@ -73,9 +73,9 @@ function JudgePanel({ scores }: { scores: EvaluatorScore[] }) {
         </div>
         <div>
           Score Range: <span className="summary-value">
-            {minScore.toFixed(2)} &ndash; {maxScore.toFixed(2)}
+            {minScore.toFixed(SCORE_CHIP_PRECISION)} &ndash; {maxScore.toFixed(SCORE_CHIP_PRECISION)}
           </span>
-          {' '}(spread: {(maxScore - minScore).toFixed(3)})
+          {' '}(spread: {(maxScore - minScore).toFixed(SCORE_DISPLAY_PRECISION)})
         </div>
       </div>
     </div>
