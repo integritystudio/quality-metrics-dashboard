@@ -77,7 +77,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
   const hallucinationEvals: typeof evaluations = [];
   const failedEvals: typeof evaluations = [];
+  const evalRows: EvalRow[] = [];
   for (const e of evaluations) {
+    evalRows.push(evalToRow(e));
     const label = (e.scoreLabel ?? '').toLowerCase();
     const isFail = label === 'fail';
     if (isFail) failedEvals.push(e);
@@ -97,7 +99,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const handoffScore = evaluation.handoffScore ?? 0;
   const avgRelevance = evaluation.avgTurnRelevance ?? 0;
   const completeness = evaluation.conversationCompleteness ?? 0;
-  const evalRows: EvalRow[] = evaluations.map(evalToRow);
 
   const models = [...new Set(tokenProgression.map(t => t.model).filter(Boolean))];
 
