@@ -29,9 +29,7 @@ const EXPECTED_FONT_FILES: Record<string, string[]> = {
   ],
 };
 
-// ---------------------------------------------------------------------------
 // theme.css — external import removed
-// ---------------------------------------------------------------------------
 
 describe('DR-L4: theme.css — no external Google Fonts import', () => {
   it('should not contain a fonts.googleapis.com @import', () => {
@@ -47,9 +45,7 @@ describe('DR-L4: theme.css — no external Google Fonts import', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Local @font-face declarations
-// ---------------------------------------------------------------------------
 
 describe('DR-L4: local @font-face declarations exist', () => {
   function getFontFaceSource(): string {
@@ -94,9 +90,7 @@ describe('DR-L4: local @font-face declarations exist', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // public/fonts/ — font files exist on disk
-// ---------------------------------------------------------------------------
 
 describe('DR-L4: public/fonts/ directory and font files exist', () => {
   it('should have a public/fonts/ directory', () => {

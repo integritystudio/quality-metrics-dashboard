@@ -15,9 +15,7 @@ import {
   type PercentileDistribution,
 } from '../lib/quality-utils.js';
 
-// ---------------------------------------------------------------------------
 // Test fixtures
-// ---------------------------------------------------------------------------
 
 function makeDist(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
   return {
@@ -30,9 +28,7 @@ function makeDist(overrides: Partial<PercentileDistribution> = {}): PercentileDi
   };
 }
 
-// ---------------------------------------------------------------------------
 // empiricalCDF
-// ---------------------------------------------------------------------------
 
 describe('empiricalCDF', () => {
   it('returns 0.5 for value at exact p50', () => {
@@ -75,9 +71,7 @@ describe('empiricalCDF', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // MIN_QUANTILE_SAMPLE_SIZE constant
-// ---------------------------------------------------------------------------
 
 describe('MIN_QUANTILE_SAMPLE_SIZE', () => {
   it('equals 100', () => {
@@ -85,9 +79,7 @@ describe('MIN_QUANTILE_SAMPLE_SIZE', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // METRIC_SCALE_STRATEGY constant
-// ---------------------------------------------------------------------------
 
 describe('METRIC_SCALE_STRATEGY', () => {
   it('maps relevance to quantile', () => {
@@ -119,9 +111,7 @@ describe('METRIC_SCALE_STRATEGY', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // adaptiveScoreColorBand — quantile strategy (relevance)
-// ---------------------------------------------------------------------------
 
 describe('adaptiveScoreColorBand — quantile strategy', () => {
   it('uses empiricalCDF when distribution and sufficient sampleSize are provided', () => {
@@ -159,9 +149,7 @@ describe('adaptiveScoreColorBand — quantile strategy', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // adaptiveScoreColorBand — binary strategy (faithfulness)
-// ---------------------------------------------------------------------------
 
 describe('adaptiveScoreColorBand — binary strategy', () => {
   it('returns excellent for score >= 0.7', () => {
@@ -181,9 +169,7 @@ describe('adaptiveScoreColorBand — binary strategy', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // adaptiveScoreColorBand — log strategy (hallucination)
-// ---------------------------------------------------------------------------
 
 describe('adaptiveScoreColorBand — log strategy', () => {
   it('returns excellent for a low hallucination score (near 0)', () => {
@@ -198,9 +184,7 @@ describe('adaptiveScoreColorBand — log strategy', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // adaptiveScoreColorBand — step strategy (task_completion)
-// ---------------------------------------------------------------------------
 
 describe('adaptiveScoreColorBand — step strategy', () => {
   it('returns excellent for score >= 0.8', () => {
@@ -228,9 +212,7 @@ describe('adaptiveScoreColorBand — step strategy', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // adaptiveScoreColorBand — uniform strategy (coherence)
-// ---------------------------------------------------------------------------
 
 describe('adaptiveScoreColorBand — uniform strategy', () => {
   it('returns excellent for score >= 0.9', () => {
@@ -254,9 +236,7 @@ describe('adaptiveScoreColorBand — uniform strategy', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // adaptiveScoreColorBand — unknown metric fallback
-// ---------------------------------------------------------------------------
 
 describe('adaptiveScoreColorBand — unknown metric', () => {
   it('falls back to uniform scoreColorBand for unrecognized metric name', () => {
