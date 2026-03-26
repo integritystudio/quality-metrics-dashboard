@@ -12,9 +12,7 @@
 
 import { z } from 'zod';
 
-// ============================================================================
 // Trace and Span Data
-// ============================================================================
 
 /**
  * High-resolution time tuple: [seconds, nanoseconds]
@@ -46,9 +44,7 @@ export const traceSpanSchema = z.object({
 
 export type TraceSpan = z.infer<typeof traceSpanSchema>;
 
-// ============================================================================
 // Log Entry Data (from telemetry logs)
-// ============================================================================
 
 /**
  * OTel log record with structured attributes.
@@ -65,9 +61,7 @@ export const otelLogEntrySchema = z.object({
 
 export type OTelLogEntry = z.infer<typeof otelLogEntrySchema>;
 
-// ============================================================================
 // Transcript and Turn Data
-// ============================================================================
 
 /**
  * Single turn in a conversation transcript (user message, assistant response, etc).
@@ -91,9 +85,7 @@ export const transcriptEntrySchema = z.object({
 
 export type TranscriptEntry = z.infer<typeof transcriptEntrySchema>;
 
-// ============================================================================
 // Evaluation Record Data (OTel format)
-// ============================================================================
 
 /**
  * OTel evaluation record written by derive-evaluations.ts.
@@ -119,9 +111,7 @@ export const otelEvaluationRecordSchema = z.object({
 
 export type OTelEvaluationRecord = z.infer<typeof otelEvaluationRecordSchema>;
 
-// ============================================================================
 // KV Sync State (sync-to-kv.ts)
-// ============================================================================
 
 /**
  * KV sync state file schema (.kv-sync-state.json).
@@ -143,9 +133,7 @@ export const kvSyncStateSchema = z.record(z.string(), kvSyncEntrySchema);
 
 export type KvSyncState = z.infer<typeof kvSyncStateSchema>;
 
-// ============================================================================
 // KV Entry Value (what's stored in KV namespace)
-// ============================================================================
 
 /**
  * Dashboard metric detail value stored in Cloudflare KV.
@@ -162,9 +150,7 @@ export const kvEntryValueSchema = z.object({
 
 export type KvEntryValue = z.infer<typeof kvEntryValueSchema>;
 
-// ============================================================================
 // Coverage Heatmap Data (dashboard visualization)
-// ============================================================================
 
 /**
  * Coverage heatmap cell: code location → line coverage percentage.
@@ -180,9 +166,7 @@ export const coverageHeatmapSchema = z.record(z.string(), z.array(coverageHeatma
 
 export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 
-// ============================================================================
 // Routing Telemetry KV Data
-// ============================================================================
 
 const routingTelemetrySummarySchema = z.object({
   routedSpans: z.int().min(0),
