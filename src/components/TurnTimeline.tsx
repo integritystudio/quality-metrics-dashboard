@@ -14,11 +14,13 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
     return <EmptyState message="No turns to display." />;
   }
 
+  const colorByAgent = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
+
   return (
     <div className="d-flex gap-2 overflow-x-auto py-2">
       {turns.map((turn) => {
         const agent = turn.agentName ?? 'unknown';
-        const color = agentColor(agent, agentNames);
+        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
         const bandColor = scoreColor(turn.relevance);
 
         return (

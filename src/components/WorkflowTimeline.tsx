@@ -125,6 +125,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
   const lanes = buildLanes(visibleTurns, agentNames);
   const totalTurns = visibleTurns.length;
   const agentLaneIndex = new Map(agentNames.map((name, i) => [name, i]));
+  const agentColorMap = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
 
   const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
   const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
@@ -165,7 +166,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
         </g>
 
         {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
-          const color = agentColor(agentName, agentNames);
+          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
           const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
 
           return (
