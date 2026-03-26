@@ -877,6 +877,8 @@ details[open] > .cot-summary::before {
   border-radius: var(--radius-xs);
   min-height: 36px;
   border: none;
+  background-color: var(--heatmap-cell-bg);
+  color: var(--heatmap-cell-fg);
 }
 .heatmap-cell[data-toxic] {
   border: var(--border-width-thick) solid var(--score-failing);

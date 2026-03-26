@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { formatScore } from '../lib/quality-utils.js';
@@ -123,9 +124,9 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
                 className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
                 style={{
-                  backgroundColor: bg,
-                  color: isDiag ? 'var(--text-secondary)' : contrastText(value),
-                }}
+                  '--heatmap-cell-bg': bg,
+                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
+                } as CSSProperties}
               >
                 {value.toFixed(SCORE_CHIP_PRECISION)}
               </div>
