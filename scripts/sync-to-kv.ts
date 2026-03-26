@@ -205,7 +205,6 @@ function kvBulkPut(entries: KVEntry[]): number {
     try {
       writeFileSync(tmpFile, JSON.stringify(batch));
       if (dryRun) {
-        for (const _e of batch) { /* dry-run logging */ }
         written += batch.length;
         continue;
       }
