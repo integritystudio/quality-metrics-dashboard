@@ -14,6 +14,30 @@ function toDateOnly(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
+type AgentAcc = {
+  invocations: number;
+  errors: number;
+  rateLimitCount: number;
+  totalOutputSize: number;
+  sessions: Set<string>;
+  traceIds: Set<string>;
+  sourceTypes: Record<string, number>;
+  dailyCounts: number[];
+};
+
+function createAgentAccumulator(periodDays: number): AgentAcc {
+  return {
+    invocations: 0,
+    errors: 0,
+    rateLimitCount: 0,
+    totalOutputSize: 0,
+    sessions: new Set(),
+    traceIds: new Set(),
+    sourceTypes: Object.create(null),
+    dailyCounts: new Array(periodDays).fill(0),
+  };
+}
+
 export const agentRoutes = new Hono();
 
 agentRoutes.get('/agents', async (c) => {
@@ -43,16 +67,7 @@ agentRoutes.get('/agents', async (c) => {
     const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
 
     // Phase 1: aggregate agent stats from spans (prototype-safe accumulators)
-    const acc: Record<string, {
-      invocations: number;
-      errors: number;
-      rateLimitCount: number;
-      totalOutputSize: number;
-      sessions: Set<string>;
-      traceIds: Set<string>;
-      sourceTypes: Record<string, number>;
-      dailyCounts: number[];
-    }> = Object.create(null);
+    const acc: Record<string, AgentAcc> = Object.create(null);
 
     // Build traceId -> agent names mapping for evaluation join
     const traceToAgents = new Map<string, Set<string>>();
@@ -61,7 +76,7 @@ agentRoutes.get('/agents', async (c) => {
       const rawName = span.attributes?.['gen_ai.agent.name'];
       const name = typeof rawName === 'string' ? rawName : 'unknown';
       if (!acc[name]) {
-        acc[name] = { invocations: 0, errors: 0, rateLimitCount: 0, totalOutputSize: 0, sessions: new Set(), traceIds: new Set(), sourceTypes: Object.create(null), dailyCounts: new Array(periodDays).fill(0) };
+        acc[name] = createAgentAccumulator(periodDays);
       }
       acc[name].invocations++;
       // Bucket into daily counts
