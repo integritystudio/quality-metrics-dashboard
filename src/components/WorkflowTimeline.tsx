@@ -10,7 +10,6 @@ import type { HandoffEvaluation } from '../types.js';
 
 const LANE_HEIGHT = 64;
 const LANE_PADDING_TOP = 12;
-const LANE_PADDING_BOTTOM = 12;
 const TURN_BLOCK_HEIGHT = 32;
 const TURN_BLOCK_MIN_WIDTH = 40;
 const TURN_BLOCK_GAP = 6;
