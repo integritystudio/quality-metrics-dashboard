@@ -106,53 +106,40 @@ export const STALE_TIME = {
   /** Slow-changing aggregate stats (agent stats). */
   AGGREGATE: 60_000,
 } as const;
-/** Default query params for metric detail endpoint. */
 export const DEFAULT_TOP_N = 5;
 export const DEFAULT_BUCKET_COUNT = 10;
 
-/** Page UI values */
 export const SKELETON_HEIGHT_SM = 200;
 export const SKELETON_HEIGHT_MD = 300;
 export const SKELETON_HEIGHT_LG = 400;
 export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
 export const DEFAULT_PAGE_LIMIT = 50;
 
-/** CorrelationHeatmap row-header column width and column-header row height (px). */
 export const HEATMAP_ROW_HEADER_WIDTH = 80;
 export const HEATMAP_COL_HEADER_HEIGHT = 32;
-/** CoverageGrid layout dimensions (px) and max displayed input columns. */
 export const COVERAGE_GRID_HEADER_WIDTH = 120;
 export const COVERAGE_GRID_CELL_SIZE = 28;
 export const COVERAGE_GRID_MAX_INPUTS = 30;
 /** PipelineFunnel dropoff warning threshold (%). */
 export const FUNNEL_DROPOFF_WARN_PCT = 20;
-/** SpanTree indentation per depth level and base left padding (px). */
 export const SPAN_TREE_INDENT = 20;
 export const SPAN_TREE_BASE_PADDING = 8;
-/** Sparkline canvas dimensions (px). */
 export const SPARKLINE_WIDTH = 160;
 export const SPARKLINE_HEIGHT = 28;
 
 /** ConfidencePanel: minimum sample size for "sample size" confidence method. */
 export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
-/** ConfidencePanel VarianceBar: band thresholds (pct). */
 export const VARIANCE_LOW_PCT = 20;
 export const VARIANCE_MEDIUM_PCT = 50;
 
-/** TrendChart: responsive container height (px). */
 export const CHART_HEIGHT = 200;
-/** TrendChart: line stroke width (px). */
 export const CHART_STROKE_WIDTH = 2;
-/** TrendChart: dot radii for data, active, and projected points (px). */
 export const CHART_DOT_RADIUS = 4;
 export const CHART_DOT_RADIUS_ACTIVE = 6;
 export const CHART_DOT_RADIUS_PROJECTED = 3;
-/** TrendChart: SVG strokeDasharray for threshold reference lines and projected line. */
 export const CHART_DASH_THRESHOLD = '6 3';
 export const CHART_DASH_PROJECTED = '6 4';
-/** EvaluationTable: expand/collapse column width (px). */
 export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-/** Shared Recharts color palette for TrendChart and TrendSeries. */
 export const CHART_COLORS = {
   line: '#58a6ff',
   grid: '#30363d',
@@ -162,13 +149,11 @@ export const CHART_COLORS = {
   warning: '#d29922',
   critical: '#f85149',
 } as const;
-/** Color palette for per-agent visual distinction. */
 export const AGENT_PALETTE = [
   '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
   '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
 ] as const;
 
-/** Shared Recharts layout and style constants (TrendChart, TrendSeries). */
 export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
 export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
 export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
