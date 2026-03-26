@@ -372,8 +372,9 @@ function main(): void {
   const byDate = new Map<string, EvalRecord[]>();
   for (const ev of allEvals) {
     const date = ev.timestamp.slice(0, 10); // YYYY-MM-DD
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date)!.push(ev);
+    let group = byDate.get(date);
+    if (!group) byDate.set(date, group = []);
+    group.push(ev);
   }
 
   const RULE_EVALUATOR = 'telemetry-rule-engine';

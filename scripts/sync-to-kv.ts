@@ -351,8 +351,9 @@ function isValidScore(v: number | null | undefined): v is number {
 }
 
 function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
-  if (!map.has(key)) map.set(key, []);
-  map.get(key)!.push(value);
+  let group = map.get(key);
+  if (!group) map.set(key, group = []);
+  group.push(value);
 }
 
 function arrayAvg(nums: number[]): number | null {
