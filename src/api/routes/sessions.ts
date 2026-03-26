@@ -51,6 +51,31 @@ function incrementCount(map: Record<string, number>, key: string): void {
   map[key] = (map[key] ?? 0) + 1;
 }
 
+type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
+
+function computeLatencyStats(durations: number[]): LatencyStats {
+  const sorted = [...durations].sort((a, b) => a - b);
+  return {
+    count: sorted.length,
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
+    p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
+    p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
+  };
+}
+
+type ScoreStats = { avg: number | null; min: number | null; max: number | null };
+
+function computeScoreStats(scores: number[]): ScoreStats {
+  if (scores.length === 0) return { avg: null, min: null, max: null };
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+  };
+}
+
 const LIMIT_SESSION_SPANS = 1000;
 
 /** Load spans for a session, defaulting to 30-day window. */
@@ -200,14 +225,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     }
     const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
     for (const [name, durations] of Object.entries(hookDurations)) {
-      const sorted = [...durations].sort((a, b) => a - b);
-      hookLatency[name] = {
-        count: sorted.length,
-        avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
-        p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
-        p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
-        max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
-      };
+      hookLatency[name] = computeLatencyStats(durations);
     }
 
     // ---- Error Categorization ----
@@ -311,14 +329,8 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
     }
     const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
-      const sorted = [...d.scores].sort((a, b) => a - b);
-      return {
-        name,
-        count: d.count,
-        avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION) : null,
-        min: sorted.length > 0 ? +sorted[0].toFixed(SCORE_DISPLAY_PRECISION) : null,
-        max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION) : null,
-      };
+      const { avg, min, max } = computeScoreStats(d.scores);
+      return { name, count: d.count, avg, min, max };
     });
 
     // ---- Log Summary ----
