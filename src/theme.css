@@ -899,6 +899,20 @@ details[open] > .cot-summary::before {
   font-weight: var(--light-bold);
 }
 
+/* Funnel bar — dynamic width/height/background set via inline style */
+.funnel-bar {
+  border-radius: var(--radius-sm);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-2-5);
+  transition: width 0.3s ease;
+}
+/* Funnel drop-off indicator — dynamic color set via inline style */
+.funnel-dropoff {
+  padding-left: var(--space-2-5);
+  margin: var(--space-0-5) 0;
+}
+
 /* Worst explanation preview on MetricCard */
 .metric-worst {
   font-size: var(--font-size-xs);
@@ -1036,6 +1050,7 @@ details[open] > .cot-summary::before {
 .text-muted        { color: var(--text-muted); }
 .text-accent       { color: var(--accent); }
 .text-accent-hover { color: var(--accent-hover); }
+.text-on-accent    { color: var(--text-on-accent); }
 
 /* Flex layout */
 .d-flex         { display: flex; }
