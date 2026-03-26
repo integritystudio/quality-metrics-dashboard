@@ -15,6 +15,12 @@ const TURN_BLOCK_GAP = 6;
 const LABEL_WIDTH = 120;
 const HANDOFF_MARKER_RADIUS = 7;
 const HEADER_HEIGHT = 28;
+/**
+ * CR-PERF-1: Maximum turns rendered in the SVG viewport.
+ * Sessions with 10K+ turns would produce 400KB+ SVG without a cap.
+ * Excess turns are hidden with a truncation notice below the timeline.
+ */
+const MAX_VISIBLE_TURNS = 200;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -134,8 +140,12 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
     return <EmptyState message="No turns to display." />;
   }
 
-  const lanes = buildLanes(turns, agentNames);
-  const totalTurns = turns.length;
+  // CR-PERF-1: cap rendered turns to avoid unbounded SVG on high-turn sessions
+  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
+  const truncated = turns.length > MAX_VISIBLE_TURNS;
+
+  const lanes = buildLanes(visibleTurns, agentNames);
+  const totalTurns = visibleTurns.length;
 
   // Each turn gets equal width
   const availableWidth = totalTurns * (TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP);
@@ -308,6 +318,11 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
         <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
         {handoffs.length > 0 && (
           <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
+        )}
+        {truncated && (
+          <span className="text-2xs text-warning">
+            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
+          </span>
         )}
       </div>
     </div>
