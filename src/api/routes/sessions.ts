@@ -237,19 +237,28 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     let tsMin = Infinity;
     let tsMax = -Infinity;
+    const evalByName: Record<string, { count: number; scores: number[] }> = {};
     for (const ev of evaluations) {
       const t = parseTimestamp(ev.timestamp);
       if (t !== null) {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
       }
+      const name = ev.evaluationName;
+      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
+      evalByName[name].count++;
+      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+        evalByName[name].scores.push(ev.scoreValue);
+      }
     }
+    const logBySeverity: Record<string, number> = {};
     for (const l of logs) {
       const t = parseTimestamp((l as { timestamp?: string }).timestamp);
       if (t !== null) {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
       }
+      incrementCount(logBySeverity, (l as { severity?: string }).severity ?? 'UNKNOWN');
     }
     const timespan = tsMin < Infinity ? {
       start: new Date(tsMin).toISOString(),
@@ -305,25 +314,10 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     const alertSummary = { totalFired: alertTotalFired, stopEvents: alertStopEvents };
 
-    const evalByName: Record<string, { count: number; scores: number[] }> = {};
-    for (const ev of evaluations) {
-      const name = ev.evaluationName;
-      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
-      evalByName[name].count++;
-      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-        evalByName[name].scores.push(ev.scoreValue);
-      }
-    }
     const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
       const { avg, min, max } = computeScoreStats(d.scores);
       return { name, count: d.count, avg, min, max };
     });
-
-    const logBySeverity: Record<string, number> = {};
-    for (const l of logs) {
-      const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
-      incrementCount(logBySeverity, sev);
-    }
 
     const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
 
