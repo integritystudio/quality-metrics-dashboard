@@ -4,7 +4,6 @@ import type { CalibrationState } from '../../../dist/lib/quality/quality-feature
 
 type KVEntry = { key: string; value: string };
 
-// ---- CalibrationState fixtures ----
 
 function makeCalibrationState(overrides: Partial<CalibrationState> = {}): CalibrationState {
   return {
@@ -27,7 +26,6 @@ function makeCalibrationState(overrides: Partial<CalibrationState> = {}): Calibr
   };
 }
 
-// ---- Tests ----
 
 describe('buildCalibrationEntry', () => {
   it('produces a meta:calibration KV entry from valid CalibrationState', () => {

@@ -1166,7 +1166,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  // ---- Budget enforcement with trace reservation ----
   const isTraceKey = (e: KVEntry) =>
     e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:');
   const highPriority = changed.filter(e => !isTraceKey(e));
@@ -1193,12 +1192,10 @@ async function main(): Promise<void> {
 
   const written = kvBulkPut(toWrite);
 
-  // ---- Update state only for entries actually written ----
   const newState = { ...prevState };
   for (const e of toWrite.slice(0, written)) {
     newState[e.key] = hashValue(e.value);
   }
-  // Prune keys from state that no longer exist in computed set
   const computedKeys = new Set(allEntries.map(e => e.key));
   computedKeys.add('meta:lastSync');
   computedKeys.add('meta:syncCoverage');
@@ -1207,7 +1204,6 @@ async function main(): Promise<void> {
   }
   saveSyncState(newState);
 
-  // ---- Sync coverage metrics ----
   // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
   // It may over-count if a prior wrangler write failed silently.
   const syncedTraceKeys = Object.keys(newState).filter(k => k.startsWith('trace:'));
