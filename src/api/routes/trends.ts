@@ -25,14 +25,6 @@ const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
 export const trendRoutes = new Hono();
 
-/**
- * GET /api/trends/:name
- * Returns time-bucketed trend data with percentile distributions and metric dynamics.
- *
- * Query params:
- *   period: '24h' | '7d' | '30d' (default: '7d')
- *   buckets: number 3-30 (default: 7) — how many time buckets to divide the period into
- */
 trendRoutes.get('/trends/:name', async (c) => {
   const name = c.req.param('name');
   if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
