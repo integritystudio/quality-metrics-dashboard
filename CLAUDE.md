@@ -20,6 +20,8 @@ npm run deploy:worker        # Deploy Cloudflare Worker
 - **Worker**: `worker/index.ts` — Auth0 JWKS JWT verification via `jose`, KV read-through cache, protected `/api/*` routes
 - **Auth**: Auth0 Universal Login + role-based permissions from Supabase `user_roles -> roles.permissions` (all DB access via service role key)
 - **Validation**: Zod schemas in `src/lib/validation/` for all auth and dashboard types
+- **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
+- **React Compiler**: Active via `babel-plugin-react-compiler`. Libraries incompatible with it (e.g., `useReactTable`) require `// eslint-disable-next-line react-compiler/react-compiler` suppression with a comment explaining why.
 
 ## Data Pipeline (`scripts/`)
 

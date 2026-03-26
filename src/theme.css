@@ -104,6 +104,7 @@
 
   /* Layout */
   --layout-max-width: 1280px;
+  --page-content-max-width: 1100px;
 
   /* Status tints (bg + border pairs) */
   --bg-status-healthy: #0d1f12;
@@ -611,6 +612,9 @@ body {
   padding: var(--space-2-5) var(--space-3-5);
 }
 .issue-callout .callout-title { color: var(--s-fg); }
+
+/* Constrained page content width (e.g. session detail, detail pages) */
+.page-content { max-width: var(--page-content-max-width); }
 
 /* Centered constrained text block (e.g. not-yet-available callout) */
 .centered-callout {

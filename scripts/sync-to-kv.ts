@@ -29,7 +29,7 @@ import {
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
-import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
 import {
   computePercentileDistribution,

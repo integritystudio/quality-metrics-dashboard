@@ -185,6 +185,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
   const [activeCategories, setActiveCategories] = useState<LabelFilterCategory[]>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table returns unstable function refs; React Compiler compatibility is a known upstream issue. Component re-renders on data change so no stale refs escape.
   const table = useReactTable({
     data: evaluations,
     columns,

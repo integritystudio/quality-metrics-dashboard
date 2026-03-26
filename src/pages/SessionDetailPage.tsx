@@ -21,7 +21,6 @@ import {
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
   CALLOUT_MAX_WIDTH,
-  PAGE_CONTENT_MAX_WIDTH,
   CODE_QUALITY_WARN_THRESHOLD,
   AGENT_CARD_MIN_WIDTH,
   FILE_ACCESS_COL_MIN,
@@ -108,7 +107,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const models = [...new Set(tokenProgression.map(t => t.model).filter(Boolean))];
 
   return (
-    <div style={{ maxWidth: PAGE_CONTENT_MAX_WIDTH }}>
+    <div className="page-content">
       <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
 
       {/* ── Header ── */}
