@@ -24,7 +24,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
       - run: npm test
 
   build:
@@ -39,9 +38,13 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
       - run: npm ci
-      - name: Build with API URL from Doppler
+      - name: Build with env vars from Doppler
         run: |
-          VITE_API_URL=$(doppler secrets get DEV_WORKER_URL --plain) npm run build
+          VITE_API_URL=$(doppler secrets get DEV_WORKER_URL --plain) \
+          VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --plain) \
+          VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --plain) \
+          VITE_AUTH0_AUDIENCE=$(doppler secrets get VITE_AUTH0_AUDIENCE --plain) \
+          npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
