@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket: string; count: number }> }) {
   if (distribution.length === 0) return null;
 
@@ -10,7 +12,7 @@ export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket:
           <div
             key={i}
             className="histogram-bar"
-            style={{ height: `${(d.count / maxCount) * 100}%` }}
+            style={{ '--histogram-bar-height': `${(d.count / maxCount) * 100}%` } as CSSProperties}
             aria-label={`${d.bucket}: ${d.count} evaluations`}
           >
             <div className="tooltip surface-elevated">

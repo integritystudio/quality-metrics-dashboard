@@ -415,6 +415,7 @@ body {
 }
 .histogram-bar {
   flex: 1;
+  height: var(--histogram-bar-height);
   background: var(--accent);
   border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   min-height: var(--space-px);
