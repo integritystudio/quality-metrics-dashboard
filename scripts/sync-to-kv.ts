@@ -307,7 +307,6 @@ export function prioritizeTraces(
 
     const isReferencedByWorst = referencedTraceIds.has(traceId);
 
-    // Composite priority (higher = sync first)
     const scoreComponent = (1 - worstScore) * TRACE_PRIORITY_WEIGHTS.worstScore;
     const recencyComponent = (latestTimestamp > 0
       ? Math.max(0, 1 - (now - latestTimestamp) / thirtyDaysMs)
