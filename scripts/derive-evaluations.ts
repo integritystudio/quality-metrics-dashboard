@@ -170,10 +170,8 @@ export function trackTaskActivity(span: TraceSpan): void {
 
   if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
     const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;
-    if (!entry.tasks.has(id)) {
-      entry.tasks.set(id, { statuses: new Set(), lastSpan: span });
-    }
-    const task = entry.tasks.get(id)!;
+    let task = entry.tasks.get(id);
+    if (!task) entry.tasks.set(id, task = { statuses: new Set(), lastSpan: span });
     task.statuses.add(taskStatus);
     task.lastSpan = span;
   }
