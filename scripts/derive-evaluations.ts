@@ -66,7 +66,6 @@ function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
   if (!isBuiltin && !isMcp) return null;
 
   const success = isBuiltin ? attrs['builtin.success'] : attrs['mcp.success'];
-  const _hasError = isBuiltin ? attrs['builtin.has_error'] : attrs['mcp.has_error'];
   const tool = isBuiltin ? attrs['builtin.tool'] : attrs['mcp.tool'];
   const errorType = isBuiltin ? attrs['builtin.error_type'] : attrs['mcp.error_type'];
   const server = isMcp ? attrs['mcp.server'] : undefined;
