@@ -6,7 +6,6 @@
  * Keep in sync with the parent when these definitions change.
  */
 
-// -- Types ------------------------------------------------------------------
 
 export type ScoreDirection = 'maximize' | 'minimize';
 export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
@@ -42,7 +41,6 @@ export interface RoleFeatureConfig {
   maxWorstEvaluations: number;
 }
 
-// -- Shared helpers ---------------------------------------------------------
 
 export function truncateText(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '...' : text;
@@ -84,7 +82,6 @@ export function scoreColor(value: number, direction?: ScoreDirection): string {
   return SCORE_COLORS[scoreColorBand(value, direction)];
 }
 
-// -- scoreColorBand ---------------------------------------------------------
 
 export function scoreColorBand(
   value: number,
@@ -98,7 +95,6 @@ export function scoreColorBand(
   return 'failing';
 }
 
-// -- inferScoreDirection ----------------------------------------------------
 
 type ThresholdDirection = 'above' | 'below';
 
@@ -108,7 +104,6 @@ export function inferScoreDirection(
   return alertDirection === 'above' ? 'minimize' : 'maximize';
 }
 
-// -- Label ordinal encoding -------------------------------------------------
 
 const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
   excellent: { ordinal: 4, category: 'Pass' },
@@ -156,7 +151,6 @@ export function ordinalToCategory(ordinal: number): LabelFilterCategory {
   return 'Fail';
 }
 
-// -- Role feature config ----------------------------------------------------
 
 const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
 const OPERATOR_EXPLANATION_TRUNCATION = 500;
@@ -210,7 +204,6 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
   },
 };
 
-// -- Path/byte formatters ---------------------------------------------------
 
 export function shortPath(fullPath: string): string {
   const parts = fullPath.replace(/\\/g, '/').split('/');
@@ -223,7 +216,6 @@ export function fmtBytes(n: number): string {
   return String(n);
 }
 
-// -- Adaptive scoring -------------------------------------------------------
 
 export interface PercentileDistribution {
   p10: number; p25: number; p50: number; p75: number; p90: number;
@@ -311,7 +303,6 @@ export function adaptiveScoreColorBand(
   }
 }
 
-// -- Timestamp formatting ---------------------------------------------------
 
 import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 
