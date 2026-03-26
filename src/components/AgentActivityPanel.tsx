@@ -70,7 +70,6 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
     [agents],
   );
 
-  // React 18+ batches both setState calls in event handlers atomically
   const toggleSort = useCallback((key: SortKey) => {
     if (key === sort) {
       setAsc(v => !v);
