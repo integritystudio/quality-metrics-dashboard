@@ -26,6 +26,11 @@ const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
 const ERR_INVALID_SORT_BY = 'Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.';
 
+const ERR_FORBIDDEN = 'Forbidden';
+const ERR_INVALID_METRIC_NAME = 'Invalid metric name';
+const ERR_INVALID_TRACE_ID = 'Invalid traceId';
+const ERR_INVALID_SESSION_ID = 'Invalid sessionId';
+
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
 function isValidId(id: string | undefined): id is string {
@@ -256,7 +261,7 @@ app.post('/api/activity', async (c) => {
 
 app.get('/api/dashboard', async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(session, 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -266,7 +271,7 @@ app.get('/api/dashboard', async (c) => {
     return c.json({ error: 'Invalid role. Must be executive, operator, or auditor.' }, Http.BadRequest);
   }
   if (role && !session.allowedViews.includes(role as DashboardView)) {
-    return c.json({ error: 'Forbidden' }, Http.Forbidden);
+    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   }
 
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
@@ -277,9 +282,9 @@ app.get('/api/dashboard', async (c) => {
 });
 
 app.get('/api/metrics/:name/evaluations', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const name = c.req.param('name');
-  if (!isValidId(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -307,9 +312,9 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
 });
 
 app.get('/api/metrics/:name', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const name = c.req.param('name');
-  if (!isValidId(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`metric:${name}`, 'json');
   if (!data) {
     return c.json({
@@ -328,9 +333,9 @@ app.get('/api/metrics/:name', async (c) => {
 });
 
 app.get('/api/trends/:name', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const name = c.req.param('name');
-  if (!isValidId(name)) return c.json({ error: 'Invalid metric name' }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -342,9 +347,9 @@ app.get('/api/trends/:name', async (c) => {
 
 app.get('/api/evaluations/trace/:traceId', async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const traceId = c.req.param('traceId');
-  if (!isValidId(traceId)) return c.json({ error: 'Invalid traceId' }, Http.BadRequest);
+  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
   logActivity(session.appUserId ?? '', 'trace_view', c.env);
@@ -353,9 +358,9 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
 
 app.get('/api/traces/:traceId', async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const traceId = c.req.param('traceId');
-  if (!isValidId(traceId)) return c.json({ error: 'Invalid traceId' }, Http.BadRequest);
+  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, Http.NotFound);
   logActivity(session.appUserId ?? '', 'trace_view', c.env);
@@ -363,7 +368,7 @@ app.get('/api/traces/:traceId', async (c) => {
 });
 
 app.get('/api/correlations', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '30d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -374,7 +379,7 @@ app.get('/api/correlations', async (c) => {
 });
 
 app.get('/api/degradation-signals', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -386,7 +391,7 @@ app.get('/api/degradation-signals', async (c) => {
 });
 
 app.get('/api/coverage', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -401,7 +406,7 @@ app.get('/api/coverage', async (c) => {
 });
 
 app.get('/api/pipeline', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.pipeline.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.pipeline.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -413,9 +418,9 @@ app.get('/api/pipeline', async (c) => {
 
 app.get('/api/sessions/:sessionId', async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.sessions.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(session, 'dashboard.sessions.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const sessionId = c.req.param('sessionId');
-  if (!isValidId(sessionId)) return c.json({ error: 'Invalid sessionId' }, Http.BadRequest);
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
   logActivity(session.appUserId ?? '', 'session_view', c.env);
@@ -423,14 +428,14 @@ app.get('/api/sessions/:sessionId', async (c) => {
 });
 
 app.get('/api/agents', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const data = await c.env.DASHBOARD.get('meta:agents', 'json');
   if (!data) return c.json([]);
   return c.json(data);
 });
 
 app.get('/api/agents/detail/:agentId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const agentId = c.req.param('agentId');
   if (!isValidId(agentId)) return c.json({ error: 'Invalid agentId' }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`agent:${agentId}`, 'json');
@@ -439,9 +444,9 @@ app.get('/api/agents/detail/:agentId', async (c) => {
 });
 
 app.get('/api/agents/:sessionId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const sessionId = c.req.param('sessionId');
-  if (!isValidId(sessionId)) return c.json({ error: 'Invalid sessionId' }, Http.BadRequest);
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
   const session = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json') as Record<string, unknown> | null;
   if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
   return c.json({
@@ -455,7 +460,7 @@ app.get('/api/agents/:sessionId', async (c) => {
 
 app.get('/api/compliance/sla', async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -473,7 +478,7 @@ app.get('/api/compliance/sla', async (c) => {
 
 app.get('/api/compliance/verifications', async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -483,14 +488,14 @@ app.get('/api/compliance/verifications', async (c) => {
 });
 
 app.get('/api/calibration', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const data = await c.env.DASHBOARD.get('meta:calibration', 'json');
   if (!data) return c.json({ error: 'No calibration data available' }, Http.NotFound);
   return c.json(data);
 });
 
 app.get('/api/routing-telemetry', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -523,7 +528,7 @@ app.get('/api/health', async (c) => {
 
 // Admin: list all users with their assigned roles
 app.get('/api/admin/users', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
   const headers = serviceRoleHeaders(c.env);
   const [usersRes, roleRowsRes] = await Promise.all([
@@ -562,7 +567,7 @@ app.get('/api/admin/users', async (c) => {
 
 // Admin: list all available roles
 app.get('/api/admin/roles', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
   const res = await fetch(
     `${c.env.SUPABASE_URL}/rest/v1/roles?select=id,name,permissions&order=name.asc`,
@@ -581,7 +586,7 @@ app.get('/api/admin/roles', async (c) => {
 
 // Admin: assign a role to a user
 app.post('/api/admin/users/:userId/roles', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
   const userId = c.req.param('userId');
   if (!UUID_PATTERN.test(userId)) return c.json({ error: 'Invalid userId' }, Http.BadRequest);
@@ -601,7 +606,7 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
 
 // Admin: revoke a role from a user
 app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, Http.Forbidden);
+  if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
   const userId = c.req.param('userId');
   const roleId = c.req.param('roleId');
