@@ -310,9 +310,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     }
 
     // ---- Multi-agent Evaluation ----
+    // WG-C1: check both 'agent.name' (hooks context) and 'gen_gi.agent.name' (OTel GenAI).
     const agentMapForEval = new Map<number, string>();
     spans.forEach((span, i) => {
-      const agent = span.attributes?.['agent.name'] as string | undefined;
+      const agent =
+        (span.attributes?.['agent.name'] as string | undefined) ??
+        (span.attributes?.['gen_ai.agent.name'] as string | undefined);
       if (agent) agentMapForEval.set(i, agent);
     });
     const stepScores: StepScore[] = spans.map((span, i) => ({
