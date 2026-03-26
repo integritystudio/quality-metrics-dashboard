@@ -175,7 +175,6 @@ export function computeBudgetAllocation(
   return { highPriorityBudget, traceBudget };
 }
 
-// ---- Delta sync state ----
 
 function loadSyncState(): KvSyncState {
   return loadJsonWithValidationSafe(STATE_FILE, kvSyncStateSchema, {});
@@ -209,7 +208,6 @@ function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   });
 }
 
-// ---- KV bulk write ----
 
 /** Returns the number of entries successfully written. */
 function kvBulkPut(entries: KVEntry[]): number {
@@ -252,7 +250,6 @@ function kvBulkPut(entries: KVEntry[]): number {
   return written;
 }
 
-// ---- Evaluation-weighted trace prioritization ----
 
 function extractTraceId(key: string): string | null {
   if (key.startsWith('evaluations:trace:')) return key.slice('evaluations:trace:'.length);
@@ -336,7 +333,6 @@ export function prioritizeTraces(
   return result;
 }
 
-// ---- Session detail pre-computation (mirrors src/api/routes/sessions.ts) ----
 
 type SessionSpan = {
   name: string;
