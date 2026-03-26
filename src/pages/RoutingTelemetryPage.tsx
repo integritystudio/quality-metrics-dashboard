@@ -1,6 +1,7 @@
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
 import { PageShell } from '../components/PageShell.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { formatPercent } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
 
 const PERCENT_MULTIPLIER = 100;
@@ -33,7 +34,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
               </div>
               <div className="text-center">
                 <div className="mono-xl font-semibold">
-                  {(data.summary.fallbackRate * PERCENT_MULTIPLIER).toFixed(1)}%
+                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
                 </div>
                 <div className="text-secondary text-xs uppercase">Fallback Rate</div>
               </div>
@@ -67,9 +68,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                         <td className="mono">{provider}</td>
                         <td className="mono">{count}</td>
                         <td className="mono">
-                          {data.summary.routedSpans > 0
-                            ? ((count / data.summary.routedSpans) * PERCENT_MULTIPLIER).toFixed(1) + '%'
-                            : '—'}
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
                         </td>
                       </tr>
                     ))}
@@ -97,9 +96,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                         <td className="mono">{model}</td>
                         <td className="mono">{count}</td>
                         <td className="mono">
-                          {data.summary.routedSpans > 0
-                            ? ((count / data.summary.routedSpans) * PERCENT_MULTIPLIER).toFixed(1) + '%'
-                            : '—'}
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
                         </td>
                       </tr>
                     ))}
@@ -129,7 +126,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                         <td className="mono">{g.strategy}</td>
                         <td className="mono">{g.count}</td>
                         <td className="mono">{g.fallbackCount}</td>
-                        <td className="mono">{(g.fallbackRate * PERCENT_MULTIPLIER).toFixed(1)}%</td>
+                        <td className="mono">{formatPercent(g.fallbackRate * PERCENT_MULTIPLIER)}</td>
                       </tr>
                     ))}
                 </tbody>
