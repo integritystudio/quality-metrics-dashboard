@@ -117,37 +117,41 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   }
 
   const nodes: WorkflowNode[] = [];
-  for (const [agentId, group] of agentSpans) {
-    const toolCallCount = group.filter(s => s.name.startsWith('tool:')).length;
-    const tokenValues = group
-      .map(s => s.attributes?.[ATTR_TOTAL_TOKENS])
-      .filter((v): v is number => typeof v === 'number' && isFinite(v));
-    const totalTokens = tokenValues.length > 0 ? tokenValues.reduce((a, b) => a + b, 0) : null;
-    const durationMs = group.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
+  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
 
+  for (const [agentId, group] of agentSpans) {
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    let hasError = false;
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.name.startsWith('tool:')) toolCallCount++;
+      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
+      durationMs += s.durationMs ?? 0;
+      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
     nodes.push({
       id: agentId,
       label: agentId,
       evaluationScore: null,
       toolCallCount,
-      totalTokens,
+      totalTokens: tokenCount > 0 ? tokenSum : null,
       durationMs,
       turnCount: group.length,
-      hasError: group.some(s => s.status?.code === OTEL_STATUS_ERROR_CODE),
+      hasError,
     });
+    agentTimings.push({ id: agentId, minStart, maxEnd });
   }
 
   // Infer edges from temporal ordering
-  const agentTimings = [...agentSpans.entries()].map(([id, group]) => {
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of group) {
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
-      if (end > maxEnd) maxEnd = end;
-    }
-    return { id, minStart, maxEnd };
-  }).sort((a, b) => a.minStart - b.minStart);
+  agentTimings.sort((a, b) => a.minStart - b.minStart);
 
   const edges: WorkflowEdge[] = [];
   for (let i = 0; i < agentTimings.length - 1; i++) {
