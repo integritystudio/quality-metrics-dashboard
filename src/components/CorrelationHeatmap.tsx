@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
@@ -62,7 +63,10 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
   const n = metrics.length;
   const cols = n + 1;
 
-  const corrMap = new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c]));
+  const corrMap = useMemo(
+    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
+    [correlations],
+  );
 
   return (
     <div
