@@ -121,7 +121,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const hookDurations: Record<string, number[]> = {};
     const errorsByCategory: Record<string, number> = {};
     const errorDetails: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
-    const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
+    const agentAcc = Object.create(null) as Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }>;
     const fileCount: Record<string, number> = {};
     const gitCommits: Array<{ subject: string; body: string; files: string }> = [];
     let alertTotalFired = 0;
@@ -179,11 +179,11 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
       if (hookName === HOOK_NAME.AGENT_POST_TOOL) {
         const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
-        if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
-        agentAcc[name].invocations++;
-        if (spanAttr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
-        if (spanAttr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
-        agentAcc[name].totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
+        const agentEntry = (agentAcc[name] ??= { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 });
+        agentEntry.invocations++;
+        if (spanAttr<boolean>(s, 'agent.has_error')) agentEntry.errors++;
+        if (spanAttr<boolean>(s, 'agent.has_rate_limit')) agentEntry.hasRateLimit = true;
+        agentEntry.totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
       }
 
       const fp = spanAttr<string>(s, 'builtin.file_path');
@@ -250,7 +250,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         entry.scores.push(ev.scoreValue);
       }
     }
-    const logBySeverity: Record<string, number> = {};
+    const logBySeverity: Record<string, number> = Object.create(null);
     for (const l of logs) {
       const t = parseTimestamp((l as { timestamp?: string }).timestamp);
       if (t !== null) {

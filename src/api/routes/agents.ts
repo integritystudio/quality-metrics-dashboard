@@ -78,28 +78,26 @@ agentRoutes.get('/agents', async (c) => {
 
     for (const span of result.traces) {
       const name = attrStr(span, 'gen_ai.agent.name');
-      if (!acc[name]) {
-        acc[name] = createAgentAccumulator(periodDays);
-      }
-      acc[name].invocations++;
+      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
+      entry.invocations++;
       if (span.startTimeUnixNano) {
         const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
         const idx = bucketIndex.get(dayKey);
-        if (idx !== undefined) acc[name].dailyCounts[idx]++;
+        if (idx !== undefined) entry.dailyCounts[idx]++;
       }
-      if (span.attributes?.['agent.has_error']) acc[name].errors++;
-      if (span.attributes?.['agent.has_rate_limit']) acc[name].rateLimitCount++;
-      acc[name].totalOutputSize += attrNum(span, 'agent.output_size');
+      if (span.attributes?.['agent.has_error']) entry.errors++;
+      if (span.attributes?.['agent.has_rate_limit']) entry.rateLimitCount++;
+      entry.totalOutputSize += attrNum(span, 'agent.output_size');
       const sid = attrStr(span, 'session.id', '');
-      if (sid) acc[name].sessions.add(sid);
+      if (sid) entry.sessions.add(sid);
       if (span.traceId) {
-        acc[name].traceIds.add(span.traceId);
+        entry.traceIds.add(span.traceId);
         if (!traceToAgents.has(span.traceId)) traceToAgents.set(span.traceId, new Set());
         traceToAgents.get(span.traceId)!.add(name);
       }
       const rawSrc = attrStr(span, 'agent.source_type');
       const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
-      incrementCount(acc[name].sourceTypes, src);
+      incrementCount(entry.sourceTypes, src);
     }
 
     const allTraceIds = [...traceToAgents.keys()];
@@ -111,9 +109,8 @@ agentRoutes.get('/agents', async (c) => {
       const agentNames = traceToAgents.get(ev.traceId);
       if (!agentNames) continue;
       for (const agent of agentNames) {
-        if (!agentEvalAcc[agent]) agentEvalAcc[agent] = Object.create(null);
-        if (!agentEvalAcc[agent][ev.evaluationName]) agentEvalAcc[agent][ev.evaluationName] = [];
-        agentEvalAcc[agent][ev.evaluationName].push(ev.scoreValue);
+        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
+        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
       }
     }
 
