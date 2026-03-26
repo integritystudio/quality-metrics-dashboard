@@ -39,7 +39,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
     return <EmptyState message="No coverage data available." />;
   }
 
-  // Limit displayed inputs to avoid huge grids
   const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
   const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
 
