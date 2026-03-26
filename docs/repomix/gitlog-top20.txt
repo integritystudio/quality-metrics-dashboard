@@ -1,3 +1,36 @@
+d5649a4 2026-03-26 refactor(sync-to-kv): hoist inline constants to module level, use arrayAvg helper
+  scripts/sync-to-kv.ts
+
+77efc6d 2026-03-26 refactor(components): replace inline styles with CSS classes in HandoffCard and EvaluationExpandedRow
+  src/theme.css
+
+4f15191 2026-03-26 refactor(sync-to-kv): replace hardcoded period calculations and inline options with constants
+  scripts/sync-to-kv.ts
+
+b265898 2026-03-26 refactor(components): extract ConfidencePanel grid inline style to .confidence-stats-grid CSS class
+  src/theme.css
+
+85a34fc 2026-03-26 refactor(sync-to-kv): replace magic numbers with named constants from api-constants
+  scripts/sync-to-kv.ts
+
+80d9b06 2026-03-26 refactor(components): replace inline styles with CSS classes in AgentActivityPanel
+  src/theme.css
+
+1dbf84c 2026-03-26 refactor(sync-to-kv): replace magic millisecond literals with TIME_MS constants
+  scripts/sync-to-kv.ts
+
+f89622f 2026-03-26 refactor(sync-to-kv): remove dead dry-run loop body
+  scripts/sync-to-kv.ts
+
+2cdb0d1 2026-03-26 refactor(sync-to-kv): import PERIOD_MS and ROLES from constants, remove local duplicates
+  scripts/sync-to-kv.ts
+
+d7018ed 2026-03-26 refactor(metrics,scripts): simplify dynamics assignment and remove dead code in judge script
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  scripts/judge-evaluations.ts
+
 840bf0a 2026-03-26 refactor(components,scripts): extract JudgePanel sub-component and remove dead _logCount
   scripts/judge-evaluations.ts
 
@@ -312,37 +345,3 @@ b8d83e5 2026-03-03 fix(sync): respect --days flag and raise span query limit for
 7cc9729 2026-03-02 fix(worker): add missing /api/metrics/:name/evaluations route and redeploy
   scripts/sync-to-kv.ts
   worker/index.ts
-
-c12c5c7 2026-03-02 fix(scripts): restore missing variable assignments broken by ESLint pass
-  scripts/judge-evaluations.ts
-
-27cf6a6 2026-03-02 chore(sync): full trace backlog drained to 100% KV coverage; fix const→let
-  scripts/sync-to-kv.ts
-
-d8a0098 2026-03-02 refactor(css): migrate inline styles to utility classes (M1)
-  src/theme.css
-
-5c5810f 2026-03-02 refactor(components): consolidate repeated patterns across views, pages, and components
-  src/theme.css
-
-2645970 2026-03-02 refactor(css): add 18 utility classes and migrate inline styles
-  src/theme.css
-
-7a5db88 2026-03-02 refactor(css): add 18 utility classes and migrate inline styles
-  docs/repomix/docs-compressed.xml
-  docs/repomix/docs.xml
-  src/theme.css
-
-9ca1327 2026-03-01 refactor(css): add d-flex, w-full, m-0 utilities; replace repeated inline styles
-  src/theme.css
-
-9e7afb4 2026-03-01 refactor(css): migrate shared blocks to utility classes; fix undefined CSS vars
-  docs/repomix/docs-compressed.xml
-  docs/repomix/docs.xml
-  src/theme.css
-
-a45936c 2026-03-01 fix(review-followups): address M1/M2/L1/L2 from final review
-  src/theme.css
-
-d66fac9 2026-03-01 refactor(FreqBar): replace hardcoded widths with CSS grid layout (FR6)
-  src/theme.css
