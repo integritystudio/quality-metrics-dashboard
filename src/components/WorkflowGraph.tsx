@@ -17,10 +17,6 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
 const MINIMAP_THRESHOLD = 5;
@@ -49,10 +45,6 @@ const ELK_OPTIONS = {
   'elk.spacing.nodeNode': '60',
   'elk.layered.feedbackEdges': 'true',
 } as const;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getScoreBand(score: number | null) {
   if (score === null) return null;
@@ -120,10 +112,6 @@ async function computeLayout(
   return { nodes: rfNodes, edges: rfEdges };
 }
 
-// ---------------------------------------------------------------------------
-// Custom node
-// ---------------------------------------------------------------------------
-
 const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
   if (!isWorkflowNode(data)) return null;
   const d = data;
@@ -164,10 +152,6 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
 });
 
 const NODE_TYPES = { agentNode: AgentNodeComponent };
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 interface WorkflowGraphProps {
   graph: WorkflowGraph;
