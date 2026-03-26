@@ -47,6 +47,8 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
+const LIMIT_SESSION_SPANS = 1000;
+
 /** Load spans for a session, defaulting to 30-day window. */
 async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
   const now = new Date();
@@ -56,7 +58,7 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
     attributeFilter: { 'session.id': sessionId },
     startDate: start,
     endDate: end,
-    limit: 1000,
+    limit: LIMIT_SESSION_SPANS,
   });
   return result.traces;
 }
