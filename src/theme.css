@@ -370,6 +370,7 @@ body {
 .sla-table { font-size: var(--font-size-base); }
 .sla-table th,
 .sla-table td { padding: var(--space-2) var(--space-3); }
+.sla-table .col-agent { width: 30%; }
 
 /* Histogram */
 .histogram {
@@ -1053,10 +1054,13 @@ details[open] > .cot-summary::before {
 .mt-2   { margin-top: var(--space-2); }
 .mt-3   { margin-top: var(--space-3); }
 .mt-4   { margin-top: var(--space-4); }
+/* Margin-y (top + bottom) */
+.my-2   { margin-top: var(--space-2); margin-bottom: var(--space-2); }
 
 /* Padding */
 .p-4    { padding: var(--space-4); }
 .p-6    { padding: var(--space-6); }
+.py-2   { padding-top: var(--space-2); padding-bottom: var(--space-2); }
 
 /* Text align */
 .text-center { text-align: center; }

@@ -69,7 +69,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
       <table className="data-table sla-table" style={{ minWidth: AGENT_TABLE_MIN_WIDTH }}>
         <thead>
           <tr>
-            <th style={{ width: '30%' }}>Agent</th>
+            <th className="col-agent">Agent</th>
             <th className="cursor-pointer select-none" onClick={() => toggleSort('invocations')}>
               Invocations{sortIndicator('invocations')}
             </th>
