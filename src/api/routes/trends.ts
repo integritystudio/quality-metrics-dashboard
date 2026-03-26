@@ -62,7 +62,6 @@ trendRoutes.get('/trends/:name', async (c) => {
       .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
       .filter(({ ts }) => Number.isFinite(ts));
 
-    // Determine actual data range — auto-narrow if data is concentrated
     const { dataMin, dataMax } = validTs.length > 0
       ? validTs.reduce(
           (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
