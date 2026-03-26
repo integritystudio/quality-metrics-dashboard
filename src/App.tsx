@@ -297,7 +297,7 @@ export function App() {
         domain={AUTH0_DOMAIN}
         clientId={AUTH0_CLIENT_ID}
         authorizationParams={{
-          redirect_uri: `${window.location.origin}/callback`,
+          redirect_uri: window.location.origin,
           audience: AUTH0_AUDIENCE,
         }}
       >

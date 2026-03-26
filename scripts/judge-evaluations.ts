@@ -33,6 +33,8 @@ import {
   otelEvaluationRecordSchema,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
+import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
 
 /** B9: Tool correctness criteria — evaluates whether tool usage was appropriate */
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
@@ -839,8 +841,8 @@ function acquireLock(): boolean {
       try {
         const lockStat = statSync(LOCK_FILE);
         const lockAgeMs = Date.now() - lockStat.mtimeMs;
-        if (lockAgeMs > 3_600_000) {
-          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / 60_000)}min old, treating as stale`);
+        if (lockAgeMs > TIME_MS.HOUR) {
+          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
           stale = true;
         }
       } catch { /* stat failed, leave stale as-is */ }
@@ -998,14 +1000,12 @@ async function main() {
       const contentChars = t.userText.length + t.assistantText.length
         + t.toolResults.reduce((s, r) => s + r.length, 0);
       const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
-      return sum + Math.ceil(contentChars / 4) * evalsPerTurn;
+      return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
     }, 0);
     const estOutputTokens = estEvals * 200;
-    // Haiku pricing: $0.80/1M input, $4.00/1M output
-    const HAIKU_INPUT_PER_M = 0.80;
-    const HAIKU_OUTPUT_PER_M = 4.0;
-    const estCost = (estInputTokens / 1_000_000) * HAIKU_INPUT_PER_M
-      + (estOutputTokens / 1_000_000) * HAIKU_OUTPUT_PER_M;
+    const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
+    const estCost = (estInputTokens / TOKENS_PER_MILLION) * haikuPricing.input
+      + (estOutputTokens / TOKENS_PER_MILLION) * haikuPricing.output;
 
     console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
     console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
@@ -1050,7 +1050,7 @@ async function main() {
     } else {
       const llm = await createAnthropicProvider();
       const judge = new LLMJudge(llm, {
-        timeoutMs: 60_000,
+        timeoutMs: TIME_MS.MINUTE,
         maxRetries: 2,
         evaluator: 'llm-judge',
         evaluatorType: 'llm',
