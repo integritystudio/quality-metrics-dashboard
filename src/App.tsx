@@ -38,6 +38,7 @@ import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './context/CalibrationContext.js';
 import { useAuth } from './contexts/AuthContext.js';
+import { ROLES } from './lib/constants.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -48,7 +49,7 @@ import type {
 
 const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
 
-const VALID_ROLES: readonly RoleViewType[] = ['executive', 'operator', 'auditor'];
+const VALID_ROLES: readonly RoleViewType[] = ROLES;
 
 function DashboardPage({ period }: { period: Period }) {
   const { data, isLoading, isFetching, error } = useDashboard(period);

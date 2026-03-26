@@ -1,3 +1,5 @@
+import type { RoleViewType } from '../types.js';
+
 export type DashboardPermission =
   | 'dashboard.read'
   | 'dashboard.executive'
@@ -10,18 +12,12 @@ export type DashboardPermission =
   | 'dashboard.compliance.read'
   | 'dashboard.admin';
 
+/** Alias of RoleViewType — unified single source of truth for view names. */
+export type DashboardView = RoleViewType;
+
 export interface AppSession {
   authUserId: string;
   appUserId: string;
-  email: string;
-  roles: string[];
-  permissions: DashboardPermission[];
-  allowedViews: DashboardView[];
-}
-
-export type DashboardView = 'executive' | 'operator' | 'auditor';
-
-export interface MeResponse {
   email: string;
   roles: string[];
   permissions: DashboardPermission[];
