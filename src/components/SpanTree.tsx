@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { plural } from '../lib/quality-utils.js';
-import { SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
 interface SpanNode {
@@ -66,8 +66,7 @@ const STATUS_ICONS: Record<number, string> = {
 
 function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
   const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
-  const statusCode = node.status?.code ?? 0;
-  const isError = statusCode === 2;
+  const isError = (node.status?.code ?? 0) === OTEL_STATUS_ERROR_CODE;
 
   const barStyle: CSSProperties = {
     height: 'var(--space-1)',
