@@ -21,6 +21,8 @@ const STATUS_COLORS: Record<CoverageStatus, string> = {
   missing: 'var(--score-poor, #D55E00)',
 };
 
+const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
+
 function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
   const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
 
@@ -56,7 +58,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
 
       {/* Legend */}
       <div className="mb-3 text-xs flex-wrap gap-4">
-        {(['covered', 'partial', 'missing'] as const).map(status => (
+        {COVERAGE_STATUSES.map(status => (
           <div key={status} className="flex-center gap-1">
             <div style={{
               width: COVERAGE_GRID_LEGEND_SIZE, height: COVERAGE_GRID_LEGEND_SIZE, borderRadius: 'var(--radius-xs)',
