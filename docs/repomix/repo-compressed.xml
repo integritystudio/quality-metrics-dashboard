@@ -500,37 +500,6 @@ unobserve()
 disconnect()
 
 ================
-File: src/api/routes/compliance.ts
-================
-import { Hono } from 'hono';
-import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-
-================
-File: src/api/routes/correlations.ts
-================
-import { Hono } from 'hono';
-import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-
-================
-File: src/api/routes/coverage.ts
-================
-import { Hono } from 'hono';
-import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, InputKeySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-function filterJudgeEvaluations(
-  byMetric: Map<string, EvaluationResult[]>,
-): Map<string, EvaluationResult[]>
-
-================
 File: src/api/routes/evaluations.ts
 ================
 import { Hono } from 'hono';
@@ -538,18 +507,6 @@ import { z } from 'zod';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { HttpStatus } from '../../lib/constants.js';
 import { loadEvaluationsByTraceId } from '../data-loader.js';
-
-================
-File: src/api/routes/pipeline.ts
-================
-import { Hono } from 'hono';
-import {
-  computePipelineView,
-  computeDashboardSummary,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 ================
 File: src/api/routes/quality.ts
@@ -2043,26 +2000,47 @@ function makeTurn(overrides: Partial<TurnLevelResult> =
 function makeHandoff(overrides: Partial<HandoffEvaluation> =
 
 ================
-File: src/api/routes/dashboard.ts
+File: src/api/routes/compliance.ts
+================
+import { Hono } from 'hono';
+import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+
+================
+File: src/api/routes/correlations.ts
+================
+import { Hono } from 'hono';
+import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+
+================
+File: src/api/routes/coverage.ts
+================
+import { Hono } from 'hono';
+import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-metrics.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { PeriodSchema, InputKeySchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+function filterJudgeEvaluations(
+  byMetric: Map<string, EvaluationResult[]>,
+): Map<string, EvaluationResult[]>
+
+================
+File: src/api/routes/pipeline.ts
 ================
 import { Hono } from 'hono';
 import {
+  computePipelineView,
   computeDashboardSummary,
-  computeRoleView,
-  type RoleViewType,
 } from '../../../../dist/lib/quality/quality-metrics.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-function computePeriodDates(period: string):
-function computeSparklineData(
-  evaluations: EvaluationResult[],
-  startMs: number,
-  endMs: number,
-  buckets: number,
-): (number | null)[]
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 ================
 File: src/api/routes/traces.ts
@@ -2074,25 +2052,11 @@ import { PARAM_ID_RE } from '../api-constants.js';
 import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../data-loader.js';
 
 ================
-File: src/api/routes/trends.ts
+File: src/components/RoleSelector.tsx
 ================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD } from '../api-constants.js';
+import { useLocation } from 'wouter';
+import type { RoleViewType } from '../types.js';
+import { useAuth } from '../contexts/AuthContext.js';
 
 ================
 File: src/components/SplitPane.tsx
@@ -2345,6 +2309,27 @@ export function makeChainGraph(
 ): WorkflowGraph
 
 ================
+File: src/api/routes/dashboard.ts
+================
+import { Hono } from 'hono';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  type RoleViewType,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
+import { PeriodSchema, RoleSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+function computeSparklineData(
+  evaluations: EvaluationResult[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): (number | null)[]
+
+================
 File: src/api/routes/metrics.ts
 ================
 import { Hono } from 'hono';
@@ -2362,68 +2347,25 @@ import { PARAM_METRIC_NAME_RE } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 ================
-File: src/api/data-loader.ts
+File: src/api/routes/trends.ts
 ================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-⋮----
-function getBackend(): MultiDirectoryBackend
-function toDateOnly(d: string): string
-function defaultRange(lookbackMs: number):
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>>
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]>
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
-⋮----
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]>
-export async function loadTracesByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-)
-export async function loadTracesBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-)
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]>
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
-export async function checkHealth(): Promise<
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD } from '../api-constants.js';
 
 ================
 File: src/components/AgentWorkflowView.tsx
@@ -2449,13 +2391,6 @@ export function AgentWorkflowView({
 }: AgentWorkflowViewProps)
 ⋮----
 onClick=
-
-================
-File: src/components/RoleSelector.tsx
-================
-import { useLocation } from 'wouter';
-import type { RoleViewType } from '../types.js';
-import { useAuth } from '../contexts/AuthContext.js';
 
 ================
 File: src/components/ScoreBadge.tsx
@@ -2505,28 +2440,6 @@ interface TrendSeriesProps {
 }
 ⋮----
 function formatTime(iso: string, spanDays: number): string
-
-================
-File: src/contexts/RoleContext.tsx
-================
-import { createContext, useContext, useEffect, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useRoute } from 'wouter';
-import {
-  getRoleFeatureConfig,
-  type FeatureRoleType,
-  type RoleFeatureConfig,
-} from '../lib/quality-utils.js';
-import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
-⋮----
-interface RoleContextValue {
-  role: FeatureRoleType;
-  config: RoleFeatureConfig;
-  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
-}
-⋮----
-export function RoleProvider(
-export function useRole(): RoleContextValue
 
 ================
 File: src/hooks/useMetricEvaluations.ts
@@ -2692,35 +2605,6 @@ import type { FrontendActivityEvent } from '../types/activity.js';
 export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise<void>
 
 ================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum ErrorName {
-  SessionNotFound = 'SessionNotFoundError',
-}
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-}
-⋮----
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-⋮----
-export type InputKey = z.infer<typeof InputKeySchema>;
-⋮----
-export type SortBy = z.infer<typeof SortBySchema>;
-⋮----
-export type Role = z.infer<typeof RoleSchema>;
-⋮----
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
-
-================
 File: src/lib/dashboard-file-utils.ts
 ================
 import { readFileSync, existsSync } from 'fs';
@@ -2747,6 +2631,364 @@ export function loadJsonWithValidationSafe<T>(
   schema: z.ZodType<T>,
   fallback: T
 ): T
+
+================
+File: scripts/backtest-degradation.ts
+================
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { basename, join } from 'path';
+import { z } from 'zod';
+import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
+import {
+  computeStdDev,
+  sweepDegradationParams,
+  CURRENT_PRODUCTION_CONFIG,
+  BACKTEST_SWEEP,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import type {
+  LabeledIncident,
+  BacktestSweepResult,
+  BacktestConfig,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
+⋮----
+function parseIntArg(argList: string[], flag: string, defaultValue: number): number
+function parseStringArg(argList: string[], flag: string): string | null
+⋮----
+function loadIncidents(): LabeledIncident[]
+interface DailyBucket {
+  timestamp: number;
+  scores: number[];
+}
+function buildDailyBuckets(
+  evaluations: Array<{ timestamp: string; scoreValue: number }>,
+  startMs: number,
+  bucketCount: number,
+): DailyBucket[]
+type TimeSeriesPoint = {
+  timestamp: number;
+  currentStdDev: number;
+  baselineStdDev: number;
+  coverageGapCount: number;
+  totalCoverageCells: number;
+  latencyP95: number;
+  latencyP50: number;
+  historicalValues: number[];
+};
+function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[]
+function formatConfig(cfg: BacktestConfig): string
+function printSummaryTable(metricName: string, result: BacktestSweepResult, evalCount: number): void
+// ---- Main ----
+async function main(): Promise<void>
+
+================
+File: scripts/judge-evaluations.ts
+================
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
+import { createHash } from 'crypto';
+import { join, basename } from 'path';
+import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
+import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
+import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
+import {
+  LLMJudge,
+} from '../../src/lib/judge/llm-judge-config.js';
+import type { DatasetRunRecord } from '../../src/backends/index.js';
+import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
+import {
+  traceSpanSchema,
+  otelLogEntrySchema,
+  transcriptEntrySchema,
+  otelEvaluationRecordSchema,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
+⋮----
+export function normalizeScore(score: number): number
+export interface TranscriptInfo {
+  path: string;
+  sessionId: string;
+  traceId: string;
+}
+export interface Turn {
+  sessionId: string;
+  traceId: string;
+  timestamp: string;
+  userText: string;
+  assistantText: string;
+  toolResults: string[];
+}
+export interface EvalRecord {
+  timestamp: string;
+  evaluationName: string;
+  scoreValue: number;
+  explanation: string;
+  evaluator: string;
+  evaluatorType: string;
+  traceId: string;
+  sessionId: string;
+}
+⋮----
+/**
+ * Alternate directories where session transcripts may exist.
+ * Checked in order when a log-referenced path is missing, and scanned
+ * directly to discover transcripts not referenced in logs at all.
+ */
+⋮----
+function resolveTranscriptPath(originalPath: string): string | null
+async function _discoverTranscripts(): Promise<TranscriptInfo[]>
+⋮----
+// Phase 2: Directory scan for transcripts not referenced in logs
+⋮----
+if (scanCount > 0) { /* scan results logged externally */ }
+⋮----
+// ============================================================================
+// Trace-Based Session Discovery (for --backfill)
+// ============================================================================
+interface TraceSession {
+  sessionId: string;
+  traceId: string;
+  earliestTime: number; // epoch seconds
+  spanCount: number;
+}
+⋮----
+earliestTime: number; // epoch seconds
+⋮----
+/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
+async function discoverSessionsFromTraces(): Promise<Turn[]>
+⋮----
+// Convert to Turn[] with synthetic entries (one per session)
+⋮----
+// ============================================================================
+// Turn Extraction
+// ============================================================================
+/** B8: Discriminated union for transcript content blocks */
+export interface TextBlock { type: 'text'; text: string }
+export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
+export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
+export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
+function isContentBlock(value: unknown): value is ContentBlock
+function asContentBlocks(content: unknown): ContentBlock[]
+export function isSystemPrompt(text: string): boolean
+export function isToolResultOnly(content: unknown): boolean
+export function extractTextFromContent(content: unknown): string
+export function extractToolResults(content: unknown): string[]
+export async function extractTurns(info: TranscriptInfo): Promise<Turn[]>
+async function createAnthropicProvider(): Promise<LLMProvider>
+⋮----
+async generate(
+      prompt: string,
+      options?: { temperature?: number; logprobs?: boolean }
+): Promise<
+⋮----
+// B15: Anthropic Messages API doesn't support logprobs, so G-Eval
+⋮----
+export function hashToScore(input: string, min: number, max: number): number
+export function isCanaryTurn(sessionId: string, turnKey: string): boolean
+export interface SeedResult {
+  evals: EvalRecord[];
+  canaryCount: number;
+}
+export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult
+⋮----
+function trackFailure(metric: string): void
+export async function evaluateTurn(
+  judge: LLMJudge,
+  turn: Turn,
+  existingKeys: Set<string>,
+): Promise<EvalRecord[]>
+export function toOTelRecord(ev: EvalRecord): object
+function _loadExistingKeys(): Set<string>
+// ============================================================================
+// Output
+// ============================================================================
+⋮----
+function acquireLock(): boolean
+function releaseLock(): void
+function safeExit(code: number): never
+function writeEvaluations(evals: EvalRecord[]): void
+export async function processBatch<T, R>(
+  items: T[],
+  concurrency: number,
+  delayMs: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]>
+async function main()
+
+================
+File: src/__tests__/api-calibration.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import app from '../../worker/index.js';
+function makeKV(store: Record<string, unknown> =
+function makeCalibrationData()
+
+================
+File: src/api/data-loader.ts
+================
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+⋮----
+function getBackend(): MultiDirectoryBackend
+function toDateOnly(d: string): string
+function defaultRange(lookbackMs: number):
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>>
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]>
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
+⋮----
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]>
+function traceQueryDates(startDate?: string, endDate?: string):
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string)
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string)
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]>
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
+export async function checkHealth(): Promise<
+
+================
+File: src/components/RequireAuth.tsx
+================
+import { type ReactNode } from 'react';
+import { Redirect, useLocation } from 'wouter';
+import { useAuth } from '../contexts/AuthContext.js';
+interface RequireAuthProps {
+  children: ReactNode;
+}
+export function RequireAuth(
+
+================
+File: src/contexts/RoleContext.tsx
+================
+import { createContext, useContext, useEffect, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { useRoute } from 'wouter';
+import {
+  ROLE_FEATURE_CONFIG,
+  type FeatureRoleType,
+  type RoleFeatureConfig,
+} from '../lib/quality-utils.js';
+import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
+⋮----
+interface RoleContextValue {
+  role: FeatureRoleType;
+  config: RoleFeatureConfig;
+  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
+}
+⋮----
+export function RoleProvider(
+export function useRole(): RoleContextValue
+
+================
+File: src/hooks/useAgentSession.ts
+================
+import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
+interface AgentSessionResponse {
+  sessionId: string;
+  spans: Array<{
+    traceId: string;
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+  }>;
+  evaluation: MultiAgentEvaluation;
+  evaluations: EvaluationResult[];
+  agentMap: Record<string, string>;
+  graph: WorkflowGraph;
+}
+export function useAgentSession(sessionId: string | undefined)
+
+================
+File: src/hooks/useTrace.ts
+================
+import { useQuery } from '@tanstack/react-query';
+import type { EvaluationResult } from '../types.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useAuth } from '../contexts/AuthContext.js';
+interface TraceSpanResponse {
+  traceId: string;
+  spanId: string;
+  name: string;
+  kind?: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+}
+interface TraceResponse {
+  traceId: string;
+  spans: TraceSpanResponse[];
+  evaluations: EvaluationResult[];
+}
+export function useTrace(traceId: string | undefined)
+
+================
+File: src/lib/constants.ts
+================
+import { z } from 'zod';
+export const enum ErrorName {
+  SessionNotFound = 'SessionNotFoundError',
+}
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+}
+⋮----
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+⋮----
+export type InputKey = z.infer<typeof InputKeySchema>;
+⋮----
+export type SortBy = z.infer<typeof SortBySchema>;
+⋮----
+export type Role = z.infer<typeof RoleSchema>;
+⋮----
+export function computePeriodDates(period: string):
+⋮----
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
 
 ================
 File: src/lib/quality-utils.ts
@@ -2795,7 +3037,6 @@ function normalizeLabel(label: string): string
 export function labelToOrdinal(label: string): LabelOrdinal
 export function ordinalToCategory(ordinal: number): LabelFilterCategory
 ⋮----
-export function getRoleFeatureConfig(role: FeatureRoleType): RoleFeatureConfig
 export function shortPath(fullPath: string): string
 export function fmtBytes(n: number): string
 export interface PercentileDistribution {
@@ -2813,6 +3054,25 @@ export function adaptiveScoreColorBand(
 ): ScoreColorBand
 import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 export function formatTimestamp(ts: string): string
+
+================
+File: src/lib/supabase-rest.ts
+================
+export function supabasePost(
+  url: string,
+  body: unknown,
+  key: string,
+): void
+
+================
+File: src/pages/RoutingTelemetryPage.tsx
+================
+import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
+import { PageShell } from '../components/PageShell.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { Period } from '../types.js';
+⋮----
+function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
 
 ================
 File: src/theme.css
@@ -3058,15 +3318,16 @@ details[open] > .cot-summary::before {
 .border-t        { border-top: 1px solid var(--border); }
 .chip-badge {
 .chip-accent {
-.dot-sm {
-.dot-xs {
+.dot-sm,
+.dot-sm { width: 8px; height: 8px; }
+.dot-xs { width: 6px; height: 6px; }
 .badge-warning {
 .section-rail {
 .workflow-node {
 .workflow-node__label {
 .workflow-node__score {
-.workflow-node__meta {
-.workflow-node__duration {
+.workflow-node__meta,
+.workflow-node__meta { margin-top: var(--space-1); }
 .workflow-node__error {
 .workflow-fallback {
 .workflow-fallback__title {
@@ -3079,273 +3340,6 @@ details[open] > .cot-summary::before {
 .workflow-tabs {
 .workflow-tab {
 .workflow-tab[aria-selected='true'] {
-
-================
-File: scripts/backtest-degradation.ts
-================
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { basename, join } from 'path';
-import { z } from 'zod';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
-import {
-  computeStdDev,
-  sweepDegradationParams,
-  CURRENT_PRODUCTION_CONFIG,
-  BACKTEST_SWEEP,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import type {
-  LabeledIncident,
-  BacktestSweepResult,
-  BacktestConfig,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
-⋮----
-function parseIntArg(argList: string[], flag: string, defaultValue: number): number
-function parseStringArg(argList: string[], flag: string): string | null
-⋮----
-function loadIncidents(): LabeledIncident[]
-interface DailyBucket {
-  timestamp: number;
-  scores: number[];
-}
-function buildDailyBuckets(
-  evaluations: Array<{ timestamp: string; scoreValue: number }>,
-  startMs: number,
-  bucketCount: number,
-): DailyBucket[]
-type TimeSeriesPoint = {
-  timestamp: number;
-  currentStdDev: number;
-  baselineStdDev: number;
-  coverageGapCount: number;
-  totalCoverageCells: number;
-  latencyP95: number;
-  latencyP50: number;
-  historicalValues: number[];
-};
-function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[]
-function formatConfig(cfg: BacktestConfig): string
-function printSummaryTable(metricName: string, result: BacktestSweepResult, evalCount: number): void
-// ---- Main ----
-async function main(): Promise<void>
-
-================
-File: scripts/judge-evaluations.ts
-================
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
-import { createHash } from 'crypto';
-import { join, basename } from 'path';
-import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
-import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
-import {
-  LLMJudge,
-} from '../../src/lib/judge/llm-judge-config.js';
-import type { DatasetRunRecord } from '../../src/backends/index.js';
-import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
-import {
-  traceSpanSchema,
-  otelLogEntrySchema,
-  transcriptEntrySchema,
-  otelEvaluationRecordSchema,
-} from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
-⋮----
-export function normalizeScore(score: number): number
-export interface TranscriptInfo {
-  path: string;
-  sessionId: string;
-  traceId: string;
-}
-export interface Turn {
-  sessionId: string;
-  traceId: string;
-  timestamp: string;
-  userText: string;
-  assistantText: string;
-  toolResults: string[];
-}
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  explanation: string;
-  evaluator: string;
-  evaluatorType: string;
-  traceId: string;
-  sessionId: string;
-}
-⋮----
-/**
- * Alternate directories where session transcripts may exist.
- * Checked in order when a log-referenced path is missing, and scanned
- * directly to discover transcripts not referenced in logs at all.
- */
-⋮----
-function resolveTranscriptPath(originalPath: string): string | null
-async function _discoverTranscripts(): Promise<TranscriptInfo[]>
-⋮----
-// Phase 2: Directory scan for transcripts not referenced in logs
-⋮----
-if (scanCount > 0) { /* scan results logged externally */ }
-⋮----
-// ============================================================================
-// Trace-Based Session Discovery (for --backfill)
-// ============================================================================
-interface TraceSession {
-  sessionId: string;
-  traceId: string;
-  earliestTime: number; // epoch seconds
-  spanCount: number;
-}
-⋮----
-earliestTime: number; // epoch seconds
-⋮----
-/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
-async function discoverSessionsFromTraces(): Promise<Turn[]>
-⋮----
-// Convert to Turn[] with synthetic entries (one per session)
-⋮----
-// ============================================================================
-// Turn Extraction
-// ============================================================================
-/** B8: Discriminated union for transcript content blocks */
-export interface TextBlock { type: 'text'; text: string }
-export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
-export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
-export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
-function isContentBlock(value: unknown): value is ContentBlock
-function asContentBlocks(content: unknown): ContentBlock[]
-export function isSystemPrompt(text: string): boolean
-export function isToolResultOnly(content: unknown): boolean
-export function extractTextFromContent(content: unknown): string
-export function extractToolResults(content: unknown): string[]
-export async function extractTurns(info: TranscriptInfo): Promise<Turn[]>
-async function createAnthropicProvider(): Promise<LLMProvider>
-⋮----
-async generate(
-      prompt: string,
-      options?: { temperature?: number; logprobs?: boolean }
-): Promise<
-⋮----
-// B15: Anthropic Messages API doesn't support logprobs, so G-Eval
-⋮----
-export function hashToScore(input: string, min: number, max: number): number
-export function isCanaryTurn(sessionId: string, turnKey: string): boolean
-export interface SeedResult {
-  evals: EvalRecord[];
-  canaryCount: number;
-}
-export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult
-⋮----
-function trackFailure(metric: string): void
-export async function evaluateTurn(
-  judge: LLMJudge,
-  turn: Turn,
-  existingKeys: Set<string>,
-): Promise<EvalRecord[]>
-export function toOTelRecord(ev: EvalRecord): object
-function _loadExistingKeys(): Set<string>
-// ============================================================================
-// Output
-// ============================================================================
-⋮----
-function acquireLock(): boolean
-function releaseLock(): void
-function safeExit(code: number): never
-function writeEvaluations(evals: EvalRecord[]): void
-export async function processBatch<T, R>(
-  items: T[],
-  concurrency: number,
-  delayMs: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]>
-async function main()
-
-================
-File: src/__tests__/api-calibration.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import app from '../../worker/index.js';
-function makeKV(store: Record<string, unknown> =
-function makeCalibrationData()
-
-================
-File: src/components/RequireAuth.tsx
-================
-import { type ReactNode } from 'react';
-import { Redirect, useLocation } from 'wouter';
-import { useAuth } from '../contexts/AuthContext.js';
-interface RequireAuthProps {
-  children: ReactNode;
-}
-export function RequireAuth(
-
-================
-File: src/hooks/useAgentSession.ts
-================
-import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
-import { useApiQuery } from './useApiQuery.js';
-interface AgentSessionResponse {
-  sessionId: string;
-  spans: Array<{
-    traceId: string;
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-  }>;
-  evaluation: MultiAgentEvaluation;
-  evaluations: EvaluationResult[];
-  agentMap: Record<string, string>;
-  graph: WorkflowGraph;
-}
-export function useAgentSession(sessionId: string | undefined)
-
-================
-File: src/hooks/useTrace.ts
-================
-import { useQuery } from '@tanstack/react-query';
-import type { EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
-import { useAuth } from '../contexts/AuthContext.js';
-interface TraceSpanResponse {
-  traceId: string;
-  spanId: string;
-  name: string;
-  kind?: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-}
-interface TraceResponse {
-  traceId: string;
-  spans: TraceSpanResponse[];
-  evaluations: EvaluationResult[];
-}
-export function useTrace(traceId: string | undefined)
-
-================
-File: src/lib/supabase-rest.ts
-================
-export function supabasePost(
-  url: string,
-  body: unknown,
-  key: string,
-): void
-
-================
-File: src/pages/RoutingTelemetryPage.tsx
-================
-import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
-import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { Period } from '../types.js';
-⋮----
-function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
 
 ================
 File: src/__tests__/WorkflowPage.test.tsx
@@ -3799,6 +3793,11 @@ export function KeyboardNavProvider(
 function handleKeydown(e: KeyboardEvent)
 
 ================
+File: scripts/.kv-sync-coverage.json
+================
+{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
+
+================
 File: scripts/derive-evaluations.ts
 ================
 import { writeFileSync, readdirSync, existsSync } from 'fs';
@@ -3979,11 +3978,6 @@ async function handleAssign()
 async function handleRevoke(roleId: string, roleName: string)
 
 ================
-File: scripts/.kv-sync-coverage.json
-================
-{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
-
-================
 File: src/api/api-constants.ts
 ================
 export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
@@ -4128,28 +4122,6 @@ export function startAutoRefresh(): void
 export function stopAutoRefresh(): void
 
 ================
-File: src/contexts/AuthContext.tsx
-================
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
-import { API_BASE } from '../lib/constants.js';
-import { postActivityEvent } from '../lib/activity-logger.js';
-import type { AppSession } from '../types/auth.js';
-import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
-interface AuthContextValue {
-  session: AppSession | null;
-  isLoading: boolean;
-  signOut: () => Promise<void>;
-  getAccessToken: () => Promise<string>;
-}
-⋮----
-async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null>
-export function AuthProvider(
-export function useAuth(): AuthContextValue
-
-================
 File: src/App.tsx
 ================
 import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
@@ -4201,6 +4173,28 @@ import type {
   MetricDetailResult,
   MetricDynamics,
 } from './types.js';
+
+================
+File: src/contexts/AuthContext.tsx
+================
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import { useAuth0 } from '../lib/auth0.js';
+import { AUTH0_AUDIENCE } from '../lib/auth0.js';
+import { API_BASE } from '../lib/constants.js';
+import { postActivityEvent } from '../lib/activity-logger.js';
+import type { AppSession } from '../types/auth.js';
+import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
+interface AuthContextValue {
+  session: AppSession | null;
+  isLoading: boolean;
+  signOut: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
+}
+⋮----
+async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null>
+export function AuthProvider(
+export function useAuth(): AuthContextValue
 
 
 

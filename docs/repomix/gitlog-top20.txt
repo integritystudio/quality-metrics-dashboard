@@ -1,3 +1,11 @@
+e676e88 2026-03-26 refactor(api): extract computePeriodDates helper and remove duplicate wrappers
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  src/theme.css
+  worker/index.ts
+
 55cf6e3 2026-03-26 docs(auth0): mark migration complete, add tenant deploy script
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-docs.xml
@@ -330,7 +338,4 @@ d165340 2026-03-01 refactor(theme): replace hardcoded px values with space token
   src/theme.css
 
 f1d36ee 2026-03-01 fix(theme): add info token rule for data-status attribute
-  src/theme.css
-
-ea59b38 2026-03-01 refactor(theme): consolidate status color mapping with data-status attribute selectors (H1)
   src/theme.css

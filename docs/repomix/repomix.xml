@@ -3453,139 +3453,6 @@ if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
 }
 
 ================
-File: src/api/routes/compliance.ts
-================
-import { Hono } from 'hono';
-import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-export const complianceRoutes = new Hono();
-complianceRoutes.get('/compliance/sla', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const dates = { start: start.toISOString(), end: now.toISOString() };
-    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const summary = computeDashboardSummary(evaluationsByMetric, undefined, dates);
-    return c.json({
-      period,
-      results: summary.slaCompliance ?? [],
-      noSLAsConfigured: !summary.slaCompliance || summary.slaCompliance.length === 0,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-complianceRoutes.get('/compliance/verifications', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const verifications = await loadVerifications({
-      startDate: start.toISOString(),
-      endDate: now.toISOString(),
-    });
-    return c.json({ period, count: verifications.length, verifications });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/api/routes/correlations.ts
-================
-import { Hono } from 'hono';
-import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-export const correlationRoutes = new Hono();
-correlationRoutes.get('/correlations', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['30d'];
-    const start = new Date(now.getTime() - periodMs);
-    const evaluationsByMetric = await loadEvaluationsByMetric(start.toISOString(), now.toISOString());
-    const metricTimeSeries = new Map<string, number[]>();
-    const metricNames: string[] = [];
-    for (const [name, evals] of evaluationsByMetric) {
-      metricTimeSeries.set(name, evals.filter(e => e.scoreValue != null).map(e => e.scoreValue!));
-      metricNames.push(name);
-    }
-    const correlations = computeCorrelationMatrix(metricTimeSeries);
-    return c.json({ correlations, metrics: metricNames });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/api/routes/coverage.ts
-================
-import { Hono } from 'hono';
-import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, InputKeySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-function filterJudgeEvaluations(
-  byMetric: Map<string, EvaluationResult[]>,
-): Map<string, EvaluationResult[]> {
-  const filtered = new Map<string, EvaluationResult[]>();
-  for (const [metric, evals] of byMetric) {
-    const judgeEvals = evals.filter(e => e.evaluatorType !== 'rule');
-    if (judgeEvals.length > 0) {
-      filtered.set(metric, judgeEvals);
-    }
-  }
-  return filtered;
-}
-export const coverageRoutes = new Hono();
-coverageRoutes.get('/coverage', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const inputKeyResult = InputKeySchema.safeParse(c.req.query('inputKey'));
-  if (!inputKeyResult.success) {
-    return c.json({ error: 'Invalid inputKey. Must be traceId or sessionId.' }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const allEvaluations = await loadEvaluationsByMetric(
-      start.toISOString(),
-      now.toISOString(),
-    );
-    const evaluationsByMetric = filterJudgeEvaluations(allEvaluations);
-    const heatmap = computeCoverageHeatmap(evaluationsByMetric, {
-      inputKey: inputKeyResult.data,
-    });
-    return c.json({ period, ...heatmap });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
 File: src/api/routes/evaluations.ts
 ================
 import { Hono } from 'hono';
@@ -3603,40 +3470,6 @@ evaluationRoutes.get('/evaluations/trace/:traceId', async (c) => {
   try {
     const evaluations = await loadEvaluationsByTraceId(parseResult.data);
     return c.json({ evaluations });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/api/routes/pipeline.ts
-================
-import { Hono } from 'hono';
-import {
-  computePipelineView,
-  computeDashboardSummary,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-export const pipelineRoutes = new Hono();
-pipelineRoutes.get('/pipeline', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const evaluationsByMetric = await loadEvaluationsByMetric(
-      start.toISOString(),
-      now.toISOString(),
-    );
-    const dashboard = computeDashboardSummary(evaluationsByMetric);
-    const pipeline = computePipelineView(evaluationsByMetric, dashboard);
-    return c.json({ period, ...pipeline });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
@@ -10092,85 +9925,150 @@ describe('AgentWorkflowView', () => {
 });
 
 ================
-File: src/api/routes/dashboard.ts
+File: src/api/routes/compliance.ts
 ================
 import { Hono } from 'hono';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-  type RoleViewType,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-function computePeriodDates(period: string): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
-  return { start: start.toISOString(), end: now.toISOString() };
-}
-function computeSparklineData(
-  evaluations: EvaluationResult[],
-  startMs: number,
-  endMs: number,
-  buckets: number,
-): (number | null)[] {
-  const range = endMs - startMs;
-  if (range <= 0 || evaluations.length === 0) return [];
-  const bucketWidth = range / buckets;
-  const sums = new Array(buckets).fill(0);
-  const counts = new Array(buckets).fill(0);
-  for (const ev of evaluations) {
-    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
-    const ts = new Date(ev.timestamp).getTime();
-    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
-    if (idx >= 0) {
-      sums[idx] += ev.scoreValue;
-      counts[idx]++;
-    }
-  }
-  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
-}
-export const dashboardRoutes = new Hono();
-dashboardRoutes.get('/dashboard', async (c) => {
+import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+export const complianceRoutes = new Hono();
+complianceRoutes.get('/compliance/sla', async (c) => {
   const periodResult = PeriodSchema.safeParse(c.req.query('period'));
   if (!periodResult.success) {
     return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
-  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
-  if (!roleResult.success) {
-    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
-  }
   try {
     const period = periodResult.data;
-    const role = roleResult.data;
     const dates = computePeriodDates(period);
     const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
-    const cqi = computeCQI(dashboard.metrics);
-    const startMs = new Date(dates.start).getTime();
-    const endMs = new Date(dates.end).getTime();
-    const sparklines: Record<string, (number | null)[]> = {};
-    for (const [metricName, evals] of evaluationsByMetric) {
-      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, 24);
-    }
-    if (role) {
-      const view = computeRoleView(dashboard, role as RoleViewType);
-      if (role === 'executive') {
-        return c.json({ ...view, cqi, sparklines });
-      }
-      return c.json({ ...view, sparklines });
-    }
-    return c.json({ ...dashboard, cqi, sparklines });
+    const summary = computeDashboardSummary(evaluationsByMetric, undefined, dates);
+    return c.json({
+      period,
+      results: summary.slaCompliance ?? [],
+      noSLAsConfigured: !summary.slaCompliance || summary.slaCompliance.length === 0,
+    });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
-dashboardRoutes.get('/health', async (c) => {
+complianceRoutes.get('/compliance/verifications', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
   try {
-    const result = await checkHealth();
-    return c.json(result);
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const verifications = await loadVerifications({
+      startDate: start,
+      endDate: end,
+    });
+    return c.json({ period, count: verifications.length, verifications });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/routes/correlations.ts
+================
+import { Hono } from 'hono';
+import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+export const correlationRoutes = new Hono();
+correlationRoutes.get('/correlations', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const { start, end } = computePeriodDates(periodResult.data);
+    const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
+    const metricTimeSeries = new Map<string, number[]>();
+    const metricNames: string[] = [];
+    for (const [name, evals] of evaluationsByMetric) {
+      metricTimeSeries.set(name, evals.filter(e => e.scoreValue != null).map(e => e.scoreValue!));
+      metricNames.push(name);
+    }
+    const correlations = computeCorrelationMatrix(metricTimeSeries);
+    return c.json({ correlations, metrics: metricNames });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/routes/coverage.ts
+================
+import { Hono } from 'hono';
+import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-metrics.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { PeriodSchema, InputKeySchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+function filterJudgeEvaluations(
+  byMetric: Map<string, EvaluationResult[]>,
+): Map<string, EvaluationResult[]> {
+  const filtered = new Map<string, EvaluationResult[]>();
+  for (const [metric, evals] of byMetric) {
+    const judgeEvals = evals.filter(e => e.evaluatorType !== 'rule');
+    if (judgeEvals.length > 0) {
+      filtered.set(metric, judgeEvals);
+    }
+  }
+  return filtered;
+}
+export const coverageRoutes = new Hono();
+coverageRoutes.get('/coverage', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const inputKeyResult = InputKeySchema.safeParse(c.req.query('inputKey'));
+  if (!inputKeyResult.success) {
+    return c.json({ error: 'Invalid inputKey. Must be traceId or sessionId.' }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const allEvaluations = await loadEvaluationsByMetric(start, end);
+    const evaluationsByMetric = filterJudgeEvaluations(allEvaluations);
+    const heatmap = computeCoverageHeatmap(evaluationsByMetric, {
+      inputKey: inputKeyResult.data,
+    });
+    return c.json({ period, ...heatmap });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/routes/pipeline.ts
+================
+import { Hono } from 'hono';
+import {
+  computePipelineView,
+  computeDashboardSummary,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+export const pipelineRoutes = new Hono();
+pipelineRoutes.get('/pipeline', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
+    const dashboard = computeDashboardSummary(evaluationsByMetric);
+    const pipeline = computePipelineView(evaluationsByMetric, dashboard);
+    return c.json({ period, ...pipeline });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
@@ -10202,171 +10100,50 @@ traceRoutes.get('/traces/:traceId', async (c) => {
 });
 
 ================
-File: src/api/routes/trends.ts
+File: src/components/RoleSelector.tsx
 ================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD } from '../api-constants.js';
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const timestamps = evaluations
-      .map(e => new Date(e.timestamp).getTime())
-      .filter(Number.isFinite);
-    const dataMin = timestamps.length > 0 ? Math.min(...timestamps) : periodStart.getTime();
-    const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
-    const dataSpan = dataMax - dataMin;
-    const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * 0.1, 60_000) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    const buckets: Array<{
-      startTime: string;
-      endTime: string;
-      scores: number[];
-    }> = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-      });
-    }
-    for (const ev of evaluations) {
-      const ts = new Date(ev.timestamp).getTime();
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0 && ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-        buckets[bucketIdx].scores.push(ev.scoreValue);
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * 3600000);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = scores.length > 0
-        ? computeMetricDetail(
-            evaluations.filter(e => {
-              const ts = new Date(e.timestamp).getTime();
-              const bStart = new Date(bucket.startTime).getTime();
-              const bEnd = new Date(bucket.endTime).getTime();
-              return ts >= bStart && ts < bEnd;
-            }),
-            config,
-            { topN: 0, bucketCount: 0, previousValues },
-          )
-        : undefined;
-      let dynamics = undefined;
-      if (detail?.trend) {
-        dynamics = computeMetricDynamics(
-          detail.trend,
-          previousTrend,
-          periodHours,
+import { useLocation } from 'wouter';
+import type { RoleViewType } from '../types.js';
+import { useAuth } from '../contexts/AuthContext.js';
+const ROLE_TABS: Array<{ path: string; label: string; role: RoleViewType }> = [
+  { path: '/role/executive', label: 'Executive', role: 'executive' },
+  { path: '/role/operator', label: 'Operator', role: 'operator' },
+  { path: '/role/auditor', label: 'Auditor', role: 'auditor' },
+];
+const STATIC_TABS: Array<{ path: string; label: string }> = [
+  { path: '/', label: 'Dashboard' },
+  { path: '/correlations', label: 'Correlations' },
+  { path: '/pipeline', label: 'Pipeline' },
+];
+export function RoleSelector() {
+  const [location, setLocation] = useLocation();
+  const { session } = useAuth();
+  const allowedViews = session?.allowedViews ?? [];
+  const visibleRoleTabs = ROLE_TABS.filter((t) => allowedViews.includes(t.role));
+  const tabs = [
+    STATIC_TABS[0],
+    ...visibleRoleTabs,
+    ...STATIC_TABS.slice(1),
+  ];
+  return (
+    <nav className="tab-nav" role="tablist" aria-label="Dashboard views">
+      {tabs.map((tab) => {
+        const active = location === tab.path;
+        return (
+          <button
+            key={tab.path}
+            role="tab"
+            aria-selected={active}
+            className="tab-btn"
+            onClick={() => setLocation(tab.path)}
+          >
+            {tab.label}
+          </button>
         );
-        previousTrend = detail.trend;
-      }
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * 10000) / 10000 : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = evaluations
-      .map(e => e.scoreValue)
-      .filter((v): v is number => v != null && Number.isFinite(v));
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
-        const scores = evals
-          .map(e => e.scoreValue)
-          .filter((v): v is number => v != null && Number.isFinite(v));
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
+      })}
+    </nav>
+  );
+}
 
 ================
 File: src/components/SplitPane.tsx
@@ -11238,6 +11015,86 @@ export function makeChainGraph(
 }
 
 ================
+File: src/api/routes/dashboard.ts
+================
+import { Hono } from 'hono';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  type RoleViewType,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
+import { PeriodSchema, RoleSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+function computeSparklineData(
+  evaluations: EvaluationResult[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): (number | null)[] {
+  const range = endMs - startMs;
+  if (range <= 0 || evaluations.length === 0) return [];
+  const bucketWidth = range / buckets;
+  const sums = new Array(buckets).fill(0);
+  const counts = new Array(buckets).fill(0);
+  for (const ev of evaluations) {
+    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
+    const ts = new Date(ev.timestamp).getTime();
+    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
+    if (idx >= 0) {
+      sums[idx] += ev.scoreValue;
+      counts[idx]++;
+    }
+  }
+  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
+}
+export const dashboardRoutes = new Hono();
+dashboardRoutes.get('/dashboard', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
+  if (!roleResult.success) {
+    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const role = roleResult.data;
+    const dates = computePeriodDates(period);
+    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
+    const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
+    const cqi = computeCQI(dashboard.metrics);
+    const startMs = new Date(dates.start).getTime();
+    const endMs = new Date(dates.end).getTime();
+    const sparklines: Record<string, (number | null)[]> = {};
+    for (const [metricName, evals] of evaluationsByMetric) {
+      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, 24);
+    }
+    if (role) {
+      const view = computeRoleView(dashboard, role as RoleViewType);
+      if (role === 'executive') {
+        return c.json({ ...view, cqi, sparklines });
+      }
+      return c.json({ ...view, sparklines });
+    }
+    return c.json({ ...dashboard, cqi, sparklines });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+dashboardRoutes.get('/health', async (c) => {
+  try {
+    const result = await checkHealth();
+    return c.json(result);
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: src/api/routes/metrics.ts
 ================
 import { Hono } from 'hono';
@@ -11391,210 +11248,169 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
 });
 
 ================
-File: src/api/data-loader.ts
+File: src/api/routes/trends.ts
 ================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const DEFAULT_LOOKBACK_7D = 7 * MS_PER_DAY;
-const DEFAULT_LOOKBACK_30D = 30 * MS_PER_DAY;
-const DEFAULT_LOOKBACK_90D = 90 * MS_PER_DAY;
-const LIMIT_EVALS_BULK = 100_000;
-const LIMIT_EVALS_METRIC = 10_000;
-const LIMIT_EVALS_PER_TRACE = 1_000;
-const LIMIT_EVALS_SESSION = 10_000;
-const LIMIT_TRACES = 500;
-const LIMIT_LOGS = 1_000;
-const LIMIT_HEALTH_PROBE = 1;
-let backend: MultiDirectoryBackend | undefined;
-function getBackend(): MultiDirectoryBackend {
-  if (!backend) {
-    backend = new MultiDirectoryBackend(undefined, true);
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD } from '../api-constants.js';
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
-  return backend;
-}
-function toDateOnly(d: string): string {
-  return d.split('T')[0];
-}
-function defaultRange(lookbackMs: number): { start: string; end: string } {
-  const now = new Date();
-  return {
-    start: new Date(now.getTime() - lookbackMs).toISOString(),
-    end: now.toISOString(),
-  };
-}
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>> {
-  const be = getBackend();
-  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
-  const grouped = new Map<string, EvaluationResult[]>();
-  for (const ev of evals) {
-    const name = ev.evaluationName;
-    if (!grouped.has(name)) grouped.set(name, []);
-    grouped.get(name)!.push(ev);
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
-  return grouped;
-}
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  return be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    evaluationName: metricName,
-    limit: LIMIT_EVALS_METRIC,
-  });
-}
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return be.queryEvaluations({
-    traceId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_PER_TRACE,
-  });
-}
-const TRACE_QUERY_CONCURRENCY = 10;
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]> {
-  const uniqueIds = [...new Set(traceIds)];
-  if (uniqueIds.length === 0) return [];
-  const be = getBackend();
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
-  const start = startDate ?? defStart;
-  const end = endDate ?? defEnd;
-  const all: EvaluationResult[] = [];
-  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
-    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
-    const settled = await Promise.allSettled(
-      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
-    );
-    for (const result of settled) {
-      if (result.status === 'fulfilled') all.push(...result.value);
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const timestamps = evaluations
+      .map(e => new Date(e.timestamp).getTime())
+      .filter(Number.isFinite);
+    const dataMin = timestamps.length > 0 ? Math.min(...timestamps) : periodStart.getTime();
+    const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
+    const dataSpan = dataMax - dataMin;
+    const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * 0.1, 60_000) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    const buckets: Array<{
+      startTime: string;
+      endTime: string;
+      scores: number[];
+    }> = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+      });
     }
+    for (const ev of evaluations) {
+      const ts = new Date(ev.timestamp).getTime();
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0 && ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+        buckets[bucketIdx].scores.push(ev.scoreValue);
+      }
+    }
+    const periodHours = rangeMs / (bucketCount * 3600000);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = scores.length > 0
+        ? computeMetricDetail(
+            evaluations.filter(e => {
+              const ts = new Date(e.timestamp).getTime();
+              const bStart = new Date(bucket.startTime).getTime();
+              const bEnd = new Date(bucket.endTime).getTime();
+              return ts >= bStart && ts < bEnd;
+            }),
+            config,
+            { topN: 0, bucketCount: 0, previousValues },
+          )
+        : undefined;
+      let dynamics = undefined;
+      if (detail?.trend) {
+        dynamics = computeMetricDynamics(
+          detail.trend,
+          previousTrend,
+          periodHours,
+        );
+        previousTrend = detail.trend;
+      }
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * 10000) / 10000 : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = evaluations
+      .map(e => e.scoreValue)
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
-  return all;
-}
-export async function loadTracesByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-) {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryTracesTool({
-    traceId,
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_TRACES,
-  });
-  return result.traces;
-}
-export async function loadTracesBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-) {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryTracesTool({
-    attributeFilter: { 'session.id': sessionId },
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_TRACES,
-  });
-  return result.traces;
-}
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({
-    traceId,
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_LOGS,
-  });
-  return result.logs;
-}
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]> {
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return queryVerificationsLib({
-    startDate: opts.startDate ?? start,
-    endDate: opts.endDate ?? end,
-    sessionId: opts.sessionId,
-    limit: opts.limit ?? LIMIT_LOGS,
-  });
-}
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({
-    sessionId,
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_LOGS,
-  });
-  return result.logs;
-}
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return be.queryEvaluations({
-    sessionId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_SESSION,
-  });
-}
-export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
-  const be = getBackend();
-  const health = await be.healthCheck();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
-  const evals = await be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_HEALTH_PROBE,
-  });
-  return { status: health.status, hasData: evals.length > 0 };
-}
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = evals
+          .map(e => e.scoreValue)
+          .filter((v): v is number => v != null && Number.isFinite(v));
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
 
 ================
 File: src/components/AgentWorkflowView.tsx
@@ -11676,52 +11492,6 @@ export function AgentWorkflowView({
         />
       </div>
     </div>
-  );
-}
-
-================
-File: src/components/RoleSelector.tsx
-================
-import { useLocation } from 'wouter';
-import type { RoleViewType } from '../types.js';
-import { useAuth } from '../contexts/AuthContext.js';
-const ROLE_TABS: Array<{ path: string; label: string; role: RoleViewType }> = [
-  { path: '/role/executive', label: 'Executive', role: 'executive' },
-  { path: '/role/operator', label: 'Operator', role: 'operator' },
-  { path: '/role/auditor', label: 'Auditor', role: 'auditor' },
-];
-const STATIC_TABS: Array<{ path: string; label: string }> = [
-  { path: '/', label: 'Dashboard' },
-  { path: '/correlations', label: 'Correlations' },
-  { path: '/pipeline', label: 'Pipeline' },
-];
-export function RoleSelector() {
-  const [location, setLocation] = useLocation();
-  const { session } = useAuth();
-  const allowedViews = session?.allowedViews ?? [];
-  const visibleRoleTabs = ROLE_TABS.filter((t) => allowedViews.includes(t.role));
-  const tabs = [
-    STATIC_TABS[0],
-    ...visibleRoleTabs,
-    ...STATIC_TABS.slice(1),
-  ];
-  return (
-    <nav className="tab-nav" role="tablist" aria-label="Dashboard views">
-      {tabs.map((tab) => {
-        const active = location === tab.path;
-        return (
-          <button
-            key={tab.path}
-            role="tab"
-            aria-selected={active}
-            className="tab-btn"
-            onClick={() => setLocation(tab.path)}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </nav>
   );
 }
 
@@ -11959,62 +11729,6 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
 }
 
 ================
-File: src/contexts/RoleContext.tsx
-================
-import { createContext, useContext, useEffect, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useRoute } from 'wouter';
-import {
-  getRoleFeatureConfig,
-  type FeatureRoleType,
-  type RoleFeatureConfig,
-} from '../lib/quality-utils.js';
-import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
-const VALID_ROLES = new Set<FeatureRoleType>(ROLES);
-interface RoleContextValue {
-  role: FeatureRoleType;
-  config: RoleFeatureConfig;
-  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
-}
-const RoleContext = createContext<RoleContextValue | null>(null);
-export function RoleProvider({ children }: { children: ReactNode }) {
-  const [, params] = useRoute('/role/:roleName');
-  const roleName = params?.roleName;
-  const role: FeatureRoleType =
-    roleName && VALID_ROLES.has(roleName as FeatureRoleType)
-      ? (roleName as FeatureRoleType)
-      : DEFAULT_ROLE;
-  useEffect(() => {
-    if (roleName && !VALID_ROLES.has(roleName as FeatureRoleType)) {
-      console.warn(`[RoleProvider] Unknown role "${roleName}", falling back to "executive". Valid roles: ${[...VALID_ROLES].join(', ')}`);
-    }
-  }, [roleName]);
-  const value = useMemo<RoleContextValue>(() => {
-    const config = getRoleFeatureConfig(role);
-    return {
-      role,
-      config,
-      hasFeature: (feature: keyof RoleFeatureConfig) => {
-        const v = config[feature];
-        return typeof v === 'boolean' ? v : v != null;
-      },
-    };
-  }, [role]);
-  return (
-    <RoleContext.Provider value={value}>
-      {children}
-    </RoleContext.Provider>
-  );
-}
-export function useRole(): RoleContextValue {
-  const ctx = useContext(RoleContext);
-  if (!ctx) {
-    throw new Error('useRole must be used within a RoleProvider');
-  }
-  return ctx;
-}
-
-================
 File: src/hooks/useMetricEvaluations.ts
 ================
 import type { EvalRow } from '../components/EvaluationTable.js';
@@ -12234,144 +11948,6 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
 }
 
 ================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum ErrorName {
-  SessionNotFound = 'SessionNotFoundError',
-}
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-}
-export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
-export type InputKey = z.infer<typeof InputKeySchema>;
-export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
-export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
-export type SortBy = z.infer<typeof SortBySchema>;
-export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
-export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
-export type Role = z.infer<typeof RoleSchema>;
-export const ROLES = RoleSchema.options;
-export const DEFAULT_ROLE: Role = 'executive';
-export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
-const TIME_MS = {
-  DAY: 24 * 60 * 60 * 1000,
-} as const;
-export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
-export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
-export const PeriodEnum = z.enum(PERIOD_KEYS);
-export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
-export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
-export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
-export const PERIOD_MS: Record<string, number> = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
-);
-export const LLM_SAMPLE_RATE = 10;
-export const SCORE_THRESHOLD_GREEN = 0.8;
-export const SCORE_THRESHOLD_YELLOW = 0.5;
-export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-export const MAX_ERROR_ROWS = 10;
-export const MAX_HALLUCINATION_ROWS = 8;
-export const MAX_FAILED_EVAL_ROWS = 6;
-export const LIVE_WINDOW_MS = TIME_MS.DAY;
-export const QUERY_RETRY_COUNT = 2;
-export const POLL_INTERVAL_MS = 30_000;
-export const RETRY_DELAY_BASE = 1_000;
-export const RETRY_DELAY_CAP = 30_000;
-export const MAX_IDS = 50;
-export const EVAL_LIMIT = 100;
-export const SCORE_DISPLAY_PRECISION = 3;
-export const STALE_TIME = {
-  DEFAULT: 25_000,
-  DETAIL: 30_000,
-  AGGREGATE: 60_000,
-} as const;
-export const DEFAULT_TOP_N = 5;
-export const DEFAULT_BUCKET_COUNT = 10;
-export const SKELETON_HEIGHT_SM = 200;
-export const SKELETON_HEIGHT_MD = 300;
-export const SKELETON_HEIGHT_LG = 400;
-export const ICON_BADGE_SIZE = 24;
-export const CALLOUT_MAX_WIDTH = 480;
-export const PAGE_CONTENT_MAX_WIDTH = 1100;
-export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
-export const AGENT_CARD_MIN_WIDTH = '220px';
-export const FILE_ACCESS_COL_MIN = '320px';
-export const DEFAULT_PAGE_LIMIT = 50;
-export const HEATMAP_ROW_HEADER_WIDTH = 80;
-export const HEATMAP_COL_HEADER_HEIGHT = 32;
-export const HEATMAP_CELL_MIN_HEIGHT = 36;
-export const COVERAGE_GRID_HEADER_WIDTH = 120;
-export const COVERAGE_GRID_CELL_SIZE = 28;
-export const COVERAGE_GRID_LEGEND_SIZE = 12;
-export const COVERAGE_GRID_MAX_INPUTS = 30;
-export const COVERAGE_GRID_HEADER_MAX_HEIGHT = 60;
-export const FUNNEL_BAR_HEIGHT = 32;
-export const FUNNEL_BAR_MIN_WIDTH = 40;
-export const FUNNEL_DROPOFF_WARN_PCT = 20;
-export const SPAN_TREE_INDENT = 20;
-export const SPAN_TREE_BASE_PADDING = 8;
-export const SPLIT_PANE_DIVIDER_WIDTH = 6;
-export const SPLIT_PANE_MIN_HEIGHT = 300;
-export const TURN_CARD_MIN_WIDTH = 120;
-export const AGENT_TABLE_MIN_WIDTH = 640;
-export const AGENT_BAR_MIN_WIDTH = 48;
-export const AGENT_EVAL_CARD_MIN_WIDTH = 140;
-export const SPARKLINE_WIDTH = 160;
-export const SPARKLINE_HEIGHT = 28;
-export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
-export const VARIANCE_LOW_PCT = 20;
-export const VARIANCE_MEDIUM_PCT = 50;
-export const VARIANCE_DISPLAY_MIN_WIDTH = 36;
-export const CHART_HEIGHT = 200;
-export const CHART_STROKE_WIDTH = 2;
-export const CHART_DOT_RADIUS = 4;
-export const CHART_DOT_RADIUS_ACTIVE = 6;
-export const CHART_DOT_RADIUS_PROJECTED = 3;
-export const CHART_DASH_THRESHOLD = '6 3';
-export const CHART_DASH_PROJECTED = '6 4';
-export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-export const EVAL_FILTER_INACTIVE_OPACITY = 0.6;
-export const SCORE_BADGE_ALPHA_HEX = '1a';
-export const CHART_COLORS = {
-  line: '#58a6ff',
-  grid: '#30363d',
-  text: '#8b949e',
-  surface: '#1f2937',
-  tooltip: '#161b22',
-  warning: '#d29922',
-  critical: '#f85149',
-} as const;
-export const AGENT_PALETTE = [
-  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
-  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
-] as const;
-export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
-export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
-export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
-export const CHART_TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: CHART_COLORS.tooltip,
-  border: `1px solid ${CHART_COLORS.grid}`,
-  borderRadius: 'var(--radius)',
-  color: CHART_COLORS.text,
-  fontSize: 12,
-};
-export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
-export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
-
-================
 File: src/lib/dashboard-file-utils.ts
 ================
 import { readFileSync, existsSync } from 'fs';
@@ -12467,1243 +12043,6 @@ export function loadJsonWithValidationSafe<T>(
   } catch {
     return fallback;
   }
-}
-
-================
-File: src/lib/quality-utils.ts
-================
-export type ScoreDirection = 'maximize' | 'minimize';
-export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
-export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
-export interface LabelOrdinal {
-  ordinal: number;
-  category: LabelFilterCategory;
-  mapped: boolean;
-}
-import type { Role } from './constants.js';
-export type FeatureRoleType = Role;
-export interface RoleFeatureConfig {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
-}
-export function truncateText(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + '...' : text;
-}
-export function truncateId(id: string, max = 10): string {
-  if (id.length <= max) return id;
-  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
-}
-export function formatScore(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  return val.toFixed(4);
-}
-export function formatPercent(value: number, decimals = 1): string {
-  if (!Number.isFinite(value)) return '\u2014';
-  return `${value.toFixed(decimals)}%`;
-}
-export function plural(count: number, singular: string, suffix = 's'): string {
-  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
-}
-export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-  no_data: '#6b7280',
-};
-export function scoreColor(value: number, direction?: ScoreDirection): string {
-  return SCORE_COLORS[scoreColorBand(value, direction)];
-}
-export function scoreColorBand(
-  value: number,
-  direction: ScoreDirection = 'maximize',
-): ScoreColorBand {
-  const v = direction === 'minimize' ? 1 - value : value;
-  if (v >= 0.9) return 'excellent';
-  if (v >= 0.8) return 'good';
-  if (v >= 0.6) return 'adequate';
-  if (v >= 0.4) return 'poor';
-  return 'failing';
-}
-type ThresholdDirection = 'above' | 'below';
-export function inferScoreDirection(
-  alertDirection: ThresholdDirection | undefined,
-): ScoreDirection {
-  return alertDirection === 'above' ? 'minimize' : 'maximize';
-}
-const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
-  excellent: { ordinal: 4, category: 'Pass' },
-  highly_relevant: { ordinal: 4, category: 'Pass' },
-  fully_faithful: { ordinal: 4, category: 'Pass' },
-  perfect: { ordinal: 4, category: 'Pass' },
-  relevant: { ordinal: 3, category: 'Pass' },
-  good: { ordinal: 3, category: 'Pass' },
-  faithful: { ordinal: 3, category: 'Pass' },
-  pass: { ordinal: 3, category: 'Pass' },
-  correct: { ordinal: 3, category: 'Pass' },
-  coherent: { ordinal: 3, category: 'Pass' },
-  partial: { ordinal: 2, category: 'Review' },
-  borderline: { ordinal: 2, category: 'Review' },
-  adequate: { ordinal: 2, category: 'Review' },
-  mixed: { ordinal: 2, category: 'Review' },
-  off_topic: { ordinal: 1, category: 'Fail' },
-  irrelevant: { ordinal: 1, category: 'Fail' },
-  unfaithful: { ordinal: 1, category: 'Fail' },
-  fail: { ordinal: 1, category: 'Fail' },
-  incorrect: { ordinal: 1, category: 'Fail' },
-  incoherent: { ordinal: 1, category: 'Fail' },
-  hallucinated: { ordinal: 0, category: 'Fail' },
-  fabricated: { ordinal: 0, category: 'Fail' },
-  toxic: { ordinal: 0, category: 'Fail' },
-  dangerous: { ordinal: 0, category: 'Fail' },
-};
-function normalizeLabel(label: string): string {
-  return label.toLowerCase().replace(/-/g, '_').trim();
-}
-export function labelToOrdinal(label: string): LabelOrdinal {
-  const normalized = normalizeLabel(label);
-  const entry = LABEL_ORDINAL_MAP[normalized];
-  if (entry) {
-    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
-  }
-  return { ordinal: 2, category: 'Review', mapped: false };
-}
-export function ordinalToCategory(ordinal: number): LabelFilterCategory {
-  if (ordinal >= 3) return 'Pass';
-  if (ordinal === 2) return 'Review';
-  return 'Fail';
-}
-export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
-  executive: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: false,
-    showAcceleration: false,
-    showProjectedBreach: true,
-    showCorrelationRemediation: false,
-    showCoverageHeatmap: false,
-    showPipelineFunnel: false,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: 80,
-    maxWorstEvaluations: 1,
-  },
-  operator: {
-    showCQI: false,
-    showCQIBreakdown: false,
-    showVariance: true,
-    showAcceleration: true,
-    showProjectedBreach: true,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: 500,
-    maxWorstEvaluations: 5,
-  },
-  auditor: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: true,
-    showAcceleration: false,
-    showProjectedBreach: false,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: true,
-    showRawExport: true,
-    explanationTruncation: 2000,
-    maxWorstEvaluations: 10,
-  },
-};
-export function getRoleFeatureConfig(role: FeatureRoleType): RoleFeatureConfig {
-  return ROLE_FEATURE_CONFIG[role];
-}
-export function shortPath(fullPath: string): string {
-  const parts = fullPath.replace(/\\/g, '/').split('/');
-  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
-}
-export function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-export interface PercentileDistribution {
-  p10: number; p25: number; p50: number; p75: number; p90: number;
-}
-export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
-export const MIN_QUANTILE_SAMPLE_SIZE = 100;
-const NUMERICAL_MIN_DENOMINATOR = 0.001;
-const LOG_SCALE_DIVISOR = 3;
-const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
-const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
-const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
-const QUANTILE_P10 = 0.1;
-const QUANTILE_P25 = 0.25;
-const QUANTILE_P50 = 0.5;
-const QUANTILE_P75 = 0.75;
-const QUANTILE_P90 = 0.9;
-export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
-  relevance: 'quantile',
-  faithfulness: 'binary',
-  coherence: 'uniform',
-  hallucination: 'log',
-  task_completion: 'step',
-  tool_correctness: 'categorical',
-  evaluation_latency: 'percentile_rank',
-};
-export function empiricalCDF(value: number, dist: PercentileDistribution): number {
-  if (!Number.isFinite(value)) return QUANTILE_P50;
-  const points: [number, number][] = [
-    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
-    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
-  ];
-  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
-  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
-  for (let i = 0; i < points.length - 1; i++) {
-    const [v0, p0] = points[i];
-    const [v1, p1] = points[i + 1];
-    if (value >= v0 && value <= v1) {
-      const range = v1 - v0;
-      if (range === 0) return p0;
-      return p0 + (p1 - p0) * ((value - v0) / range);
-    }
-  }
-  return QUANTILE_P50;
-}
-export function adaptiveScoreColorBand(
-  value: number,
-  metric: string,
-  direction: ScoreDirection = 'maximize',
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
-): ScoreColorBand {
-  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
-  switch (strategy) {
-    case 'quantile': {
-      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
-        return scoreColorBand(value, direction);
-      }
-      const rank = empiricalCDF(value, distribution);
-      if (rank >= QUANTILE_P90) return 'excellent';
-      if (rank >= QUANTILE_P75) return 'good';
-      if (rank >= QUANTILE_P50) return 'adequate';
-      if (rank >= QUANTILE_P25) return 'poor';
-      return 'failing';
-    }
-    case 'log': {
-      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
-      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
-      return scoreColorBand(logNorm, 'maximize');
-    }
-    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
-    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
-    case 'categorical': return scoreColorBand(value, direction);
-    case 'percentile_rank': {
-      if (!distribution) return scoreColorBand(value, direction);
-      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
-    }
-    case 'uniform':
-    default: return scoreColorBand(value, direction);
-  }
-}
-import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
-export function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return ts || '-';
-  const now = new Date();
-  const diffMin = differenceInMinutes(now, d);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = differenceInHours(now, d);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = differenceInDays(now, d);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return format(d, 'PP');
-}
-
-================
-File: src/theme.css
-================
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/JetBrainsMono-Medium.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/JetBrainsMono-SemiBold.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'IBM Plex Sans';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/IBMPlexSans-Regular.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'IBM Plex Sans';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/IBMPlexSans-Medium.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'IBM Plex Sans';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
-}
-:root {
-  --bg-primary: #0a0e14;
-  --bg-card: #131920;
-  --bg-elevated: #1a2230;
-  --bg-surface: #1f2937;
-  --bg-hover: #243044;
-  --border: #2a3a4e;
-  --border-subtle: #1e2a3a;
-  --border-accent: #3b5278;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #475569;
-  --text-on-accent: #ffffff;
-  --status-healthy: #26d97f;
-  --status-warning: #e5a00d;
-  --status-critical: #f04438;
-  --status-no-data: #6b7280;
-  --status-good: #34d399;
-  --status-poor: #f97316;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --accent-muted: #1e3a5f;
-  --score-excellent: var(--status-healthy);
-  --score-good: var(--status-good);
-  --score-adequate: var(--status-warning);
-  --score-poor: var(--status-poor);
-  --score-failing: var(--status-critical);
-  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-  --space-px: 1px;
-  --space-0-5: 2px;
-  --space-1: 4px;
-  --space-1-5: 6px;
-  --space-2: 8px;
-  --space-2-5: 10px;
-  --space-3: 12px;
-  --space-3-5: 14px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-16: 64px;
-  --layout-max-width: 1280px;
-  --bg-status-healthy: #0d1f12;
-  --bg-status-warning: #1f1a0d;
-  --bg-status-critical: #1f0d0d;
-  --border-status-healthy: #1a3a1f;
-  --border-status-warning: #3a2f1a;
-  --border-status-critical: #3a1a1a;
-  --accent-alpha-10: rgba(59, 130, 246, 0.1);
-  --accent-alpha-20: rgba(59, 130, 246, 0.2);
-  --healthy-alpha-15: rgba(38, 217, 127, 0.15);
-  --warning-alpha-15: rgba(229, 160, 13, 0.15);
-  --critical-alpha-20: rgba(240, 68, 56, 0.2);
-  --critical-alpha-40: rgba(240, 68, 56, 0.4);
-  --critical-alpha-60: rgba(240, 68, 56, 0.6);
-  --radius-xs: 2px;
-  --radius-bar: 3px;
-  --radius-sm: 4px;
-  --radius: 6px;
-  --radius-lg: 8px;
-  --radius-pill: 12px;
-  --radius-full: 50%;
-  --border-width-thick: 2px;
-  --border-width-rail: 3px;
-  --font-size-2xs: 9px;
-  --font-size-xs: 12px;
-  --font-size-base: 14px;
-  --font-size-md: 16px;
-  --font-size-lg: 18px;
-  --font-size-xl: 20px;
-  --font-size-stat: 22px;
-  --font-size-2xl: 24px;
-  --font-size-3xl: 36px;
-  --bold: 600;
-  --light-bold: 500;
-  --label-letter-spacing: 0.5px;
-  --stat-label-letter-spacing: 0.1em;
-  --letter-spacing-id: 0.02em;
-  --label-letter-spacing-wide: 0.12em;
-  --transition-fast: 0.15s ease;
-  --transition-medium: 0.2s ease;
-  --transition-bar: width 0.3s ease;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-glow-healthy: 0 0 12px var(--healthy-alpha-15);
-  --shadow-glow-warning: 0 0 12px var(--warning-alpha-15);
-  --shadow-glow-critical: 0 0 12px var(--critical-alpha-20);
-}
-.overflow-x-auto { overflow-x: auto; }
-.select-none { user-select: none; }
-.cursor-pointer { cursor: pointer; }
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-.summary-count .label,
-.sla-table th,
-.cot-summary,
-.agreement-grid .ag-header,
-.stat-label,
-.field-label {
-  text-transform: uppercase;
-  letter-spacing: var(--label-letter-spacing);
-}
-.back-link,
-.tooltip-link,
-.alert-metric-link {
-  color: var(--accent);
-  text-decoration: none;
-}
-.back-link:hover,
-.tooltip-link:hover,
-.alert-metric-link:hover {
-  text-decoration: underline;
-}
-.summary-count { text-align: center; }
-.card:hover { border-color: var(--border); }
-.trend.stable { color: var(--text-secondary); }
-.card.glow-critical { box-shadow: var(--shadow-glow-critical); }
-.card.glow-warning { box-shadow: var(--shadow-glow-warning); }
-body {
-  font-family: var(--font-body);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  line-height: 1.6;
-  font-size: var(--font-size-base);
-  -webkit-font-smoothing: antialiased;
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-.dashboard-container {
-  max-width: var(--layout-max-width);
-  margin: 0 auto;
-  padding: var(--space-6);
-}
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--space-4);
-}
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  box-shadow: var(--shadow-sm);
-}
-.card-link {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-[data-status="healthy"]  { --s-bg: var(--bg-status-healthy);  --s-border: var(--border-status-healthy);  --s-fg: var(--status-healthy); }
-[data-status="warning"]  { --s-bg: var(--bg-status-warning);  --s-border: var(--border-status-warning);  --s-fg: var(--status-warning); }
-[data-status="critical"] { --s-bg: var(--bg-status-critical); --s-border: var(--border-status-critical); --s-fg: var(--status-critical); }
-[data-status="no_data"]  { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--status-no-data); }
-[data-status="info"]     { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--text-secondary); }
-.health-banner {
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--radius);
-  margin-bottom: var(--space-6);
-  justify-content: space-between;
-}
-.health-banner[data-status] { background: var(--s-bg); border: 1px solid var(--s-border); }
-.summary-count .value {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--bold);
-  font-family: var(--font-mono);
-}
-.status-badge {
-  gap: var(--space-1-5);
-  font-weight: var(--light-bold);
-  padding: var(--space-px) var(--space-2);
-  border-radius: var(--radius-pill);
-}
-.status-badge[data-status] { color: var(--s-fg); background: var(--s-bg); }
-.trend {
-  gap: var(--space-1);
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono);
-}
-.trend.improving { color: var(--status-healthy); }
-.trend.degrading { color: var(--status-critical); }
-.metric-card-header {
-  justify-content: space-between;
-  margin-bottom: var(--space-3);
-}
-.metric-card-header h3 {
-  font-size: var(--font-size-base);
-  font-weight: var(--light-bold);
-}
-.metric-values {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-}
-.metric-values .primary {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--bold);
-  line-height: 1.2;
-}
-.metric-values .secondary {
-  color: var(--text-secondary);
-  margin-top: var(--space-1);
-}
-.metric-footer,
-.pipeline-stats,
-.agreement-summary {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-}
-.metric-footer {
-  justify-content: space-between;
-  border-top-color: var(--border);
-}
-.alert-list {
-  list-style: none;
-}
-.alert-item {
-  padding: var(--space-3) var(--space-4);
-  border-left: 3px solid;
-  background: var(--bg-card);
-  margin-bottom: var(--space-2);
-  border-radius: 0 var(--radius) var(--radius) 0;
-}
-.alert-item[data-status] { border-left-color: var(--s-fg); }
-.alert-item .alert-meta,
-.alert-item .remediation {
-  margin-top: var(--space-1);
-}
-.alert-item .remediation { color: var(--accent); }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th,
-.data-table td { border-bottom: 1px solid var(--border); }
-.data-table th {
-  font-size: var(--font-size-xs);
-  text-align: left;
-  color: var(--text-secondary);
-  font-weight: var(--light-bold);
-}
-.sla-table { font-size: var(--font-size-base); }
-.sla-table th,
-.sla-table td { padding: var(--space-2) var(--space-3); }
-.histogram {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-px);
-  height: 120px;
-  padding: var(--space-2) 0;
-}
-.histogram-bar {
-  flex: 1;
-  background: var(--accent);
-  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-  min-height: var(--space-px);
-  position: relative;
-}
-.histogram-bar:hover {
-  opacity: 0.8;
-}
-.histogram-bar .tooltip,
-.score-badge-tooltip {
-  display: none;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: var(--font-size-xs);
-}
-.histogram-bar .tooltip {
-  bottom: 100%;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  z-index: 10;
-}
-.histogram-bar:hover .tooltip {
-  display: block;
-}
-.histogram-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-.eval-table {
-  font-size: var(--font-size-xs);
-}
-.eval-table th,
-.eval-table td {
-  padding: var(--space-1-5) var(--space-2-5);
-}
-.eval-table td {
-  font-family: var(--font-mono);
-}
-.eval-table .explanation {
-  font-family: inherit;
-  color: var(--text-secondary);
-  max-width: 300px;
-}
-.eval-table tbody tr:hover,
-.eval-table .eval-row-expanded {
-  background: var(--bg-elevated);
-}
-.eval-table .eval-expanded-panel td {
-  padding: 0 var(--space-2-5) var(--space-2-5);
-}
-.eval-expanded-content {
-  background: var(--bg-elevated);
-  border-radius: var(--radius);
-  padding: var(--space-4);
-  animation: fade-in var(--transition-fast);
-}
-.pad-panel-section { padding: var(--space-2-5) 0 var(--space-2); }
-.pad-panel-sparse  { padding: var(--space-2-5) 0 var(--space-1); }
-.tab-btn,
-.period-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.tab-nav {
-  display: flex;
-  gap: var(--space-1);
-  margin-bottom: var(--space-6);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0;
-}
-.tab-btn {
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--font-size-base);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-.tab-btn:hover {
-  color: var(--text-primary);
-}
-.tab-btn[aria-selected="true"] {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent);
-}
-.period-selector {
-  display: inline-flex;
-  gap: var(--space-1);
-  background: var(--bg-elevated);
-  border-radius: var(--radius);
-  padding: var(--space-px);
-}
-.period-btn {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius);
-  font-size: var(--font-size-xs);
-  font-family: var(--font-body);
-}
-.period-btn.active {
-  background: var(--bg-card);
-  color: var(--text-primary);
-}
-.header {
-  justify-content: space-between;
-  margin-bottom: var(--space-6);
-}
-.header h1 {
-  font-size: var(--font-size-xl);
-  font-weight: var(--bold);
-}
-.skeleton {
-  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-elevated) 50%, var(--bg-card) 75%);
-  background-size: 200% 100%;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-  border-radius: var(--radius);
-}
-@keyframes skeleton-pulse {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-.empty-state {
-  text-align: center;
-  padding: var(--space-16) var(--space-6);
-  color: var(--text-secondary);
-}
-.empty-state h2 {
-  color: var(--text-primary);
-  margin-bottom: var(--space-2);
-}
-.empty-state code {
-  background: var(--bg-elevated);
-  padding: var(--space-px) var(--space-1-5);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-}
-.back-link {
-  font-size: var(--font-size-xs);
-  gap: var(--space-1);
-  margin-bottom: var(--space-4);
-}
-.error-state {
-  background: var(--bg-status-critical);
-  border: 1px solid var(--border-status-critical);
-  border-radius: var(--radius);
-  padding: var(--space-6);
-  text-align: center;
-}
-.error-state h2 {
-  color: var(--status-critical);
-  margin-bottom: var(--space-2);
-}
-.error-state .error-actions {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  justify-content: center;
-}
-.error-state .error-actions button,
-.error-state .error-actions a {
-  padding: var(--space-1-5) var(--space-4);
-  cursor: pointer;
-}
-.section-heading {
-  font-size: var(--font-size-md);
-  font-weight: var(--bold);
-  margin-bottom: var(--space-4);
-  margin-top: var(--space-8);
-}
-.stat-item {
-  flex: 1 1 100px;
-  min-width: 80px;
-  text-align: center;
-}
-.stat-value {
-  font-size: var(--font-size-stat);
-  line-height: 1.1;
-}
-.stat-label {
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  letter-spacing: var(--stat-label-letter-spacing);
-  margin-top: var(--space-px);
-}
-.freq-bar-row {
-  display: grid;
-  grid-template-columns: 160px 1fr 36px;
-  align-items: center;
-  gap: var(--space-2-5);
-  margin-bottom: var(--space-1-5);
-}
-.vitals-divider {
-  width: 1px;
-  background: var(--border-subtle);
-  margin: 0 var(--space-2);
-  align-self: stretch;
-}
-.freq-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 0 var(--space-8);
-}
-.view-section {
-  margin-bottom: var(--space-8);
-}
-.refetch-indicator {
-  position: fixed;
-  top: var(--space-4);
-  right: var(--space-4);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius);
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  z-index: 1000;
-  animation: fade-in var(--transition-fast);
-}
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes toxicPulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--critical-alpha-40); }
-  50% { box-shadow: 0 0 6px 2px var(--critical-alpha-60); }
-}
-.score-badge-wrapper {
-  position: relative;
-  cursor: default;
-}
-.score-badge-tooltip {
-  bottom: calc(100% + var(--space-2));
-  border-radius: var(--radius);
-  padding: var(--space-2-5) var(--space-3);
-  min-width: 200px;
-  max-width: 300px;
-  z-index: 20;
-  white-space: normal;
-  animation: fade-in var(--transition-fast);
-}
-.score-badge-wrapper:hover .score-badge-tooltip,
-.score-badge-wrapper:focus-within .score-badge-tooltip {
-  display: block;
-}
-.tooltip-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-px) 0;
-  color: var(--text-primary);
-}
-.tooltip-link {
-  display: block;
-  margin-top: var(--space-2);
-  padding-top: var(--space-1-5);
-  border-top: 1px solid var(--border);
-}
-.cot-panel {
-  margin-top: var(--space-1);
-}
-.cot-summary {
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: var(--space-1) 0;
-  list-style: none;
-}
-.cot-summary::-webkit-details-marker {
-  display: none;
-}
-.cot-summary::before {
-  content: '\25B6';
-  display: inline-block;
-  margin-right: var(--space-1-5);
-  font-size: var(--font-size-2xs);
-  transition: transform var(--transition-fast);
-}
-details[open] > .cot-summary::before {
-  transform: rotate(90deg);
-}
-.cot-content {
-  font-size: var(--font-size-xs);
-  color: var(--text-primary);
-  line-height: 1.6;
-  padding: var(--space-2) 0 var(--space-1);
-}
-.eval-detail-header {
-  margin-bottom: var(--space-6);
-}
-.eval-detail-meta {
-  gap: var(--space-4);
-  margin-top: var(--space-2);
-}
-.eval-detail-card {
-  margin-bottom: var(--space-4);
-}
-.eval-summary-card.card:hover {
-  border-color: var(--accent);
-}
-.alert-compound {
-  border-left-width: var(--space-1);
-  background: var(--bg-elevated);
-}
-.alert-related {
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-.alert-metric-link {
-  font-family: var(--font-mono);
-  padding: var(--space-px) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--accent-alpha-10);
-}
-.alert-metric-link:hover {
-  background: var(--accent-alpha-20);
-}
-.remediation-list {
-  margin-top: var(--space-2);
-  padding-left: var(--space-5);
-  color: var(--accent);
-}
-.remediation-list li {
-  margin-bottom: var(--space-1);
-}
-.threshold-bar {
-  position: relative;
-  height: var(--space-1-5);
-  background: var(--bg-card);
-  border-radius: var(--radius-bar);
-  margin-top: var(--space-2);
-  overflow: visible;
-}
-.threshold-bar-fill,
-.variance-bar-fill {
-  height: 100%;
-  transition: var(--transition-bar);
-}
-.threshold-bar-fill { border-radius: var(--radius-bar); }
-.variance-bar-fill  { border-radius: var(--radius-xs); }
-.threshold-bar-marker {
-  position: absolute;
-  top: -3px;
-  width: 2px;
-  height: 12px;
-  background: var(--text-primary);
-  border-radius: calc(var(--radius-xs) / 2);
-  transform: translateX(-1px);
-}
-.pipeline-stat {
-  gap: var(--space-1);
-}
-.pipeline-stat .stat-value {
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-  font-weight: var(--light-bold);
-}
-.metric-worst {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  margin-top: var(--space-2);
-  line-height: 1.4;
-}
-.metric-worst .worst-score {
-  color: var(--score-failing);
-  font-family: var(--font-mono);
-  font-weight: var(--light-bold);
-}
-.provenance-grid,
-.agreement-grid {
-  display: grid;
-  gap: var(--space-1) var(--space-4);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-}
-.provenance-grid { grid-template-columns: auto 1fr; }
-.provenance-grid .prov-label {
-  color: var(--text-secondary);
-  font-family: var(--font-body);
-  white-space: nowrap;
-}
-.provenance-grid .prov-value {
-  color: var(--text-primary);
-  word-break: break-all;
-}
-.provenance-actions {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-.provenance-actions button {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  color: var(--accent);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-family: var(--font-body);
-}
-.provenance-actions button:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-accent);
-}
-.confidence-header {
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-.confidence-method {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-}
-.agreement-grid { grid-template-columns: 1fr auto auto; }
-.agreement-grid .ag-header {
-  color: var(--text-muted);
-  font-size: var(--font-size-xs);
-  font-family: var(--font-body);
-  padding-bottom: var(--space-1);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.agreement-summary .summary-value {
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-}
-.variance-bar {
-  gap: var(--space-2);
-}
-.variance-bar-track {
-  flex: 1;
-  height: var(--space-1);
-  background: var(--bg-surface);
-  border-radius: var(--radius-xs);
-  overflow: hidden;
-}
-.mini-bar {
-  height: var(--bar-h, 4px);
-  background: var(--bg-surface);
-  border-radius: var(--radius-xs);
-  overflow: hidden;
-}
-.mini-bar-fill {
-  height: 100%;
-  border-radius: var(--radius-xs);
-  transition: var(--transition-bar);
-}
-.card--empty {
-  padding: var(--space-4);
-  color: var(--text-muted);
-}
-.mono      { font-family: var(--font-mono); }
-.mono-2xs  { font-family: var(--font-mono); font-size: var(--font-size-2xs); }
-.mono-xs   { font-family: var(--font-mono); font-size: var(--font-size-xs); }
-.mono-base { font-family: var(--font-mono); font-size: var(--font-size-base); }
-.mono-md   { font-family: var(--font-mono); font-size: var(--font-size-md); }
-.mono-lg   { font-family: var(--font-mono); font-size: var(--font-size-lg); }
-.mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
-.mono-2xl  { font-family: var(--font-mono); font-size: var(--font-size-2xl); }
-.text-2xs  { font-size: var(--font-size-2xs); }
-.text-xs   { font-size: var(--font-size-xs); }
-.text-base { font-size: var(--font-size-base); }
-.text-md   { font-size: var(--font-size-md); }
-.text-lg   { font-size: var(--font-size-lg); }
-.text-xl   { font-size: var(--font-size-xl); }
-.text-2xl  { font-size: var(--font-size-2xl); }
-.text-secondary    { color: var(--text-secondary); }
-.text-muted        { color: var(--text-muted); }
-.text-accent       { color: var(--accent); }
-.text-accent-hover { color: var(--accent-hover); }
-.d-flex         { display: flex; }
-.d-grid         { display: grid; }
-.d-inline-block { display: inline-block; }
-.flex-center    { display: flex; align-items: center; }
-.align-start    { align-items: flex-start; }
-.uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
-.font-semibold { font-weight: var(--bold); }
-.chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
-.gap-half { gap: var(--space-px); }
-.gap-1    { gap: var(--space-1); }
-.gap-1-5  { gap: var(--space-1-5); }
-.gap-2    { gap: var(--space-2); }
-.gap-2-5  { gap: var(--space-2-5); }
-.gap-3    { gap: var(--space-3); }
-.gap-4    { gap: var(--space-4); }
-.gap-5    { gap: var(--space-5); }
-.gap-6    { gap: var(--space-6); }
-.gap-8    { gap: var(--space-8); }
-.gap-16   { gap: var(--space-16); }
-.w-full   { width: 100%; }
-.min-w-120 { min-width: 120px; }
-.m-0    { margin: 0; }
-.ml-auto { margin-left: auto; }
-.mb-0   { margin-bottom: 0; }
-.mb-1   { margin-bottom: var(--space-1); }
-.mb-1-5 { margin-bottom: var(--space-1-5); }
-.mb-2   { margin-bottom: var(--space-2); }
-.mb-2-5 { margin-bottom: var(--space-2-5); }
-.mb-3   { margin-bottom: var(--space-3); }
-.mb-4   { margin-bottom: var(--space-4); }
-.mb-5   { margin-bottom: var(--space-5); }
-.mb-6   { margin-bottom: var(--space-6); }
-.mt-1   { margin-top: var(--space-1); }
-.mt-2   { margin-top: var(--space-2); }
-.mt-3   { margin-top: var(--space-3); }
-.mt-4   { margin-top: var(--space-4); }
-.p-4    { padding: var(--space-4); }
-.p-6    { padding: var(--space-6); }
-.text-center { text-align: center; }
-.text-right  { text-align: right; }
-.text-left   { text-align: left; }
-.flex-wrap          { display: flex; flex-wrap: wrap; }
-.flex-col           { display: flex; flex-direction: column; }
-.inline-flex-center { display: inline-flex; align-items: center; }
-.shrink-0           { flex-shrink: 0; }
-.flex-1             { flex: 1; }
-.justify-between    { justify-content: space-between; }
-.justify-center     { justify-content: center; }
-.contents { display: contents; }
-.opacity-50 { opacity: 0.5; }
-.list-none { list-style: none; }
-.valign-middle { vertical-align: middle; }
-.table-collapse { border-collapse: collapse; }
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-}
-.font-medium { font-weight: var(--light-bold); }
-.font-bold   { font-weight: 700; }
-.italic      { font-style: italic; }
-.nowrap      { white-space: nowrap; }
-.truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.break-all { word-break: break-all; }
-.leading-relaxed { line-height: 1.6; }
-.btn-reset { background: none; border: none; padding: 0; }
-.expand-chevron {
-  display: inline-block;
-  transition: transform var(--transition-fast);
-  line-height: 1;
-}
-.text-healthy  { color: var(--status-healthy); }
-.text-warning  { color: var(--status-warning); }
-.text-critical { color: var(--status-critical); }
-.text-primary  { color: var(--text-primary); }
-.surface-elevated { background: var(--bg-elevated); border: 1px solid var(--border); }
-.link-accent { color: var(--accent); text-decoration: none; }
-.cell-pad      { padding: var(--space-1) var(--space-2-5); }
-.cell-pad-wide { padding: var(--space-1) var(--space-3); }
-.border-b        { border-bottom: 1px solid var(--border); }
-.border-b-subtle { border-bottom: 1px solid var(--border-subtle); }
-.border-t        { border-top: 1px solid var(--border); }
-.chip-badge {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-}
-.chip-accent {
-  background: var(--accent-alpha-10);
-  color: var(--accent);
-}
-.dot-sm {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  flex-shrink: 0;
-}
-.dot-xs {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: inline-block;
-  flex-shrink: 0;
-}
-.badge-warning {
-  color: var(--status-warning);
-  background: var(--bg-status-warning);
-  padding: var(--space-px) var(--space-1-5);
-  border-radius: var(--radius-pill);
-}
-.section-rail {
-  background: var(--bg-card);
-  border-left: 3px solid var(--section-rail-color, var(--border-accent));
-}
-.workflow-node {
-  width: 220px;
-  height: 120px;
-  border: 2px solid var(--workflow-node-border, #d1d5db);
-  border-radius: 8px;
-  background: var(--workflow-node-bg, #f9fafb);
-  padding: 12px;
-  font-size: 13px;
-}
-.workflow-node__label {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-.workflow-node__score {
-  font-size: 12px;
-  color: var(--workflow-node-score-color, inherit);
-}
-.workflow-node__meta {
-  font-size: 11px;
-  color: #6b7280;
-  margin-top: 4px;
-}
-.workflow-node__duration {
-  font-size: 11px;
-  color: #6b7280;
-}
-.workflow-node__error {
-  color: #dc2626;
-  font-size: 11px;
-  font-weight: 600;
-}
-.workflow-fallback {
-  padding: 24px;
-  text-align: center;
-}
-.workflow-fallback__title {
-  font-size: 18px;
-  font-weight: 600;
-}
-.workflow-fallback__subtitle {
-  font-size: 13px;
-  color: #6b7280;
-  margin-top: 8px;
-}
-.workflow-fallback__empty {
-  color: #9ca3af;
-}
-.workflow-oversize {
-  padding: 24px;
-}
-.workflow-oversize__heading {
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-.workflow-oversize__note {
-  margin-bottom: 12px;
-}
-.workflow-oversize__list {
-  list-style: disc;
-  padding-left: 20px;
-}
-.workflow-tabs {
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: var(--space-3);
-}
-.workflow-tab {
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  color: var(--text-muted);
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-.workflow-tab[aria-selected='true'] {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
 }
 
 ================
@@ -14928,6 +13267,192 @@ describe('GET /api/calibration', () => {
 });
 
 ================
+File: src/api/data-loader.ts
+================
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const DEFAULT_LOOKBACK_7D = 7 * MS_PER_DAY;
+const DEFAULT_LOOKBACK_30D = 30 * MS_PER_DAY;
+const DEFAULT_LOOKBACK_90D = 90 * MS_PER_DAY;
+const LIMIT_EVALS_BULK = 100_000;
+const LIMIT_EVALS_METRIC = 10_000;
+const LIMIT_EVALS_PER_TRACE = 1_000;
+const LIMIT_EVALS_SESSION = 10_000;
+const LIMIT_TRACES = 500;
+const LIMIT_LOGS = 1_000;
+const LIMIT_HEALTH_PROBE = 1;
+let backend: MultiDirectoryBackend | undefined;
+function getBackend(): MultiDirectoryBackend {
+  if (!backend) {
+    backend = new MultiDirectoryBackend(undefined, true);
+  }
+  return backend;
+}
+function toDateOnly(d: string): string {
+  return d.split('T')[0];
+}
+function defaultRange(lookbackMs: number): { start: string; end: string } {
+  const now = new Date();
+  return {
+    start: new Date(now.getTime() - lookbackMs).toISOString(),
+    end: now.toISOString(),
+  };
+}
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>> {
+  const be = getBackend();
+  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
+  const grouped = new Map<string, EvaluationResult[]>();
+  for (const ev of evals) {
+    const name = ev.evaluationName;
+    if (!grouped.has(name)) grouped.set(name, []);
+    grouped.get(name)!.push(ev);
+  }
+  return grouped;
+}
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  return be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    evaluationName: metricName,
+    limit: LIMIT_EVALS_METRIC,
+  });
+}
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return be.queryEvaluations({
+    traceId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_PER_TRACE,
+  });
+}
+const TRACE_QUERY_CONCURRENCY = 10;
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]> {
+  const uniqueIds = [...new Set(traceIds)];
+  if (uniqueIds.length === 0) return [];
+  const be = getBackend();
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
+  const start = startDate ?? defStart;
+  const end = endDate ?? defEnd;
+  const all: EvaluationResult[] = [];
+  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
+    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
+    );
+    for (const result of settled) {
+      if (result.status === 'fulfilled') all.push(...result.value);
+    }
+  }
+  return all;
+}
+function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
+}
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const start = toDateOnly(startDate ?? defStart);
+  const end = toDateOnly(endDate ?? defEnd);
+  const result = await queryLogs({
+    traceId,
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_LOGS,
+  });
+  return result.logs;
+}
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]> {
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return queryVerificationsLib({
+    startDate: opts.startDate ?? start,
+    endDate: opts.endDate ?? end,
+    sessionId: opts.sessionId,
+    limit: opts.limit ?? LIMIT_LOGS,
+  });
+}
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  const { queryLogs } = await import('../../../dist/tools/query-logs.js');
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const start = toDateOnly(startDate ?? defStart);
+  const end = toDateOnly(endDate ?? defEnd);
+  const result = await queryLogs({
+    sessionId,
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_LOGS,
+  });
+  return result.logs;
+}
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return be.queryEvaluations({
+    sessionId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_SESSION,
+  });
+}
+export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
+  const be = getBackend();
+  const health = await be.healthCheck();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
+  const evals = await be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_HEALTH_PROBE,
+  });
+  return { status: health.status, hasData: evals.length > 0 };
+}
+
+================
 File: src/components/RequireAuth.tsx
 ================
 import { type ReactNode } from 'react';
@@ -14945,6 +13470,62 @@ export function RequireAuth({ children }: RequireAuthProps) {
     return <Redirect to={`/login${redirect}`} />;
   }
   return <>{children}</>;
+}
+
+================
+File: src/contexts/RoleContext.tsx
+================
+import { createContext, useContext, useEffect, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { useRoute } from 'wouter';
+import {
+  ROLE_FEATURE_CONFIG,
+  type FeatureRoleType,
+  type RoleFeatureConfig,
+} from '../lib/quality-utils.js';
+import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
+const VALID_ROLES = new Set<FeatureRoleType>(ROLES);
+interface RoleContextValue {
+  role: FeatureRoleType;
+  config: RoleFeatureConfig;
+  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
+}
+const RoleContext = createContext<RoleContextValue | null>(null);
+export function RoleProvider({ children }: { children: ReactNode }) {
+  const [, params] = useRoute('/role/:roleName');
+  const roleName = params?.roleName;
+  const role: FeatureRoleType =
+    roleName && VALID_ROLES.has(roleName as FeatureRoleType)
+      ? (roleName as FeatureRoleType)
+      : DEFAULT_ROLE;
+  useEffect(() => {
+    if (roleName && !VALID_ROLES.has(roleName as FeatureRoleType)) {
+      console.warn(`[RoleProvider] Unknown role "${roleName}", falling back to "executive". Valid roles: ${[...VALID_ROLES].join(', ')}`);
+    }
+  }, [roleName]);
+  const value = useMemo<RoleContextValue>(() => {
+    const config = ROLE_FEATURE_CONFIG[role];
+    return {
+      role,
+      config,
+      hasFeature: (feature: keyof RoleFeatureConfig) => {
+        const v = config[feature];
+        return typeof v === 'boolean' ? v : v != null;
+      },
+    };
+  }, [role]);
+  return (
+    <RoleContext.Provider value={value}>
+      {children}
+    </RoleContext.Provider>
+  );
+}
+export function useRole(): RoleContextValue {
+  const ctx = useContext(RoleContext);
+  if (!ctx) {
+    throw new Error('useRole must be used within a RoleProvider');
+  }
+  return ctx;
 }
 
 ================
@@ -15026,6 +13607,411 @@ export function useTrace(traceId: string | undefined) {
     staleTime: STALE_TIME.DETAIL,
     retry: 2,
   });
+}
+
+================
+File: src/lib/constants.ts
+================
+import { z } from 'zod';
+export const enum ErrorName {
+  SessionNotFound = 'SessionNotFoundError',
+}
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+}
+export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+export type InputKey = z.infer<typeof InputKeySchema>;
+export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
+export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
+export type SortBy = z.infer<typeof SortBySchema>;
+export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
+export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
+export type Role = z.infer<typeof RoleSchema>;
+export const ROLES = RoleSchema.options;
+export const DEFAULT_ROLE: Role = 'executive';
+export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
+const TIME_MS = {
+  DAY: 24 * 60 * 60 * 1000,
+} as const;
+export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
+export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
+export const PeriodEnum = z.enum(PERIOD_KEYS);
+export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
+export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
+export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
+export const PERIOD_MS: Record<string, number> = Object.fromEntries(
+  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
+);
+export function computePeriodDates(period: string): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
+export const LLM_SAMPLE_RATE = 10;
+export const SCORE_THRESHOLD_GREEN = 0.8;
+export const SCORE_THRESHOLD_YELLOW = 0.5;
+export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
+export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+export const MAX_ERROR_ROWS = 10;
+export const MAX_HALLUCINATION_ROWS = 8;
+export const MAX_FAILED_EVAL_ROWS = 6;
+export const LIVE_WINDOW_MS = TIME_MS.DAY;
+export const QUERY_RETRY_COUNT = 2;
+export const POLL_INTERVAL_MS = 30_000;
+export const RETRY_DELAY_BASE = 1_000;
+export const RETRY_DELAY_CAP = 30_000;
+export const MAX_IDS = 50;
+export const EVAL_LIMIT = 100;
+export const SCORE_DISPLAY_PRECISION = 3;
+export const STALE_TIME = {
+  DEFAULT: 25_000,
+  DETAIL: 30_000,
+  AGGREGATE: 60_000,
+} as const;
+export const DEFAULT_TOP_N = 5;
+export const DEFAULT_BUCKET_COUNT = 10;
+export const SKELETON_HEIGHT_SM = 200;
+export const SKELETON_HEIGHT_MD = 300;
+export const SKELETON_HEIGHT_LG = 400;
+export const ICON_BADGE_SIZE = 24;
+export const CALLOUT_MAX_WIDTH = 480;
+export const PAGE_CONTENT_MAX_WIDTH = 1100;
+export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
+export const AGENT_CARD_MIN_WIDTH = '220px';
+export const FILE_ACCESS_COL_MIN = '320px';
+export const DEFAULT_PAGE_LIMIT = 50;
+export const HEATMAP_ROW_HEADER_WIDTH = 80;
+export const HEATMAP_COL_HEADER_HEIGHT = 32;
+export const HEATMAP_CELL_MIN_HEIGHT = 36;
+export const COVERAGE_GRID_HEADER_WIDTH = 120;
+export const COVERAGE_GRID_CELL_SIZE = 28;
+export const COVERAGE_GRID_LEGEND_SIZE = 12;
+export const COVERAGE_GRID_MAX_INPUTS = 30;
+export const COVERAGE_GRID_HEADER_MAX_HEIGHT = 60;
+export const FUNNEL_BAR_HEIGHT = 32;
+export const FUNNEL_BAR_MIN_WIDTH = 40;
+export const FUNNEL_DROPOFF_WARN_PCT = 20;
+export const SPAN_TREE_INDENT = 20;
+export const SPAN_TREE_BASE_PADDING = 8;
+export const SPLIT_PANE_DIVIDER_WIDTH = 6;
+export const SPLIT_PANE_MIN_HEIGHT = 300;
+export const TURN_CARD_MIN_WIDTH = 120;
+export const AGENT_TABLE_MIN_WIDTH = 640;
+export const AGENT_BAR_MIN_WIDTH = 48;
+export const AGENT_EVAL_CARD_MIN_WIDTH = 140;
+export const SPARKLINE_WIDTH = 160;
+export const SPARKLINE_HEIGHT = 28;
+export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
+export const VARIANCE_LOW_PCT = 20;
+export const VARIANCE_MEDIUM_PCT = 50;
+export const VARIANCE_DISPLAY_MIN_WIDTH = 36;
+export const CHART_HEIGHT = 200;
+export const CHART_STROKE_WIDTH = 2;
+export const CHART_DOT_RADIUS = 4;
+export const CHART_DOT_RADIUS_ACTIVE = 6;
+export const CHART_DOT_RADIUS_PROJECTED = 3;
+export const CHART_DASH_THRESHOLD = '6 3';
+export const CHART_DASH_PROJECTED = '6 4';
+export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
+export const EVAL_FILTER_INACTIVE_OPACITY = 0.6;
+export const SCORE_BADGE_ALPHA_HEX = '1a';
+export const CHART_COLORS = {
+  line: '#58a6ff',
+  grid: '#30363d',
+  text: '#8b949e',
+  surface: '#1f2937',
+  tooltip: '#161b22',
+  warning: '#d29922',
+  critical: '#f85149',
+} as const;
+export const AGENT_PALETTE = [
+  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
+  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
+] as const;
+export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
+export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
+export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
+export const CHART_TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: CHART_COLORS.tooltip,
+  border: `1px solid ${CHART_COLORS.grid}`,
+  borderRadius: 'var(--radius)',
+  color: CHART_COLORS.text,
+  fontSize: 12,
+};
+export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
+export const CHART_YAXIS_WIDTH = 48;
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
+
+================
+File: src/lib/quality-utils.ts
+================
+export type ScoreDirection = 'maximize' | 'minimize';
+export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
+export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
+export interface LabelOrdinal {
+  ordinal: number;
+  category: LabelFilterCategory;
+  mapped: boolean;
+}
+import type { Role } from './constants.js';
+export type FeatureRoleType = Role;
+export interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;
+  maxWorstEvaluations: number;
+}
+export function truncateText(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+export function truncateId(id: string, max = 10): string {
+  if (id.length <= max) return id;
+  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+}
+export function formatScore(val: number | null | undefined): string {
+  if (val === null || val === undefined) return 'N/A';
+  return val.toFixed(4);
+}
+export function formatPercent(value: number, decimals = 1): string {
+  if (!Number.isFinite(value)) return '\u2014';
+  return `${value.toFixed(decimals)}%`;
+}
+export function plural(count: number, singular: string, suffix = 's'): string {
+  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
+}
+export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
+  excellent: '#26d97f',
+  good: '#34d399',
+  adequate: '#e5a00d',
+  poor: '#f97316',
+  failing: '#f04438',
+  no_data: '#6b7280',
+};
+export function scoreColor(value: number, direction?: ScoreDirection): string {
+  return SCORE_COLORS[scoreColorBand(value, direction)];
+}
+export function scoreColorBand(
+  value: number,
+  direction: ScoreDirection = 'maximize',
+): ScoreColorBand {
+  const v = direction === 'minimize' ? 1 - value : value;
+  if (v >= 0.9) return 'excellent';
+  if (v >= 0.8) return 'good';
+  if (v >= 0.6) return 'adequate';
+  if (v >= 0.4) return 'poor';
+  return 'failing';
+}
+type ThresholdDirection = 'above' | 'below';
+export function inferScoreDirection(
+  alertDirection: ThresholdDirection | undefined,
+): ScoreDirection {
+  return alertDirection === 'above' ? 'minimize' : 'maximize';
+}
+const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
+  excellent: { ordinal: 4, category: 'Pass' },
+  highly_relevant: { ordinal: 4, category: 'Pass' },
+  fully_faithful: { ordinal: 4, category: 'Pass' },
+  perfect: { ordinal: 4, category: 'Pass' },
+  relevant: { ordinal: 3, category: 'Pass' },
+  good: { ordinal: 3, category: 'Pass' },
+  faithful: { ordinal: 3, category: 'Pass' },
+  pass: { ordinal: 3, category: 'Pass' },
+  correct: { ordinal: 3, category: 'Pass' },
+  coherent: { ordinal: 3, category: 'Pass' },
+  partial: { ordinal: 2, category: 'Review' },
+  borderline: { ordinal: 2, category: 'Review' },
+  adequate: { ordinal: 2, category: 'Review' },
+  mixed: { ordinal: 2, category: 'Review' },
+  off_topic: { ordinal: 1, category: 'Fail' },
+  irrelevant: { ordinal: 1, category: 'Fail' },
+  unfaithful: { ordinal: 1, category: 'Fail' },
+  fail: { ordinal: 1, category: 'Fail' },
+  incorrect: { ordinal: 1, category: 'Fail' },
+  incoherent: { ordinal: 1, category: 'Fail' },
+  hallucinated: { ordinal: 0, category: 'Fail' },
+  fabricated: { ordinal: 0, category: 'Fail' },
+  toxic: { ordinal: 0, category: 'Fail' },
+  dangerous: { ordinal: 0, category: 'Fail' },
+};
+function normalizeLabel(label: string): string {
+  return label.toLowerCase().replace(/-/g, '_').trim();
+}
+export function labelToOrdinal(label: string): LabelOrdinal {
+  const normalized = normalizeLabel(label);
+  const entry = LABEL_ORDINAL_MAP[normalized];
+  if (entry) {
+    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
+  }
+  return { ordinal: 2, category: 'Review', mapped: false };
+}
+export function ordinalToCategory(ordinal: number): LabelFilterCategory {
+  if (ordinal >= 3) return 'Pass';
+  if (ordinal === 2) return 'Review';
+  return 'Fail';
+}
+export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
+  executive: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: false,
+    showAcceleration: false,
+    showProjectedBreach: true,
+    showCorrelationRemediation: false,
+    showCoverageHeatmap: false,
+    showPipelineFunnel: false,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: 80,
+    maxWorstEvaluations: 1,
+  },
+  operator: {
+    showCQI: false,
+    showCQIBreakdown: false,
+    showVariance: true,
+    showAcceleration: true,
+    showProjectedBreach: true,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: 500,
+    maxWorstEvaluations: 5,
+  },
+  auditor: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: true,
+    showAcceleration: false,
+    showProjectedBreach: false,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: true,
+    showRawExport: true,
+    explanationTruncation: 2000,
+    maxWorstEvaluations: 10,
+  },
+};
+export function shortPath(fullPath: string): string {
+  const parts = fullPath.replace(/\\/g, '/').split('/');
+  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
+}
+export function fmtBytes(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+export interface PercentileDistribution {
+  p10: number; p25: number; p50: number; p75: number; p90: number;
+}
+export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
+export const MIN_QUANTILE_SAMPLE_SIZE = 100;
+const NUMERICAL_MIN_DENOMINATOR = 0.001;
+const LOG_SCALE_DIVISOR = 3;
+const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
+const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
+const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
+const QUANTILE_P10 = 0.1;
+const QUANTILE_P25 = 0.25;
+const QUANTILE_P50 = 0.5;
+const QUANTILE_P75 = 0.75;
+const QUANTILE_P90 = 0.9;
+export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
+  relevance: 'quantile',
+  faithfulness: 'binary',
+  coherence: 'uniform',
+  hallucination: 'log',
+  task_completion: 'step',
+  tool_correctness: 'categorical',
+  evaluation_latency: 'percentile_rank',
+};
+export function empiricalCDF(value: number, dist: PercentileDistribution): number {
+  if (!Number.isFinite(value)) return QUANTILE_P50;
+  const points: [number, number][] = [
+    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
+    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
+  ];
+  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
+  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
+  for (let i = 0; i < points.length - 1; i++) {
+    const [v0, p0] = points[i];
+    const [v1, p1] = points[i + 1];
+    if (value >= v0 && value <= v1) {
+      const range = v1 - v0;
+      if (range === 0) return p0;
+      return p0 + (p1 - p0) * ((value - v0) / range);
+    }
+  }
+  return QUANTILE_P50;
+}
+export function adaptiveScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection = 'maximize',
+  distribution?: PercentileDistribution,
+  sampleSize?: number,
+): ScoreColorBand {
+  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
+  switch (strategy) {
+    case 'quantile': {
+      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
+        return scoreColorBand(value, direction);
+      }
+      const rank = empiricalCDF(value, distribution);
+      if (rank >= QUANTILE_P90) return 'excellent';
+      if (rank >= QUANTILE_P75) return 'good';
+      if (rank >= QUANTILE_P50) return 'adequate';
+      if (rank >= QUANTILE_P25) return 'poor';
+      return 'failing';
+    }
+    case 'log': {
+      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
+      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
+      return scoreColorBand(logNorm, 'maximize');
+    }
+    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
+    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
+    case 'categorical': return scoreColorBand(value, direction);
+    case 'percentile_rank': {
+      if (!distribution) return scoreColorBand(value, direction);
+      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
+    }
+    case 'uniform':
+    default: return scoreColorBand(value, direction);
+  }
+}
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+export function formatTimestamp(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts || '-';
+  const now = new Date();
+  const diffMin = differenceInMinutes(now, d);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = differenceInHours(now, d);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = differenceInDays(now, d);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return format(d, 'PP');
 }
 
 ================
@@ -15206,6 +14192,968 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
       ) : null}
     </PageShell>
   );
+}
+
+================
+File: src/theme.css
+================
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/IBMPlexSans-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/IBMPlexSans-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
+}
+:root {
+  --bg-primary: #0a0e14;
+  --bg-card: #131920;
+  --bg-elevated: #1a2230;
+  --bg-surface: #1f2937;
+  --bg-hover: #243044;
+  --border: #2a3a4e;
+  --border-subtle: #1e2a3a;
+  --border-accent: #3b5278;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+  --text-on-accent: #ffffff;
+  --status-healthy: #26d97f;
+  --status-warning: #e5a00d;
+  --status-critical: #f04438;
+  --status-no-data: #6b7280;
+  --status-good: #34d399;
+  --status-poor: #f97316;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-muted: #1e3a5f;
+  --score-excellent: var(--status-healthy);
+  --score-good: var(--status-good);
+  --score-adequate: var(--status-warning);
+  --score-poor: var(--status-poor);
+  --score-failing: var(--status-critical);
+  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --space-px: 1px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-16: 64px;
+  --layout-max-width: 1280px;
+  --bg-status-healthy: #0d1f12;
+  --bg-status-warning: #1f1a0d;
+  --bg-status-critical: #1f0d0d;
+  --border-status-healthy: #1a3a1f;
+  --border-status-warning: #3a2f1a;
+  --border-status-critical: #3a1a1a;
+  --accent-alpha-10: rgba(59, 130, 246, 0.1);
+  --accent-alpha-20: rgba(59, 130, 246, 0.2);
+  --healthy-alpha-15: rgba(38, 217, 127, 0.15);
+  --warning-alpha-15: rgba(229, 160, 13, 0.15);
+  --critical-alpha-20: rgba(240, 68, 56, 0.2);
+  --critical-alpha-40: rgba(240, 68, 56, 0.4);
+  --critical-alpha-60: rgba(240, 68, 56, 0.6);
+  --radius-xs: 2px;
+  --radius-bar: 3px;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 12px;
+  --radius-full: 50%;
+  --border-width-thick: 2px;
+  --border-width-rail: 3px;
+  --font-size-2xs: 9px;
+  --font-size-xs: 12px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-stat: 22px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 36px;
+  --bold: 600;
+  --light-bold: 500;
+  --label-letter-spacing: 0.5px;
+  --stat-label-letter-spacing: 0.1em;
+  --letter-spacing-id: 0.02em;
+  --label-letter-spacing-wide: 0.12em;
+  --transition-fast: 0.15s ease;
+  --transition-medium: 0.2s ease;
+  --transition-bar: width 0.3s ease;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-glow-healthy: 0 0 12px var(--healthy-alpha-15);
+  --shadow-glow-warning: 0 0 12px var(--warning-alpha-15);
+  --shadow-glow-critical: 0 0 12px var(--critical-alpha-20);
+}
+.overflow-x-auto { overflow-x: auto; }
+.select-none { user-select: none; }
+.cursor-pointer { cursor: pointer; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+.summary-count .label,
+.sla-table th,
+.cot-summary,
+.agreement-grid .ag-header,
+.stat-label,
+.field-label {
+  text-transform: uppercase;
+  letter-spacing: var(--label-letter-spacing);
+}
+.back-link,
+.tooltip-link,
+.alert-metric-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.back-link:hover,
+.tooltip-link:hover,
+.alert-metric-link:hover {
+  text-decoration: underline;
+}
+.summary-count { text-align: center; }
+.card:hover { border-color: var(--border); }
+.trend.stable { color: var(--text-secondary); }
+.card.glow-critical { box-shadow: var(--shadow-glow-critical); }
+.card.glow-warning { box-shadow: var(--shadow-glow-warning); }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-size: var(--font-size-base);
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+.dashboard-container {
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+.card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+[data-status="healthy"]  { --s-bg: var(--bg-status-healthy);  --s-border: var(--border-status-healthy);  --s-fg: var(--status-healthy); }
+[data-status="warning"]  { --s-bg: var(--bg-status-warning);  --s-border: var(--border-status-warning);  --s-fg: var(--status-warning); }
+[data-status="critical"] { --s-bg: var(--bg-status-critical); --s-border: var(--border-status-critical); --s-fg: var(--status-critical); }
+[data-status="no_data"]  { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--status-no-data); }
+[data-status="info"]     { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--text-secondary); }
+.health-banner {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-6);
+  justify-content: space-between;
+}
+.health-banner[data-status] { background: var(--s-bg); border: 1px solid var(--s-border); }
+.summary-count .value {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--bold);
+  font-family: var(--font-mono);
+}
+.status-badge {
+  gap: var(--space-1-5);
+  font-weight: var(--light-bold);
+  padding: var(--space-px) var(--space-2);
+  border-radius: var(--radius-pill);
+}
+.status-badge[data-status] { color: var(--s-fg); background: var(--s-bg); }
+.trend {
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+}
+.trend.improving { color: var(--status-healthy); }
+.trend.degrading { color: var(--status-critical); }
+.metric-card-header {
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.metric-card-header h3 {
+  font-size: var(--font-size-base);
+  font-weight: var(--light-bold);
+}
+.metric-values {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+.metric-values .primary {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--bold);
+  line-height: 1.2;
+}
+.metric-values .secondary {
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+}
+.metric-footer,
+.pipeline-stats,
+.agreement-summary {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+.metric-footer {
+  justify-content: space-between;
+  border-top-color: var(--border);
+}
+.alert-list {
+  list-style: none;
+}
+.alert-item {
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid;
+  background: var(--bg-card);
+  margin-bottom: var(--space-2);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.alert-item[data-status] { border-left-color: var(--s-fg); }
+.alert-item .alert-meta,
+.alert-item .remediation {
+  margin-top: var(--space-1);
+}
+.alert-item .remediation { color: var(--accent); }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th,
+.data-table td { border-bottom: 1px solid var(--border); }
+.data-table th {
+  font-size: var(--font-size-xs);
+  text-align: left;
+  color: var(--text-secondary);
+  font-weight: var(--light-bold);
+}
+.sla-table { font-size: var(--font-size-base); }
+.sla-table th,
+.sla-table td { padding: var(--space-2) var(--space-3); }
+.histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-px);
+  height: 120px;
+  padding: var(--space-2) 0;
+}
+.histogram-bar {
+  flex: 1;
+  background: var(--accent);
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  min-height: var(--space-px);
+  position: relative;
+}
+.histogram-bar:hover {
+  opacity: 0.8;
+}
+.histogram-bar .tooltip,
+.score-badge-tooltip {
+  display: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: var(--font-size-xs);
+}
+.histogram-bar .tooltip {
+  bottom: 100%;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  z-index: 10;
+}
+.histogram-bar:hover .tooltip {
+  display: block;
+}
+.histogram-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.eval-table {
+  font-size: var(--font-size-xs);
+}
+.eval-table th,
+.eval-table td {
+  padding: var(--space-1-5) var(--space-2-5);
+}
+.eval-table td {
+  font-family: var(--font-mono);
+}
+.eval-table .explanation {
+  font-family: inherit;
+  color: var(--text-secondary);
+  max-width: 300px;
+}
+.eval-table tbody tr:hover,
+.eval-table .eval-row-expanded {
+  background: var(--bg-elevated);
+}
+.eval-table .eval-expanded-panel td {
+  padding: 0 var(--space-2-5) var(--space-2-5);
+}
+.eval-expanded-content {
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  animation: fade-in var(--transition-fast);
+}
+.pad-panel-section { padding: var(--space-2-5) 0 var(--space-2); }
+.pad-panel-sparse  { padding: var(--space-2-5) 0 var(--space-1); }
+.tab-btn,
+.period-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.tab-nav {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-base);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+.tab-btn[aria-selected="true"] {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+.period-selector {
+  display: inline-flex;
+  gap: var(--space-1);
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: var(--space-px);
+}
+.period-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-body);
+}
+.period-btn.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.header {
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+.header h1 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--bold);
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-elevated) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+@keyframes skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.empty-state {
+  text-align: center;
+  padding: var(--space-16) var(--space-6);
+  color: var(--text-secondary);
+}
+.empty-state h2 {
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+.empty-state code {
+  background: var(--bg-elevated);
+  padding: var(--space-px) var(--space-1-5);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+.back-link {
+  font-size: var(--font-size-xs);
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+.error-state {
+  background: var(--bg-status-critical);
+  border: 1px solid var(--border-status-critical);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+  text-align: center;
+}
+.error-state h2 {
+  color: var(--status-critical);
+  margin-bottom: var(--space-2);
+}
+.error-state .error-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  justify-content: center;
+}
+.error-state .error-actions button,
+.error-state .error-actions a {
+  padding: var(--space-1-5) var(--space-4);
+  cursor: pointer;
+}
+.section-heading {
+  font-size: var(--font-size-md);
+  font-weight: var(--bold);
+  margin-bottom: var(--space-4);
+  margin-top: var(--space-8);
+}
+.stat-item {
+  flex: 1 1 100px;
+  min-width: 80px;
+  text-align: center;
+}
+.stat-value {
+  font-size: var(--font-size-stat);
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: var(--stat-label-letter-spacing);
+  margin-top: var(--space-px);
+}
+.freq-bar-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 36px;
+  align-items: center;
+  gap: var(--space-2-5);
+  margin-bottom: var(--space-1-5);
+}
+.vitals-divider {
+  width: 1px;
+  background: var(--border-subtle);
+  margin: 0 var(--space-2);
+  align-self: stretch;
+}
+.freq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 0 var(--space-8);
+}
+.view-section {
+  margin-bottom: var(--space-8);
+}
+.refetch-indicator {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  z-index: 1000;
+  animation: fade-in var(--transition-fast);
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toxicPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--critical-alpha-40); }
+  50% { box-shadow: 0 0 6px 2px var(--critical-alpha-60); }
+}
+.score-badge-wrapper {
+  position: relative;
+  cursor: default;
+}
+.score-badge-tooltip {
+  bottom: calc(100% + var(--space-2));
+  border-radius: var(--radius);
+  padding: var(--space-2-5) var(--space-3);
+  min-width: 200px;
+  max-width: 300px;
+  z-index: 20;
+  white-space: normal;
+  animation: fade-in var(--transition-fast);
+}
+.score-badge-wrapper:hover .score-badge-tooltip,
+.score-badge-wrapper:focus-within .score-badge-tooltip {
+  display: block;
+}
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-px) 0;
+  color: var(--text-primary);
+}
+.tooltip-link {
+  display: block;
+  margin-top: var(--space-2);
+  padding-top: var(--space-1-5);
+  border-top: 1px solid var(--border);
+}
+.cot-panel {
+  margin-top: var(--space-1);
+}
+.cot-summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  list-style: none;
+}
+.cot-summary::-webkit-details-marker {
+  display: none;
+}
+.cot-summary::before {
+  content: '\25B6';
+  display: inline-block;
+  margin-right: var(--space-1-5);
+  font-size: var(--font-size-2xs);
+  transition: transform var(--transition-fast);
+}
+details[open] > .cot-summary::before {
+  transform: rotate(90deg);
+}
+.cot-content {
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  line-height: 1.6;
+  padding: var(--space-2) 0 var(--space-1);
+}
+.eval-detail-header {
+  margin-bottom: var(--space-6);
+}
+.eval-detail-meta {
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+.eval-detail-card {
+  margin-bottom: var(--space-4);
+}
+.eval-summary-card.card:hover {
+  border-color: var(--accent);
+}
+.alert-compound {
+  border-left-width: var(--space-1);
+  background: var(--bg-elevated);
+}
+.alert-related {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.alert-metric-link {
+  font-family: var(--font-mono);
+  padding: var(--space-px) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-alpha-10);
+}
+.alert-metric-link:hover {
+  background: var(--accent-alpha-20);
+}
+.remediation-list {
+  margin-top: var(--space-2);
+  padding-left: var(--space-5);
+  color: var(--accent);
+}
+.remediation-list li {
+  margin-bottom: var(--space-1);
+}
+.threshold-bar {
+  position: relative;
+  height: var(--space-1-5);
+  background: var(--bg-card);
+  border-radius: var(--radius-bar);
+  margin-top: var(--space-2);
+  overflow: visible;
+}
+.threshold-bar-fill,
+.variance-bar-fill {
+  height: 100%;
+  transition: var(--transition-bar);
+}
+.threshold-bar-fill { border-radius: var(--radius-bar); }
+.variance-bar-fill  { border-radius: var(--radius-xs); }
+.threshold-bar-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--text-primary);
+  border-radius: calc(var(--radius-xs) / 2);
+  transform: translateX(-1px);
+}
+.pipeline-stat {
+  gap: var(--space-1);
+}
+.pipeline-stat .stat-value {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: var(--light-bold);
+}
+.metric-worst {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+  line-height: 1.4;
+}
+.metric-worst .worst-score {
+  color: var(--score-failing);
+  font-family: var(--font-mono);
+  font-weight: var(--light-bold);
+}
+.provenance-grid,
+.agreement-grid {
+  display: grid;
+  gap: var(--space-1) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+.provenance-grid { grid-template-columns: auto 1fr; }
+.provenance-grid .prov-label {
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  white-space: nowrap;
+}
+.provenance-grid .prov-value {
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.provenance-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.provenance-actions button {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+.provenance-actions button:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-accent);
+}
+.confidence-header {
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.confidence-method {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+.agreement-grid { grid-template-columns: 1fr auto auto; }
+.agreement-grid .ag-header {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-body);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.agreement-summary .summary-value {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+.variance-bar {
+  gap: var(--space-2);
+}
+.variance-bar-track {
+  flex: 1;
+  height: var(--space-1);
+  background: var(--bg-surface);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+.mini-bar {
+  height: var(--bar-h, 4px);
+  background: var(--bg-surface);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+.mini-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-xs);
+  transition: var(--transition-bar);
+}
+.card--empty {
+  padding: var(--space-4);
+  color: var(--text-muted);
+}
+.mono      { font-family: var(--font-mono); }
+.mono-2xs  { font-family: var(--font-mono); font-size: var(--font-size-2xs); }
+.mono-xs   { font-family: var(--font-mono); font-size: var(--font-size-xs); }
+.mono-base { font-family: var(--font-mono); font-size: var(--font-size-base); }
+.mono-md   { font-family: var(--font-mono); font-size: var(--font-size-md); }
+.mono-lg   { font-family: var(--font-mono); font-size: var(--font-size-lg); }
+.mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
+.mono-2xl  { font-family: var(--font-mono); font-size: var(--font-size-2xl); }
+.text-2xs  { font-size: var(--font-size-2xs); }
+.text-xs   { font-size: var(--font-size-xs); }
+.text-base { font-size: var(--font-size-base); }
+.text-md   { font-size: var(--font-size-md); }
+.text-lg   { font-size: var(--font-size-lg); }
+.text-xl   { font-size: var(--font-size-xl); }
+.text-2xl  { font-size: var(--font-size-2xl); }
+.text-secondary    { color: var(--text-secondary); }
+.text-muted        { color: var(--text-muted); }
+.text-accent       { color: var(--accent); }
+.text-accent-hover { color: var(--accent-hover); }
+.d-flex         { display: flex; }
+.d-grid         { display: grid; }
+.d-inline-block { display: inline-block; }
+.flex-center    { display: flex; align-items: center; }
+.align-start    { align-items: flex-start; }
+.uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
+.font-semibold { font-weight: var(--bold); }
+.chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
+.gap-half { gap: var(--space-px); }
+.gap-1    { gap: var(--space-1); }
+.gap-1-5  { gap: var(--space-1-5); }
+.gap-2    { gap: var(--space-2); }
+.gap-2-5  { gap: var(--space-2-5); }
+.gap-3    { gap: var(--space-3); }
+.gap-4    { gap: var(--space-4); }
+.gap-5    { gap: var(--space-5); }
+.gap-6    { gap: var(--space-6); }
+.gap-8    { gap: var(--space-8); }
+.gap-16   { gap: var(--space-16); }
+.w-full   { width: 100%; }
+.min-w-120 { min-width: 120px; }
+.m-0    { margin: 0; }
+.ml-auto { margin-left: auto; }
+.mb-0   { margin-bottom: 0; }
+.mb-1   { margin-bottom: var(--space-1); }
+.mb-1-5 { margin-bottom: var(--space-1-5); }
+.mb-2   { margin-bottom: var(--space-2); }
+.mb-2-5 { margin-bottom: var(--space-2-5); }
+.mb-3   { margin-bottom: var(--space-3); }
+.mb-4   { margin-bottom: var(--space-4); }
+.mb-5   { margin-bottom: var(--space-5); }
+.mb-6   { margin-bottom: var(--space-6); }
+.mt-1   { margin-top: var(--space-1); }
+.mt-2   { margin-top: var(--space-2); }
+.mt-3   { margin-top: var(--space-3); }
+.mt-4   { margin-top: var(--space-4); }
+.p-4    { padding: var(--space-4); }
+.p-6    { padding: var(--space-6); }
+.text-center { text-align: center; }
+.text-right  { text-align: right; }
+.text-left   { text-align: left; }
+.flex-wrap          { display: flex; flex-wrap: wrap; }
+.flex-col           { display: flex; flex-direction: column; }
+.inline-flex-center { display: inline-flex; align-items: center; }
+.shrink-0           { flex-shrink: 0; }
+.flex-1             { flex: 1; }
+.justify-between    { justify-content: space-between; }
+.justify-center     { justify-content: center; }
+.contents { display: contents; }
+.opacity-50 { opacity: 0.5; }
+.list-none { list-style: none; }
+.valign-middle { vertical-align: middle; }
+.table-collapse { border-collapse: collapse; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.font-medium { font-weight: var(--light-bold); }
+.font-bold   { font-weight: 700; }
+.italic      { font-style: italic; }
+.nowrap      { white-space: nowrap; }
+.truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.break-all { word-break: break-all; }
+.leading-relaxed { line-height: 1.6; }
+.btn-reset { background: none; border: none; padding: 0; }
+.expand-chevron {
+  display: inline-block;
+  transition: transform var(--transition-fast);
+  line-height: 1;
+}
+.text-healthy  { color: var(--status-healthy); }
+.text-warning  { color: var(--status-warning); }
+.text-critical { color: var(--status-critical); }
+.text-primary  { color: var(--text-primary); }
+.surface-elevated { background: var(--bg-elevated); border: 1px solid var(--border); }
+.link-accent { color: var(--accent); text-decoration: none; }
+.cell-pad      { padding: var(--space-1) var(--space-2-5); }
+.cell-pad-wide { padding: var(--space-1) var(--space-3); }
+.border-b        { border-bottom: 1px solid var(--border); }
+.border-b-subtle { border-bottom: 1px solid var(--border-subtle); }
+.border-t        { border-top: 1px solid var(--border); }
+.chip-badge {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
+.chip-accent {
+  background: var(--accent-alpha-10);
+  color: var(--accent);
+}
+.dot-sm,
+.dot-xs {
+  border-radius: var(--radius-full);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-sm { width: 8px; height: 8px; }
+.dot-xs { width: 6px; height: 6px; }
+.badge-warning {
+  color: var(--status-warning);
+  background: var(--bg-status-warning);
+  padding: var(--space-px) var(--space-1-5);
+  border-radius: var(--radius-pill);
+}
+.section-rail {
+  background: var(--bg-card);
+  border-left: 3px solid var(--section-rail-color, var(--border-accent));
+}
+.workflow-node {
+  width: 220px;
+  height: 120px;
+  border: 2px solid var(--workflow-node-border, #d1d5db);
+  border-radius: var(--radius-lg);
+  background: var(--workflow-node-bg, #f9fafb);
+  padding: var(--space-3);
+  font-size: var(--font-size-xs);
+}
+.workflow-node__label {
+  font-weight: var(--bold);
+  margin-bottom: var(--space-1);
+}
+.workflow-node__score {
+  font-size: var(--font-size-xs);
+  color: var(--workflow-node-score-color, inherit);
+}
+.workflow-node__meta,
+.workflow-node__duration {
+  font-size: var(--font-size-xs);
+  color: var(--status-no-data);
+}
+.workflow-node__meta { margin-top: var(--space-1); }
+.workflow-node__error {
+  color: var(--status-critical);
+  font-size: var(--font-size-xs);
+  font-weight: var(--bold);
+}
+.workflow-fallback {
+  padding: var(--space-6);
+  text-align: center;
+}
+.workflow-fallback__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--bold);
+}
+.workflow-fallback__subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--status-no-data);
+  margin-top: var(--space-2);
+}
+.workflow-fallback__empty {
+  color: #9ca3af;
+}
+.workflow-oversize {
+  padding: var(--space-6);
+}
+.workflow-oversize__heading {
+  font-weight: var(--bold);
+  margin-bottom: var(--space-2);
+}
+.workflow-oversize__note {
+  margin-bottom: var(--space-3);
+}
+.workflow-oversize__list {
+  list-style: disc;
+  padding-left: var(--space-5);
+}
+.workflow-tabs {
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-3);
+}
+.workflow-tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--bold);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.workflow-tab[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
 }
 
 ================
@@ -18532,6 +18480,11 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
 }
 
 ================
+File: scripts/.kv-sync-coverage.json
+================
+{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
+
+================
 File: scripts/derive-evaluations.ts
 ================
 #!/usr/bin/env tsx
@@ -19707,11 +19660,6 @@ export function AdminPage() {
 }
 
 ================
-File: scripts/.kv-sync-coverage.json
-================
-{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
-
-================
 File: src/api/api-constants.ts
 ================
 export const PERCENT_BASE = 100;
@@ -20468,102 +20416,6 @@ export function stopAutoRefresh(): void {
 }
 
 ================
-File: src/contexts/AuthContext.tsx
-================
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
-import { API_BASE } from '../lib/constants.js';
-import { postActivityEvent } from '../lib/activity-logger.js';
-import type { AppSession } from '../types/auth.js';
-import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
-interface AuthContextValue {
-  session: AppSession | null;
-  isLoading: boolean;
-  signOut: () => Promise<void>;
-  getAccessToken: () => Promise<string>;
-}
-const AuthContext = createContext<AuthContextValue | null>(null);
-async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
-  try {
-    const res = await fetch(`${API_BASE}/api/me`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${jwt}` },
-      signal,
-    });
-    if (!res.ok) return null;
-    const data: unknown = await res.json();
-    const meResult = MeResponseSchema.safeParse(data);
-    if (!meResult.success) return null;
-    const me = meResult.data;
-    return {
-      email: me.email,
-      roles: me.roles,
-      permissions: me.permissions,
-      allowedViews: me.allowedViews,
-    };
-  } catch {
-    return null;
-  }
-}
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
-  const [session, setSession] = useState<AppSession | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const getAccessToken = useCallback(
-    () => getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
-    [getAccessTokenSilently],
-  );
-  useEffect(() => {
-    if (auth0Loading) return;
-    if (!isAuthenticated) {
-      setSession(null);
-      setIsLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    let cancelled = false;
-    getAccessToken()
-      .then((jwt) => (cancelled ? null : fetchAppSession(jwt, controller.signal)))
-      .then((appSession) => {
-        if (!cancelled) {
-          setSession(appSession);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSession(null);
-          setIsLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [auth0Loading, isAuthenticated, getAccessToken]);
-  const handleSignOut = useCallback(async () => {
-    if (session) {
-      const jwt = await getAccessToken().catch(() => null);
-      if (jwt) void postActivityEvent('logout', jwt);
-    }
-    logout({ logoutParams: { returnTo: window.location.origin } });
-    setSession(null);
-  }, [session, logout, getAccessToken]);
-  return (
-    <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
-  return ctx;
-}
-
-================
 File: src/App.tsx
 ================
 import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
@@ -20968,6 +20820,102 @@ export function App() {
       </Auth0Provider>
     </Router>
   );
+}
+
+================
+File: src/contexts/AuthContext.tsx
+================
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import { useAuth0 } from '../lib/auth0.js';
+import { AUTH0_AUDIENCE } from '../lib/auth0.js';
+import { API_BASE } from '../lib/constants.js';
+import { postActivityEvent } from '../lib/activity-logger.js';
+import type { AppSession } from '../types/auth.js';
+import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
+interface AuthContextValue {
+  session: AppSession | null;
+  isLoading: boolean;
+  signOut: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
+}
+const AuthContext = createContext<AuthContextValue | null>(null);
+async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/me`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${jwt}` },
+      signal,
+    });
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    const meResult = MeResponseSchema.safeParse(data);
+    if (!meResult.success) return null;
+    const me = meResult.data;
+    return {
+      email: me.email,
+      roles: me.roles,
+      permissions: me.permissions,
+      allowedViews: me.allowedViews,
+    };
+  } catch {
+    return null;
+  }
+}
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
+  const [session, setSession] = useState<AppSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const getAccessToken = useCallback(
+    () => getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
+    [getAccessTokenSilently],
+  );
+  useEffect(() => {
+    if (auth0Loading) return;
+    if (!isAuthenticated) {
+      setSession(null);
+      setIsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    getAccessToken()
+      .then((jwt) => (cancelled ? null : fetchAppSession(jwt, controller.signal)))
+      .then((appSession) => {
+        if (!cancelled) {
+          setSession(appSession);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [auth0Loading, isAuthenticated, getAccessToken]);
+  const handleSignOut = useCallback(async () => {
+    if (session) {
+      const jwt = await getAccessToken().catch(() => null);
+      if (jwt) void postActivityEvent('logout', jwt);
+    }
+    logout({ logoutParams: { returnTo: window.location.origin } });
+    setSession(null);
+  }, [session, logout, getAccessToken]);
+  return (
+    <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  return ctx;
 }
 
 
