@@ -147,10 +147,10 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | `DELETE /api/admin/users/:userId/roles/:roleId` | admin | Remove role from user |
 | `GET /api/health` | ✗ | Health check + last sync timestamp |
 
-## Project Structure (134,327 tokens)
+## Project Structure (95,098 tokens)
 
 ```
-└── src/ (134,327 tokens)
+└── src/ (95,098 tokens)
     ├── App.tsx (4,959 tokens)
     ├── main.tsx (325 tokens)
     ├── theme.css (15,044 tokens)

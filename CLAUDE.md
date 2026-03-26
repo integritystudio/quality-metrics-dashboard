@@ -23,6 +23,18 @@ npm run deploy:worker        # Deploy Cloudflare Worker
 - **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
 - **React Compiler**: Active via `babel-plugin-react-compiler`. Libraries incompatible with it (e.g., `useReactTable`) require `// eslint-disable-next-line react-compiler/react-compiler` suppression with a comment explaining why.
 
+## Constants Architecture
+
+Two constants files with a hard module boundary — do not cross-import:
+- **`src/lib/constants.ts`** — frontend + API server shared; uses `import.meta.env` (Vite). Imported by React components, hooks, and Hono API routes.
+- **`src/api/api-constants.ts`** — API server only (Node context). Imported by `src/api/routes/` and `scripts/`. Cannot be imported in Vite-rendered code.
+- **`worker/index.ts`** — has its own local `Http` constants object; cannot import either file above safely.
+
+Score display precision constants (use these, never raw `.toFixed()` literals):
+- `SCORE_CHIP_PRECISION = 2` — compact chips/cells
+- `SCORE_DISPLAY_PRECISION = 3` — standard display
+- `SCORE_FORMAT_PRECISION = 4` — raw value formatting
+
 ## Data Pipeline (`scripts/`)
 
 `npm run populate` runs: derive → judge → sync-to-kv
