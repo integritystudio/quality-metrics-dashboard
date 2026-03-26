@@ -42,6 +42,9 @@ const ERR_INVALID_INPUT_KEY = 'Invalid inputKey. Must be traceId or sessionId.';
 
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
+function safeArray<T>(val: unknown): T[] {
+  return Array.isArray(val) ? val as T[] : [];
+}
 function isValidId(id: string | undefined): id is string {
   return !!id && id.length <= MAX_PARAM_LEN && PARAM_RE.test(id);
 }
@@ -193,7 +196,7 @@ app.use('/api/*', async (c, next) => {
     ).catch(() => null);
     if (rolesRes?.ok) {
       const rawRows: unknown = await rolesRes.json().catch(() => []);
-      const rows = Array.isArray(rawRows) ? rawRows : [];
+      const rows = safeArray(rawRows);
       for (const row of rows) {
         const rowResult = UserRoleRowSchema.safeParse(row);
         if (!rowResult.success || !rowResult.data.roles) continue;
@@ -461,7 +464,7 @@ app.get('/api/agents/:sessionId', async (c) => {
     sessionId,
     spans: [],
     evaluation: session['multiAgentEvaluation'] ?? null,
-    evaluations: Array.isArray(session['evaluations']) ? session['evaluations'] : [],
+    evaluations: safeArray(session['evaluations']),
     agentMap: {},
   });
 });
@@ -476,7 +479,7 @@ app.get('/api/compliance/sla', async (c) => {
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
   logActivity(session.appUserId, 'compliance_view', c.env);
-  const slaResults = Array.isArray(dashboard['slaCompliance']) ? dashboard['slaCompliance'] : [];
+  const slaResults = safeArray(dashboard['slaCompliance']);
   return c.json({
     period,
     results: slaResults,
@@ -546,9 +549,9 @@ app.get('/api/admin/users', async (c) => {
   if (!usersRes.ok) return c.json({ error: 'Failed to fetch users' }, Http.InternalServerError);
   if (!roleRowsRes.ok) return c.json({ error: 'Failed to fetch role assignments' }, Http.InternalServerError);
   const rawUsersJson: unknown = await usersRes.json().catch(() => null);
-  const rawUsers = Array.isArray(rawUsersJson) ? rawUsersJson : [];
+  const rawUsers = safeArray(rawUsersJson);
   const rawRoleRowsJson: unknown = await roleRowsRes.json().catch(() => []);
-  const rawRoleRows = Array.isArray(rawRoleRowsJson) ? rawRoleRowsJson : [];
+  const rawRoleRows = safeArray(rawRoleRowsJson);
 
   const rolesByUser = new Map<string, { id: string; name: string }[]>();
   for (const row of rawRoleRows) {
@@ -581,7 +584,7 @@ app.get('/api/admin/roles', async (c) => {
   if (!res.ok) return c.json({ error: 'Failed to fetch roles' }, Http.InternalServerError);
 
   const rawJson: unknown = await res.json().catch(() => null);
-  const rows = Array.isArray(rawJson) ? rawJson : [];
+  const rows = safeArray(rawJson);
   const roles = rows.flatMap((row) => {
     const parsed = AdminRoleSchema.safeParse(row);
     return parsed.success ? [parsed.data] : [];
