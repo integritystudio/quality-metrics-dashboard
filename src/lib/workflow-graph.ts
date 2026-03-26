@@ -150,7 +150,6 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     agentTimings.push({ id: agentId, minStart, maxEnd });
   }
 
-  // Infer edges from temporal ordering
   agentTimings.sort((a, b) => a.minStart - b.minStart);
 
   const edges: WorkflowEdge[] = [];
@@ -216,7 +215,6 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
   // Check cyclic using DFS — detects both pairwise (A↔B) and multi-node (A→B→C→A) cycles
   if (hasCycle(nodes, edges)) return 'cyclic';
 
-  // Check branching: any source with >1 outgoing edge
   const outDegree = new Map<string, number>();
   for (const e of edges) {
     outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
