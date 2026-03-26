@@ -78,7 +78,6 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
   const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
   return (
     <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
-      {/* Main block */}
       <rect
         width={width}
         height={TURN_BLOCK_HEIGHT}
@@ -96,7 +95,6 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
         fill={barColor}
         fillOpacity={0.85}
       />
-      {/* Error indicator */}
       {turn.hasError && (
         <rect
           x={width - 6}
@@ -107,7 +105,6 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
           fillOpacity={0.85}
         />
       )}
-      {/* Turn index label */}
       <text
         x={width / 2}
         y={TURN_BLOCK_HEIGHT / 2 + 5}
