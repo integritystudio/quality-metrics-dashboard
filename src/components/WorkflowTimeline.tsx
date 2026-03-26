@@ -12,6 +12,8 @@ const LANE_PADDING_TOP = 12;
 const TURN_BLOCK_HEIGHT = 32;
 const TURN_BLOCK_MIN_WIDTH = 40;
 const TURN_BLOCK_GAP = 6;
+const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
+const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
 const LABEL_WIDTH = 120;
 const HANDOFF_MARKER_RADIUS = 7;
 const HEADER_HEIGHT = 28;
@@ -143,17 +145,17 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
   const totalTurns = visibleTurns.length;
 
   // Each turn gets equal width
-  const availableWidth = totalTurns * (TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP);
+  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
   const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
   const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
 
   // Map turnIndex → x offset within the tracks area
   const turnX = (turnIndex: number): number =>
-    LABEL_WIDTH + turnIndex * (TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP) + TURN_BLOCK_GAP;
+    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
 
   // Y center of a lane (for handoff markers)
   const laneY = (laneIndex: number): number =>
-    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
 
   return (
     <div
@@ -213,7 +215,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
               {/* Agent label */}
               <text
                 x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2 + 4}
+                y={laneTop + LANE_CENTER_OFFSET + 4}
                 textAnchor="end"
                 fontSize={11}
                 fontWeight={600}
