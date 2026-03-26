@@ -61,8 +61,6 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
   evaluationParams: ['input', 'output', 'context'],
 };
 
-// Constants
-
 const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
@@ -79,8 +77,6 @@ export const MAX_TURN_LIMIT = 10_000;
 export function normalizeScore(score: number): number {
   return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
 }
-
-// Types
 
 export interface TranscriptInfo {
   path: string;
@@ -107,8 +103,6 @@ export interface EvalRecord {
   traceId: string;
   sessionId: string;
 }
-
-// Transcript Discovery
 
 /**
  * Alternate directories where session transcripts may exist.
@@ -264,8 +258,6 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
 
   return turns;
 }
-
-// Turn Extraction
 
 /** B8: Discriminated union for transcript content blocks */
 export interface TextBlock { type: 'text'; text: string }
@@ -550,8 +542,6 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
   return { evals, canaryCount };
 }
 
-// Evaluation
-
 /** Track evaluation failures for summary reporting (P1-6) */
 export const evalFailures: Record<string, number> = {};
 
@@ -748,8 +738,6 @@ export function toOTelRecord(ev: EvalRecord): object {
   };
 }
 
-// Deduplication
-
 function _loadExistingKeys(): Set<string> {
   const keys = new Set<string>();
   const evalFiles = readdirSync(TELEMETRY_DIR)
@@ -776,8 +764,6 @@ function _loadExistingKeys(): Set<string> {
 
   return keys;
 }
-
-// Output
 
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 
@@ -856,8 +842,6 @@ function writeEvaluations(evals: EvalRecord[]): void {
   appendFileSync(outFile, content);
 }
 
-// Batching
-
 export async function processBatch<T, R>(
   items: T[],
   concurrency: number,
@@ -883,8 +867,6 @@ export async function processBatch<T, R>(
 
   return results;
 }
-
-// Main
 
 async function main() {
   const args = process.argv.slice(2);
