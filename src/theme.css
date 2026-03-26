@@ -1399,6 +1399,19 @@ summary.section-rail {
 .agent-activity-grid {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
+.eval-filter-chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--chip-color);
+  background-color: transparent;
+  color: var(--chip-color);
+  opacity: 0.6;
+  transition: opacity var(--transition-fast), background-color var(--transition-fast);
+}
+.eval-filter-chip[data-active] {
+  background-color: color-mix(in srgb, var(--chip-color) 19%, transparent);
+  opacity: 1;
+}
 .file-access-columns {
   columns: 2 320px;
   column-gap: var(--space-8);

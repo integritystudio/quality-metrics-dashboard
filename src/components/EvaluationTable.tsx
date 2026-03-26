@@ -14,6 +14,7 @@ import {
   type SortingFn,
   type FilterFn,
 } from '@tanstack/react-table';
+import type { CSSProperties } from 'react';
 import {
   labelToOrdinal,
   ordinalToCategory,
@@ -22,7 +23,7 @@ import {
   SCORE_COLORS,
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
-import { EVAL_TABLE_EXPAND_COL_SIZE, EVAL_FILTER_INACTIVE_OPACITY } from '../lib/constants.js';
+import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
 import { TimestampCell } from './TimestampCell.js';
 import { ExpandChevron } from './ExpandChevron.js';
@@ -226,16 +227,9 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
               key={cat}
               type="button"
               onClick={() => toggleCategory(cat)}
-              className="text-xs font-semibold cursor-pointer"
-              style={{
-                padding: 'var(--space-1) var(--space-3)',
-                borderRadius: 'var(--radius)',
-                border: `1px solid ${CATEGORY_COLORS[cat]}`,
-                backgroundColor: active ? `${CATEGORY_COLORS[cat]}30` : 'transparent',
-                color: CATEGORY_COLORS[cat],
-                opacity: active ? 1 : EVAL_FILTER_INACTIVE_OPACITY,
-                transition: 'opacity var(--transition-fast), background-color var(--transition-fast)',
-              }}
+              className="eval-filter-chip text-xs font-semibold cursor-pointer"
+              style={{ '--chip-color': CATEGORY_COLORS[cat] } as CSSProperties}
+              data-active={active || undefined}
             >
               {cat}
             </button>
