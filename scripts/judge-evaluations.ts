@@ -18,9 +18,8 @@
 import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
-import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
+import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import {
   LLMJudge,
 } from '../../src/lib/judge/llm-judge-config.js';
@@ -66,7 +65,8 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
 // Constants
 // ============================================================================
 
-export const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
+const HOME = process.env.HOME ?? '';
+export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -113,8 +113,6 @@ export interface EvalRecord {
 // ============================================================================
 // Transcript Discovery
 // ============================================================================
-
-const HOME = process.env.HOME ?? '';
 
 /**
  * Alternate directories where session transcripts may exist.
@@ -180,8 +178,6 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
       transcripts.push({ path: resolved, sessionId, traceId });
     }
   }
-
-  const _logCount = transcripts.length;
 
   // Phase 2: Directory scan for transcripts not referenced in logs
   for (const dir of TRANSCRIPT_DIRS) {
