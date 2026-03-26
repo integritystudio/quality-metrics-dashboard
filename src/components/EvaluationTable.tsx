@@ -183,7 +183,6 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
   'use no memo';
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [activeCategories, setActiveCategories] = useState<LabelFilterCategory[]>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table returns unstable function refs; React Compiler compatibility is a known upstream issue. Component re-renders on data change so no stale refs escape.
@@ -201,14 +200,14 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
     getExpandedRowModel: getExpandedRowModel(),
   });
 
+  const activeCategories: LabelFilterCategory[] =
+    (columnFilters.find(f => f.id === 'label')?.value as LabelFilterCategory[]) ?? [];
+
   const toggleCategory = (cat: LabelFilterCategory) => {
     const next = activeCategories.includes(cat)
       ? activeCategories.filter((c) => c !== cat)
       : [...activeCategories, cat];
-    setActiveCategories(next);
-    setColumnFilters(
-      next.length > 0 ? [{ id: 'label', value: next }] : [],
-    );
+    setColumnFilters(next.length > 0 ? [{ id: 'label', value: next }] : []);
   };
 
   const sortDir = (colId: string): 'ascending' | 'descending' | 'none' => {
