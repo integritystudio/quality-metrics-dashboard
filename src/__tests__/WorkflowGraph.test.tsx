@@ -18,7 +18,6 @@ interface ReactFlowProps {
   edges?: MockEdge[];
   onNodeClick?: (event: unknown, node: MockNode) => void;
   nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
-  _edgeTypes?: unknown;
   children?: ReactNode;
   [key: string]: unknown;
 }
@@ -26,7 +25,7 @@ interface ReactFlowProps {
 vi.mock('@xyflow/react', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   return {
-    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, _edgeTypes, children, ...rest }: ReactFlowProps) => (
+    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) => (
       <div data-testid="reactflow" {...rest}>
         {(nodes ?? []).map((n) => {
           const NodeComp = nodeTypes?.[n.type];
@@ -82,52 +81,9 @@ vi.mock('elkjs/lib/elk.bundled.js', () => ({
 }));
 
 import { WorkflowGraphView } from '../components/WorkflowGraph.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
 
 afterEach(cleanup);
-
-// ---------------------------------------------------------------------------
-// Factories
-// ---------------------------------------------------------------------------
-
-function makeNode(overrides: Partial<WorkflowNode> = {}): WorkflowNode {
-  return {
-    id: 'node-1',
-    label: 'test-agent',
-    evaluationScore: null,
-    toolCallCount: 0,
-    totalTokens: null,
-    durationMs: 1000,
-    turnCount: 1,
-    hasError: false,
-    ...overrides,
-  };
-}
-
-function makeEdge(overrides: Partial<WorkflowEdge> = {}): WorkflowEdge {
-  return {
-    id: 'edge-1',
-    source: 'node-1',
-    target: 'node-2',
-    handoffScore: 0.8,
-    contextPreserved: true,
-    ...overrides,
-  };
-}
-
-function makeGraph(overrides: Partial<WorkflowGraph> = {}): WorkflowGraph {
-  return {
-    nodes: [makeNode()],
-    edges: [],
-    rootNodeId: 'node-1',
-    workflowShape: 'linear',
-    ...overrides,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// WorkflowGraphView
-// ---------------------------------------------------------------------------
 
 describe('WorkflowGraphView', () => {
   const twoNodeGraph: WorkflowGraph = {
@@ -262,71 +218,39 @@ describe('WorkflowGraphView', () => {
   });
 });
 
-// ============================================================================
-// ST-G5 Stress Tests — graph layout stability at scale
-// ============================================================================
-
 const ST_G5_LARGE_GRAPH_SIZE = 100;
 const ST_G5_DEEP_CHAIN_SIZE = 20;
+const ST_G5_DISCONNECTED_SIZE = 10;
 
 describe('WorkflowGraphView stress (ST-G5)', () => {
   it('renders 100+ node graph without error and shows all nodes', async () => {
-    const nodes: WorkflowNode[] = Array.from({ length: ST_G5_LARGE_GRAPH_SIZE }, (_, i) =>
-      makeNode({ id: `node-${i}`, label: `agent-${i}` })
-    );
-    // Chain edges: 0→1→2→...→99
-    const edges: WorkflowEdge[] = nodes.slice(0, -1).map((n, i) =>
-      makeEdge({ id: `edge-${i}`, source: n.id, target: `node-${i + 1}` })
-    );
-    const graph: WorkflowGraph = {
-      nodes,
-      edges,
-      rootNodeId: 'node-0',
-      workflowShape: 'branching',
-    };
+    const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, 'agent', 'branching');
 
     render(<WorkflowGraphView graph={graph} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('rf-node-node-0')).toBeInTheDocument();
-      expect(screen.getByTestId(`rf-node-node-${ST_G5_LARGE_GRAPH_SIZE - 1}`)).toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-agent-0')).toBeInTheDocument();
+      expect(screen.getByTestId(`rf-node-agent-${ST_G5_LARGE_GRAPH_SIZE - 1}`)).toBeInTheDocument();
     });
-    // All 100 nodes rendered
     expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_LARGE_GRAPH_SIZE);
   });
 
   it('renders deeply nested delegation chain without error', async () => {
-    const nodes: WorkflowNode[] = Array.from({ length: ST_G5_DEEP_CHAIN_SIZE }, (_, i) =>
-      makeNode({ id: `node-${i}`, label: `delegate-${i}` })
-    );
-    const edges: WorkflowEdge[] = nodes.slice(0, -1).map((n, i) =>
-      makeEdge({ id: `edge-${i}`, source: n.id, target: `node-${i + 1}` })
-    );
-    const graph: WorkflowGraph = {
-      nodes,
-      edges,
-      rootNodeId: 'node-0',
-      workflowShape: 'linear',
-    };
+    const graph = makeChainGraph(ST_G5_DEEP_CHAIN_SIZE, 'delegate', 'linear');
 
     render(<WorkflowGraphView graph={graph} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('rf-node-node-0')).toBeInTheDocument();
-      expect(screen.getByTestId(`rf-node-node-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-delegate-0')).toBeInTheDocument();
+      expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
     });
   });
 
   it('renders without crash when rootNodeId is null (missing parent span inference fallback)', async () => {
-    const nodes: WorkflowNode[] = Array.from({ length: 5 }, (_, i) =>
+    const nodes = Array.from({ length: 5 }, (_, i) =>
       makeNode({ id: `node-${i}`, label: `orphan-${i}` })
     );
-    const graph: WorkflowGraph = {
-      nodes,
-      edges: [],
-      rootNodeId: null,
-      workflowShape: 'branching',
-    };
+    const graph = makeGraph({ nodes, rootNodeId: null, workflowShape: 'branching' });
 
     expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
     await waitFor(() => {
@@ -335,49 +259,40 @@ describe('WorkflowGraphView stress (ST-G5)', () => {
   });
 
   it('renders disconnected nodes (no edges) without crash', async () => {
-    const nodes: WorkflowNode[] = Array.from({ length: 10 }, (_, i) =>
+    const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =>
       makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
     );
-    const graph: WorkflowGraph = {
-      nodes,
-      edges: [],
-      rootNodeId: 'orphan-0',
-      workflowShape: 'branching',
-    };
+    const graph = makeGraph({ nodes, rootNodeId: 'orphan-0', workflowShape: 'branching' });
 
     render(<WorkflowGraphView graph={graph} />);
 
     await waitFor(() => {
-      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(10);
+      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
     });
   });
 
   it('handles concurrent renders of different graphs without state leakage', async () => {
-    const graphA: WorkflowGraph = {
+    const graphA = makeGraph({
       nodes: [makeNode({ id: 'a-1', label: 'alpha' }), makeNode({ id: 'a-2', label: 'beta' })],
       edges: [makeEdge({ id: 'ea-1', source: 'a-1', target: 'a-2' })],
       rootNodeId: 'a-1',
-      workflowShape: 'linear',
-    };
-    const graphB: WorkflowGraph = {
+    });
+    const graphB = makeGraph({
       nodes: [makeNode({ id: 'b-1', label: 'gamma' }), makeNode({ id: 'b-2', label: 'delta' })],
       edges: [makeEdge({ id: 'eb-1', source: 'b-1', target: 'b-2' })],
       rootNodeId: 'b-1',
-      workflowShape: 'linear',
-    };
+    });
 
     const { unmount: unmountA } = render(<WorkflowGraphView graph={graphA} />);
-    const { unmount: unmountB } = render(<WorkflowGraphView graph={graphB} />);
+    render(<WorkflowGraphView graph={graphB} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('rf-node-a-1')).toBeInTheDocument();
       expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
     });
 
-    // Unmounting one should not affect the other
     unmountA();
     expect(screen.queryByTestId('rf-node-a-1')).not.toBeInTheDocument();
     expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
-    unmountB();
   });
 });

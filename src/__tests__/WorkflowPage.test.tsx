@@ -76,40 +76,12 @@ vi.mock('../components/PageShell.js', () => ({
 
 import { WorkflowPage } from '../pages/WorkflowPage.js';
 import { AgentSessionPage } from '../pages/AgentSessionPage.js';
-import type { WorkflowGraph, WorkflowNode } from '../types/workflow-graph.js';
+import { makeNode, makeGraph } from './workflow-fixtures.js';
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-
-// ---------------------------------------------------------------------------
-// Factories
-// ---------------------------------------------------------------------------
-
-function makeNode(overrides: Partial<WorkflowNode> = {}): WorkflowNode {
-  return {
-    id: 'node-1',
-    label: 'planner-agent',
-    evaluationScore: null,
-    toolCallCount: 2,
-    totalTokens: null,
-    durationMs: 500,
-    turnCount: 1,
-    hasError: false,
-    ...overrides,
-  };
-}
-
-function makeGraph(overrides: Partial<WorkflowGraph> = {}): WorkflowGraph {
-  return {
-    nodes: [makeNode()],
-    edges: [],
-    rootNodeId: 'node-1',
-    workflowShape: 'linear',
-    ...overrides,
-  };
-}
 
 function makeAgentSessionData(graph: WorkflowGraph | null | undefined = makeGraph()) {
   return {
