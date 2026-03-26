@@ -15,6 +15,12 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR } from '../api-constants.js';
+
+/** Fraction of data span added as padding on each side when auto-narrowing the time axis. */
+const TREND_PADDING_RATIO = 0.1;
+/** Minimum padding in ms when auto-narrowing (ensures at least 1 minute of context). */
+const TREND_PADDING_MIN_MS = 60_000;
+
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
 function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
@@ -66,7 +72,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
     const dataSpan = dataMax - dataMin;
     const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * 0.1, 60_000) : 0;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
     const start = narrowed ? new Date(dataMin - pad) : periodStart;
     const end = narrowed ? new Date(dataMax + pad) : now;
     const rangeMs = end.getTime() - start.getTime();
