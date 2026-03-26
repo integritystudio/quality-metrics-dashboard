@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus } from '../../lib/constants.js';
+import { HttpStatus, ErrorMessage } from '../../lib/constants.js';
 import { MAX_TRACE_ID_LEN } from '../api-constants.js';
 import { loadEvaluationsByTraceId } from '../data-loader.js';
 
@@ -12,7 +12,7 @@ export const evaluationRoutes = new Hono();
 evaluationRoutes.get('/evaluations/trace/:traceId', async (c) => {
   const parseResult = TraceIdSchema.safeParse(c.req.param('traceId'));
   if (!parseResult.success) {
-    return c.json({ error: 'Invalid traceId' }, HttpStatus.BadRequest);
+    return c.json({ error: ErrorMessage.InvalidTraceId }, HttpStatus.BadRequest);
   }
 
   try {

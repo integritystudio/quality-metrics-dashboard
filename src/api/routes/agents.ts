@@ -4,7 +4,7 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
@@ -157,7 +157,7 @@ agentRoutes.get('/agents', async (c) => {
 agentRoutes.get('/agents/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
+    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
   }
 
   try {
