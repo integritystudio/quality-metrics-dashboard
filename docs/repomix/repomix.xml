@@ -5830,6 +5830,153 @@ export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
 }
 
 ================
+File: src/pages/CoveragePage.tsx
+================
+import { useState } from 'react';
+import { CoverageGrid } from '../components/CoverageGrid.js';
+import { useCoverage } from '../hooks/useCoverage.js';
+import { PageShell } from '../components/PageShell.js';
+import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
+import type { Period } from '../types.js';
+export function CoveragePage({ period }: { period: Period }) {
+  const [inputKey, setInputKey] = useState<InputKey>(DEFAULT_INPUT_KEY);
+  const { data, isLoading, error } = useCoverage(period, inputKey);
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
+      {data && (
+        <>
+          <div className="flex-center mb-3 gap-4">
+            <h2 className="text-lg m-0">Evaluation Coverage</h2>
+            <select
+              value={inputKey}
+              onChange={(e) => setInputKey(e.target.value as InputKey)}
+              aria-label="Group by"
+              className="text-xs form-select"
+            >
+              <option value="traceId">By Trace</option>
+              <option value="sessionId">By Session</option>
+            </select>
+          </div>
+          <div className="card">
+            <CoverageGrid
+              metrics={data.metrics}
+              inputs={data.inputs}
+              cells={data.cells}
+              gaps={data.gaps}
+              overallCoveragePercent={data.overallCoveragePercent}
+            />
+          </div>
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+================
+File: src/pages/EvaluationDetailPage.tsx
+================
+import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
+import { ProvenancePanel } from '../components/ProvenancePanel.js';
+import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
+import { PageShell } from '../components/PageShell.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { formatScore, plural } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
+import { TimestampCell } from '../components/TimestampCell.js';
+import { Link, useSearch } from 'wouter';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
+export function EvaluationDetailPage({ traceId }: { traceId: string }) {
+  const { data: allEvaluations, isLoading, error } = useTraceEvaluations(traceId);
+  const search = useSearch();
+  const metricFilter = new URLSearchParams(search).get('metric');
+  const evaluations = metricFilter && allEvaluations
+    ? allEvaluations.filter(ev => ev.evaluationName === metricFilter)
+    : allEvaluations;
+  const heading = metricFilter
+    ? `${metricFilter} Evaluations`
+    : 'Trace Evaluations';
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_SM}>
+      {(!evaluations || evaluations.length === 0) ? (
+        <EmptyState
+          title="No Evaluations Found"
+          description={<>No evaluations found for trace <code>{traceId}</code></>}
+          showSyncHint
+        />
+      ) : (
+        <>
+          <DetailPageHeader title={heading} id={traceId}>
+            <span className="text-secondary text-xs">
+              {plural(evaluations.length, 'evaluation')}
+            </span>
+            <Link href={routes.trace(traceId)} className="text-xs link-accent">View trace &rarr;</Link>
+            {metricFilter && (
+              <Link
+                href={routes.evaluationDetail(traceId)}
+                className="text-xs link-accent"
+              >
+                View all evaluations
+              </Link>
+            )}
+          </DetailPageHeader>
+          {evaluations.map((ev, i) => (
+            <div key={`${ev.evaluationName}-${ev.timestamp}-${i}`} className="eval-detail-card card">
+              <div className="flex-center mb-3 justify-between">
+                <div className="flex-center gap-3">
+                  <ScoreBadge
+                    score={ev.scoreValue ?? null}
+                    metricName={ev.evaluationName}
+                    label={ev.scoreLabel ?? (ev.scoreValue != null ? formatScore(ev.scoreValue) : undefined)}
+                  />
+                  <span className="text-base font-medium">{ev.evaluationName}</span>
+                </div>
+                <TimestampCell timestamp={ev.timestamp} className="text-secondary text-xs" />
+              </div>
+              <ChainOfThoughtPanel
+                explanation={ev.explanation}
+                evaluator={ev.evaluator}
+              />
+              {ev.stepScores && ev.stepScores.length > 0 && (
+                <div className="mt-3">
+                  <div className="section-label mb-1">Step Scores</div>
+                  <div className="gap-1-5 mt-1 flex-wrap">
+                    {ev.stepScores.map(s => (
+                      <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <details open className="mt-3">
+                <summary className="cot-summary text-xs">Provenance &amp; Audit Trail</summary>
+                <div className="pt-2">
+                  <ProvenancePanel
+                    evaluationName={ev.evaluationName}
+                    scoreValue={ev.scoreValue}
+                    scoreLabel={ev.scoreLabel}
+                    traceId={ev.traceId ?? traceId}
+                    spanId={ev.spanId}
+                    sessionId={ev.sessionId}
+                    timestamp={ev.timestamp}
+                    evaluator={ev.evaluator}
+                    evaluatorType={ev.evaluatorType}
+                    scoreUnit={ev.scoreUnit}
+                    agentName={ev.agentName}
+                    rawData={ev as unknown as Record<string, unknown>}
+                  />
+                </div>
+              </details>
+            </div>
+          ))}
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+================
 File: src/pages/TraceDetailPage.tsx
 ================
 import { useTrace } from '../hooks/useTrace.js';
@@ -7746,153 +7893,6 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
               </div>
             </ViewSection>
           )}
-        </>
-      )}
-    </PageShell>
-  );
-}
-
-================
-File: src/pages/CoveragePage.tsx
-================
-import { useState } from 'react';
-import { CoverageGrid } from '../components/CoverageGrid.js';
-import { useCoverage } from '../hooks/useCoverage.js';
-import { PageShell } from '../components/PageShell.js';
-import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
-import type { Period } from '../types.js';
-export function CoveragePage({ period }: { period: Period }) {
-  const [inputKey, setInputKey] = useState<InputKey>(DEFAULT_INPUT_KEY);
-  const { data, isLoading, error } = useCoverage(period, inputKey);
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
-      {data && (
-        <>
-          <div className="flex-center mb-3 gap-4">
-            <h2 className="text-lg m-0">Evaluation Coverage</h2>
-            <select
-              value={inputKey}
-              onChange={(e) => setInputKey(e.target.value as InputKey)}
-              aria-label="Group by"
-              className="text-xs form-select"
-            >
-              <option value="traceId">By Trace</option>
-              <option value="sessionId">By Session</option>
-            </select>
-          </div>
-          <div className="card">
-            <CoverageGrid
-              metrics={data.metrics}
-              inputs={data.inputs}
-              cells={data.cells}
-              gaps={data.gaps}
-              overallCoveragePercent={data.overallCoveragePercent}
-            />
-          </div>
-        </>
-      )}
-    </PageShell>
-  );
-}
-
-================
-File: src/pages/EvaluationDetailPage.tsx
-================
-import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
-import { ProvenancePanel } from '../components/ProvenancePanel.js';
-import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
-import { PageShell } from '../components/PageShell.js';
-import { EmptyState } from '../components/EmptyState.js';
-import { formatScore, plural } from '../lib/quality-utils.js';
-import { routes } from '../lib/routes.js';
-import { TimestampCell } from '../components/TimestampCell.js';
-import { Link, useSearch } from 'wouter';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
-export function EvaluationDetailPage({ traceId }: { traceId: string }) {
-  const { data: allEvaluations, isLoading, error } = useTraceEvaluations(traceId);
-  const search = useSearch();
-  const metricFilter = new URLSearchParams(search).get('metric');
-  const evaluations = metricFilter && allEvaluations
-    ? allEvaluations.filter(ev => ev.evaluationName === metricFilter)
-    : allEvaluations;
-  const heading = metricFilter
-    ? `${metricFilter} Evaluations`
-    : 'Trace Evaluations';
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_SM}>
-      {(!evaluations || evaluations.length === 0) ? (
-        <EmptyState
-          title="No Evaluations Found"
-          description={<>No evaluations found for trace <code>{traceId}</code></>}
-          showSyncHint
-        />
-      ) : (
-        <>
-          <DetailPageHeader title={heading} id={traceId}>
-            <span className="text-secondary text-xs">
-              {plural(evaluations.length, 'evaluation')}
-            </span>
-            <Link href={routes.trace(traceId)} className="text-xs link-accent">View trace &rarr;</Link>
-            {metricFilter && (
-              <Link
-                href={routes.evaluationDetail(traceId)}
-                className="text-xs link-accent"
-              >
-                View all evaluations
-              </Link>
-            )}
-          </DetailPageHeader>
-          {evaluations.map((ev, i) => (
-            <div key={`${ev.evaluationName}-${ev.timestamp}-${i}`} className="eval-detail-card card">
-              <div className="flex-center mb-3 justify-between">
-                <div className="flex-center gap-3">
-                  <ScoreBadge
-                    score={ev.scoreValue ?? null}
-                    metricName={ev.evaluationName}
-                    label={ev.scoreLabel ?? (ev.scoreValue != null ? formatScore(ev.scoreValue) : undefined)}
-                  />
-                  <span className="text-base font-medium">{ev.evaluationName}</span>
-                </div>
-                <TimestampCell timestamp={ev.timestamp} className="text-secondary text-xs" />
-              </div>
-              <ChainOfThoughtPanel
-                explanation={ev.explanation}
-                evaluator={ev.evaluator}
-              />
-              {ev.stepScores && ev.stepScores.length > 0 && (
-                <div className="mt-3">
-                  <div className="section-label mb-1">Step Scores</div>
-                  <div className="gap-1-5 mt-1 flex-wrap">
-                    {ev.stepScores.map(s => (
-                      <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              <details open className="mt-3">
-                <summary className="cot-summary text-xs">Provenance &amp; Audit Trail</summary>
-                <div className="pt-2">
-                  <ProvenancePanel
-                    evaluationName={ev.evaluationName}
-                    scoreValue={ev.scoreValue}
-                    scoreLabel={ev.scoreLabel}
-                    traceId={ev.traceId ?? traceId}
-                    spanId={ev.spanId}
-                    sessionId={ev.sessionId}
-                    timestamp={ev.timestamp}
-                    evaluator={ev.evaluator}
-                    evaluatorType={ev.evaluatorType}
-                    scoreUnit={ev.scoreUnit}
-                    agentName={ev.agentName}
-                    rawData={ev as unknown as Record<string, unknown>}
-                  />
-                </div>
-              </details>
-            </div>
-          ))}
         </>
       )}
     </PageShell>
@@ -11144,6 +11144,291 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
 }
 
 ================
+File: src/components/EvaluationTable.tsx
+================
+import { useState, Fragment } from 'react';
+import type { EvaluationResult } from '../types.js';
+import {
+  createColumnHelper,
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  getExpandedRowModel,
+  flexRender,
+  type SortingState,
+  type ColumnFiltersState,
+  type ExpandedState,
+  type SortingFn,
+  type FilterFn,
+} from '@tanstack/react-table';
+import type { CSSProperties } from 'react';
+import {
+  labelToOrdinal,
+  ordinalToCategory,
+  truncateText,
+  formatScore,
+  SCORE_COLORS,
+  type LabelFilterCategory,
+} from '../lib/quality-utils.js';
+import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
+import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { TimestampCell } from './TimestampCell.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { ColoredChip } from './Chip.js';
+import { ScoreBadge } from './ScoreBadge.js';
+export interface EvalRow {
+  score: number | null;
+  explanation?: string;
+  traceId?: string;
+  timestamp?: string;
+  evaluator?: string;
+  label?: string;
+  evaluatorType?: string;
+  spanId?: string;
+  sessionId?: string;
+  agentName?: string;
+  trajectoryLength?: number;
+  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
+  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
+}
+const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
+  Pass: SCORE_COLORS.excellent,
+  Review: SCORE_COLORS.adequate,
+  Fail: SCORE_COLORS.failing,
+};
+const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) => {
+  const a = labelToOrdinal(rowA.original.label ?? 'unknown').ordinal;
+  const b = labelToOrdinal(rowB.original.label ?? 'unknown').ordinal;
+  return a - b;
+};
+const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) => {
+  if (!filterValue || filterValue.length === 0) return true;
+  const category = ordinalToCategory(labelToOrdinal(row.original.label ?? 'unknown').ordinal);
+  return filterValue.includes(category);
+};
+const columnHelper = createColumnHelper<EvalRow>();
+const columns = [
+  columnHelper.display({
+    id: 'expand',
+    header: '',
+    cell: ({ row }) => (
+      <button
+        type="button"
+        className="cursor-pointer btn-reset btn-expand"
+        onClick={row.getToggleExpandedHandler()}
+        aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
+      >
+        <ExpandChevron expanded={row.getIsExpanded()} className="text-secondary text-xs" />
+      </button>
+    ),
+    size: EVAL_TABLE_EXPAND_COL_SIZE,
+  }),
+  columnHelper.accessor('score', {
+    header: 'Score',
+    cell: (info) => {
+      const row = info.row.original;
+      return (
+        <ScoreBadge
+          score={info.getValue()}
+          metricName="score"
+          label={formatScore(info.getValue())}
+          evaluator={row.evaluator}
+          evaluatorType={row.evaluatorType}
+          explanation={row.explanation}
+          traceId={row.traceId}
+        />
+      );
+    },
+    sortingFn: 'basic',
+  }),
+  columnHelper.accessor('label', {
+    header: 'Label',
+    cell: (info) => {
+      const label = info.getValue() ?? 'unknown';
+      const { category } = labelToOrdinal(label);
+      return (
+        <ColoredChip color={CATEGORY_COLORS[category]} className="font-medium">
+          {label}
+        </ColoredChip>
+      );
+    },
+    sortingFn: labelSortFn,
+    filterFn: categoryFilterFn,
+  }),
+  columnHelper.display({
+    id: 'category',
+    header: 'Category',
+    cell: (info) => {
+      const label = info.row.original.label ?? 'unknown';
+      const category = ordinalToCategory(labelToOrdinal(label).ordinal);
+      return (
+        <ColoredChip color={CATEGORY_COLORS[category]} className="font-semibold">
+          {category}
+        </ColoredChip>
+      );
+    },
+  }),
+  columnHelper.accessor('explanation', {
+    header: 'Explanation',
+    cell: (info) => {
+      const text = info.getValue() ?? '-';
+      return (
+        <span className="explanation truncate" title={text}>
+          {truncateText(text, 60)}
+        </span>
+      );
+    },
+    enableSorting: false,
+  }),
+  columnHelper.accessor('evaluator', {
+    header: 'Evaluator',
+    cell: (info) => (
+      <span className="mono-xs">
+        {info.getValue() ?? '-'}
+      </span>
+    ),
+    enableSorting: false,
+  }),
+  columnHelper.accessor('timestamp', {
+    header: 'Timestamp',
+    cell: (info) => {
+      const ts = info.getValue();
+      if (!ts) return '-';
+      return (
+        <TimestampCell timestamp={ts} />
+      );
+    },
+    sortingFn: 'datetime',
+  }),
+];
+export function evalToRow(e: EvaluationResult): EvalRow {
+  return {
+    score: typeof e.scoreValue === 'number' ? e.scoreValue : null,
+    explanation: e.explanation,
+    traceId: e.traceId,
+    timestamp: e.timestamp,
+    evaluator: e.evaluator,
+    label: e.scoreLabel,
+    evaluatorType: e.evaluatorType,
+    spanId: e.spanId,
+    sessionId: e.sessionId,
+    agentName: e.agentName,
+    trajectoryLength: e.trajectoryLength,
+    stepScores: e.stepScores as EvalRow['stepScores'],
+    toolVerifications: e.toolVerifications as EvalRow['toolVerifications'],
+  };
+}
+export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
+  'use no memo';
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [activeCategories, setActiveCategories] = useState<LabelFilterCategory[]>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const table = useReactTable({
+    data: evaluations,
+    columns,
+    state: { sorting, columnFilters, expanded },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: () => true,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+  });
+  const toggleCategory = (cat: LabelFilterCategory) => {
+    const next = activeCategories.includes(cat)
+      ? activeCategories.filter((c) => c !== cat)
+      : [...activeCategories, cat];
+    setActiveCategories(next);
+    setColumnFilters(
+      next.length > 0 ? [{ id: 'label', value: next }] : [],
+    );
+  };
+  const sortDir = (colId: string): 'ascending' | 'descending' | 'none' => {
+    const s = sorting.find((entry) => entry.id === colId);
+    if (!s) return 'none';
+    return s.desc ? 'descending' : 'ascending';
+  };
+  return (
+    <div>
+      <div className="d-flex mb-3 gap-1-5">
+        {(['Pass', 'Review', 'Fail'] as const).map((cat) => {
+          const active = activeCategories.includes(cat);
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => toggleCategory(cat)}
+              className="eval-filter-chip text-xs font-semibold cursor-pointer"
+              style={{ '--chip-color': CATEGORY_COLORS[cat] } as CSSProperties}
+              data-active={active || undefined}
+            >
+              {cat}
+            </button>
+          );
+        })}
+      </div>
+      <table className="data-table eval-table">
+        <thead>
+          {table.getHeaderGroups().map((hg) => (
+            <tr key={hg.id}>
+              {hg.headers.map((header) => {
+                const canSort = header.column.getCanSort();
+                return (
+                  <th
+                    key={header.id}
+                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                    className={`select-none${canSort ? ' cursor-pointer' : ''}`}
+                    aria-sort={canSort ? sortDir(header.id) : undefined}
+                  >
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {canSort && (
+                      <span className="ml-1 text-2xs">
+                        {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
+                      </span>
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <Fragment key={row.id}>
+              <tr className={row.getIsExpanded() ? 'eval-row-expanded' : ''}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+              {row.getIsExpanded() && (
+                <tr className="eval-expanded-panel">
+                  <td colSpan={row.getVisibleCells().length}>
+                    <EvaluationExpandedRow row={row.original} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          ))}
+          {table.getRowModel().rows.length === 0 && (
+            <tr>
+              <td colSpan={table.getVisibleLeafColumns().length} className="text-muted text-center p-4">
+                No evaluations match the current filter.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+================
 File: src/components/MetricCard.tsx
 ================
 import { memo } from 'react';
@@ -14013,291 +14298,6 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
 }
 
 ================
-File: src/components/EvaluationTable.tsx
-================
-import { useState, Fragment } from 'react';
-import type { EvaluationResult } from '../types.js';
-import {
-  createColumnHelper,
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getExpandedRowModel,
-  flexRender,
-  type SortingState,
-  type ColumnFiltersState,
-  type ExpandedState,
-  type SortingFn,
-  type FilterFn,
-} from '@tanstack/react-table';
-import type { CSSProperties } from 'react';
-import {
-  labelToOrdinal,
-  ordinalToCategory,
-  truncateText,
-  formatScore,
-  SCORE_COLORS,
-  type LabelFilterCategory,
-} from '../lib/quality-utils.js';
-import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
-import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
-import { TimestampCell } from './TimestampCell.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { ColoredChip } from './Chip.js';
-import { ScoreBadge } from './ScoreBadge.js';
-export interface EvalRow {
-  score: number | null;
-  explanation?: string;
-  traceId?: string;
-  timestamp?: string;
-  evaluator?: string;
-  label?: string;
-  evaluatorType?: string;
-  spanId?: string;
-  sessionId?: string;
-  agentName?: string;
-  trajectoryLength?: number;
-  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
-  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
-}
-const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
-  Pass: SCORE_COLORS.excellent,
-  Review: SCORE_COLORS.adequate,
-  Fail: SCORE_COLORS.failing,
-};
-const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) => {
-  const a = labelToOrdinal(rowA.original.label ?? 'unknown').ordinal;
-  const b = labelToOrdinal(rowB.original.label ?? 'unknown').ordinal;
-  return a - b;
-};
-const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) => {
-  if (!filterValue || filterValue.length === 0) return true;
-  const category = ordinalToCategory(labelToOrdinal(row.original.label ?? 'unknown').ordinal);
-  return filterValue.includes(category);
-};
-const columnHelper = createColumnHelper<EvalRow>();
-const columns = [
-  columnHelper.display({
-    id: 'expand',
-    header: '',
-    cell: ({ row }) => (
-      <button
-        type="button"
-        className="cursor-pointer btn-reset btn-expand"
-        onClick={row.getToggleExpandedHandler()}
-        aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
-      >
-        <ExpandChevron expanded={row.getIsExpanded()} className="text-secondary text-xs" />
-      </button>
-    ),
-    size: EVAL_TABLE_EXPAND_COL_SIZE,
-  }),
-  columnHelper.accessor('score', {
-    header: 'Score',
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <ScoreBadge
-          score={info.getValue()}
-          metricName="score"
-          label={formatScore(info.getValue())}
-          evaluator={row.evaluator}
-          evaluatorType={row.evaluatorType}
-          explanation={row.explanation}
-          traceId={row.traceId}
-        />
-      );
-    },
-    sortingFn: 'basic',
-  }),
-  columnHelper.accessor('label', {
-    header: 'Label',
-    cell: (info) => {
-      const label = info.getValue() ?? 'unknown';
-      const { category } = labelToOrdinal(label);
-      return (
-        <ColoredChip color={CATEGORY_COLORS[category]} className="font-medium">
-          {label}
-        </ColoredChip>
-      );
-    },
-    sortingFn: labelSortFn,
-    filterFn: categoryFilterFn,
-  }),
-  columnHelper.display({
-    id: 'category',
-    header: 'Category',
-    cell: (info) => {
-      const label = info.row.original.label ?? 'unknown';
-      const category = ordinalToCategory(labelToOrdinal(label).ordinal);
-      return (
-        <ColoredChip color={CATEGORY_COLORS[category]} className="font-semibold">
-          {category}
-        </ColoredChip>
-      );
-    },
-  }),
-  columnHelper.accessor('explanation', {
-    header: 'Explanation',
-    cell: (info) => {
-      const text = info.getValue() ?? '-';
-      return (
-        <span className="explanation truncate" title={text}>
-          {truncateText(text, 60)}
-        </span>
-      );
-    },
-    enableSorting: false,
-  }),
-  columnHelper.accessor('evaluator', {
-    header: 'Evaluator',
-    cell: (info) => (
-      <span className="mono-xs">
-        {info.getValue() ?? '-'}
-      </span>
-    ),
-    enableSorting: false,
-  }),
-  columnHelper.accessor('timestamp', {
-    header: 'Timestamp',
-    cell: (info) => {
-      const ts = info.getValue();
-      if (!ts) return '-';
-      return (
-        <TimestampCell timestamp={ts} />
-      );
-    },
-    sortingFn: 'datetime',
-  }),
-];
-export function evalToRow(e: EvaluationResult): EvalRow {
-  return {
-    score: typeof e.scoreValue === 'number' ? e.scoreValue : null,
-    explanation: e.explanation,
-    traceId: e.traceId,
-    timestamp: e.timestamp,
-    evaluator: e.evaluator,
-    label: e.scoreLabel,
-    evaluatorType: e.evaluatorType,
-    spanId: e.spanId,
-    sessionId: e.sessionId,
-    agentName: e.agentName,
-    trajectoryLength: e.trajectoryLength,
-    stepScores: e.stepScores as EvalRow['stepScores'],
-    toolVerifications: e.toolVerifications as EvalRow['toolVerifications'],
-  };
-}
-export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
-  'use no memo';
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [activeCategories, setActiveCategories] = useState<LabelFilterCategory[]>([]);
-  const [expanded, setExpanded] = useState<ExpandedState>({});
-  const table = useReactTable({
-    data: evaluations,
-    columns,
-    state: { sorting, columnFilters, expanded },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onExpandedChange: setExpanded,
-    getRowCanExpand: () => true,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
-  });
-  const toggleCategory = (cat: LabelFilterCategory) => {
-    const next = activeCategories.includes(cat)
-      ? activeCategories.filter((c) => c !== cat)
-      : [...activeCategories, cat];
-    setActiveCategories(next);
-    setColumnFilters(
-      next.length > 0 ? [{ id: 'label', value: next }] : [],
-    );
-  };
-  const sortDir = (colId: string): 'ascending' | 'descending' | 'none' => {
-    const s = sorting.find((entry) => entry.id === colId);
-    if (!s) return 'none';
-    return s.desc ? 'descending' : 'ascending';
-  };
-  return (
-    <div>
-      <div className="d-flex mb-3 gap-1-5">
-        {(['Pass', 'Review', 'Fail'] as const).map((cat) => {
-          const active = activeCategories.includes(cat);
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => toggleCategory(cat)}
-              className="eval-filter-chip text-xs font-semibold cursor-pointer"
-              style={{ '--chip-color': CATEGORY_COLORS[cat] } as CSSProperties}
-              data-active={active || undefined}
-            >
-              {cat}
-            </button>
-          );
-        })}
-      </div>
-      <table className="data-table eval-table">
-        <thead>
-          {table.getHeaderGroups().map((hg) => (
-            <tr key={hg.id}>
-              {hg.headers.map((header) => {
-                const canSort = header.column.getCanSort();
-                return (
-                  <th
-                    key={header.id}
-                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                    className={`select-none${canSort ? ' cursor-pointer' : ''}`}
-                    aria-sort={canSort ? sortDir(header.id) : undefined}
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {canSort && (
-                      <span className="ml-1 text-2xs">
-                        {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
-                      </span>
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <Fragment key={row.id}>
-              <tr className={row.getIsExpanded() ? 'eval-row-expanded' : ''}>
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-              {row.getIsExpanded() && (
-                <tr className="eval-expanded-panel">
-                  <td colSpan={row.getVisibleCells().length}>
-                    <EvaluationExpandedRow row={row.original} />
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          ))}
-          {table.getRowModel().rows.length === 0 && (
-            <tr>
-              <td colSpan={table.getVisibleLeafColumns().length} className="text-muted text-center p-4">
-                No evaluations match the current filter.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-================
 File: src/components/HealthOverview.tsx
 ================
 import type { QualityDashboardSummary } from '../types.js';
@@ -14366,6 +14366,159 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
       <StatDisplay value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
       <StatDisplay value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
     </HealthBanner>
+  );
+}
+
+================
+File: src/components/QualityLiveIndicator.tsx
+================
+import type { CSSProperties } from 'react';
+import { useQualityLive } from '../hooks/useQualityLive.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
+import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_CHIP_PRECISION } from '../lib/constants.js';
+function scoreToBadgeColor(score: number): string {
+  if (score >= SCORE_THRESHOLD_GREEN) return 'var(--status-healthy)';
+  if (score >= SCORE_THRESHOLD_YELLOW) return 'var(--status-warning)';
+  return 'var(--status-critical)';
+}
+export function QualityLiveIndicator() {
+  const { data, isLoading, error } = useQualityLive();
+  if (isLoading) {
+    return <div className="quality-live-bar opacity-50">Loading quality signals...</div>;
+  }
+  if (error || !data) {
+    return null;
+  }
+  if (data.metrics.length === 0) {
+    return null;
+  }
+  return (
+    <div
+      className="quality-live-bar flex-center gap-2 text-xs surface-elevated"
+      role="status"
+      aria-label="Live quality signals"
+    >
+      <span className="text-secondary font-semibold mr-1">
+        Quality
+      </span>
+      {data.metrics.map((m) => (
+        <span
+          key={m.name}
+          title={`${m.name}: ${m.score.toFixed(SCORE_CHIP_PRECISION)} (${m.evaluatorType})`}
+          className="mono text-xs chip gap-1 font-medium inline-flex-center quality-chip"
+          style={{ '--chip-color': scoreToBadgeColor(m.score) } as CSSProperties}
+        >
+          <span className="dot-xs" />
+          {m.name.replace(/_/g, ' ')}
+          <span className="font-bold">{m.score.toFixed(SCORE_CHIP_PRECISION)}</span>
+        </span>
+      ))}
+      <span className="text-secondary text-2xs ml-auto">
+        {formatTimestamp(data.lastUpdated)}
+      </span>
+    </div>
+  );
+}
+
+================
+File: src/components/ScoreBadge.tsx
+================
+import { Link } from 'wouter';
+import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
+import { SCORE_SHAPES } from '../lib/symbols.js';
+import { useMetricCalibration } from '../context/CalibrationContext.js';
+import type { ReactNode } from 'react';
+function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode; mono?: boolean }) {
+  if (value == null || value === '') return null;
+  return (
+    <div className="tooltip-row">
+      <span className="text-secondary">{label}</span>
+      <span className={mono ? 'mono-xs' : undefined}>{value}</span>
+    </div>
+  );
+}
+interface ScoreBadgeProps {
+  score: number | null;
+  metricName: string;
+  direction?: ScoreDirection;
+  label?: string;
+  evaluator?: string;
+  evaluatorType?: string;
+  explanation?: string;
+  traceId?: string;
+  calibration?: { distribution: PercentileDistribution; sampleSize: number };
+}
+function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
+  score: number;
+  label?: string;
+  evaluator?: string;
+  evaluatorType?: string;
+  explanation?: string;
+  traceId?: string;
+}) {
+  return (
+    <div className="score-badge-tooltip surface-elevated" role="tooltip">
+      <MetadataRow label="Score" value={formatScore(score)} mono />
+      <MetadataRow label="Label" value={label} />
+      <MetadataRow label="Evaluator" value={evaluator} mono />
+      <MetadataRow label="Type" value={evaluatorType} />
+      {explanation && (
+        <div className="tooltip-row tooltip-row--col gap-half">
+          <span className="text-secondary">Explanation</span>
+          <span className="text-secondary text-xs">{truncateText(explanation, 120)}</span>
+        </div>
+      )}
+      {traceId && (
+        <Link href={routes.evaluationDetail(traceId)} className="tooltip-link text-xs">
+          View full explanation &rarr;
+        </Link>
+      )}
+    </div>
+  );
+}
+export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId, calibration: calibrationProp }: ScoreBadgeProps) {
+  const contextCalibration = useMetricCalibration(metricName);
+  const calibration = calibrationProp ?? contextCalibration;
+  const hasTooltip = evaluator || evaluatorType || explanation || traceId;
+  if (score === null) {
+    return (
+      <span
+        className="inline-flex-center gap-1 score-no-data"
+        aria-label={`${metricName}: no data`}
+      >
+        {SCORE_SHAPES.no_data} {label ?? 'N/A'}
+      </span>
+    );
+  }
+  const band = calibration
+    ? adaptiveScoreColorBand(score, metricName, direction, calibration.distribution, calibration.sampleSize)
+    : scoreColorBand(score, direction);
+  const shape = SCORE_SHAPES[band];
+  const directionHint = direction === 'minimize' ? 'lower is better' : 'higher is better';
+  const badge = (
+    <span
+      className="inline-flex-center gap-1 score-band"
+      data-band={band}
+      aria-label={`Score: ${score}, ${band} (${directionHint})`}
+    >
+      {shape} {label ?? score.toFixed(SCORE_CHIP_PRECISION)}
+    </span>
+  );
+  if (!hasTooltip) return badge;
+  return (
+    <span className="score-badge-wrapper inline-flex-center" tabIndex={0}>
+      {badge}
+      <Tooltip
+        score={score}
+        label={label}
+        evaluator={evaluator}
+        evaluatorType={evaluatorType}
+        explanation={explanation}
+        traceId={traceId}
+      />
+    </span>
   );
 }
 
@@ -14716,186 +14869,6 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
 }
 
 ================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-const ATTR_AGENT_NAME = 'gen_ai.agent.name';
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
-const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph {
-  if (evaluation !== null && Array.isArray(evaluation.turns)) {
-    return buildFromEvaluation(evaluation, spans);
-  }
-  return inferFromSpans(spans);
-}
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
-  let droppedTurns = 0;
-  let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
-  for (const turn of evaluation.turns) {
-    if (turn.agentName == null) {
-      droppedTurns++;
-      continue;
-    }
-    const existing = agentTurns.get(turn.agentName) ?? [];
-    existing.push(turn);
-    agentTurns.set(turn.agentName, existing);
-    if (
-      turn.turnIndex < minTurnIndex ||
-      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
-    ) {
-      minTurnIndex = turn.turnIndex;
-      rootAgentName = turn.agentName;
-    }
-  }
-  const nodes: WorkflowNode[] = [];
-  for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
-    const evaluationScore = relevances.length > 0
-      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
-      : null;
-    const agentSpans = spans.filter(s => s.attributes?.[ATTR_AGENT_NAME] === agentName);
-    const toolCallCount = agentSpans.filter(s => s.name === 'tool_call').length;
-    let tokenSum = 0, tokenCount = 0;
-    for (const s of agentSpans) {
-      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && isFinite(v)) { tokenSum += v; tokenCount++; }
-    }
-    const totalTokens = tokenCount > 0 ? tokenSum : null;
-    const durationMs = agentSpans.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
-    nodes.push({
-      id: agentName,
-      label: agentName,
-      evaluationScore,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: turns.length,
-      hasError: turns.some(t => t.hasError),
-    });
-  }
-  const seenEdges = new Set<string>();
-  const edges: WorkflowEdge[] = [];
-  for (const h of evaluation.handoffs) {
-    const key = `${h.sourceAgent}->${h.targetAgent}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
-    const score = isFinite(h.score) ? h.score : 0;
-    edges.push({
-      id: key,
-      source: h.sourceAgent,
-      target: h.targetAgent,
-      handoffScore: score,
-      contextPreserved: h.contextPreserved,
-      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
-    });
-  }
-  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
-}
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = new Map<string, TraceSpan[]>();
-  for (const span of spans) {
-    const agentId = span.attributes?.[ATTR_AGENT_ID] as string | undefined;
-    if (!agentId) continue;
-    const group = agentSpans.get(agentId) ?? [];
-    group.push(span);
-    agentSpans.set(agentId, group);
-  }
-  if (agentSpans.size === 0) {
-    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
-  }
-  const nodes: WorkflowNode[] = [];
-  for (const [agentId, group] of agentSpans) {
-    const toolCallCount = group.filter(s => s.name.startsWith('tool:')).length;
-    const tokenValues = group
-      .map(s => s.attributes?.[ATTR_TOTAL_TOKENS])
-      .filter((v): v is number => typeof v === 'number' && isFinite(v));
-    const totalTokens = tokenValues.length > 0 ? tokenValues.reduce((a, b) => a + b, 0) : null;
-    const durationMs = group.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
-    nodes.push({
-      id: agentId,
-      label: agentId,
-      evaluationScore: null,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: group.length,
-      hasError: group.some(s => s.status?.code === OTEL_STATUS_ERROR_CODE),
-    });
-  }
-  const agentTimings = [...agentSpans.entries()].map(([id, group]) => ({
-    id,
-    minStart: Math.min(...group.map(s => s.startTimeUnixNano)),
-    maxEnd: Math.max(...group.map(s => s.endTimeUnixNano ?? s.startTimeUnixNano)),
-  })).sort((a, b) => a.minStart - b.minStart);
-  const edges: WorkflowEdge[] = [];
-  for (let i = 0; i < agentTimings.length - 1; i++) {
-    const curr = agentTimings[i];
-    const next = agentTimings[i + 1];
-    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
-      const key = `${curr.id}->${next.id}`;
-      edges.push({
-        id: key,
-        source: curr.id,
-        target: next.id,
-        handoffScore: null,
-        contextPreserved: false,
-        label: 'inferred',
-      });
-    }
-  }
-  const rootNodeId = agentTimings[0]?.id ?? null;
-  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
-}
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
-  const adjacency = new Map<string, string[]>();
-  for (const n of nodes) adjacency.set(n.id, []);
-  for (const e of edges) {
-    if (e.source !== e.target) {
-      adjacency.get(e.source)?.push(e.target);
-    }
-  }
-  const UNVISITED = 0;
-  const IN_STACK = 1;
-  const DONE = 2;
-  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
-  function dfs(nodeId: string): boolean {
-    state.set(nodeId, IN_STACK);
-    for (const neighbor of adjacency.get(nodeId) ?? []) {
-      const neighborState = state.get(neighbor) ?? UNVISITED;
-      if (neighborState === IN_STACK) return true;
-      if (neighborState === UNVISITED && dfs(neighbor)) return true;
-    }
-    state.set(nodeId, DONE);
-    return false;
-  }
-  for (const n of nodes) {
-    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
-  }
-  return false;
-}
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
-  if (nodes.length <= 1) return 'single_agent';
-  if (edges.length === 0) return 'single_agent';
-  if (hasCycle(nodes, edges)) return 'cyclic';
-  const outDegree = new Map<string, number>();
-  for (const e of edges) {
-    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
-  }
-  for (const count of outDegree.values()) {
-    if (count > 1) return 'branching';
-  }
-  return 'linear';
-}
-
-================
 File: src/pages/RoutingTelemetryPage.tsx
 ================
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
@@ -15193,156 +15166,189 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
 });
 
 ================
-File: src/components/QualityLiveIndicator.tsx
+File: src/lib/workflow-graph.ts
 ================
-import type { CSSProperties } from 'react';
-import { useQualityLive } from '../hooks/useQualityLive.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_CHIP_PRECISION } from '../lib/constants.js';
-function scoreToBadgeColor(score: number): string {
-  if (score >= SCORE_THRESHOLD_GREEN) return 'var(--status-healthy)';
-  if (score >= SCORE_THRESHOLD_YELLOW) return 'var(--status-warning)';
-  return 'var(--status-critical)';
-}
-export function QualityLiveIndicator() {
-  const { data, isLoading, error } = useQualityLive();
-  if (isLoading) {
-    return <div className="quality-live-bar opacity-50">Loading quality signals...</div>;
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+const ATTR_AGENT_NAME = 'gen_ai.agent.name';
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
+const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph {
+  if (evaluation !== null && Array.isArray(evaluation.turns)) {
+    return buildFromEvaluation(evaluation, spans);
   }
-  if (error || !data) {
-    return null;
+  return inferFromSpans(spans);
+}
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
+  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  let droppedTurns = 0;
+  let rootAgentName: string | null = null;
+  let minTurnIndex = Infinity;
+  for (const turn of evaluation.turns) {
+    if (turn.agentName == null) {
+      droppedTurns++;
+      continue;
+    }
+    const existing = agentTurns.get(turn.agentName) ?? [];
+    existing.push(turn);
+    agentTurns.set(turn.agentName, existing);
+    if (
+      turn.turnIndex < minTurnIndex ||
+      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
+    ) {
+      minTurnIndex = turn.turnIndex;
+      rootAgentName = turn.agentName;
+    }
   }
-  if (data.metrics.length === 0) {
-    return null;
+  const nodes: WorkflowNode[] = [];
+  for (const [agentName, turns] of agentTurns) {
+    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
+    const evaluationScore = relevances.length > 0
+      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
+      : null;
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    for (const s of spans) {
+      if (s.attributes?.[ATTR_AGENT_NAME] !== agentName) continue;
+      if (s.name === 'tool_call') toolCallCount++;
+      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof v === 'number' && isFinite(v)) {
+        tokenSum += v;
+        tokenCount++;
+      }
+      durationMs += s.durationMs ?? 0;
+    }
+    const totalTokens = tokenCount > 0 ? tokenSum : null;
+    nodes.push({
+      id: agentName,
+      label: agentName,
+      evaluationScore,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: turns.length,
+      hasError: turns.some(t => t.hasError),
+    });
   }
-  return (
-    <div
-      className="quality-live-bar flex-center gap-2 text-xs surface-elevated"
-      role="status"
-      aria-label="Live quality signals"
-    >
-      <span className="text-secondary font-semibold mr-1">
-        Quality
-      </span>
-      {data.metrics.map((m) => (
-        <span
-          key={m.name}
-          title={`${m.name}: ${m.score.toFixed(SCORE_CHIP_PRECISION)} (${m.evaluatorType})`}
-          className="mono text-xs chip gap-1 font-medium inline-flex-center quality-chip"
-          style={{ '--chip-color': scoreToBadgeColor(m.score) } as CSSProperties}
-        >
-          <span className="dot-xs" />
-          {m.name.replace(/_/g, ' ')}
-          <span className="font-bold">{m.score.toFixed(SCORE_CHIP_PRECISION)}</span>
-        </span>
-      ))}
-      <span className="text-secondary text-2xs ml-auto">
-        {formatTimestamp(data.lastUpdated)}
-      </span>
-    </div>
-  );
-}
-
-================
-File: src/components/ScoreBadge.tsx
-================
-import { Link } from 'wouter';
-import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-import { routes } from '../lib/routes.js';
-import { SCORE_SHAPES } from '../lib/symbols.js';
-import { useMetricCalibration } from '../context/CalibrationContext.js';
-import type { ReactNode } from 'react';
-function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode; mono?: boolean }) {
-  if (value == null || value === '') return null;
-  return (
-    <div className="tooltip-row">
-      <span className="text-secondary">{label}</span>
-      <span className={mono ? 'mono-xs' : undefined}>{value}</span>
-    </div>
-  );
-}
-interface ScoreBadgeProps {
-  score: number | null;
-  metricName: string;
-  direction?: ScoreDirection;
-  label?: string;
-  evaluator?: string;
-  evaluatorType?: string;
-  explanation?: string;
-  traceId?: string;
-  calibration?: { distribution: PercentileDistribution; sampleSize: number };
-}
-function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
-  score: number;
-  label?: string;
-  evaluator?: string;
-  evaluatorType?: string;
-  explanation?: string;
-  traceId?: string;
-}) {
-  return (
-    <div className="score-badge-tooltip surface-elevated" role="tooltip">
-      <MetadataRow label="Score" value={formatScore(score)} mono />
-      <MetadataRow label="Label" value={label} />
-      <MetadataRow label="Evaluator" value={evaluator} mono />
-      <MetadataRow label="Type" value={evaluatorType} />
-      {explanation && (
-        <div className="tooltip-row tooltip-row--col gap-half">
-          <span className="text-secondary">Explanation</span>
-          <span className="text-secondary text-xs">{truncateText(explanation, 120)}</span>
-        </div>
-      )}
-      {traceId && (
-        <Link href={routes.evaluationDetail(traceId)} className="tooltip-link text-xs">
-          View full explanation &rarr;
-        </Link>
-      )}
-    </div>
-  );
-}
-export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId, calibration: calibrationProp }: ScoreBadgeProps) {
-  const contextCalibration = useMetricCalibration(metricName);
-  const calibration = calibrationProp ?? contextCalibration;
-  const hasTooltip = evaluator || evaluatorType || explanation || traceId;
-  if (score === null) {
-    return (
-      <span
-        className="inline-flex-center gap-1 score-no-data"
-        aria-label={`${metricName}: no data`}
-      >
-        {SCORE_SHAPES.no_data} {label ?? 'N/A'}
-      </span>
-    );
+  const seenEdges = new Set<string>();
+  const edges: WorkflowEdge[] = [];
+  for (const h of evaluation.handoffs) {
+    const key = `${h.sourceAgent}->${h.targetAgent}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    const score = isFinite(h.score) ? h.score : 0;
+    edges.push({
+      id: key,
+      source: h.sourceAgent,
+      target: h.targetAgent,
+      handoffScore: score,
+      contextPreserved: h.contextPreserved,
+      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
+    });
   }
-  const band = calibration
-    ? adaptiveScoreColorBand(score, metricName, direction, calibration.distribution, calibration.sampleSize)
-    : scoreColorBand(score, direction);
-  const shape = SCORE_SHAPES[band];
-  const directionHint = direction === 'minimize' ? 'lower is better' : 'higher is better';
-  const badge = (
-    <span
-      className="inline-flex-center gap-1 score-band"
-      data-band={band}
-      aria-label={`Score: ${score}, ${band} (${directionHint})`}
-    >
-      {shape} {label ?? score.toFixed(SCORE_CHIP_PRECISION)}
-    </span>
-  );
-  if (!hasTooltip) return badge;
-  return (
-    <span className="score-badge-wrapper inline-flex-center" tabIndex={0}>
-      {badge}
-      <Tooltip
-        score={score}
-        label={label}
-        evaluator={evaluator}
-        evaluatorType={evaluatorType}
-        explanation={explanation}
-        traceId={traceId}
-      />
-    </span>
-  );
+  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
+}
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
+  const agentSpans = new Map<string, TraceSpan[]>();
+  for (const span of spans) {
+    const agentId = span.attributes?.[ATTR_AGENT_ID] as string | undefined;
+    if (!agentId) continue;
+    const group = agentSpans.get(agentId) ?? [];
+    group.push(span);
+    agentSpans.set(agentId, group);
+  }
+  if (agentSpans.size === 0) {
+    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
+  }
+  const nodes: WorkflowNode[] = [];
+  for (const [agentId, group] of agentSpans) {
+    const toolCallCount = group.filter(s => s.name.startsWith('tool:')).length;
+    const tokenValues = group
+      .map(s => s.attributes?.[ATTR_TOTAL_TOKENS])
+      .filter((v): v is number => typeof v === 'number' && isFinite(v));
+    const totalTokens = tokenValues.length > 0 ? tokenValues.reduce((a, b) => a + b, 0) : null;
+    const durationMs = group.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
+    nodes.push({
+      id: agentId,
+      label: agentId,
+      evaluationScore: null,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: group.length,
+      hasError: group.some(s => s.status?.code === OTEL_STATUS_ERROR_CODE),
+    });
+  }
+  const agentTimings = [...agentSpans.entries()].map(([id, group]) => ({
+    id,
+    minStart: Math.min(...group.map(s => s.startTimeUnixNano)),
+    maxEnd: Math.max(...group.map(s => s.endTimeUnixNano ?? s.startTimeUnixNano)),
+  })).sort((a, b) => a.minStart - b.minStart);
+  const edges: WorkflowEdge[] = [];
+  for (let i = 0; i < agentTimings.length - 1; i++) {
+    const curr = agentTimings[i];
+    const next = agentTimings[i + 1];
+    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
+      const key = `${curr.id}->${next.id}`;
+      edges.push({
+        id: key,
+        source: curr.id,
+        target: next.id,
+        handoffScore: null,
+        contextPreserved: false,
+        label: 'inferred',
+      });
+    }
+  }
+  const rootNodeId = agentTimings[0]?.id ?? null;
+  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
+}
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
+  const adjacency = new Map<string, string[]>();
+  for (const n of nodes) adjacency.set(n.id, []);
+  for (const e of edges) {
+    if (e.source !== e.target) {
+      adjacency.get(e.source)?.push(e.target);
+    }
+  }
+  const UNVISITED = 0;
+  const IN_STACK = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
+  function dfs(nodeId: string): boolean {
+    state.set(nodeId, IN_STACK);
+    for (const neighbor of adjacency.get(nodeId) ?? []) {
+      const neighborState = state.get(neighbor) ?? UNVISITED;
+      if (neighborState === IN_STACK) return true;
+      if (neighborState === UNVISITED && dfs(neighbor)) return true;
+    }
+    state.set(nodeId, DONE);
+    return false;
+  }
+  for (const n of nodes) {
+    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  }
+  return false;
+}
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
+  if (nodes.length <= 1) return 'single_agent';
+  if (edges.length === 0) return 'single_agent';
+  if (hasCycle(nodes, edges)) return 'cyclic';
+  const outDegree = new Map<string, number>();
+  for (const e of edges) {
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+  }
+  for (const count of outDegree.values()) {
+    if (count > 1) return 'branching';
+  }
+  return 'linear';
 }
 
 ================
@@ -15749,155 +15755,6 @@ export function App() {
 }
 
 ================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
-const TREND_PADDING_RATIO = 0.1;
-const TREND_PADDING_MIN_MS = 60_000;
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const evWithTs = evaluations.map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }));
-    const validTs = evWithTs.filter(({ ts }) => Number.isFinite(ts));
-    const dataMin = validTs.length > 0 ? Math.min(...validTs.map(({ ts }) => ts)) : periodStart.getTime();
-    const dataMax = validTs.length > 0 ? Math.max(...validTs.map(({ ts }) => ts)) : now.getTime();
-    const dataSpan = dataMax - dataMin;
-    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-    for (const { ev, ts } of evWithTs) {
-      if (!Number.isFinite(ts)) continue;
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
-        }
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
 File: src/components/PipelineFunnel.tsx
 ================
 import { memo, type CSSProperties } from 'react';
@@ -16255,108 +16112,6 @@ export function formatTimestamp(ts: string): string {
   const diffDay = differenceInDays(now, d);
   if (diffDay < 7) return `${diffDay}d ago`;
   return format(d, 'PP');
-}
-
-================
-File: src/api/api-constants.ts
-================
-export const PERCENT_BASE = 100;
-export const LATENCY_P50 = 50;
-export const LATENCY_P95 = 95;
-export const LATENCY_DISPLAY_PRECISION = 1;
-export const RATE_DISPLAY_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const FILE_ACCESS_TOP_N = 30;
-export const CONCENTRATION_THRESHOLD = 0.2;
-export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
-export const COMMIT_BODY_START_LINE_INDEX = 2;
-export const MAX_TRACE_ID_LEN = 128;
-export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
-export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
-export const SCORE_ROUND_FACTOR = 10_000;
-export const LOG_SUMMARY_MAX_ENTRIES = 200;
-export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-export const NANOS_TO_MS = 1_000_000;
-export function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
-}
-export const HOOK_NAME = {
-  SESSION_START: 'session-start',
-  TOKEN_METRICS: 'token-metrics-extraction',
-  AGENT_POST_TOOL: 'agent-post-tool',
-  POST_COMMIT_REVIEW: 'post-commit-review',
-  ALERT_EVALUATION: 'telemetry-alert-evaluation',
-  CODE_STRUCTURE: 'code-structure',
-} as const;
-export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals.reduce<number[]>((acc, e) => {
-    if (e.scoreValue != null && Number.isFinite(e.scoreValue)) acc.push(e.scoreValue);
-    return acc;
-  }, []);
-}
-
-================
-File: src/components/CQIHero.tsx
-================
-import type { CSSProperties } from 'react';
-import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
-import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-function segmentColor(contribution: CQIContribution): string {
-  return scoreColor(contribution.rawScore, 'maximize');
-}
-export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
-  const displayValue = (cqi.value * 100).toFixed(1);
-  const overallColor = scoreColor(cqi.value, 'maximize');
-  return (
-    <div
-      role="region"
-      aria-label={`Composite Quality Index: ${displayValue}`}
-      className="card text-center p-6"
-      style={{ '--cqi-color': overallColor } as CSSProperties}
-    >
-      <div className="field-label text-secondary text-xs mb-1">
-        Composite Quality Index
-      </div>
-      <div className="mono font-bold cqi-value">
-        {displayValue}
-      </div>
-      {cqi.contributions.length > 0 && (
-        <div className="d-flex mt-4 cqi-segment-bar">
-          {cqi.contributions.map((c) => (
-            <div
-              key={c.metric}
-              className="cqi-segment"
-              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * 100, 0)})`}
-              style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
-            />
-          ))}
-        </div>
-      )}
-      <table className="sr-only">
-        <caption>CQI Metric Breakdown</caption>
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Raw Score</th>
-            <th>Weight</th>
-            <th>Contribution</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cqi.contributions.map((c) => (
-            <tr key={c.metric}>
-              <td>{c.metric}</td>
-              <td>{formatScore(c.rawScore)}</td>
-              <td>{formatPercent(c.weight * 100, 0)}</td>
-              <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 ================
@@ -17441,6 +17196,261 @@ main().catch((err) => {
 });
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
+const TREND_PADDING_RATIO = 0.1;
+const TREND_PADDING_MIN_MS = 60_000;
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const evWithTs = evaluations.map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }));
+    const validTs = evWithTs.filter(({ ts }) => Number.isFinite(ts));
+    const { dataMin, dataMax } = validTs.length > 0
+      ? validTs.reduce(
+          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
+          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
+        )
+      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
+    const dataSpan = dataMax - dataMin;
+    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+        evals: [],
+      });
+    }
+    for (const { ev, ts } of evWithTs) {
+      if (!Number.isFinite(ts)) continue;
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
+      }
+    }
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+        : undefined;
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = extractFiniteScores(evaluations);
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/api-constants.ts
+================
+export const PERCENT_BASE = 100;
+export const LATENCY_P50 = 50;
+export const LATENCY_P95 = 95;
+export const LATENCY_DISPLAY_PRECISION = 1;
+export const RATE_DISPLAY_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const FILE_ACCESS_TOP_N = 30;
+export const CONCENTRATION_THRESHOLD = 0.2;
+export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
+export const COMMIT_BODY_START_LINE_INDEX = 2;
+export const MAX_TRACE_ID_LEN = 128;
+export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
+export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
+export const SCORE_ROUND_FACTOR = 10_000;
+export const LOG_SUMMARY_MAX_ENTRIES = 200;
+export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+export const NANOS_TO_MS = 1_000_000;
+export function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+export const HOOK_NAME = {
+  SESSION_START: 'session-start',
+  TOKEN_METRICS: 'token-metrics-extraction',
+  AGENT_POST_TOOL: 'agent-post-tool',
+  POST_COMMIT_REVIEW: 'post-commit-review',
+  ALERT_EVALUATION: 'telemetry-alert-evaluation',
+  CODE_STRUCTURE: 'code-structure',
+} as const;
+export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals.reduce<number[]>((acc, e) => {
+    if (e.scoreValue != null && Number.isFinite(e.scoreValue)) acc.push(e.scoreValue);
+    return acc;
+  }, []);
+}
+
+================
+File: src/components/CQIHero.tsx
+================
+import type { CSSProperties } from 'react';
+import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
+import type { CompositeQualityIndex, CQIContribution } from '../types.js';
+import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+function segmentColor(contribution: CQIContribution): string {
+  return scoreColor(contribution.rawScore, 'maximize');
+}
+export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
+  const displayValue = (cqi.value * 100).toFixed(1);
+  const overallColor = scoreColor(cqi.value, 'maximize');
+  return (
+    <div
+      role="region"
+      aria-label={`Composite Quality Index: ${displayValue}`}
+      className="card text-center p-6"
+      style={{ '--cqi-color': overallColor } as CSSProperties}
+    >
+      <div className="field-label text-secondary text-xs mb-1">
+        Composite Quality Index
+      </div>
+      <div className="mono font-bold cqi-value">
+        {displayValue}
+      </div>
+      {cqi.contributions.length > 0 && (
+        <div className="d-flex mt-4 cqi-segment-bar">
+          {cqi.contributions.map((c) => (
+            <div
+              key={c.metric}
+              className="cqi-segment"
+              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * 100, 0)})`}
+              style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
+            />
+          ))}
+        </div>
+      )}
+      <table className="sr-only">
+        <caption>CQI Metric Breakdown</caption>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Raw Score</th>
+            <th>Weight</th>
+            <th>Contribution</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cqi.contributions.map((c) => (
+            <tr key={c.metric}>
+              <td>{c.metric}</td>
+              <td>{formatScore(c.rawScore)}</td>
+              <td>{formatPercent(c.weight * 100, 0)}</td>
+              <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+================
 File: src/components/CoverageGrid.tsx
 ================
 import { memo, useState, useMemo, type CSSProperties } from 'react';
@@ -17578,6 +17588,123 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   );
 }
 export const CoverageGrid = memo(CoverageGridInner);
+
+================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[] {
+  const nodeMap = new Map<string, SpanNode>();
+  const roots: SpanNode[] = [];
+  for (const s of spans) {
+    nodeMap.set(s.spanId, {
+      spanId: s.spanId,
+      name: s.name,
+      durationMs: s.durationMs,
+      status: s.status,
+      attributes: s.attributes,
+      children: [],
+      evalCount: evalsBySpan.get(s.spanId) ?? 0,
+    });
+  }
+  for (const s of spans) {
+    const node = nodeMap.get(s.spanId)!;
+    const parentId = (s as { parentSpanId?: string }).parentSpanId;
+    if (parentId && nodeMap.has(parentId)) {
+      nodeMap.get(parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
+}
+const STATUS_ICONS: Record<number, string> = {
+  0: '',      // UNSET
+  1: '\u2713',
+  2: '\u2717',
+};
+function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
+  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
+  const statusCode = node.status?.code ?? 0;
+  const isError = statusCode === OTEL_STATUS_ERROR_CODE;
+  const barStyle: CSSProperties = {
+    '--span-bar-width': `${barPct}%`,
+    '--span-bar-min-width': barPct > 0 ? 'var(--space-0-5)' : '0',
+  } as CSSProperties;
+  return (
+    <>
+      <div
+        className="flex-center gap-2 border-b span-row"
+        style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
+      >
+        <span className="text-base span-status-icon" data-error={isError || undefined}>
+          {STATUS_ICONS[statusCode]}
+        </span>
+        <div className="flex-1">
+          <div className="text-xs font-medium">{node.name}</div>
+          <div className="flex-center gap-2">
+            <div className="flex-1 bar-track">
+              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
+            </div>
+            {node.durationMs != null && (
+              <span className="mono-xs text-secondary nowrap">
+                {fmtDuration(node.durationMs, 2)}
+              </span>
+            )}
+          </div>
+        </div>
+        {node.evalCount > 0 && (
+          <span className="text-2xs chip font-semibold chip-accent">
+            {plural(node.evalCount, 'eval')}
+          </span>
+        )}
+      </div>
+      {node.children.map(child => (
+        <SpanRow key={child.spanId} node={child} depth={depth + 1} maxDuration={maxDuration} />
+      ))}
+    </>
+  );
+}
+export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
+  const roots = buildTree(spans, evalsBySpan);
+  if (roots.length === 0) {
+    return <EmptyState message="No spans found for this trace." />;
+  }
+  return (
+    <div>
+      {roots.map(node => (
+        <SpanRow key={node.spanId} node={node} depth={0} maxDuration={maxDuration} />
+      ))}
+    </div>
+  );
+}
 
 ================
 File: src/components/WorkflowGraph.tsx
@@ -17917,123 +18044,6 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
             );
           })}
         </div>
-      ))}
-    </div>
-  );
-}
-
-================
-File: src/components/SpanTree.tsx
-================
-import type { CSSProperties } from 'react';
-import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[] {
-  const nodeMap = new Map<string, SpanNode>();
-  const roots: SpanNode[] = [];
-  for (const s of spans) {
-    nodeMap.set(s.spanId, {
-      spanId: s.spanId,
-      name: s.name,
-      durationMs: s.durationMs,
-      status: s.status,
-      attributes: s.attributes,
-      children: [],
-      evalCount: evalsBySpan.get(s.spanId) ?? 0,
-    });
-  }
-  for (const s of spans) {
-    const node = nodeMap.get(s.spanId)!;
-    const parentId = (s as { parentSpanId?: string }).parentSpanId;
-    if (parentId && nodeMap.has(parentId)) {
-      nodeMap.get(parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-  return roots;
-}
-const STATUS_ICONS: Record<number, string> = {
-  0: '',      // UNSET
-  1: '\u2713',
-  2: '\u2717',
-};
-function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
-  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
-  const statusCode = node.status?.code ?? 0;
-  const isError = statusCode === OTEL_STATUS_ERROR_CODE;
-  const barStyle: CSSProperties = {
-    '--span-bar-width': `${barPct}%`,
-    '--span-bar-min-width': barPct > 0 ? 'var(--space-0-5)' : '0',
-  } as CSSProperties;
-  return (
-    <>
-      <div
-        className="flex-center gap-2 border-b span-row"
-        style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
-      >
-        <span className="text-base span-status-icon" data-error={isError || undefined}>
-          {STATUS_ICONS[statusCode]}
-        </span>
-        <div className="flex-1">
-          <div className="text-xs font-medium">{node.name}</div>
-          <div className="flex-center gap-2">
-            <div className="flex-1 bar-track">
-              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
-            </div>
-            {node.durationMs != null && (
-              <span className="mono-xs text-secondary nowrap">
-                {fmtDuration(node.durationMs, 2)}
-              </span>
-            )}
-          </div>
-        </div>
-        {node.evalCount > 0 && (
-          <span className="text-2xs chip font-semibold chip-accent">
-            {plural(node.evalCount, 'eval')}
-          </span>
-        )}
-      </div>
-      {node.children.map(child => (
-        <SpanRow key={child.spanId} node={child} depth={depth + 1} maxDuration={maxDuration} />
-      ))}
-    </>
-  );
-}
-export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
-  const roots = buildTree(spans, evalsBySpan);
-  if (roots.length === 0) {
-    return <EmptyState message="No spans found for this trace." />;
-  }
-  return (
-    <div>
-      {roots.map(node => (
-        <SpanRow key={node.spanId} node={node} depth={0} maxDuration={maxDuration} />
       ))}
     </div>
   );
@@ -18721,13 +18731,17 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const maxMcpCount = Math.max(...mcpUsageValues, 1);
   const maxFileCount = fileAccess[0]?.count ?? 1;
   const maxSpanCount = Math.max(...spanBreakdownValues, 1);
-  const hallucinationEvals = evaluations.filter(e =>
-    (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
-    ((e.scoreLabel ?? '').toLowerCase() === 'fail' && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
-  );
-  const failedEvals = evaluations.filter(e =>
-    (e.scoreLabel ?? '').toLowerCase() === 'fail'
-  );
+  const hallucinationEvals: typeof evaluations = [];
+  const failedEvals: typeof evaluations = [];
+  for (const e of evaluations) {
+    const label = (e.scoreLabel ?? '').toLowerCase();
+    const isFail = label === 'fail';
+    if (isFail) failedEvals.push(e);
+    if (
+      (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
+      (isFail && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
+    ) hallucinationEvals.push(e);
+  }
   const errorCount = errorDetails.length;
   const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
     hallucinationEvals.length > 0 || failedEvals.length > 0;

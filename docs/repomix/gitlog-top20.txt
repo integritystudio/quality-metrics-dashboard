@@ -1,3 +1,8 @@
+ce7da7d 2026-03-26 chore: regenerate repomix docs after Round 12 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 0d40ca0 2026-03-26 chore: regenerate repomix docs after Round 11 simplifications
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -326,6 +331,3 @@ b265898 2026-03-26 refactor(components): extract ConfidencePanel grid inline sty
 
 85a34fc 2026-03-26 refactor(sync-to-kv): replace magic numbers with named constants from api-constants
   scripts/sync-to-kv.ts
-
-80d9b06 2026-03-26 refactor(components): replace inline styles with CSS classes in AgentActivityPanel
-  src/theme.css

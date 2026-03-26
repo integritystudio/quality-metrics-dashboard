@@ -1784,6 +1784,39 @@ interface CorrelationsResponse {
 }
 
 ================
+File: src/pages/CoveragePage.tsx
+================
+import { useState } from 'react';
+import { CoverageGrid } from '../components/CoverageGrid.js';
+import { useCoverage } from '../hooks/useCoverage.js';
+import { PageShell } from '../components/PageShell.js';
+import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
+import type { Period } from '../types.js';
+
+================
+File: src/pages/EvaluationDetailPage.tsx
+================
+import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
+import { ProvenancePanel } from '../components/ProvenancePanel.js';
+import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
+import { PageShell } from '../components/PageShell.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { formatScore, plural } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
+import { TimestampCell } from '../components/TimestampCell.js';
+import { Link, useSearch } from 'wouter';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
+⋮----
+
+⋮----
+<Link href=
+⋮----
+href=
+
+================
 File: src/pages/TraceDetailPage.tsx
 ================
 import { useTrace } from '../hooks/useTrace.js';
@@ -2306,39 +2339,6 @@ import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 ⋮----
 
 ================
-File: src/pages/CoveragePage.tsx
-================
-import { useState } from 'react';
-import { CoverageGrid } from '../components/CoverageGrid.js';
-import { useCoverage } from '../hooks/useCoverage.js';
-import { PageShell } from '../components/PageShell.js';
-import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
-import type { Period } from '../types.js';
-
-================
-File: src/pages/EvaluationDetailPage.tsx
-================
-import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
-import { ProvenancePanel } from '../components/ProvenancePanel.js';
-import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
-import { PageShell } from '../components/PageShell.js';
-import { EmptyState } from '../components/EmptyState.js';
-import { formatScore, plural } from '../lib/quality-utils.js';
-import { routes } from '../lib/routes.js';
-import { TimestampCell } from '../components/TimestampCell.js';
-import { Link, useSearch } from 'wouter';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
-⋮----
-
-⋮----
-<Link href=
-⋮----
-href=
-
-================
 File: src/pages/LoginPage.tsx
 ================
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
@@ -2649,6 +2649,70 @@ interface EvaluationEventOverlayProps {
   traceId?: string;
 }
 export function EvaluationEventOverlay(
+
+================
+File: src/components/EvaluationTable.tsx
+================
+import { useState, Fragment } from 'react';
+import type { EvaluationResult } from '../types.js';
+import {
+  createColumnHelper,
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  getExpandedRowModel,
+  flexRender,
+  type SortingState,
+  type ColumnFiltersState,
+  type ExpandedState,
+  type SortingFn,
+  type FilterFn,
+} from '@tanstack/react-table';
+import type { CSSProperties } from 'react';
+import {
+  labelToOrdinal,
+  ordinalToCategory,
+  truncateText,
+  formatScore,
+  SCORE_COLORS,
+  type LabelFilterCategory,
+} from '../lib/quality-utils.js';
+import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
+import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { TimestampCell } from './TimestampCell.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { ColoredChip } from './Chip.js';
+import { ScoreBadge } from './ScoreBadge.js';
+export interface EvalRow {
+  score: number | null;
+  explanation?: string;
+  traceId?: string;
+  timestamp?: string;
+  evaluator?: string;
+  label?: string;
+  evaluatorType?: string;
+  spanId?: string;
+  sessionId?: string;
+  agentName?: string;
+  trajectoryLength?: number;
+  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
+  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
+}
+⋮----
+const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) =>
+const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) =>
+⋮----
+aria-label=
+⋮----
+const toggleCategory = (cat: LabelFilterCategory) =>
+const sortDir = (colId: string): 'ascending' | 'descending' | 'none' =>
+⋮----
+aria-sort=
+⋮----
+<tr className=
+⋮----
+<td colSpan=
 
 ================
 File: src/components/MetricCard.tsx
@@ -3060,70 +3124,6 @@ function VarianceBar(
 function JudgePanel(
 
 ================
-File: src/components/EvaluationTable.tsx
-================
-import { useState, Fragment } from 'react';
-import type { EvaluationResult } from '../types.js';
-import {
-  createColumnHelper,
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getExpandedRowModel,
-  flexRender,
-  type SortingState,
-  type ColumnFiltersState,
-  type ExpandedState,
-  type SortingFn,
-  type FilterFn,
-} from '@tanstack/react-table';
-import type { CSSProperties } from 'react';
-import {
-  labelToOrdinal,
-  ordinalToCategory,
-  truncateText,
-  formatScore,
-  SCORE_COLORS,
-  type LabelFilterCategory,
-} from '../lib/quality-utils.js';
-import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
-import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
-import { TimestampCell } from './TimestampCell.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { ColoredChip } from './Chip.js';
-import { ScoreBadge } from './ScoreBadge.js';
-export interface EvalRow {
-  score: number | null;
-  explanation?: string;
-  traceId?: string;
-  timestamp?: string;
-  evaluator?: string;
-  label?: string;
-  evaluatorType?: string;
-  spanId?: string;
-  sessionId?: string;
-  agentName?: string;
-  trajectoryLength?: number;
-  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
-  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
-}
-⋮----
-const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) =>
-const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) =>
-⋮----
-aria-label=
-⋮----
-const toggleCategory = (cat: LabelFilterCategory) =>
-const sortDir = (colId: string): 'ascending' | 'descending' | 'none' =>
-⋮----
-aria-sort=
-⋮----
-<tr className=
-⋮----
-<td colSpan=
-
-================
 File: src/components/HealthOverview.tsx
 ================
 import type { QualityDashboardSummary } from '../types.js';
@@ -3140,6 +3140,40 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
 function formatVolume(n: number): string
 ⋮----
 Eval Volume: <span className="stat-value">
+
+================
+File: src/components/QualityLiveIndicator.tsx
+================
+import type { CSSProperties } from 'react';
+import { useQualityLive } from '../hooks/useQualityLive.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
+import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_CHIP_PRECISION } from '../lib/constants.js';
+function scoreToBadgeColor(score: number): string
+
+================
+File: src/components/ScoreBadge.tsx
+================
+import { Link } from 'wouter';
+import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
+import { SCORE_SHAPES } from '../lib/symbols.js';
+import { useMetricCalibration } from '../context/CalibrationContext.js';
+import type { ReactNode } from 'react';
+function MetadataRow(
+interface ScoreBadgeProps {
+  score: number | null;
+  metricName: string;
+  direction?: ScoreDirection;
+  label?: string;
+  evaluator?: string;
+  evaluatorType?: string;
+  explanation?: string;
+  traceId?: string;
+  calibration?: { distribution: PercentileDistribution; sampleSize: number };
+}
+⋮----
+<Link href=
 
 ================
 File: src/components/TrendChart.tsx
@@ -3212,25 +3246,6 @@ interface TurnTimelineProps {
 }
 
 ================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-⋮----
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
-⋮----
-function dfs(nodeId: string): boolean
-⋮----
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
-
-================
 File: src/pages/RoutingTelemetryPage.tsx
 ================
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
@@ -3259,38 +3274,23 @@ import { PARAM_METRIC_NAME_RE, extractFiniteScores } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 ================
-File: src/components/QualityLiveIndicator.tsx
+File: src/lib/workflow-graph.ts
 ================
-import type { CSSProperties } from 'react';
-import { useQualityLive } from '../hooks/useQualityLive.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_CHIP_PRECISION } from '../lib/constants.js';
-function scoreToBadgeColor(score: number): string
-
-================
-File: src/components/ScoreBadge.tsx
-================
-import { Link } from 'wouter';
-import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-import { routes } from '../lib/routes.js';
-import { SCORE_SHAPES } from '../lib/symbols.js';
-import { useMetricCalibration } from '../context/CalibrationContext.js';
-import type { ReactNode } from 'react';
-function MetadataRow(
-interface ScoreBadgeProps {
-  score: number | null;
-  metricName: string;
-  direction?: ScoreDirection;
-  label?: string;
-  evaluator?: string;
-  evaluatorType?: string;
-  explanation?: string;
-  traceId?: string;
-  calibration?: { distribution: PercentileDistribution; sampleSize: number };
-}
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
 ⋮----
-<Link href=
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
+⋮----
+function dfs(nodeId: string): boolean
+⋮----
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
 
 ================
 File: src/App.tsx
@@ -3343,29 +3343,6 @@ import type {
   MetricDetailResult,
   MetricDynamics,
 } from './types.js';
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
-⋮----
-type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
 
 ================
 File: src/components/PipelineFunnel.tsx
@@ -3448,25 +3425,6 @@ export function adaptiveScoreColorBand(
 ): ScoreColorBand
 import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 export function formatTimestamp(ts: string): string
-
-================
-File: src/api/api-constants.ts
-================
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-⋮----
-export function incrementCount(map: Record<string, number>, key: string): void
-⋮----
-export function extractFiniteScores(evals: Array<
-
-================
-File: src/components/CQIHero.tsx
-================
-import type { CSSProperties } from 'react';
-import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
-import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-function segmentColor(contribution: CQIContribution): string
-export function CQIHero(
 
 ================
 File: scripts/sync-to-kv.ts
@@ -3632,6 +3590,48 @@ type Span = (typeof allSpans)[number];
 const isTraceKey = (e: KVEntry)
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores } from '../api-constants.js';
+⋮----
+type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
+File: src/api/api-constants.ts
+================
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+⋮----
+export function incrementCount(map: Record<string, number>, key: string): void
+⋮----
+export function extractFiniteScores(evals: Array<
+
+================
+File: src/components/CQIHero.tsx
+================
+import type { CSSProperties } from 'react';
+import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
+import type { CompositeQualityIndex, CQIContribution } from '../types.js';
+import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+function segmentColor(contribution: CQIContribution): string
+export function CQIHero(
+
+================
 File: src/components/CoverageGrid.tsx
 ================
 import { memo, useState, useMemo, type CSSProperties } from 'react';
@@ -3651,6 +3651,41 @@ interface CoverageGridProps {
 }
 ⋮----
 onMouseLeave=
+
+================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[]
+⋮----
+0: '',      // UNSET
 
 ================
 File: src/components/WorkflowGraph.tsx
@@ -3714,41 +3749,6 @@ function contrastText(pearsonR: number): string
 const toLinear = (c: number) =>
 ⋮----
 function corrKey(a: string, b: string): string
-
-================
-File: src/components/SpanTree.tsx
-================
-import type { CSSProperties } from 'react';
-import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[]
-⋮----
-0: '',      // UNSET
 
 ================
 File: src/lib/constants.ts
