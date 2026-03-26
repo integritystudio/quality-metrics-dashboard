@@ -87,7 +87,6 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
         stroke={color}
         strokeWidth={1.5}
       />
-      {/* Relevance bar at top */}
       <rect
         width={Math.max(2, width * turn.relevance)}
         height={4}
@@ -164,7 +163,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
         className="d-block"
         style={{ minWidth: svgWidth }}
       >
-        {/* Column header: turn indices */}
         <g>
           {turns.map(t => (
             <text
@@ -181,14 +179,12 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
           ))}
         </g>
 
-        {/* Lanes */}
         {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
           const color = agentColor(agentName, agentNames);
           const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
 
           return (
             <g key={agentName}>
-              {/* Lane background */}
               <rect
                 x={0}
                 y={laneTop}
@@ -198,7 +194,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
                 fillOpacity={0.5}
               />
 
-              {/* Lane separator */}
               <line
                 x1={0}
                 y1={laneTop}
@@ -208,7 +203,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
                 strokeWidth={1}
               />
 
-              {/* Agent label */}
               <text
                 x={LABEL_WIDTH - 8}
                 y={laneTop + LANE_CENTER_OFFSET + 4}
@@ -221,7 +215,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
                 {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
               </text>
 
-              {/* Turn blocks */}
               {laneTurns.map(turn => (
                 <TurnBlock
                   key={turn.turnIndex}
@@ -236,7 +229,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
           );
         })}
 
-        {/* Bottom border */}
         <line
           x1={0}
           y1={svgHeight}
@@ -270,7 +262,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
               role="img"
               aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
             >
-              {/* Connecting line */}
               <line
                 x1={x}
                 y1={y1}
@@ -281,7 +272,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
                 strokeDasharray="4 2"
                 opacity={0.7}
               />
-              {/* Score label at midpoint */}
               <circle
                 cx={x}
                 cy={midY}
