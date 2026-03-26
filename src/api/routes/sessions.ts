@@ -113,10 +113,127 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       loadEvaluationsBySessionId(sessionId, startDate, endDate),
     ]);
 
+    // Single consolidated pass over spans — collects all per-span data structures.
     const traceIds = new Set<string>();
-    for (const s of spans) {
+    let firstSessionStart: (typeof spans)[0] | undefined;
+    let lastSessionStart: (typeof spans)[0] | undefined;
+    let sessionStartCount = 0;
+    const tokenProgressionRaw: Array<{ messages: number; inputTokens: number; outputTokens: number; cacheRead: number; cacheCreation: number; model: string }> = [];
+    const toolUsage: Record<string, number> = {};
+    const mcpUsage: Record<string, number> = {};
+    const spanBreakdown: Record<string, number> = {};
+    const hookDurations: Record<string, number[]> = {};
+    const errorsByCategory: Record<string, number> = {};
+    const errorDetails: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
+    const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
+    const fileCount: Record<string, number> = {};
+    const gitCommits: Array<{ subject: string; body: string; files: string }> = [];
+    let alertTotalFired = 0;
+    let alertStopEvents = 0;
+    const codeStructure: Array<{ file: string; lines: number; exports: number; functions: number; hasTypes: boolean; score: number; tool: string }> = [];
+    // WG-C1: check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
+    const agentMapForEval = new Map<number, string>();
+    const stepScores: StepScore[] = [];
+
+    for (let i = 0; i < spans.length; i++) {
+      const s = spans[i];
+      const hookName = attr<string>(s, 'hook.name');
+      const hookType = attr<string>(s, 'hook.type');
+      const hookTrigger = attr<string>(s, 'hook.trigger');
+
       if (s.traceId) traceIds.add(s.traceId);
+
+      if (hookName === 'session-start') {
+        if (!firstSessionStart) firstSessionStart = s;
+        lastSessionStart = s;
+        sessionStartCount++;
+      }
+
+      if (hookName === 'token-metrics-extraction') {
+        tokenProgressionRaw.push({
+          messages: attr<number>(s, 'tokens.messages') ?? 0,
+          inputTokens: attr<number>(s, 'tokens.input') ?? 0,
+          outputTokens: attr<number>(s, 'tokens.output') ?? 0,
+          cacheRead: attr<number>(s, 'tokens.cache_read') ?? 0,
+          cacheCreation: attr<number>(s, 'tokens.cache_creation') ?? 0,
+          model: attr<string>(s, 'tokens.model') ?? '',
+        });
+      }
+
+      if (hookTrigger === 'PostToolUse') {
+        if (hookType === 'builtin') incrementCount(toolUsage, attr<string>(s, 'builtin.tool') ?? 'unknown');
+        else if (hookType === 'mcp') incrementCount(mcpUsage, attr<string>(s, 'mcp.tool') ?? 'unknown');
+      }
+
+      incrementCount(spanBreakdown, s.name);
+      const ms = s.durationMs ?? 0;
+      if (ms > 0) {
+        if (!hookDurations[s.name]) hookDurations[s.name] = [];
+        hookDurations[s.name].push(ms);
+      }
+
+      const hasError = attr<boolean>(s, 'builtin.has_error') === true
+        || attr<boolean>(s, 'agent.has_error') === true
+        || s.status?.code === OTEL_STATUS_ERROR_CODE;
+      if (hasError) {
+        const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
+        const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
+        incrementCount(errorsByCategory, `${tool} -> ${errType}`);
+        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: attr<string>(s, 'builtin.file_path') });
+      }
+
+      if (hookName === 'agent-post-tool') {
+        const name = attr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
+        if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
+        agentAcc[name].invocations++;
+        if (attr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
+        if (attr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
+        agentAcc[name].totalOutputSize += attr<number>(s, 'agent.output_size') ?? 0;
+      }
+
+      const fp = attr<string>(s, 'builtin.file_path');
+      if (fp) incrementCount(fileCount, fp);
+
+      if (hookName === 'post-commit-review') {
+        const raw = attr<string>(s, 'git.command') ?? '';
+        const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
+        const files = filesMatch ? filesMatch[1].trim() : '';
+        const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
+        const fullMessage = msgMatch ? msgMatch[1] : '';
+        gitCommits.push({
+          subject: fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS),
+          body: fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '',
+          files,
+        });
+      }
+
+      if (hookName === 'telemetry-alert-evaluation') {
+        alertTotalFired += attr<number>(s, 'alerts.triggered_count') ?? 0;
+        alertStopEvents++;
+      }
+
+      if (hookName === 'code-structure') {
+        codeStructure.push({
+          file: attr<string>(s, 'code.structure.file') ?? '',
+          lines: attr<number>(s, 'code.structure.lines') ?? 0,
+          exports: attr<number>(s, 'code.structure.exports') ?? 0,
+          functions: attr<number>(s, 'code.structure.functions') ?? 0,
+          hasTypes: attr<boolean>(s, 'code.structure.has_types') ?? false,
+          score: attr<number>(s, 'code.structure.score') ?? 0,
+          tool: attr<string>(s, 'code.structure.tool') ?? '',
+        });
+      }
+
+      const agent = attr<string>(s, 'agent.name') ?? attr<string>(s, 'gen_ai.agent.name');
+      if (agent) agentMapForEval.set(i, agent);
+      stepScores.push({
+        step: i,
+        score: attr<number>(s, 'evaluation.score') ?? (s.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+        explanation: s.name,
+      });
     }
+
+    // Derive values from the consolidated pass
     const dataSources = {
       traces: { count: spans.length, traceIds: traceIds.size },
       logs: { count: logs.length },
@@ -146,35 +263,21 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
     } : null;
 
-    const sessionStarts = spans.filter(s => attr<string>(s, 'hook.name') === 'session-start');
-    const first = sessionStarts[0];
-    const last = sessionStarts[sessionStarts.length - 1] ?? first;
-    const sessionInfo = first ? {
-      projectName: attr<string>(first, 'project.name') ?? 'unknown',
-      workingDirectory: attr<string>(first, 'working.directory') ?? '',
-      gitRepository: attr<string>(first, 'git.repository') ?? '',
-      gitBranch: attr<string>(first, 'git.branch') ?? '',
-      nodeVersion: attr<string>(first, 'node.version') ?? '',
-      resumeCount: sessionStarts.length,
-      initialMessageCount: attr<number>(first, 'context.message_count') ?? 0,
-      initialContextTokens: attr<number>(first, 'context.estimated_tokens') ?? 0,
-      finalMessageCount: attr<number>(last, 'context.message_count') ?? 0,
-      taskCount: attr<number>(first, 'tasks.active') ?? 0,
-      uncommittedAtStart: attr<number>(first, 'git.uncommitted') ?? 0,
+    const sessionInfo = firstSessionStart ? {
+      projectName: attr<string>(firstSessionStart, 'project.name') ?? 'unknown',
+      workingDirectory: attr<string>(firstSessionStart, 'working.directory') ?? '',
+      gitRepository: attr<string>(firstSessionStart, 'git.repository') ?? '',
+      gitBranch: attr<string>(firstSessionStart, 'git.branch') ?? '',
+      nodeVersion: attr<string>(firstSessionStart, 'node.version') ?? '',
+      resumeCount: sessionStartCount,
+      initialMessageCount: attr<number>(firstSessionStart, 'context.message_count') ?? 0,
+      initialContextTokens: attr<number>(firstSessionStart, 'context.estimated_tokens') ?? 0,
+      finalMessageCount: attr<number>(lastSessionStart ?? firstSessionStart, 'context.message_count') ?? 0,
+      taskCount: attr<number>(firstSessionStart, 'tasks.active') ?? 0,
+      uncommittedAtStart: attr<number>(firstSessionStart, 'git.uncommitted') ?? 0,
     } : null;
 
-    const tokenProgression = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'token-metrics-extraction')
-      .map(s => ({
-        messages: attr<number>(s, 'tokens.messages') ?? 0,
-        inputTokens: attr<number>(s, 'tokens.input') ?? 0,
-        outputTokens: attr<number>(s, 'tokens.output') ?? 0,
-        cacheRead: attr<number>(s, 'tokens.cache_read') ?? 0,
-        cacheCreation: attr<number>(s, 'tokens.cache_creation') ?? 0,
-        model: attr<string>(s, 'tokens.model') ?? '',
-      }))
-      .sort((a, b) => a.messages - b.messages);
-
+    const tokenProgression = tokenProgressionRaw.sort((a, b) => a.messages - b.messages);
     const tokenTotals = {
       input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
       models: {} as Record<string, number>,
@@ -188,64 +291,11 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       if (t.model) incrementCount(tokenTotals.models, t.model);
     }
 
-    const toolUsage: Record<string, number> = {};
-    const mcpUsage: Record<string, number> = {};
-    const spanBreakdown: Record<string, number> = {};
-    const hookDurations: Record<string, number[]> = {};
-    for (const s of spans) {
-      const hookType = attr<string>(s, 'hook.type');
-      const hookTrigger = attr<string>(s, 'hook.trigger');
-      if (hookTrigger === 'PostToolUse') {
-        if (hookType === 'builtin') incrementCount(toolUsage, attr<string>(s, 'builtin.tool') ?? 'unknown');
-        else if (hookType === 'mcp') incrementCount(mcpUsage, attr<string>(s, 'mcp.tool') ?? 'unknown');
-      }
-      incrementCount(spanBreakdown, s.name);
-      const ms = s.durationMs ?? 0;
-      if (ms > 0) {
-        if (!hookDurations[s.name]) hookDurations[s.name] = [];
-        hookDurations[s.name].push(ms);
-      }
-    }
     const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
     for (const [name, durations] of Object.entries(hookDurations)) {
       hookLatency[name] = computeLatencyStats(durations);
     }
 
-    const errorsByCategory: Record<string, number> = {};
-    const errorDetails: Array<{
-      spanName: string;
-      tool?: string;
-      errorType?: string;
-      filePath?: string;
-    }> = [];
-    for (const s of spans) {
-      const hasError = attr<boolean>(s, 'builtin.has_error') === true
-        || attr<boolean>(s, 'agent.has_error') === true
-        || s.status?.code === OTEL_STATUS_ERROR_CODE;
-      if (!hasError) continue;
-      const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
-      const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
-      const key = `${tool} -> ${errType}`;
-      incrementCount(errorsByCategory, key);
-      errorDetails.push({
-        spanName: s.name,
-        tool,
-        errorType: errType,
-        filePath: attr<string>(s, 'builtin.file_path'),
-      });
-    }
-
-    const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.name') === 'agent-post-tool') {
-        const name = attr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
-        if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
-        agentAcc[name].invocations++;
-        if (attr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
-        if (attr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
-        agentAcc[name].totalOutputSize += attr<number>(s, 'agent.output_size') ?? 0;
-      }
-    }
     const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
       agentName,
       invocations: d.invocations,
@@ -254,46 +304,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
     }));
 
-    const fileCount: Record<string, number> = {};
-    for (const s of spans) {
-      const fp = attr<string>(s, 'builtin.file_path');
-      if (fp) incrementCount(fileCount, fp);
-    }
     const fileAccess = Object.entries(fileCount)
       .map(([path, count]) => ({ path, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, FILE_ACCESS_TOP_N);
 
-    const gitCommits = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'post-commit-review')
-      .map(s => {
-        const raw = attr<string>(s, 'git.command') ?? '';
-        const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
-        const files = filesMatch ? filesMatch[1].trim() : '';
-        const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
-        const fullMessage = msgMatch ? msgMatch[1] : '';
-        const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
-        const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
-        return { subject, body, files };
-      });
-
-    const alertSpans = spans.filter(s => attr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
-    const alertSummary = {
-      totalFired: alertSpans.reduce((sum, s) => sum + (attr<number>(s, 'alerts.triggered_count') ?? 0), 0),
-      stopEvents: alertSpans.length,
-    };
-
-    const codeStructure = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'code-structure')
-      .map(s => ({
-        file: attr<string>(s, 'code.structure.file') ?? '',
-        lines: attr<number>(s, 'code.structure.lines') ?? 0,
-        exports: attr<number>(s, 'code.structure.exports') ?? 0,
-        functions: attr<number>(s, 'code.structure.functions') ?? 0,
-        hasTypes: attr<boolean>(s, 'code.structure.has_types') ?? false,
-        score: attr<number>(s, 'code.structure.score') ?? 0,
-        tool: attr<string>(s, 'code.structure.tool') ?? '',
-      }));
+    const alertSummary = { totalFired: alertTotalFired, stopEvents: alertStopEvents };
 
     const evalByName: Record<string, { count: number; scores: number[] }> = {};
     for (const ev of evaluations) {
@@ -315,19 +331,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       incrementCount(logBySeverity, sev);
     }
 
-    // WG-C1: check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
-    const agentMapForEval = new Map<number, string>();
-    const stepScores: StepScore[] = [];
-    for (let i = 0; i < spans.length; i++) {
-      const span = spans[i];
-      const agent = attr<string>(span, 'agent.name') ?? attr<string>(span, 'gen_ai.agent.name');
-      if (agent) agentMapForEval.set(i, agent);
-      stepScores.push({
-        step: i,
-        score: attr<number>(span, 'evaluation.score') ?? (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
-        explanation: span.name,
-      });
-    }
     const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
 
     return c.json({
