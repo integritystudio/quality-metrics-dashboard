@@ -846,6 +846,11 @@ details[open] > .cot-summary::before {
   padding: var(--space-1-5) var(--space-3);
   border-radius: var(--radius);
 }
+.quality-chip {
+  background: color-mix(in srgb, var(--chip-color) 10%, transparent);
+  color: var(--chip-color);
+}
+.quality-chip .dot-xs { background: var(--chip-color); }
 .cqi-value {
   font-size: var(--font-size-3xl);
   line-height: 1.2;
