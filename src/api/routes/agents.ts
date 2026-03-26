@@ -10,6 +10,18 @@ import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 
+type SpanLike = { attributes?: Record<string, unknown> };
+
+function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
+  const v = span.attributes?.[key];
+  return typeof v === 'string' ? v : fallback;
+}
+
+function attrNum(span: SpanLike, key: string, fallback = 0): number {
+  const v = span.attributes?.[key];
+  return typeof v === 'number' ? v : fallback;
+}
+
 function toDateOnly(d: Date): string {
   return d.toISOString().split('T')[0];
 }
@@ -83,8 +95,7 @@ agentRoutes.get('/agents', async (c) => {
     const traceToAgents = new Map<string, Set<string>>();
 
     for (const span of result.traces) {
-      const rawName = span.attributes?.['gen_ai.agent.name'];
-      const name = typeof rawName === 'string' ? rawName : 'unknown';
+      const name = attrStr(span, 'gen_ai.agent.name');
       if (!acc[name]) {
         acc[name] = createAgentAccumulator(periodDays);
       }
@@ -97,18 +108,15 @@ agentRoutes.get('/agents', async (c) => {
       }
       if (span.attributes?.['agent.has_error']) acc[name].errors++;
       if (span.attributes?.['agent.has_rate_limit']) acc[name].rateLimitCount++;
-      const rawOutputSize = span.attributes?.['agent.output_size'];
-      acc[name].totalOutputSize += typeof rawOutputSize === 'number' ? rawOutputSize : 0;
-      const rawSid = span.attributes?.['session.id'];
-      const sid = typeof rawSid === 'string' ? rawSid : undefined;
+      acc[name].totalOutputSize += attrNum(span, 'agent.output_size');
+      const sid = attrStr(span, 'session.id', '');
       if (sid) acc[name].sessions.add(sid);
       if (span.traceId) {
         acc[name].traceIds.add(span.traceId);
         if (!traceToAgents.has(span.traceId)) traceToAgents.set(span.traceId, new Set());
         traceToAgents.get(span.traceId)!.add(name);
       }
-      const rawSrcVal = span.attributes?.['agent.source_type'];
-      const rawSrc = typeof rawSrcVal === 'string' ? rawSrcVal : 'unknown';
+      const rawSrc = attrStr(span, 'agent.source_type');
       const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
       acc[name].sourceTypes[src] = (acc[name].sourceTypes[src] ?? 0) + 1;
     }
@@ -188,8 +196,7 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     const agentMap = new Map<number, string>();
     const traceIds = new Set<string>();
     spans.forEach((span, i) => {
-      const rawAgent = span.attributes?.['agent.name'] ?? span.attributes?.['gen_ai.agent.name'];
-      const agent = typeof rawAgent === 'string' ? rawAgent : undefined;
+      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
       if (agent) agentMap.set(i, agent);
       if (span.traceId) traceIds.add(span.traceId);
     });
@@ -197,9 +204,7 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     // Build step scores from spans
     const stepScores: StepScore[] = spans.map((span, i) => ({
       step: i,
-      score: typeof span.attributes?.['evaluation.score'] === 'number'
-        ? span.attributes['evaluation.score'] as number
-        : (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
       explanation: span.name,
     }));
 
