@@ -1,3 +1,12 @@
+90d3c49 2026-03-26 refactor(worker): replace magic HTTP status codes with Http constants object
+  worker/index.ts
+
+e04fed2 2026-03-26 chore: regenerate repomix docs after Round 3 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 28c5f5d 2026-03-26 chore: regenerate repomix docs
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -333,10 +342,4 @@ cfdbefa 2026-03-20 docs: update auth roadmap with PII leakage mitigation and typ
   docs/roadmap/users.md
 
 6c4b10a 2026-03-20 fix(auth): stop /api/me from leaking internal user IDs
-  worker/index.ts
-
-fedb21d 2026-03-20 refactor(auth): simplify phase 1 implementation per code-simplifier
-  worker/index.ts
-
-e7afb28 2026-03-20 fix(types+worker): add authUserId and appUserId to MeResponse
   worker/index.ts
