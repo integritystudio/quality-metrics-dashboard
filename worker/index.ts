@@ -461,7 +461,7 @@ app.get('/api/agents/:sessionId', async (c) => {
     sessionId,
     spans: [],
     evaluation: session['multiAgentEvaluation'] ?? null,
-    evaluations: session['evaluations'] ?? [],
+    evaluations: Array.isArray(session['evaluations']) ? session['evaluations'] : [],
     agentMap: {},
   });
 });
@@ -476,7 +476,7 @@ app.get('/api/compliance/sla', async (c) => {
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
   logActivity(session.appUserId, 'compliance_view', c.env);
-  const slaResults = (dashboard['slaCompliance'] as unknown[]) ?? [];
+  const slaResults = Array.isArray(dashboard['slaCompliance']) ? dashboard['slaCompliance'] : [];
   return c.json({
     period,
     results: slaResults,
