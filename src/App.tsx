@@ -4,7 +4,7 @@ import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
-import { AuthProvider } from './contexts/AuthContext.js';
+import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { Auth0Provider, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
@@ -38,7 +38,6 @@ import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './context/CalibrationContext.js';
-import { useAuth } from './contexts/AuthContext.js';
 import { ROLES, SKELETON_HEIGHT_MD, SKELETON_HEIGHT_XL } from './lib/constants.js';
 import type {
   Period,

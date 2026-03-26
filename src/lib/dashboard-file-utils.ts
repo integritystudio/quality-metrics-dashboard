@@ -8,9 +8,8 @@
  * and validation schemas.
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, createReadStream } from 'fs';
 import { createInterface } from 'readline';
-import { createReadStream } from 'fs';
 import type { z } from 'zod';
 
 /**
