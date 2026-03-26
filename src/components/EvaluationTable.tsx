@@ -252,8 +252,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
                   <th
                     key={header.id}
                     onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                    className="select-none"
-                    style={{ cursor: canSort ? 'pointer' : 'default' }}
+                    className={`select-none${canSort ? ' cursor-pointer' : ''}`}
                     aria-sort={canSort ? sortDir(header.id) : undefined}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
