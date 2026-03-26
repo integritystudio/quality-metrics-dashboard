@@ -2336,66 +2336,6 @@ fi
 echo "$tree_lines" > "$TREE_OUTPUT_PATH"
 
 ================
-File: scripts/populate-dashboard.ts
-================
-#!/usr/bin/env tsx
-import { execFileSync } from 'child_process';
-import { existsSync } from 'fs';
-import { join } from 'path';
-const SCRIPTS_DIR = import.meta.dirname;
-const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
-const args = process.argv.slice(2);
-const skipJudge = args.includes('--skip-judge');
-const skipSync = args.includes('--skip-sync');
-const dryRun = args.includes('--dry-run');
-const seed = args.includes('--seed');
-const limitIdx = args.indexOf('--limit');
-let limit: string | undefined;
-if (limitIdx !== -1) {
-  const raw = args[limitIdx + 1];
-  const parsed = parseInt(raw, 10);
-  if (!raw || isNaN(parsed) || parsed < 1) {
-    console.error('[populate] Error: --limit requires a positive integer');
-    process.exit(1);
-  }
-  limit = String(parsed);
-}
-const autoSeed = !seed && !skipJudge && !process.env.ANTHROPIC_API_KEY;
-if (autoSeed) {  }
-if (!skipSync && !existsSync(DIST_DIR)) {
-  console.error(`[populate] Error: ${DIST_DIR} not found. Run \`npm run build\` in the parent observability-toolkit first.`);
-  process.exit(1);
-}
-interface StepResult { name: string; ms: number }
-const results: StepResult[] = [];
-function runStep(name: string, script: string, extraArgs: string[] = []): void {
-  const start = performance.now();
-  execFileSync('npx', ['tsx', join(SCRIPTS_DIR, script), ...extraArgs], {
-    stdio: 'inherit',
-    cwd: join(SCRIPTS_DIR, '..'),
-  });
-  const ms = Math.round(performance.now() - start);
-  results.push({ name, ms });
-}
-if (!dryRun) {
-  runStep('derive-evaluations', 'derive-evaluations.ts');
-} else {  }
-if (!skipJudge) {
-  const judgeArgs: string[] = [];
-  if (dryRun) judgeArgs.push('--dry-run');
-  if (seed || autoSeed) judgeArgs.push('--seed');
-  if (limit) judgeArgs.push('--limit', limit);
-  runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
-}
-if (!skipSync) {
-  const syncArgs: string[] = [];
-  if (dryRun) syncArgs.push('--dry-run');
-  runStep('sync-to-kv', 'sync-to-kv.ts', syncArgs);
-}
-for (const _r of results) {  }
-const _total = results.reduce((sum, r) => sum + r.ms, 0);
-
-================
 File: scripts/update-readme-tree.sh
 ================
 set -euo pipefail
@@ -3578,36 +3518,6 @@ complianceRoutes.get('/compliance/verifications', async (c) => {
 });
 
 ================
-File: src/api/routes/correlations.ts
-================
-import { Hono } from 'hono';
-import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
-export const correlationRoutes = new Hono();
-correlationRoutes.get('/correlations', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const { start, end } = computePeriodDates(periodResult.data);
-    const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
-    const metricTimeSeries = new Map<string, number[]>();
-    const metricNames: string[] = [];
-    for (const [name, evals] of evaluationsByMetric) {
-      metricTimeSeries.set(name, evals.filter(e => e.scoreValue != null).map(e => e.scoreValue!));
-      metricNames.push(name);
-    }
-    const correlations = computeCorrelationMatrix(metricTimeSeries);
-    return c.json({ correlations, metrics: metricNames });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
 File: src/api/routes/coverage.ts
 ================
 import { Hono } from 'hono';
@@ -4603,59 +4513,6 @@ export function useAgentStats(period: Period) {
 }
 
 ================
-File: src/hooks/useApiQuery.ts
-================
-import { useQuery } from '@tanstack/react-query';
-import { STALE_TIME } from '../lib/constants.js';
-import { useAuth } from '../contexts/AuthContext.js';
-function defaultRetry(failureCount: number, error: unknown): boolean {
-  if (error instanceof Error && (
-    error.message === 'AUTH_REQUIRED' ||
-    error.message.startsWith('API error: 401')
-  )) return false;
-  return failureCount < 2;
-}
-export function useApiQuery<TRaw, T = TRaw>(
-  queryKey: readonly unknown[],
-  buildUrl: () => string,
-  options: {
-    enabled?: boolean;
-    staleTime?: number;
-    retry?: number | ((failureCount: number, error: unknown) => boolean);
-    refetchInterval?: number;
-    retryDelay?: (attempt: number) => number;
-    select?: (raw: TRaw) => T;
-  } = {},
-) {
-  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select } = options;
-  const { getAccessToken } = useAuth();
-  return useQuery<TRaw, Error, T>({
-    queryKey,
-    queryFn: async () => {
-      let token: string;
-      try {
-        token = await getAccessToken();
-      } catch {
-        throw new Error('AUTH_REQUIRED');
-      }
-      const url = buildUrl();
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
-      }
-      return res.json() as Promise<TRaw>;
-    },
-    select,
-    enabled,
-    staleTime,
-    retry: retry !== undefined ? retry : defaultRetry,
-    ...(refetchInterval !== undefined && { refetchInterval }),
-    ...(retryDelay !== undefined && { retryDelay }),
-  });
-}
-
-================
 File: src/hooks/useCalibration.ts
 ================
 import type { PercentileDistribution } from '../lib/quality-utils.js';
@@ -4875,6 +4732,143 @@ export function useRoutingTelemetry(period: Period) {
   return useApiQuery<RoutingTelemetryResponse>(
     ['routing-telemetry', period],
     () => `${API_BASE}/api/routing-telemetry?${new URLSearchParams({ period })}`,
+  );
+}
+
+================
+File: src/hooks/useSessionDetail.ts
+================
+import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
+export interface SessionInfo {
+  projectName: string;
+  workingDirectory: string;
+  gitRepository: string;
+  gitBranch: string;
+  nodeVersion: string;
+  resumeCount: number;
+  initialMessageCount: number;
+  initialContextTokens: number;
+  finalMessageCount: number;
+  taskCount: number;
+  uncommittedAtStart: number;
+}
+export interface TokenSnapshot {
+  messages: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheRead: number;
+  cacheCreation: number;
+  model: string;
+}
+export interface TokenTotals {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+  messages: number;
+  models: Record<string, number>;
+}
+export interface SessionAgentStat {
+  agentName: string;
+  invocations: number;
+  errors: number;
+  hasRateLimit: boolean;
+  avgOutputSize: number;
+}
+export interface FileAccessEntry {
+  path: string;
+  count: number;
+}
+export interface GitCommit {
+  subject: string;
+  body: string;
+  files: string;
+}
+export interface CodeStructureEntry {
+  file: string;
+  lines: number;
+  exports: number;
+  functions: number;
+  hasTypes: boolean;
+  score: number;
+  tool: string;
+}
+export interface AlertSummary {
+  totalFired: number;
+  stopEvents: number;
+}
+export interface DataSources {
+  traces: { count: number; traceIds: number };
+  logs: { count: number };
+  evaluations: { count: number };
+  total: number;
+}
+export interface Timespan {
+  start: string;
+  end: string;
+  durationHours: number;
+}
+export interface HookLatency {
+  count: number;
+  avg: number;
+  p50: number;
+  p95: number;
+  max: number;
+}
+export interface EvaluationBreakdownEntry {
+  name: string;
+  count: number;
+  avg: number | null;
+  min: number | null;
+  max: number | null;
+}
+export interface SessionDetailResponse {
+  sessionId: string;
+  dataSources: DataSources;
+  timespan: Timespan | null;
+  sessionInfo: SessionInfo | null;
+  tokenTotals: TokenTotals;
+  tokenProgression: TokenSnapshot[];
+  toolUsage: Record<string, number>;
+  mcpUsage: Record<string, number>;
+  spanBreakdown: Record<string, number>;
+  hookLatency: Record<string, HookLatency>;
+  errors: {
+    byCategory: Record<string, number>;
+    details: Array<{
+      spanName: string;
+      tool?: string;
+      errorType?: string;
+      filePath?: string;
+    }>;
+  };
+  agentActivity: SessionAgentStat[];
+  fileAccess: FileAccessEntry[];
+  gitCommits: GitCommit[];
+  alertSummary: AlertSummary;
+  codeStructure: CodeStructureEntry[];
+  evaluationBreakdown: EvaluationBreakdownEntry[];
+  logSummary: {
+    bySeverity: Record<string, number>;
+    logs: unknown[];
+  };
+  multiAgentEvaluation: MultiAgentEvaluation;
+  evaluations: EvaluationResult[];
+}
+export function useSessionDetail(sessionId: string | undefined) {
+  return useApiQuery<SessionDetailResponse>(
+    ['session-detail', sessionId],
+    () => `${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`,
+    {
+      enabled: !!sessionId,
+      staleTime: STALE_TIME.DETAIL,
+      retry: (failureCount, error) =>
+        error instanceof Error && error.message.startsWith('API error: 404')
+          ? false
+          : failureCount < 2,
+    },
   );
 }
 
@@ -5916,6 +5910,66 @@ export interface QualityLiveData {
 File: src/vite-env.d.ts
 ================
 
+
+================
+File: scripts/populate-dashboard.ts
+================
+#!/usr/bin/env tsx
+import { execFileSync } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
+const SCRIPTS_DIR = import.meta.dirname;
+const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
+const args = process.argv.slice(2);
+const skipJudge = args.includes('--skip-judge');
+const skipSync = args.includes('--skip-sync');
+const dryRun = args.includes('--dry-run');
+const seed = args.includes('--seed');
+const limitIdx = args.indexOf('--limit');
+let limit: string | undefined;
+if (limitIdx !== -1) {
+  const raw = args[limitIdx + 1];
+  const parsed = parseInt(raw, 10);
+  if (!raw || isNaN(parsed) || parsed < 1) {
+    console.error('[populate] Error: --limit requires a positive integer');
+    process.exit(1);
+  }
+  limit = String(parsed);
+}
+const autoSeed = !seed && !skipJudge && !process.env.ANTHROPIC_API_KEY;
+if (autoSeed) {  }
+if (!skipSync && !existsSync(DIST_DIR)) {
+  console.error(`[populate] Error: ${DIST_DIR} not found. Run \`npm run build\` in the parent observability-toolkit first.`);
+  process.exit(1);
+}
+interface StepResult { name: string; ms: number }
+const results: StepResult[] = [];
+function runStep(name: string, script: string, extraArgs: string[] = []): void {
+  const start = performance.now();
+  execFileSync('npx', ['tsx', join(SCRIPTS_DIR, script), ...extraArgs], {
+    stdio: 'inherit',
+    cwd: join(SCRIPTS_DIR, '..'),
+  });
+  const ms = Math.round(performance.now() - start);
+  results.push({ name, ms });
+}
+if (!dryRun) {
+  runStep('derive-evaluations', 'derive-evaluations.ts');
+} else {  }
+if (!skipJudge) {
+  const judgeArgs: string[] = [];
+  if (dryRun) judgeArgs.push('--dry-run');
+  if (seed || autoSeed) judgeArgs.push('--seed');
+  if (limit) judgeArgs.push('--limit', limit);
+  runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
+}
+if (!skipSync) {
+  const syncArgs: string[] = [];
+  if (dryRun) syncArgs.push('--dry-run');
+  runStep('sync-to-kv', 'sync-to-kv.ts', syncArgs);
+}
+for (const _r of results) {  }
+const _total = results.reduce((sum, r) => sum + r.ms, 0);
 
 ================
 File: src/__tests__/api-agents.test.ts
@@ -9532,6 +9586,117 @@ describe('AgentSessionPage', () => {
 });
 
 ================
+File: src/api/routes/correlations.ts
+================
+import { Hono } from 'hono';
+import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+export const correlationRoutes = new Hono();
+correlationRoutes.get('/correlations', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const { start, end } = computePeriodDates(periodResult.data);
+    const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
+    const metricTimeSeries = new Map<string, number[]>();
+    const metricNames: string[] = [];
+    for (const [name, evals] of evaluationsByMetric) {
+      metricTimeSeries.set(name, evals.reduce<number[]>((acc, e) => { if (e.scoreValue != null) acc.push(e.scoreValue); return acc; }, []));
+      metricNames.push(name);
+    }
+    const correlations = computeCorrelationMatrix(metricTimeSeries);
+    return c.json({ correlations, metrics: metricNames });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/routes/dashboard.ts
+================
+import { Hono } from 'hono';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  type RoleViewType,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
+import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+const SPARKLINE_BUCKET_COUNT = 24;
+function computeSparklineData(
+  evaluations: EvaluationResult[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): (number | null)[] {
+  const range = endMs - startMs;
+  if (range <= 0 || evaluations.length === 0) return [];
+  const bucketWidth = range / buckets;
+  const sums = new Array(buckets).fill(0);
+  const counts = new Array(buckets).fill(0);
+  for (const ev of evaluations) {
+    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
+    const ts = new Date(ev.timestamp).getTime();
+    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
+    if (idx >= 0) {
+      sums[idx] += ev.scoreValue;
+      counts[idx]++;
+    }
+  }
+  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
+}
+export const dashboardRoutes = new Hono();
+dashboardRoutes.get('/dashboard', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
+  if (!roleResult.success) {
+    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const role = roleResult.data;
+    const dates = computePeriodDates(period);
+    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
+    const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
+    const cqi = computeCQI(dashboard.metrics);
+    const startMs = new Date(dates.start).getTime();
+    const endMs = new Date(dates.end).getTime();
+    const sparklines: Record<string, (number | null)[]> = {};
+    for (const [metricName, evals] of evaluationsByMetric) {
+      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
+    }
+    if (role) {
+      const view = computeRoleView(dashboard, role as RoleViewType);
+      if (role === 'executive') {
+        return c.json({ ...view, cqi, sparklines });
+      }
+      return c.json({ ...view, sparklines });
+    }
+    return c.json({ ...dashboard, cqi, sparklines });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+dashboardRoutes.get('/health', async (c) => {
+  try {
+    const result = await checkHealth();
+    return c.json(result);
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: src/api/routes/evaluations.ts
 ================
 import { Hono } from 'hono';
@@ -10463,140 +10628,56 @@ export function useRole(): RoleContextValue {
 }
 
 ================
-File: src/hooks/useSessionDetail.ts
+File: src/hooks/useApiQuery.ts
 ================
-import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
-import { useApiQuery } from './useApiQuery.js';
-export interface SessionInfo {
-  projectName: string;
-  workingDirectory: string;
-  gitRepository: string;
-  gitBranch: string;
-  nodeVersion: string;
-  resumeCount: number;
-  initialMessageCount: number;
-  initialContextTokens: number;
-  finalMessageCount: number;
-  taskCount: number;
-  uncommittedAtStart: number;
+import { useQuery } from '@tanstack/react-query';
+import { STALE_TIME } from '../lib/constants.js';
+import { useAuth } from '../contexts/AuthContext.js';
+function defaultRetry(failureCount: number, error: unknown): boolean {
+  if (error instanceof Error && (
+    error.message === 'AUTH_REQUIRED' ||
+    error.message.startsWith('API error: 401')
+  )) return false;
+  return failureCount < 2;
 }
-export interface TokenSnapshot {
-  messages: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheRead: number;
-  cacheCreation: number;
-  model: string;
-}
-export interface TokenTotals {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheCreation: number;
-  messages: number;
-  models: Record<string, number>;
-}
-export interface SessionAgentStat {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  hasRateLimit: boolean;
-  avgOutputSize: number;
-}
-export interface FileAccessEntry {
-  path: string;
-  count: number;
-}
-export interface GitCommit {
-  subject: string;
-  body: string;
-  files: string;
-}
-export interface CodeStructureEntry {
-  file: string;
-  lines: number;
-  exports: number;
-  functions: number;
-  hasTypes: boolean;
-  score: number;
-  tool: string;
-}
-export interface AlertSummary {
-  totalFired: number;
-  stopEvents: number;
-}
-export interface DataSources {
-  traces: { count: number; traceIds: number };
-  logs: { count: number };
-  evaluations: { count: number };
-  total: number;
-}
-export interface Timespan {
-  start: string;
-  end: string;
-  durationHours: number;
-}
-export interface HookLatency {
-  count: number;
-  avg: number;
-  p50: number;
-  p95: number;
-  max: number;
-}
-export interface EvaluationBreakdownEntry {
-  name: string;
-  count: number;
-  avg: number | null;
-  min: number | null;
-  max: number | null;
-}
-export interface SessionDetailResponse {
-  sessionId: string;
-  dataSources: DataSources;
-  timespan: Timespan | null;
-  sessionInfo: SessionInfo | null;
-  tokenTotals: TokenTotals;
-  tokenProgression: TokenSnapshot[];
-  toolUsage: Record<string, number>;
-  mcpUsage: Record<string, number>;
-  spanBreakdown: Record<string, number>;
-  hookLatency: Record<string, HookLatency>;
-  errors: {
-    byCategory: Record<string, number>;
-    details: Array<{
-      spanName: string;
-      tool?: string;
-      errorType?: string;
-      filePath?: string;
-    }>;
-  };
-  agentActivity: SessionAgentStat[];
-  fileAccess: FileAccessEntry[];
-  gitCommits: GitCommit[];
-  alertSummary: AlertSummary;
-  codeStructure: CodeStructureEntry[];
-  evaluationBreakdown: EvaluationBreakdownEntry[];
-  logSummary: {
-    bySeverity: Record<string, number>;
-    logs: unknown[];
-  };
-  multiAgentEvaluation: MultiAgentEvaluation;
-  evaluations: EvaluationResult[];
-}
-export function useSessionDetail(sessionId: string | undefined) {
-  return useApiQuery<SessionDetailResponse>(
-    ['session-detail', sessionId],
-    () => `${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`,
-    {
-      enabled: !!sessionId,
-      staleTime: STALE_TIME.DETAIL,
-      retry: (failureCount, error) =>
-        error instanceof Error && error.message.startsWith('API error: 404')
-          ? false
-          : failureCount < 2,
+export function useApiQuery<TRaw, T = TRaw>(
+  queryKey: readonly unknown[],
+  buildUrl: () => string,
+  options: {
+    enabled?: boolean;
+    staleTime?: number;
+    retry?: number | ((failureCount: number, error: unknown) => boolean);
+    refetchInterval?: number;
+    retryDelay?: (attempt: number) => number;
+    select?: (raw: TRaw) => T;
+  } = {},
+) {
+  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select } = options;
+  const { getAccessToken } = useAuth();
+  return useQuery<TRaw, Error, T>({
+    queryKey,
+    queryFn: async () => {
+      let token: string;
+      try {
+        token = await getAccessToken();
+      } catch {
+        throw new Error('AUTH_REQUIRED');
+      }
+      const url = buildUrl();
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
+      }
+      return res.json() as Promise<TRaw>;
     },
-  );
+    select,
+    enabled,
+    staleTime,
+    retry: retry !== undefined ? retry : defaultRetry,
+    refetchInterval,
+    retryDelay,
+  });
 }
 
 ================
@@ -11089,1092 +11170,6 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </ErrorBoundary>
 );
-
-================
-File: src/__tests__/components.test.tsx
-================
-import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from '../components/Indicators.js';
-import { HealthOverview } from '../components/HealthOverview.js';
-import { AlertList } from '../components/AlertList.js';
-import { SLATable } from '../components/SLATable.js';
-import type {
-  QualityDashboardSummary,
-  TriggeredAlert,
-  SLAComplianceResult,
-  MetricTrend,
-  ConfidenceIndicator,
-} from '../types.js';
-function makeDashboard(overrides: Partial<QualityDashboardSummary> = {}): QualityDashboardSummary {
-  return {
-    overallStatus: 'healthy',
-    metrics: [],
-    alerts: [],
-    summary: {
-      totalMetrics: 7,
-      healthyMetrics: 5,
-      warningMetrics: 1,
-      criticalMetrics: 1,
-      noDataMetrics: 0,
-    },
-    timestamp: '2026-02-10T00:00:00Z',
-    ...overrides,
-  };
-}
-function makeAlert(overrides: Partial<TriggeredAlert> = {}): TriggeredAlert {
-  return {
-    severity: 'warning',
-    message: 'Test alert message',
-    aggregation: 'avg',
-    threshold: 0.7,
-    actualValue: 0.6,
-    direction: 'below',
-    ...overrides,
-  };
-}
-function makeSLA(overrides: Partial<SLAComplianceResult> = {}): SLAComplianceResult {
-  return {
-    sla: { metric: 'relevance', aggregation: 'avg', target: 0.8, direction: 'above' },
-    compliant: true,
-    status: 'compliant',
-    actualValue: 0.9,
-    gap: 0.1,
-    marginPercent: 12.5,
-    ...overrides,
-  };
-}
-describe('StatusBadge', () => {
-  it('renders healthy status', () => {
-    render(<StatusBadge status="healthy" />);
-    expect(screen.getByLabelText('Status: healthy')).toBeInTheDocument();
-    expect(screen.getByText(/healthy/)).toBeInTheDocument();
-  });
-  it('renders critical status', () => {
-    render(<StatusBadge status="critical" />);
-    expect(screen.getByLabelText('Status: critical')).toBeInTheDocument();
-  });
-  it('renders no_data status', () => {
-    render(<StatusBadge status="no_data" />);
-    expect(screen.getByLabelText('Status: no_data')).toBeInTheDocument();
-  });
-});
-describe('TrendIndicator', () => {
-  it('renders nothing when trend is undefined', () => {
-    const { container } = render(<TrendIndicator trend={undefined} />);
-    expect(container.innerHTML).toBe('');
-  });
-  it('renders improving trend with positive percentage', () => {
-    const trend: MetricTrend = {
-      direction: 'improving',
-      delta: 0.05,
-      percentChange: 5.3,
-      currentValue: 0.85,
-      previousValue: 0.8,
-      aggregation: 'avg',
-      lowSampleWarning: false,
-    };
-    render(<TrendIndicator trend={trend} />);
-    expect(screen.getByText(/\+5.3%/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/improving/)).toBeInTheDocument();
-  });
-  it('renders degrading trend with negative percentage', () => {
-    const trend: MetricTrend = {
-      direction: 'degrading',
-      delta: -0.05,
-      percentChange: -3.1,
-      currentValue: 0.75,
-      previousValue: 0.8,
-      aggregation: 'avg',
-      lowSampleWarning: false,
-    };
-    render(<TrendIndicator trend={trend} />);
-    expect(screen.getByText(/-3.1%/)).toBeInTheDocument();
-  });
-  it('shows low sample warning indicator', () => {
-    const trend: MetricTrend = {
-      direction: 'stable',
-      delta: 0,
-      percentChange: 0,
-      currentValue: 0.8,
-      previousValue: 0.8,
-      aggregation: 'avg',
-      lowSampleWarning: true,
-    };
-    render(<TrendIndicator trend={trend} />);
-    expect(screen.getByText('*')).toBeInTheDocument();
-  });
-});
-describe('ConfidenceBadge', () => {
-  it('renders nothing when confidence is undefined', () => {
-    const { container } = render(<ConfidenceBadge confidence={undefined} />);
-    expect(container.innerHTML).toBe('');
-  });
-  it('renders high confidence', () => {
-    const confidence: ConfidenceIndicator = {
-      level: 'high',
-      sampleCount: 100,
-      scoreStdDev: 0.1,
-      evaluatorCount: 1,
-      evaluatorAgreement: null,
-    };
-    render(<ConfidenceBadge confidence={confidence} />);
-    expect(screen.getByLabelText('Confidence: high')).toBeInTheDocument();
-  });
-});
-describe('HealthOverview', () => {
-  it('renders healthy banner text', () => {
-    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'healthy' })} />);
-    expect(screen.getByText('All metrics within thresholds')).toBeInTheDocument();
-  });
-  it('renders critical banner text', () => {
-    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'critical' })} />);
-    expect(screen.getByText('Critical issues detected')).toBeInTheDocument();
-  });
-  it('renders warning banner text', () => {
-    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'warning' })} />);
-    expect(screen.getByText('Some metrics need attention')).toBeInTheDocument();
-  });
-  it('renders no_data banner text', () => {
-    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'no_data' })} />);
-    expect(screen.getByText('No evaluation data available')).toBeInTheDocument();
-  });
-  it('renders summary counts', () => {
-    const dash = makeDashboard({
-      summary: { totalMetrics: 7, healthyMetrics: 3, warningMetrics: 2, criticalMetrics: 1, noDataMetrics: 1 },
-    });
-    const { container } = render(<HealthOverview dashboard={dash} />);
-    const counts = container.querySelectorAll('.summary-count');
-    expect(counts).toHaveLength(4);
-    expect(within(counts[0] as HTMLElement).getByText('7')).toBeInTheDocument();
-    expect(within(counts[0] as HTMLElement).getByText('Total')).toBeInTheDocument();
-    expect(within(counts[1] as HTMLElement).getByText('3')).toBeInTheDocument();
-    expect(within(counts[2] as HTMLElement).getByText('2')).toBeInTheDocument();
-    expect(within(counts[3] as HTMLElement).getByText('1')).toBeInTheDocument();
-  });
-});
-describe('AlertList', () => {
-  it('renders nothing for empty alerts', () => {
-    const { container } = render(<AlertList alerts={[]} />);
-    expect(container.innerHTML).toBe('');
-  });
-  it('renders alert messages', () => {
-    const alerts = [makeAlert({ message: 'Relevance p50 critically low' })];
-    render(<AlertList alerts={alerts} />);
-    expect(screen.getByText('Relevance p50 critically low')).toBeInTheDocument();
-  });
-  it('sorts alerts by severity (critical first)', () => {
-    const alerts = [
-      makeAlert({ severity: 'info', message: 'info alert' }),
-      makeAlert({ severity: 'critical', message: 'critical alert' }),
-      makeAlert({ severity: 'warning', message: 'warning alert' }),
-    ];
-    const { container } = render(<AlertList alerts={alerts} />);
-    const items = container.querySelectorAll('.alert-item');
-    expect(items[0]).toHaveTextContent('critical alert');
-    expect(items[1]).toHaveTextContent('warning alert');
-    expect(items[2]).toHaveTextContent('info alert');
-  });
-  it('renders remediation hints', () => {
-    const alerts = [makeAlert({ remediationHints: ['Review recent prompt changes'] })];
-    render(<AlertList alerts={alerts} />);
-    expect(screen.getByText(/Review recent prompt changes/)).toBeInTheDocument();
-  });
-  it('renders aggregation and threshold metadata', () => {
-    const alerts = [makeAlert({ aggregation: 'p50', actualValue: 0.45, threshold: 0.7 })];
-    const { container } = render(<AlertList alerts={alerts} />);
-    const meta = container.querySelector('.alert-meta');
-    expect(meta).toHaveTextContent('p50 = 0.4500');
-    expect(meta).toHaveTextContent('threshold: 0.7000');
-  });
-});
-describe('SLATable', () => {
-  it('renders nothing for empty SLAs', () => {
-    const { container } = render(<SLATable slas={[]} />);
-    expect(container.innerHTML).toBe('');
-  });
-  it('renders SLA rows with metric name and target', () => {
-    const slas = [makeSLA()];
-    render(<SLATable slas={slas} />);
-    expect(screen.getByText('relevance (avg)')).toBeInTheDocument();
-    expect(screen.getByText(/>= 0.8000/)).toBeInTheDocument();
-  });
-  it('renders actual value and gap', () => {
-    const slas = [makeSLA({ actualValue: 0.9, gap: 0.1 })];
-    const { container } = render(<SLATable slas={slas} />);
-    const cells = container.querySelectorAll('td');
-    expect(cells[2]).toHaveTextContent('0.9000');
-    expect(cells[3]).toHaveTextContent('+0.1000');
-  });
-  it('renders N/A for null actual value', () => {
-    const slas = [makeSLA({ actualValue: null, gap: null, status: 'no_data', compliant: false })];
-    render(<SLATable slas={slas} />);
-    expect(screen.getByText('N/A')).toBeInTheDocument();
-  });
-  it('renders non-compliant gap with data-noncompliant attribute', () => {
-    const slas = [makeSLA({ compliant: false, gap: -0.1, status: 'non_compliant' })];
-    render(<SLATable slas={slas} />);
-    const gapCell = screen.getByText('-0.1000');
-    expect(gapCell.closest('td')).toHaveAttribute('data-noncompliant');
-  });
-});
-
-================
-File: src/api/routes/dashboard.ts
-================
-import { Hono } from 'hono';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-  type RoleViewType,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
-const SPARKLINE_BUCKET_COUNT = 24;
-function computeSparklineData(
-  evaluations: EvaluationResult[],
-  startMs: number,
-  endMs: number,
-  buckets: number,
-): (number | null)[] {
-  const range = endMs - startMs;
-  if (range <= 0 || evaluations.length === 0) return [];
-  const bucketWidth = range / buckets;
-  const sums = new Array(buckets).fill(0);
-  const counts = new Array(buckets).fill(0);
-  for (const ev of evaluations) {
-    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
-    const ts = new Date(ev.timestamp).getTime();
-    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
-    if (idx >= 0) {
-      sums[idx] += ev.scoreValue;
-      counts[idx]++;
-    }
-  }
-  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
-}
-export const dashboardRoutes = new Hono();
-dashboardRoutes.get('/dashboard', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
-  if (!roleResult.success) {
-    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const role = roleResult.data;
-    const dates = computePeriodDates(period);
-    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
-    const cqi = computeCQI(dashboard.metrics);
-    const startMs = new Date(dates.start).getTime();
-    const endMs = new Date(dates.end).getTime();
-    const sparklines: Record<string, (number | null)[]> = {};
-    for (const [metricName, evals] of evaluationsByMetric) {
-      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
-    }
-    if (role) {
-      const view = computeRoleView(dashboard, role as RoleViewType);
-      if (role === 'executive') {
-        return c.json({ ...view, cqi, sparklines });
-      }
-      return c.json({ ...view, sparklines });
-    }
-    return c.json({ ...dashboard, cqi, sparklines });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-dashboardRoutes.get('/health', async (c) => {
-  try {
-    const result = await checkHealth();
-    return c.json(result);
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/components/AlertList.tsx
-================
-import { Link } from 'wouter';
-import type { CSSProperties } from 'react';
-import { formatScore } from '../lib/quality-utils.js';
-import type { TriggeredAlert } from '../types.js';
-type AlertWithMeta = TriggeredAlert & { metricName?: string };
-function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
-  return (
-    <li className="alert-item" data-status={alert.severity}>
-      <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
-      </div>
-      {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <div className="remediation text-xs">
-          Hint: {alert.remediationHints[0]}
-        </div>
-      )}
-    </li>
-  );
-}
-function ThresholdBar({ actual, threshold, direction }: {
-  actual: number;
-  threshold: number;
-  direction: 'above' | 'below';
-}) {
-  const max = Math.max(actual, threshold) * 1.2 || 1;
-  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
-  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
-  const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
-  return (
-    <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
-      <div
-        className="threshold-bar-fill"
-        data-violating={isViolating || undefined}
-        style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
-      />
-      <div
-        className="threshold-bar-marker"
-        style={{ '--bar-marker-left': `${thresholdPct}%` } as CSSProperties}
-        title={`Threshold: ${formatScore(threshold)}`}
-      />
-    </div>
-  );
-}
-function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
-  return (
-    <li className="alert-item alert-compound" data-status={alert.severity}>
-      <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
-      </div>
-      <ThresholdBar
-        actual={alert.actualValue}
-        threshold={alert.threshold}
-        direction={alert.direction}
-      />
-      {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <ol className="remediation-list text-xs">
-          {alert.remediationHints.map((hint, i) => (
-            <li key={i}>{hint}</li>
-          ))}
-        </ol>
-      )}
-      {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
-        <div className="alert-related flex-center">
-          <span className="text-secondary text-xs">Related:</span>
-          {alert.relatedMetrics.map((m) => (
-            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
-              {m}
-            </Link>
-          ))}
-        </div>
-      )}
-    </li>
-  );
-}
-export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
-  if (alerts.length === 0) return null;
-  const sorted = [...alerts].sort((a, b) => {
-    const order = { critical: 0, warning: 1, info: 2 };
-    return (order[a.severity as keyof typeof order] ?? 2) - (order[b.severity as keyof typeof order] ?? 2);
-  });
-  return (
-    <ul className="alert-list">
-      {sorted.map((alert, i) =>
-        alert.isCompound
-          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
-          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
-      )}
-    </ul>
-  );
-}
-
-================
-File: src/components/Chip.tsx
-================
-import type { CSSProperties, ReactNode } from 'react';
-import { scoreColor, type ScoreDirection } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-interface ColoredChipProps {
-  color: string;
-  title?: string;
-  className?: string;
-  style?: CSSProperties;
-  children: ReactNode;
-}
-export function ColoredChip({ color, title, className, style, children }: ColoredChipProps) {
-  return (
-    <span
-      className={`mono-xs chip chip-colored d-inline-block${className ? ` ${className}` : ''}`}
-      title={title}
-      style={{ '--chip-color': color, ...style } as CSSProperties}
-    >
-      {children}
-    </span>
-  );
-}
-interface ScoreChipProps {
-  score: number;
-  direction?: ScoreDirection;
-  title?: string;
-  className?: string;
-  style?: CSSProperties;
-  children?: ReactNode;
-}
-export function ScoreChip({ score, direction, title, className, style, children }: ScoreChipProps) {
-  const color = scoreColor(score, direction);
-  return (
-    <ColoredChip color={color} title={title} className={className} style={style}>
-      {children ?? score.toFixed(SCORE_CHIP_PRECISION)}
-    </ColoredChip>
-  );
-}
-
-================
-File: src/components/EvaluationEventOverlay.tsx
-================
-import { Link } from 'wouter';
-import { ScoreBadge } from './ScoreBadge.js';
-import { routes } from '../lib/routes.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-import type { EvaluationResult } from '../types.js';
-interface EvaluationEventOverlayProps {
-  evaluations: EvaluationResult[];
-  traceId?: string;
-}
-export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEventOverlayProps) {
-  if (evaluations.length === 0) return null;
-  const byName = new Map<string, EvaluationResult[]>();
-  for (const ev of evaluations) {
-    const name = ev.evaluationName;
-    if (!byName.has(name)) byName.set(name, []);
-    byName.get(name)!.push(ev);
-  }
-  return (
-    <div className="flex-wrap gap-2">
-      {[...byName.entries()].map(([name, evs]) => {
-        const avg = evs.reduce((s, e) => s + (e.scoreValue ?? 0), 0) / evs.length;
-        const card = (
-          <div className={`flex-center gap-1-5 surface-elevated eval-overlay-card${traceId ? ' eval-summary-card' : ''}`}>
-            <span className="text-xs">{name}</span>
-            <ScoreBadge score={avg} metricName={name} label={avg.toFixed(SCORE_CHIP_PRECISION)} />
-            <span className="text-muted text-2xs">({evs.length})</span>
-          </div>
-        );
-        if (traceId) {
-          return (
-            <Link
-              key={name}
-              href={routes.evaluationDetail(traceId, name)}
-              className="link-plain"
-            >
-              {card}
-            </Link>
-          );
-        }
-        return <div key={name}>{card}</div>;
-      })}
-    </div>
-  );
-}
-
-================
-File: src/components/EvaluationExpandedRow.tsx
-================
-import { Link } from 'wouter';
-import { SCORE_COLORS } from '../lib/quality-utils.js';
-import { routes } from '../lib/routes.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-import { ScoreChip, ColoredChip } from './Chip.js';
-import { MetaItem } from './MetaItem.js';
-import { SectionBlock } from './SectionBlock.js';
-import type { EvalRow } from './EvaluationTable.js';
-export function StepScoreChip({ step, score, explanation }: {
-  step: string | number;
-  score: number;
-  explanation?: string;
-}) {
-  return (
-    <ScoreChip score={score} direction="maximize" title={explanation ?? `Step ${step}: ${score.toFixed(SCORE_CHIP_PRECISION)}`}>
-      {step}: {score.toFixed(SCORE_CHIP_PRECISION)}
-    </ScoreChip>
-  );
-}
-export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score }: {
-  toolName: string;
-  toolCorrect: boolean;
-  argsCorrect: boolean;
-  score: number;
-}) {
-  const ok = toolCorrect && argsCorrect;
-  const color = ok ? SCORE_COLORS.excellent : SCORE_COLORS.failing;
-  return (
-    <ColoredChip
-      color={color}
-      title={`tool: ${toolCorrect ? 'correct' : 'wrong'}, args: ${argsCorrect ? 'correct' : 'wrong'}, score: ${score.toFixed(SCORE_CHIP_PRECISION)}`}
-    >
-      {toolName} {score.toFixed(SCORE_CHIP_PRECISION)}
-    </ColoredChip>
-  );
-}
-export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
-  const meta = [
-    { label: 'Evaluator Type', value: row.evaluatorType },
-    { label: 'Trace ID', value: row.traceId },
-    { label: 'Span ID', value: row.spanId },
-    { label: 'Session ID', value: row.sessionId },
-    { label: 'Agent', value: row.agentName },
-    { label: 'Trajectory Length', value: row.trajectoryLength },
-  ].filter(m => m.value != null);
-  const hasDetail = row.explanation || meta.length > 0 ||
-    (row.stepScores && row.stepScores.length > 0) ||
-    (row.toolVerifications && row.toolVerifications.length > 0);
-  return (
-    <div className="eval-expanded-content">
-      {row.explanation && (
-        <SectionBlock label="Explanation">
-          <div className="text-xs text-primary leading-normal">
-            {row.explanation}
-          </div>
-        </SectionBlock>
-      )}
-      {meta.length > 0 && (
-        <div className="mb-3 flex-wrap gap-4">
-          {meta.map(m => <MetaItem key={m.label} label={m.label} value={m.value} />)}
-        </div>
-      )}
-      {row.stepScores && row.stepScores.length > 0 && (
-        <SectionBlock label="Step Scores">
-          <div className="flex-wrap gap-1-5">
-            {row.stepScores.map(s => (
-              <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
-            ))}
-          </div>
-        </SectionBlock>
-      )}
-      {row.toolVerifications && row.toolVerifications.length > 0 && (
-        <SectionBlock label="Tool Verifications">
-          <div className="flex-wrap gap-1-5">
-            {row.toolVerifications.map((tv, i) => (
-              <ToolVerificationChip
-                key={`${tv.toolName}-${i}`}
-                toolName={tv.toolName}
-                toolCorrect={tv.toolCorrect}
-                argsCorrect={tv.argsCorrect}
-                score={tv.score}
-              />
-            ))}
-          </div>
-        </SectionBlock>
-      )}
-      {}
-      {(row.traceId || row.sessionId) && (
-        <div className="d-flex gap-4 mt-3 border-t pt-3">
-          {row.traceId && (
-            <Link href={routes.evaluationDetail(row.traceId)} className="back-link inline-flex-center mb-0">
-              View full evaluation detail &rarr;
-            </Link>
-          )}
-          {row.sessionId ? (
-            <Link href={routes.session(row.sessionId)} className="back-link inline-flex-center mb-0">
-              View trace spans &rarr;
-            </Link>
-          ) : row.traceId ? (
-            <Link href={routes.trace(row.traceId)} className="back-link inline-flex-center mb-0">
-              View trace spans &rarr;
-            </Link>
-          ) : null}
-        </div>
-      )}
-      {!hasDetail && !row.traceId && !row.sessionId && (
-        <div className="text-muted text-xs">
-          No additional detail available.
-        </div>
-      )}
-    </div>
-  );
-}
-
-================
-File: src/components/MetricCard.tsx
-================
-import { memo } from 'react';
-import { Link } from 'wouter';
-import type { QualityMetricResult, WorstExplanation } from '../types.js';
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
-import { ScoreBadge } from './ScoreBadge.js';
-import { Sparkline } from './Sparkline.js';
-import { inferScoreDirection, truncateText, plural, formatScore } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-function MetricCardInner({ metric, sparklineData }: {
-  metric: QualityMetricResult;
-  sparklineData?: (number | null)[];
-}) {
-  const { name, displayName, sampleCount, status, values, trend, confidence, alerts } = metric;
-  const worst = (metric as QualityMetricResult & { worstExplanation?: WorstExplanation }).worstExplanation;
-  const primaryValue = values.avg;
-  const glowClass = status === 'critical' ? 'glow-critical' : status === 'warning' ? 'glow-warning' : '';
-  return (
-    <Link href={`/metrics/${name}`} className="card-link" aria-label={`View ${displayName} metric details`}>
-      <div className={`card ${glowClass}`}>
-        <div className="metric-card-header flex-center">
-          <h3>{displayName}</h3>
-          <StatusBadge status={status} />
-        </div>
-        <div className="metric-values">
-          <div className="primary">
-            <ScoreBadge
-              score={primaryValue ?? null}
-              metricName={name}
-              direction={inferScoreDirection(alerts?.[0]?.direction)}
-              label={formatScore(primaryValue)}
-            />
-            {trend && <TrendIndicator trend={trend} />}
-          </div>
-          <div className="secondary">
-            p50: {formatScore(values.p50)} &middot; p95: {formatScore(values.p95)}
-          </div>
-        </div>
-        {sparklineData && sparklineData.length >= 2 && (
-          <div className="mt-2">
-            <Sparkline
-              data={sparklineData}
-              width={120}
-              height={24}
-              color={status === 'critical' ? 'var(--status-critical)' : status === 'warning' ? 'var(--status-warning)' : 'var(--accent)'}
-              label={`${displayName} score trend`}
-            />
-          </div>
-        )}
-        <div className="metric-footer flex-center">
-          <span>n={sampleCount} <ConfidenceBadge confidence={confidence} /></span>
-          {alerts.length > 0 && (
-            <span className="text-warning">
-              {'\u25B2'} {plural(alerts.length, 'alert')}
-            </span>
-          )}
-        </div>
-        {worst && worst.explanation && (
-          <div className="metric-worst truncate" title={worst.explanation}>
-            <span className="worst-score">{worst.score.toFixed(SCORE_CHIP_PRECISION)}</span>{' '}
-            {truncateText(worst.explanation, 60)}
-          </div>
-        )}
-      </div>
-    </Link>
-  );
-}
-export const MetricCard = memo(MetricCardInner);
-
-================
-File: src/components/ScoreHistogram.tsx
-================
-import type { CSSProperties } from 'react';
-export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket: string; count: number }> }) {
-  if (distribution.length === 0) return null;
-  const maxCount = distribution.reduce((m, d) => Math.max(m, d.count), 1);
-  return (
-    <div>
-      <div className="histogram">
-        {distribution.map((d, i) => (
-          <div
-            key={i}
-            className="histogram-bar"
-            style={{ '--histogram-bar-height': `${(d.count / maxCount) * 100}%` } as CSSProperties}
-            aria-label={`${d.bucket}: ${d.count} evaluations`}
-          >
-            <div className="tooltip surface-elevated">
-              {d.bucket}: {d.count}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="histogram-labels">
-        <span>{distribution[0]?.bucket}</span>
-        <span>{distribution[distribution.length - 1]?.bucket}</span>
-      </div>
-    </div>
-  );
-}
-
-================
-File: src/components/Section.tsx
-================
-import type { CSSProperties, ReactNode } from 'react';
-import { CHEVRON_RIGHT } from '../lib/symbols.js';
-export function ViewSection({ title, children }: { title: ReactNode; children: ReactNode }) {
-  return (
-    <div className="view-section">
-      <h3 className="section-heading">{title}</h3>
-      {children}
-    </div>
-  );
-}
-export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
-export interface SectionProps {
-  title: string;
-  badge?: string;
-  health?: SectionHealth;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}
-export function Section({ title, badge, health = 'neutral', defaultOpen = false, children }: SectionProps) {
-  const railColor = health === 'ok'
-    ? 'var(--status-healthy)'
-    : health === 'warn'
-    ? 'var(--status-warning)'
-    : health === 'crit'
-    ? 'var(--status-critical)'
-    : 'var(--border-accent)';
-  return (
-    <details open={defaultOpen} className="mb-1" style={{ '--section-rail-color': railColor } as CSSProperties}>
-      <summary className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail">
-        <span className="mono text-2xs d-inline-block section-rail-chevron">
-          {CHEVRON_RIGHT}
-        </span>
-        <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
-        {badge && (
-          <span className="mono-xs text-muted chip chip-badge">{badge}</span>
-        )}
-      </summary>
-      <div className="border-b-subtle section-rail section-rail-body">
-        {children}
-      </div>
-    </details>
-  );
-}
-
-================
-File: src/components/SplitPane.tsx
-================
-import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
-interface SplitPaneProps {
-  left: ReactNode;
-  right: ReactNode;
-  initialSplit?: number;
-  minPct?: number;
-  maxPct?: number;
-}
-export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct = 75 }: SplitPaneProps) {
-  const [splitPct, setSplitPct] = useState(initialSplit);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-  const onMouseDown = useCallback(() => { dragging.current = true; }, []);
-  useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
-      if (!dragging.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
-      setSplitPct(Math.max(minPct, Math.min(maxPct, pct)));
-    }
-    function onMouseUp() { dragging.current = false; }
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    return () => {
-      dragging.current = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [minPct, maxPct]);
-  return (
-    <div ref={containerRef} className="d-flex w-full split-pane">
-      <div className="split-pane-panel" style={{ '--split-width': `${splitPct}%` } as CSSProperties}>{left}</div>
-      <div
-        className="shrink-0 split-pane-divider" role="separator"
-        aria-orientation="vertical"
-        aria-valuenow={Math.round(splitPct)}
-        aria-valuemin={minPct}
-        aria-valuemax={maxPct}
-        aria-label="Resize panes"
-        tabIndex={0}
-        onMouseDown={onMouseDown}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowLeft') { e.preventDefault(); setSplitPct(p => Math.max(minPct, p - 2)); }
-          if (e.key === 'ArrowRight') { e.preventDefault(); setSplitPct(p => Math.min(maxPct, p + 2)); }
-        }}
-      />
-      <div className="split-pane-panel" style={{ '--split-width': `${100 - splitPct}%` } as CSSProperties}>{right}</div>
-    </div>
-  );
-}
-
-================
-File: src/hooks/useTrace.ts
-================
-import { useQuery } from '@tanstack/react-query';
-import type { EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME, QUERY_RETRY_COUNT, HttpStatus } from '../lib/constants.js';
-import { useAuth } from '../contexts/AuthContext.js';
-interface TraceSpanResponse {
-  traceId: string;
-  spanId: string;
-  name: string;
-  kind?: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-}
-interface TraceResponse {
-  traceId: string;
-  spans: TraceSpanResponse[];
-  evaluations: EvaluationResult[];
-}
-export function useTrace(traceId: string | undefined) {
-  const { getAccessToken } = useAuth();
-  return useQuery<TraceResponse>({
-    queryKey: ['trace', traceId],
-    queryFn: async () => {
-      if (!traceId) throw new Error('traceId is required');
-      let token: string;
-      try {
-        token = await getAccessToken();
-      } catch {
-        throw new Error('AUTH_REQUIRED');
-      }
-      const res = await fetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        if (res.status === HttpStatus.NotFound) return { traceId, spans: [], evaluations: [] };
-        throw new Error(`API error: ${res.status}`);
-      }
-      return res.json();
-    },
-    enabled: !!traceId,
-    staleTime: STALE_TIME.DETAIL,
-    retry: QUERY_RETRY_COUNT,
-  });
-}
-
-================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-const ATTR_AGENT_NAME = 'gen_ai.agent.name';
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
-const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph {
-  if (evaluation !== null && Array.isArray(evaluation.turns)) {
-    return buildFromEvaluation(evaluation, spans);
-  }
-  return inferFromSpans(spans);
-}
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
-  let droppedTurns = 0;
-  let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
-  for (const turn of evaluation.turns) {
-    if (turn.agentName == null) {
-      droppedTurns++;
-      continue;
-    }
-    const existing = agentTurns.get(turn.agentName) ?? [];
-    existing.push(turn);
-    agentTurns.set(turn.agentName, existing);
-    if (
-      turn.turnIndex < minTurnIndex ||
-      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
-    ) {
-      minTurnIndex = turn.turnIndex;
-      rootAgentName = turn.agentName;
-    }
-  }
-  const nodes: WorkflowNode[] = [];
-  for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
-    const evaluationScore = relevances.length > 0
-      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
-      : null;
-    const agentSpans = spans.filter(s => s.attributes?.[ATTR_AGENT_NAME] === agentName);
-    const toolCallCount = agentSpans.filter(s => s.name === 'tool_call').length;
-    const tokenValues = agentSpans
-      .map(s => s.attributes?.[ATTR_TOTAL_TOKENS])
-      .filter((v): v is number => typeof v === 'number' && isFinite(v));
-    const totalTokens = tokenValues.length > 0 ? tokenValues.reduce((a, b) => a + b, 0) : null;
-    const durationMs = agentSpans.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
-    nodes.push({
-      id: agentName,
-      label: agentName,
-      evaluationScore,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: turns.length,
-      hasError: turns.some(t => t.hasError),
-    });
-  }
-  const seenEdges = new Set<string>();
-  const edges: WorkflowEdge[] = [];
-  for (const h of evaluation.handoffs) {
-    const key = `${h.sourceAgent}->${h.targetAgent}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
-    const score = isFinite(h.score) ? h.score : 0;
-    edges.push({
-      id: key,
-      source: h.sourceAgent,
-      target: h.targetAgent,
-      handoffScore: score,
-      contextPreserved: h.contextPreserved,
-      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
-    });
-  }
-  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
-}
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = new Map<string, TraceSpan[]>();
-  for (const span of spans) {
-    const agentId = span.attributes?.[ATTR_AGENT_ID] as string | undefined;
-    if (!agentId) continue;
-    const group = agentSpans.get(agentId) ?? [];
-    group.push(span);
-    agentSpans.set(agentId, group);
-  }
-  if (agentSpans.size === 0) {
-    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
-  }
-  const nodes: WorkflowNode[] = [];
-  for (const [agentId, group] of agentSpans) {
-    const toolCallCount = group.filter(s => s.name.startsWith('tool:')).length;
-    const tokenValues = group
-      .map(s => s.attributes?.[ATTR_TOTAL_TOKENS])
-      .filter((v): v is number => typeof v === 'number' && isFinite(v));
-    const totalTokens = tokenValues.length > 0 ? tokenValues.reduce((a, b) => a + b, 0) : null;
-    const durationMs = group.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
-    nodes.push({
-      id: agentId,
-      label: agentId,
-      evaluationScore: null,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: group.length,
-      hasError: group.some(s => s.status?.code === OTEL_STATUS_ERROR_CODE),
-    });
-  }
-  const agentTimings = [...agentSpans.entries()].map(([id, group]) => ({
-    id,
-    minStart: Math.min(...group.map(s => s.startTimeUnixNano)),
-    maxEnd: Math.max(...group.map(s => s.endTimeUnixNano ?? s.startTimeUnixNano)),
-  })).sort((a, b) => a.minStart - b.minStart);
-  const edges: WorkflowEdge[] = [];
-  for (let i = 0; i < agentTimings.length - 1; i++) {
-    const curr = agentTimings[i];
-    const next = agentTimings[i + 1];
-    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
-      const key = `${curr.id}->${next.id}`;
-      edges.push({
-        id: key,
-        source: curr.id,
-        target: next.id,
-        handoffScore: null,
-        contextPreserved: false,
-        label: 'inferred',
-      });
-    }
-  }
-  const rootNodeId = agentTimings[0]?.id ?? null;
-  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
-}
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
-  const adjacency = new Map<string, string[]>();
-  for (const n of nodes) adjacency.set(n.id, []);
-  for (const e of edges) {
-    if (e.source !== e.target) {
-      adjacency.get(e.source)?.push(e.target);
-    }
-  }
-  const UNVISITED = 0;
-  const IN_STACK = 1;
-  const DONE = 2;
-  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
-  function dfs(nodeId: string): boolean {
-    state.set(nodeId, IN_STACK);
-    for (const neighbor of adjacency.get(nodeId) ?? []) {
-      const neighborState = state.get(neighbor) ?? UNVISITED;
-      if (neighborState === IN_STACK) return true;
-      if (neighborState === UNVISITED && dfs(neighbor)) return true;
-    }
-    state.set(nodeId, DONE);
-    return false;
-  }
-  for (const n of nodes) {
-    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
-  }
-  return false;
-}
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
-  if (nodes.length <= 1) return 'single_agent';
-  if (edges.length === 0) return 'single_agent';
-  if (hasCycle(nodes, edges)) return 'cyclic';
-  const outDegree = new Map<string, number>();
-  for (const e of edges) {
-    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
-  }
-  for (const count of outDegree.values()) {
-    if (count > 1) return 'branching';
-  }
-  return 'linear';
-}
-
-================
-File: src/pages/PipelinePage.tsx
-================
-import { PipelineFunnel } from '../components/PipelineFunnel.js';
-import { usePipeline } from '../hooks/usePipeline.js';
-import { PageShell } from '../components/PageShell.js';
-import { LLM_SAMPLE_RATE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { Period } from '../types.js';
-function T2SamplingStage() {
-  return (
-    <div className="flex-center text-secondary text-xs gap-2-5 mt-3 t2-stage-notice">
-      <span
-        className="inline-flex-center justify-center shrink-0 text-2xs font-bold t2-stage-badge"
-      >
-        T2
-      </span>
-      <span>
-        <strong className="text-primary">LLM Sampling</strong>
-        {' \u2014 '}
-        {LLM_SAMPLE_RATE}% sampled for LLM evaluation (relevance, coherence, faithfulness, hallucination)
-      </span>
-    </div>
-  );
-}
-export function PipelinePage({ period }: { period: Period }) {
-  const { data, isLoading, error } = usePipeline(period);
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && (
-        <>
-          <h2 className="text-lg mb-3">Evaluation Pipeline</h2>
-          <div className="card">
-            <PipelineFunnel
-              stages={data.stages}
-              dropoffs={data.dropoffs}
-              overallConversionPercent={data.overallConversionPercent}
-            />
-            <T2SamplingStage />
-          </div>
-        </>
-      )}
-    </PageShell>
-  );
-}
 
 ================
 File: scripts/derive-evaluations.ts
@@ -13403,6 +12398,1011 @@ if (isDirectRun) {
 }
 
 ================
+File: src/__tests__/components.test.tsx
+================
+import { describe, it, expect } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from '../components/Indicators.js';
+import { HealthOverview } from '../components/HealthOverview.js';
+import { AlertList } from '../components/AlertList.js';
+import { SLATable } from '../components/SLATable.js';
+import type {
+  QualityDashboardSummary,
+  TriggeredAlert,
+  SLAComplianceResult,
+  MetricTrend,
+  ConfidenceIndicator,
+} from '../types.js';
+function makeDashboard(overrides: Partial<QualityDashboardSummary> = {}): QualityDashboardSummary {
+  return {
+    overallStatus: 'healthy',
+    metrics: [],
+    alerts: [],
+    summary: {
+      totalMetrics: 7,
+      healthyMetrics: 5,
+      warningMetrics: 1,
+      criticalMetrics: 1,
+      noDataMetrics: 0,
+    },
+    timestamp: '2026-02-10T00:00:00Z',
+    ...overrides,
+  };
+}
+function makeAlert(overrides: Partial<TriggeredAlert> = {}): TriggeredAlert {
+  return {
+    severity: 'warning',
+    message: 'Test alert message',
+    aggregation: 'avg',
+    threshold: 0.7,
+    actualValue: 0.6,
+    direction: 'below',
+    ...overrides,
+  };
+}
+function makeSLA(overrides: Partial<SLAComplianceResult> = {}): SLAComplianceResult {
+  return {
+    sla: { metric: 'relevance', aggregation: 'avg', target: 0.8, direction: 'above' },
+    compliant: true,
+    status: 'compliant',
+    actualValue: 0.9,
+    gap: 0.1,
+    marginPercent: 12.5,
+    ...overrides,
+  };
+}
+describe('StatusBadge', () => {
+  it('renders healthy status', () => {
+    render(<StatusBadge status="healthy" />);
+    expect(screen.getByLabelText('Status: healthy')).toBeInTheDocument();
+    expect(screen.getByText(/healthy/)).toBeInTheDocument();
+  });
+  it('renders critical status', () => {
+    render(<StatusBadge status="critical" />);
+    expect(screen.getByLabelText('Status: critical')).toBeInTheDocument();
+  });
+  it('renders no_data status', () => {
+    render(<StatusBadge status="no_data" />);
+    expect(screen.getByLabelText('Status: no_data')).toBeInTheDocument();
+  });
+});
+describe('TrendIndicator', () => {
+  it('renders nothing when trend is undefined', () => {
+    const { container } = render(<TrendIndicator trend={undefined} />);
+    expect(container.innerHTML).toBe('');
+  });
+  it('renders improving trend with positive percentage', () => {
+    const trend: MetricTrend = {
+      direction: 'improving',
+      delta: 0.05,
+      percentChange: 5.3,
+      currentValue: 0.85,
+      previousValue: 0.8,
+      aggregation: 'avg',
+      lowSampleWarning: false,
+    };
+    render(<TrendIndicator trend={trend} />);
+    expect(screen.getByText(/\+5.3%/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/improving/)).toBeInTheDocument();
+  });
+  it('renders degrading trend with negative percentage', () => {
+    const trend: MetricTrend = {
+      direction: 'degrading',
+      delta: -0.05,
+      percentChange: -3.1,
+      currentValue: 0.75,
+      previousValue: 0.8,
+      aggregation: 'avg',
+      lowSampleWarning: false,
+    };
+    render(<TrendIndicator trend={trend} />);
+    expect(screen.getByText(/-3.1%/)).toBeInTheDocument();
+  });
+  it('shows low sample warning indicator', () => {
+    const trend: MetricTrend = {
+      direction: 'stable',
+      delta: 0,
+      percentChange: 0,
+      currentValue: 0.8,
+      previousValue: 0.8,
+      aggregation: 'avg',
+      lowSampleWarning: true,
+    };
+    render(<TrendIndicator trend={trend} />);
+    expect(screen.getByText('*')).toBeInTheDocument();
+  });
+});
+describe('ConfidenceBadge', () => {
+  it('renders nothing when confidence is undefined', () => {
+    const { container } = render(<ConfidenceBadge confidence={undefined} />);
+    expect(container.innerHTML).toBe('');
+  });
+  it('renders high confidence', () => {
+    const confidence: ConfidenceIndicator = {
+      level: 'high',
+      sampleCount: 100,
+      scoreStdDev: 0.1,
+      evaluatorCount: 1,
+      evaluatorAgreement: null,
+    };
+    render(<ConfidenceBadge confidence={confidence} />);
+    expect(screen.getByLabelText('Confidence: high')).toBeInTheDocument();
+  });
+});
+describe('HealthOverview', () => {
+  it('renders healthy banner text', () => {
+    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'healthy' })} />);
+    expect(screen.getByText('All metrics within thresholds')).toBeInTheDocument();
+  });
+  it('renders critical banner text', () => {
+    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'critical' })} />);
+    expect(screen.getByText('Critical issues detected')).toBeInTheDocument();
+  });
+  it('renders warning banner text', () => {
+    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'warning' })} />);
+    expect(screen.getByText('Some metrics need attention')).toBeInTheDocument();
+  });
+  it('renders no_data banner text', () => {
+    render(<HealthOverview dashboard={makeDashboard({ overallStatus: 'no_data' })} />);
+    expect(screen.getByText('No evaluation data available')).toBeInTheDocument();
+  });
+  it('renders summary counts', () => {
+    const dash = makeDashboard({
+      summary: { totalMetrics: 7, healthyMetrics: 3, warningMetrics: 2, criticalMetrics: 1, noDataMetrics: 1 },
+    });
+    const { container } = render(<HealthOverview dashboard={dash} />);
+    const counts = container.querySelectorAll('.summary-count');
+    expect(counts).toHaveLength(4);
+    expect(within(counts[0] as HTMLElement).getByText('7')).toBeInTheDocument();
+    expect(within(counts[0] as HTMLElement).getByText('Total')).toBeInTheDocument();
+    expect(within(counts[1] as HTMLElement).getByText('3')).toBeInTheDocument();
+    expect(within(counts[2] as HTMLElement).getByText('2')).toBeInTheDocument();
+    expect(within(counts[3] as HTMLElement).getByText('1')).toBeInTheDocument();
+  });
+});
+describe('AlertList', () => {
+  it('renders nothing for empty alerts', () => {
+    const { container } = render(<AlertList alerts={[]} />);
+    expect(container.innerHTML).toBe('');
+  });
+  it('renders alert messages', () => {
+    const alerts = [makeAlert({ message: 'Relevance p50 critically low' })];
+    render(<AlertList alerts={alerts} />);
+    expect(screen.getByText('Relevance p50 critically low')).toBeInTheDocument();
+  });
+  it('sorts alerts by severity (critical first)', () => {
+    const alerts = [
+      makeAlert({ severity: 'info', message: 'info alert' }),
+      makeAlert({ severity: 'critical', message: 'critical alert' }),
+      makeAlert({ severity: 'warning', message: 'warning alert' }),
+    ];
+    const { container } = render(<AlertList alerts={alerts} />);
+    const items = container.querySelectorAll('.alert-item');
+    expect(items[0]).toHaveTextContent('critical alert');
+    expect(items[1]).toHaveTextContent('warning alert');
+    expect(items[2]).toHaveTextContent('info alert');
+  });
+  it('renders remediation hints', () => {
+    const alerts = [makeAlert({ remediationHints: ['Review recent prompt changes'] })];
+    render(<AlertList alerts={alerts} />);
+    expect(screen.getByText(/Review recent prompt changes/)).toBeInTheDocument();
+  });
+  it('renders aggregation and threshold metadata', () => {
+    const alerts = [makeAlert({ aggregation: 'p50', actualValue: 0.45, threshold: 0.7 })];
+    const { container } = render(<AlertList alerts={alerts} />);
+    const meta = container.querySelector('.alert-meta');
+    expect(meta).toHaveTextContent('p50 = 0.4500');
+    expect(meta).toHaveTextContent('threshold: 0.7000');
+  });
+});
+describe('SLATable', () => {
+  it('renders nothing for empty SLAs', () => {
+    const { container } = render(<SLATable slas={[]} />);
+    expect(container.innerHTML).toBe('');
+  });
+  it('renders SLA rows with metric name and target', () => {
+    const slas = [makeSLA()];
+    render(<SLATable slas={slas} />);
+    expect(screen.getByText('relevance (avg)')).toBeInTheDocument();
+    expect(screen.getByText(/>= 0.8000/)).toBeInTheDocument();
+  });
+  it('renders actual value and gap', () => {
+    const slas = [makeSLA({ actualValue: 0.9, gap: 0.1 })];
+    const { container } = render(<SLATable slas={slas} />);
+    const cells = container.querySelectorAll('td');
+    expect(cells[2]).toHaveTextContent('0.9000');
+    expect(cells[3]).toHaveTextContent('+0.1000');
+  });
+  it('renders N/A for null actual value', () => {
+    const slas = [makeSLA({ actualValue: null, gap: null, status: 'no_data', compliant: false })];
+    render(<SLATable slas={slas} />);
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+  });
+  it('renders non-compliant gap with data-noncompliant attribute', () => {
+    const slas = [makeSLA({ compliant: false, gap: -0.1, status: 'non_compliant' })];
+    render(<SLATable slas={slas} />);
+    const gapCell = screen.getByText('-0.1000');
+    expect(gapCell.closest('td')).toHaveAttribute('data-noncompliant');
+  });
+});
+
+================
+File: src/components/AlertList.tsx
+================
+import { Link } from 'wouter';
+import type { CSSProperties } from 'react';
+import { formatScore } from '../lib/quality-utils.js';
+import type { TriggeredAlert } from '../types.js';
+type AlertWithMeta = TriggeredAlert & { metricName?: string };
+function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
+  return (
+    <li className="alert-item" data-status={alert.severity}>
+      <div className="alert-message">{alert.message}</div>
+      <div className="alert-meta text-secondary text-xs">
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      </div>
+      {alert.remediationHints && alert.remediationHints.length > 0 && (
+        <div className="remediation text-xs">
+          Hint: {alert.remediationHints[0]}
+        </div>
+      )}
+    </li>
+  );
+}
+function ThresholdBar({ actual, threshold, direction }: {
+  actual: number;
+  threshold: number;
+  direction: 'above' | 'below';
+}) {
+  const max = Math.max(actual, threshold) * 1.2 || 1;
+  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
+  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
+  const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
+  return (
+    <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
+      <div
+        className="threshold-bar-fill"
+        data-violating={isViolating || undefined}
+        style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
+      />
+      <div
+        className="threshold-bar-marker"
+        style={{ '--bar-marker-left': `${thresholdPct}%` } as CSSProperties}
+        title={`Threshold: ${formatScore(threshold)}`}
+      />
+    </div>
+  );
+}
+function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
+  return (
+    <li className="alert-item alert-compound" data-status={alert.severity}>
+      <div className="alert-message">{alert.message}</div>
+      <div className="alert-meta text-secondary text-xs">
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      </div>
+      <ThresholdBar
+        actual={alert.actualValue}
+        threshold={alert.threshold}
+        direction={alert.direction}
+      />
+      {alert.remediationHints && alert.remediationHints.length > 0 && (
+        <ol className="remediation-list text-xs">
+          {alert.remediationHints.map((hint, i) => (
+            <li key={i}>{hint}</li>
+          ))}
+        </ol>
+      )}
+      {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
+        <div className="alert-related flex-center">
+          <span className="text-secondary text-xs">Related:</span>
+          {alert.relatedMetrics.map((m) => (
+            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
+              {m}
+            </Link>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
+  if (alerts.length === 0) return null;
+  const sorted = [...alerts].sort((a, b) => {
+    const order = { critical: 0, warning: 1, info: 2 };
+    return (order[a.severity as keyof typeof order] ?? 2) - (order[b.severity as keyof typeof order] ?? 2);
+  });
+  return (
+    <ul className="alert-list">
+      {sorted.map((alert, i) =>
+        alert.isCompound
+          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
+          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
+      )}
+    </ul>
+  );
+}
+
+================
+File: src/components/Chip.tsx
+================
+import type { CSSProperties, ReactNode } from 'react';
+import { scoreColor, type ScoreDirection } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+interface ColoredChipProps {
+  color: string;
+  title?: string;
+  className?: string;
+  style?: CSSProperties;
+  children: ReactNode;
+}
+export function ColoredChip({ color, title, className, style, children }: ColoredChipProps) {
+  return (
+    <span
+      className={`mono-xs chip chip-colored d-inline-block${className ? ` ${className}` : ''}`}
+      title={title}
+      style={{ '--chip-color': color, ...style } as CSSProperties}
+    >
+      {children}
+    </span>
+  );
+}
+interface ScoreChipProps {
+  score: number;
+  direction?: ScoreDirection;
+  title?: string;
+  className?: string;
+  style?: CSSProperties;
+  children?: ReactNode;
+}
+export function ScoreChip({ score, direction, title, className, style, children }: ScoreChipProps) {
+  const color = scoreColor(score, direction);
+  return (
+    <ColoredChip color={color} title={title} className={className} style={style}>
+      {children ?? score.toFixed(SCORE_CHIP_PRECISION)}
+    </ColoredChip>
+  );
+}
+
+================
+File: src/components/EvaluationEventOverlay.tsx
+================
+import { Link } from 'wouter';
+import { ScoreBadge } from './ScoreBadge.js';
+import { routes } from '../lib/routes.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import type { EvaluationResult } from '../types.js';
+interface EvaluationEventOverlayProps {
+  evaluations: EvaluationResult[];
+  traceId?: string;
+}
+export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEventOverlayProps) {
+  if (evaluations.length === 0) return null;
+  const byName = new Map<string, EvaluationResult[]>();
+  for (const ev of evaluations) {
+    const name = ev.evaluationName;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name)!.push(ev);
+  }
+  return (
+    <div className="flex-wrap gap-2">
+      {[...byName.entries()].map(([name, evs]) => {
+        const avg = evs.reduce((s, e) => s + (e.scoreValue ?? 0), 0) / evs.length;
+        const card = (
+          <div className={`flex-center gap-1-5 surface-elevated eval-overlay-card${traceId ? ' eval-summary-card' : ''}`}>
+            <span className="text-xs">{name}</span>
+            <ScoreBadge score={avg} metricName={name} label={avg.toFixed(SCORE_CHIP_PRECISION)} />
+            <span className="text-muted text-2xs">({evs.length})</span>
+          </div>
+        );
+        if (traceId) {
+          return (
+            <Link
+              key={name}
+              href={routes.evaluationDetail(traceId, name)}
+              className="link-plain"
+            >
+              {card}
+            </Link>
+          );
+        }
+        return <div key={name}>{card}</div>;
+      })}
+    </div>
+  );
+}
+
+================
+File: src/components/EvaluationExpandedRow.tsx
+================
+import { Link } from 'wouter';
+import { SCORE_COLORS } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { ScoreChip, ColoredChip } from './Chip.js';
+import { MetaItem } from './MetaItem.js';
+import { SectionBlock } from './SectionBlock.js';
+import type { EvalRow } from './EvaluationTable.js';
+export function StepScoreChip({ step, score, explanation }: {
+  step: string | number;
+  score: number;
+  explanation?: string;
+}) {
+  return (
+    <ScoreChip score={score} direction="maximize" title={explanation ?? `Step ${step}: ${score.toFixed(SCORE_CHIP_PRECISION)}`}>
+      {step}: {score.toFixed(SCORE_CHIP_PRECISION)}
+    </ScoreChip>
+  );
+}
+export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score }: {
+  toolName: string;
+  toolCorrect: boolean;
+  argsCorrect: boolean;
+  score: number;
+}) {
+  const ok = toolCorrect && argsCorrect;
+  const color = ok ? SCORE_COLORS.excellent : SCORE_COLORS.failing;
+  return (
+    <ColoredChip
+      color={color}
+      title={`tool: ${toolCorrect ? 'correct' : 'wrong'}, args: ${argsCorrect ? 'correct' : 'wrong'}, score: ${score.toFixed(SCORE_CHIP_PRECISION)}`}
+    >
+      {toolName} {score.toFixed(SCORE_CHIP_PRECISION)}
+    </ColoredChip>
+  );
+}
+export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
+  const meta = [
+    { label: 'Evaluator Type', value: row.evaluatorType },
+    { label: 'Trace ID', value: row.traceId },
+    { label: 'Span ID', value: row.spanId },
+    { label: 'Session ID', value: row.sessionId },
+    { label: 'Agent', value: row.agentName },
+    { label: 'Trajectory Length', value: row.trajectoryLength },
+  ].filter(m => m.value != null);
+  const hasDetail = row.explanation || meta.length > 0 ||
+    (row.stepScores && row.stepScores.length > 0) ||
+    (row.toolVerifications && row.toolVerifications.length > 0);
+  return (
+    <div className="eval-expanded-content">
+      {row.explanation && (
+        <SectionBlock label="Explanation">
+          <div className="text-xs text-primary leading-normal">
+            {row.explanation}
+          </div>
+        </SectionBlock>
+      )}
+      {meta.length > 0 && (
+        <div className="mb-3 flex-wrap gap-4">
+          {meta.map(m => <MetaItem key={m.label} label={m.label} value={m.value} />)}
+        </div>
+      )}
+      {row.stepScores && row.stepScores.length > 0 && (
+        <SectionBlock label="Step Scores">
+          <div className="flex-wrap gap-1-5">
+            {row.stepScores.map(s => (
+              <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />
+            ))}
+          </div>
+        </SectionBlock>
+      )}
+      {row.toolVerifications && row.toolVerifications.length > 0 && (
+        <SectionBlock label="Tool Verifications">
+          <div className="flex-wrap gap-1-5">
+            {row.toolVerifications.map((tv, i) => (
+              <ToolVerificationChip
+                key={`${tv.toolName}-${i}`}
+                toolName={tv.toolName}
+                toolCorrect={tv.toolCorrect}
+                argsCorrect={tv.argsCorrect}
+                score={tv.score}
+              />
+            ))}
+          </div>
+        </SectionBlock>
+      )}
+      {}
+      {(row.traceId || row.sessionId) && (
+        <div className="d-flex gap-4 mt-3 border-t pt-3">
+          {row.traceId && (
+            <Link href={routes.evaluationDetail(row.traceId)} className="back-link inline-flex-center mb-0">
+              View full evaluation detail &rarr;
+            </Link>
+          )}
+          {row.sessionId ? (
+            <Link href={routes.session(row.sessionId)} className="back-link inline-flex-center mb-0">
+              View trace spans &rarr;
+            </Link>
+          ) : row.traceId ? (
+            <Link href={routes.trace(row.traceId)} className="back-link inline-flex-center mb-0">
+              View trace spans &rarr;
+            </Link>
+          ) : null}
+        </div>
+      )}
+      {!hasDetail && !row.traceId && !row.sessionId && (
+        <div className="text-muted text-xs">
+          No additional detail available.
+        </div>
+      )}
+    </div>
+  );
+}
+
+================
+File: src/components/MetricCard.tsx
+================
+import { memo } from 'react';
+import { Link } from 'wouter';
+import type { QualityMetricResult, WorstExplanation } from '../types.js';
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
+import { ScoreBadge } from './ScoreBadge.js';
+import { Sparkline } from './Sparkline.js';
+import { inferScoreDirection, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+function MetricCardInner({ metric, sparklineData }: {
+  metric: QualityMetricResult;
+  sparklineData?: (number | null)[];
+}) {
+  const { name, displayName, sampleCount, status, values, trend, confidence, alerts } = metric;
+  const worst = (metric as QualityMetricResult & { worstExplanation?: WorstExplanation }).worstExplanation;
+  const primaryValue = values.avg;
+  const glowClass = status === 'critical' ? 'glow-critical' : status === 'warning' ? 'glow-warning' : '';
+  return (
+    <Link href={`/metrics/${name}`} className="card-link" aria-label={`View ${displayName} metric details`}>
+      <div className={`card ${glowClass}`}>
+        <div className="metric-card-header flex-center">
+          <h3>{displayName}</h3>
+          <StatusBadge status={status} />
+        </div>
+        <div className="metric-values">
+          <div className="primary">
+            <ScoreBadge
+              score={primaryValue ?? null}
+              metricName={name}
+              direction={inferScoreDirection(alerts?.[0]?.direction)}
+              label={formatScore(primaryValue)}
+            />
+            {trend && <TrendIndicator trend={trend} />}
+          </div>
+          <div className="secondary">
+            p50: {formatScore(values.p50)} &middot; p95: {formatScore(values.p95)}
+          </div>
+        </div>
+        {sparklineData && sparklineData.length >= 2 && (
+          <div className="mt-2">
+            <Sparkline
+              data={sparklineData}
+              width={120}
+              height={24}
+              color={status === 'critical' ? 'var(--status-critical)' : status === 'warning' ? 'var(--status-warning)' : 'var(--accent)'}
+              label={`${displayName} score trend`}
+            />
+          </div>
+        )}
+        <div className="metric-footer flex-center">
+          <span>n={sampleCount} <ConfidenceBadge confidence={confidence} /></span>
+          {alerts.length > 0 && (
+            <span className="text-warning">
+              {'\u25B2'} {plural(alerts.length, 'alert')}
+            </span>
+          )}
+        </div>
+        {worst && worst.explanation && (
+          <div className="metric-worst truncate" title={worst.explanation}>
+            <span className="worst-score">{worst.score.toFixed(SCORE_CHIP_PRECISION)}</span>{' '}
+            {truncateText(worst.explanation, 60)}
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
+export const MetricCard = memo(MetricCardInner);
+
+================
+File: src/components/ScoreHistogram.tsx
+================
+import type { CSSProperties } from 'react';
+export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket: string; count: number }> }) {
+  if (distribution.length === 0) return null;
+  const maxCount = distribution.reduce((m, d) => Math.max(m, d.count), 1);
+  return (
+    <div>
+      <div className="histogram">
+        {distribution.map((d, i) => (
+          <div
+            key={i}
+            className="histogram-bar"
+            style={{ '--histogram-bar-height': `${(d.count / maxCount) * 100}%` } as CSSProperties}
+            aria-label={`${d.bucket}: ${d.count} evaluations`}
+          >
+            <div className="tooltip surface-elevated">
+              {d.bucket}: {d.count}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="histogram-labels">
+        <span>{distribution[0]?.bucket}</span>
+        <span>{distribution[distribution.length - 1]?.bucket}</span>
+      </div>
+    </div>
+  );
+}
+
+================
+File: src/components/Section.tsx
+================
+import type { CSSProperties, ReactNode } from 'react';
+import { CHEVRON_RIGHT } from '../lib/symbols.js';
+export function ViewSection({ title, children }: { title: ReactNode; children: ReactNode }) {
+  return (
+    <div className="view-section">
+      <h3 className="section-heading">{title}</h3>
+      {children}
+    </div>
+  );
+}
+export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
+export interface SectionProps {
+  title: string;
+  badge?: string;
+  health?: SectionHealth;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}
+export function Section({ title, badge, health = 'neutral', defaultOpen = false, children }: SectionProps) {
+  const railColor = health === 'ok'
+    ? 'var(--status-healthy)'
+    : health === 'warn'
+    ? 'var(--status-warning)'
+    : health === 'crit'
+    ? 'var(--status-critical)'
+    : 'var(--border-accent)';
+  return (
+    <details open={defaultOpen} className="mb-1" style={{ '--section-rail-color': railColor } as CSSProperties}>
+      <summary className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail">
+        <span className="mono text-2xs d-inline-block section-rail-chevron">
+          {CHEVRON_RIGHT}
+        </span>
+        <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
+        {badge && (
+          <span className="mono-xs text-muted chip chip-badge">{badge}</span>
+        )}
+      </summary>
+      <div className="border-b-subtle section-rail section-rail-body">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+================
+File: src/components/SplitPane.tsx
+================
+import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
+interface SplitPaneProps {
+  left: ReactNode;
+  right: ReactNode;
+  initialSplit?: number;
+  minPct?: number;
+  maxPct?: number;
+}
+export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct = 75 }: SplitPaneProps) {
+  const [splitPct, setSplitPct] = useState(initialSplit);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const onMouseDown = useCallback(() => { dragging.current = true; }, []);
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!dragging.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setSplitPct(Math.max(minPct, Math.min(maxPct, pct)));
+    }
+    function onMouseUp() { dragging.current = false; }
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      dragging.current = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [minPct, maxPct]);
+  return (
+    <div ref={containerRef} className="d-flex w-full split-pane">
+      <div className="split-pane-panel" style={{ '--split-width': `${splitPct}%` } as CSSProperties}>{left}</div>
+      <div
+        className="shrink-0 split-pane-divider" role="separator"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(splitPct)}
+        aria-valuemin={minPct}
+        aria-valuemax={maxPct}
+        aria-label="Resize panes"
+        tabIndex={0}
+        onMouseDown={onMouseDown}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') { e.preventDefault(); setSplitPct(p => Math.max(minPct, p - 2)); }
+          if (e.key === 'ArrowRight') { e.preventDefault(); setSplitPct(p => Math.min(maxPct, p + 2)); }
+        }}
+      />
+      <div className="split-pane-panel" style={{ '--split-width': `${100 - splitPct}%` } as CSSProperties}>{right}</div>
+    </div>
+  );
+}
+
+================
+File: src/hooks/useTrace.ts
+================
+import { useQuery } from '@tanstack/react-query';
+import type { EvaluationResult } from '../types.js';
+import { API_BASE, STALE_TIME, QUERY_RETRY_COUNT, HttpStatus } from '../lib/constants.js';
+import { useAuth } from '../contexts/AuthContext.js';
+interface TraceSpanResponse {
+  traceId: string;
+  spanId: string;
+  name: string;
+  kind?: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+}
+interface TraceResponse {
+  traceId: string;
+  spans: TraceSpanResponse[];
+  evaluations: EvaluationResult[];
+}
+export function useTrace(traceId: string | undefined) {
+  const { getAccessToken } = useAuth();
+  return useQuery<TraceResponse>({
+    queryKey: ['trace', traceId],
+    queryFn: async () => {
+      if (!traceId) throw new Error('traceId is required');
+      let token: string;
+      try {
+        token = await getAccessToken();
+      } catch {
+        throw new Error('AUTH_REQUIRED');
+      }
+      const res = await fetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        if (res.status === HttpStatus.NotFound) return { traceId, spans: [], evaluations: [] };
+        throw new Error(`API error: ${res.status}`);
+      }
+      return res.json();
+    },
+    enabled: !!traceId,
+    staleTime: STALE_TIME.DETAIL,
+    retry: QUERY_RETRY_COUNT,
+  });
+}
+
+================
+File: src/lib/workflow-graph.ts
+================
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+const ATTR_AGENT_NAME = 'gen_ai.agent.name';
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
+const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph {
+  if (evaluation !== null && Array.isArray(evaluation.turns)) {
+    return buildFromEvaluation(evaluation, spans);
+  }
+  return inferFromSpans(spans);
+}
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
+  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  let droppedTurns = 0;
+  let rootAgentName: string | null = null;
+  let minTurnIndex = Infinity;
+  for (const turn of evaluation.turns) {
+    if (turn.agentName == null) {
+      droppedTurns++;
+      continue;
+    }
+    const existing = agentTurns.get(turn.agentName) ?? [];
+    existing.push(turn);
+    agentTurns.set(turn.agentName, existing);
+    if (
+      turn.turnIndex < minTurnIndex ||
+      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
+    ) {
+      minTurnIndex = turn.turnIndex;
+      rootAgentName = turn.agentName;
+    }
+  }
+  const nodes: WorkflowNode[] = [];
+  for (const [agentName, turns] of agentTurns) {
+    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
+    const evaluationScore = relevances.length > 0
+      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
+      : null;
+    const agentSpans = spans.filter(s => s.attributes?.[ATTR_AGENT_NAME] === agentName);
+    const toolCallCount = agentSpans.filter(s => s.name === 'tool_call').length;
+    const tokenValues = agentSpans
+      .map(s => s.attributes?.[ATTR_TOTAL_TOKENS])
+      .filter((v): v is number => typeof v === 'number' && isFinite(v));
+    const totalTokens = tokenValues.length > 0 ? tokenValues.reduce((a, b) => a + b, 0) : null;
+    const durationMs = agentSpans.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
+    nodes.push({
+      id: agentName,
+      label: agentName,
+      evaluationScore,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: turns.length,
+      hasError: turns.some(t => t.hasError),
+    });
+  }
+  const seenEdges = new Set<string>();
+  const edges: WorkflowEdge[] = [];
+  for (const h of evaluation.handoffs) {
+    const key = `${h.sourceAgent}->${h.targetAgent}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    const score = isFinite(h.score) ? h.score : 0;
+    edges.push({
+      id: key,
+      source: h.sourceAgent,
+      target: h.targetAgent,
+      handoffScore: score,
+      contextPreserved: h.contextPreserved,
+      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
+    });
+  }
+  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
+}
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
+  const agentSpans = new Map<string, TraceSpan[]>();
+  for (const span of spans) {
+    const agentId = span.attributes?.[ATTR_AGENT_ID] as string | undefined;
+    if (!agentId) continue;
+    const group = agentSpans.get(agentId) ?? [];
+    group.push(span);
+    agentSpans.set(agentId, group);
+  }
+  if (agentSpans.size === 0) {
+    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
+  }
+  const nodes: WorkflowNode[] = [];
+  for (const [agentId, group] of agentSpans) {
+    const toolCallCount = group.filter(s => s.name.startsWith('tool:')).length;
+    const tokenValues = group
+      .map(s => s.attributes?.[ATTR_TOTAL_TOKENS])
+      .filter((v): v is number => typeof v === 'number' && isFinite(v));
+    const totalTokens = tokenValues.length > 0 ? tokenValues.reduce((a, b) => a + b, 0) : null;
+    const durationMs = group.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
+    nodes.push({
+      id: agentId,
+      label: agentId,
+      evaluationScore: null,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: group.length,
+      hasError: group.some(s => s.status?.code === OTEL_STATUS_ERROR_CODE),
+    });
+  }
+  const agentTimings = [...agentSpans.entries()].map(([id, group]) => ({
+    id,
+    minStart: Math.min(...group.map(s => s.startTimeUnixNano)),
+    maxEnd: Math.max(...group.map(s => s.endTimeUnixNano ?? s.startTimeUnixNano)),
+  })).sort((a, b) => a.minStart - b.minStart);
+  const edges: WorkflowEdge[] = [];
+  for (let i = 0; i < agentTimings.length - 1; i++) {
+    const curr = agentTimings[i];
+    const next = agentTimings[i + 1];
+    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
+      const key = `${curr.id}->${next.id}`;
+      edges.push({
+        id: key,
+        source: curr.id,
+        target: next.id,
+        handoffScore: null,
+        contextPreserved: false,
+        label: 'inferred',
+      });
+    }
+  }
+  const rootNodeId = agentTimings[0]?.id ?? null;
+  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
+}
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
+  const adjacency = new Map<string, string[]>();
+  for (const n of nodes) adjacency.set(n.id, []);
+  for (const e of edges) {
+    if (e.source !== e.target) {
+      adjacency.get(e.source)?.push(e.target);
+    }
+  }
+  const UNVISITED = 0;
+  const IN_STACK = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
+  function dfs(nodeId: string): boolean {
+    state.set(nodeId, IN_STACK);
+    for (const neighbor of adjacency.get(nodeId) ?? []) {
+      const neighborState = state.get(neighbor) ?? UNVISITED;
+      if (neighborState === IN_STACK) return true;
+      if (neighborState === UNVISITED && dfs(neighbor)) return true;
+    }
+    state.set(nodeId, DONE);
+    return false;
+  }
+  for (const n of nodes) {
+    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  }
+  return false;
+}
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
+  if (nodes.length <= 1) return 'single_agent';
+  if (edges.length === 0) return 'single_agent';
+  if (hasCycle(nodes, edges)) return 'cyclic';
+  const outDegree = new Map<string, number>();
+  for (const e of edges) {
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+  }
+  for (const count of outDegree.values()) {
+    if (count > 1) return 'branching';
+  }
+  return 'linear';
+}
+
+================
+File: src/pages/PipelinePage.tsx
+================
+import { PipelineFunnel } from '../components/PipelineFunnel.js';
+import { usePipeline } from '../hooks/usePipeline.js';
+import { PageShell } from '../components/PageShell.js';
+import { LLM_SAMPLE_RATE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { Period } from '../types.js';
+function T2SamplingStage() {
+  return (
+    <div className="flex-center text-secondary text-xs gap-2-5 mt-3 t2-stage-notice">
+      <span
+        className="inline-flex-center justify-center shrink-0 text-2xs font-bold t2-stage-badge"
+      >
+        T2
+      </span>
+      <span>
+        <strong className="text-primary">LLM Sampling</strong>
+        {' \u2014 '}
+        {LLM_SAMPLE_RATE}% sampled for LLM evaluation (relevance, coherence, faithfulness, hallucination)
+      </span>
+    </div>
+  );
+}
+export function PipelinePage({ period }: { period: Period }) {
+  const { data, isLoading, error } = usePipeline(period);
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
+      {data && (
+        <>
+          <h2 className="text-lg mb-3">Evaluation Pipeline</h2>
+          <div className="card">
+            <PipelineFunnel
+              stages={data.stages}
+              dropoffs={data.dropoffs}
+              overallConversionPercent={data.overallConversionPercent}
+            />
+            <T2SamplingStage />
+          </div>
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+================
 File: src/__tests__/workflow-graph.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -14140,6 +14140,120 @@ export function AgentWorkflowView({
 }
 
 ================
+File: src/components/ConfidencePanel.tsx
+================
+import type { ConfidenceIndicator } from '../types.js';
+import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
+import {
+  SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
+  VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT,
+  CONFIDENCE_MIN_SAMPLE_SIZE, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION,
+} from '../lib/constants.js';
+import { BarIndicator } from './BarIndicator.js';
+interface EvaluatorScore {
+  evaluator: string;
+  score: number;
+  label?: string;
+}
+interface ConfidencePanelProps {
+  confidence: ConfidenceIndicator;
+  evaluatorScores?: EvaluatorScore[];
+}
+function levelShape(level: string): string {
+  if (level === 'high') return '\u25CF';
+  if (level === 'medium') return '\u25D0';
+  return '\u25CB';
+}
+function VarianceBar({ value, max }: { value: number; max: number }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  const band: ScoreColorBand = pct < VARIANCE_LOW_PCT ? 'excellent' : pct < VARIANCE_MEDIUM_PCT ? 'adequate' : 'failing';
+  return (
+    <div className="variance-bar flex-center">
+      <BarIndicator value={pct} color={SCORE_COLORS[band]} className="flex-1" />
+      <span className="mono-xs text-secondary variance-value">
+        {value.toFixed(SCORE_DISPLAY_PRECISION)}
+      </span>
+    </div>
+  );
+}
+function JudgePanel({ scores }: { scores: EvaluatorScore[] }) {
+  const scoreValues = scores.map(s => s.score);
+  const minScore = Math.min(...scoreValues);
+  const maxScore = Math.max(...scoreValues);
+  return (
+    <div>
+      <div className="uppercase text-xs text-muted mb-1-5">Judge Panel</div>
+      <div className="agreement-grid">
+        <span className="ag-header">Evaluator</span>
+        <span className="ag-header">Score</span>
+        <span className="ag-header">Label</span>
+        {scores.map((es) => (
+          <div key={es.evaluator} className="contents">
+            <span className="mono-xs">{es.evaluator}</span>
+            <span className="mono-xs">{formatScore(es.score)}</span>
+            <span className="text-secondary text-xs">{es.label ?? '-'}</span>
+          </div>
+        ))}
+      </div>
+      <div className="agreement-summary">
+        <div>
+          Agreement: <span className="summary-value">
+            {scores.every(s => s.label === scores[0].label) ? '100%' : 'partial'}
+          </span>
+          {' '}({scores.filter(s => s.label === scores[0].label).length}/{scores.length} same label)
+        </div>
+        <div>
+          Score Range: <span className="summary-value">
+            {minScore.toFixed(SCORE_CHIP_PRECISION)} &ndash; {maxScore.toFixed(SCORE_CHIP_PRECISION)}
+          </span>
+          {' '}(spread: {(maxScore - minScore).toFixed(SCORE_DISPLAY_PRECISION)})
+        </div>
+      </div>
+    </div>
+  );
+}
+export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanelProps) {
+  const { level, sampleCount, scoreStdDev, evaluatorCount, evaluatorAgreement } = confidence;
+  const method = evaluatorCount > 1 ? 'multi-judge agreement' : sampleCount > CONFIDENCE_MIN_SAMPLE_SIZE ? 'sample size' : 'sample count';
+  return (
+    <div className="text-xs">
+      <div className="confidence-header flex-center">
+        <span className="text-base confidence-level-indicator" data-level={level}>
+          {levelShape(level)} {level}
+        </span>
+        <span className="confidence-method">({method})</span>
+      </div>
+      <div className="confidence-stats-grid mb-3 text-xs">
+        <span className="text-secondary">Sample Count</span>
+        <span className="mono">{sampleCount}</span>
+        {scoreStdDev != null && (
+          <>
+            <span className="text-secondary">Score Variance</span>
+            <VarianceBar value={scoreStdDev} max={0.5} />
+          </>
+        )}
+        <span className="text-secondary">Evaluators</span>
+        <span className="mono">{evaluatorCount}</span>
+        {evaluatorAgreement != null && (
+          <>
+            <span className="text-secondary">Agreement</span>
+            <span
+              className="mono agreement-value"
+              data-band={evaluatorAgreement > SCORE_THRESHOLD_GREEN ? 'excellent' : evaluatorAgreement > SCORE_THRESHOLD_YELLOW ? 'adequate' : undefined}
+            >
+              {formatPercent(evaluatorAgreement * 100, 0)}
+            </span>
+          </>
+        )}
+      </div>
+      {evaluatorScores && evaluatorScores.length > 1 && (
+        <JudgePanel scores={evaluatorScores} />
+      )}
+    </div>
+  );
+}
+
+================
 File: src/components/TrendSeries.tsx
 ================
 import {
@@ -14511,120 +14625,6 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
         </>
       ) : null}
     </PageShell>
-  );
-}
-
-================
-File: src/components/ConfidencePanel.tsx
-================
-import type { ConfidenceIndicator } from '../types.js';
-import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
-import {
-  SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
-  VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT,
-  CONFIDENCE_MIN_SAMPLE_SIZE, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION,
-} from '../lib/constants.js';
-import { BarIndicator } from './BarIndicator.js';
-interface EvaluatorScore {
-  evaluator: string;
-  score: number;
-  label?: string;
-}
-interface ConfidencePanelProps {
-  confidence: ConfidenceIndicator;
-  evaluatorScores?: EvaluatorScore[];
-}
-function levelShape(level: string): string {
-  if (level === 'high') return '\u25CF';
-  if (level === 'medium') return '\u25D0';
-  return '\u25CB';
-}
-function VarianceBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  const band: ScoreColorBand = pct < VARIANCE_LOW_PCT ? 'excellent' : pct < VARIANCE_MEDIUM_PCT ? 'adequate' : 'failing';
-  return (
-    <div className="variance-bar flex-center">
-      <BarIndicator value={pct} color={SCORE_COLORS[band]} className="flex-1" />
-      <span className="mono-xs text-secondary variance-value">
-        {value.toFixed(SCORE_DISPLAY_PRECISION)}
-      </span>
-    </div>
-  );
-}
-function JudgePanel({ scores }: { scores: EvaluatorScore[] }) {
-  const scoreValues = scores.map(s => s.score);
-  const minScore = Math.min(...scoreValues);
-  const maxScore = Math.max(...scoreValues);
-  return (
-    <div>
-      <div className="uppercase text-xs text-muted mb-1-5">Judge Panel</div>
-      <div className="agreement-grid">
-        <span className="ag-header">Evaluator</span>
-        <span className="ag-header">Score</span>
-        <span className="ag-header">Label</span>
-        {scores.map((es) => (
-          <div key={es.evaluator} className="contents">
-            <span className="mono-xs">{es.evaluator}</span>
-            <span className="mono-xs">{formatScore(es.score)}</span>
-            <span className="text-secondary text-xs">{es.label ?? '-'}</span>
-          </div>
-        ))}
-      </div>
-      <div className="agreement-summary">
-        <div>
-          Agreement: <span className="summary-value">
-            {scores.every(s => s.label === scores[0].label) ? '100%' : 'partial'}
-          </span>
-          {' '}({scores.filter(s => s.label === scores[0].label).length}/{scores.length} same label)
-        </div>
-        <div>
-          Score Range: <span className="summary-value">
-            {minScore.toFixed(SCORE_CHIP_PRECISION)} &ndash; {maxScore.toFixed(SCORE_CHIP_PRECISION)}
-          </span>
-          {' '}(spread: {(maxScore - minScore).toFixed(SCORE_DISPLAY_PRECISION)})
-        </div>
-      </div>
-    </div>
-  );
-}
-export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanelProps) {
-  const { level, sampleCount, scoreStdDev, evaluatorCount, evaluatorAgreement } = confidence;
-  const method = evaluatorCount > 1 ? 'multi-judge agreement' : sampleCount > CONFIDENCE_MIN_SAMPLE_SIZE ? 'sample size' : 'sample count';
-  return (
-    <div className="text-xs">
-      <div className="confidence-header flex-center">
-        <span className="text-base confidence-level-indicator" data-level={level}>
-          {levelShape(level)} {level}
-        </span>
-        <span className="confidence-method">({method})</span>
-      </div>
-      <div className="confidence-stats-grid mb-3 text-xs">
-        <span className="text-secondary">Sample Count</span>
-        <span className="mono">{sampleCount}</span>
-        {scoreStdDev != null && (
-          <>
-            <span className="text-secondary">Score Variance</span>
-            <VarianceBar value={scoreStdDev} max={0.5} />
-          </>
-        )}
-        <span className="text-secondary">Evaluators</span>
-        <span className="mono">{evaluatorCount}</span>
-        {evaluatorAgreement != null && (
-          <>
-            <span className="text-secondary">Agreement</span>
-            <span
-              className="mono agreement-value"
-              data-band={evaluatorAgreement > SCORE_THRESHOLD_GREEN ? 'excellent' : evaluatorAgreement > SCORE_THRESHOLD_YELLOW ? 'adequate' : undefined}
-            >
-              {formatPercent(evaluatorAgreement * 100, 0)}
-            </span>
-          </>
-        )}
-      </div>
-      {evaluatorScores && evaluatorScores.length > 1 && (
-        <JudgePanel scores={evaluatorScores} />
-      )}
-    </div>
   );
 }
 
@@ -15309,67 +15309,159 @@ export function App() {
 }
 
 ================
-File: src/components/CQIHero.tsx
+File: src/api/routes/trends.ts
 ================
-import type { CSSProperties } from 'react';
-import { scoreColor, formatPercent } from '../lib/quality-utils.js';
-import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-import { SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-function segmentColor(contribution: CQIContribution): string {
-  return scoreColor(contribution.rawScore, 'maximize');
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR } from '../api-constants.js';
+const TREND_PADDING_RATIO = 0.1;
+const TREND_PADDING_MIN_MS = 60_000;
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals
+    .map(e => e.scoreValue)
+    .filter((v): v is number => v != null && Number.isFinite(v));
 }
-export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
-  const displayValue = (cqi.value * 100).toFixed(1);
-  const overallColor = scoreColor(cqi.value, 'maximize');
-  return (
-    <div
-      role="region"
-      aria-label={`Composite Quality Index: ${displayValue}`}
-      className="card text-center p-6"
-      style={{ '--cqi-color': overallColor } as CSSProperties}
-    >
-      <div className="field-label text-secondary text-xs mb-1">
-        Composite Quality Index
-      </div>
-      <div className="mono font-bold cqi-value">
-        {displayValue}
-      </div>
-      {cqi.contributions.length > 0 && (
-        <div className="d-flex mt-4 cqi-segment-bar">
-          {cqi.contributions.map((c) => (
-            <div
-              key={c.metric}
-              className="cqi-segment"
-              title={`${c.metric}: ${c.rawScore.toFixed(SCORE_CHIP_PRECISION)} (weight ${formatPercent(c.weight * 100, 0)})`}
-              style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
-            />
-          ))}
-        </div>
-      )}
-      <table className="sr-only">
-        <caption>CQI Metric Breakdown</caption>
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Raw Score</th>
-            <th>Weight</th>
-            <th>Contribution</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cqi.contributions.map((c) => (
-            <tr key={c.metric}>
-              <td>{c.metric}</td>
-              <td>{c.rawScore.toFixed(SCORE_CHIP_PRECISION)}</td>
-              <td>{formatPercent(c.weight * 100, 0)}</td>
-              <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const timestamps = evaluations
+      .map(e => new Date(e.timestamp).getTime())
+      .filter(Number.isFinite);
+    const dataMin = timestamps.length > 0 ? Math.min(...timestamps) : periodStart.getTime();
+    const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
+    const dataSpan = dataMax - dataMin;
+    const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+        evals: [],
+      });
+    }
+    for (const ev of evaluations) {
+      const ts = new Date(ev.timestamp).getTime();
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
+      }
+    }
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+        : undefined;
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = extractFiniteScores(evaluations);
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
 
 ================
 File: src/components/EvaluationTable.tsx
@@ -16184,383 +16276,64 @@ export function formatTimestamp(ts: string): string {
 }
 
 ================
-File: src/api/routes/trends.ts
+File: src/components/CQIHero.tsx
 ================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR } from '../api-constants.js';
-const TREND_PADDING_RATIO = 0.1;
-const TREND_PADDING_MIN_MS = 60_000;
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals
-    .map(e => e.scoreValue)
-    .filter((v): v is number => v != null && Number.isFinite(v));
+import type { CSSProperties } from 'react';
+import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
+import type { CompositeQualityIndex, CQIContribution } from '../types.js';
+import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+function segmentColor(contribution: CQIContribution): string {
+  return scoreColor(contribution.rawScore, 'maximize');
 }
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: 'Invalid buckets. Must be integer 3-30.' }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const timestamps = evaluations
-      .map(e => new Date(e.timestamp).getTime())
-      .filter(Number.isFinite);
-    const dataMin = timestamps.length > 0 ? Math.min(...timestamps) : periodStart.getTime();
-    const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
-    const dataSpan = dataMax - dataMin;
-    const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-    for (const ev of evaluations) {
-      const ts = new Date(ev.timestamp).getTime();
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
-        }
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/components/WorkflowGraph.tsx
-================
-import React, { memo, useCallback, useEffect, useState } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 120;
-const MINIMAP_THRESHOLD = 5;
-const MAX_ELK_NODES = 50;
-const WORKFLOW_SCORE_HIGH_MIN = 0.7;
-const WORKFLOW_SCORE_MID_MIN = 0.4;
-const SCORE_BANDS = {
-  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: 'Good', bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
-  MID: { min: WORKFLOW_SCORE_MID_MIN, label: 'Fair', bg: '#fef9c3', border: '#ca8a04', text: '#a16207' },
-  LOW: { min: 0, label: 'Poor', bg: '#fee2e2', border: '#dc2626', text: '#b91c1c' },
-} as const;
-const ELK_OPTIONS = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'DOWN',
-  'elk.layered.cycleBreaking.strategy': 'GREEDY',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '80',
-  'elk.spacing.nodeNode': '60',
-  'elk.layered.feedbackEdges': 'true',
-} as const;
-function getScoreBand(score: number | null) {
-  if (score === null) return null;
-  if (score >= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
-  if (score >= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
-  return SCORE_BANDS.LOW;
-}
-const elk = new ELK();
-function isWorkflowNode(value: unknown): value is WorkflowNode {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['id'] === 'string' &&
-    typeof v['label'] === 'string' &&
-    typeof v['toolCallCount'] === 'number' &&
-    typeof v['turnCount'] === 'number' &&
-    typeof v['durationMs'] === 'number' &&
-    typeof v['hasError'] === 'boolean'
-  );
-}
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
-  return new Map(nodes.map(n => [n.id, n]));
-}
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const nodeDataMap = buildNodeDataMap(nodes);
-  const elkGraph = {
-    id: 'root',
-    layoutOptions: ELK_OPTIONS,
-    children: nodes.map(n => ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT })),
-    edges: edges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] })),
-  };
-  const layout = await elk.layout(elkGraph);
-  const rfNodes: Node[] = (layout.children ?? [])
-    .filter(elkNode => nodeDataMap.has(elkNode.id))
-    .map(elkNode => ({
-      id: elkNode.id,
-      position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-      data: nodeDataMap.get(elkNode.id) as unknown as Record<string, unknown>,
-      type: 'agentNode',
-    }));
-  const rfEdges: Edge[] = edges.map(e => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    label: e.label,
-  }));
-  return { nodes: rfNodes, edges: rfEdges };
-}
-const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
-  if (!isWorkflowNode(data)) return null;
-  const d = data;
-  const band = getScoreBand(d.evaluationScore);
+export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
+  const displayValue = (cqi.value * 100).toFixed(1);
+  const overallColor = scoreColor(cqi.value, 'maximize');
   return (
     <div
-      className="workflow-node"
-      style={{
-        '--workflow-node-border': band?.border ?? '#d1d5db',
-        '--workflow-node-bg': band?.bg ?? '#f9fafb',
-        '--workflow-node-score-color': band?.text ?? 'inherit',
-      } as React.CSSProperties}
-      role="group"
-      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
+      role="region"
+      aria-label={`Composite Quality Index: ${displayValue}`}
+      className="card text-center p-6"
+      style={{ '--cqi-color': overallColor } as CSSProperties}
     >
-      <div className="workflow-node__label">{d.label}</div>
-      {band && (
-        <div className="workflow-node__score">
-          <span>{band.label}</span>: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
+      <div className="field-label text-secondary text-xs mb-1">
+        Composite Quality Index
+      </div>
+      <div className="mono font-bold cqi-value">
+        {displayValue}
+      </div>
+      {cqi.contributions.length > 0 && (
+        <div className="d-flex mt-4 cqi-segment-bar">
+          {cqi.contributions.map((c) => (
+            <div
+              key={c.metric}
+              className="cqi-segment"
+              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * 100, 0)})`}
+              style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
+            />
+          ))}
         </div>
       )}
-      <div className="workflow-node__meta">
-        <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
-        {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
-      </div>
-      <div className="workflow-node__duration">
-        {fmtDuration(d.durationMs)}
-      </div>
-      {d.hasError && <div className="workflow-node__error">Error</div>}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  );
-});
-const NODE_TYPES = { agentNode: AgentNodeComponent };
-interface WorkflowGraphProps {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-}
-export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: WorkflowGraphProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [layoutError, setLayoutError] = useState<string | null>(null);
-  useEffect(() => {
-    if (graph.nodes.length === 0) return;
-    let cancelled = false;
-    computeLayout(graph.nodes, graph.edges)
-      .then(({ nodes: rfNodes, edges: rfEdges }) => {
-        if (!cancelled) {
-          setLayoutError(null);
-          setNodes(rfNodes);
-          setEdges(rfEdges);
-        }
-      })
-      .catch(err => {
-        if (!cancelled) {
-          setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
-        }
-      });
-    return () => { cancelled = true; };
-  }, [graph.nodes, graph.edges]);
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    onNodeClick?.(node.id);
-  }, [onNodeClick]);
-  if (graph.nodes.length > MAX_ELK_NODES) {
-    return (
-      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-        <div className="workflow-oversize text-secondary text-xs">
-          <div className="workflow-oversize__heading">
-            Graph too large to render ({graph.nodes.length} agents)
-          </div>
-          <div className="workflow-oversize__note text-muted">
-            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
-          </div>
-          <ul className="workflow-oversize__list">
-            {graph.nodes.map(n => (
-              <li key={n.id} className="mono-xs mb-1">
-                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
-                {n.hasError && <span className="text-warning"> (error)</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    );
-  }
-  if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
-    const node = graph.nodes[0];
-    return (
-      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-        <div className="workflow-fallback">
-          {node ? (
-            <>
-              <div className="workflow-fallback__title">{node.label}</div>
-              <div className="workflow-fallback__subtitle">
-                {node.turnCount} turns | {node.toolCallCount} tools
-              </div>
-            </>
-          ) : (
-            <div className="workflow-fallback__empty">No agent data</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-  if (layoutError) {
-    return (
-      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-        <div className="error-state workflow-fallback">
-          Failed to compute workflow layout: {layoutError}
-        </div>
-      </div>
-    );
-  }
-  const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
-  return (
-    <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        nodeTypes={NODE_TYPES}
-        fitView
-      >
-        <Controls />
-        <Background />
-        {showMiniMap && <MiniMap pannable zoomable />}
-      </ReactFlow>
+      <table className="sr-only">
+        <caption>CQI Metric Breakdown</caption>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Raw Score</th>
+            <th>Weight</th>
+            <th>Contribution</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cqi.contributions.map((c) => (
+            <tr key={c.metric}>
+              <td>{c.metric}</td>
+              <td>{formatScore(c.rawScore)}</td>
+              <td>{formatPercent(c.weight * 100, 0)}</td>
+              <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -16844,6 +16617,233 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
 export const CoverageGrid = memo(CoverageGridInner);
 
 ================
+File: src/components/WorkflowGraph.tsx
+================
+import React, { memo, useCallback, useEffect, useState } from 'react';
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import ELK from 'elkjs/lib/elk.bundled.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { fmtDuration } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
+const MINIMAP_THRESHOLD = 5;
+const MAX_ELK_NODES = 50;
+const WORKFLOW_SCORE_HIGH_MIN = 0.7;
+const WORKFLOW_SCORE_MID_MIN = 0.4;
+const SCORE_BANDS = {
+  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: 'Good', bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
+  MID: { min: WORKFLOW_SCORE_MID_MIN, label: 'Fair', bg: '#fef9c3', border: '#ca8a04', text: '#a16207' },
+  LOW: { min: 0, label: 'Poor', bg: '#fee2e2', border: '#dc2626', text: '#b91c1c' },
+} as const;
+const ELK_OPTIONS = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'DOWN',
+  'elk.layered.cycleBreaking.strategy': 'GREEDY',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+  'elk.spacing.nodeNode': '60',
+  'elk.layered.feedbackEdges': 'true',
+} as const;
+function getScoreBand(score: number | null) {
+  if (score === null) return null;
+  if (score >= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
+  if (score >= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
+  return SCORE_BANDS.LOW;
+}
+const elk = new ELK();
+function isWorkflowNode(value: unknown): value is WorkflowNode {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['id'] === 'string' &&
+    typeof v['label'] === 'string' &&
+    typeof v['toolCallCount'] === 'number' &&
+    typeof v['turnCount'] === 'number' &&
+    typeof v['durationMs'] === 'number' &&
+    typeof v['hasError'] === 'boolean'
+  );
+}
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
+  return new Map(nodes.map(n => [n.id, n]));
+}
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const nodeDataMap = buildNodeDataMap(nodes);
+  const elkGraph = {
+    id: 'root',
+    layoutOptions: ELK_OPTIONS,
+    children: nodes.map(n => ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT })),
+    edges: edges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+  };
+  const layout = await elk.layout(elkGraph);
+  const rfNodes: Node[] = (layout.children ?? [])
+    .filter(elkNode => nodeDataMap.has(elkNode.id))
+    .map(elkNode => ({
+      id: elkNode.id,
+      position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+      data: nodeDataMap.get(elkNode.id) as unknown as Record<string, unknown>,
+      type: 'agentNode',
+    }));
+  const rfEdges: Edge[] = edges.map(e => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label,
+  }));
+  return { nodes: rfNodes, edges: rfEdges };
+}
+const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
+  if (!isWorkflowNode(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.evaluationScore);
+  return (
+    <div
+      className="workflow-node"
+      style={{
+        '--workflow-node-border': band?.border ?? '#d1d5db',
+        '--workflow-node-bg': band?.bg ?? '#f9fafb',
+        '--workflow-node-score-color': band?.text ?? 'inherit',
+      } as React.CSSProperties}
+      role="group"
+      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
+    >
+      <div className="workflow-node__label">{d.label}</div>
+      {band && (
+        <div className="workflow-node__score">
+          <span>{band.label}</span>: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
+        </div>
+      )}
+      <div className="workflow-node__meta">
+        <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
+        {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
+      </div>
+      <div className="workflow-node__duration">
+        {fmtDuration(d.durationMs)}
+      </div>
+      {d.hasError && <div className="workflow-node__error">Error</div>}
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+});
+const NODE_TYPES = { agentNode: AgentNodeComponent };
+interface WorkflowGraphProps {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
+}
+export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: WorkflowGraphProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
+  useEffect(() => {
+    if (graph.nodes.length === 0) return;
+    let cancelled = false;
+    computeLayout(graph.nodes, graph.edges)
+      .then(({ nodes: rfNodes, edges: rfEdges }) => {
+        if (!cancelled) {
+          setLayoutError(null);
+          setNodes(rfNodes);
+          setEdges(rfEdges);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [graph.nodes, graph.edges]);
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    onNodeClick?.(node.id);
+  }, [onNodeClick]);
+  if (graph.nodes.length > MAX_ELK_NODES) {
+    return (
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+        <div className="workflow-oversize text-secondary text-xs">
+          <div className="workflow-oversize__heading">
+            Graph too large to render ({graph.nodes.length} agents)
+          </div>
+          <div className="workflow-oversize__note text-muted">
+            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
+          </div>
+          <ul className="workflow-oversize__list">
+            {graph.nodes.map(n => (
+              <li key={n.id} className="mono-xs mb-1">
+                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
+                {n.hasError && <span className="text-warning"> (error)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+  if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
+    const node = graph.nodes[0];
+    return (
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+        <div className="workflow-fallback">
+          {node ? (
+            <>
+              <div className="workflow-fallback__title">{node.label}</div>
+              <div className="workflow-fallback__subtitle">
+                {node.turnCount} turns | {node.toolCallCount} tools
+              </div>
+            </>
+          ) : (
+            <div className="workflow-fallback__empty">No agent data</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (layoutError) {
+    return (
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+        <div className="error-state workflow-fallback">
+          Failed to compute workflow layout: {layoutError}
+        </div>
+      </div>
+    );
+  }
+  const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
+  return (
+    <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        nodeTypes={NODE_TYPES}
+        fitView
+      >
+        <Controls />
+        <Background />
+        {showMiniMap && <MiniMap pannable zoomable />}
+      </ReactFlow>
+    </div>
+  );
+}
+
+================
 File: src/api/routes/agents.ts
 ================
 import { Hono } from 'hono';
@@ -17007,7 +17007,6 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
       if (agent) agentMap.set(i, agent);
       if (span.traceId) traceIds.add(span.traceId);
     });
-    // Build step scores from spans
     const stepScores: StepScore[] = spans.map((span, i) => ({
       step: i,
       score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
@@ -17146,340 +17145,6 @@ export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
     </div>
   );
 }
-
-================
-File: src/api/routes/sessions.ts
-================
-import { Hono } from 'hono';
-import { subMilliseconds, formatISO } from 'date-fns';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import {
-  COMMIT_BODY_START_LINE_INDEX,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
-  FILE_ACCESS_TOP_N,
-  LATENCY_P50,
-  LATENCY_P95,
-  LOG_SUMMARY_FIELDS,
-  LOG_SUMMARY_MAX_ENTRIES,
-  type SafeLogEntry,
-  OTEL_STATUS_ERROR_CODE,
-  PARAM_ID_RE,
-  PERCENT_BASE,
-  LATENCY_DISPLAY_PRECISION,
-} from '../api-constants.js';
-import {
-  loadEvaluationsBySessionId,
-  loadLogsBySessionId,
-} from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-export const sessionRoutes = new Hono();
-function attr<T>(span: { attributes?: Record<string, unknown> }, key: string): T | undefined {
-  return span.attributes?.[key] as T | undefined;
-}
-function parseTimestamp(value: string | undefined | null): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  return isNaN(ms) ? null : ms;
-}
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
-  return sorted[Math.max(0, idx)];
-}
-function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
-}
-type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
-function computeLatencyStats(durations: number[]): LatencyStats {
-  const sorted = [...durations].sort((a, b) => a - b);
-  return {
-    count: sorted.length,
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
-    p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
-    p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
-  };
-}
-type ScoreStats = { avg: number | null; min: number | null; max: number | null };
-function computeScoreStats(scores: number[]): ScoreStats {
-  if (scores.length === 0) return { avg: null, min: null, max: null };
-  const sorted = [...scores].sort((a, b) => a - b);
-  return {
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
-  };
-}
-const LIMIT_SESSION_SPANS = 1000;
-async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
-  const now = new Date();
-  const end = endDate ?? formatISO(now, { representation: 'date' });
-  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
-  const result = await queryTraces({
-    attributeFilter: { 'session.id': sessionId },
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_SESSION_SPANS,
-  });
-  return result.traces;
-}
-sessionRoutes.get('/sessions/:sessionId', async (c) => {
-  const sessionId = c.req.param('sessionId');
-  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
-    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
-  }
-  const startDate = c.req.query('startDate');
-  const endDate = c.req.query('endDate');
-  try {
-    const [spans, logs, evaluations] = await Promise.all([
-      loadSessionSpans(sessionId, startDate, endDate),
-      loadLogsBySessionId(sessionId, startDate, endDate),
-      loadEvaluationsBySessionId(sessionId, startDate, endDate),
-    ]);
-    const traceIds = new Set<string>();
-    for (const s of spans) {
-      if (s.traceId) traceIds.add(s.traceId);
-    }
-    const dataSources = {
-      traces: { count: spans.length, traceIds: traceIds.size },
-      logs: { count: logs.length },
-      evaluations: { count: evaluations.length },
-      total: spans.length + logs.length + evaluations.length,
-    };
-    let tsMin = Infinity;
-    let tsMax = -Infinity;
-    for (const ev of evaluations) {
-      const t = parseTimestamp(ev.timestamp);
-      if (t !== null) {
-        if (t < tsMin) tsMin = t;
-        if (t > tsMax) tsMax = t;
-      }
-    }
-    for (const l of logs) {
-      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
-      if (t !== null) {
-        if (t < tsMin) tsMin = t;
-        if (t > tsMax) tsMax = t;
-      }
-    }
-    const timespan = tsMin < Infinity ? {
-      start: new Date(tsMin).toISOString(),
-      end: new Date(tsMax).toISOString(),
-      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
-    } : null;
-    const sessionStarts = spans.filter(s => attr<string>(s, 'hook.name') === 'session-start');
-    const first = sessionStarts[0];
-    const last = sessionStarts[sessionStarts.length - 1] ?? first;
-    const sessionInfo = first ? {
-      projectName: attr<string>(first, 'project.name') ?? 'unknown',
-      workingDirectory: attr<string>(first, 'working.directory') ?? '',
-      gitRepository: attr<string>(first, 'git.repository') ?? '',
-      gitBranch: attr<string>(first, 'git.branch') ?? '',
-      nodeVersion: attr<string>(first, 'node.version') ?? '',
-      resumeCount: sessionStarts.length,
-      initialMessageCount: attr<number>(first, 'context.message_count') ?? 0,
-      initialContextTokens: attr<number>(first, 'context.estimated_tokens') ?? 0,
-      finalMessageCount: attr<number>(last, 'context.message_count') ?? 0,
-      taskCount: attr<number>(first, 'tasks.active') ?? 0,
-      uncommittedAtStart: attr<number>(first, 'git.uncommitted') ?? 0,
-    } : null;
-    const tokenProgression = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'token-metrics-extraction')
-      .map(s => ({
-        messages: attr<number>(s, 'tokens.messages') ?? 0,
-        inputTokens: attr<number>(s, 'tokens.input') ?? 0,
-        outputTokens: attr<number>(s, 'tokens.output') ?? 0,
-        cacheRead: attr<number>(s, 'tokens.cache_read') ?? 0,
-        cacheCreation: attr<number>(s, 'tokens.cache_creation') ?? 0,
-        model: attr<string>(s, 'tokens.model') ?? '',
-      }))
-      .sort((a, b) => a.messages - b.messages);
-    const tokenTotals = {
-      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
-      models: {} as Record<string, number>,
-    };
-    for (const t of tokenProgression) {
-      tokenTotals.input += t.inputTokens;
-      tokenTotals.output += t.outputTokens;
-      tokenTotals.cacheRead += t.cacheRead;
-      tokenTotals.cacheCreation += t.cacheCreation;
-      tokenTotals.messages += t.messages;
-      if (t.model) incrementCount(tokenTotals.models, t.model);
-    }
-    const toolUsage: Record<string, number> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.type') === 'builtin' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
-        const tool = attr<string>(s, 'builtin.tool') ?? 'unknown';
-        incrementCount(toolUsage, tool);
-      }
-    }
-    const mcpUsage: Record<string, number> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.type') === 'mcp' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
-        const tool = attr<string>(s, 'mcp.tool') ?? 'unknown';
-        incrementCount(mcpUsage, tool);
-      }
-    }
-    const spanBreakdown: Record<string, number> = {};
-    const hookDurations: Record<string, number[]> = {};
-    for (const s of spans) {
-      incrementCount(spanBreakdown, s.name);
-      const ms = s.durationMs ?? 0;
-      if (ms > 0) {
-        if (!hookDurations[s.name]) hookDurations[s.name] = [];
-        hookDurations[s.name].push(ms);
-      }
-    }
-    const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
-    for (const [name, durations] of Object.entries(hookDurations)) {
-      hookLatency[name] = computeLatencyStats(durations);
-    }
-    const errorsByCategory: Record<string, number> = {};
-    const errorDetails: Array<{
-      spanName: string;
-      tool?: string;
-      errorType?: string;
-      filePath?: string;
-    }> = [];
-    for (const s of spans) {
-      const hasError = attr<boolean>(s, 'builtin.has_error') === true
-        || attr<boolean>(s, 'agent.has_error') === true
-        || s.status?.code === OTEL_STATUS_ERROR_CODE;
-      if (!hasError) continue;
-      const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
-      const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
-      const key = `${tool} -> ${errType}`;
-      incrementCount(errorsByCategory, key);
-      errorDetails.push({
-        spanName: s.name,
-        tool,
-        errorType: errType,
-        filePath: attr<string>(s, 'builtin.file_path'),
-      });
-    }
-    const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.name') === 'agent-post-tool') {
-        const name = attr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
-        if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
-        agentAcc[name].invocations++;
-        if (attr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
-        if (attr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
-        agentAcc[name].totalOutputSize += attr<number>(s, 'agent.output_size') ?? 0;
-      }
-    }
-    const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
-      agentName,
-      invocations: d.invocations,
-      errors: d.errors,
-      hasRateLimit: d.hasRateLimit,
-      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-    }));
-    const fileCount: Record<string, number> = {};
-    for (const s of spans) {
-      const fp = attr<string>(s, 'builtin.file_path');
-      if (fp) incrementCount(fileCount, fp);
-    }
-    const fileAccess = Object.entries(fileCount)
-      .map(([path, count]) => ({ path, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, FILE_ACCESS_TOP_N);
-    const gitCommits = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'post-commit-review')
-      .map(s => {
-        const raw = attr<string>(s, 'git.command') ?? '';
-        const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
-        const files = filesMatch ? filesMatch[1].trim() : '';
-        const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
-        const fullMessage = msgMatch ? msgMatch[1] : '';
-        const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
-        const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
-        return { subject, body, files };
-      });
-    const alertSpans = spans.filter(s => attr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
-    const alertSummary = {
-      totalFired: alertSpans.reduce((sum, s) => sum + (attr<number>(s, 'alerts.triggered_count') ?? 0), 0),
-      stopEvents: alertSpans.length,
-    };
-    const codeStructure = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'code-structure')
-      .map(s => ({
-        file: attr<string>(s, 'code.structure.file') ?? '',
-        lines: attr<number>(s, 'code.structure.lines') ?? 0,
-        exports: attr<number>(s, 'code.structure.exports') ?? 0,
-        functions: attr<number>(s, 'code.structure.functions') ?? 0,
-        hasTypes: attr<boolean>(s, 'code.structure.has_types') ?? false,
-        score: attr<number>(s, 'code.structure.score') ?? 0,
-        tool: attr<string>(s, 'code.structure.tool') ?? '',
-      }));
-    const evalByName: Record<string, { count: number; scores: number[] }> = {};
-    for (const ev of evaluations) {
-      const name = ev.evaluationName;
-      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
-      evalByName[name].count++;
-      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-        evalByName[name].scores.push(ev.scoreValue);
-      }
-    }
-    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
-      const { avg, min, max } = computeScoreStats(d.scores);
-      return { name, count: d.count, avg, min, max };
-    });
-    const logBySeverity: Record<string, number> = {};
-    for (const l of logs) {
-      const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
-      incrementCount(logBySeverity, sev);
-    }
-    const agentMapForEval = new Map<number, string>();
-    spans.forEach((span, i) => {
-      const agent = attr<string>(span, 'agent.name') ?? attr<string>(span, 'gen_ai.agent.name');
-      if (agent) agentMapForEval.set(i, agent);
-    });
-    const stepScores: StepScore[] = spans.map((span, i) => ({
-      step: i,
-      score: attr<number>(span, 'evaluation.score') ?? (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
-      explanation: span.name,
-    }));
-    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
-    return c.json({
-      sessionId,
-      dataSources,
-      timespan,
-      sessionInfo,
-      tokenTotals,
-      tokenProgression,
-      toolUsage,
-      mcpUsage,
-      spanBreakdown,
-      hookLatency,
-      errors: { byCategory: errorsByCategory, details: errorDetails },
-      agentActivity,
-      fileAccess,
-      gitCommits,
-      alertSummary,
-      codeStructure,
-      evaluationBreakdown,
-      logSummary: {
-        bySeverity: logBySeverity,
-        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
-          const entry: SafeLogEntry = {};
-          for (const key of LOG_SUMMARY_FIELDS) {
-            const val = l[key];
-            if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
-          }
-          return entry;
-        }),
-      },
-      multiAgentEvaluation,
-      evaluations,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
 
 ================
 File: src/lib/constants.ts
@@ -18166,7 +17831,6 @@ function computeSessionDetail(
       const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
       return { subject, body, files };
     });
-  // Alert summary
   const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.ALERT_EVALUATION);
   const alertSummary = {
     totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr<number>(s, 'alerts.triggered_count') ?? 0), 0),
@@ -18183,7 +17847,6 @@ function computeSessionDetail(
       score: spanAttr<number>(s, 'code.structure.score') ?? 0,
       tool: spanAttr<string>(s, 'code.structure.tool') ?? '',
     }));
-  // Multi-agent evaluation
   const agentMapForEval = new Map<number, string>();
   spans.forEach((span, i) => {
     const agent = spanAttr<string>(span, 'agent.name');
@@ -18603,7 +18266,6 @@ async function main(): Promise<void> {
       lastSeen,
     });
   }
-  // Sort agent list by invocations descending
   agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
   agentEntries.push({ key: 'meta:agents', value: JSON.stringify(agentSummaryList) });
   const allEntries = [...entries, ...sessionEntries, ...traceEntries, ...agentEntries];
@@ -18688,6 +18350,336 @@ async function main(): Promise<void> {
 main().catch((err) => {
   console.error(err);
   process.exit(1);
+});
+
+================
+File: src/api/routes/sessions.ts
+================
+import { Hono } from 'hono';
+import { subMilliseconds, formatISO } from 'date-fns';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import {
+  COMMIT_BODY_START_LINE_INDEX,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  FILE_ACCESS_TOP_N,
+  LATENCY_P50,
+  LATENCY_P95,
+  LOG_SUMMARY_FIELDS,
+  LOG_SUMMARY_MAX_ENTRIES,
+  type SafeLogEntry,
+  OTEL_STATUS_ERROR_CODE,
+  PARAM_ID_RE,
+  PERCENT_BASE,
+  LATENCY_DISPLAY_PRECISION,
+} from '../api-constants.js';
+import {
+  loadEvaluationsBySessionId,
+  loadLogsBySessionId,
+} from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+export const sessionRoutes = new Hono();
+function attr<T>(span: { attributes?: Record<string, unknown> }, key: string): T | undefined {
+  return span.attributes?.[key] as T | undefined;
+}
+function parseTimestamp(value: string | undefined | null): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return isNaN(ms) ? null : ms;
+}
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
+  return sorted[Math.max(0, idx)];
+}
+function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
+function computeLatencyStats(durations: number[]): LatencyStats {
+  const sorted = [...durations].sort((a, b) => a - b);
+  return {
+    count: sorted.length,
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
+    p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
+    p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
+  };
+}
+type ScoreStats = { avg: number | null; min: number | null; max: number | null };
+function computeScoreStats(scores: number[]): ScoreStats {
+  if (scores.length === 0) return { avg: null, min: null, max: null };
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+  };
+}
+const LIMIT_SESSION_SPANS = 1000;
+async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
+  const now = new Date();
+  const end = endDate ?? formatISO(now, { representation: 'date' });
+  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
+  const result = await queryTraces({
+    attributeFilter: { 'session.id': sessionId },
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_SESSION_SPANS,
+  });
+  return result.traces;
+}
+sessionRoutes.get('/sessions/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
+    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
+  }
+  const startDate = c.req.query('startDate');
+  const endDate = c.req.query('endDate');
+  try {
+    const [spans, logs, evaluations] = await Promise.all([
+      loadSessionSpans(sessionId, startDate, endDate),
+      loadLogsBySessionId(sessionId, startDate, endDate),
+      loadEvaluationsBySessionId(sessionId, startDate, endDate),
+    ]);
+    const traceIds = new Set<string>();
+    for (const s of spans) {
+      if (s.traceId) traceIds.add(s.traceId);
+    }
+    const dataSources = {
+      traces: { count: spans.length, traceIds: traceIds.size },
+      logs: { count: logs.length },
+      evaluations: { count: evaluations.length },
+      total: spans.length + logs.length + evaluations.length,
+    };
+    let tsMin = Infinity;
+    let tsMax = -Infinity;
+    for (const ev of evaluations) {
+      const t = parseTimestamp(ev.timestamp);
+      if (t !== null) {
+        if (t < tsMin) tsMin = t;
+        if (t > tsMax) tsMax = t;
+      }
+    }
+    for (const l of logs) {
+      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
+      if (t !== null) {
+        if (t < tsMin) tsMin = t;
+        if (t > tsMax) tsMax = t;
+      }
+    }
+    const timespan = tsMin < Infinity ? {
+      start: new Date(tsMin).toISOString(),
+      end: new Date(tsMax).toISOString(),
+      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
+    } : null;
+    const sessionStarts = spans.filter(s => attr<string>(s, 'hook.name') === 'session-start');
+    const first = sessionStarts[0];
+    const last = sessionStarts[sessionStarts.length - 1] ?? first;
+    const sessionInfo = first ? {
+      projectName: attr<string>(first, 'project.name') ?? 'unknown',
+      workingDirectory: attr<string>(first, 'working.directory') ?? '',
+      gitRepository: attr<string>(first, 'git.repository') ?? '',
+      gitBranch: attr<string>(first, 'git.branch') ?? '',
+      nodeVersion: attr<string>(first, 'node.version') ?? '',
+      resumeCount: sessionStarts.length,
+      initialMessageCount: attr<number>(first, 'context.message_count') ?? 0,
+      initialContextTokens: attr<number>(first, 'context.estimated_tokens') ?? 0,
+      finalMessageCount: attr<number>(last, 'context.message_count') ?? 0,
+      taskCount: attr<number>(first, 'tasks.active') ?? 0,
+      uncommittedAtStart: attr<number>(first, 'git.uncommitted') ?? 0,
+    } : null;
+    const tokenProgression = spans
+      .filter(s => attr<string>(s, 'hook.name') === 'token-metrics-extraction')
+      .map(s => ({
+        messages: attr<number>(s, 'tokens.messages') ?? 0,
+        inputTokens: attr<number>(s, 'tokens.input') ?? 0,
+        outputTokens: attr<number>(s, 'tokens.output') ?? 0,
+        cacheRead: attr<number>(s, 'tokens.cache_read') ?? 0,
+        cacheCreation: attr<number>(s, 'tokens.cache_creation') ?? 0,
+        model: attr<string>(s, 'tokens.model') ?? '',
+      }))
+      .sort((a, b) => a.messages - b.messages);
+    const tokenTotals = {
+      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
+      models: {} as Record<string, number>,
+    };
+    for (const t of tokenProgression) {
+      tokenTotals.input += t.inputTokens;
+      tokenTotals.output += t.outputTokens;
+      tokenTotals.cacheRead += t.cacheRead;
+      tokenTotals.cacheCreation += t.cacheCreation;
+      tokenTotals.messages += t.messages;
+      if (t.model) incrementCount(tokenTotals.models, t.model);
+    }
+    const toolUsage: Record<string, number> = {};
+    const mcpUsage: Record<string, number> = {};
+    const spanBreakdown: Record<string, number> = {};
+    const hookDurations: Record<string, number[]> = {};
+    for (const s of spans) {
+      const hookType = attr<string>(s, 'hook.type');
+      const hookTrigger = attr<string>(s, 'hook.trigger');
+      if (hookTrigger === 'PostToolUse') {
+        if (hookType === 'builtin') incrementCount(toolUsage, attr<string>(s, 'builtin.tool') ?? 'unknown');
+        else if (hookType === 'mcp') incrementCount(mcpUsage, attr<string>(s, 'mcp.tool') ?? 'unknown');
+      }
+      incrementCount(spanBreakdown, s.name);
+      const ms = s.durationMs ?? 0;
+      if (ms > 0) {
+        if (!hookDurations[s.name]) hookDurations[s.name] = [];
+        hookDurations[s.name].push(ms);
+      }
+    }
+    const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
+    for (const [name, durations] of Object.entries(hookDurations)) {
+      hookLatency[name] = computeLatencyStats(durations);
+    }
+    const errorsByCategory: Record<string, number> = {};
+    const errorDetails: Array<{
+      spanName: string;
+      tool?: string;
+      errorType?: string;
+      filePath?: string;
+    }> = [];
+    for (const s of spans) {
+      const hasError = attr<boolean>(s, 'builtin.has_error') === true
+        || attr<boolean>(s, 'agent.has_error') === true
+        || s.status?.code === OTEL_STATUS_ERROR_CODE;
+      if (!hasError) continue;
+      const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
+      const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
+      const key = `${tool} -> ${errType}`;
+      incrementCount(errorsByCategory, key);
+      errorDetails.push({
+        spanName: s.name,
+        tool,
+        errorType: errType,
+        filePath: attr<string>(s, 'builtin.file_path'),
+      });
+    }
+    const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
+    for (const s of spans) {
+      if (attr<string>(s, 'hook.name') === 'agent-post-tool') {
+        const name = attr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
+        if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
+        agentAcc[name].invocations++;
+        if (attr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
+        if (attr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
+        agentAcc[name].totalOutputSize += attr<number>(s, 'agent.output_size') ?? 0;
+      }
+    }
+    const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
+      agentName,
+      invocations: d.invocations,
+      errors: d.errors,
+      hasRateLimit: d.hasRateLimit,
+      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+    }));
+    const fileCount: Record<string, number> = {};
+    for (const s of spans) {
+      const fp = attr<string>(s, 'builtin.file_path');
+      if (fp) incrementCount(fileCount, fp);
+    }
+    const fileAccess = Object.entries(fileCount)
+      .map(([path, count]) => ({ path, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, FILE_ACCESS_TOP_N);
+    const gitCommits = spans
+      .filter(s => attr<string>(s, 'hook.name') === 'post-commit-review')
+      .map(s => {
+        const raw = attr<string>(s, 'git.command') ?? '';
+        const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
+        const files = filesMatch ? filesMatch[1].trim() : '';
+        const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
+        const fullMessage = msgMatch ? msgMatch[1] : '';
+        const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
+        const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
+        return { subject, body, files };
+      });
+    const alertSpans = spans.filter(s => attr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
+    const alertSummary = {
+      totalFired: alertSpans.reduce((sum, s) => sum + (attr<number>(s, 'alerts.triggered_count') ?? 0), 0),
+      stopEvents: alertSpans.length,
+    };
+    const codeStructure = spans
+      .filter(s => attr<string>(s, 'hook.name') === 'code-structure')
+      .map(s => ({
+        file: attr<string>(s, 'code.structure.file') ?? '',
+        lines: attr<number>(s, 'code.structure.lines') ?? 0,
+        exports: attr<number>(s, 'code.structure.exports') ?? 0,
+        functions: attr<number>(s, 'code.structure.functions') ?? 0,
+        hasTypes: attr<boolean>(s, 'code.structure.has_types') ?? false,
+        score: attr<number>(s, 'code.structure.score') ?? 0,
+        tool: attr<string>(s, 'code.structure.tool') ?? '',
+      }));
+    const evalByName: Record<string, { count: number; scores: number[] }> = {};
+    for (const ev of evaluations) {
+      const name = ev.evaluationName;
+      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
+      evalByName[name].count++;
+      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+        evalByName[name].scores.push(ev.scoreValue);
+      }
+    }
+    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
+      const { avg, min, max } = computeScoreStats(d.scores);
+      return { name, count: d.count, avg, min, max };
+    });
+    const logBySeverity: Record<string, number> = {};
+    for (const l of logs) {
+      const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
+      incrementCount(logBySeverity, sev);
+    }
+    const agentMapForEval = new Map<number, string>();
+    const stepScores: StepScore[] = [];
+    for (let i = 0; i < spans.length; i++) {
+      const span = spans[i];
+      const agent = attr<string>(span, 'agent.name') ?? attr<string>(span, 'gen_ai.agent.name');
+      if (agent) agentMapForEval.set(i, agent);
+      stepScores.push({
+        step: i,
+        score: attr<number>(span, 'evaluation.score') ?? (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+        explanation: span.name,
+      });
+    }
+    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
+    return c.json({
+      sessionId,
+      dataSources,
+      timespan,
+      sessionInfo,
+      tokenTotals,
+      tokenProgression,
+      toolUsage,
+      mcpUsage,
+      spanBreakdown,
+      hookLatency,
+      errors: { byCategory: errorsByCategory, details: errorDetails },
+      agentActivity,
+      fileAccess,
+      gitCommits,
+      alertSummary,
+      codeStructure,
+      evaluationBreakdown,
+      logSummary: {
+        bySeverity: logBySeverity,
+        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
+          const entry: SafeLogEntry = {};
+          for (const key of LOG_SUMMARY_FIELDS) {
+            const val = l[key];
+            if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
+          }
+          return entry;
+        }),
+      },
+      multiAgentEvaluation,
+      evaluations,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
 });
 
 ================
@@ -19272,13 +19264,12 @@ import { FreqBar } from '../components/FreqBar.js';
 import { FreqBarGrid } from '../components/FreqBarGrid.js';
 import { TruncatedList } from '../components/TruncatedList.js';
 import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
+import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
 import {
   HALLUCINATION_SCORE_THRESHOLD,
   MAX_ERROR_ROWS,
   MAX_HALLUCINATION_ROWS,
   MAX_FAILED_EVAL_ROWS,
-  SCORE_CHIP_PRECISION,
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
   CODE_QUALITY_WARN_THRESHOLD,
@@ -19661,7 +19652,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     <td className="cell-pad text-right text-muted">{f.functions}</td>
                     <td className="cell-pad text-center">{f.hasTypes ? '✓' : '·'}</td>
                     <td className="cell-pad text-right font-semibold score-band" data-band={scoreColorBand(f.score)}>
-                      {f.score.toFixed(SCORE_CHIP_PRECISION)}
+                      {formatScore(f.score)}
                     </td>
                   </tr>
                 ))}
