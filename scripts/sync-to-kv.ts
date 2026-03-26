@@ -54,7 +54,7 @@ import {
   loadJsonWithValidationSafe,
   loadJsonWithValidation,
 } from '../src/lib/dashboard-file-utils.js';
-import { PERIOD_MS, ROLES } from '../src/lib/constants.js';
+import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT } from '../src/lib/constants.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import {
   OTEL_STATUS_ERROR_CODE,
@@ -776,8 +776,8 @@ async function main(): Promise<void> {
   }
 
   // Metric details (7d window with previous-period trend)
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const weekAgo = new Date(now.getTime() - PERIOD_MS['7d']);
+  const twoWeeksAgo = new Date(now.getTime() - 2 * PERIOD_MS['7d']);
   const metricNames = Object.keys(QUALITY_METRICS);
 
   for (const name of metricNames) {
@@ -809,8 +809,8 @@ async function main(): Promise<void> {
       : undefined;
 
     const detail = computeMetricDetail(evals, config as QualityMetricConfig, {
-      topN: 5,
-      bucketCount: 10,
+      topN: DEFAULT_TOP_N,
+      bucketCount: DEFAULT_BUCKET_COUNT,
       previousValues,
     });
     entries.push({ key: `metric:${name}`, value: JSON.stringify(detail) });
