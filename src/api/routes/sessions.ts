@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
 import {
   COMMIT_BODY_START_LINE_INDEX,
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
@@ -12,7 +12,6 @@ import {
   LOG_SUMMARY_FIELDS,
   LOG_SUMMARY_MAX_ENTRIES,
   type SafeLogEntry,
-  TIME_MS,
   OTEL_STATUS_ERROR_CODE,
   PARAM_ID_RE,
   PERCENT_BASE,
