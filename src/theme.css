@@ -1260,6 +1260,16 @@ details[open] > .cot-summary::before {
   background: var(--bg-card);
   border-left: 3px solid var(--section-rail-color, var(--border-accent));
 }
+summary.section-rail {
+  padding: var(--space-3) var(--space-5);
+  transition: background var(--transition-fast);
+}
+.section-rail-body {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.section-rail-chevron {
+  transition: transform var(--transition-medium);
+}
 
 /* ─── Workflow components (CR-STYLE-1) ────────────────────────────────────── */
 
