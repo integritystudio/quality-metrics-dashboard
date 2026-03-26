@@ -55,6 +55,7 @@ import {
   loadJsonWithValidation,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES } from '../src/lib/constants.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
 
 function resolveNamespaceId(): string {
   if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
@@ -78,7 +79,7 @@ function parseIntArg(args: string[], flag: string, defaultValue: number): number
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const maxDays = parseIntArg(args, 'days', 30);
-const MAX_DAYS_MS = maxDays * 24 * 60 * 60 * 1000;
+const MAX_DAYS_MS = maxDays * TIME_MS.DAY;
 const WRITE_BUDGET = parseIntArg(args, 'budget', 450);
 
 const PERIODS = ['24h', '7d', '30d'] as const;
@@ -378,7 +379,7 @@ function computeTimespan(evaluations: EvaluationResult[]) {
   return tsMin < Infinity ? {
     start: new Date(tsMin).toISOString(),
     end: new Date(tsMax).toISOString(),
-    durationHours: +((tsMax - tsMin) / 3_600_000).toFixed(1),
+    durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(1),
   } : null;
 }
 
@@ -897,7 +898,7 @@ async function main(): Promise<void> {
         endTime: b.endTime,
       }));
 
-      const periodHours = ms / (TREND_BUCKETS * 3600000);
+      const periodHours = ms / (TREND_BUCKETS * TIME_MS.HOUR);
       let previousTrend: MetricTrend | undefined;
       const trendData = timeBuckets.map((bucket, idx) => {
         const { scores } = bucket;
