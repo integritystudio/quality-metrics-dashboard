@@ -581,6 +581,24 @@ body {
 }
 
 /* Session detail — stat item, stat value, stat label, vitals divider, frequency grid */
+/* ID display: subtle letter-spacing for session/trace ID labels */
+.ls-id { letter-spacing: var(--letter-spacing-id); }
+/* Stat label with wide letter-spacing used as section sub-header */
+.stat-label-section {
+  letter-spacing: var(--label-letter-spacing-wide);
+  margin: var(--space-3-5) 0 var(--space-2);
+}
+/* Git commit detail expand/collapse panel */
+.commit-summary {
+  padding: var(--space-2) var(--space-1);
+}
+.commit-detail {
+  padding-left: var(--space-5);
+  padding-bottom: var(--space-2-5);
+}
+.commit-body {
+  font-family: var(--font-body);
+}
 .agent-stat-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);

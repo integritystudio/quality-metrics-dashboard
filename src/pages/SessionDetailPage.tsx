@@ -116,9 +116,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <div className="flex-wrap gap-4 justify-between align-start">
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
-            <div className="mono font-semibold text-base mb-2 break-all text-accent-hover" style={{
-              letterSpacing: 'var(--letter-spacing-id)',
-            }}>{sessionId}</div>
+            <div className="mono font-semibold text-base mb-2 break-all text-accent-hover ls-id">{sessionId}</div>
             <div className="text-secondary text-xs flex-wrap gap-4">
               <span>{si.projectName}</span>
               {si.gitRepository && (
@@ -138,7 +136,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               ))}
             </div>
             {timespan && (
-              <div className="text-muted text-xs flex-wrap gap-4" style={{ marginTop: 'var(--space-1)' }}>
+              <div className="text-muted text-xs flex-wrap gap-4 mt-1">
                 <span>{format(new Date(timespan.start), 'PPp')}</span>
                 <span>&rarr;</span>
                 <span>{format(new Date(timespan.end), 'PPp')}</span>
@@ -306,7 +304,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
         {totalMcpCalls > 0 && (
           <>
-            <div className="stat-label" style={{ letterSpacing: 'var(--label-letter-spacing-wide)', margin: 'var(--space-3-5) 0 var(--space-2)' }}>
+            <div className="stat-label stat-label-section">
               MCP Tools — {totalMcpCalls} calls
             </div>
             <FreqBarGrid entries={Object.entries(mcpUsage)} max={maxMcpCount} color="var(--status-healthy)" />
@@ -393,9 +391,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               const commitFiles = commit.files?.split(' ') ?? [];
               return (
                 <details key={commit.subject} className="border-b-subtle">
-                  <summary className="flex-center gap-2-5 cursor-pointer list-none" style={{
-                    padding: 'var(--space-2) var(--space-1)',
-                  }}>
+                  <summary className="flex-center gap-2-5 cursor-pointer list-none commit-summary">
                     <span className="text-healthy text-2xs shrink-0">●</span>
                     <span className="mono-xs font-semibold flex-1">
                       {commit.subject}
@@ -406,11 +402,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                       </span>
                     )}
                   </summary>
-                  <div style={{ paddingLeft: 'var(--space-5)', paddingBottom: 'var(--space-2-5)' }}>
+                  <div className="commit-detail">
                     {commit.body && (
-                      <div className="text-secondary text-xs leading-relaxed mb-2" style={{
-                        fontFamily: 'var(--font-body)',
-                      }}>
+                      <div className="text-secondary text-xs leading-relaxed mb-2 commit-body">
                         {commit.body}
                       </div>
                     )}
