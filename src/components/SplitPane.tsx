@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
-import { SPLIT_PANE_DIVIDER_WIDTH, SPLIT_PANE_MIN_HEIGHT } from '../lib/constants.js';
 
 interface SplitPaneProps {
   left: ReactNode;
@@ -34,10 +33,10 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
   }, [minPct, maxPct]);
 
   return (
-    <div ref={containerRef} className="d-flex w-full" style={{ minHeight: SPLIT_PANE_MIN_HEIGHT }}>
+    <div ref={containerRef} className="d-flex w-full split-pane">
       <div style={{ width: `${splitPct}%`, overflow: 'auto' }}>{left}</div>
       <div
-        className="shrink-0" role="separator"
+        className="shrink-0 split-pane-divider" role="separator"
         aria-orientation="vertical"
         aria-valuenow={Math.round(splitPct)}
         aria-valuemin={minPct}
@@ -48,12 +47,6 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') { e.preventDefault(); setSplitPct(p => Math.max(minPct, p - 2)); }
           if (e.key === 'ArrowRight') { e.preventDefault(); setSplitPct(p => Math.min(maxPct, p + 2)); }
-        }}
-        style={{
-          width: SPLIT_PANE_DIVIDER_WIDTH,
-          cursor: 'col-resize',
-          background: 'var(--border)',
-          borderRadius: 'var(--radius-bar)',
         }}
       />
       <div style={{ width: `${100 - splitPct}%`, overflow: 'auto' }}>{right}</div>

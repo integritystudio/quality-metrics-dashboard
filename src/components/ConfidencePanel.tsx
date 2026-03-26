@@ -2,7 +2,7 @@ import type { ConfidenceIndicator } from '../types.js';
 import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
 import {
   SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
-  VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT, VARIANCE_DISPLAY_MIN_WIDTH,
+  VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT,
   CONFIDENCE_MIN_SAMPLE_SIZE, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION,
 } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
@@ -38,7 +38,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
   return (
     <div className="variance-bar flex-center">
       <BarIndicator value={pct} color={SCORE_COLORS[band]} className="flex-1" />
-      <span className="mono-xs text-secondary" style={{ minWidth: VARIANCE_DISPLAY_MIN_WIDTH }}>
+      <span className="mono-xs text-secondary variance-value">
         {value.toFixed(SCORE_DISPLAY_PRECISION)}
       </span>
     </div>

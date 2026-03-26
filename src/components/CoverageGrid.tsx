@@ -3,7 +3,7 @@ import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
 import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
 import {
   COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE, COVERAGE_GRID_LEGEND_SIZE,
-  COVERAGE_GRID_MAX_INPUTS, COVERAGE_GRID_HEADER_MAX_HEIGHT,
+  COVERAGE_GRID_MAX_INPUTS,
 } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -91,7 +91,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                 role="columnheader"
                 title={input}
                 className="text-secondary text-2xs coverage-header-cell"
-                style={{ maxHeight: COVERAGE_GRID_HEADER_MAX_HEIGHT }}
               >
                 {truncateId(input, 8)}
               </div>

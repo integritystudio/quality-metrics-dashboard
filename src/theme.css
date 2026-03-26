@@ -384,6 +384,8 @@ body {
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--text-on-accent);
+  width: 24px;
+  height: 24px;
 }
 
 /* Turn timeline card — dynamic border color set via inline style; static layout via class */
@@ -1383,6 +1385,7 @@ summary.section-rail {
   writing-mode: vertical-lr;
   text-align: end;
   overflow: hidden;
+  max-height: 60px;
 }
 .coverage-cell {
   border-radius: var(--radius-bar);
@@ -1421,4 +1424,16 @@ summary.section-rail {
 }
 .file-access-columns > div {
   break-inside: avoid;
+}
+.split-pane {
+  min-height: 300px;
+}
+.split-pane-divider {
+  width: 6px;
+  cursor: col-resize;
+  background: var(--border);
+  border-radius: var(--radius-bar);
+}
+.variance-value {
+  min-width: 36px;
 }

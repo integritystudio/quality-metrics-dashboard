@@ -1,7 +1,7 @@
 import { PipelineFunnel } from '../components/PipelineFunnel.js';
 import { usePipeline } from '../hooks/usePipeline.js';
 import { PageShell } from '../components/PageShell.js';
-import { LLM_SAMPLE_RATE, SKELETON_HEIGHT_MD, ICON_BADGE_SIZE } from '../lib/constants.js';
+import { LLM_SAMPLE_RATE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
 function T2SamplingStage() {
@@ -9,7 +9,6 @@ function T2SamplingStage() {
     <div className="flex-center text-secondary text-xs gap-2-5 mt-3 t2-stage-notice">
       <span
         className="inline-flex-center justify-center shrink-0 text-2xs font-bold t2-stage-badge"
-        style={{ width: ICON_BADGE_SIZE, height: ICON_BADGE_SIZE }}
       >
         T2
       </span>
