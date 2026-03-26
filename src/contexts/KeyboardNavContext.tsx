@@ -108,7 +108,6 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Two-key combo support (e.g. "g h")
       if (pendingRef.current) {
         const combo = `${pendingRef.current} ${key}`;
         pendingRef.current = null;
