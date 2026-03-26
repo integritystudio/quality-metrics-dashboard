@@ -166,7 +166,8 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
       <svg
         width={svgWidth}
         height={svgHeight}
-        style={{ display: 'block', minWidth: svgWidth }}
+        className="d-block"
+        style={{ minWidth: svgWidth }}
       >
         {/* Column header: turn indices */}
         <g>
