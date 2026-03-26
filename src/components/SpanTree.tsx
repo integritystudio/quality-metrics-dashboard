@@ -70,13 +70,9 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
   const isError = statusCode === OTEL_STATUS_ERROR_CODE;
 
   const barStyle: CSSProperties = {
-    height: 'var(--space-1)',
-    width: `${barPct}%`,
-    background: isError ? 'var(--status-critical)' : 'var(--status-healthy)',
-    borderRadius: 'var(--radius-xs)',
-    marginTop: 'var(--space-1)',
-    minWidth: barPct > 0 ? 'var(--space-0-5)' : '0',
-  };
+    '--span-bar-width': `${barPct}%`,
+    '--span-bar-min-width': barPct > 0 ? 'var(--space-0-5)' : '0',
+  } as CSSProperties;
 
   return (
     <>
@@ -91,7 +87,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
           <div className="text-xs font-medium">{node.name}</div>
           <div className="flex-center gap-2">
             <div className="flex-1 bar-track">
-              <div style={barStyle} />
+              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
             </div>
             {node.durationMs != null && (
               <span className="mono-xs text-secondary nowrap">

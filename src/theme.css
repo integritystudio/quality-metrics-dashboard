@@ -845,12 +845,17 @@ details[open] > .cot-summary::before {
   padding-bottom: var(--space-2);
   padding-left: var(--span-row-indent, 0);
 }
-.span-status-icon {
-  color: var(--text-primary);
+.span-status-icon { color: var(--text-primary); }
+.span-status-icon[data-error] { color: var(--status-critical); }
+.span-bar {
+  height: var(--space-1);
+  width: var(--span-bar-width);
+  min-width: var(--span-bar-min-width, 0);
+  background: var(--status-healthy);
+  border-radius: var(--radius-xs);
+  margin-top: var(--space-1);
 }
-.span-status-icon[data-error] {
-  color: var(--status-critical);
-}
+.span-bar[data-error] { background: var(--status-critical); }
 .quality-live-bar {
   flex-wrap: wrap;
   padding: var(--space-1-5) var(--space-3);
