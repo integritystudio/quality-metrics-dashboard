@@ -1,3 +1,4 @@
+import React from 'react';
 import { scoreColor, agentColor } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
@@ -145,8 +146,8 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
       <svg
         width={svgWidth}
         height={svgHeight}
-        className="d-block"
-        style={{ minWidth: svgWidth }}
+        className="d-block timeline-svg"
+        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
       >
         <g>
           {turns.map(t => (

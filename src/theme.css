@@ -1169,6 +1169,7 @@ details[open] > .cot-summary::before {
 .d-grid         { display: grid; }
 .d-inline-block { display: inline-block; }
 .d-block        { display: block; }
+.timeline-svg   { min-width: var(--timeline-min-width); }
 .flex-center    { display: flex; align-items: center; }
 .align-start    { align-items: flex-start; }
 
