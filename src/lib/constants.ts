@@ -13,6 +13,13 @@ export const enum ErrorMessage {
   MissingPeriodOrAgents = 'Invalid response: missing period or agents',
   InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
   InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+  InvalidMetricNameFormat = 'Invalid metric name format',
+  InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
+  InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
+  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
+  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
+  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
+  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
 }
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
 export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
