@@ -81,14 +81,10 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
   return (
     <>
       <div
-        className="flex-center gap-2 border-b"
-        style={{
-          paddingLeft: depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING,
-          paddingTop: 'var(--space-2)',
-          paddingBottom: 'var(--space-2)',
-        }}
+        className="flex-center gap-2 border-b span-row"
+        style={{ paddingLeft: depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING }}
       >
-        <span className="text-base" style={{ color: isError ? 'var(--status-critical)' : 'var(--text-primary)' }}>
+        <span className="text-base span-status-icon" data-error={isError || undefined}>
           {STATUS_ICONS[statusCode]}
         </span>
         <div className="flex-1">

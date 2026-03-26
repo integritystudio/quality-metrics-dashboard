@@ -827,6 +827,16 @@ details[open] > .cot-summary::before {
   text-decoration: none;
   color: inherit;
 }
+.span-row {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+.span-status-icon {
+  color: var(--text-primary);
+}
+.span-status-icon[data-error] {
+  color: var(--status-critical);
+}
 
 /* Compact metric card used in agent eval summary and similar inline panels */
 .metric-card-compact {
