@@ -883,6 +883,8 @@ details[open] > .cot-summary::before {
 .agent-inv-bar {
   min-width: 48px;
 }
+.agent-inv-count { min-width: var(--space-8); }
+.agent-dot { background: var(--agent-color, var(--border)); }
 
 /* Two-column equal grid */
 .grid-two-col {

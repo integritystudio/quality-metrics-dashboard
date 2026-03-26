@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColor, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
@@ -129,6 +130,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
               <Fragment key={agent.agentName}>
                 <tr
                   className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
+                  style={{ '--agent-color': color } as CSSProperties}
                   onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
                 >
                   {/* Agent name with color accent */}
@@ -137,7 +139,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       {hasLinks && (
                         <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
                       )}
-                      <span className="dot-sm" style={{ background: color }} />
+                      <span className="dot-sm agent-dot" />
                       <span className="mono-xs text-primary break-all">
                         {agent.agentName}
                       </span>
@@ -147,7 +149,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   {/* Invocations with inline bar */}
                   <td>
                     <div className="flex-center gap-2">
-                      <span className="mono-xs" style={{ minWidth: 'var(--space-8)' }}>
+                      <span className="mono-xs agent-inv-count">
                         {agent.invocations}
                       </span>
                       <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
