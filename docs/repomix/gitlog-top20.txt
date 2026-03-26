@@ -1,3 +1,98 @@
+39098f4 2026-03-26 refactor(tests): remove section-separator divider comments from components, dr13-coverage
+  src/__tests__/dr13-coverage.test.tsx
+
+e8a33b1 2026-03-26 chore: regenerate repomix docs after final simplification rounds
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+02b70b1 2026-03-26 refactor(bar-indicator): replace fillStyle inline object with CSS custom properties
+  src/theme.css
+
+1ded19e 2026-03-26 refactor(span-tree): replace barStyle inline object with span-bar CSS class and custom properties
+  src/theme.css
+
+5649fa5 2026-03-26 refactor(workflow-timeline): replace minWidth inline style with --timeline-min-width CSS custom property
+  src/theme.css
+
+2131feb 2026-03-26 refactor(coverage-grid): replace status background inline styles with --coverage-status-color CSS custom property
+  src/theme.css
+
+b6caaf6 2026-03-26 refactor(page-shell): replace skeleton height inline style with CSS custom property
+  src/theme.css
+
+d747de2 2026-03-26 refactor(alert-list): replace threshold bar width+left inline styles with CSS custom properties
+  src/theme.css
+
+e7a1b5d 2026-03-26 refactor(workflow-graph): replace 4x height inline style with --graph-height CSS custom property
+  src/theme.css
+
+0061304 2026-03-26 refactor(pipeline-funnel): replace bar width+background inline with CSS custom properties
+  src/theme.css
+
+21bd926 2026-03-26 refactor(split-pane): move static overflow:auto to CSS, width as --split-width custom property
+  src/theme.css
+
+5ca96cb 2026-03-26 refactor(span-tree): replace paddingLeft inline calc with CSS custom property --span-row-indent
+  src/theme.css
+
+f504585 2026-03-26 refactor(score-histogram): replace bar height inline style with CSS custom property
+  src/theme.css
+
+e12de1e 2026-03-26 refactor(correlation-heatmap): replace cell backgroundColor+color inline with CSS custom properties
+  src/theme.css
+
+03239f7 2026-03-26 refactor(cqi-hero): replace segment flex+backgroundColor inline with CSS custom properties
+  src/theme.css
+
+4d2f859 2026-03-26 refactor(chip): replace hex-alpha inline color+bg with CSS custom property --chip-color
+  src/theme.css
+
+c89a59e 2026-03-26 refactor(alert-list): replace threshold-bar background ternary with data-violating CSS
+  src/theme.css
+
+34be70d 2026-03-26 refactor(correlation-heatmap): move toxic border/animation to CSS data-toxic selector
+  src/theme.css
+
+c42cc05 2026-03-26 refactor(trend-series): replace chart legend color styles with CSS classes
+  src/theme.css
+
+fdb952c 2026-03-26 refactor(trend-chart): replace dynamics panel color styles with CSS classes
+  src/theme.css
+
+ccc35e3 2026-03-26 refactor(score-badge): replace color inline style with score-band CSS utility
+  src/theme.css
+
+e91b1cb 2026-03-26 refactor(cqi-hero): hoist overall color to CSS var, extract segment min-width to CSS
+  src/theme.css
+
+9120de8 2026-03-26 refactor(score-badge): replace no_data color inline style with CSS class
+  src/theme.css
+
+a2ec418 2026-03-26 refactor(agent-activity): replace err-rate and score-label color styles with data attrs
+  src/theme.css
+
+fa7de1c 2026-03-26 refactor(agent-activity): consolidate agent color dot and inv-count width into CSS
+  src/theme.css
+
+23a93be 2026-03-26 refactor(quality-live-indicator): consolidate chip colors into CSS custom property
+  src/theme.css
+
+7e317a8 2026-03-26 refactor(section): remove redundant railColor style on chevron, use CSS var
+  src/theme.css
+
+3851866 2026-03-26 refactor(turn-timeline): consolidate agent color into CSS custom property
+  src/theme.css
+
+4316cf3 2026-03-26 refactor(confidence-panel): replace dynamic color styles with data-level/data-band CSS
+  src/theme.css
+
+0575aef 2026-03-26 refactor(sla-table): replace conditional color style with data-noncompliant CSS
+  src/theme.css
+
+f9da05a 2026-03-26 refactor(coverage-grid): move cell/swatch size and opacity to CSS
+  src/theme.css
+
 d0ff9f0 2026-03-26 refactor(correlation-heatmap): extract static inline styles to CSS classes
   src/theme.css
 
@@ -236,117 +331,3 @@ eaa394b 2026-03-26 chore(docs): regenerate repomix snapshots and token tree
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
   docs/repomix/repomix.xml
-
-e676e88 2026-03-26 refactor(api): extract computePeriodDates helper and remove duplicate wrappers
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  src/theme.css
-  worker/index.ts
-
-55cf6e3 2026-03-26 docs(auth0): mark migration complete, add tenant deploy script
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  docs/roadmap/users.md
-
-6a53313 2026-03-26 feat(auth): migrate frontend and worker auth from Supabase to Auth0
-  worker/index.ts
-
-37f71c0 2026-03-26 feat(auth): migrate worker JWT verification from Supabase to Auth0 JWKS
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  docs/roadmap/users.md
-  package-lock.json
-  worker/index.ts
-
-d132fc6 2026-03-26 fix(style): extract inline styles from workflow components to theme.css classes
-  src/theme.css
-
-4f239b8 2026-03-26 fix(worker): safe JSON casts, Zod error logging, admin roles-fetch failure handling
-  worker/index.ts
-
-e8d28ff 2026-03-26 refactor(dashboard): code review fixes — constants, auth middleware, workflow graph
-  worker/index.ts
-
-3c1273c 2026-03-25 docs(worker): document admin route error handling policy (ADMIN-P4-3)
-  worker/index.ts
-
-5f60b82 2026-03-25 feat(auth): add proactive auto-refresh timer to AuthContext
-  docs/roadmap/users.md
-
-88c7605 2026-03-25 refactor(auth): extract Supabase REST client helpers to supabase-rest.ts (AUTH-P4-1)
-  worker/index.ts
-
-9e7bb4e 2026-03-25 refactor(auth): make authUserId/appUserId optional in AppSession (AUTH-P3-3)
-  worker/index.ts
-
-e792a5b 2026-03-25 chore(deps): migrate Zod schemas to v4 API
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  package-lock.json
-
-80d1241 2026-03-25 chore(deps): upgrade TypeScript to 6.0.2
-  package-lock.json
-
-b9c9fb5 2026-03-25 chore(deps): upgrade eslint 10, fix eslint 10 breaking changes
-  package-lock.json
-  scripts/judge-evaluations.ts
-  scripts/sync-to-kv.ts
-
-6888b88 2026-03-25 chore(deps): upgrade vite 8, plugin-react 6, error-boundary 6, minor bumps
-  package-lock.json
-
-4741f21 2026-03-25 fix(worker): resolve activity logging test mock exhaustion
-  worker/index.ts
-
-3c9c359 2026-03-25 refactor(date-fns): replace native Date APIs with date-fns utilities
-  package-lock.json
-
-0ef55ee 2026-03-25 feat(activity-logging): add login/logout activity logging and POST /api/logout endpoint
-  worker/index.ts
-
-fe6ac9b 2026-03-25 docs(worker): document RLS policy requirement for logActivity (FU-AUTH-RLS-VERIFY)
-  worker/index.ts
-
-1e47fd9 2026-03-24 fix(routing-telemetry): add Zod KV validation, guard division by zero, tighten type guard
-  worker/index.ts
-
-b434768 2026-03-24 feat(routing-telemetry): add /api/routing-telemetry endpoint and dashboard page (FU-R8-DASH)
-  worker/index.ts
-
-f61f047 2026-03-24 refactor(scripts): add Zod validation to sync-to-kv.ts
-  scripts/sync-to-kv.ts
-
-def7b17 2026-03-24 feat: integrate validated file I/O with Zod schemas
-  scripts/judge-evaluations.ts
-
-ac93407 2026-03-24 refactor(activity): consolidate activity logging patterns into shared module
-  worker/index.ts
-
-7941d36 2026-03-23 chore(dashboard): add e2e auth fixtures and react-compiler dependency
-  package-lock.json
-
-93cce89 2026-03-23 fix(lint): remove unused variables
-  worker/index.ts
-
-f6e18de 2026-03-22 test: add test-mode auth bypass and provide Bearer test-token in API tests
-  worker/index.ts
-
-b4a30bb 2026-03-21 docs(admin): mark admin tooling for role/permission assignment done in Phase 4 roadmap
-  docs/roadmap/users.md
-
-c9a38dc 2026-03-21 fix(admin): address code review findings — frontend guard and service role headers
-  worker/index.ts
-
-d420e6c 2026-03-21 feat(admin): add admin tooling for role/permission assignment (Phase 4)
-  worker/index.ts
-
-04e8206 2026-03-20 docs(auth): mark login/logout activity logging done in Phase 4 roadmap
-  docs/roadmap/users.md
