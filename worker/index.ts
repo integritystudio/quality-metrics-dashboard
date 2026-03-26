@@ -500,6 +500,15 @@ app.get('/api/health', async (c) => {
   });
 });
 
+// Admin error handling policy (ADMIN-P4-3):
+// All admin routes (/api/admin/*) return generic error messages on Supabase REST failures,
+// e.g. "Failed to fetch users" instead of the raw Supabase error body. This is intentional:
+// - The service role key is used, so Supabase error bodies may contain table/column metadata.
+// - Generic messages prevent internal schema details from leaking to admin clients.
+// - HTTP status is always 500 on upstream failure; 400 for input validation.
+// - Supabase errors are swallowed; failures are surfaced only via status code + generic message.
+// This policy aligns with sanitizeErrorForResponse used in API routes.
+
 // Admin: list all users with their assigned roles
 app.get('/api/admin/users', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: 'Forbidden' }, 403);
