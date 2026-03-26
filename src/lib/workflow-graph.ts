@@ -24,8 +24,12 @@ export function buildWorkflowGraph(
 
 function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
   const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  let droppedTurns = 0;
   for (const turn of evaluation.turns) {
-    if (turn.agentName == null) continue;
+    if (turn.agentName == null) {
+      droppedTurns++;
+      continue;
+    }
     const existing = agentTurns.get(turn.agentName) ?? [];
     existing.push(turn);
     agentTurns.set(turn.agentName, existing);
@@ -90,7 +94,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     });
   }
 
-  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges) };
+  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
 }
 
 function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
@@ -104,7 +108,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   }
 
   if (agentSpans.size === 0) {
-    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent' };
+    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
   }
 
   const nodes: WorkflowNode[] = [];
@@ -155,7 +159,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   }
 
   const rootNodeId = agentTimings[0]?.id ?? null;
-  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges) };
+  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
 }
 
 function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {

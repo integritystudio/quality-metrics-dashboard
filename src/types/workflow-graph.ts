@@ -26,4 +26,6 @@ export interface WorkflowGraph {
   edges: WorkflowEdge[];
   rootNodeId: string | null;
   workflowShape: WorkflowShape;
+  /** Count of turns dropped because agentName was undefined/null (WG-5 observability). */
+  droppedTurns: number;
 }

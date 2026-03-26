@@ -32,6 +32,7 @@ export function makeGraph(overrides: Partial<WorkflowGraph> = {}): WorkflowGraph
     edges: [],
     rootNodeId: 'planner',
     workflowShape: 'linear',
+    droppedTurns: 0,
     ...overrides,
   };
 }

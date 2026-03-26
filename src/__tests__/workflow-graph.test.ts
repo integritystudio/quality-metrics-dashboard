@@ -369,6 +369,46 @@ describe('buildWorkflowGraph — root node identification', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 8b. droppedTurns counter (WG-5)
+// ---------------------------------------------------------------------------
+
+describe('buildWorkflowGraph — droppedTurns counter', () => {
+  it('counts turns where agentName is undefined', () => {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+        { turnIndex: 1, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+        { turnIndex: 2, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+      ],
+      totalTurns: 3,
+    });
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(2);
+  });
+
+  it('returns droppedTurns 0 when all turns have agentName', () => {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+        makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      ],
+      handoffs: [makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB' })],
+      totalTurns: 2,
+    });
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(0);
+  });
+
+  it('returns droppedTurns 0 for span-inferred graphs (no evaluation)', () => {
+    const spans = [
+      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.id': 'agentA' } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.droppedTurns).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 9. Span-inference fallback (evaluation === null, spans carry gen_ai.agent.id)
 // ---------------------------------------------------------------------------
 
