@@ -24,12 +24,7 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
       {[...byName.entries()].map(([name, evs]) => {
         const avg = evs.reduce((s, e) => s + (e.scoreValue ?? 0), 0) / evs.length;
         const card = (
-          <div style={{
-            padding: '4px 8px', borderRadius: 'var(--radius)',
-            ...(traceId ? { cursor: 'pointer', transition: 'border-color 0.15s' } : {}),
-          }}
-          className={traceId ? 'flex-center eval-summary-card gap-1-5 surface-elevated' : 'flex-center gap-1-5 surface-elevated'}
-          >
+          <div className={`flex-center gap-1-5 surface-elevated eval-overlay-card${traceId ? ' eval-summary-card' : ''}`}>
             <span className="text-xs">{name}</span>
             <ScoreBadge score={avg} metricName={name} label={avg.toFixed(SCORE_CHIP_PRECISION)} />
             <span className="text-muted text-2xs">({evs.length})</span>
@@ -41,7 +36,7 @@ export function EvaluationEventOverlay({ evaluations, traceId }: EvaluationEvent
             <Link
               key={name}
               href={routes.evaluationDetail(traceId, name)}
-              style={{ textDecoration: 'none', color: 'inherit' }}
+              className="link-plain"
             >
               {card}
             </Link>

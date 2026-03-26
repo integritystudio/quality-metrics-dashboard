@@ -812,8 +812,20 @@ details[open] > .cot-summary::before {
   margin-bottom: var(--space-4);
 }
 
+.eval-overlay-card {
+  padding: 4px 8px;
+  border-radius: var(--radius);
+}
+.eval-summary-card {
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
 .eval-summary-card.card:hover {
   border-color: var(--accent);
+}
+.link-plain {
+  text-decoration: none;
+  color: inherit;
 }
 
 /* Compact metric card used in agent eval summary and similar inline panels */
