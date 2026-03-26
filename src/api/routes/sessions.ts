@@ -307,7 +307,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
     }
     const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
-      const sorted = d.scores.sort((a, b) => a - b);
+      const sorted = [...d.scores].sort((a, b) => a - b);
       return {
         name,
         count: d.count,
