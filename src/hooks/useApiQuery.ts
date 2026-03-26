@@ -59,7 +59,7 @@ export function useApiQuery<TRaw, T = TRaw>(
     enabled,
     staleTime,
     retry: retry !== undefined ? retry : defaultRetry,
-    ...(refetchInterval !== undefined && { refetchInterval }),
-    ...(retryDelay !== undefined && { retryDelay }),
+    refetchInterval,
+    retryDelay,
   });
 }
