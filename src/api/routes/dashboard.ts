@@ -12,7 +12,6 @@ import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates 
 
 const SPARKLINE_BUCKET_COUNT = 24;
 
-/** Bucket evaluations into N time bins and return avg scores per bucket */
 function computeSparklineData(
   evaluations: EvaluationResult[],
   startMs: number,

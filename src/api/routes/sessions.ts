@@ -75,7 +75,6 @@ function computeScoreStats(scores: number[]): ScoreStats {
 
 const LIMIT_SESSION_SPANS = 1000;
 
-/** Load spans for a session, defaulting to 30-day window. */
 async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
   const now = new Date();
   const end = endDate ?? formatISO(now, { representation: 'date' });
