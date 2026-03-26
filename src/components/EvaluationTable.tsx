@@ -256,7 +256,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {canSort && (
-                      <span style={{ marginLeft: 'var(--space-1)', fontSize: 'var(--font-size-2xs)' }}>
+                      <span className="ml-1 text-2xs">
                         {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
                       </span>
                     )}
