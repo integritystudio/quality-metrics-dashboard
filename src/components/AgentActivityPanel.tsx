@@ -204,10 +204,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         </div>
                       )}
 
-                      <div className="d-grid gap-4" style={{
-                        gridTemplateColumns: '1fr 1fr',
-                        padding: 'var(--space-3) 0 var(--space-1)',
-                      }}>
+                      <div className="agent-expanded-grid">
                         {/* Sessions column */}
                         <div>
                           <div className="text-muted mb-1-5 text-xs uppercase">
@@ -293,23 +290,13 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
         {metrics.map(([name, m]) => {
           const barColor = scoreColor(m.avg);
           return (
-            <div key={name} style={{
-              minWidth: AGENT_EVAL_CARD_MIN_WIDTH,
-              padding: 'var(--space-2) var(--space-2-5)',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius)',
-            }}>
+            <div key={name} className="metric-card-compact" style={{ minWidth: AGENT_EVAL_CARD_MIN_WIDTH }}>
               <div className="text-secondary mb-1 text-xs truncate">
                 {name}
               </div>
-              {/* Score bar */}
               <div className="flex-center mb-1 gap-2">
                 <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
-                <span className="mono-xs font-semibold text-right" style={{
-                  color: barColor,
-                  minWidth: 'var(--space-8)',
-                }}>
+                <span className="mono-xs font-semibold text-right score-label-width" style={{ color: barColor }}>
                   {m.avg.toFixed(2)}
                 </span>
               </div>
