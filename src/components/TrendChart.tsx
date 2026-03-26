@@ -49,13 +49,11 @@ export function TrendChart({
     return <EmptyState message="No trend data available" />;
   }
 
-  // Build data points: previous and current
   const data: Array<{ label: string; value: number; projected?: number }> = [
     { label: 'Previous', value: trend.previousValue },
     { label: 'Current', value: trend.currentValue },
   ];
 
-  // If dynamics has projectedBreachTime or velocity, add projection point
   if (dynamics && dynamics.velocity !== 0) {
     const projectedValue = trend.currentValue + dynamics.velocity;
     data.push({
@@ -67,7 +65,6 @@ export function TrendChart({
     data[1].projected = trend.currentValue;
   }
 
-  // Compute Y domain with some padding
   const allValues = data.flatMap((d) => [d.value, d.projected].filter((v): v is number => v != null));
   if (warningThreshold != null) allValues.push(warningThreshold);
   if (criticalThreshold != null) allValues.push(criticalThreshold);

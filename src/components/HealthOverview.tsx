@@ -22,7 +22,6 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
 
   const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
 
-  // Compute rate based on period
   const period = dashboard.metrics[0]?.period;
   const DEFAULT_PERIOD_HOURS = PERIOD_MS['7d'] / TIME_MS.HOUR;
   let periodHours = DEFAULT_PERIOD_HOURS;
