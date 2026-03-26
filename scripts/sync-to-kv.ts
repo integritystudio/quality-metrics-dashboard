@@ -48,7 +48,6 @@ import {
   metricDetailValueSchema,
   coverageHeatmapSchema,
   type KvSyncState,
-  type MetricDetailValue,
   type CoverageHeatmap,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import {
@@ -230,7 +229,7 @@ function kvBulkPut(entries: KVEntry[]): number {
         console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
         if (stderr) console.error(`[sync-to-kv] stderr: ${stderr.slice(0, 500)}`);
         if (stdout) console.error(`[sync-to-kv] stdout: ${stdout.slice(0, 500)}`);
-        throw new Error(`Wrangler KV bulk put failed for ${batch.length} entries${batchLabel}.`);
+        throw new Error(`Wrangler KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
       }
       written += batch.length;
     } finally {

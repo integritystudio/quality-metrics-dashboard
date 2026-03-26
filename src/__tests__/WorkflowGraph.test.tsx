@@ -82,6 +82,7 @@ vi.mock('elkjs/lib/elk.bundled.js', () => ({
 
 import { WorkflowGraphView } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
 
 afterEach(cleanup);
 

@@ -15,8 +15,7 @@
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, createReadStream, statSync, constants } from 'fs';
-import { createInterface } from 'readline';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
@@ -32,10 +31,6 @@ import {
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
-  type TraceSpan,
-  type OTelLogEntry,
-  type TranscriptEntry,
-  type OTelEvaluationRecord,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 
@@ -823,20 +818,17 @@ function acquireLock(): boolean {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
     // Lock file exists — check if owning process is still alive
-    let stale = false;
     try {
       const lockContent = readFileSync(LOCK_FILE, 'utf-8').trim();
       const lockPid = parseInt(lockContent, 10);
-      if (isNaN(lockPid) || lockPid <= 0) {
-        stale = true;
-      } else {
+      if (!isNaN(lockPid) && lockPid > 0) {
         try {
           process.kill(lockPid, 0);
           return false; // Process alive, lock held
         } catch (killErr) {
           // EPERM = process exists but we can't signal it — lock is valid
           if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
-          stale = true; // Process dead — stale lock
+          // Process dead — stale lock, continue to age check
         }
       }
     } catch {
@@ -844,7 +836,8 @@ function acquireLock(): boolean {
     }
 
     // Also check lock age — stale if older than 1 hour regardless of PID
-    if (!stale) {
+    let stale = false;
+    {
       try {
         const lockStat = statSync(LOCK_FILE);
         const lockAgeMs = Date.now() - lockStat.mtimeMs;

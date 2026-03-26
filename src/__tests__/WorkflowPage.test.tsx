@@ -77,6 +77,7 @@ vi.mock('../components/PageShell.js', () => ({
 import { WorkflowPage } from '../pages/WorkflowPage.js';
 import { AgentSessionPage } from '../pages/AgentSessionPage.js';
 import { makeNode, makeGraph } from './workflow-fixtures.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
 
 afterEach(() => {
   cleanup();

@@ -6,7 +6,7 @@
  * in the format expected by the observability-toolkit backend.
  */
 
-import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
+import { writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,

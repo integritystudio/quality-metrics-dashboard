@@ -149,7 +149,7 @@ export function loadJsonWithValidation<T>(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to load ${filePath}: ${message}`);
+    throw new Error(`Failed to load ${filePath}: ${message}`, { cause: error });
   }
 }
 
