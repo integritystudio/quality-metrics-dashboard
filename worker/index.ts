@@ -41,6 +41,10 @@ const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 const ERR_INVALID_INPUT_KEY = 'Invalid inputKey. Must be traceId or sessionId.';
 const ERR_INVALID_USER_ID = 'Invalid userId';
 const ERR_INVALID_ROLE_ID = 'Invalid roleId';
+const ERR_INTERNAL = 'Internal server error';
+const ERR_NO_DATA = 'No data available';
+const ERR_NO_CALIBRATION_DATA = 'No calibration data available';
+const ERR_ROUTING_TELEMETRY_MALFORMED = 'Routing telemetry data is malformed';
 
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
@@ -191,21 +195,22 @@ app.use('/api/*', async (c, next) => {
 
     const roles: string[] = [];
     const permissionSet = new Set<DashboardPermission>();
-    // Non-fatal — fetch failure leaves user with no permissions; routes will deny
     const rolesRes = await fetch(
       `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
       { headers: serviceRoleHeaders(c.env), signal: controller.signal },
     ).catch(() => null);
-    if (rolesRes?.ok) {
-      const rawRows: unknown = await rolesRes.json().catch(() => []);
-      const rows = safeArray(rawRows);
-      for (const row of rows) {
-        const rowResult = UserRoleRowSchema.safeParse(row);
-        if (!rowResult.success || !rowResult.data.roles) continue;
-        roles.push(rowResult.data.roles.name);
-        for (const perm of rowResult.data.roles.permissions) {
-          if (VALID_PERMISSIONS.has(perm)) permissionSet.add(perm as DashboardPermission);
-        }
+    if (!rolesRes?.ok) {
+      console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes?.status ?? 'network error');
+      return c.json({ error: 'Failed to load user roles' }, Http.InternalServerError);
+    }
+    const rawRows: unknown = await rolesRes.json().catch(() => []);
+    const rows = safeArray(rawRows);
+    for (const row of rows) {
+      const rowResult = UserRoleRowSchema.safeParse(row);
+      if (!rowResult.success || !rowResult.data.roles) continue;
+      roles.push(rowResult.data.roles.name);
+      for (const perm of rowResult.data.roles.permissions) {
+        if (VALID_PERMISSIONS.has(perm)) permissionSet.add(perm as DashboardPermission);
       }
     }
 
@@ -253,7 +258,7 @@ app.get('/api/me', (c) => {
   const meResult = MeResponseSchema.safeParse(me);
   if (!meResult.success) {
     console.error('[/api/me] MeResponseSchema validation failed:', meResult.error.issues);
-    return c.json({ error: 'Internal server error' }, Http.InternalServerError);
+    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
   }
   return c.json(meResult.data);
 });
@@ -289,7 +294,7 @@ app.get('/api/dashboard', async (c) => {
 
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await c.env.DASHBOARD.get(key, 'json');
-  if (!data) return c.json({ error: 'No data available' }, Http.NotFound);
+  if (!data) return c.json({ error: ERR_NO_DATA }, Http.NotFound);
   logActivity(session.appUserId, 'dashboard_view', c.env);
   return c.json(data);
 });
@@ -503,7 +508,7 @@ app.get('/api/compliance/verifications', async (c) => {
 app.get('/api/calibration', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const data = await c.env.DASHBOARD.get('meta:calibration', 'json');
-  if (!data) return c.json({ error: 'No calibration data available' }, Http.NotFound);
+  if (!data) return c.json({ error: ERR_NO_CALIBRATION_DATA }, Http.NotFound);
   return c.json(data);
 });
 
@@ -517,7 +522,7 @@ app.get('/api/routing-telemetry', async (c) => {
   const result = routingTelemetryKvSchema.safeParse(raw ?? {});
   if (!result.success) {
     console.error('[/api/routing-telemetry] schema validation failed:', result.error.issues);
-    return c.json({ error: 'Routing telemetry data is malformed' }, Http.InternalServerError);
+    return c.json({ error: ERR_ROUTING_TELEMETRY_MALFORMED }, Http.InternalServerError);
   }
   return c.json({ ...result.data, period });
 });
