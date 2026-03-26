@@ -52,7 +52,8 @@ agentRoutes.get('/agents', async (c) => {
     const traceToAgents = new Map<string, Set<string>>();
 
     for (const span of result.traces) {
-      const name = (span.attributes?.['gen_ai.agent.name'] as string | undefined) ?? 'unknown';
+      const rawName = span.attributes?.['gen_ai.agent.name'];
+      const name = typeof rawName === 'string' ? rawName : 'unknown';
       if (!acc[name]) {
         acc[name] = { invocations: 0, errors: 0, rateLimitCount: 0, totalOutputSize: 0, sessions: new Set(), traceIds: new Set(), sourceTypes: Object.create(null), dailyCounts: new Array(periodDays).fill(0) };
       }
@@ -65,15 +66,18 @@ agentRoutes.get('/agents', async (c) => {
       }
       if (span.attributes?.['agent.has_error']) acc[name].errors++;
       if (span.attributes?.['agent.has_rate_limit']) acc[name].rateLimitCount++;
-      acc[name].totalOutputSize += (span.attributes?.['agent.output_size'] as number | undefined) ?? 0;
-      const sid = span.attributes?.['session.id'] as string | undefined;
+      const rawOutputSize = span.attributes?.['agent.output_size'];
+      acc[name].totalOutputSize += typeof rawOutputSize === 'number' ? rawOutputSize : 0;
+      const rawSid = span.attributes?.['session.id'];
+      const sid = typeof rawSid === 'string' ? rawSid : undefined;
       if (sid) acc[name].sessions.add(sid);
       if (span.traceId) {
         acc[name].traceIds.add(span.traceId);
         if (!traceToAgents.has(span.traceId)) traceToAgents.set(span.traceId, new Set());
         traceToAgents.get(span.traceId)!.add(name);
       }
-      const rawSrc = (span.attributes?.['agent.source_type'] as string | undefined) ?? 'unknown';
+      const rawSrcVal = span.attributes?.['agent.source_type'];
+      const rawSrc = typeof rawSrcVal === 'string' ? rawSrcVal : 'unknown';
       const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
       acc[name].sourceTypes[src] = (acc[name].sourceTypes[src] ?? 0) + 1;
     }
@@ -159,9 +163,8 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     const agentMap = new Map<number, string>();
     const traceIds = new Set<string>();
     spans.forEach((span, i) => {
-      const agent =
-        (span.attributes?.['agent.name'] as string | undefined) ??
-        (span.attributes?.['gen_ai.agent.name'] as string | undefined);
+      const rawAgent = span.attributes?.['agent.name'] ?? span.attributes?.['gen_ai.agent.name'];
+      const agent = typeof rawAgent === 'string' ? rawAgent : undefined;
       if (agent) agentMap.set(i, agent);
       if (span.traceId) traceIds.add(span.traceId);
     });
