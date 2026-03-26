@@ -552,7 +552,6 @@ export async function evaluateTurn(
   const turnKey = turn.timestamp.slice(0, 19);
   const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
 
-  // Relevance
   const relKey = `${turn.sessionId}:relevance:${turnKey}`;
   if (!existingKeys.has(relKey)) {
     try {
@@ -577,7 +576,6 @@ export async function evaluateTurn(
     }
   }
 
-  // Coherence
   const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
   if (!existingKeys.has(cohKey)) {
     try {
@@ -598,7 +596,6 @@ export async function evaluateTurn(
     }
   }
 
-  // Faithfulness + Hallucination (only when tool results exist as context)
   if (turn.toolResults.length > 0) {
     const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
     const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
