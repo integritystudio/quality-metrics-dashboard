@@ -32,13 +32,11 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
               <span className="text-muted text-2xs">#{turn.turnIndex}</span>
             </div>
 
-            {/* Relevance bar */}
             <div className="mb-1-5">
               <div className="text-secondary text-2xs mb-1">Relevance</div>
               <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
             </div>
 
-            {/* Task progress bar */}
             <div className="mb-1-5">
               <div className="text-secondary text-2xs mb-1">Progress</div>
               <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />

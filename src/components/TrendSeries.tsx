@@ -88,7 +88,6 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
             ]}
             labelStyle={CHART_TOOLTIP_LABEL_STYLE}
           />
-          {/* P10-P90 band */}
           <Area
             type="monotone"
             dataKey="p90"
@@ -103,7 +102,6 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
             fill={TREND_COLORS.background}
             connectNulls
           />
-          {/* P50 line */}
           <Line
             type="monotone"
             dataKey="p50"
@@ -113,7 +111,6 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
             dot={false}
             connectNulls
           />
-          {/* Average line */}
           <Line
             type="monotone"
             dataKey="avg"
