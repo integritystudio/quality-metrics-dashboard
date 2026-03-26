@@ -153,7 +153,6 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                     </div>
                   </td>
 
-                  {/* Error rate */}
                   <td>
                     <div className="flex-center gap-1-5">
                       <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
@@ -167,21 +166,18 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                     </div>
                   </td>
 
-                  {/* Session count */}
                   <td>
                     <span className="mono-xs">
                       {agent.sessionCount}
                     </span>
                   </td>
 
-                  {/* Avg output size */}
                   <td>
                     <span className="mono-xs text-secondary">
                       {fmtBytes(agent.avgOutputSize)}
                     </span>
                   </td>
 
-                  {/* Rate limits */}
                   <td>
                     {agent.rateLimitCount > 0 ? (
                       <span className="mono-xs badge-warning">
@@ -192,7 +188,6 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                     )}
                   </td>
 
-                  {/* Source type */}
                   <td>
                     {topSource ? (
                       <span className="mono text-muted text-2xs uppercase">
@@ -202,14 +197,11 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   </td>
                 </tr>
 
-                {/* Expanded row: eval summary + sessions + traces */}
                 {isExpanded && (
                   <tr className="eval-expanded-panel">
                     <td colSpan={COLUMN_COUNT} className="border-b">
-                      {/* Evaluation summary */}
                       <EvalSummaryRow evalSummary={agent.evalSummary} />
 
-                      {/* Daily invocation sparkline */}
                       {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
                         <div className="border-b-subtle mb-1 pad-panel-section">
                           <div className="flex-center gap-3">
@@ -290,7 +282,6 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
                   {m.avg.toFixed(SCORE_CHIP_PRECISION)}
                 </span>
               </div>
-              {/* Min/max range + count */}
               <div className="mono text-muted flex-wrap justify-between text-2xs">
                 <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}\u2013{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
                 <span>n={m.count}</span>
