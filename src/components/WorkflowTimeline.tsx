@@ -44,7 +44,6 @@ function findHandoffTurnIndex(
   handoff: HandoffEvaluation,
   turns: TurnLevelResult[],
 ): number | null {
-  // Find first turn by the target agent that follows any turn by the source agent.
   let sawSource = false;
   for (const t of turns) {
     const agent = t.agentName ?? 'unknown';
