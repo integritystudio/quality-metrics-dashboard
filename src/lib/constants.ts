@@ -118,7 +118,6 @@ export const SKELETON_HEIGHT_LG = 400;
 export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
 export const DEFAULT_PAGE_LIMIT = 50;
 
-// ─── Component layout constants ───────────────────────────────────────────────
 /** CorrelationHeatmap row-header column width and column-header row height (px). */
 export const HEATMAP_ROW_HEADER_WIDTH = 80;
 export const HEATMAP_COL_HEADER_HEIGHT = 32;
@@ -135,14 +134,12 @@ export const SPAN_TREE_BASE_PADDING = 8;
 export const SPARKLINE_WIDTH = 160;
 export const SPARKLINE_HEIGHT = 28;
 
-// Component computed value consts
 /** ConfidencePanel: minimum sample size for "sample size" confidence method. */
 export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
 /** ConfidencePanel VarianceBar: band thresholds (pct). */
 export const VARIANCE_LOW_PCT = 20;
 export const VARIANCE_MEDIUM_PCT = 50;
 
-// ─── Chart constants ──────────────────────────────────────────────────────────
 /** TrendChart: responsive container height (px). */
 export const CHART_HEIGHT = 200;
 /** TrendChart: line stroke width (px). */
@@ -154,7 +151,6 @@ export const CHART_DOT_RADIUS_PROJECTED = 3;
 /** TrendChart: SVG strokeDasharray for threshold reference lines and projected line. */
 export const CHART_DASH_THRESHOLD = '6 3';
 export const CHART_DASH_PROJECTED = '6 4';
-// ─── Evaluation table constants ───────────────────────────────────────────────
 /** EvaluationTable: expand/collapse column width (px). */
 export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
 /** Shared Recharts color palette for TrendChart and TrendSeries. */
