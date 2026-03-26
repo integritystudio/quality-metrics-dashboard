@@ -4,21 +4,6 @@ Open items from code reviews and deferred work.
 
 ## Open Items
 
-### Phase 3 Auth: Code Review Deferred Items
-
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| AUTH-P3-1 | `RoleViewType` and `DashboardView` are structurally identical unions declared independently — unify by making one an alias of the other | P3 | ce1cb6a review |
-| AUTH-P3-2 | `VALID_ROLES` in App.tsx hardcodes `['executive', 'operator', 'auditor']` — derive from Zod schema or VIEW_PERMISSION_MAP to avoid silent divergence | P3 | ce1cb6a review |
-| AUTH-P3-3 | `authUserId`/`appUserId` set to `''` in fetchAppSession — consider optional or null to make emptiness explicit in the type | P4 | ce1cb6a review |
-| AUTH-P3-4 | Dual `MeResponse` types: hand-written interface in `src/types/auth.ts` and Zod-inferred in `auth-schemas.ts` — remove hand-written and re-export from schemas | P3 | ce1cb6a review |
-
-### Phase 4 Auth: Code Review Deferred Items
-
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| AUTH-P4-1 | Extract generic Supabase REST client helper (`dashboard/src/lib/supabase-rest.ts`) to unify duplicate POST patterns in `logActivity` and `api-provisioning-sender` | P3 | activity-logging code-simplifier review |
-
 ### G5: Multi-Agent Workflow Visualization — Remaining Work
 
 | # | Item | Priority | Source |
@@ -36,7 +21,6 @@ Open items from code reviews and deferred work.
 | G5-WG5 | Turns with undefined `agentName` are silently dropped — add observability counter | P4 | WG-5 |
 | G5-WG9 | `durationMs` on WorkflowNode sums nested spans (double-counts wall time) — document or fix | P4 | WG-9 |
 | G5-C1 | `agent.name` vs `gen_ai.agent.name` attribute key: route uses former, transformer uses latter — verify both attributes are present on real spans | P3 | WG-C1 |
-| G5-M1 | `classifyShape` only detects pairwise back-edges; misses 3+ node cycles (A→B→C→A) — needs DFS cycle detection | P3 | WG-M1 |
 | G5-M2 | `inferFromSpans` strict `<=` for edge inference misses near-concurrent spans — consider epsilon tolerance | P4 | WG-M2 |
 | G5-M4 | `WorkflowEdge.handoffScore` typed as `number` but inferred edges use `0` — consider `number | null` to distinguish from real zero scores | P4 | WG-M4 |
 
@@ -44,17 +28,12 @@ Open items from code reviews and deferred work.
 
 | # | Item | Priority | Source |
 |---|------|----------|--------|
-| ADMIN-P4-1 | `AdminUserSchema` silently drops users with non-standard emails (phone auth, OAuth) via failed Zod parse — consider logging dropped users or using optional/refinement for email field | P3 | code-reviewer feedback on c9a38dc |
-| ADMIN-P4-2 | `AdminPage.tsx` `onChanged` refetch invalidates all users after each role mutation — no concurrent mutation guard, races possible if multiple UserRow components assign/revoke simultaneously | P3 | code-reviewer feedback on c9a38dc |
 | ADMIN-P4-3 | Admin routes return generic error messages on Supabase REST failures — currently safe (no body exposure), but document error handling policy for consistency with other endpoints | P4 | code-reviewer feedback on c9a38dc |
 
 ### Test Fixture Consolidation
 
 | # | Item | Priority | Source |
 |---|------|----------|--------|
-| TF-1 | Audit test files for local `makeNode`/`makeGraph` factories that duplicate `workflow-fixtures.ts` — replace with shared imports | P3 | 431e456 simplify review |
-| TF-2 | Audit test files for inline `WorkflowGraph` object literals that could use `makeGraph()` with overrides | P3 | 431e456 simplify review |
-| TF-3 | Audit test files for repeated chain-graph construction (Array.from + edge wiring) that could use `makeChainGraph()` | P3 | 431e456 simplify review |
 | TF-4 | Audit test files for duplicated `@xyflow/react` or `elkjs` mock definitions that could be extracted to a shared mock module | P4 | 431e456 simplify review |
 | TF-5 | Audit test files for redundant section-banner comments (`// ---`, `// ===`) where `describe` blocks already provide structure | P4 | 431e456 simplify review |
 
@@ -64,3 +43,40 @@ Open items from code reviews and deferred work.
 |---|------|----------|--------|
 | E2E-1 | Create production-aligned integration tests that remove mocked APIs and run E2E tests with Doppler-injected credentials against real dev environment. Current E2E suite uses placeholder Supabase credentials + custom fixture that mocks `/api/me` endpoint (suitable for unit-like testing). Separate integration tests would validate API contracts and auth flow with real Supabase. | P3 | e2e-auth-setup session |
 
+## Completed
+
+### Phase 3 Auth: Code Review Deferred Items
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| AUTH-P3-1 | `RoleViewType` and `DashboardView` unified — `DashboardView = RoleViewType` alias in `src/types/auth.ts` | P3 | Done (pre-existing) |
+| AUTH-P3-2 | `VALID_ROLES` in App.tsx now derived from `ROLES` = `RoleSchema.options` | P3 | Done (pre-existing) |
+| AUTH-P3-3 | `authUserId`/`appUserId` made optional in `AppSession`; omitted in client `fetchAppSession` | P4 | Done (9e7bb4e) |
+| AUTH-P3-4 | Hand-written `MeResponse` interface removed; re-exported from `auth-schemas.ts` | P3 | Done (pre-existing) |
+
+### Phase 4 Auth: Code Review Deferred Items
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| AUTH-P4-1 | `supabase-rest.ts` extracted with `userAuthHeaders()` and `supabasePost()` helpers | P3 | Done (88c7605) |
+
+### G5: Code Review Deferred Items
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| G5-M1 | `classifyShape` now uses DFS cycle detection — correctly handles 3+ node cycles | P3 | Done (cb90cfc) |
+
+### Phase 4 Admin: Code Review Deferred Items
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| ADMIN-P4-1 | `AdminUserSchema` email made optional — phone-auth/OAuth users no longer silently dropped | P3 | Done (0a3e2c1) |
+| ADMIN-P4-2 | `AdminPage` concurrent mutation guard added via `pendingMutations` ref counter | P3 | Done (0cc5136) |
+
+### Test Fixture Consolidation
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| TF-1 | Audited — no local duplicate `makeNode`/`makeGraph` factories found; all tests use `workflow-fixtures.ts` | P3 | Done (f37f38e) |
+| TF-2 | Inline `WorkflowGraph` literals in `WorkflowGraph.test.tsx` converted to `makeGraph()` calls | P3 | Done (f37f38e) |
+| TF-3 | Audited — chain-graph `Array.from` patterns correctly use `makeGraph()` wrapper; no additional `makeChainGraph` opportunities | P3 | Done (f37f38e) |
