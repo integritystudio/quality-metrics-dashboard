@@ -1171,6 +1171,10 @@ details[open] > .cot-summary::before {
 
 /* Chip / pill */
 .chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
+.chip-colored {
+  color: var(--chip-color);
+  background-color: color-mix(in srgb, var(--chip-color) 13%, transparent);
+}
 
 /* Gap */
 .gap-half { gap: var(--space-px); }
