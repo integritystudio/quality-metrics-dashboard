@@ -83,7 +83,6 @@ function makeMockEval(traceId = 'trace-001') {
   } as any;
 }
 
-// /agents route
 
 describe('GET /agents', () => {
   beforeEach(() => {
@@ -191,7 +190,6 @@ describe('GET /agents', () => {
   });
 });
 
-// /agents/:sessionId route
 
 describe('GET /agents/:sessionId', () => {
   beforeEach(() => {

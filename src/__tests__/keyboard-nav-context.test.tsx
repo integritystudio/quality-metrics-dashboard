@@ -4,7 +4,6 @@ import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/Ke
 
 afterEach(cleanup);
 
-// Helpers
 
 function ShortcutConsumer({ shortcutKey, desc, scope, action }: {
   shortcutKey: string;
@@ -21,7 +20,6 @@ function OverlayReader() {
   return <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>;
 }
 
-// Shortcut conflict guard
 
 describe('shortcut conflict guard', () => {
   it('throws when registering single key "g" when combo "g h" already exists', () => {
@@ -83,7 +81,6 @@ describe('shortcut conflict guard', () => {
   });
 });
 
-// Two-key combo dispatch
 
 describe('two-key combo dispatch', () => {
   it('fires combo action when both keys pressed in sequence', () => {
@@ -199,7 +196,6 @@ describe('two-key combo dispatch', () => {
   });
 });
 
-// Combo timeout: pending cleared after 500ms
 
 describe('combo timeout', () => {
   beforeEach(() => { vi.useFakeTimers(); });
@@ -261,7 +257,6 @@ describe('combo timeout', () => {
   });
 });
 
-// Overlay toggle and Escape
 
 describe('overlay toggle', () => {
   it('starts closed', () => {
@@ -363,7 +358,6 @@ describe('overlay toggle', () => {
   });
 });
 
-// Ignored tags: shortcuts should NOT fire from INPUT, TEXTAREA, SELECT
 
 describe('ignored tags', () => {
   it('does NOT fire shortcut when keydown originates from INPUT', () => {
@@ -447,7 +441,6 @@ describe('ignored tags', () => {
   });
 });
 
-// Modifier key bypass
 
 describe('modifier key bypass', () => {
   it('does NOT fire shortcut when Ctrl is held', () => {
@@ -510,7 +503,6 @@ describe('modifier key bypass', () => {
   });
 });
 
-// Duplicate key registration guard
 
 describe('duplicate key registration guard', () => {
   it('throws when the same single key is registered twice', () => {
@@ -544,7 +536,6 @@ describe('duplicate key registration guard', () => {
   });
 });
 
-// Unregister (cleanup from useShortcut)
 
 describe('unregister', () => {
   it('shortcut no longer fires after the component that registered it unmounts', () => {
