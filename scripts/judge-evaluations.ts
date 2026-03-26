@@ -210,9 +210,6 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
     }
   }
 
-  const scanCount = transcripts.length - logCount;
-  if (scanCount > 0) { /* scan results logged externally */ }
-
   return transcripts;
 }
 
@@ -588,6 +585,7 @@ export async function evaluateTurn(
 ): Promise<EvalRecord[]> {
   const evals: EvalRecord[] = [];
   const turnKey = turn.timestamp.slice(0, 19);
+  const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
 
   // Relevance
   const relKey = `${turn.sessionId}:relevance:${turnKey}`;
@@ -596,7 +594,7 @@ export async function evaluateTurn(
       const result = await judge.evaluateRelevance(
         turn.userText,
         turn.assistantText,
-        turn.toolResults.length > 0 ? turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS) : [],
+        toolContext,
       );
       evals.push({
         timestamp: turn.timestamp,
@@ -648,7 +646,7 @@ export async function evaluateTurn(
         const faithResult = await judge.qagEvaluate(
           turn.userText,
           turn.assistantText,
-          turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
+          toolContext,
         );
         evals.push({
           timestamp: turn.timestamp,
@@ -672,7 +670,7 @@ export async function evaluateTurn(
         const halResult = await judge.evaluateFaithfulness(
           turn.userText,
           turn.assistantText,
-          turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
+          toolContext,
         );
         // Invert: faithfulness measures consistency, hallucination is the complement
         const halScore = normalizeScore(1 - halResult.score);
@@ -698,7 +696,7 @@ export async function evaluateTurn(
       const tcTestCase = {
         input: turn.userText,
         output: turn.assistantText,
-        context: turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS),
+        context: toolContext,
       };
       try {
         const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
@@ -988,38 +986,41 @@ async function main() {
 
   const transcripts = await _discoverTranscripts();
 
-  const allTurns: Turn[] = [];
-  for (const info of transcripts) {
-    const turns = await extractTurns(info);
-    allTurns.push(...turns);
-  }
-
-  // Apply limit
-  if (limit < allTurns.length) { /* truncated by --limit */ }
+  const turnArrays = await Promise.all(transcripts.map(info => extractTurns(info)));
+  const allTurns = turnArrays.flat().slice(0, limit);
 
   if (dryRun) {
-    // P2-14: Accurate cost estimate based on tool result presence
     // 2 base evals (relevance, coherence) + 3 with tools (faithfulness, hallucination, tool_correctness)
     const estEvals = allTurns.reduce((sum, t) =>
       sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
-    // B7: Estimate tokens from actual content length (~4 chars/token)
-    const _estInputTokens = allTurns.reduce((sum, t) => {
+    // Estimate tokens from actual content length (~4 chars/token)
+    const estInputTokens = allTurns.reduce((sum, t) => {
       const contentChars = t.userText.length + t.assistantText.length
         + t.toolResults.reduce((s, r) => s + r.length, 0);
       const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
       return sum + Math.ceil(contentChars / 4) * evalsPerTurn;
     }, 0);
-    const _estOutputTokens = estEvals * 200;
-    // Haiku 3.5 pricing: $0.80/1M input, $4.00/1M output
-    const _HAIKU_INPUT_PER_M = 0.80;
-    const _HAIKU_OUTPUT_PER_M = 4.0;
+    const estOutputTokens = estEvals * 200;
+    // Haiku pricing: $0.80/1M input, $4.00/1M output
+    const HAIKU_INPUT_PER_M = 0.80;
+    const HAIKU_OUTPUT_PER_M = 4.0;
+    const estCost = (estInputTokens / 1_000_000) * HAIKU_INPUT_PER_M
+      + (estOutputTokens / 1_000_000) * HAIKU_OUTPUT_PER_M;
+
+    console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
+    console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
+    console.log(`[dry-run] estimated cost: $${estCost.toFixed(4)}`);
 
     const bySession = new Map<string, number>();
     for (const t of allTurns) {
-      bySession.set(t.sessionId.slice(0, 8), (bySession.get(t.sessionId.slice(0, 8)) ?? 0) + 1);
+      const sid = t.sessionId.slice(0, 8);
+      bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
     }
     const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-    for (const [_sid, _count] of sorted) { /* dry-run summary */ }
+    console.log('[dry-run] top sessions by turn count:');
+    for (const [sid, count] of sorted) {
+      console.log(`  ${sid}: ${count} turns`);
+    }
     return;
   }
 
@@ -1046,7 +1047,6 @@ async function main() {
     if (seed) {
       const seedResult = seedEvaluations(allTurns, existingKeys);
       flatEvals = seedResult.evals;
-      if (seedResult.canaryCount > 0) { /* canary turns detected */ }
     } else {
       const llm = await createAnthropicProvider();
       const judge = new LLMJudge(llm, {
