@@ -2,14 +2,12 @@ import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
 import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 
-/** Milliseconds per day */
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/** Default lookback windows (days) */
-const DEFAULT_LOOKBACK_7D = 7 * MS_PER_DAY;
-const DEFAULT_LOOKBACK_30D = 30 * MS_PER_DAY;
-const DEFAULT_LOOKBACK_90D = 90 * MS_PER_DAY;
+/** Default lookback windows */
+const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
+const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
+const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
 
 /** Query result limits */
 const LIMIT_EVALS_BULK = 100_000;
