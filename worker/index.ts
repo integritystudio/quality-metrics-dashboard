@@ -26,6 +26,7 @@ const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
 const ERR_INVALID_SORT_BY = 'Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.';
 
+const ERR_UNAUTHORIZED = 'Unauthorized';
 const ERR_FORBIDDEN = 'Forbidden';
 const ERR_INVALID_REQUEST_BODY = 'Invalid request body';
 const ERR_INVALID_METRIC_NAME = 'Invalid metric name';
@@ -139,12 +140,12 @@ app.use('/api/*', async (c, next) => {
       email: 'test@example.com',
       roles: ['test'],
       permissions: ['dashboard.admin'],
-      allowedViews: ['executive', 'operator', 'auditor'],
+      allowedViews: [...VALID_ROLES],
     });
     return next();
   }
 
-  if (!jwt) return c.json({ error: 'Unauthorized' }, Http.Unauthorized);
+  if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
 
   // Single AbortController shared across all auth fetches; aborts on timeout
   const controller = new AbortController();
@@ -163,21 +164,21 @@ app.use('/api/*', async (c, next) => {
       });
       jwtPayload = payload as Record<string, unknown>;
     } catch {
-      return c.json({ error: 'Unauthorized' }, Http.Unauthorized);
+      return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
     }
     const auth0Id = typeof jwtPayload['sub'] === 'string' ? jwtPayload['sub'] : null;
-    if (!auth0Id) return c.json({ error: 'Unauthorized' }, Http.Unauthorized);
+    if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
 
     // Fetch public.users row by auth0_id — required; users with no app record are rejected
     const userRes = await fetch(
       `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&auth0_id=eq.${encodeURIComponent(auth0Id)}&limit=1`,
       { headers: serviceRoleHeaders(c.env), signal: controller.signal },
     ).catch(() => null);
-    if (!userRes?.ok) return c.json({ error: 'Unauthorized' }, Http.Unauthorized);
+    if (!userRes?.ok) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
     const rawUsers: unknown = await userRes.json().catch(() => null);
-    if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: 'Unauthorized' }, Http.Unauthorized);
+    if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
     const userResult = PublicUserSchema.safeParse(rawUsers[0]);
-    if (!userResult.success) return c.json({ error: 'Unauthorized' }, Http.Unauthorized);
+    if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
     const appUserId = userResult.data.id;
     const email = userResult.data.email;
     const authUserId = auth0Id;
@@ -204,7 +205,7 @@ app.use('/api/*', async (c, next) => {
 
     const permissions = [...permissionSet];
     const allowedViews: DashboardView[] = permissionSet.has('dashboard.admin')
-      ? ['executive', 'operator', 'auditor']
+      ? [...VALID_ROLES]
       : VIEW_PERMISSION_MAP
           .filter(([perm]) => permissionSet.has(perm))
           .map(([, view]) => view);
@@ -551,7 +552,6 @@ app.get('/api/admin/users', async (c) => {
   const rawRoleRowsJson: unknown = await roleRowsRes.json().catch(() => []);
   const rawRoleRows = Array.isArray(rawRoleRowsJson) ? rawRoleRowsJson : [];
 
-  // Build userId → roles map
   const rolesByUser = new Map<string, { id: string; name: string }[]>();
   for (const row of rawRoleRows) {
     const parsed = AdminUserRoleRowSchema.safeParse(row);
