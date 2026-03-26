@@ -584,6 +584,15 @@ body {
 /* Session detail — stat item, stat value, stat label, vitals divider, frequency grid */
 /* ID display: subtle letter-spacing for session/trace ID labels */
 .ls-id { letter-spacing: var(--letter-spacing-id); }
+/* Issue callout — uses data-status="warning|critical" to drive colors via --s-* variables */
+.issue-callout {
+  border-left: var(--border-width-rail) solid var(--s-fg);
+  background: var(--s-bg);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: var(--space-2-5) var(--space-3-5);
+}
+.issue-callout .callout-title { color: var(--s-fg); }
+
 /* Centered constrained text block (e.g. not-yet-available callout) */
 .centered-callout {
   max-width: var(--callout-max-width, 480px);
