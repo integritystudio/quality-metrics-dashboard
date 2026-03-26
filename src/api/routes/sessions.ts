@@ -114,7 +114,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       loadEvaluationsBySessionId(sessionId, startDate, endDate),
     ]);
 
-    // ---- Data Sources Inventory ----
     const traceIds = new Set<string>();
     for (const s of spans) {
       if (s.traceId) traceIds.add(s.traceId);
@@ -126,7 +125,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       total: spans.length + logs.length + evaluations.length,
     };
 
-    // ---- Session Timespan (from evaluation timestamps — trace query strips time fields) ----
     let tsMin = Infinity;
     let tsMax = -Infinity;
     for (const ev of evaluations) {
@@ -149,7 +147,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
     } : null;
 
-    // ---- Session Info from session-start spans ----
     const sessionStarts = spans.filter(s => attr<string>(s, 'hook.name') === 'session-start');
     const first = sessionStarts[0];
     const last = sessionStarts[sessionStarts.length - 1] ?? first;
@@ -167,7 +164,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       uncommittedAtStart: attr<number>(first, 'git.uncommitted') ?? 0,
     } : null;
 
-    // ---- Token Progression ----
     const tokenProgression = spans
       .filter(s => attr<string>(s, 'hook.name') === 'token-metrics-extraction')
       .map(s => ({
@@ -180,7 +176,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }))
       .sort((a, b) => a.messages - b.messages);
 
-    // ---- Token Totals ----
     const tokenTotals = {
       input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
       models: {} as Record<string, number>,
@@ -194,7 +189,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       if (t.model) incrementCount(tokenTotals.models, t.model);
     }
 
-    // ---- Tool Usage ----
     const toolUsage: Record<string, number> = {};
     for (const s of spans) {
       if (attr<string>(s, 'hook.type') === 'builtin' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
@@ -203,7 +197,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
     }
 
-    // ---- MCP Usage ----
     const mcpUsage: Record<string, number> = {};
     for (const s of spans) {
       if (attr<string>(s, 'hook.type') === 'mcp' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
@@ -212,7 +205,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
     }
 
-    // ---- Span Breakdown + Hook Latency ----
     const spanBreakdown: Record<string, number> = {};
     const hookDurations: Record<string, number[]> = {};
     for (const s of spans) {
@@ -228,7 +220,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       hookLatency[name] = computeLatencyStats(durations);
     }
 
-    // ---- Error Categorization ----
     const errorsByCategory: Record<string, number> = {};
     const errorDetails: Array<{
       spanName: string;
@@ -253,7 +244,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       });
     }
 
-    // ---- Agent Activity ----
     const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
     for (const s of spans) {
       if (attr<string>(s, 'hook.name') === 'agent-post-tool') {
@@ -273,7 +263,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
     }));
 
-    // ---- File Access ----
     const fileCount: Record<string, number> = {};
     for (const s of spans) {
       const fp = attr<string>(s, 'builtin.file_path');
@@ -284,7 +273,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, FILE_ACCESS_TOP_N);
 
-    // ---- Git Commits ----
     const gitCommits = spans
       .filter(s => attr<string>(s, 'hook.name') === 'post-commit-review')
       .map(s => {
@@ -298,14 +286,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         return { subject, body, files };
       });
 
-    // ---- Alert Summary ----
     const alertSpans = spans.filter(s => attr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
     const alertSummary = {
       totalFired: alertSpans.reduce((sum, s) => sum + (attr<number>(s, 'alerts.triggered_count') ?? 0), 0),
       stopEvents: alertSpans.length,
     };
 
-    // ---- Code Structure ----
     const codeStructure = spans
       .filter(s => attr<string>(s, 'hook.name') === 'code-structure')
       .map(s => ({
@@ -318,7 +304,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         tool: attr<string>(s, 'code.structure.tool') ?? '',
       }));
 
-    // ---- Evaluation Breakdown (from direct sessionId query) ----
     const evalByName: Record<string, { count: number; scores: number[] }> = {};
     for (const ev of evaluations) {
       const name = ev.evaluationName;
@@ -333,14 +318,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       return { name, count: d.count, avg, min, max };
     });
 
-    // ---- Log Summary ----
     const logBySeverity: Record<string, number> = {};
     for (const l of logs) {
       const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
       incrementCount(logBySeverity, sev);
     }
 
-    // ---- Multi-agent Evaluation ----
     // WG-C1: check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
     const agentMapForEval = new Map<number, string>();
     spans.forEach((span, i) => {
