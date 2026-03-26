@@ -22,8 +22,12 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
       body: JSON.stringify({ activity_type: activityType }),
       signal: controller.signal,
     });
-  } catch {
-    // Intentionally swallowed — audit logging must not block auth flows
+  } catch (err) {
+    // CR-ERR-4: warn in development so audit trail failures are visible during debugging.
+    // Swallowed in production — audit logging must not block auth flows.
+    if (import.meta.env?.DEV) {
+      console.warn('[activity-logger] Failed to post activity event:', activityType, err);
+    }
   } finally {
     clearTimeout(timeout);
   }

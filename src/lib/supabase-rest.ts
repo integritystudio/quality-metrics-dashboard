@@ -39,5 +39,7 @@ export function supabasePost(
     },
     body: JSON.stringify(body),
     signal: controller.signal,
+    // CR-ERR-4: fetch errors are intentionally swallowed. Failures are visible
+    // at the network level; this function is fire-and-forget for non-critical writes.
   }).catch(() => undefined).finally(() => clearTimeout(timeout));
 }
