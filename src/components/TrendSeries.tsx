@@ -125,8 +125,8 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="flex-center justify-center gap-4 mt-1 text-xs" style={{ color: CHART_COLORS.text }}>
-        <span><span style={{ color: CHART_COLORS.line }}>&#9473;</span> avg</span>
+      <div className="flex-center justify-center gap-4 mt-1 text-xs chart-dynamics">
+        <span><span className="chart-line-indicator">&#9473;</span> avg</span>
         <span><span className="opacity-50">- -</span> p50</span>
         <span><span className="opacity-30">&#9608;</span> p10-p90</span>
       </div>
