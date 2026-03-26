@@ -2,9 +2,7 @@ import { z } from 'zod';
 import type { ReactNode } from 'react';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 
-// ---------------------------------------------------------------------------
 // Link (wouter) component props
-// ---------------------------------------------------------------------------
 
 export const LinkPropsSchema = z.object({
   href: z.string(),
@@ -16,9 +14,7 @@ export type LinkProps = z.infer<typeof LinkPropsSchema> & {
   [key: string]: unknown;
 };
 
-// ---------------------------------------------------------------------------
 // WorkflowGraphView component props
-// ---------------------------------------------------------------------------
 
 export const WorkflowGraphViewPropsSchema = z.object({
   graph: z.object({
@@ -38,9 +34,7 @@ export type WorkflowGraphViewProps = {
   onNodeClick?: (nodeId: string) => void;
 };
 
-// ---------------------------------------------------------------------------
 // DetailPageHeader component props
-// ---------------------------------------------------------------------------
 
 export const DetailPageHeaderPropsSchema = z.object({
   title: z.string(),
@@ -54,9 +48,7 @@ export type DetailPageHeaderProps = {
   children?: ReactNode;
 };
 
-// ---------------------------------------------------------------------------
 // PageShell component props
-// ---------------------------------------------------------------------------
 
 export const PageShellPropsSchema = z.object({
   isLoading: z.boolean(),

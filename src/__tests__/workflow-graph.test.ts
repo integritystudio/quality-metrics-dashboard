@@ -4,9 +4,7 @@ import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
 
-// ---------------------------------------------------------------------------
 // 1. 3-agent linear workflow
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — 3-agent linear workflow', () => {
   const evaluation = makeEvaluation({
@@ -45,9 +43,7 @@ describe('buildWorkflowGraph — 3-agent linear workflow', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 2. Single-agent session
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — single-agent session', () => {
   const evaluation = makeEvaluation({
@@ -74,9 +70,7 @@ describe('buildWorkflowGraph — single-agent session', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 3. Cyclic workflow: A → B → A
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — cyclic workflow', () => {
   const evaluation = makeEvaluation({
@@ -112,9 +106,7 @@ describe('buildWorkflowGraph — cyclic workflow', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 3b. 3-node cyclic workflow: A → B → C → A (WG-M1)
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
   const evaluation = makeEvaluation({
@@ -144,9 +136,7 @@ describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 4. Branching workflow: A → B and A → C
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — branching workflow', () => {
   const evaluation = makeEvaluation({
@@ -170,9 +160,7 @@ describe('buildWorkflowGraph — branching workflow', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 5. Node data binding from turns
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — node data binding', () => {
   const evaluation = makeEvaluation({
@@ -213,9 +201,7 @@ describe('buildWorkflowGraph — node data binding', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 6. Edge data binding from handoffs
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — edge data binding', () => {
   const evaluation = makeEvaluation({
@@ -257,9 +243,7 @@ describe('buildWorkflowGraph — edge data binding', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 7. Empty / null evaluation
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — null evaluation', () => {
   const spans: TraceSpan[] = [];
@@ -286,9 +270,7 @@ describe('buildWorkflowGraph — null evaluation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 8. Root node is the first agent in the workflow
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — root node identification', () => {
   const evaluation = makeEvaluation({
@@ -316,9 +298,7 @@ describe('buildWorkflowGraph — root node identification', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 8b. droppedTurns counter (WG-5)
-// ---------------------------------------------------------------------------
 
 describe('buildWorkflowGraph — droppedTurns counter', () => {
   it('counts turns where agentName is undefined', () => {
@@ -356,9 +336,7 @@ describe('buildWorkflowGraph — droppedTurns counter', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 9. Span-inference fallback (evaluation === null, spans carry gen_ai.agent.id)
-// ---------------------------------------------------------------------------
 
 const ATTR_AGENT_ID = 'gen_ai.agent.id';
 

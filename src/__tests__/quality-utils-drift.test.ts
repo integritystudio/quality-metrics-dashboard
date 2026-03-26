@@ -18,9 +18,7 @@ import {
   SCORE_COLORS,
 } from '../lib/quality-utils.js';
 
-// ---------------------------------------------------------------------------
 // scoreColorBand
-// ---------------------------------------------------------------------------
 
 describe('scoreColorBand', () => {
   describe('maximize direction (default)', () => {
@@ -61,9 +59,7 @@ describe('scoreColorBand', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // inferScoreDirection
-// ---------------------------------------------------------------------------
 
 describe('inferScoreDirection', () => {
   it('above → minimize', () => {
@@ -79,9 +75,7 @@ describe('inferScoreDirection', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // labelToOrdinal
-// ---------------------------------------------------------------------------
 
 describe('labelToOrdinal', () => {
   it.each([
@@ -128,9 +122,7 @@ describe('labelToOrdinal', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // ordinalToCategory
-// ---------------------------------------------------------------------------
 
 describe('ordinalToCategory', () => {
   it.each<[number, string]>([
@@ -144,9 +136,7 @@ describe('ordinalToCategory', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // SCORE_COLORS
-// ---------------------------------------------------------------------------
 
 describe('SCORE_COLORS', () => {
   it('has all required bands', () => {
@@ -166,9 +156,7 @@ describe('SCORE_COLORS', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // ROLE_FEATURE_CONFIG shape (sentinel)
-// ---------------------------------------------------------------------------
 
 describe('ROLE_FEATURE_CONFIG', () => {
   const roles = ['executive', 'operator', 'auditor'] as const;
@@ -201,9 +189,7 @@ describe('ROLE_FEATURE_CONFIG', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // truncateText
-// ---------------------------------------------------------------------------
 
 describe('truncateText', () => {
   it('returns original text when under limit', () => {
