@@ -4,7 +4,7 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
 import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
@@ -20,7 +20,7 @@ agentRoutes.get('/agents', async (c) => {
   }
   const now = new Date();
   const endDate = now.toISOString().split('T')[0];
-  const startDate = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const startDate = new Date(now.getTime() - periodDays * TIME_MS.DAY).toISOString().split('T')[0];
 
   try {
     const result = await queryTraces({
