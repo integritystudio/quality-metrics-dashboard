@@ -63,12 +63,10 @@ function runStep(name: string, script: string, extraArgs: string[] = []): void {
   results.push({ name, ms });
 }
 
-// --- Step 1: derive-evaluations (always writes; skipped under --dry-run) ---
 if (!dryRun) {
   runStep('derive-evaluations', 'derive-evaluations.ts');
 } else { /* dry-run: skip derive */ }
 
-// --- Step 2: judge-evaluations ---
 if (!skipJudge) {
   const judgeArgs: string[] = [];
   if (dryRun) judgeArgs.push('--dry-run');
@@ -77,13 +75,11 @@ if (!skipJudge) {
   runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
 }
 
-// --- Step 3: sync-to-kv ---
 if (!skipSync) {
   const syncArgs: string[] = [];
   if (dryRun) syncArgs.push('--dry-run');
   runStep('sync-to-kv', 'sync-to-kv.ts', syncArgs);
 }
 
-// --- Summary ---
 for (const _r of results) { /* step summary */ }
 const _total = results.reduce((sum, r) => sum + r.ms, 0);
