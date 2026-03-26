@@ -20,6 +20,7 @@ import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
+/** Show MiniMap only when there are enough nodes to benefit from an overview. */
 const MINIMAP_THRESHOLD = 5;
 /**
  * CR-PERF-2: Maximum nodes passed to ELK layout.
