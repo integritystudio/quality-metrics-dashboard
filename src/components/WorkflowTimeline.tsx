@@ -139,6 +139,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
 
   const lanes = buildLanes(visibleTurns, agentNames);
   const totalTurns = visibleTurns.length;
+  const agentLaneIndex = new Map(agentNames.map((name, i) => [name, i]));
 
   const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
   const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
@@ -243,8 +244,8 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
           const turnIndex = findHandoffTurnIndex(h, turns);
           if (turnIndex == null) return null;
 
-          const sourceLaneIdx = agentNames.indexOf(h.sourceAgent);
-          const targetLaneIdx = agentNames.indexOf(h.targetAgent);
+          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
+          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
           if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
 
           const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
