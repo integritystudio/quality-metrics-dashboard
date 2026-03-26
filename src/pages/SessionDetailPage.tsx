@@ -67,7 +67,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const spanCount = dataSources.traces.count;
   const errorDetails = errors.details;
 
-  // Derive computed values
   const toolUsageValues = Object.values(toolUsage);
   const mcpUsageValues = Object.values(mcpUsage);
   const spanBreakdownValues = Object.values(spanBreakdown);
@@ -79,7 +78,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const maxFileCount = fileAccess[0]?.count ?? 1;
   const maxSpanCount = Math.max(...spanBreakdownValues, 1);
 
-  // Issue detection
   const hallucinationEvals = evaluations.filter(e =>
     (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
     ((e.scoreLabel ?? '').toLowerCase() === 'fail' && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
@@ -94,14 +92,12 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   if (errorCount > 0 || hallucinationEvals.length > 0) issueHealth = 'crit';
   else if (alertSummary.totalFired > 0 || failedEvals.length > 0) issueHealth = 'warn';
 
-  // Score interpretation
   const evaluation = multiAgentEvaluation;
   const handoffScore = evaluation.handoffScore ?? 0;
   const avgRelevance = evaluation.avgTurnRelevance ?? 0;
   const completeness = evaluation.conversationCompleteness ?? 0;
   const evalRows: EvalRow[] = evaluations.map(evalToRow);
 
-  // Unique models used
   const models = [...new Set(tokenProgression.map(t => t.model).filter(Boolean))];
 
   return (
