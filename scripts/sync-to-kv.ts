@@ -56,6 +56,12 @@ import {
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES } from '../src/lib/constants.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
+import {
+  OTEL_STATUS_ERROR_CODE,
+  FILE_ACCESS_TOP_N,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  COMMIT_BODY_START_LINE_INDEX,
+} from '../src/api/api-constants.js';
 
 function resolveNamespaceId(): string {
   if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
@@ -479,7 +485,7 @@ function computeErrorSummary(spans: SessionSpan[]) {
   for (const s of spans) {
     const hasError = spanAttr<boolean>(s, 'builtin.has_error') === true
       || spanAttr<boolean>(s, 'agent.has_error') === true
-      || s.status?.code === 2;
+      || s.status?.code === OTEL_STATUS_ERROR_CODE;
     if (!hasError) continue;
     const tool = spanAttr<string>(s, 'builtin.tool') ?? spanAttr<string>(s, 'agent.type') ?? 'unknown';
     const errType = spanAttr<string>(s, 'builtin.error_type') ?? 'unknown';
@@ -620,7 +626,7 @@ function computeSessionDetail(
   const fileAccess = Object.entries(fileCount)
     .map(([path, count]) => ({ path, count }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 30);
+    .slice(0, FILE_ACCESS_TOP_N);
 
   // Git commits
   const gitCommits = spans
@@ -631,8 +637,8 @@ function computeSessionDetail(
       const files = filesMatch ? filesMatch[1].trim() : '';
       const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
       const fullMessage = msgMatch ? msgMatch[1] : '';
-      const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, 80);
-      const body = fullMessage ? fullMessage.split('\n').slice(2).join('\n').trim() : '';
+      const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
+      const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
       return { subject, body, files };
     });
 
@@ -665,7 +671,7 @@ function computeSessionDetail(
   const stepScores: StepScore[] = spans.map((span, i) => ({
     step: i,
     score: spanAttr<number>(span, 'evaluation.score')
-      ?? (span.status?.code === 2 ? 0 : 1),
+      ?? (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
     explanation: span.name,
   }));
   const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
