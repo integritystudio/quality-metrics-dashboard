@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, type CSSProperties } from 'react';
 import { Link } from 'wouter';
 
 interface PageShellProps {
@@ -12,7 +12,7 @@ export function PageShell({ isLoading, error, skeletonHeight = 300, children }: 
   return (
     <div>
       <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-      {isLoading && <div className="card skeleton" style={{ height: skeletonHeight }} />}
+      {isLoading && <div className="card skeleton page-skeleton" style={{ '--skeleton-height': `${skeletonHeight}px` } as CSSProperties} />}
       {!isLoading && error != null && (
         <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>
       )}
