@@ -5,7 +5,7 @@ import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
   AGENT_TABLE_MIN_WIDTH, AGENT_BAR_MIN_WIDTH, AGENT_EVAL_CARD_MIN_WIDTH,
-  SPARKLINE_WIDTH, SPARKLINE_HEIGHT,
+  SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
 } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { BarIndicator } from './BarIndicator.js';
@@ -297,12 +297,12 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
               <div className="flex-center mb-1 gap-2">
                 <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
                 <span className="mono-xs font-semibold text-right score-label-width" style={{ color: barColor }}>
-                  {m.avg.toFixed(2)}
+                  {m.avg.toFixed(SCORE_CHIP_PRECISION)}
                 </span>
               </div>
               {/* Min/max range + count */}
               <div className="mono text-muted flex-wrap justify-between text-2xs">
-                <span>{m.min.toFixed(2)}\u2013{m.max.toFixed(2)}</span>
+                <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}\u2013{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
                 <span>n={m.count}</span>
               </div>
             </div>

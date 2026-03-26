@@ -1,6 +1,7 @@
 import { scoreColor, agentColor } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -72,7 +73,7 @@ interface TurnBlockProps {
 
 function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
   const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(2)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
   return (
     <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
       {/* Main block */}
@@ -269,7 +270,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
             <g
               key={`handoff-${i}`}
               role="img"
-              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(2)}`}
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
             >
               {/* Connecting line */}
               <line
