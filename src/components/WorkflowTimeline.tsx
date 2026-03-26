@@ -133,7 +133,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
   const turnX = (turnIndex: number): number =>
     LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
 
-  // Y center of a lane (for handoff markers)
   const laneY = (laneIndex: number): number =>
     HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
 

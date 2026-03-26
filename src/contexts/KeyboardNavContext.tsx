@@ -124,7 +124,6 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Check for single-key match
       const single = shortcutsRef.current.find(s => s.key === key);
       if (single) {
         e.preventDefault();
@@ -132,7 +131,6 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Check if this could be the start of a combo
       const hasCombo = shortcutsRef.current.some(s => s.key.startsWith(`${key} `));
       if (hasCombo) {
         pendingRef.current = key;
