@@ -57,15 +57,21 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       ? relevances.reduce((a, b) => a + b, 0) / relevances.length
       : null;
 
-    const agentSpans = spans.filter(s => s.attributes?.[ATTR_AGENT_NAME] === agentName);
-    const toolCallCount = agentSpans.filter(s => s.name === 'tool_call').length;
-    let tokenSum = 0, tokenCount = 0;
-    for (const s of agentSpans) {
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    for (const s of spans) {
+      if (s.attributes?.[ATTR_AGENT_NAME] !== agentName) continue;
+      if (s.name === 'tool_call') toolCallCount++;
       const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && isFinite(v)) { tokenSum += v; tokenCount++; }
+      if (typeof v === 'number' && isFinite(v)) {
+        tokenSum += v;
+        tokenCount++;
+      }
+      durationMs += s.durationMs ?? 0;
     }
     const totalTokens = tokenCount > 0 ? tokenSum : null;
-    const durationMs = agentSpans.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
 
     nodes.push({
       id: agentName,
