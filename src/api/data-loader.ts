@@ -53,8 +53,9 @@ export async function loadEvaluationsByMetric(
   const grouped = new Map<string, EvaluationResult[]>();
   for (const ev of evals) {
     const name = ev.evaluationName;
-    if (!grouped.has(name)) grouped.set(name, []);
-    grouped.get(name)!.push(ev);
+    let group = grouped.get(name);
+    if (!group) grouped.set(name, group = []);
+    group.push(ev);
   }
   return grouped;
 }
