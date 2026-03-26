@@ -7,9 +7,7 @@ import type { TriggeredAlert } from '../types.js';
 
 afterEach(cleanup);
 
-// ---------------------------------------------------------------------------
 // ScoreBadge tooltip (Feature 3)
-// ---------------------------------------------------------------------------
 
 describe('ScoreBadge tooltip', () => {
   it('renders tooltip content when tooltip props provided', () => {
@@ -54,9 +52,7 @@ describe('ScoreBadge tooltip', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // ChainOfThoughtPanel (Feature 2)
-// ---------------------------------------------------------------------------
 
 describe('ChainOfThoughtPanel', () => {
   it('renders explanation in details element', () => {
@@ -85,9 +81,7 @@ describe('ChainOfThoughtPanel', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // AlertList compound alerts (Feature 4)
-// ---------------------------------------------------------------------------
 
 describe('AlertList compound alerts', () => {
   function makeAlerts(): (TriggeredAlert & { metricName: string })[] {
@@ -155,9 +149,7 @@ describe('AlertList compound alerts', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // EvaluationDetailPage (Feature 2) - basic render with mocked hook
-// ---------------------------------------------------------------------------
 
 vi.mock('../hooks/useTraceEvaluations.js', () => ({
   useTraceEvaluations: vi.fn(),

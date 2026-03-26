@@ -9,9 +9,7 @@ import type { CompositeQualityIndex, CorrelationFeature } from '../types.js';
 
 afterEach(cleanup);
 
-// ---------------------------------------------------------------------------
 // ScoreBadge (F1)
-// ---------------------------------------------------------------------------
 
 describe('ScoreBadge', () => {
   it('renders null score as N/A with aria-label', () => {
@@ -45,9 +43,7 @@ describe('ScoreBadge', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // CQIHero (F2)
-// ---------------------------------------------------------------------------
 
 function makeCQI(overrides: Partial<CompositeQualityIndex> = {}): CompositeQualityIndex {
   return {
@@ -94,9 +90,7 @@ describe('CQIHero', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // EvaluationTable (F6)
-// ---------------------------------------------------------------------------
 
 function makeEvalRows(): EvalRow[] {
   return [
@@ -192,9 +186,7 @@ describe('EvaluationTable', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // CorrelationHeatmap (F5)
-// ---------------------------------------------------------------------------
 
 function makeCorrelations(): { correlations: CorrelationFeature[]; metrics: string[] } {
   const metrics = ['relevance', 'coherence', 'hallucination'];
@@ -275,9 +267,7 @@ describe('CorrelationHeatmap', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // KeyboardNavContext — regression tests for infinite re-render fix
-// ---------------------------------------------------------------------------
 
 function ShortcutConsumer({ shortcutKey, desc }: { shortcutKey: string; desc: string }) {
   const action = vi.fn();
