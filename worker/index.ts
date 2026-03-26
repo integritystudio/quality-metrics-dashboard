@@ -23,6 +23,9 @@ const Http = {
 const VALID_PERIOD_KEYS = ['24h', '7d', '30d'] as const;
 const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
 
+const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
+const ERR_INVALID_SORT_BY = 'Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.';
+
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
 function isValidId(id: string | undefined): id is string {
@@ -284,6 +287,9 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '50', 10) || 50, 1), 200);
   const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
   const sortBy = c.req.query('sortBy') ?? 'timestamp_desc';
+  if (!VALID_SORT_BY.includes(sortBy as typeof VALID_SORT_BY[number])) {
+    return c.json({ error: ERR_INVALID_SORT_BY }, Http.BadRequest);
+  }
   const scoreLabel = c.req.query('scoreLabel');
 
   const data = await c.env.DASHBOARD.get(`metric:evaluations:${name}:${period}`, 'json') as
