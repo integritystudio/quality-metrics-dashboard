@@ -1,3 +1,14 @@
+690d5d9 2026-03-26 refactor(tests): remove standalone label comments from dr13-coverage
+  src/__tests__/dr13-coverage.test.tsx
+
+83a05a8 2026-03-26 refactor(heatmap): extract display:grid and aspectRatio to CSS class
+  src/theme.css
+
+a7dad5d 2026-03-26 chore: regenerate repomix docs after Round 10 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 dfe7a15 2026-03-26 refactor(judge-evaluations): remove section-separator divider comments
   scripts/judge-evaluations.ts
 
@@ -316,15 +327,3 @@ b265898 2026-03-26 refactor(components): extract ConfidencePanel grid inline sty
 
 1dbf84c 2026-03-26 refactor(sync-to-kv): replace magic millisecond literals with TIME_MS constants
   scripts/sync-to-kv.ts
-
-f89622f 2026-03-26 refactor(sync-to-kv): remove dead dry-run loop body
-  scripts/sync-to-kv.ts
-
-2cdb0d1 2026-03-26 refactor(sync-to-kv): import PERIOD_MS and ROLES from constants, remove local duplicates
-  scripts/sync-to-kv.ts
-
-d7018ed 2026-03-26 refactor(metrics,scripts): simplify dynamics assignment and remove dead code in judge script
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  scripts/judge-evaluations.ts
