@@ -28,12 +28,14 @@ function parentDistStub(): Plugin {
   };
 }
 
-export default defineConfig(({ command }) => {
-  // Load .env.test for test environment
-  const env = command === 'serve' ? {} : loadEnv('test', process.cwd(), 'VITE_');
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
 
   return {
     base: '/',
+    define: command === 'build' ? Object.fromEntries(
+      Object.entries(env).map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)])
+    ) : {},
     plugins: [
       react(),
       ...(process.env.VITEST ? [parentDistStub()] : []),
