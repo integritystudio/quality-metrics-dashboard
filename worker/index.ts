@@ -39,6 +39,8 @@ const ERR_INVALID_ROLE = 'Invalid role. Must be executive, operator, or auditor.
 
 const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 const ERR_INVALID_INPUT_KEY = 'Invalid inputKey. Must be traceId or sessionId.';
+const ERR_INVALID_USER_ID = 'Invalid userId';
+const ERR_INVALID_USER_OR_ROLE_ID = 'Invalid userId or roleId';
 
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
@@ -596,7 +598,7 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.admin')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
   const userId = c.req.param('userId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: 'Invalid userId' }, Http.BadRequest);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
 
   const body: unknown = await c.req.json().catch(() => null);
   const result = AssignRoleRequestSchema.safeParse(body);
@@ -616,7 +618,7 @@ app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
 
   const userId = c.req.param('userId');
   const roleId = c.req.param('roleId');
-  if (!UUID_PATTERN.test(userId) || !UUID_PATTERN.test(roleId)) return c.json({ error: 'Invalid ID' }, Http.BadRequest);
+  if (!UUID_PATTERN.test(userId) || !UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_USER_OR_ROLE_ID }, Http.BadRequest);
 
   const res = await fetch(
     `${c.env.SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${encodeURIComponent(userId)}&role_id=eq.${encodeURIComponent(roleId)}`,
