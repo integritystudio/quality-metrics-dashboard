@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
 import { SplitPane } from '../components/SplitPane.js';
 import { MetricCompare } from '../components/MetricCompare.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
-import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
 import type { CorrelationFeature, Period } from '../types.js';
 
 interface CorrelationsResponse {
@@ -14,16 +14,11 @@ interface CorrelationsResponse {
 }
 
 export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
-  const { data, isLoading, error } = useQuery<CorrelationsResponse>({
-    queryKey: ['correlations', period],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/correlations?period=${period}`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
-    },
-    staleTime: STALE_TIME.AGGREGATE,
-    retry: QUERY_RETRY_COUNT,
-  });
+  const { data, isLoading, error } = useApiQuery<CorrelationsResponse>(
+    ['correlations', period],
+    () => `${API_BASE}/api/correlations?period=${period}`,
+    { staleTime: STALE_TIME.AGGREGATE },
+  );
 
   const [leftMetric, setLeftMetric] = useState<string | undefined>();
   const [rightMetric, setRightMetric] = useState<string | undefined>();
