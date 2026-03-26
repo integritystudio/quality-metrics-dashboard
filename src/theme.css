@@ -837,6 +837,15 @@ details[open] > .cot-summary::before {
 .span-status-icon[data-error] {
   color: var(--status-critical);
 }
+.cqi-value {
+  font-size: var(--font-size-3xl);
+  line-height: 1.2;
+}
+.cqi-segment-bar {
+  height: var(--space-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
 
 /* Compact metric card used in agent eval summary and similar inline panels */
 .metric-card-compact {
@@ -1172,6 +1181,7 @@ details[open] > .cot-summary::before {
 .contents { display: contents; }
 
 /* Opacity */
+.opacity-30 { opacity: 0.3; }
 .opacity-50 { opacity: 0.5; }
 
 /* List */

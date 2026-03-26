@@ -20,25 +20,14 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
         Composite Quality Index
       </div>
       <div
-        className="mono font-bold"
-        style={{
-          fontSize: 'var(--font-size-3xl)',
-          color: overallColor,
-          lineHeight: 1.2,
-        }}
+        className="mono font-bold cqi-value"
+        style={{ color: overallColor }}
       >
         {displayValue}
       </div>
 
       {cqi.contributions.length > 0 && (
-        <div
-          className="d-flex mt-4"
-          style={{
-            height: 'var(--space-2)',
-            borderRadius: 'var(--radius-sm)',
-            overflow: 'hidden',
-          }}
-        >
+        <div className="d-flex mt-4 cqi-segment-bar">
           {cqi.contributions.map((c) => (
             <div
               key={c.metric}
