@@ -1130,6 +1130,7 @@ details[open] > .cot-summary::before {
 
 /* Button reset */
 .btn-reset { background: none; border: none; padding: 0; }
+.btn-xs { border: 1px solid var(--border); padding: var(--space-1-5) var(--space-3); border-radius: var(--radius); }
 
 /* Expand chevron */
 .expand-chevron {
