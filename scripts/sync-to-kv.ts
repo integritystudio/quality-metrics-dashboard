@@ -948,7 +948,7 @@ async function main(): Promise<void> {
     const windowStart = new Date(now.getTime() - ms);
     const window = { startDate: windowStart.toISOString(), endDate: now.toISOString() };
     const reports = computeRollingDegradationSignals(metricBuckets, metricNames, degradationState, window);
-    // Update breach counts from this period's reports (latest period wins)
+    // latest period wins
     for (const r of reports) {
       degradationState.breaches[r.metricName] = r.signal.consecutiveBreaches;
     }
