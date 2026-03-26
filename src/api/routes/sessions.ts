@@ -258,7 +258,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
       }
-      incrementCount(logBySeverity, (l as { severity?: string }).severity ?? 'UNKNOWN');
+      incrementCount(logBySeverity, (l as { severity?: string }).severity ?? 'unknown');
     }
     const timespan = tsMin < Infinity ? {
       start: new Date(tsMin).toISOString(),
