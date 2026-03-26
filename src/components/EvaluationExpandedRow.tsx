@@ -54,7 +54,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
     <div className="eval-expanded-content">
       {row.explanation && (
         <SectionBlock label="Explanation">
-          <div className="text-xs text-primary" style={{ lineHeight: 1.5 }}>
+          <div className="text-xs text-primary leading-normal">
             {row.explanation}
           </div>
         </SectionBlock>
@@ -94,7 +94,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
 
       {/* back-link inline — uses mb-0 to reset default margin */}
       {(row.traceId || row.sessionId) && (
-        <div className="d-flex gap-4 mt-3 border-t" style={{ paddingTop: 'var(--space-3)' }}>
+        <div className="d-flex gap-4 mt-3 border-t pt-3">
           {row.traceId && (
             <Link href={routes.evaluationDetail(row.traceId)} className="back-link inline-flex-center mb-0">
               View full evaluation detail &rarr;
