@@ -1,12 +1,10 @@
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
 import { PageShell } from '../components/PageShell.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import { formatPercent } from '../lib/quality-utils.js';
+import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
 
 const PERCENT_MULTIPLIER = 100;
-
-const byValueDesc = ([, a]: [string, number], [, b]: [string, number]) => b - a;
 
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
   return 'strategy' in g && !('pair' in g);

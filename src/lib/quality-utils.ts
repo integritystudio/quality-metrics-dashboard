@@ -67,6 +67,9 @@ export function plural(count: number, singular: string, suffix = 's'): string {
   return `${count} ${singular}${count !== 1 ? suffix : ''}`;
 }
 
+/** Descending comparator for `Object.entries()` result tuples sorted by numeric value. */
+export const byValueDesc = ([, a]: [string, number], [, b]: [string, number]): number => b - a;
+
 export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
   excellent: '#26d97f',
   good: '#34d399',

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
+import { scoreColor, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
@@ -121,7 +121,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
             const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
             const errColor = errorRateColor(agent.errorRate);
             const invPct = (agent.invocations / maxInvocations) * 100;
-            const topSource = Object.entries(agent.sourceTypes).sort((a, b) => b[1] - a[1])[0]?.[0];
+            const topSource = Object.entries(agent.sourceTypes).sort(byValueDesc)[0]?.[0];
             const isExpanded = expanded === agent.agentName;
             const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
 
