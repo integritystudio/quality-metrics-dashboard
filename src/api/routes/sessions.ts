@@ -196,7 +196,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     }
     const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
     for (const [name, durations] of Object.entries(hookDurations)) {
-      const sorted = durations.sort((a, b) => a - b);
+      const sorted = [...durations].sort((a, b) => a - b);
       hookLatency[name] = {
         count: sorted.length,
         avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
