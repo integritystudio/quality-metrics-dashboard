@@ -44,7 +44,6 @@ import { computeDashboardSummary, computeRoleView } from '../../../dist/lib/qual
 import { computeCQI } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
 
-// Helpers
 
 function makeMockEval(name = 'relevance', score = 0.85, timestamp = '2026-01-15T12:00:00.000Z') {
   return {
