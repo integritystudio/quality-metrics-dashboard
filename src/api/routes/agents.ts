@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, toDateOnly } from '../api-constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, toDateOnly, isValidParam } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
@@ -160,7 +160,7 @@ agentRoutes.get('/agents', async (c) => {
  */
 agentRoutes.get('/agents/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
+  if (!isValidParam(sessionId, PARAM_ID_RE)) {
     return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
   }
 

@@ -66,6 +66,11 @@ export const HOOK_NAME = {
   CODE_STRUCTURE: 'code-structure',
 } as const;
 
+/** Returns true if a route path parameter is present and matches the given regex. */
+export function isValidParam(value: string | undefined, re: RegExp): boolean {
+  return !!value && re.test(value);
+}
+
 /** Convert a Date or ISO timestamp string to a YYYY-MM-DD date string. */
 export function toDateOnly(d: Date): string;
 export function toDateOnly(d: string): string;

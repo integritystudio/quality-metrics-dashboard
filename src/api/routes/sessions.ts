@@ -16,6 +16,7 @@ import {
   type SafeLogEntry,
   OTEL_STATUS_ERROR_CODE,
   PARAM_ID_RE,
+  isValidParam,
   PERCENT_BASE,
   LATENCY_DISPLAY_PRECISION,
   spanAttr,
@@ -96,7 +97,7 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
  */
 sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
+  if (!isValidParam(sessionId, PARAM_ID_RE)) {
     return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
   }
   const startDate = c.req.query('startDate');
