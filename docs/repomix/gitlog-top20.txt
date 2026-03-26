@@ -1,3 +1,12 @@
+16924ea 2026-03-26 refactor(worker): extract VALID_PERIOD_KEYS and ERR_INVALID_PERIOD constants to consolidate 10 repeated inline arrays
+  worker/index.ts
+
+5218b9b 2026-03-26 chore: regenerate repomix docs after round 3 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 90d3c49 2026-03-26 refactor(worker): replace magic HTTP status codes with Http constants object
   worker/index.ts
 
@@ -336,10 +345,4 @@ beae4b7 2026-03-20 fix(auth): P3 hardening — token guard, CORS, comments, auth
   worker/index.ts
 
 6ae89a6 2026-03-20 fix(auth): return 401 when public.users row not found (AUTH-6)
-  worker/index.ts
-
-cfdbefa 2026-03-20 docs: update auth roadmap with PII leakage mitigation and type clarifications
-  docs/roadmap/users.md
-
-6c4b10a 2026-03-20 fix(auth): stop /api/me from leaking internal user IDs
   worker/index.ts

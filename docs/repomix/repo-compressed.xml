@@ -2858,16 +2858,6 @@ export function supabasePost(
 ): void
 
 ================
-File: src/pages/RoutingTelemetryPage.tsx
-================
-import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
-import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { Period } from '../types.js';
-⋮----
-function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
-
-================
 File: src/types/workflow-graph.ts
 ================
 export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
@@ -2974,6 +2964,17 @@ export type KvEntryValue = z.infer<typeof kvEntryValueSchema>;
 export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 ⋮----
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
+
+================
+File: src/pages/RoutingTelemetryPage.tsx
+================
+import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
+import { PageShell } from '../components/PageShell.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { Period } from '../types.js';
+⋮----
+const byValueDesc = ([, a]: [string, number], [, b]: [string, number])
+function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
 
 ================
 File: scripts/derive-evaluations.ts
