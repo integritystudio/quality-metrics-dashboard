@@ -1,0 +1,31 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+# Load Doppler cache (function no-ops if cache already loaded)
+export DOTFILES_DIR="${DOTFILES_DIR:-$HOME/dotfiles}"
+source "$DOTFILES_DIR/shell/functions.sh"
+source "$DOTFILES_DIR/shell/doppler-secrets.sh"
+
+load_doppler_cache integrity-studio dev
+
+AUTH0_CLI_DOMAIN="$(secret AUTH0_CLI_DOMAIN)"
+AUTH0_CLI_SECRET="$(secret AUTH0_CLI_SECRET)"
+AUTH0_CLI_ID="$(secret AUTH0_CLI_ID)"
+
+# These are values for e2e tests, not production environment
+export AUTH0_DOMAIN="$AUTH0_CLI_DOMAIN"
+export AUTH0_CLIENT_ID="$AUTH0_CLI_ID"
+export AUTH0_CLIENT_SECRET="$AUTH0_CLI_SECRET"
+export AUTH0_ALLOW_DELETE=true
+# Keyword replacements for action secrets in tenant.yaml (##VAR## placeholders)
+export SUPABASE_URL="$(secret SUPABASE_URL)"
+export SUPABASE_SERVICE_ROLE_KEY="$(secret SUPABASE_SERVICE_ROLE_KEY)"
+a0deploy import --input_file=local/tenant.yaml
+
+# Write frontend .env from Doppler
+cat > .env <<EOF
+VITE_AUTH0_DOMAIN=$(secret VITE_AUTH0_DOMAIN)
+VITE_AUTH0_CLIENT_ID=$(secret VITE_AUTH0_CLIENT_ID)
+VITE_AUTH0_AUDIENCE=$(secret VITE_AUTH0_AUDIENCE)
+EOF
+echo ".env written from Doppler"

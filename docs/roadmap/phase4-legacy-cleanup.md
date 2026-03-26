@@ -35,9 +35,9 @@ All TypeScript source files, Zod schemas (`src/lib/validation/auth-schemas.ts`),
 
 ### ID alignment finding
 
-`worker/index.ts:131` queries `public.users` with `id=eq.${authUserId}`, where `authUserId` comes from the Supabase `auth.users` JWT. This assumes `public.users.id = auth.users.id` for all rows.
+After Auth0 migration, `worker/index.ts` queries `public.users` by `auth0_id=eq.${auth0Id}`, where `auth0Id` is the `sub` claim from the Auth0 JWT. `authUserId` is now the Auth0 subject (`auth0|...`) and `appUserId` is the Supabase UUID returned from that lookup — they are **always distinct** post-migration.
 
-`AppSession` (`src/types/auth.ts`) tracks `authUserId` and `appUserId` as separate fields. In the current worker flow they will be equal if IDs are aligned — but the schema supports them diverging. Verify before removing the distinction.
+`AppSession` (`src/types/auth.ts`) correctly tracks both as separate fields. The distinction is load-bearing and must be preserved.
 
 ---
 
@@ -209,20 +209,9 @@ Should return zero rows.
 
 ## Optional: AppSession Code Simplification
 
-This is safe to do **only after** Task 1 confirms full ID alignment.
+> **Note (post-Auth0 migration)**: The original premise of this section — that `authUserId` and `appUserId` could be the same value — no longer applies. `authUserId` is now the Auth0 subject (`auth0|...`) and `appUserId` is the Supabase UUID from `public.users`. They are always distinct. **Do not collapse these fields.**
 
-Currently `AppSession` (`src/types/auth.ts`) carries both `authUserId` and `appUserId`. In `worker/index.ts`, the middleware sets both fields — but if `public.users.id` is always equal to `auth.users.id`, `appUserId` is redundant.
-
-The worker already queries `public.users` with `id=eq.${authUserId}` and then sets `appUserId = userResult.data.id`. They are the same value.
-
-**If you choose to simplify:**
-
-1. Remove `appUserId` from `AppSession` in `src/types/auth.ts`.
-2. In `worker/index.ts`, replace all `appUserId` references with `authUserId`. The `user_roles` query at line 156 uses `user_id=eq.${appUserId}` — update to `authUserId`.
-3. Remove the `appUserId` variable from the middleware closure.
-4. Remove `appUserId` from the `c.set('session', ...)` call at line 189.
-
-**Do not do this** if the verification in Task 1 returns any misaligned rows. In that case, keep `appUserId` as a distinct field that stores the actual `public.users.id` value retrieved from the DB.
+The `user_roles` query uses `user_id=eq.${appUserId}` (the Supabase UUID), and activity logging uses `appUserId` as the FK into `user_activity`. Both must continue using `appUserId`, not `authUserId`.
 
 ---
 

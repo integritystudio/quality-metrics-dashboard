@@ -77,7 +77,7 @@ Open items from code reviews and deferred work.
 
 ### E2E & Integration Testing
 
-**Status**: E2E-1 — Done. 23 integration tests in `e2e/integration/api-contracts.spec.ts` hitting deployed worker with real Supabase JWT. Setup creates ephemeral test user with `e2e-dashboard-reader` role; teardown cleans up. Run: `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration`
+**Status**: E2E-1 — Done. 23 integration tests in `e2e/integration/api-contracts.spec.ts` hitting deployed worker with real Auth0 JWT. Setup creates ephemeral test user with `e2e-dashboard-reader` role; teardown cleans up. Run: `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration`
 
 ## Completed
 

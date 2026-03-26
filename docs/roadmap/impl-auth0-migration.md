@@ -2,17 +2,18 @@
 
 **Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
 **Date**: 2026-03-26
+**Status**: Code implementation complete (2026-03-26). Manual Auth0 tenant setup and deployment remain.
 **Parent**: [`docs/roadmap/users.md`](users.md) (Phase 4 — Auth0 canonical decision)
 
 ---
 
 ## Overview
 
-The current stack authenticates via Supabase Auth (JWT verification through `/auth/v1/user`). This migration replaces Supabase Auth with Auth0 as the identity provider while keeping Supabase as the application database. Auth0 issues JWTs; the worker verifies them via JWKS; `public.users` is the app-level user record keyed by `auth0_id`.
+Supabase Auth (JWT verification via `/auth/v1/user`) has been replaced with Auth0 as the identity provider. Supabase remains the application database. Auth0 issues JWTs; the worker verifies them via JWKS; `public.users` is the app-level user record keyed by `auth0_id`.
 
 **What stays**: Supabase DB, `public.users`, `user_roles`, `roles`, `user_activity`, all KV reads, all route handlers, all permission logic.
 
-**What changes**: JWT issuance/verification, session management on the frontend, user provisioning path, activity logging auth.
+**What changed**: JWT issuance/verification, session management on the frontend, user provisioning path, activity logging auth.
 
 ---
 
@@ -22,21 +23,22 @@ The current stack authenticates via Supabase Auth (JWT verification through `/au
 |------|---------|--------|
 | Auth0 tenant setup | Auth0 dashboard | [ ] |
 | Auth0 Post-Login Action | Auth0 dashboard | [ ] |
-| Worker: JWKS JWT verification | `worker/index.ts` | [ ] |
-| Worker: user lookup by `auth0_id` | `worker/index.ts` | [ ] |
-| Worker: activity logging via service role | `worker/index.ts` | [ ] |
-| Worker: remove `SUPABASE_ANON_KEY` dependency | `worker/index.ts`, `wrangler.toml` | [ ] |
-| Frontend: replace `supabase.ts` with Auth0 SDK | `src/lib/auth0.ts` (new), `src/lib/supabase.ts` (delete) | [ ] |
-| Frontend: update `AuthContext.tsx` | `src/contexts/AuthContext.tsx` | [ ] |
-| Frontend: update `LoginPage.tsx` | `src/pages/LoginPage.tsx` | [ ] |
-| Schemas: replace `AuthUserResponseSchema` | `src/lib/validation/auth-schemas.ts` | [ ] |
-| Schemas: remove Supabase-specific schemas | `src/lib/validation/auth-schemas.ts` | [ ] |
-| DB: RLS policy on `user_activity` | Supabase | [ ] |
-| DB: existing user `auth0_id` backfill | Supabase | [ ] |
-| Env vars: add Auth0, remove Supabase anon key | `wrangler.toml`, `.env` | [ ] |
-| Tests: update worker auth mocks | `worker/__tests__/` | [ ] |
+| Worker: JWKS JWT verification | `worker/index.ts` | ✅ Done (2026-03-26) |
+| Worker: user lookup by `auth0_id` | `worker/index.ts` | ✅ Done (2026-03-26) |
+| Worker: activity logging via service role | `worker/index.ts` | ✅ Done (2026-03-26) |
+| Worker: remove `SUPABASE_ANON_KEY` dependency | `worker/index.ts`, `wrangler.toml` | ✅ Done (2026-03-26) |
+| Frontend: replace `supabase.ts` with Auth0 SDK | `src/lib/auth0.ts` (new), `src/lib/supabase.ts` (delete later) | ✅ Done (2026-03-26) |
+| Frontend: update `AuthContext.tsx` | `src/contexts/AuthContext.tsx` | ✅ Done (2026-03-26) |
+| Frontend: update `LoginPage.tsx` | `src/pages/LoginPage.tsx` | ✅ Done (2026-03-26) |
+| Schemas: replace `AuthUserResponseSchema` | `src/lib/validation/auth-schemas.ts` | ✅ Done (2026-03-26) |
+| Schemas: remove Supabase-specific schemas | `src/lib/validation/auth-schemas.ts` | ✅ Done (2026-03-26) |
+| DB: RLS policy on `user_activity` | Supabase | ✅ Done (2026-03-26) |
+| DB: existing user `auth0_id` backfill | Supabase | Handled by Post-Login Action on first login |
+| Env vars: add Auth0, remove Supabase anon key | `wrangler.toml`, `.env` | ✅ Done (2026-03-26) |
+| Tests: update worker auth mocks | `worker/__tests__/` | ✅ Done (2026-03-26) |
+| DB: fix permissions mismatch (`dashboard.*` format) | Supabase `public.roles` | ✅ Done (2026-03-26) |
 
-**Execution order**: Auth0 setup → DB changes → worker → frontend → tests.
+**Remaining**: Auth0 tenant setup (manual) → Post-Login Action deploy → provision worker secrets → set frontend `.env` → deploy both workers → delete `src/lib/supabase.ts`.
 
 ---
 
@@ -164,7 +166,7 @@ exports.onExecutePostLogin = async (event, api) => {
 
 ---
 
-## 3. Worker Changes (`worker/index.ts`)
+## 3. Worker Changes (`worker/index.ts`) ✅
 
 ### 3a. Dependencies
 
@@ -280,7 +282,7 @@ Remove all `c.get('jwt')` arguments passed to `logActivity` calls throughout the
 
 ---
 
-## 4. Frontend Changes
+## 4. Frontend Changes ✅
 
 ### 4a. Install Auth0 React SDK
 
@@ -421,7 +423,7 @@ These call `getAccessToken()` from a custom hook or directly from `AuthContext`.
 
 ---
 
-## 5. Validation Schema Changes (`src/lib/validation/auth-schemas.ts`)
+## 5. Validation Schema Changes (`src/lib/validation/auth-schemas.ts`) ✅
 
 ### Replace `AuthUserResponseSchema`
 
@@ -454,7 +456,7 @@ The schema selects `id`, `email`, `created_at`, `updated_at`. The worker now pas
 
 ---
 
-## 6. Database Changes
+## 6. Database Changes ✅
 
 ### 6a. Drop RLS policy on `user_activity`
 
@@ -487,7 +489,7 @@ where auth0_id = id::text;  -- still has UUID stand-in
 
 ---
 
-## 7. Environment Variables
+## 7. Environment Variables (partial — worker done ✅, frontend pending)
 
 ### Worker (`wrangler.toml` + secrets)
 
@@ -520,7 +522,7 @@ VITE_AUTH0_AUDIENCE=https://api.integritystudio.dev
 
 ---
 
-## 8. Test Updates (`worker/__tests__/`)
+## 8. Test Updates (`worker/__tests__/`) ✅
 
 The worker tests mock Supabase auth responses. Replace with Auth0 JWT mocks:
 
@@ -532,33 +534,33 @@ The test-token bypass (`ALLOW_TEST_BYPASS=true` + `jwt === 'test-token'`) in `wo
 
 ---
 
-## 9. Permissions Model Note
+## 9. Permissions Model — Resolved ✅
 
-The current `roles.permissions` values are simple strings (`"read"`, `"write"`, `"all"`). The worker's `VALID_PERMISSIONS` set expects `dashboard.*` strings. These are misaligned — the worker currently grants no `allowedViews` for any user because `"read"` ≠ `"dashboard.read"`.
+**Fixed 2026-03-26.** `roles.permissions` values were simple strings (`"read"`, `"write"`, `"all"`) misaligned with the worker's `VALID_PERMISSIONS` set (`dashboard.*` format). Option A was applied — permissions updated directly in `public.roles`:
 
-This predates the Auth0 migration decision and needs resolution independently:
-
-**Option A**: Update `roles.permissions` values to `dashboard.*` format:
 ```sql
+-- Applied:
 update public.roles set permissions = '["dashboard.read"]'::jsonb where name = 'read';
-update public.roles set permissions = '["dashboard.read","dashboard.traces.read","dashboard.sessions.read","dashboard.agents.read","dashboard.pipeline.read","dashboard.compliance.read","dashboard.admin"]'::jsonb where name = 'admin';
-update public.roles set permissions = '["dashboard.read","dashboard.executive","dashboard.operator","dashboard.auditor","dashboard.traces.read","dashboard.sessions.read","dashboard.agents.read","dashboard.pipeline.read","dashboard.compliance.read","dashboard.admin"]'::jsonb where name = 'owner';
+update public.roles set permissions = '["dashboard.read","dashboard.traces.read",...]'::jsonb where name = 'admin';
+update public.roles set permissions = '["dashboard.read","dashboard.executive",...]'::jsonb where name = 'owner';
 ```
 
-**Option B**: Enrich permissions in the Post-Login Action by mapping role names to `dashboard.*` permission sets (avoids DB schema change).
-
-Option A is simpler and keeps permissions in the DB as the source of truth.
+Permissions are now stored in the DB as the source of truth and the Post-Login Action reads them at login time. No mapping in the Action is needed.
 
 ---
 
 ## Rollout Sequence
 
-1. Auth0 tenant setup + Post-Login Action (section 1–2)
-2. Resolve permissions model mismatch (section 9, Option A)
-3. DB changes: drop RLS policy on `user_activity` (section 6a)
-4. Worker changes behind feature flag or on a staging worker name (section 3)
-5. Frontend changes (section 4–5)
-6. Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`)
-7. Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging
-8. Monitor Supabase logs for column-not-found or auth errors for 48h
-9. After all users have logged in via Auth0: verify `auth0_id` backfill complete (section 6b)
+- ✅ Resolve permissions model mismatch (section 9, Option A)
+- ✅ DB changes: drop RLS policy on `user_activity` (section 6a)
+- ✅ Worker changes: JWKS verification, `auth0_id` lookup, service-role activity logging (section 3)
+- ✅ Frontend changes: Auth0 SDK, `AuthContext`, `LoginPage`, `App.tsx` (section 4–5)
+- ✅ Tests: worker auth mocks updated, `auth-context-refresh` rewritten (section 8)
+- [ ] Auth0 tenant setup + Post-Login Action (section 1–2) — **manual, required before go-live**
+- [ ] Provision worker secrets: `wrangler secret put SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY` for both workers
+- [ ] Set frontend `.env`: `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`
+- [ ] Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`)
+- [ ] Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging
+- [ ] Monitor Supabase logs for auth errors for 48h
+- [ ] After all users log in via Auth0: verify `auth0_id` backfill complete (section 6b)
+- [ ] Delete `src/lib/supabase.ts` and remaining dead code (see `BACKLOG.md` AUTH0-CLEANUP)

@@ -2,8 +2,8 @@
 
 As of 2026-03-25, **Phase 1, Phase 2, Phase 3, and Phase 4 (partial) are implemented**:
 
-### Phase 1 (v3.0.4)
-- ✅ Supabase Auth for sign-in with JWT verification
+### Phase 1 (v3.0.4) — superseded by Auth0 migration (2026-03-26)
+- ✅ ~~Supabase Auth for sign-in with JWT verification~~ → replaced by Auth0 JWKS verification
 - ✅ Provisioning/resolving `public.users` on first login
 - ✅ Role/permission loading from `user_roles → roles`
 - ✅ Protected routes with permission guards
@@ -42,15 +42,17 @@ As of 2026-03-25, **Phase 1, Phase 2, Phase 3, and Phase 4 (partial) are impleme
 
 ## Recommended approach (v3.0.1+)
 
-Add **Supabase Auth for sign-in**, but keep authorization grounded in your existing app schema:
+> **Superseded (2026-03-26)**: Auth0 is the canonical identity provider. See [`impl-auth0-migration.md`](impl-auth0-migration.md) for current architecture. The Supabase Auth approach below is retained as historical context only.
 
-* authenticate with `auth.users`
-* provision/resolve the matching `public.users` row
-* load roles from `user_roles -> roles`
-* gate dashboard/API access by permissions
-* keep Cloudflare KV as the metrics source for now
+~~Add **Supabase Auth for sign-in**, but keep authorization grounded in your existing app schema:~~
 
-That fits the current repo shape: React/Vite frontend, Hono API, Cloudflare Worker backend, and KV-backed read APIs. The app today still exposes role as a request/UI concept, and the worker currently serves public GET routes with no auth enforcement. ([GitHub][1])
+* ~~authenticate with `auth.users`~~
+* ~~provision/resolve the matching `public.users` row~~
+* ~~load roles from `user_roles -> roles`~~
+* ~~gate dashboard/API access by permissions~~
+* ~~keep Cloudflare KV as the metrics source for now~~
+
+~~That fits the current repo shape: React/Vite frontend, Hono API, Cloudflare Worker backend, and KV-backed read APIs. The app today still exposes role as a request/UI concept, and the worker currently serves public GET routes with no auth enforcement. ([GitHub][1])~~
 
 ---
 
@@ -790,21 +792,24 @@ See `git log --oneline` for full implementation sequence and code-review finding
 
 ## Zod Validation Schemas ✅ Complete
 
-Created in Phase 2.1 (commit 8b9898c) to consolidate all auth validation into Zod schemas at `src/lib/validation/auth-schemas.ts`:
+Created in Phase 2.1 (commit 8b9898c) and updated for Auth0 migration (2026-03-26). All auth schemas live at `src/lib/validation/auth-schemas.ts`.
 
-### Completed Schemas
-- ✅ `AuthUserResponseSchema` — Supabase `/auth/v1/user` response (required: `id`; optional: `email`, `email_confirmed_at`, `user_metadata`, etc.)
-- ✅ `PublicUserSchema` — `public.users` table rows (required: `id` uuid, `email` string)
+### Current Schemas
+- ✅ `Auth0JwtPayloadSchema` — Auth0 JWT payload after `jose.jwtVerify()` (required: `sub`, `iss`, `aud`, `iat`, `exp`; optional: `email`, `name`, etc.) — replaced `AuthUserResponseSchema` on Auth0 migration
+- ✅ `PublicUserSchema` — `public.users` table rows (required: `id` uuid, `email` string); worker looks up by `auth0_id`
 - ✅ `UserRoleRowSchema` — `user_roles` joined with `roles` (required: `roles.name` string, `roles.permissions` string[])
-- ✅ `AuthTokenResponseSchema` — Supabase sign-in/sign-up responses (optional: `session`, `user`, `error`)
-- ✅ `LoginRequestSchema` — Frontend login payload (required: `email`, `password`)
-- ✅ `RefreshTokenRequestSchema` — Token refresh payload (required: `refresh_token`)
 - ✅ `MeResponseSchema` — `/api/me` endpoint response (required: `email`, `roles`, `permissions`, `allowedViews`)
+- ✅ `ActivityRequestSchema`, `AdminRoleSchema`, `AdminUserRoleRowSchema`, `AdminUserSchema`, `AssignRoleRequestSchema` — admin/activity route schemas (unchanged)
+
+### Removed (Auth0 migration, 2026-03-26)
+- ~~`AuthUserResponseSchema`~~ — Supabase `/auth/v1/user` response; worker no longer calls this endpoint
+- ~~`AuthTokenResponseSchema`~~ — Supabase sign-in/sign-up response; Auth0 SDK handles token exchange
+- ~~`LoginRequestSchema`~~ — email/password login payload; replaced by Auth0 Universal Login redirect
+- ~~`RefreshTokenRequestSchema`~~ — token refresh payload; Auth0 SDK handles refresh automatically
 
 ### Integration Points
-- **worker/index.ts**: JWT verification (line 85), `public.users` lookup (line 109), `user_roles` validation (line 133), `/api/me` response validation (line 176)
-- **AuthContext.tsx**: Replaces manual `typeof` checks in `fetchAppSession()` with `MeResponseSchema.safeParse()`
-- **Consistency**: Aligns auth validation with existing patterns in `src/api/routes/metrics.ts`, `trends.ts`, `evaluations.ts`
+- **worker/index.ts**: JWKS verification via `jose`, `public.users` lookup by `auth0_id`, `user_roles` validation, `/api/me` response validation
+- **AuthContext.tsx**: `MeResponseSchema.safeParse()` on `/api/me` response
 
 **Result**: Full Zod coverage for auth request/response validation, eliminating manual type assertions and typeof checks.
 

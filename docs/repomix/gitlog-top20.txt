@@ -1,3 +1,24 @@
+6a53313 2026-03-26 feat(auth): migrate frontend and worker auth from Supabase to Auth0
+  worker/index.ts
+
+37f71c0 2026-03-26 feat(auth): migrate worker JWT verification from Supabase to Auth0 JWKS
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  docs/roadmap/users.md
+  package-lock.json
+  worker/index.ts
+
+d132fc6 2026-03-26 fix(style): extract inline styles from workflow components to theme.css classes
+  src/theme.css
+
+4f239b8 2026-03-26 fix(worker): safe JSON casts, Zod error logging, admin roles-fetch failure handling
+  worker/index.ts
+
+e8d28ff 2026-03-26 refactor(dashboard): code review fixes — constants, auth middleware, workflow graph
+  worker/index.ts
+
 3c1273c 2026-03-25 docs(worker): document admin route error handling policy (ADMIN-P4-3)
   worker/index.ts
 
@@ -310,28 +331,4 @@ ea59b38 2026-03-01 refactor(theme): consolidate status color mapping with data-s
 aaf11fa 2026-03-01 refactor(components): DRY consolidation — ScoreChip, EmptyState, ExpandChevron, symbols
   docs/repomix/docs-compressed.xml
   docs/repomix/docs.xml
-  src/theme.css
-
-126a30f 2026-03-01 refactor(styles): migrate inline styles to utility classes (Section B)
-  src/theme.css
-
-b1d390d 2026-03-01 feat(datasets): add --dataset-id flag and DatasetRunRecord writing to judge-evaluations
-  scripts/judge-evaluations.ts
-
-845b780 2026-03-01 chore: add ESLint with TypeScript and React Hooks plugins, fix all lint errors
-  package-lock.json
-  scripts/judge-evaluations.ts
-  scripts/sync-to-kv.ts
-
-3f8f9eb 2026-03-01 test: add integration tests and E2E suite (293 tests) (#1)
-  docs/repomix/docs-compressed.xml
-  docs/repomix/docs.xml
-  package-lock.json
-  scripts/__tests__/judge-evaluations.test.ts
-  scripts/judge-evaluations.ts
-  scripts/sync-to-kv.ts
-  src/theme.css
-
-0a13cbf 2026-02-28 (refactor)   Summary:   - Added 9 gap utility classes (.gap-half through .gap-8) to theme.css using space tokens   - Migrated all 60 inline gap: values across 22 .tsx files   - Consolidated: gap: 1 → 2px (.gap-half), gap: 3 → 4px (.gap-1), gap: 20 → 24px (.gap-6)   - 3 intentional gap: 0 left as-is, test file gap: 0.1 untouched   - 0 remaining non-zero inline gap values in components/pages
-  scripts/judge-evaluations.ts
   src/theme.css

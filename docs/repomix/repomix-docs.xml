@@ -1,306 +1,11 @@
 <repomix><directory_structure>docs/
   roadmap/
+    impl-auth0-migration.md
     impl-g5-multi-agent-visualization.md
     impl-g5-workflow-visualization-update.md
     phase4-legacy-cleanup.md
     README.md
-    users.md</directory_structure><files>This section contains the contents of the repository&apos;s files.<file path="docs/roadmap/impl-g5-multi-agent-visualization.md"># G5: Multi-Agent Workflow Visualization — Implementation Plan
-
-**Version**: 1.1
-**Date**: 2026-02-27
-**Priority**: P3 | **Effort**: High
-**Source**: [known-gaps.md](known-gaps.md) G5, white paper S7.3
-**Competitive bar**: Arize Phoenix auto-flowcharts (June 2025), Langfuse Agent Graphs (GA Nov 2025)
-**Research validated**: 2026-02-27 — cross-platform comparison (Phoenix, Datadog, LangSmith, Langfuse) + library evaluation
-
----
-
-## Design Decision
-
-Build interactive graph and timeline views for multi-agent workflows. Validated against four industry platforms:
-
-| Platform | Visualization | Key pattern |
-|----------|--------------|-------------|
-| **Arize Phoenix** (June 2025) | Auto-flowchart in Agents tab; graph abstracted over spans | Agent/tool/component as logical nodes, not raw spans |
-| **Datadog** (June 2025+) | &quot;Execution flow chart&quot; with embedded metrics per node | Latency + tokens + eval scores inline on each node |
-| **Langfuse** (GA Nov 2025) | Agent Graphs inferred from OTel timing/nesting | No explicit graph metadata required — inferred from spans |
-| **LangSmith** | Span tree (production) + LangGraph Studio (static graph + execution overlay) | Separates static architecture view from dynamic execution trace |
-
-The toolkit has the data layer; the gap is visualization. Langfuse&apos;s inference-from-spans approach is the most robust fallback when explicit `MultiAgentEvaluation` data is sparse.
-
----
-
-## Current State
-
-### Data layer (complete)
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `MultiAgentEvaluation` | `src/lib/quality/quality-multi-agent.ts:69` | Handoff scores, turn-level results, error propagation |
-| `HandoffEvaluation` | `src/lib/quality/quality-multi-agent.ts:32` | Source → target agent, correctTarget, contextPreserved, score |
-| `TurnLevelResult` | `src/lib/quality/quality-multi-agent.ts:51` | Per-turn relevance, task progress, error flag |
-| `computeMultiAgentEvaluation()` | `src/lib/quality/quality-multi-agent.ts:191` | Builds full evaluation from stepScores + agentMap |
-| `computePipelineView()` | `src/lib/quality/quality-visualization.ts:65` | 4-stage funnel: ingested → scored → evaluated → alerted |
-| `computeCoverageHeatmap()` | `src/lib/quality/quality-visualization.ts:183` | Metric × input coverage matrix |
-| `analyzeTrajectory()` | `src/lib/agent-judge/agent-judge-verification.ts:406` | Tool call count, efficiency ratio, redundancy |
-| `verifyToolCall()` | `src/lib/agent-judge/agent-judge-verification.ts:203` | Weighted tool verification (selection 40%, args 30%, result 30%) |
-| `ProceduralJudge` | `src/lib/agent-judge/agent-judge-classes.ts:116` | Stage-based evaluation pipeline |
-| `ReactiveJudge` | `src/lib/agent-judge/agent-judge-classes.ts:235` | Event-driven specialist routing |
-
-### Dashboard infrastructure (partial)
-
-Existing multi-agent components:
-
-| Component | File | Current scope |
-|-----------|------|---------------|
-| `TurnTimeline.tsx` | `dashboard/src/components/` | Timeline of turns — no DAG |
-| `HandoffCard.tsx` | `dashboard/src/components/` | Single handoff display |
-| `SpanTree.tsx` | `dashboard/src/components/` | Nested span tree — not a DAG layout |
-
-Existing API route:
-
-`GET /api/agents/:sessionId` — returns `{ sessionId, spans, evaluation: MultiAgentEvaluation, evaluations, agentMap }`. Already computes the data needed for visualization.
-
-Current dashboard dependencies: `recharts@^3.7`, `d3-scale@^4`, `d3-scale-chromatic@^3` — no graph layout library.
-
-### Not implemented
-
-- DAG visualization (agents as nodes, handoffs as directed edges)
-- Interactive flowchart view (Phoenix-style)
-- Node drill-down to agent-level detail
-- Zoom/pan for complex graphs
-- Single-agent graceful fallback in DAG view
-
----
-
-## Library Decision: RESOLVED
-
-**Decision**: `@xyflow/react` (ReactFlow v12) + ELKjs for layout.
-
-React 19 compatibility confirmed October 2025. dagre is deprecated (2015 codebase). d3-dag is in light maintenance (maintainer recommends ReactFlow for interactive use cases).
-
-| Criterion | @xyflow/react v12 | d3-dag v1.1+ | dagre | ELKjs |
-|-----------|-------------------|-------------|-------|-------|
-| **License** | MIT | Apache 2.0 | MIT | EPL 2.0 |
-| **Bundle size (min+gz)** | ~150KB | ~30KB | ~30KB | ~100KB |
-| **React 19** | Confirmed (Oct 2025) | No React dep | No React dep | No React dep |
-| **Layout** | dagre (deprecated), ELK (plugin), custom | Sugiyama, Coffman-Graham | Sugiyama | Layered, force, orthogonal, stress, tree |
-| **Interactivity** | Full: drag, zoom, pan, select, minimap | None | None | None |
-| **Handles cycles** | Yes | No (DAG-only by definition) | Yes | Yes |
-| **Maintenance** | Active (35.4K stars, release Feb 19 2026) | Light maintenance (1.5K stars) | Deprecated | Active (Eclipse/KIELER, 2.4K stars) |
-
-**Dependencies to add** (lazy-loaded):
-
-```json
-&quot;@xyflow/react&quot;: &quot;^12.0.0&quot;,
-&quot;elkjs&quot;: &quot;^0.9.0&quot;
-```
-
-**Remaining spike** (before Phase 3): Measure bundle size delta with `npx vite-bundle-visualizer` to confirm lazy-loading eliminates impact on other pages. React 19 compat verification is no longer needed.
-
----
-
-## Implementation Plan
-
-### Phase 1: Graph data model
-
-**File**: `dashboard/src/types/workflow-graph.ts` (new)
-
-Named `WorkflowGraph` (not `WorkflowDAG`) because real agent executions are frequently cyclic — retry loops, reflection steps, tool-call-then-verify patterns. Both Langfuse and Datadog explicitly handle cycles.
-
-```typescript
-export type WorkflowShape = &apos;single_agent&apos; | &apos;linear&apos; | &apos;branching&apos; | &apos;cyclic&apos;;
-
-export interface WorkflowNode {
-  id: string;                    // agent name or ID
-  label: string;                 // display name
-  evaluationScore: number | null;
-  toolCallCount: number;
-  totalTokens: number | null;    // token usage per agent (Datadog standard)
-  durationMs: number;
-  turnCount: number;
-  hasError: boolean;
-}
-
-export interface WorkflowEdge {
-  id: string;                    // `${source}-&gt;${target}`
-  source: string;                // source agent id
-  target: string;                // target agent id
-  handoffScore: number;
-  contextPreserved: boolean;
-  label?: string;                // e.g. &quot;score: 0.85&quot;
-}
-
-export interface WorkflowGraph {
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  rootNodeId: string | null;     // first agent
-  workflowShape: WorkflowShape;  // replaces boolean isMultiAgent
-}
-```
-
-Transformer function: `buildWorkflowGraph(evaluation: MultiAgentEvaluation, agentMap: Map&lt;number, string&gt;, spans: Span[]): WorkflowGraph`
-
-Fallback: when `MultiAgentEvaluation` is absent but `gen_ai.agent.*` spans exist, infer the graph from span parent/child relationships and timing (Langfuse pattern).
-
-### Phase 2: API extension
-
-**File**: `dashboard/src/api/routes/agents.ts`
-
-Extend `GET /api/agents/:sessionId` response to include `graph: WorkflowGraph`:
-
-```typescript
-// After existing computation:
-const graph = buildWorkflowGraph(evaluation, agentMap, spans);
-return c.json({ sessionId, spans, evaluation, evaluations, agentMap, graph });
-```
-
-No new routes needed — the existing endpoint already returns all required source data.
-
-### Phase 3: Graph visualization component
-
-**File**: `dashboard/src/components/WorkflowGraph.tsx` (new)
-
-**Depends on**: Bundle size spike only (library decision resolved — ReactFlow + ELKjs)
-
-Props:
-
-```typescript
-interface WorkflowGraphProps {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) =&gt; void;  // drill-down to agent detail
-  height?: number;
-}
-```
-
-Layout via ELKjs (not the deprecated built-in dagre):
-
-```typescript
-import ELK from &apos;elkjs/lib/elk.bundled.js&apos;;
-const elk = new ELK();
-// elk.algorithm: &apos;layered&apos;, elk.direction: &apos;DOWN&apos;
-// ELKjs handles cycles gracefully via back-edge routing
-```
-
-Requirements:
-- Render agents as custom ReactFlow nodes with: name, score badge, tool call count, token count, duration
-- Render handoffs as directed edges with: score, context-preserved indicator
-- Color-code nodes by score (green/yellow/red using existing `ScoreBadge` thresholds)
-- Score indicators include text label (not color-only) for WCAG 1.4.1
-- Color-code edges by handoff score
-- Zoom/pan controls for graphs with 5+ nodes
-- `&lt;MiniMap /&gt;` component for graphs with 5+ nodes (built-in ReactFlow, zero effort)
-- Hover tooltip with full evaluation details
-- Click node → navigate to agent detail (existing route)
-- Keyboard navigation: nodes focusable via Tab, operable via Enter
-- Container has `role=&quot;img&quot;` with `aria-label` describing the workflow
-- Cyclic workflows (retry loops, reflection) render without layout errors
-
-Single-agent fallback: When `graph.workflowShape === &apos;single_agent&apos;`, show a simplified single-node view with the timeline below instead of a graph.
-
-Span-inference fallback: When `MultiAgentEvaluation` is absent but `gen_ai.agent.*` spans exist, infer the graph from span parent/child relationships (Langfuse pattern).
-
-### Phase 4: Enhanced timeline component
-
-**File**: `dashboard/src/components/WorkflowTimeline.tsx` (new)
-
-Extends existing `TurnTimeline.tsx` with multi-agent awareness:
-
-- Horizontal timeline with swimlanes per agent
-- Color-coded segments: active (blue), idle (gray), error (red)
-- Parallel execution shown as overlapping swimlanes
-- Handoff markers between swimlanes
-- Click segment → expand to show turns in that agent&apos;s execution window
-
-Data source: `TurnLevelResult[]` from `MultiAgentEvaluation.turns`, grouped by `agentName`.
-
-### Phase 5: Dashboard integration
-
-**Files**: `dashboard/src/pages/` or `dashboard/src/App.tsx`
-
-| # | Task | Detail |
-|---|------|--------|
-| 1 | Add &quot;Workflows&quot; page/tab | New route: `/workflows/:sessionId` |
-| 2 | Wire DAG + Timeline | Split view: DAG on top, timeline below |
-| 3 | Session list with multi-agent indicator | Badge on session list items that have &gt;1 agent |
-| 4 | Navigation from DAG node click | `onNodeClick` → `/agents/:sessionId?agent=&lt;name&gt;` |
-| 5 | Lazy-load graph library | Dynamic `import()` to avoid bundle size impact on non-workflow pages |
-
-### Phase 6: Tests
-
-**File**: `dashboard/src/__tests__/WorkflowGraph.test.tsx` (new)
-
-| Test | Validates |
-|------|-----------|
-| Renders 3-agent graph with correct node count | Basic rendering |
-| Renders directed edges between handoff pairs | Edge correctness |
-| Node displays score, tool count, token count, duration | Data binding |
-| Edge displays handoff score | Data binding |
-| Single-agent session shows fallback view | Graceful degradation |
-| Cyclic workflow (agent loop) renders without errors | Cycle handling |
-| Empty evaluation renders without errors | Empty state |
-| `onNodeClick` fires with correct nodeId | Interaction |
-| Graph with 10+ agents renders (no crash) | Scale boundary |
-| Minimap appears for graphs with 5+ nodes | Minimap threshold |
-| Timeline swimlanes grouped by agent | Multi-agent timeline |
-| Handoff markers appear between swimlanes | Timeline accuracy |
-| Score badges have text labels (not color-only) | Accessibility |
-| Span-inference builds graph when MultiAgentEvaluation absent | Fallback path |
-
----
-
-## File Impact Summary
-
-| File | Change Type |
-|------|-------------|
-| `dashboard/src/types/workflow-graph.ts` | **New** — graph data model |
-| `dashboard/src/api/routes/agents.ts` | Extend response with `graph` field |
-| `dashboard/src/components/WorkflowGraph.tsx` | **New** — graph visualization (ReactFlow + ELKjs) |
-| `dashboard/src/components/WorkflowTimeline.tsx` | **New** — multi-agent timeline |
-| `dashboard/src/pages/` or `App.tsx` | New route, navigation wiring |
-| `dashboard/package.json` | Add `@xyflow/react@^12`, `elkjs@^0.9` |
-| `dashboard/src/__tests__/WorkflowGraph.test.tsx` | **New** — test suite |
-
----
-
-## Acceptance Criteria
-
-- [ ] Graph view renders agents as nodes and handoffs as directed edges
-- [ ] Each node shows: agent name, evaluation score, tool call count, token count, duration
-- [ ] Each edge shows: handoff score, context-preserved indicator
-- [ ] Cyclic workflows (agent loops, retries) render without layout errors
-- [ ] Timeline view shows parallel/sequential agent execution with swimlanes
-- [ ] Clicking a node navigates to agent-level metric detail
-- [ ] Single-agent sessions show simplified view (no graph, just timeline)
-- [ ] Span-inference fallback works when `MultiAgentEvaluation` is absent
-- [ ] Components render without errors on empty data
-- [ ] Minimap shown for graphs with 5+ nodes
-- [ ] Graph library lazy-loaded (no bundle size impact on other pages)
-- [ ] Graph container has `aria-label`; score indicators include text labels (not color-only)
-- [ ] Interactive nodes are keyboard-focusable and operable via Enter
-
----
-
-## Anti-Patterns to Avoid
-
-| Anti-pattern | Source | Mitigation |
-|-------------|--------|------------|
-| Flame chart/span waterfall for multi-agent workflows | Datadog explicitly warns against this | Graph view abstracts logical agents, not raw spans; `SpanTree.tsx` remains separate |
-| Using dagre as layout engine | Deprecated (2015 codebase, no maintainers) | Use ELKjs — documented migration path in ReactFlow ecosystem |
-| Rendering every span as a node | Phoenix design principle: abstract to logical components | `buildWorkflowGraph()` aggregates at agent level, not span level |
-| Requiring explicit graph metadata for visualization | Langfuse infers from OTel timing/nesting | Add span-inference fallback when `MultiAgentEvaluation` is absent |
-| Color-only score indicators | WCAG 1.4.1 | Text labels on all score badges |
-
----
-
-## Risks
-
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| Graph library bundle size (~250KB combined) | Medium | Lazy-load via dynamic `import()`; measure with `vite-bundle-visualizer`; ReactFlow `onlyRenderVisibleElements` for perf |
-| Complex graphs (10+ agents) become unreadable | Medium | Zoom/pan + minimap + collapse sub-workflows; limit initial render to top-level agents |
-| Multi-agent data sparse in production | Low | Ship with mock data; span-inference fallback (Langfuse pattern) when explicit data absent |
-| ELKjs layout computation is async and expensive | Low | Memoize layout result; recompute only on data change, not on pan/zoom |</file><file path="docs/roadmap/impl-g5-workflow-visualization-update.md"># G5: Workflow Visualization — Updated Implementation Plan
+    users.md</directory_structure><files>This section contains the contents of the repository&apos;s files.<file path="docs/roadmap/impl-g5-workflow-visualization-update.md"># G5: Workflow Visualization — Updated Implementation Plan
 
 **Version**: 2.0
 **Date**: 2026-03-01
@@ -988,9 +693,870 @@ Code-reviewer findings incorporated (2026-03-01):
 | M10: `AGENT_PALETTE` vs `SCORE_BANDS` ambiguity | Medium | Agent color for identity distinction; score bands for evaluation state (documented) |
 | M11: `computeLayout` no error handling | Medium | Added try/catch with cancellation flag in useEffect |
 | M12: `manualChunks` would overwrite existing config | Medium | Noted — must merge with existing `react` and `query` chunks |
-| L14: `SCORE_BANDS` duplicates `scoreColorBand` utility | Low | Added comment to import from `quality-utils.ts` during implementation |</file><file path="docs/roadmap/README.md"># Dashboard Roadmap
+| L14: `SCORE_BANDS` duplicates `scoreColorBand` utility | Low | Added comment to import from `quality-utils.ts` during implementation |</file><file path="docs/roadmap/impl-auth0-migration.md"># Auth0 Migration — Implementation Guide
 
-**Date**: 2026-03-02
+**Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
+**Date**: 2026-03-26
+**Status**: Code implementation complete (2026-03-26). Manual Auth0 tenant setup and deployment remain.
+**Parent**: [`docs/roadmap/users.md`](users.md) (Phase 4 — Auth0 canonical decision)
+
+---
+
+## Overview
+
+Supabase Auth (JWT verification via `/auth/v1/user`) has been replaced with Auth0 as the identity provider. Supabase remains the application database. Auth0 issues JWTs; the worker verifies them via JWKS; `public.users` is the app-level user record keyed by `auth0_id`.
+
+**What stays**: Supabase DB, `public.users`, `user_roles`, `roles`, `user_activity`, all KV reads, all route handlers, all permission logic.
+
+**What changed**: JWT issuance/verification, session management on the frontend, user provisioning path, activity logging auth.
+
+---
+
+## Status
+
+| Task | File(s) | Status |
+|------|---------|--------|
+| Auth0 tenant setup | Auth0 dashboard | [ ] |
+| Auth0 Post-Login Action | Auth0 dashboard | [ ] |
+| Worker: JWKS JWT verification | `worker/index.ts` | ✅ Done (2026-03-26) |
+| Worker: user lookup by `auth0_id` | `worker/index.ts` | ✅ Done (2026-03-26) |
+| Worker: activity logging via service role | `worker/index.ts` | ✅ Done (2026-03-26) |
+| Worker: remove `SUPABASE_ANON_KEY` dependency | `worker/index.ts`, `wrangler.toml` | ✅ Done (2026-03-26) |
+| Frontend: replace `supabase.ts` with Auth0 SDK | `src/lib/auth0.ts` (new), `src/lib/supabase.ts` (delete later) | ✅ Done (2026-03-26) |
+| Frontend: update `AuthContext.tsx` | `src/contexts/AuthContext.tsx` | ✅ Done (2026-03-26) |
+| Frontend: update `LoginPage.tsx` | `src/pages/LoginPage.tsx` | ✅ Done (2026-03-26) |
+| Schemas: replace `AuthUserResponseSchema` | `src/lib/validation/auth-schemas.ts` | ✅ Done (2026-03-26) |
+| Schemas: remove Supabase-specific schemas | `src/lib/validation/auth-schemas.ts` | ✅ Done (2026-03-26) |
+| DB: RLS policy on `user_activity` | Supabase | ✅ Done (2026-03-26) |
+| DB: existing user `auth0_id` backfill | Supabase | Handled by Post-Login Action on first login |
+| Env vars: add Auth0, remove Supabase anon key | `wrangler.toml`, `.env` | ✅ Done (2026-03-26) |
+| Tests: update worker auth mocks | `worker/__tests__/` | ✅ Done (2026-03-26) |
+| DB: fix permissions mismatch (`dashboard.*` format) | Supabase `public.roles` | ✅ Done (2026-03-26) |
+
+**Remaining**: Auth0 tenant setup (manual) → Post-Login Action deploy → provision worker secrets → set frontend `.env` → deploy both workers → delete `src/lib/supabase.ts`.
+
+---
+
+## 1. Auth0 Tenant Setup
+
+### Application
+
+Create a **Single Page Application** in the Auth0 dashboard:
+
+- **Allowed Callback URLs**: `https://integritystudio.dev/callback`, `http://localhost:5173/callback`
+- **Allowed Logout URLs**: `https://integritystudio.dev`, `http://localhost:5173`
+- **Allowed Web Origins**: `https://integritystudio.dev`, `http://localhost:5173`
+- **Token Endpoint Auth Method**: None (SPA, PKCE)
+
+### API (Audience)
+
+Create an API resource in Auth0:
+
+- **Name**: `integritystudio-dashboard`
+- **Identifier (Audience)**: `https://api.integritystudio.dev` (or your preferred audience string)
+- **Signing Algorithm**: RS256
+
+This audience must be passed when requesting tokens so the JWT includes the correct `aud` claim.
+
+### Connections
+
+Configure at minimum:
+- Username-Password-Authentication (existing users)
+- Google social connection (for enterprise onboarding)
+- Enterprise SAML/OIDC connections as needed per org
+
+---
+
+## 2. Auth0 Post-Login Action
+
+This Action runs after every successful login. It provisions `public.users` on first login and enriches the token with app permissions. Replaces the current worker-side provisioning and the `assign_default_role` DB trigger as the primary mechanism (trigger remains as safety net).
+
+```javascript
+// Auth0 Action: Post-Login
+// Secrets required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+exports.onExecutePostLogin = async (event, api) =&gt; {
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = event.secrets;
+  const headers = {
+    &apos;apikey&apos;: SUPABASE_SERVICE_ROLE_KEY,
+    &apos;Authorization&apos;: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    &apos;Content-Type&apos;: &apos;application/json&apos;,
+    &apos;Prefer&apos;: &apos;return=representation&apos;,
+  };
+
+  const auth0Id = event.user.user_id; // e.g. &quot;auth0|abc123&quot;
+  const email = event.user.email;
+
+  // 1. Look up existing public.users row by auth0_id
+  let userRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/users?auth0_id=eq.${encodeURIComponent(auth0Id)}&amp;select=id,email&amp;limit=1`,
+    { headers }
+  );
+  let users = await userRes.json();
+
+  // 2. If not found by auth0_id, try by email (handles migrated Supabase users)
+  if (!Array.isArray(users) || !users[0]) {
+    userRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}&amp;select=id,email&amp;limit=1`,
+      { headers }
+    );
+    users = await userRes.json();
+
+    if (Array.isArray(users) &amp;&amp; users[0]) {
+      // Backfill auth0_id for migrated user
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/users?id=eq.${users[0].id}`,
+        {
+          method: &apos;PATCH&apos;,
+          headers,
+          body: JSON.stringify({ auth0_id: auth0Id }),
+        }
+      );
+    }
+  }
+
+  // 3. Provision new public.users row if still not found
+  if (!Array.isArray(users) || !users[0]) {
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+      method: &apos;POST&apos;,
+      headers,
+      body: JSON.stringify({ auth0_id: auth0Id, email }),
+    });
+    const inserted = await insertRes.json();
+    users = Array.isArray(inserted) ? inserted : [inserted];
+  }
+
+  const appUserId = users[0]?.id;
+  if (!appUserId) return; // fail open — don&apos;t block login
+
+  // 4. Load permissions from user_roles → roles
+  const rolesRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${appUserId}&amp;select=roles(name,permissions)`,
+    { headers }
+  );
+  const roleRows = await rolesRes.json();
+
+  const permissions = new Set();
+  const roleNames = [];
+  if (Array.isArray(roleRows)) {
+    for (const row of roleRows) {
+      if (!row?.roles) continue;
+      roleNames.push(row.roles.name);
+      for (const perm of (row.roles.permissions ?? [])) {
+        permissions.add(perm);
+      }
+    }
+  }
+
+  // 5. Enrich token with app-level claims (avoids a DB round-trip on every request)
+  api.idToken.setCustomClaim(&apos;https://integritystudio.dev/roles&apos;, roleNames);
+  api.idToken.setCustomClaim(&apos;https://integritystudio.dev/permissions&apos;, [...permissions]);
+  api.accessToken.setCustomClaim(&apos;https://integritystudio.dev/roles&apos;, roleNames);
+  api.accessToken.setCustomClaim(&apos;https://integritystudio.dev/permissions&apos;, [...permissions]);
+  api.accessToken.setCustomClaim(&apos;https://integritystudio.dev/app_user_id&apos;, appUserId);
+};
+```
+
+**Namespace prefix** (`https://integritystudio.dev/`): Auth0 requires custom claims to be namespaced with a URL you control to avoid conflicts with reserved claims.
+
+---
+
+## 3. Worker Changes (`worker/index.ts`) ✅
+
+### 3a. Dependencies
+
+Add `jose` for JWKS verification (available in Cloudflare Workers):
+
+```bash
+cd dashboard &amp;&amp; npm install jose
+```
+
+### 3b. Bindings
+
+Replace in `Bindings` type and `wrangler.toml`:
+
+```typescript
+// Remove:
+SUPABASE_ANON_KEY: string;
+
+// Add:
+AUTH0_DOMAIN: string;       // e.g. &quot;integritystudio.us.auth0.com&quot;
+AUTH0_AUDIENCE: string;     // e.g. &quot;https://api.integritystudio.dev&quot;
+```
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` remain — all DB access switches to service role.
+
+### 3c. JWT Verification (lines 122–131)
+
+Replace the Supabase `/auth/v1/user` fetch with JWKS verification:
+
+```typescript
+import { createRemoteJWKSet, jwtVerify } from &apos;jose&apos;;
+
+// In the auth middleware, replace lines 122–131:
+
+// Build JWKS URL from domain binding (cached per isolate lifetime by jose)
+const JWKS = createRemoteJWKSet(
+  new URL(`https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`)
+);
+
+let payload: Record&lt;string, unknown&gt;;
+try {
+  const { payload: p } = await jwtVerify(jwt, JWKS, {
+    issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+    audience: c.env.AUTH0_AUDIENCE,
+  });
+  payload = p as Record&lt;string, unknown&gt;;
+} catch {
+  return c.json({ error: &apos;Unauthorized&apos; }, 401);
+}
+
+const auth0Id = typeof payload[&apos;sub&apos;] === &apos;string&apos; ? payload[&apos;sub&apos;] : null;
+if (!auth0Id) return c.json({ error: &apos;Unauthorized&apos; }, 401);
+```
+
+`jwtVerify` validates signature, expiry, issuer, and audience. No network call to Supabase Auth.
+
+### 3d. User Lookup (lines 133–145)
+
+Change lookup from `id=eq.{authUserId}` to `auth0_id=eq.{auth0Id}`, using service role (Auth0 JWT is not a valid Supabase session JWT for RLS):
+
+```typescript
+// Replace lines 133–145:
+const userRes = await fetch(
+  `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&amp;auth0_id=eq.${encodeURIComponent(auth0Id)}&amp;limit=1`,
+  { headers: serviceRoleHeaders(c.env), signal: controller.signal },
+).catch(() =&gt; null);
+if (!userRes?.ok) return c.json({ error: &apos;Unauthorized&apos; }, 401);
+const rawUsers: unknown = await userRes.json().catch(() =&gt; null);
+if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: &apos;Unauthorized&apos; }, 401);
+const userResult = PublicUserSchema.safeParse(rawUsers[0]);
+if (!userResult.success) return c.json({ error: &apos;Unauthorized&apos; }, 401);
+const appUserId = userResult.data.id;
+const email = userResult.data.email;
+```
+
+`authUserId` is now `auth0Id` (the Auth0 `sub`); `appUserId` is `public.users.id` (your internal UUID).
+
+### 3e. Roles Lookup (lines 150–165)
+
+Switch from user JWT to service role (same Auth0 JWT issue):
+
+```typescript
+const rolesRes = await fetch(
+  `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&amp;user_id=eq.${encodeURIComponent(appUserId)}`,
+  { headers: serviceRoleHeaders(c.env), signal: controller.signal },  // was: userAuthHeaders
+).catch(() =&gt; null);
+```
+
+### 3f. Activity Logging
+
+`logActivity` currently passes the user JWT to satisfy Supabase RLS (`user_id = auth.uid()`). Auth0 JWTs are not valid Supabase session tokens, so RLS will reject them. Switch to service role:
+
+```typescript
+// Update logActivity signature — drop jwt param, use service role:
+function logActivity(
+  appUserId: string,
+  activityType: UserActivityEvent,
+  env: { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string },
+): void {
+  supabasePost(
+    `${env.SUPABASE_URL}/rest/v1/user_activity`,
+    { user_id: appUserId, activity_type: activityType },
+    env,
+    env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+}
+```
+
+Remove all `c.get(&apos;jwt&apos;)` arguments passed to `logActivity` calls throughout the file.
+
+### 3g. `AppSession` update
+
+`authUserId` now holds the Auth0 `sub` (`auth0|...`), not a UUID. Update the test-mode bypass accordingly and any code that assumes `authUserId` is UUID-shaped.
+
+---
+
+## 4. Frontend Changes ✅
+
+### 4a. Install Auth0 React SDK
+
+```bash
+cd dashboard &amp;&amp; npm install @auth0/auth0-react
+```
+
+### 4b. New `src/lib/auth0.ts`
+
+Replace `src/lib/supabase.ts` with an Auth0 wrapper that exposes the same surface used by `AuthContext.tsx`:
+
+```typescript
+// src/lib/auth0.ts
+export { Auth0Provider, useAuth0 } from &apos;@auth0/auth0-react&apos;;
+
+export const AUTH0_DOMAIN = import.meta.env.VITE_AUTH0_DOMAIN as string;
+export const AUTH0_CLIENT_ID = import.meta.env.VITE_AUTH0_CLIENT_ID as string;
+export const AUTH0_AUDIENCE = import.meta.env.VITE_AUTH0_AUDIENCE as string;
+
+if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID || !AUTH0_AUDIENCE) {
+  throw new Error(&apos;Missing required env vars: VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE&apos;);
+}
+```
+
+### 4c. `src/contexts/AuthContext.tsx`
+
+Replace Supabase session management with Auth0 hooks:
+
+```typescript
+import { useAuth0 } from &apos;@auth0/auth0-react&apos;;
+import { AUTH0_AUDIENCE } from &apos;../lib/auth0.js&apos;;
+
+// Replace loadSession / getSession / refreshSession / onAuthStateChange / startAutoRefresh / stopAutoRefresh
+// with useAuth0() hook:
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
+  const [session, setSession] = useState&lt;AppSession | null&gt;(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() =&gt; {
+    if (auth0Loading) return;
+    if (!isAuthenticated) {
+      setSession(null);
+      setIsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } })
+      .then((jwt) =&gt; fetchAppSession(jwt, controller.signal))
+      .then((appSession) =&gt; {
+        setSession(appSession);
+        setIsLoading(false);
+      })
+      .catch(() =&gt; {
+        setSession(null);
+        setIsLoading(false);
+      });
+    return () =&gt; controller.abort();
+  }, [auth0Loading, isAuthenticated, getAccessTokenSilently]);
+
+  const handleSignOut = useCallback(async () =&gt; {
+    if (session) {
+      const jwt = await getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }).catch(() =&gt; null);
+      if (jwt) void postActivityEvent(&apos;logout&apos;, jwt);
+    }
+    logout({ logoutParams: { returnTo: window.location.origin } });
+    setSession(null);
+  }, [session, logout, getAccessTokenSilently]);
+
+  return (
+    &lt;AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut }}&gt;
+      {children}
+    &lt;/AuthContext.Provider&gt;
+  );
+}
+```
+
+Token refresh is handled automatically by the Auth0 SDK via `getAccessTokenSilently`. Remove `startAutoRefresh` / `stopAutoRefresh` / `refreshSession` calls.
+
+### 4d. `src/App.tsx` — Wrap with `Auth0Provider`
+
+```typescript
+import { Auth0Provider } from &apos;./lib/auth0.js&apos;;
+import { AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from &apos;./lib/auth0.js&apos;;
+
+// Wrap at the root:
+&lt;Auth0Provider
+  domain={AUTH0_DOMAIN}
+  clientId={AUTH0_CLIENT_ID}
+  authorizationParams={{
+    redirect_uri: `${window.location.origin}/callback`,
+    audience: AUTH0_AUDIENCE,
+  }}
+&gt;
+  &lt;AuthProvider&gt;
+    {/* existing router */}
+  &lt;/AuthProvider&gt;
+&lt;/Auth0Provider&gt;
+```
+
+### 4e. `src/pages/LoginPage.tsx`
+
+Replace email/password form with Auth0 Universal Login redirect:
+
+```typescript
+import { useAuth0 } from &apos;@auth0/auth0-react&apos;;
+import { AUTH0_AUDIENCE } from &apos;../lib/auth0.js&apos;;
+
+export function LoginPage() {
+  const { loginWithRedirect } = useAuth0();
+
+  const handleLogin = () =&gt;
+    loginWithRedirect({
+      authorizationParams: {
+        audience: AUTH0_AUDIENCE,
+        redirect_uri: `${window.location.origin}/callback`,
+      },
+    });
+
+  return (
+    &lt;div&gt;
+      &lt;button onClick={handleLogin}&gt;Sign in&lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+```
+
+Add a `/callback` route that renders nothing (Auth0Provider handles the token exchange on mount).
+
+### 4f. `src/lib/supabase.ts`
+
+Delete this file after migrating all imports. The only remaining Supabase reference in the frontend should be the env vars for the API base URL if still needed; otherwise remove entirely.
+
+### 4g. Other hooks (`useDashboard`, `useMetricDetail`, etc.)
+
+These call `getAccessToken()` from a custom hook or directly from `AuthContext`. Replace any remaining `getSession()?.access_token` calls with `getAccessTokenSilently()` from `useAuth0()`.
+
+---
+
+## 5. Validation Schema Changes (`src/lib/validation/auth-schemas.ts`) ✅
+
+### Replace `AuthUserResponseSchema`
+
+The current schema validates the Supabase `/auth/v1/user` response. Replace with Auth0 JWT payload claims:
+
+```typescript
+// Auth0 JWT payload — result of jwtVerify() in the worker
+export const Auth0JwtPayloadSchema = z.object({
+  sub: z.string(),                          // Auth0 subject: &quot;auth0|abc123&quot;
+  email: z.email().optional(),
+  email_verified: z.boolean().optional(),
+  name: z.string().optional(),
+  picture: z.string().url().optional(),
+  iss: z.string(),
+  aud: z.union([z.string(), z.array(z.string())]),
+  iat: z.number(),
+  exp: z.number(),
+});
+```
+
+### Remove (no longer needed)
+
+- `AuthTokenResponseSchema` — Auth0 SDK handles token exchange
+- `LoginRequestSchema` — Auth0 Universal Login handles login UI
+- `RefreshTokenRequestSchema` — Auth0 SDK handles refresh
+
+### `PublicUserSchema` — no change required
+
+The schema selects `id`, `email`, `created_at`, `updated_at`. The worker now passes `auth0_id` as the query filter but does not need to parse it from the response. No schema change needed.
+
+---
+
+## 6. Database Changes ✅
+
+### 6a. Drop RLS policy on `user_activity`
+
+The current policy (`user_id = auth.uid()`) relies on Supabase Auth sessions. With Auth0 JWTs and service-role writes, this policy is no longer enforced at the DB level. Drop it and rely on the worker&apos;s permission guard for authorization:
+
+```sql
+-- Find and drop the policy
+select polname from pg_policy
+join pg_class on pg_class.oid = pg_policy.polrelid
+where pg_class.relname = &apos;user_activity&apos;;
+
+-- Drop:
+drop policy &quot;&lt;policy_name&gt;&quot; on public.user_activity;
+```
+
+Access to activity data is already gated at the API layer by `dashboard.admin` permission on `/api/admin/*` routes.
+
+### 6b. Existing user `auth0_id` backfill
+
+All 8 current `public.users` rows have `auth0_id = public.users.id` (Supabase UUID stand-ins). When these users authenticate via Auth0 for the first time, the Post-Login Action handles the backfill by email fallback. No manual migration is required before go-live — the Action updates `auth0_id` to the real Auth0 sub on first login.
+
+Verify all users are backfilled after go-live:
+
+```sql
+-- Should return zero rows once all users have logged in via Auth0
+select id, email, auth0_id
+from public.users
+where auth0_id = id::text;  -- still has UUID stand-in
+```
+
+---
+
+## 7. Environment Variables (partial — worker done ✅, frontend pending)
+
+### Worker (`wrangler.toml` + secrets)
+
+```toml
+# Add:
+[vars]
+AUTH0_DOMAIN = &quot;integritystudio.us.auth0.com&quot;
+AUTH0_AUDIENCE = &quot;https://api.integritystudio.dev&quot;
+
+# Keep:
+# SUPABASE_URL (var or secret)
+# SUPABASE_SERVICE_ROLE_KEY (secret)
+
+# Remove:
+# SUPABASE_ANON_KEY
+```
+
+### Frontend (`.env`)
+
+```bash
+# Add:
+VITE_AUTH0_DOMAIN=integritystudio.us.auth0.com
+VITE_AUTH0_CLIENT_ID=&lt;from Auth0 dashboard&gt;
+VITE_AUTH0_AUDIENCE=https://api.integritystudio.dev
+
+# Remove:
+# VITE_SUPABASE_URL
+# VITE_SUPABASE_ANON_KEY
+```
+
+---
+
+## 8. Test Updates (`worker/__tests__/`) ✅
+
+The worker tests mock Supabase auth responses. Replace with Auth0 JWT mocks:
+
+- `admin-routes.test.ts`: Replace `ALLOW_TEST_BYPASS` mock or stub `jwtVerify` from `jose` to return a fixed payload with `sub: &apos;auth0|test-user&apos;`
+- `activity-logging.test.ts`: Update `logActivity` mock — remove `jwt` argument, verify service-role header is used
+- Remove any test that exercises the Supabase `/auth/v1/user` fetch path
+
+The test-token bypass (`ALLOW_TEST_BYPASS=true` + `jwt === &apos;test-token&apos;`) in `worker/index.ts` remains valid for integration tests and does not need to change.
+
+---
+
+## 9. Permissions Model — Resolved ✅
+
+**Fixed 2026-03-26.** `roles.permissions` values were simple strings (`&quot;read&quot;`, `&quot;write&quot;`, `&quot;all&quot;`) misaligned with the worker&apos;s `VALID_PERMISSIONS` set (`dashboard.*` format). Option A was applied — permissions updated directly in `public.roles`:
+
+```sql
+-- Applied:
+update public.roles set permissions = &apos;[&quot;dashboard.read&quot;]&apos;::jsonb where name = &apos;read&apos;;
+update public.roles set permissions = &apos;[&quot;dashboard.read&quot;,&quot;dashboard.traces.read&quot;,...]&apos;::jsonb where name = &apos;admin&apos;;
+update public.roles set permissions = &apos;[&quot;dashboard.read&quot;,&quot;dashboard.executive&quot;,...]&apos;::jsonb where name = &apos;owner&apos;;
+```
+
+Permissions are now stored in the DB as the source of truth and the Post-Login Action reads them at login time. No mapping in the Action is needed.
+
+---
+
+## Rollout Sequence
+
+- ✅ Resolve permissions model mismatch (section 9, Option A)
+- ✅ DB changes: drop RLS policy on `user_activity` (section 6a)
+- ✅ Worker changes: JWKS verification, `auth0_id` lookup, service-role activity logging (section 3)
+- ✅ Frontend changes: Auth0 SDK, `AuthContext`, `LoginPage`, `App.tsx` (section 4–5)
+- ✅ Tests: worker auth mocks updated, `auth-context-refresh` rewritten (section 8)
+- [ ] Auth0 tenant setup + Post-Login Action (section 1–2) — **manual, required before go-live**
+- [ ] Provision worker secrets: `wrangler secret put SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY` for both workers
+- [ ] Set frontend `.env`: `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`
+- [ ] Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`)
+- [ ] Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging
+- [ ] Monitor Supabase logs for auth errors for 48h
+- [ ] After all users log in via Auth0: verify `auth0_id` backfill complete (section 6b)
+- [ ] Delete `src/lib/supabase.ts` and remaining dead code (see `BACKLOG.md` AUTH0-CLEANUP)</file><file path="docs/roadmap/impl-g5-multi-agent-visualization.md"># G5: Multi-Agent Workflow Visualization — Implementation Plan
+
+**Version**: 1.1
+**Date**: 2026-02-27
+**Priority**: P3 | **Effort**: High
+**Source**: [known-gaps.md](known-gaps.md) G5, white paper S7.3
+**Competitive bar**: Arize Phoenix auto-flowcharts (June 2025), Langfuse Agent Graphs (GA Nov 2025)
+**Research validated**: 2026-02-27 — cross-platform comparison (Phoenix, Datadog, LangSmith, Langfuse) + library evaluation
+
+---
+
+## Design Decision
+
+Build interactive graph and timeline views for multi-agent workflows. Validated against four industry platforms:
+
+| Platform | Visualization | Key pattern |
+|----------|--------------|-------------|
+| **Arize Phoenix** (June 2025) | Auto-flowchart in Agents tab; graph abstracted over spans | Agent/tool/component as logical nodes, not raw spans |
+| **Datadog** (June 2025+) | &quot;Execution flow chart&quot; with embedded metrics per node | Latency + tokens + eval scores inline on each node |
+| **Langfuse** (GA Nov 2025) | Agent Graphs inferred from OTel timing/nesting | No explicit graph metadata required — inferred from spans |
+| **LangSmith** | Span tree (production) + LangGraph Studio (static graph + execution overlay) | Separates static architecture view from dynamic execution trace |
+
+The toolkit has the data layer; the gap is visualization. Langfuse&apos;s inference-from-spans approach is the most robust fallback when explicit `MultiAgentEvaluation` data is sparse.
+
+---
+
+## Current State
+
+### Data layer (complete)
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `MultiAgentEvaluation` | `src/lib/quality/quality-multi-agent.ts:69` | Handoff scores, turn-level results, error propagation |
+| `HandoffEvaluation` | `src/lib/quality/quality-multi-agent.ts:32` | Source → target agent, correctTarget, contextPreserved, score |
+| `TurnLevelResult` | `src/lib/quality/quality-multi-agent.ts:51` | Per-turn relevance, task progress, error flag |
+| `computeMultiAgentEvaluation()` | `src/lib/quality/quality-multi-agent.ts:191` | Builds full evaluation from stepScores + agentMap |
+| `computePipelineView()` | `src/lib/quality/quality-visualization.ts:65` | 4-stage funnel: ingested → scored → evaluated → alerted |
+| `computeCoverageHeatmap()` | `src/lib/quality/quality-visualization.ts:183` | Metric × input coverage matrix |
+| `analyzeTrajectory()` | `src/lib/agent-judge/agent-judge-verification.ts:406` | Tool call count, efficiency ratio, redundancy |
+| `verifyToolCall()` | `src/lib/agent-judge/agent-judge-verification.ts:203` | Weighted tool verification (selection 40%, args 30%, result 30%) |
+| `ProceduralJudge` | `src/lib/agent-judge/agent-judge-classes.ts:116` | Stage-based evaluation pipeline |
+| `ReactiveJudge` | `src/lib/agent-judge/agent-judge-classes.ts:235` | Event-driven specialist routing |
+
+### Dashboard infrastructure (partial)
+
+Existing multi-agent components:
+
+| Component | File | Current scope |
+|-----------|------|---------------|
+| `TurnTimeline.tsx` | `dashboard/src/components/` | Timeline of turns — no DAG |
+| `HandoffCard.tsx` | `dashboard/src/components/` | Single handoff display |
+| `SpanTree.tsx` | `dashboard/src/components/` | Nested span tree — not a DAG layout |
+
+Existing API route:
+
+`GET /api/agents/:sessionId` — returns `{ sessionId, spans, evaluation: MultiAgentEvaluation, evaluations, agentMap }`. Already computes the data needed for visualization.
+
+Current dashboard dependencies: `recharts@^3.7`, `d3-scale@^4`, `d3-scale-chromatic@^3` — no graph layout library.
+
+### Not implemented
+
+- DAG visualization (agents as nodes, handoffs as directed edges)
+- Interactive flowchart view (Phoenix-style)
+- Node drill-down to agent-level detail
+- Zoom/pan for complex graphs
+- Single-agent graceful fallback in DAG view
+
+---
+
+## Library Decision: RESOLVED
+
+**Decision**: `@xyflow/react` (ReactFlow v12) + ELKjs for layout.
+
+React 19 compatibility confirmed October 2025. dagre is deprecated (2015 codebase). d3-dag is in light maintenance (maintainer recommends ReactFlow for interactive use cases).
+
+| Criterion | @xyflow/react v12 | d3-dag v1.1+ | dagre | ELKjs |
+|-----------|-------------------|-------------|-------|-------|
+| **License** | MIT | Apache 2.0 | MIT | EPL 2.0 |
+| **Bundle size (min+gz)** | ~150KB | ~30KB | ~30KB | ~100KB |
+| **React 19** | Confirmed (Oct 2025) | No React dep | No React dep | No React dep |
+| **Layout** | dagre (deprecated), ELK (plugin), custom | Sugiyama, Coffman-Graham | Sugiyama | Layered, force, orthogonal, stress, tree |
+| **Interactivity** | Full: drag, zoom, pan, select, minimap | None | None | None |
+| **Handles cycles** | Yes | No (DAG-only by definition) | Yes | Yes |
+| **Maintenance** | Active (35.4K stars, release Feb 19 2026) | Light maintenance (1.5K stars) | Deprecated | Active (Eclipse/KIELER, 2.4K stars) |
+
+**Dependencies to add** (lazy-loaded):
+
+```json
+&quot;@xyflow/react&quot;: &quot;^12.0.0&quot;,
+&quot;elkjs&quot;: &quot;^0.9.0&quot;
+```
+
+**Remaining spike** (before Phase 3): Measure bundle size delta with `npx vite-bundle-visualizer` to confirm lazy-loading eliminates impact on other pages. React 19 compat verification is no longer needed.
+
+---
+
+## Implementation Plan
+
+### Phase 1: Graph data model
+
+**File**: `dashboard/src/types/workflow-graph.ts` (new)
+
+Named `WorkflowGraph` (not `WorkflowDAG`) because real agent executions are frequently cyclic — retry loops, reflection steps, tool-call-then-verify patterns. Both Langfuse and Datadog explicitly handle cycles.
+
+```typescript
+export type WorkflowShape = &apos;single_agent&apos; | &apos;linear&apos; | &apos;branching&apos; | &apos;cyclic&apos;;
+
+export interface WorkflowNode {
+  id: string;                    // agent name or ID
+  label: string;                 // display name
+  evaluationScore: number | null;
+  toolCallCount: number;
+  totalTokens: number | null;    // token usage per agent (Datadog standard)
+  durationMs: number;
+  turnCount: number;
+  hasError: boolean;
+}
+
+export interface WorkflowEdge {
+  id: string;                    // `${source}-&gt;${target}`
+  source: string;                // source agent id
+  target: string;                // target agent id
+  handoffScore: number;
+  contextPreserved: boolean;
+  label?: string;                // e.g. &quot;score: 0.85&quot;
+}
+
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  rootNodeId: string | null;     // first agent
+  workflowShape: WorkflowShape;  // replaces boolean isMultiAgent
+}
+```
+
+Transformer function: `buildWorkflowGraph(evaluation: MultiAgentEvaluation, agentMap: Map&lt;number, string&gt;, spans: Span[]): WorkflowGraph`
+
+Fallback: when `MultiAgentEvaluation` is absent but `gen_ai.agent.*` spans exist, infer the graph from span parent/child relationships and timing (Langfuse pattern).
+
+### Phase 2: API extension
+
+**File**: `dashboard/src/api/routes/agents.ts`
+
+Extend `GET /api/agents/:sessionId` response to include `graph: WorkflowGraph`:
+
+```typescript
+// After existing computation:
+const graph = buildWorkflowGraph(evaluation, agentMap, spans);
+return c.json({ sessionId, spans, evaluation, evaluations, agentMap, graph });
+```
+
+No new routes needed — the existing endpoint already returns all required source data.
+
+### Phase 3: Graph visualization component
+
+**File**: `dashboard/src/components/WorkflowGraph.tsx` (new)
+
+**Depends on**: Bundle size spike only (library decision resolved — ReactFlow + ELKjs)
+
+Props:
+
+```typescript
+interface WorkflowGraphProps {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) =&gt; void;  // drill-down to agent detail
+  height?: number;
+}
+```
+
+Layout via ELKjs (not the deprecated built-in dagre):
+
+```typescript
+import ELK from &apos;elkjs/lib/elk.bundled.js&apos;;
+const elk = new ELK();
+// elk.algorithm: &apos;layered&apos;, elk.direction: &apos;DOWN&apos;
+// ELKjs handles cycles gracefully via back-edge routing
+```
+
+Requirements:
+- Render agents as custom ReactFlow nodes with: name, score badge, tool call count, token count, duration
+- Render handoffs as directed edges with: score, context-preserved indicator
+- Color-code nodes by score (green/yellow/red using existing `ScoreBadge` thresholds)
+- Score indicators include text label (not color-only) for WCAG 1.4.1
+- Color-code edges by handoff score
+- Zoom/pan controls for graphs with 5+ nodes
+- `&lt;MiniMap /&gt;` component for graphs with 5+ nodes (built-in ReactFlow, zero effort)
+- Hover tooltip with full evaluation details
+- Click node → navigate to agent detail (existing route)
+- Keyboard navigation: nodes focusable via Tab, operable via Enter
+- Container has `role=&quot;img&quot;` with `aria-label` describing the workflow
+- Cyclic workflows (retry loops, reflection) render without layout errors
+
+Single-agent fallback: When `graph.workflowShape === &apos;single_agent&apos;`, show a simplified single-node view with the timeline below instead of a graph.
+
+Span-inference fallback: When `MultiAgentEvaluation` is absent but `gen_ai.agent.*` spans exist, infer the graph from span parent/child relationships (Langfuse pattern).
+
+### Phase 4: Enhanced timeline component
+
+**File**: `dashboard/src/components/WorkflowTimeline.tsx` (new)
+
+Extends existing `TurnTimeline.tsx` with multi-agent awareness:
+
+- Horizontal timeline with swimlanes per agent
+- Color-coded segments: active (blue), idle (gray), error (red)
+- Parallel execution shown as overlapping swimlanes
+- Handoff markers between swimlanes
+- Click segment → expand to show turns in that agent&apos;s execution window
+
+Data source: `TurnLevelResult[]` from `MultiAgentEvaluation.turns`, grouped by `agentName`.
+
+### Phase 5: Dashboard integration
+
+**Files**: `dashboard/src/pages/` or `dashboard/src/App.tsx`
+
+| # | Task | Detail |
+|---|------|--------|
+| 1 | Add &quot;Workflows&quot; page/tab | New route: `/workflows/:sessionId` |
+| 2 | Wire DAG + Timeline | Split view: DAG on top, timeline below |
+| 3 | Session list with multi-agent indicator | Badge on session list items that have &gt;1 agent |
+| 4 | Navigation from DAG node click | `onNodeClick` → `/agents/:sessionId?agent=&lt;name&gt;` |
+| 5 | Lazy-load graph library | Dynamic `import()` to avoid bundle size impact on non-workflow pages |
+
+### Phase 6: Tests
+
+**File**: `dashboard/src/__tests__/WorkflowGraph.test.tsx` (new)
+
+| Test | Validates |
+|------|-----------|
+| Renders 3-agent graph with correct node count | Basic rendering |
+| Renders directed edges between handoff pairs | Edge correctness |
+| Node displays score, tool count, token count, duration | Data binding |
+| Edge displays handoff score | Data binding |
+| Single-agent session shows fallback view | Graceful degradation |
+| Cyclic workflow (agent loop) renders without errors | Cycle handling |
+| Empty evaluation renders without errors | Empty state |
+| `onNodeClick` fires with correct nodeId | Interaction |
+| Graph with 10+ agents renders (no crash) | Scale boundary |
+| Minimap appears for graphs with 5+ nodes | Minimap threshold |
+| Timeline swimlanes grouped by agent | Multi-agent timeline |
+| Handoff markers appear between swimlanes | Timeline accuracy |
+| Score badges have text labels (not color-only) | Accessibility |
+| Span-inference builds graph when MultiAgentEvaluation absent | Fallback path |
+
+---
+
+## File Impact Summary
+
+| File | Change Type |
+|------|-------------|
+| `dashboard/src/types/workflow-graph.ts` | **New** — graph data model |
+| `dashboard/src/api/routes/agents.ts` | Extend response with `graph` field |
+| `dashboard/src/components/WorkflowGraph.tsx` | **New** — graph visualization (ReactFlow + ELKjs) |
+| `dashboard/src/components/WorkflowTimeline.tsx` | **New** — multi-agent timeline |
+| `dashboard/src/pages/` or `App.tsx` | New route, navigation wiring |
+| `dashboard/package.json` | Add `@xyflow/react@^12`, `elkjs@^0.9` |
+| `dashboard/src/__tests__/WorkflowGraph.test.tsx` | **New** — test suite |
+
+---
+
+## Acceptance Criteria
+
+- [x] Graph view renders agents as nodes and handoffs as directed edges
+- [x] Each node shows: agent name, evaluation score, tool call count, token count, duration
+- [x] Each edge shows: handoff score, context-preserved indicator
+- [x] Cyclic workflows (agent loops, retries) render without layout errors
+- [x] Timeline view shows parallel/sequential agent execution with swimlanes
+- [x] Clicking a node navigates to agent-level metric detail
+- [x] Single-agent sessions show simplified view (no graph, just timeline)
+- [x] Span-inference fallback works when `MultiAgentEvaluation` is absent
+- [x] Components render without errors on empty data
+- [x] Minimap shown for graphs with 5+ nodes
+- [x] Graph library lazy-loaded (no bundle size impact on other pages)
+- [x] Graph container has `aria-label`; score indicators include text labels (not color-only)
+- [ ] Interactive nodes are keyboard-focusable and operable via Enter
+
+---
+
+## Anti-Patterns to Avoid
+
+| Anti-pattern | Source | Mitigation |
+|-------------|--------|------------|
+| Flame chart/span waterfall for multi-agent workflows | Datadog explicitly warns against this | Graph view abstracts logical agents, not raw spans; `SpanTree.tsx` remains separate |
+| Using dagre as layout engine | Deprecated (2015 codebase, no maintainers) | Use ELKjs — documented migration path in ReactFlow ecosystem |
+| Rendering every span as a node | Phoenix design principle: abstract to logical components | `buildWorkflowGraph()` aggregates at agent level, not span level |
+| Requiring explicit graph metadata for visualization | Langfuse infers from OTel timing/nesting | Add span-inference fallback when `MultiAgentEvaluation` is absent |
+| Color-only score indicators | WCAG 1.4.1 | Text labels on all score badges |
+
+---
+
+## Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Graph library bundle size (~250KB combined) | Medium | Lazy-load via dynamic `import()`; measure with `vite-bundle-visualizer`; ReactFlow `onlyRenderVisibleElements` for perf |
+| Complex graphs (10+ agents) become unreadable | Medium | Zoom/pan + minimap + collapse sub-workflows; limit initial render to top-level agents |
+| Multi-agent data sparse in production | Low | Ship with mock data; span-inference fallback (Langfuse pattern) when explicit data absent |
+| ELKjs layout computation is async and expensive | Low | Memoize layout result; recompute only on data change, not on pan/zoom |</file><file path="docs/roadmap/README.md"># Dashboard Roadmap
+
+**Date**: 2026-03-26
 
 ---
 
@@ -998,13 +1564,13 @@ Code-reviewer findings incorporated (2026-03-01):
 
 | # | Item | Source | Priority | Effort | Status |
 |---|------|--------|----------|--------|--------|
-| G5 | Multi-agent workflow visualization | S7.3 | P3 | High | Not started |
+| G5 | Multi-agent workflow visualization | S7.3 | P3 | High | Done (Phases 1–5) |
 
 **Implementation plans**: [G5 — Multi-Agent Visualization](impl-g5-multi-agent-visualization.md) | [G5 v2.0 — Workflow Visualization Update](impl-g5-workflow-visualization-update.md)</file><file path="docs/roadmap/phase4-legacy-cleanup.md"># Phase 4: Legacy Schema Cleanup — Implementation Guide
 
 Parent roadmap: [`docs/roadmap/users.md`](users.md) (Phase 4 open items at lines 735–738)
 
-Last updated: 2026-03-21
+Last updated: 2026-03-26
 
 ---
 
@@ -1012,13 +1578,12 @@ Last updated: 2026-03-21
 
 | Task | Type | Status |
 |------|------|--------|
-| Verify `public.users.id` = `auth.users.id` alignment | SQL (read-only) | [ ] Pending |
-| Rename `auth0_id` → `identity_subject` | DB migration | [ ] Pending |
-| Drop `user_profiles.role` column | DB migration | [ ] Pending |
+| Verify `public.users.id` = `auth.users.id` alignment | SQL (read-only) | ✅ Done (2026-03-26) |
+| Rename `auth0_id` → `identity_subject` | DB migration | ~~Permanently dropped~~ |
+| Drop `user_profiles.role` column | DB migration | ✅ Done (2026-03-26) |
 | AppSession code simplification (optional) | TypeScript | [ ] Optional |
 
-**Execution order**: verify ID alignment first → rename `auth0_id` → drop `user_profiles.role`.
-Do not run destructive steps before verification passes.
+&gt; **Task 2 permanently dropped**: Auth0 will remain the canonical identity provider to support external/enterprise users (SSO, SAML/OIDC, org isolation, MFA enforcement). `auth0_id` is the correct column name — it will hold Auth0 subject identifiers (`auth0|...`) once Auth0 becomes canonical. The 7 users provisioned on 2026-03-26 currently have `auth0_id = public.users.id` (Supabase UUIDs as stand-ins); these will be updated when those users authenticate via Auth0 for the first time. The NOT NULL constraint on `auth0_id` is correct to retain.
 
 ---
 
@@ -1038,9 +1603,9 @@ All TypeScript source files, Zod schemas (`src/lib/validation/auth-schemas.ts`),
 
 ### ID alignment finding
 
-`worker/index.ts:131` queries `public.users` with `id=eq.${authUserId}`, where `authUserId` comes from the Supabase `auth.users` JWT. This assumes `public.users.id = auth.users.id` for all rows.
+After Auth0 migration, `worker/index.ts` queries `public.users` by `auth0_id=eq.${auth0Id}`, where `auth0Id` is the `sub` claim from the Auth0 JWT. `authUserId` is now the Auth0 subject (`auth0|...`) and `appUserId` is the Supabase UUID returned from that lookup — they are **always distinct** post-migration.
 
-`AppSession` (`src/types/auth.ts`) tracks `authUserId` and `appUserId` as separate fields. In the current worker flow they will be equal if IDs are aligned — but the schema supports them diverging. Verify before removing the distinction.
+`AppSession` (`src/types/auth.ts`) correctly tracks both as separate fields. The distinction is load-bearing and must be preserved.
 
 ---
 
@@ -1212,20 +1777,9 @@ Should return zero rows.
 
 ## Optional: AppSession Code Simplification
 
-This is safe to do **only after** Task 1 confirms full ID alignment.
+&gt; **Note (post-Auth0 migration)**: The original premise of this section — that `authUserId` and `appUserId` could be the same value — no longer applies. `authUserId` is now the Auth0 subject (`auth0|...`) and `appUserId` is the Supabase UUID from `public.users`. They are always distinct. **Do not collapse these fields.**
 
-Currently `AppSession` (`src/types/auth.ts`) carries both `authUserId` and `appUserId`. In `worker/index.ts`, the middleware sets both fields — but if `public.users.id` is always equal to `auth.users.id`, `appUserId` is redundant.
-
-The worker already queries `public.users` with `id=eq.${authUserId}` and then sets `appUserId = userResult.data.id`. They are the same value.
-
-**If you choose to simplify:**
-
-1. Remove `appUserId` from `AppSession` in `src/types/auth.ts`.
-2. In `worker/index.ts`, replace all `appUserId` references with `authUserId`. The `user_roles` query at line 156 uses `user_id=eq.${appUserId}` — update to `authUserId`.
-3. Remove the `appUserId` variable from the middleware closure.
-4. Remove `appUserId` from the `c.set(&apos;session&apos;, ...)` call at line 189.
-
-**Do not do this** if the verification in Task 1 returns any misaligned rows. In that case, keep `appUserId` as a distinct field that stores the actual `public.users.id` value retrieved from the DB.
+The `user_roles` query uses `user_id=eq.${appUserId}` (the Supabase UUID), and activity logging uses `appUserId` as the FK into `user_activity`. Both must continue using `appUserId`, not `authUserId`.
 
 ---
 
@@ -1251,12 +1805,12 @@ TypeScript compilation should remain clean throughout — neither column is refe
 npx tsc --noEmit
 ```
 
-No changes to Zod schemas are expected. `PublicUserSchema` selects only `id`, `email`, `created_at`, `updated_at` and is unaffected by either migration.</file><file path="docs/roadmap/users.md">## Status: Phase 1 + Phase 2 + Phase 3 Complete (v3.0.4–current)
+No changes to Zod schemas are expected. `PublicUserSchema` selects only `id`, `email`, `created_at`, `updated_at` and is unaffected by either migration.</file><file path="docs/roadmap/users.md">## Status: Phase 1 + Phase 2 + Phase 3 + Phase 4 (Partial) Complete (v3.0.4–current)
 
-As of 2026-03-20, **Phase 1, Phase 2, and Phase 3 are implemented**:
+As of 2026-03-25, **Phase 1, Phase 2, Phase 3, and Phase 4 (partial) are implemented**:
 
-### Phase 1 (v3.0.4)
-- ✅ Supabase Auth for sign-in with JWT verification
+### Phase 1 (v3.0.4) — superseded by Auth0 migration (2026-03-26)
+- ✅ ~~Supabase Auth for sign-in with JWT verification~~ → replaced by Auth0 JWKS verification
 - ✅ Provisioning/resolving `public.users` on first login
 - ✅ Role/permission loading from `user_roles → roles`
 - ✅ Protected routes with permission guards
@@ -1295,15 +1849,17 @@ As of 2026-03-20, **Phase 1, Phase 2, and Phase 3 are implemented**:
 
 ## Recommended approach (v3.0.1+)
 
-Add **Supabase Auth for sign-in**, but keep authorization grounded in your existing app schema:
+&gt; **Superseded (2026-03-26)**: Auth0 is the canonical identity provider. See [`impl-auth0-migration.md`](impl-auth0-migration.md) for current architecture. The Supabase Auth approach below is retained as historical context only.
 
-* authenticate with `auth.users`
-* provision/resolve the matching `public.users` row
-* load roles from `user_roles -&gt; roles`
-* gate dashboard/API access by permissions
-* keep Cloudflare KV as the metrics source for now
+~~Add **Supabase Auth for sign-in**, but keep authorization grounded in your existing app schema:~~
 
-That fits the current repo shape: React/Vite frontend, Hono API, Cloudflare Worker backend, and KV-backed read APIs. The app today still exposes role as a request/UI concept, and the worker currently serves public GET routes with no auth enforcement. ([GitHub][1])
+* ~~authenticate with `auth.users`~~
+* ~~provision/resolve the matching `public.users` row~~
+* ~~load roles from `user_roles -&gt; roles`~~
+* ~~gate dashboard/API access by permissions~~
+* ~~keep Cloudflare KV as the metrics source for now~~
+
+~~That fits the current repo shape: React/Vite frontend, Hono API, Cloudflare Worker backend, and KV-backed read APIs. The app today still exposes role as a request/UI concept, and the worker currently serves public GET routes with no auth enforcement. ([GitHub][1])~~
 
 ---
 
@@ -1979,16 +2535,20 @@ All items resolved across 5 commits (27e7f2c through 398d6eb):
 - ✅ Replace public role selector with permission-driven view selector (**ce1cb6a**: gate RoleSelector tabs and /role routes on allowedViews)
 - ✅ Protect `/api/dashboard` with server-side `allowedViews` check (**34195c9**: close role gate bypass)
 - ✅ Clean up MeResponse imports (**3fddbb4**: remove dead MeResponse import)
-- ⏳ Add activity/session audit logging to `user_activity` table (deferred to Phase 4)
-- ⏳ Document admin role assignment workflows (deferred to Phase 4)
+- ✅ Add activity/session audit logging to `user_activity` table (completed in Phase 4)
+- ✅ Document admin role assignment workflows (completed in Phase 4)
 
-### Phase 4: Legacy Cleanup (Partial)
+### Phase 4: Legacy Cleanup &amp; Hardening (Partial)
 - ✅ Add activity/session audit logging to `user_activity` table (**0a5cb35**, **c9ecaac**: fire-and-forget logActivity on dashboard_view, trace_view, session_view, compliance_view)
-- ✅ Add login/logout activity logging (**251b8d5**, **daef5a2**: POST /api/activity endpoint, AuthEvent type, SIGNED_IN/SIGNED_OUT hooks in AuthContext)
-- [ ] Align older users to `auth.users.id` if needed — **INVESTIGATION pending**
-- [ ] Rename `auth0_id` to neutral name like `identity_subject` — **INVESTIGATION pending**
+- ✅ Add login/logout activity logging (**251b8d5**, **daef5a2**, **0ef55ee**: POST /api/activity endpoint, POST /api/logout endpoint, AuthEvent type, SIGNED_IN/SIGNED_OUT hooks in AuthContext)
 - ✅ Add admin tooling for role/permission assignment (**d420e6c**, **c9a38dc**: GET/POST/DELETE /api/admin/* routes gated by dashboard.admin, AdminPage.tsx with user list + role assign/revoke, AdminGuard frontend permission check, service role key for RLS bypass)
-- [ ] Remove deprecated columns from `user_profiles` — **INVESTIGATION pending**
+- ✅ Document admin route error handling policy (**3c1273c**: ADMIN-P4-3)
+- ✅ Proactive auto-refresh timer in AuthContext (**5f60b82**: token refresh before expiry)
+- ✅ Extract Supabase REST client helpers to `supabase-rest.ts` (**88c7605**: AUTH-P4-1)
+- ✅ Make `authUserId`/`appUserId` optional in AppSession (**9e7bb4e**: AUTH-P3-3)
+- ✅ Align older users to `auth.users.id` — verified and resolved (2026-03-26): 2 orphaned `public.users` rows deleted, 7 `auth.users`-only accounts provisioned into `public.users`
+- ~~Rename `auth0_id` to neutral name~~ — **Permanently dropped**: Auth0 will remain the canonical identity provider for external/enterprise user support. `auth0_id` is the correct column name; it will hold Auth0 subject identifiers (`auth0|...`) once Auth0 becomes canonical. See [phase4-legacy-cleanup.md](phase4-legacy-cleanup.md).
+- ✅ Remove deprecated columns from `user_profiles` — `user_profiles.role` dropped (2026-03-26): zero non-null rows, no dependent views, RLS policies, or column-specific triggers
 
 ---
 
@@ -2039,21 +2599,24 @@ See `git log --oneline` for full implementation sequence and code-review finding
 
 ## Zod Validation Schemas ✅ Complete
 
-Created in Phase 2.1 (commit 8b9898c) to consolidate all auth validation into Zod schemas at `src/lib/validation/auth-schemas.ts`:
+Created in Phase 2.1 (commit 8b9898c) and updated for Auth0 migration (2026-03-26). All auth schemas live at `src/lib/validation/auth-schemas.ts`.
 
-### Completed Schemas
-- ✅ `AuthUserResponseSchema` — Supabase `/auth/v1/user` response (required: `id`; optional: `email`, `email_confirmed_at`, `user_metadata`, etc.)
-- ✅ `PublicUserSchema` — `public.users` table rows (required: `id` uuid, `email` string)
+### Current Schemas
+- ✅ `Auth0JwtPayloadSchema` — Auth0 JWT payload after `jose.jwtVerify()` (required: `sub`, `iss`, `aud`, `iat`, `exp`; optional: `email`, `name`, etc.) — replaced `AuthUserResponseSchema` on Auth0 migration
+- ✅ `PublicUserSchema` — `public.users` table rows (required: `id` uuid, `email` string); worker looks up by `auth0_id`
 - ✅ `UserRoleRowSchema` — `user_roles` joined with `roles` (required: `roles.name` string, `roles.permissions` string[])
-- ✅ `AuthTokenResponseSchema` — Supabase sign-in/sign-up responses (optional: `session`, `user`, `error`)
-- ✅ `LoginRequestSchema` — Frontend login payload (required: `email`, `password`)
-- ✅ `RefreshTokenRequestSchema` — Token refresh payload (required: `refresh_token`)
 - ✅ `MeResponseSchema` — `/api/me` endpoint response (required: `email`, `roles`, `permissions`, `allowedViews`)
+- ✅ `ActivityRequestSchema`, `AdminRoleSchema`, `AdminUserRoleRowSchema`, `AdminUserSchema`, `AssignRoleRequestSchema` — admin/activity route schemas (unchanged)
+
+### Removed (Auth0 migration, 2026-03-26)
+- ~~`AuthUserResponseSchema`~~ — Supabase `/auth/v1/user` response; worker no longer calls this endpoint
+- ~~`AuthTokenResponseSchema`~~ — Supabase sign-in/sign-up response; Auth0 SDK handles token exchange
+- ~~`LoginRequestSchema`~~ — email/password login payload; replaced by Auth0 Universal Login redirect
+- ~~`RefreshTokenRequestSchema`~~ — token refresh payload; Auth0 SDK handles refresh automatically
 
 ### Integration Points
-- **worker/index.ts**: JWT verification (line 85), `public.users` lookup (line 109), `user_roles` validation (line 133), `/api/me` response validation (line 176)
-- **AuthContext.tsx**: Replaces manual `typeof` checks in `fetchAppSession()` with `MeResponseSchema.safeParse()`
-- **Consistency**: Aligns auth validation with existing patterns in `src/api/routes/metrics.ts`, `trends.ts`, `evaluations.ts`
+- **worker/index.ts**: JWKS verification via `jose`, `public.users` lookup by `auth0_id`, `user_roles` validation, `/api/me` response validation
+- **AuthContext.tsx**: `MeResponseSchema.safeParse()` on `/api/me` response
 
 **Result**: Full Zod coverage for auth request/response validation, eliminating manual type assertions and typeof checks.
 
