@@ -68,6 +68,7 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
 const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
+export const EVAL_SCORE_PRECISION = 4;
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -78,7 +79,7 @@ export const MAX_TURN_LIMIT = 10_000;
 
 /** Round score to 4 decimal places (B10: extract from repeated pattern) */
 export function normalizeScore(score: number): number {
-  return parseFloat(score.toFixed(4));
+  return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
 }
 
 // ============================================================================
@@ -1006,7 +1007,7 @@ async function main() {
 
     console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
     console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
-    console.log(`[dry-run] estimated cost: $${estCost.toFixed(4)}`);
+    console.log(`[dry-run] estimated cost: $${estCost.toFixed(EVAL_SCORE_PRECISION)}`);
 
     const bySession = new Map<string, number>();
     for (const t of allTurns) {

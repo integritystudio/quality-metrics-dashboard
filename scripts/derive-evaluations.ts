@@ -20,6 +20,7 @@ import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.
 
 const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
 const SESSION_ID_PREVIEW_LEN = 8;
+const EVAL_SCORE_PRECISION = 4;
 
 export interface EvalRecord {
   timestamp: string;
@@ -118,7 +119,7 @@ function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
     evaluationName: 'evaluation_latency',
     scoreValue: durationSec,
     scoreUnit: 'seconds',
-    explanation: `Hook ${hookType} executed in ${durationSec.toFixed(4)}s`,
+    explanation: `Hook ${hookType} executed in ${durationSec.toFixed(EVAL_SCORE_PRECISION)}s`,
     evaluator: 'telemetry-rule-engine',
     evaluatorType: 'rule',
     traceId: span.traceId,
@@ -212,7 +213,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
       evals.push({
         timestamp: hrtToISO(lastSpan.startTime),
         evaluationName: 'task_completion',
-        scoreValue: parseFloat(avg.toFixed(4)),
+        scoreValue: parseFloat(avg.toFixed(EVAL_SCORE_PRECISION)),
         explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.tasks.size} tasks (${parts.join(', ')})`,
         evaluator: 'telemetry-rule-engine',
         evaluatorType: 'rule',
@@ -227,7 +228,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
       evals.push({
         timestamp: hrtToISO(lastSpan.startTime),
         evaluationName: 'task_completion',
-        scoreValue: parseFloat(completionRatio.toFixed(4)),
+        scoreValue: parseFloat(completionRatio.toFixed(EVAL_SCORE_PRECISION)),
         explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
         evaluator: 'telemetry-rule-engine',
         evaluatorType: 'rule',
@@ -281,7 +282,7 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
     evals.push({
       timestamp: hrtToISO(lastSpan.startTime),
       evaluationName: 'task_completion',
-      scoreValue: parseFloat(rate.toFixed(4)),
+      scoreValue: parseFloat(rate.toFixed(EVAL_SCORE_PRECISION)),
       explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
       evaluator: 'telemetry-rule-engine',
       evaluatorType: 'rule',
@@ -330,7 +331,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     evals.push({
       timestamp: hrtToISO(lastSpan.startTime),
       evaluationName: 'handoff_correctness',
-      scoreValue: parseFloat(avgScore.toFixed(4)),
+      scoreValue: parseFloat(avgScore.toFixed(EVAL_SCORE_PRECISION)),
       scoreUnit: 'ratio_0_1',
       explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
       evaluator: 'telemetry-rule-engine',
