@@ -1,3 +1,18 @@
+8de0763 2026-03-26 refactor(scripts): add EVAL_SCORE_PRECISION constant for toFixed(4) pattern
+  scripts/judge-evaluations.ts
+
+dd6171f 2026-03-26 refactor(constants): use RATE_DISPLAY_PRECISION and QUERY_RETRY_COUNT
+  scripts/sync-to-kv.ts
+
+6eeab8c 2026-03-26 refactor(session-detail): use page-content CSS class; add no-inline-styles note to CLAUDE.md
+  scripts/sync-to-kv.ts
+  src/theme.css
+
+cbabf37 2026-03-26 chore: regenerate repomix docs after Round 2 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 713c10f 2026-03-26 refactor(section): extract summary padding/transition to section-rail CSS selectors
   src/theme.css
 
@@ -323,15 +338,3 @@ e7afb28 2026-03-20 fix(types+worker): add authUserId and appUserId to MeResponse
 
 11f4c53 2026-03-20 fix(worker): change /api/me from POST to GET
   worker/index.ts
-
-1e248bd 2026-03-20 fix(auth): enforce permissions on all routes and fix URL injection in worker
-  worker/index.ts
-
-e7e1390 2026-03-20 refactor(auth): use Set for permission deduplication in worker middleware
-  worker/index.ts
-
-6c76f10 2026-03-20 feat(auth): implement Phase 1 dashboard authentication
-  worker/index.ts
-
-0ef5976 2026-03-20 docs(roadmap): add Supabase auth and user tracking implementation guide
-  docs/roadmap/users.md
