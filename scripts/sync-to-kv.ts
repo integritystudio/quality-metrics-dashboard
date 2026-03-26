@@ -54,7 +54,7 @@ import {
   loadJsonWithValidationSafe,
   loadJsonWithValidation,
 } from '../src/lib/dashboard-file-utils.js';
-import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT } from '../src/lib/constants.js';
+import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import {
   OTEL_STATUS_ERROR_CODE,
@@ -65,6 +65,7 @@ import {
   LATENCY_P50,
   LATENCY_P95,
   LATENCY_DISPLAY_PRECISION,
+  RATE_DISPLAY_PRECISION,
 } from '../src/api/api-constants.js';
 
 function resolveNamespaceId(): string {
@@ -606,9 +607,9 @@ function computeEvalBreakdown(evaluations: EvaluationResult[]) {
     return {
       name,
       count: d.count,
-      avg: avg != null ? +avg.toFixed(3) : null,
-      min: sorted.length > 0 ? +sorted[0].toFixed(3) : null,
-      max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(3) : null,
+      avg: avg != null ? +avg.toFixed(SCORE_DISPLAY_PRECISION) : null,
+      min: sorted.length > 0 ? +sorted[0].toFixed(SCORE_DISPLAY_PRECISION) : null,
+      max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION) : null,
     };
   });
 }
@@ -1141,15 +1142,15 @@ async function main(): Promise<void> {
       totalSessions,
       totalInvocations: acc.totalInvocations,
       totalErrors: acc.totalErrors,
-      errorRate: acc.totalInvocations > 0 ? +(acc.totalErrors / acc.totalInvocations).toFixed(4) : 0,
+      errorRate: acc.totalInvocations > 0 ? +(acc.totalErrors / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
       rateLimitEvents: acc.rateLimitEvents,
       avgOutputSize: acc.totalInvocations > 0 ? Math.round(acc.totalOutputSize / acc.totalInvocations) : 0,
       avgDurationMs: acc.totalInvocations > 0
         ? Math.round(acc.weightedDurationSum / acc.totalInvocations)
         : 0,
       p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(percentile(sortedSessionDurations, LATENCY_P95)) : 0,
-      truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(4) : 0,
-      emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(4) : 0,
+      truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
+      emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
       lastSeen,
       computedAt,
       sessions,

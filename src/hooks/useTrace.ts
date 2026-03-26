@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { API_BASE, STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
 import { useAuth } from '../contexts/AuthContext.js';
 
 interface TraceSpanResponse {
@@ -43,6 +43,6 @@ export function useTrace(traceId: string | undefined) {
     },
     enabled: !!traceId,
     staleTime: STALE_TIME.DETAIL,
-    retry: 2,
+    retry: QUERY_RETRY_COUNT,
   });
 }
