@@ -127,10 +127,11 @@ export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
 
 /**
  * User list item returned by GET /api/admin/users
+ * email is optional — phone-auth or OAuth users may not have a verified email address.
  */
 export const AdminUserSchema = z.object({
   id: z.string().uuid(),
-  email: z.email(),
+  email: z.email().optional(),
   created_at: z.iso.datetime().optional(),
   roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
 });

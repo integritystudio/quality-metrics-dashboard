@@ -111,7 +111,7 @@ function UserRow({
   return (
     <tr className="border-b">
       <td className="cell-pad text-left">
-        <span className="mono-sm">{user.email}</span>
+        <span className="mono-sm">{user.email ?? <span className="text-muted">(no email)</span>}</span>
       </td>
       <td className="cell-pad text-left">
         <div className="chip-list">
@@ -129,7 +129,7 @@ function UserRow({
             value={selectedRoleId}
             onChange={(e) => setSelectedRoleId(e.target.value)}
             disabled={busy || assignableRoles.length === 0}
-            aria-label={`Assign role to ${user.email}`}
+            aria-label={`Assign role to ${user.email ?? user.id}`}
           >
             <option value="">Select role...</option>
             {assignableRoles.map((r) => (
