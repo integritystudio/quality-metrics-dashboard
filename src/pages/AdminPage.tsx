@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
@@ -56,11 +56,13 @@ function RoleChip({
 function UserRow({
   user,
   availableRoles,
-  onChanged,
+  onMutationStart,
+  onMutationEnd,
 }: {
   user: AdminUser;
   availableRoles: AdminRole[];
-  onChanged: () => void;
+  onMutationStart: () => void;
+  onMutationEnd: () => void;
 }) {
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -74,6 +76,7 @@ function UserRow({
     if (!selectedRoleId) return;
     setBusy(true);
     setError(null);
+    onMutationStart();
     try {
       const res = await adminFetch(`/api/admin/users/${user.id}/roles`, 'POST', { role_id: selectedRoleId });
       if (!res.ok) {
@@ -81,30 +84,30 @@ function UserRow({
         setError(text || 'Failed to assign role');
       } else {
         setSelectedRoleId('');
-        onChanged();
       }
     } catch {
       setError('Network error');
     } finally {
       setBusy(false);
+      onMutationEnd();
     }
   }
 
   async function handleRevoke(roleId: string) {
     setBusy(true);
     setError(null);
+    onMutationStart();
     try {
       const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, 'DELETE');
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         setError(text || 'Failed to revoke role');
-      } else {
-        onChanged();
       }
     } catch {
       setError('Network error');
     } finally {
       setBusy(false);
+      onMutationEnd();
     }
   }
 
@@ -154,6 +157,19 @@ function UserRow({
 
 export function AdminPage() {
   const [refreshKey, setRefreshKey] = useState(0);
+  // Tracks in-flight mutations — refetch only after all concurrent mutations settle.
+  const pendingMutationsRef = useRef(0);
+
+  const onMutationStart = useCallback(() => {
+    pendingMutationsRef.current += 1;
+  }, []);
+
+  const onMutationEnd = useCallback(() => {
+    pendingMutationsRef.current -= 1;
+    if (pendingMutationsRef.current === 0) {
+      setRefreshKey((k) => k + 1);
+    }
+  }, []);
 
   const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
     ['admin', 'users', refreshKey],
@@ -184,7 +200,8 @@ export function AdminPage() {
                     key={user.id}
                     user={user}
                     availableRoles={roles ?? []}
-                    onChanged={() => setRefreshKey((k) => k + 1)}
+                    onMutationStart={onMutationStart}
+                    onMutationEnd={onMutationEnd}
                   />
                 ))}
               </tbody>
