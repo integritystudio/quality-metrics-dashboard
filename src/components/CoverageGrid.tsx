@@ -45,7 +45,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
 
   return (
     <div role="region" aria-label="Evaluation coverage heatmap">
-      {/* Summary bar */}
       <div className="flex-center mb-3 gap-3">
         <span className="mono-xl font-semibold">
           {formatPercent(overallCoveragePercent)}
@@ -55,7 +54,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
         </span>
       </div>
 
-      {/* Legend */}
       <div className="mb-3 text-xs flex-wrap gap-4">
         {COVERAGE_STATUSES.map(status => (
           <div key={status} className="flex-center gap-1">
@@ -68,7 +66,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
         ))}
       </div>
 
-      {/* Grid */}
       <div className="overflow-x-auto">
         <div
           role="table"
@@ -78,7 +75,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
             gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
           }}
         >
-          {/* Header row */}
           <div role="row" className="contents">
             <div role="columnheader" className="text-xs font-semibold" />
             {displayInputs.map(input => (

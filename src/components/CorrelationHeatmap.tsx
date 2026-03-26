@@ -79,10 +79,8 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
         aspectRatio: `${cols} / ${cols}`,
       }}
     >
-      {/* Top-left empty corner */}
       <div role="cell" />
 
-      {/* Column headers */}
       {metrics.map((m) => (
         <div
           key={`col-${m}`}
@@ -93,10 +91,8 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
         </div>
       ))}
 
-      {/* Rows */}
       {metrics.map((rowMetric, ri) => (
         <div key={`row-${rowMetric}`} role="presentation" className="contents">
-          {/* Row header */}
           <div
             role="rowheader"
             className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
@@ -104,7 +100,6 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
             {shortName(rowMetric)}
           </div>
 
-          {/* Data cells */}
           {metrics.map((colMetric, ci) => {
             const isDiag = ri === ci;
             const corr = isDiag ? undefined : lookupCorrelation(correlations, rowMetric, colMetric);
