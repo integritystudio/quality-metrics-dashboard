@@ -30,6 +30,17 @@ function attr<T>(span: { attributes?: Record<string, unknown> }, key: string): T
   return span.attributes?.[key] as T | undefined;
 }
 
+/**
+ * Parses a timestamp string to milliseconds since epoch.
+ * Returns null for empty, missing, or invalid strings that would produce NaN
+ * and corrupt tsMin/tsMax comparisons (CR-ERR-1).
+ */
+function parseTimestamp(value: string | undefined | null): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return isNaN(ms) ? null : ms;
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
@@ -88,13 +99,15 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     let tsMin = Infinity;
     let tsMax = -Infinity;
     for (const ev of evaluations) {
-      const t = new Date(ev.timestamp).getTime();
-      if (t < tsMin) tsMin = t;
-      if (t > tsMax) tsMax = t;
+      const t = parseTimestamp(ev.timestamp);
+      if (t !== null) {
+        if (t < tsMin) tsMin = t;
+        if (t > tsMax) tsMax = t;
+      }
     }
     for (const l of logs) {
-      const t = new Date((l as { timestamp?: string }).timestamp ?? '').getTime();
-      if (!isNaN(t)) {
+      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
+      if (t !== null) {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
       }
