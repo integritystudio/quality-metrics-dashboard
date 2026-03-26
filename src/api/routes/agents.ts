@@ -182,8 +182,9 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
       explanation: span.name,
     }));
 
+    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
     const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
-    const evaluations = await loadEvaluationsByTraceIds([...traceIds]);
+    const evaluations = await evalPromise;
 
     const serializedAgentMap = Object.fromEntries(agentMap);
     const graph = buildWorkflowGraph(evaluation, spans);
