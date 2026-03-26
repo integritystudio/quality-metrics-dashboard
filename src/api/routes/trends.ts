@@ -17,6 +17,12 @@ import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, 
 import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR } from '../api-constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
+function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals
+    .map(e => e.scoreValue)
+    .filter((v): v is number => v != null && Number.isFinite(v));
+}
+
 export const trendRoutes = new Hono();
 
 /**
@@ -131,9 +137,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     });
 
     // Overall percentile distribution across the full period
-    const allScores = evaluations
-      .map(e => e.scoreValue)
-      .filter((v): v is number => v != null && Number.isFinite(v));
+    const allScores = extractFiniteScores(evaluations);
     const overallPercentiles = computePercentileDistribution(allScores);
 
     return c.json({
@@ -168,9 +172,7 @@ trendRoutes.get('/trends', async (c) => {
     const summaries = await Promise.all(
       metricNames.map(async (name: string) => {
         const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = evals
-          .map(e => e.scoreValue)
-          .filter((v): v is number => v != null && Number.isFinite(v));
+        const scores = extractFiniteScores(evals);
         return {
           metric: name,
           count: scores.length,
