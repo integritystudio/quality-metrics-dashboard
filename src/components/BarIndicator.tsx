@@ -5,13 +5,11 @@ interface BarIndicatorProps {
   value: number;
   /** Fill color (default: CSS var(--accent)) */
   color?: string;
-  /** Fill opacity (default: 1) */
   opacity?: number;
   /** Track height override via --bar-h CSS custom prop (default: CSS 4px) */
   height?: number;
   /** Track background (default: CSS var(--bg-surface)) */
   trackColor?: string;
-  /** Extra class on the track div */
   className?: string;
   /** Extra inline styles on the track div (merged with internal overrides) */
   style?: CSSProperties;

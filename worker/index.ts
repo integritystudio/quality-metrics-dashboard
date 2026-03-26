@@ -124,7 +124,7 @@ app.use('/api/*', async (c, next) => {
 
 const AUTH_TIMEOUT_MS = 5000;
 
-// JWT auth middleware — runs before all /api/* routes, exempts /api/health and test mode
+// exempts /api/health and test mode
 app.use('/api/*', async (c, next) => {
   if (c.req.path === '/api/health') return next();
 
