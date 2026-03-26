@@ -139,7 +139,8 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
         id: key,
         source: curr.id,
         target: next.id,
-        handoffScore: 0,
+        // null distinguishes inferred edges (no evaluation data) from a real handoff score of 0
+        handoffScore: null,
         contextPreserved: false,
         label: 'inferred',
       });

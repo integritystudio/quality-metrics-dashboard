@@ -15,7 +15,8 @@ export interface WorkflowEdge {
   id: string;
   source: string;
   target: string;
-  handoffScore: number;
+  /** null for inferred edges (no evaluation data); real zero score is a valid low score. */
+  handoffScore: number | null;
   contextPreserved: boolean;
   label?: string;
 }
