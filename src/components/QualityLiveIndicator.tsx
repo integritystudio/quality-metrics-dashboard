@@ -34,17 +34,15 @@ export function QualityLiveIndicator() {
         borderRadius: 'var(--radius)',
       }}
     >
-      <span className="text-secondary font-semibold" style={{ marginRight: 'var(--space-1)' }}>
+      <span className="text-secondary font-semibold mr-1">
         Quality
       </span>
       {data.metrics.map((m) => (
         <span
           key={m.name}
           title={`${m.name}: ${m.score.toFixed(2)} (${m.evaluatorType})`}
-          className="mono text-xs chip gap-1 font-medium"
+          className="mono text-xs chip gap-1 font-medium inline-flex-center"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
             background: scoreToBadgeColor(m.score) + SCORE_BADGE_ALPHA_HEX,
             color: scoreToBadgeColor(m.score),
           }}

@@ -94,7 +94,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
         <div className="flex-1">
           <div className="text-xs font-medium">{node.name}</div>
           <div className="flex-center gap-2">
-            <div className="flex-1" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-xs)', height: 'var(--space-1)' }}>
+            <div className="flex-1 bar-track">
               <div style={barStyle} />
             </div>
             {node.durationMs != null && (

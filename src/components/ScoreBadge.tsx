@@ -42,7 +42,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
       <MetadataRow label="Evaluator" value={evaluator} mono />
       <MetadataRow label="Type" value={evaluatorType} />
       {explanation && (
-        <div className="tooltip-row gap-half" style={{ flexDirection: 'column' }}>
+        <div className="tooltip-row tooltip-row--col gap-half">
           <span className="text-secondary">Explanation</span>
           <span className="text-secondary text-xs">{truncateText(explanation, 120)}</span>
         </div>
