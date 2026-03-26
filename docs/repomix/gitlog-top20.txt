@@ -1,3 +1,47 @@
+d0ff9f0 2026-03-26 refactor(correlation-heatmap): extract static inline styles to CSS classes
+  src/theme.css
+
+dfe75f3 2026-03-26 refactor: extract static inline styles to CSS in QualityLiveIndicator and PipelineFunnel
+  src/theme.css
+
+0fa01ac 2026-03-26 refactor(cqi-hero): extract static layout inline styles to CSS classes
+  src/theme.css
+
+32ab606 2026-03-26 refactor(span-tree): extract padding/color inline styles to CSS classes
+  src/theme.css
+
+2edf9ec 2026-03-26 refactor(eval-overlay): extract card/link inline styles to CSS classes
+  src/theme.css
+
+7302a44 2026-03-26 refactor(turn-timeline): move min-width to CSS class, simplify inline style
+  src/theme.css
+
+4fc9e75 2026-03-26 refactor: move skeleton height constants to CSS classes
+  src/theme.css
+
+a288b8d 2026-03-26 refactor: move constant-based dimension inline styles to CSS classes
+  src/theme.css
+
+63528bf 2026-03-26 refactor(workflow-timeline): move legend paddingLeft to CSS class
+  src/theme.css
+
+ed795a4 2026-03-26 refactor(eval-table): extract filter chip inline styles to CSS class
+  src/theme.css
+
+b4cd850 2026-03-26 refactor(agent-activity): move minWidth inline styles to CSS classes
+  src/theme.css
+
+20f19d0 2026-03-26 refactor(session-detail): move inline grid/column styles to CSS classes
+  src/theme.css
+
+5cb443b 2026-03-26 refactor(coverage-grid): move static inline styles to CSS classes
+  src/theme.css
+
+52e5fdd 2026-03-26 chore: regenerate repomix docs after Round 6 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 0847cea 2026-03-26 (chore) update docs
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -306,47 +350,3 @@ d420e6c 2026-03-21 feat(admin): add admin tooling for role/permission assignment
 
 04e8206 2026-03-20 docs(auth): mark login/logout activity logging done in Phase 4 roadmap
   docs/roadmap/users.md
-
-daef5a2 2026-03-20 refactor(auth): simplify activity logging — inline vars, drop redundant type annotations
-  worker/index.ts
-
-251b8d5 2026-03-20 feat(auth): add login/logout activity logging via POST /api/activity (Phase 4)
-  worker/index.ts
-
-a7ac806 2026-03-20 perf(auth): optimize activity logging for efficiency
-  worker/index.ts
-
-fdfd05f 2026-03-20 docs(auth): mark activity logging done in Phase 4 roadmap
-  docs/roadmap/users.md
-
-c9ecaac 2026-03-20 fix(auth): address code review findings in activity logging
-  worker/index.ts
-
-0a5cb35 2026-03-20 feat(auth): add user_activity audit logging on view routes (Phase 4)
-  docs/roadmap/users.md
-  worker/index.ts
-
-3fddbb4 2026-03-20 chore(auth): remove dead MeResponse import from worker
-  worker/index.ts
-
-34195c9 2026-03-20 fix(auth): close role gate bypass and add server-side allowedViews check on /api/dashboard
-  worker/index.ts
-
-ce1cb6a 2026-03-20 feat(auth): gate RoleSelector tabs and /role routes on allowedViews (Phase 3)
-  worker/index.ts
-
-ad2c40f 2026-03-20 docs: update auth documentation with Zod validation completion
-  docs/roadmap/users.md
-
-8b9898c 2026-03-20 feat(auth): add remaining Zod validation schemas (login, refresh, me endpoint)
-  worker/index.ts
-
-87e9ba3 2026-03-20 feat(auth): add Zod validation schemas for Supabase auth responses
-  docs/roadmap/users.md
-  worker/index.ts
-
-6e94d95 2026-03-20 fix(auth): validate DB permissions and path params in worker (final review H1/H2)
-  worker/index.ts
-
-beae4b7 2026-03-20 fix(auth): P3 hardening — token guard, CORS, comments, auth timeout (AUTH-12/13/16/17)
-  worker/index.ts
