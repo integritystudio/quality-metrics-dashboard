@@ -1437,3 +1437,12 @@ summary.section-rail {
 .variance-value {
   min-width: 36px;
 }
+.skeleton-md {
+  height: 300px;
+}
+.skeleton-xl {
+  height: 600px;
+}
+.metric-grid .skeleton {
+  height: 180px;
+}
