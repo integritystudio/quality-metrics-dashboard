@@ -237,18 +237,17 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     let tsMin = Infinity;
     let tsMax = -Infinity;
-    const evalByName: Record<string, { count: number; scores: number[] }> = {};
+    const evalByName = Object.create(null) as Record<string, { count: number; scores: number[] }>;
     for (const ev of evaluations) {
       const t = parseTimestamp(ev.timestamp);
       if (t !== null) {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
       }
-      const name = ev.evaluationName;
-      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
-      evalByName[name].count++;
+      const entry = (evalByName[ev.evaluationName] ??= { count: 0, scores: [] });
+      entry.count++;
       if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-        evalByName[name].scores.push(ev.scoreValue);
+        entry.scores.push(ev.scoreValue);
       }
     }
     const logBySeverity: Record<string, number> = {};
