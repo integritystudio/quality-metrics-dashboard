@@ -1389,3 +1389,13 @@ summary.section-rail {
 .coverage-gap-list {
   padding-left: var(--space-5);
 }
+.agent-activity-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.file-access-columns {
+  columns: 2 320px;
+  column-gap: var(--space-8);
+}
+.file-access-columns > div {
+  break-inside: avoid;
+}

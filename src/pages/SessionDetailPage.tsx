@@ -18,11 +18,10 @@ import {
   MAX_ERROR_ROWS,
   MAX_HALLUCINATION_ROWS,
   MAX_FAILED_EVAL_ROWS,
+  SCORE_CHIP_PRECISION,
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
   CODE_QUALITY_WARN_THRESHOLD,
-  AGENT_CARD_MIN_WIDTH,
-  FILE_ACCESS_COL_MIN,
 } from '../lib/constants.js';
 
 // ─── Main page ───────────────────────────────────────────────────────────────
@@ -317,7 +316,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={agentActivity.map(a => `${a.agentName} ×${a.invocations}`).join(' · ')}
           health={agentActivity.some(a => a.errors > 0) ? 'warn' : 'neutral'}
         >
-          <div className="d-grid gap-2-5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${AGENT_CARD_MIN_WIDTH}, 1fr))` }}>
+          <div className="d-grid gap-2-5 agent-activity-grid">
             {agentActivity.map(a => (
               <div key={a.agentName} className="agent-stat-card" data-has-error={a.errors > 0 ? 'true' : undefined}>
                 <div className="mono-xs mb-1-5 font-semibold">
@@ -362,9 +361,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           badge={`${fileAccess.length} files · top: ${shortPath(fileAccess[0]?.path ?? '')}`}
           health="neutral"
         >
-          <div style={{ columns: `2 ${FILE_ACCESS_COL_MIN}`, columnGap: 'var(--space-8)' }}>
+          <div className="file-access-columns">
             {fileAccess.map(({ path, count }) => (
-              <div key={path} style={{ breakInside: 'avoid' }}>
+              <div key={path}>
                 <FreqBar
                   label={shortPath(path)}
                   count={count}
