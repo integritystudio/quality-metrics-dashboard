@@ -73,7 +73,6 @@ export const MAX_TOOL_CONTEXT_ITEMS = 10;
 export const MAX_TOOL_RESULTS_PER_TURN = 20;
 export const MAX_TURN_LIMIT = 10_000;
 
-/** Round score to 4 decimal places (B10: extract from repeated pattern) */
 export function normalizeScore(score: number): number {
   return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
 }
