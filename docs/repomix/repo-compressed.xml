@@ -1301,20 +1301,6 @@ interface PageShellProps {
 export function PageShell(
 
 ================
-File: src/components/PipelineFunnel.tsx
-================
-import { memo } from 'react';
-import type { PipelineStage, PipelineDropoff } from '../types.js';
-import { EmptyState } from './EmptyState.js';
-import { formatPercent } from '../lib/quality-utils.js';
-import { FUNNEL_BAR_HEIGHT, FUNNEL_BAR_MIN_WIDTH, FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
-interface PipelineFunnelProps {
-  stages: PipelineStage[];
-  dropoffs: PipelineDropoff[];
-  overallConversionPercent: number;
-}
-
-================
 File: src/components/ScoreHistogram.tsx
 ================
 
@@ -1401,22 +1387,6 @@ export function TruncatedList<T>({ items, max, renderItem, total }: {
   max: number;
 renderItem: (item: T, index: number)
 ⋮----
-
-================
-File: src/context/CalibrationContext.tsx
-================
-import { createContext, useContext, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useCalibration, getMetricCalibration } from '../hooks/useCalibration.js';
-import type { CalibrationResponse, MetricCalibration } from '../hooks/useCalibration.js';
-interface CalibrationContextValue {
-  data: CalibrationResponse | undefined;
-  isLoading: boolean;
-}
-⋮----
-export function CalibrationProvider(
-export function useCalibrationData(): CalibrationContextValue
-export function useMetricCalibration(metricName: string): MetricCalibration | undefined
 
 ================
 File: src/contexts/KeyboardNavContext.tsx
@@ -1993,6 +1963,20 @@ export interface TableColumn {
 export function MonoTableHead(
 
 ================
+File: src/components/PipelineFunnel.tsx
+================
+import { memo } from 'react';
+import type { PipelineStage, PipelineDropoff } from '../types.js';
+import { EmptyState } from './EmptyState.js';
+import { formatPercent } from '../lib/quality-utils.js';
+import { FUNNEL_BAR_HEIGHT, FUNNEL_BAR_MIN_WIDTH, FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
+interface PipelineFunnelProps {
+  stages: PipelineStage[];
+  dropoffs: PipelineDropoff[];
+  overallConversionPercent: number;
+}
+
+================
 File: src/components/QualityLiveIndicator.tsx
 ================
 import { useQualityLive } from '../hooks/useQualityLive.js';
@@ -2030,21 +2014,6 @@ interface ScoreBadgeProps {
 }
 ⋮----
 <Link href=
-
-================
-File: src/components/Section.tsx
-================
-import type { CSSProperties, ReactNode } from 'react';
-import { CHEVRON_RIGHT } from '../lib/symbols.js';
-export function ViewSection(
-export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
-export interface SectionProps {
-  title: string;
-  badge?: string;
-  health?: SectionHealth;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}
 
 ================
 File: src/components/ShortcutOverlay.tsx
@@ -2112,26 +2081,18 @@ interface TimestampCellProps {
 export function TimestampCell(
 
 ================
-File: src/contexts/RoleContext.tsx
+File: src/context/CalibrationContext.tsx
 ================
-import { createContext, useContext, useEffect, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useRoute } from 'wouter';
-import {
-  ROLE_FEATURE_CONFIG,
-  type FeatureRoleType,
-  type RoleFeatureConfig,
-} from '../lib/quality-utils.js';
-import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
-⋮----
-interface RoleContextValue {
-  role: FeatureRoleType;
-  config: RoleFeatureConfig;
-  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useCalibration, getMetricCalibration, type CalibrationResponse, type MetricCalibration } from '../hooks/useCalibration.js';
+interface CalibrationContextValue {
+  data: CalibrationResponse | undefined;
+  isLoading: boolean;
 }
 ⋮----
-export function RoleProvider(
-export function useRole(): RoleContextValue
+export function CalibrationProvider(
+export function useCalibrationData(): CalibrationContextValue
+export function useMetricCalibration(metricName: string): MetricCalibration | undefined
 
 ================
 File: src/hooks/useRoutingTelemetry.ts
@@ -2258,14 +2219,6 @@ File: src/types/activity.ts
 export type UserActivityEvent = typeof USER_ACTIVITY_EVENTS[number];
 ⋮----
 export type FrontendActivityEvent = typeof FRONTEND_ACTIVITY_EVENTS[number];
-
-================
-File: src/main.tsx
-================
-import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
-import { App } from './App.js';
 
 ================
 File: scripts/.kv-sync-coverage.json
@@ -2534,6 +2487,21 @@ interface RequireAuthProps {
 export function RequireAuth(
 
 ================
+File: src/components/Section.tsx
+================
+import type { CSSProperties, ReactNode } from 'react';
+import { CHEVRON_RIGHT } from '../lib/symbols.js';
+export function ViewSection(
+export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
+export interface SectionProps {
+  title: string;
+  badge?: string;
+  health?: SectionHealth;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}
+
+================
 File: src/components/TurnTimeline.tsx
 ================
 import { scoreColor, agentColor } from '../lib/quality-utils.js';
@@ -2545,6 +2513,27 @@ interface TurnTimelineProps {
   turns: TurnLevelResult[];
   agentNames: string[];
 }
+
+================
+File: src/contexts/RoleContext.tsx
+================
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { useRoute } from 'wouter';
+import {
+  ROLE_FEATURE_CONFIG,
+  type FeatureRoleType,
+  type RoleFeatureConfig,
+} from '../lib/quality-utils.js';
+import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
+⋮----
+interface RoleContextValue {
+  role: FeatureRoleType;
+  config: RoleFeatureConfig;
+  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
+}
+⋮----
+export function RoleProvider(
+export function useRole(): RoleContextValue
 
 ================
 File: src/hooks/useSessionDetail.ts
@@ -2679,32 +2668,14 @@ import type { FrontendActivityEvent } from '../types/activity.js';
 export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise<void>
 
 ================
-File: src/lib/dashboard-file-utils.ts
+File: src/main.tsx
 ================
-import { readFileSync, existsSync } from 'fs';
-import { createInterface } from 'readline';
-import { createReadStream } from 'fs';
-import type { z } from 'zod';
+import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import { App } from './App.js';
 ⋮----
-export async function readJsonlWithValidation<T>(
-  filePath: string,
-  schema: z.ZodType<T>,
-  limit?: number
-): Promise<T[]>
-export function readJsonlWithValidationSync<T>(
-  filePath: string,
-  schema: z.ZodType<T>,
-  limit?: number
-): T[]
-export function loadJsonWithValidation<T>(
-  filePath: string,
-  schema: z.ZodType<T>
-): T | null
-export function loadJsonWithValidationSafe<T>(
-  filePath: string,
-  schema: z.ZodType<T>,
-  fallback: T
-): T
+function ErrorFallback(
 
 ================
 File: scripts/backtest-degradation.ts
@@ -2754,72 +2725,6 @@ function formatConfig(cfg: BacktestConfig): string
 function printSummaryTable(metricName: string, result: BacktestSweepResult, evalCount: number): void
 // ---- Main ----
 async function main(): Promise<void>
-
-================
-File: scripts/derive-evaluations.ts
-================
-import { writeFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
-import {
-  computeCalibrationDistributions,
-  loadCalibrationState,
-  saveCalibrationState,
-  shouldRecalibrate,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
-import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
-⋮----
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  scoreUnit?: string;
-  explanation: string;
-  evaluator: string;
-  evaluatorType: string;
-  traceId: string;
-  sessionId?: string;
-}
-function toOTelRecord(ev: EvalRecord): object
-function hrtToSeconds(hrt: [number, number]): number
-function hrtToISO(hrt: [number, number]): string
-function deriveToolCorrectness(span: TraceSpan): EvalRecord | null
-function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null
-⋮----
-// Only measure tool execution hooks (the meaningful ones)
-⋮----
-// Track per-session task status transitions for task_completion scoring
-// Graduated: pending=0.0, in_progress=0.5, completed=1.0
-interface TaskState {
-  statuses: Set<string>;
-  lastSpan: TraceSpan;
-}
-interface SessionTaskData {
-  tasks: Map<string, TaskState>;  // taskId -> state
-  creates: number;   // fallback counters for old trace data
-  updates: number;
-  lastSpan: TraceSpan | null;
-}
-⋮----
-tasks: Map<string, TaskState>;  // taskId -> state
-creates: number;   // fallback counters for old trace data
-⋮----
-export function trackTaskActivity(span: TraceSpan): void
-export function scoreTask(statuses: Set<string>): number
-export function deriveTaskCompletionPerSession(): EvalRecord[]
-interface AgentSessionData {
-  pre: number;
-  post: number;
-  spans: TraceSpan[];
-  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
-}
-⋮----
-function trackAgentActivity(span: TraceSpan): void
-function deriveAgentCompletionPerSession(): EvalRecord[]
-⋮----
-function deriveHandoffCorrectnessPerSession(): EvalRecord[]
-function main(): void
 
 ================
 File: src/__tests__/workflow-graph.test.ts
@@ -2904,6 +2809,33 @@ interface TrendSeriesProps {
 function formatTime(iso: string, spanDays: number): string
 
 ================
+File: src/lib/dashboard-file-utils.ts
+================
+import { readFileSync, existsSync, createReadStream } from 'fs';
+import { createInterface } from 'readline';
+import type { z } from 'zod';
+⋮----
+export async function readJsonlWithValidation<T>(
+  filePath: string,
+  schema: z.ZodType<T>,
+  limit?: number
+): Promise<T[]>
+export function readJsonlWithValidationSync<T>(
+  filePath: string,
+  schema: z.ZodType<T>,
+  limit?: number
+): T[]
+export function loadJsonWithValidation<T>(
+  filePath: string,
+  schema: z.ZodType<T>
+): T | null
+export function loadJsonWithValidationSafe<T>(
+  filePath: string,
+  schema: z.ZodType<T>,
+  fallback: T
+): T
+
+================
 File: src/lib/supabase-rest.ts
 ================
 export function supabasePost(
@@ -2911,15 +2843,6 @@ export function supabasePost(
   body: unknown,
   key: string,
 ): void
-
-================
-File: src/pages/LoginPage.tsx
-================
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
-export function LoginPage()
-⋮----
-const handleLogin = ()
 
 ================
 File: src/pages/RoutingTelemetryPage.tsx
@@ -2960,6 +2883,72 @@ export interface WorkflowGraph {
   workflowShape: WorkflowShape;
   droppedTurns: number;
 }
+
+================
+File: scripts/derive-evaluations.ts
+================
+import { writeFileSync, readdirSync, existsSync } from 'fs';
+import { join } from 'path';
+import {
+  computeCalibrationDistributions,
+  loadCalibrationState,
+  saveCalibrationState,
+  shouldRecalibrate,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
+import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
+⋮----
+export interface EvalRecord {
+  timestamp: string;
+  evaluationName: string;
+  scoreValue: number;
+  scoreUnit?: string;
+  explanation: string;
+  evaluator: string;
+  evaluatorType: string;
+  traceId: string;
+  sessionId?: string;
+}
+function toOTelRecord(ev: EvalRecord): object
+function hrtToSeconds(hrt: [number, number]): number
+function hrtToISO(hrt: [number, number]): string
+function deriveToolCorrectness(span: TraceSpan): EvalRecord | null
+function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null
+⋮----
+// Only measure tool execution hooks (the meaningful ones)
+⋮----
+// Track per-session task status transitions for task_completion scoring
+// Graduated: pending=0.0, in_progress=0.5, completed=1.0
+interface TaskState {
+  statuses: Set<string>;
+  lastSpan: TraceSpan;
+}
+interface SessionTaskData {
+  tasks: Map<string, TaskState>;  // taskId -> state
+  creates: number;   // fallback counters for old trace data
+  updates: number;
+  lastSpan: TraceSpan | null;
+}
+⋮----
+tasks: Map<string, TaskState>;  // taskId -> state
+creates: number;   // fallback counters for old trace data
+⋮----
+export function trackTaskActivity(span: TraceSpan): void
+export function scoreTask(statuses: Set<string>): number
+export function deriveTaskCompletionPerSession(): EvalRecord[]
+interface AgentSessionData {
+  pre: number;
+  post: number;
+  spans: TraceSpan[];
+  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
+}
+⋮----
+function trackAgentActivity(span: TraceSpan): void
+function deriveAgentCompletionPerSession(): EvalRecord[]
+⋮----
+function deriveHandoffCorrectnessPerSession(): EvalRecord[]
+function main(): void
 
 ================
 File: src/api/routes/dashboard.ts
@@ -3066,71 +3055,12 @@ export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
-File: src/lib/quality-utils.ts
+File: src/pages/LoginPage.tsx
 ================
-export type ScoreDirection = 'maximize' | 'minimize';
-export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
-export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
-export interface LabelOrdinal {
-  ordinal: number;
-  category: LabelFilterCategory;
-  mapped: boolean;
-}
-import type { Role } from './constants.js';
-import { AGENT_PALETTE } from './constants.js';
-export type FeatureRoleType = Role;
-export function agentColor(agentName: string, agentNames: string[]): string
-export interface RoleFeatureConfig {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
-}
-export function truncateText(text: string, max: number): string
-export function truncateId(id: string, max = 10): string
-export function formatScore(val: number | null | undefined): string
-export function formatPercent(value: number, decimals = 1): string
-export function plural(count: number, singular: string, suffix = 's'): string
+import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
+export function LoginPage()
 ⋮----
-export function scoreColor(value: number, direction?: ScoreDirection): string
-export function scoreColorBand(
-  value: number,
-  direction: ScoreDirection = 'maximize',
-): ScoreColorBand
-type ThresholdDirection = 'above' | 'below';
-export function inferScoreDirection(
-  alertDirection: ThresholdDirection | undefined,
-): ScoreDirection
-⋮----
-function normalizeLabel(label: string): string
-export function labelToOrdinal(label: string): LabelOrdinal
-export function ordinalToCategory(ordinal: number): LabelFilterCategory
-⋮----
-export function shortPath(fullPath: string): string
-export function fmtBytes(n: number): string
-export interface PercentileDistribution {
-  p10: number; p25: number; p50: number; p75: number; p90: number;
-}
-export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
-⋮----
-export function empiricalCDF(value: number, dist: PercentileDistribution): number
-export function adaptiveScoreColorBand(
-  value: number,
-  metric: string,
-  direction: ScoreDirection = 'maximize',
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
-): ScoreColorBand
-import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
-export function formatTimestamp(ts: string): string
+const handleLogin = ()
 
 ================
 File: src/api/routes/trends.ts
@@ -3186,6 +3116,112 @@ function TurnBlock(
 ⋮----
 const turnX = (turnIndex: number): number
 const laneY = (laneIndex: number): number
+
+================
+File: src/hooks/useApiQuery.ts
+================
+import { useQuery } from '@tanstack/react-query';
+import { STALE_TIME } from '../lib/constants.js';
+import { useAuth } from '../contexts/AuthContext.js';
+function defaultRetry(failureCount: number, error: unknown): boolean
+export function useApiQuery<TRaw, T = TRaw>(
+  queryKey: readonly unknown[],
+  buildUrl: () => string,
+  options: {
+    enabled?: boolean;
+    staleTime?: number;
+retry?: number | ((failureCount: number, error: unknown)
+
+================
+File: src/lib/quality-utils.ts
+================
+export type ScoreDirection = 'maximize' | 'minimize';
+export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
+export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
+export interface LabelOrdinal {
+  ordinal: number;
+  category: LabelFilterCategory;
+  mapped: boolean;
+}
+import { type Role, AGENT_PALETTE } from './constants.js';
+export type FeatureRoleType = Role;
+export function agentColor(agentName: string, agentNames: string[]): string
+export interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;
+  maxWorstEvaluations: number;
+}
+export function truncateText(text: string, max: number): string
+export function truncateId(id: string, max = 10): string
+export function formatScore(val: number | null | undefined): string
+export function formatPercent(value: number, decimals = 1): string
+export function plural(count: number, singular: string, suffix = 's'): string
+⋮----
+export function scoreColor(value: number, direction?: ScoreDirection): string
+export function scoreColorBand(
+  value: number,
+  direction: ScoreDirection = 'maximize',
+): ScoreColorBand
+type ThresholdDirection = 'above' | 'below';
+export function inferScoreDirection(
+  alertDirection: ThresholdDirection | undefined,
+): ScoreDirection
+⋮----
+function normalizeLabel(label: string): string
+export function labelToOrdinal(label: string): LabelOrdinal
+export function ordinalToCategory(ordinal: number): LabelFilterCategory
+⋮----
+export function shortPath(fullPath: string): string
+export function fmtBytes(n: number): string
+export interface PercentileDistribution {
+  p10: number; p25: number; p50: number; p75: number; p90: number;
+}
+export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
+⋮----
+export function empiricalCDF(value: number, dist: PercentileDistribution): number
+export function adaptiveScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection = 'maximize',
+  distribution?: PercentileDistribution,
+  sampleSize?: number,
+): ScoreColorBand
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+export function formatTimestamp(ts: string): string
+
+================
+File: src/types/auth.ts
+================
+import type { RoleViewType } from '../types.js';
+export type DashboardPermission =
+  | 'dashboard.read'
+  | 'dashboard.executive'
+  | 'dashboard.operator'
+  | 'dashboard.auditor'
+  | 'dashboard.traces.read'
+  | 'dashboard.sessions.read'
+  | 'dashboard.agents.read'
+  | 'dashboard.pipeline.read'
+  | 'dashboard.compliance.read'
+  | 'dashboard.admin';
+export type DashboardView = RoleViewType;
+export interface AppSession {
+  authUserId?: string;
+  appUserId?: string;
+  email: string;
+  roles: string[];
+  permissions: DashboardPermission[];
+  allowedViews: DashboardView[];
+}
 
 ================
 File: src/api/routes/agents.ts
@@ -3294,19 +3330,103 @@ async function computeLayout(
 ): Promise<
 
 ================
-File: src/hooks/useApiQuery.ts
+File: src/lib/workflow-graph.ts
 ================
-import { useQuery } from '@tanstack/react-query';
-import { STALE_TIME } from '../lib/constants.js';
-import { useAuth } from '../contexts/AuthContext.js';
-function defaultRetry(failureCount: number, error: unknown): boolean
-export function useApiQuery<TRaw, T = TRaw>(
-  queryKey: readonly unknown[],
-  buildUrl: () => string,
-  options: {
-    enabled?: boolean;
-    staleTime?: number;
-retry?: number | ((failureCount: number, error: unknown)
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+⋮----
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
+⋮----
+function dfs(nodeId: string): boolean
+⋮----
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
+
+================
+File: src/__tests__/WorkflowGraph.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import type { ReactNode } from 'react';
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) => void;
+  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
+⋮----
+<div key=
+⋮----
+interface ELKGraph {
+  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+⋮----
+layout(graph: ELKGraph)
+⋮----
+import { WorkflowGraphView } from '../components/WorkflowGraph.js';
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
+
+================
+File: src/api/routes/sessions.ts
+================
+import { Hono } from 'hono';
+import { subMilliseconds, formatISO } from 'date-fns';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import {
+  COMMIT_BODY_START_LINE_INDEX,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  FILE_ACCESS_TOP_N,
+  LATENCY_P50,
+  LATENCY_P95,
+  LOG_SUMMARY_FIELDS,
+  LOG_SUMMARY_MAX_ENTRIES,
+  type SafeLogEntry,
+  OTEL_STATUS_ERROR_CODE,
+  PARAM_ID_RE,
+  PERCENT_BASE,
+  LATENCY_DISPLAY_PRECISION,
+} from '../api-constants.js';
+import {
+  loadEvaluationsBySessionId,
+  loadLogsBySessionId,
+} from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+⋮----
+function attr<T>(span:
+function parseTimestamp(value: string | undefined | null): number | null
+function percentile(sorted: number[], p: number): number
+⋮----
+async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string)
+⋮----
+// ---- Token Totals ----
+⋮----
+// ---- Tool Usage ----
+⋮----
+// ---- Alert Summary ----
+⋮----
+// ---- Evaluation Breakdown (from direct sessionId query) ----
+⋮----
+// ---- Log Summary ----
 
 ================
 File: src/lib/constants.ts
@@ -3337,22 +3457,29 @@ export function computePeriodDates(period: string):
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
 
 ================
-File: src/lib/workflow-graph.ts
+File: src/pages/AdminPage.tsx
 ================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { useState, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useAuth } from '../contexts/AuthContext.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
 ⋮----
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
+function RoleChip({
+  role,
+  onRevoke,
+  revoking,
+}: {
+  role: { id: string; name: string };
+onRevoke: (roleId: string, roleName: string)
 ⋮----
-function dfs(nodeId: string): boolean
-⋮----
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
+async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
+async function handleAssign()
+async function handleRevoke(roleId: string, roleName: string)
 
 ================
 File: scripts/judge-evaluations.ts
@@ -3481,135 +3608,42 @@ export async function processBatch<T, R>(
 async function main()
 
 ================
-File: src/__tests__/WorkflowGraph.test.tsx
+File: src/lib/supabase.ts
 ================
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import type { ReactNode } from 'react';
-interface MockNode {
-  id: string;
-  type: string;
-  data: Record<string, unknown>;
+import { fromUnixTime, isPast, subSeconds } from 'date-fns';
+⋮----
+export interface SupabaseSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  user: { id: string; email: string };
 }
-interface MockEdge {
-  id: string;
-  label?: string;
-}
-interface ReactFlowProps {
-  nodes?: MockNode[];
-  edges?: MockEdge[];
-  onNodeClick?: (event: unknown, node: MockNode) => void;
-  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
-  children?: ReactNode;
-  [key: string]: unknown;
-}
+export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
+type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
+type AuthTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: { id: string; email: string };
+};
 ⋮----
-<div key=
+function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void
+function saveSession(session: SupabaseSession): void
+function clearSession(): void
+function clearSessionAndNotify(): null
+function isValidSession(value: unknown): value is SupabaseSession
+function readRawSession(): SupabaseSession | null
+function isValidTokenResponse(value: unknown): value is AuthTokenResponse
+function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession
+export function getSession(): SupabaseSession | null
+export async function signIn(email: string, password: string): Promise<SupabaseSession>
+export async function signOut(): Promise<void>
 ⋮----
-interface ELKGraph {
-  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
-  [key: string]: unknown;
-}
+export function refreshSession(): Promise<SupabaseSession | null>
+export function onAuthStateChange(listener: AuthStateListener): () => void
 ⋮----
-layout(graph: ELKGraph)
-⋮----
-import { WorkflowGraphView } from '../components/WorkflowGraph.js';
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
-
-================
-File: src/api/routes/sessions.ts
-================
-import { Hono } from 'hono';
-import { subMilliseconds, formatISO } from 'date-fns';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import {
-  COMMIT_BODY_START_LINE_INDEX,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
-  FILE_ACCESS_TOP_N,
-  LATENCY_P50,
-  LATENCY_P95,
-  LOG_SUMMARY_FIELDS,
-  LOG_SUMMARY_MAX_ENTRIES,
-  type SafeLogEntry,
-  OTEL_STATUS_ERROR_CODE,
-  PARAM_ID_RE,
-  PERCENT_BASE,
-  LATENCY_DISPLAY_PRECISION,
-} from '../api-constants.js';
-import {
-  loadEvaluationsBySessionId,
-  loadLogsBySessionId,
-} from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-⋮----
-function attr<T>(span:
-function parseTimestamp(value: string | undefined | null): number | null
-function percentile(sorted: number[], p: number): number
-⋮----
-async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string)
-⋮----
-// ---- Token Totals ----
-⋮----
-// ---- Tool Usage ----
-⋮----
-// ---- Alert Summary ----
-⋮----
-// ---- Evaluation Breakdown (from direct sessionId query) ----
-⋮----
-// ---- Log Summary ----
-
-================
-File: src/pages/AdminPage.tsx
-================
-import { useState, useRef, useCallback } from 'react';
-import { format } from 'date-fns';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { useAuth } from '../contexts/AuthContext.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
-⋮----
-function RoleChip({
-  role,
-  onRevoke,
-  revoking,
-}: {
-  role: { id: string; name: string };
-onRevoke: (roleId: string, roleName: string)
-⋮----
-async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
-async function handleAssign()
-async function handleRevoke(roleId: string, roleName: string)
-
-================
-File: src/types/auth.ts
-================
-import type { RoleViewType } from '../types.js';
-export type DashboardPermission =
-  | 'dashboard.read'
-  | 'dashboard.executive'
-  | 'dashboard.operator'
-  | 'dashboard.auditor'
-  | 'dashboard.traces.read'
-  | 'dashboard.sessions.read'
-  | 'dashboard.agents.read'
-  | 'dashboard.pipeline.read'
-  | 'dashboard.compliance.read'
-  | 'dashboard.admin';
-export type DashboardView = RoleViewType;
-export interface AppSession {
-  authUserId?: string;
-  appUserId?: string;
-  email: string;
-  roles: string[];
-  permissions: DashboardPermission[];
-  allowedViews: DashboardView[];
-}
+export function startAutoRefresh(): void
+export function stopAutoRefresh(): void
 
 ================
 File: src/lib/validation/auth-schemas.ts
@@ -3659,7 +3693,6 @@ import {
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
   CALLOUT_MAX_WIDTH,
-  PAGE_CONTENT_MAX_WIDTH,
   CODE_QUALITY_WARN_THRESHOLD,
   AGENT_CARD_MIN_WIDTH,
   FILE_ACCESS_COL_MIN,
@@ -3673,44 +3706,6 @@ export function SessionDetailPage(
 <FreqBarGrid entries=
 ⋮----
 label=
-
-================
-File: src/lib/supabase.ts
-================
-import { fromUnixTime, isPast, subSeconds } from 'date-fns';
-⋮----
-export interface SupabaseSession {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  user: { id: string; email: string };
-}
-export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
-type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
-type AuthTokenResponse = {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: { id: string; email: string };
-};
-⋮----
-function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void
-function saveSession(session: SupabaseSession): void
-function clearSession(): void
-function clearSessionAndNotify(): null
-function isValidSession(value: unknown): value is SupabaseSession
-function readRawSession(): SupabaseSession | null
-function isValidTokenResponse(value: unknown): value is AuthTokenResponse
-function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession
-export function getSession(): SupabaseSession | null
-export async function signIn(email: string, password: string): Promise<SupabaseSession>
-export async function signOut(): Promise<void>
-⋮----
-export function refreshSession(): Promise<SupabaseSession | null>
-export function onAuthStateChange(listener: AuthStateListener): () => void
-⋮----
-export function startAutoRefresh(): void
-export function stopAutoRefresh(): void
 
 ================
 File: scripts/sync-to-kv.ts
@@ -3730,7 +3725,7 @@ import {
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
-import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
 import {
   computePercentileDistribution,
@@ -3890,7 +3885,7 @@ import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
-import { AuthProvider } from './contexts/AuthContext.js';
+import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { Auth0Provider, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
@@ -3924,7 +3919,6 @@ import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './context/CalibrationContext.js';
-import { useAuth } from './contexts/AuthContext.js';
 import { ROLES, SKELETON_HEIGHT_MD, SKELETON_HEIGHT_XL } from './lib/constants.js';
 import type {
   Period,
@@ -3937,8 +3931,7 @@ import type {
 ================
 File: src/contexts/AuthContext.tsx
 ================
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import { API_BASE } from '../lib/constants.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
@@ -4055,6 +4048,7 @@ body {
 .ls-id { letter-spacing: var(--letter-spacing-id); }
 .issue-callout {
 .issue-callout .callout-title { color: var(--s-fg); }
+.page-content { max-width: var(--page-content-max-width); }
 .centered-callout {
 .card-spacious {
 .stat-label-section {
@@ -4107,6 +4101,8 @@ details[open] > .cot-summary::before {
 .threshold-bar-marker {
 .pipeline-stat {
 .pipeline-stat .stat-value {
+.funnel-bar {
+.funnel-dropoff {
 .metric-worst {
 .metric-worst .worst-score {
 .provenance-grid,
@@ -4147,6 +4143,7 @@ details[open] > .cot-summary::before {
 .text-muted        { color: var(--text-muted); }
 .text-accent       { color: var(--accent); }
 .text-accent-hover { color: var(--accent-hover); }
+.text-on-accent    { color: var(--text-on-accent); }
 .d-flex         { display: flex; }
 .d-grid         { display: grid; }
 .d-inline-block { display: inline-block; }
@@ -4154,6 +4151,7 @@ details[open] > .cot-summary::before {
 .flex-center    { display: flex; align-items: center; }
 .align-start    { align-items: flex-start; }
 .uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
+.font-normal   { font-weight: 400; }
 .font-semibold { font-weight: var(--bold); }
 .chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
 .gap-half { gap: var(--space-px); }
@@ -4171,6 +4169,7 @@ details[open] > .cot-summary::before {
 .min-w-120 { min-width: 120px; }
 .m-0    { margin: 0; }
 .ml-1   { margin-left: var(--space-1); }
+.ml-2   { margin-left: var(--space-2); }
 .ml-auto { margin-left: auto; }
 .mr-1   { margin-right: var(--space-1); }
 .mb-0   { margin-bottom: 0; }
@@ -4221,6 +4220,7 @@ details[open] > .cot-summary::before {
 .form-select { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .btn-reset { background: none; border: none; padding: 0; }
 .btn-xs { border: 1px solid var(--border); padding: var(--space-1-5) var(--space-3); border-radius: var(--radius); }
+.btn-sm { padding: var(--space-1-5) var(--space-4); }
 .btn-expand { padding: var(--space-px) var(--space-1-5); }
 .expand-chevron {
 .expand-chevron--open {
@@ -4245,6 +4245,9 @@ details[open] > .cot-summary::before {
 .dot-xs { width: 6px; height: 6px; }
 .badge-warning {
 .section-rail {
+summary.section-rail {
+.section-rail-body {
+.section-rail-chevron {
 .workflow-node {
 .workflow-node__label {
 .workflow-node__score {

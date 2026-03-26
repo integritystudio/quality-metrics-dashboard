@@ -1,3 +1,23 @@
+713c10f 2026-03-26 refactor(section): extract summary padding/transition to section-rail CSS selectors
+  src/theme.css
+
+af87537 2026-03-26 refactor(pipeline-funnel): extract static funnel-bar and funnel-dropoff CSS classes
+  src/theme.css
+
+f878c02 2026-03-26 refactor(judge): add SESSION_ID_PREVIEW_LEN constant for slice(0, 8) pattern
+  scripts/judge-evaluations.ts
+
+7cb23b9 2026-03-26 refactor(app): replace fontWeight/marginLeft inline styles with font-normal/ml-2 classes
+  src/theme.css
+
+49a5cd5 2026-03-26 refactor(main): replace error button inline padding with btn-sm class
+  src/theme.css
+
+86f9401 2026-03-26 chore: regenerate repomix docs after simplification round 2
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 9c64a2d 2026-03-26 refactor(ui): replace static inline styles in MetricCompare and Sparkline
   src/theme.css
 
@@ -315,28 +335,3 @@ e7e1390 2026-03-20 refactor(auth): use Set for permission deduplication in worke
 
 0ef5976 2026-03-20 docs(roadmap): add Supabase auth and user tracking implementation guide
   docs/roadmap/users.md
-
-a58bbdd 2026-03-18 fix: write evals to today's file and return empty response for missing KV metrics
-  scripts/judge-evaluations.ts
-  worker/index.ts
-
-721ad33 2026-03-17 feat(G5): add WorkflowGraphView component with ReactFlow + ELKjs
-  package-lock.json
-
-b21a7be 2026-03-16 fix: override compromised undici dependency
-  package-lock.json
-
-d4590d4 2026-03-16 fix(DR-L4): self-host Google Fonts to prevent IP leak to CDN
-  public/fonts/IBMPlexSans-Medium.woff2
-  public/fonts/IBMPlexSans-Regular.woff2
-  public/fonts/IBMPlexSans-SemiBold.woff2
-  public/fonts/JetBrainsMono-Medium.woff2
-  public/fonts/JetBrainsMono-Regular.woff2
-  public/fonts/JetBrainsMono-SemiBold.woff2
-  src/theme.css
-
-0b8374b 2026-03-16 bump version to 3.0.3
-  scripts/sync-to-kv.ts
-
-6a661fc 2026-03-16 fix(DR-L6,L7,L8): clean up SPA fallback tests and fix /api guard
-  worker/index.ts

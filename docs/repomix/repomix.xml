@@ -7270,101 +7270,6 @@ export function PageShell({ isLoading, error, skeletonHeight = 300, children }: 
 }
 
 ================
-File: src/components/PipelineFunnel.tsx
-================
-import { memo } from 'react';
-import type { PipelineStage, PipelineDropoff } from '../types.js';
-import { EmptyState } from './EmptyState.js';
-import { formatPercent } from '../lib/quality-utils.js';
-import { FUNNEL_BAR_HEIGHT, FUNNEL_BAR_MIN_WIDTH, FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
-interface PipelineFunnelProps {
-  stages: PipelineStage[];
-  dropoffs: PipelineDropoff[];
-  overallConversionPercent: number;
-}
-function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
-  if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
-  const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
-  return (
-    <div role="region" aria-label="Evaluation pipeline funnel">
-      <div className="flex-center mb-3 gap-2">
-        <span className="mono-xl font-semibold">
-          {formatPercent(overallConversionPercent)}
-        </span>
-        <span className="text-secondary text-base">overall conversion</span>
-      </div>
-      <div className="flex-col gap-1">
-        {stages.map((stage, idx) => {
-          const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
-          const dropoff = dropoffs[idx];
-          const showDropoff = dropoff && dropoff.dropped > 0;
-          return (
-            <div key={stage.name}>
-              {}
-              <div className="flex-center gap-3">
-                <div
-                  className="d-flex"
-                  style={{
-                    width: `${widthPct}%`,
-                    minWidth: FUNNEL_BAR_MIN_WIDTH,
-                    height: FUNNEL_BAR_HEIGHT,
-                    background: `var(--stage-${stage.name}, var(--accent))`,
-                    borderRadius: 'var(--radius-sm)',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0 var(--space-2-5)',
-                    transition: 'width 0.3s ease',
-                  }}
-                  role="meter"
-                  aria-label={`${stage.displayName}: ${stage.entryCount} evaluations`}
-                  aria-valuenow={stage.entryCount}
-                  aria-valuemin={0}
-                  aria-valuemax={maxCount}
-                >
-                  <span className="text-xs font-semibold" style={{ color: 'var(--text-on-accent)', whiteSpace: 'nowrap' }}>
-                    {stage.displayName}
-                  </span>
-                  <span className="mono-xs" style={{ color: 'var(--text-on-accent)', whiteSpace: 'nowrap' }}>
-                    {stage.entryCount.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              {}
-              {showDropoff && (
-                <div className="text-xs" style={{
-                  color: dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT ? 'var(--status-warning)' : 'var(--text-secondary)',
-                  paddingLeft: 'var(--space-2-5)',
-                  margin: 'var(--space-0-5) 0',
-                }}>
-                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {}
-      <table className="sr-only" aria-label="Pipeline stage details">
-        <thead>
-          <tr><th>Stage</th><th>Entry</th><th>Exit</th><th>Drop-off</th></tr>
-        </thead>
-        <tbody>
-          {stages.map((stage, idx) => (
-            <tr key={stage.name}>
-              <td>{stage.displayName}</td>
-              <td>{stage.entryCount}</td>
-              <td>{stage.exitCount}</td>
-              <td>{dropoffs[idx] != null ? formatPercent(dropoffs[idx].dropoffPercent) : '\u2014'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-export const PipelineFunnel = memo(PipelineFunnelInner);
-
-================
 File: src/components/ScoreHistogram.tsx
 ================
 export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket: string; count: number }> }) {
@@ -7606,40 +7511,6 @@ export function TruncatedList<T>({ items, max, renderItem, total }: {
       )}
     </>
   );
-}
-
-================
-File: src/context/CalibrationContext.tsx
-================
-import { createContext, useContext, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useCalibration, getMetricCalibration } from '../hooks/useCalibration.js';
-import type { CalibrationResponse, MetricCalibration } from '../hooks/useCalibration.js';
-interface CalibrationContextValue {
-  data: CalibrationResponse | undefined;
-  isLoading: boolean;
-}
-const CalibrationContext = createContext<CalibrationContextValue | null>(null);
-export function CalibrationProvider({ children }: { children: ReactNode }) {
-  const { data, isLoading } = useCalibration();
-  const value = useMemo(() => ({ data, isLoading }), [data, isLoading]);
-  return (
-    <CalibrationContext.Provider value={value}>
-      {children}
-    </CalibrationContext.Provider>
-  );
-}
-export function useCalibrationData(): CalibrationContextValue {
-  const ctx = useContext(CalibrationContext);
-  if (!ctx) {
-    throw new Error('useCalibrationData must be used within a CalibrationProvider');
-  }
-  return ctx;
-}
-export function useMetricCalibration(metricName: string): MetricCalibration | undefined {
-  const ctx = useContext(CalibrationContext);
-  if (!ctx) return undefined;
-  return getMetricCalibration(ctx.data, metricName);
 }
 
 ================
@@ -9314,6 +9185,95 @@ export function MonoTableHead({ columns }: { columns: TableColumn[] }) {
 }
 
 ================
+File: src/components/PipelineFunnel.tsx
+================
+import { memo } from 'react';
+import type { PipelineStage, PipelineDropoff } from '../types.js';
+import { EmptyState } from './EmptyState.js';
+import { formatPercent } from '../lib/quality-utils.js';
+import { FUNNEL_BAR_HEIGHT, FUNNEL_BAR_MIN_WIDTH, FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
+interface PipelineFunnelProps {
+  stages: PipelineStage[];
+  dropoffs: PipelineDropoff[];
+  overallConversionPercent: number;
+}
+function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
+  if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
+  const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
+  return (
+    <div role="region" aria-label="Evaluation pipeline funnel">
+      <div className="flex-center mb-3 gap-2">
+        <span className="mono-xl font-semibold">
+          {formatPercent(overallConversionPercent)}
+        </span>
+        <span className="text-secondary text-base">overall conversion</span>
+      </div>
+      <div className="flex-col gap-1">
+        {stages.map((stage, idx) => {
+          const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
+          const dropoff = dropoffs[idx];
+          const showDropoff = dropoff && dropoff.dropped > 0;
+          return (
+            <div key={stage.name}>
+              {}
+              <div className="flex-center gap-3">
+                <div
+                  className="d-flex funnel-bar"
+                  style={{
+                    width: `${widthPct}%`,
+                    minWidth: FUNNEL_BAR_MIN_WIDTH,
+                    height: FUNNEL_BAR_HEIGHT,
+                    background: `var(--stage-${stage.name}, var(--accent))`,
+                  }}
+                  role="meter"
+                  aria-label={`${stage.displayName}: ${stage.entryCount} evaluations`}
+                  aria-valuenow={stage.entryCount}
+                  aria-valuemin={0}
+                  aria-valuemax={maxCount}
+                >
+                  <span className="text-xs font-semibold text-on-accent nowrap">
+                    {stage.displayName}
+                  </span>
+                  <span className="mono-xs text-on-accent nowrap">
+                    {stage.entryCount.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              {}
+              {showDropoff && (
+                <div
+                  className="text-xs funnel-dropoff"
+                  style={{ color: dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT ? 'var(--status-warning)' : 'var(--text-secondary)' }}
+                >
+                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {}
+      <table className="sr-only" aria-label="Pipeline stage details">
+        <thead>
+          <tr><th>Stage</th><th>Entry</th><th>Exit</th><th>Drop-off</th></tr>
+        </thead>
+        <tbody>
+          {stages.map((stage, idx) => (
+            <tr key={stage.name}>
+              <td>{stage.displayName}</td>
+              <td>{stage.entryCount}</td>
+              <td>{stage.exitCount}</td>
+              <td>{dropoffs[idx] != null ? formatPercent(dropoffs[idx].dropoffPercent) : '\u2014'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+export const PipelineFunnel = memo(PipelineFunnelInner);
+
+================
 File: src/components/QualityLiveIndicator.tsx
 ================
 import { useQualityLive } from '../hooks/useQualityLive.js';
@@ -9517,63 +9477,6 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
         traceId={traceId}
       />
     </span>
-  );
-}
-
-================
-File: src/components/Section.tsx
-================
-import type { CSSProperties, ReactNode } from 'react';
-import { CHEVRON_RIGHT } from '../lib/symbols.js';
-export function ViewSection({ title, children }: { title: ReactNode; children: ReactNode }) {
-  return (
-    <div className="view-section">
-      <h3 className="section-heading">{title}</h3>
-      {children}
-    </div>
-  );
-}
-export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
-export interface SectionProps {
-  title: string;
-  badge?: string;
-  health?: SectionHealth;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}
-export function Section({ title, badge, health = 'neutral', defaultOpen = false, children }: SectionProps) {
-  const railColor = health === 'ok'
-    ? 'var(--status-healthy)'
-    : health === 'warn'
-    ? 'var(--status-warning)'
-    : health === 'crit'
-    ? 'var(--status-critical)'
-    : 'var(--border-accent)';
-  return (
-    <details open={defaultOpen} className="mb-1" style={{ '--section-rail-color': railColor } as CSSProperties}>
-      <summary
-        className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail"
-        style={{
-          padding: 'var(--space-3) var(--space-5)',
-          transition: 'background var(--transition-fast)',
-        }}
-      >
-        <span className="mono text-2xs d-inline-block" style={{
-          color: railColor,
-          transition: 'transform var(--transition-medium)',
-        }}>{CHEVRON_RIGHT}</span>
-        <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
-        {badge && (
-          <span className="mono-xs text-muted chip chip-badge">{badge}</span>
-        )}
-      </summary>
-      <div
-        className="border-b-subtle section-rail"
-        style={{ padding: 'var(--space-4) var(--space-5) var(--space-5)' }}
-      >
-        {children}
-      </div>
-    </details>
   );
 }
 
@@ -9814,59 +9717,35 @@ export function TimestampCell({ timestamp, className }: TimestampCellProps) {
 }
 
 ================
-File: src/contexts/RoleContext.tsx
+File: src/context/CalibrationContext.tsx
 ================
-import { createContext, useContext, useEffect, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useRoute } from 'wouter';
-import {
-  ROLE_FEATURE_CONFIG,
-  type FeatureRoleType,
-  type RoleFeatureConfig,
-} from '../lib/quality-utils.js';
-import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
-const VALID_ROLES = new Set<FeatureRoleType>(ROLES);
-interface RoleContextValue {
-  role: FeatureRoleType;
-  config: RoleFeatureConfig;
-  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useCalibration, getMetricCalibration, type CalibrationResponse, type MetricCalibration } from '../hooks/useCalibration.js';
+interface CalibrationContextValue {
+  data: CalibrationResponse | undefined;
+  isLoading: boolean;
 }
-const RoleContext = createContext<RoleContextValue | null>(null);
-export function RoleProvider({ children }: { children: ReactNode }) {
-  const [, params] = useRoute('/role/:roleName');
-  const roleName = params?.roleName;
-  const role: FeatureRoleType =
-    roleName && VALID_ROLES.has(roleName as FeatureRoleType)
-      ? (roleName as FeatureRoleType)
-      : DEFAULT_ROLE;
-  useEffect(() => {
-    if (roleName && !VALID_ROLES.has(roleName as FeatureRoleType)) {
-      console.warn(`[RoleProvider] Unknown role "${roleName}", falling back to "executive". Valid roles: ${[...VALID_ROLES].join(', ')}`);
-    }
-  }, [roleName]);
-  const value = useMemo<RoleContextValue>(() => {
-    const config = ROLE_FEATURE_CONFIG[role];
-    return {
-      role,
-      config,
-      hasFeature: (feature: keyof RoleFeatureConfig) => {
-        const v = config[feature];
-        return typeof v === 'boolean' ? v : v != null;
-      },
-    };
-  }, [role]);
+const CalibrationContext = createContext<CalibrationContextValue | null>(null);
+export function CalibrationProvider({ children }: { children: ReactNode }) {
+  const { data, isLoading } = useCalibration();
+  const value = useMemo(() => ({ data, isLoading }), [data, isLoading]);
   return (
-    <RoleContext.Provider value={value}>
+    <CalibrationContext.Provider value={value}>
       {children}
-    </RoleContext.Provider>
+    </CalibrationContext.Provider>
   );
 }
-export function useRole(): RoleContextValue {
-  const ctx = useContext(RoleContext);
+export function useCalibrationData(): CalibrationContextValue {
+  const ctx = useContext(CalibrationContext);
   if (!ctx) {
-    throw new Error('useRole must be used within a RoleProvider');
+    throw new Error('useCalibrationData must be used within a CalibrationProvider');
   }
   return ctx;
+}
+export function useMetricCalibration(metricName: string): MetricCalibration | undefined {
+  const ctx = useContext(CalibrationContext);
+  if (!ctx) return undefined;
+  return getMetricCalibration(ctx.data, metricName);
 }
 
 ================
@@ -10211,42 +10090,6 @@ export const USER_ACTIVITY_EVENTS = ['login', 'logout', 'dashboard_view', 'trace
 export type UserActivityEvent = typeof USER_ACTIVITY_EVENTS[number];
 export const FRONTEND_ACTIVITY_EVENTS = ['login', 'logout'] as const;
 export type FrontendActivityEvent = typeof FRONTEND_ACTIVITY_EVENTS[number];
-
-================
-File: src/main.tsx
-================
-import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
-import { App } from './App.js';
-import './theme.css';
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  return (
-    <div className="dashboard-container">
-      <div className="error-state">
-        <h2>Something went wrong</h2>
-        <p>{error instanceof Error ? error.message : String(error)}</p>
-        <button onClick={resetErrorBoundary} className="mt-3 cursor-pointer" style={{ padding: '6px 16px' }}>
-          Try again
-        </button>
-      </div>
-    </div>
-  );
-}
-createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary FallbackComponent={ErrorFallback}>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
 
 ================
 File: scripts/.kv-sync-coverage.json
@@ -11387,6 +11230,53 @@ export function RequireAuth({ children }: RequireAuthProps) {
 }
 
 ================
+File: src/components/Section.tsx
+================
+import type { CSSProperties, ReactNode } from 'react';
+import { CHEVRON_RIGHT } from '../lib/symbols.js';
+export function ViewSection({ title, children }: { title: ReactNode; children: ReactNode }) {
+  return (
+    <div className="view-section">
+      <h3 className="section-heading">{title}</h3>
+      {children}
+    </div>
+  );
+}
+export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
+export interface SectionProps {
+  title: string;
+  badge?: string;
+  health?: SectionHealth;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}
+export function Section({ title, badge, health = 'neutral', defaultOpen = false, children }: SectionProps) {
+  const railColor = health === 'ok'
+    ? 'var(--status-healthy)'
+    : health === 'warn'
+    ? 'var(--status-warning)'
+    : health === 'crit'
+    ? 'var(--status-critical)'
+    : 'var(--border-accent)';
+  return (
+    <details open={defaultOpen} className="mb-1" style={{ '--section-rail-color': railColor } as CSSProperties}>
+      <summary className="flex-center gap-3 select-none cursor-pointer border-b-subtle list-none section-rail">
+        <span className="mono text-2xs d-inline-block section-rail-chevron" style={{ color: railColor }}>
+          {CHEVRON_RIGHT}
+        </span>
+        <span className="mono-xs text-secondary uppercase font-semibold flex-1">{title}</span>
+        {badge && (
+          <span className="mono-xs text-muted chip chip-badge">{badge}</span>
+        )}
+      </summary>
+      <div className="border-b-subtle section-rail section-rail-body">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+================
 File: src/components/TurnTimeline.tsx
 ================
 import { scoreColor, agentColor } from '../lib/quality-utils.js';
@@ -11441,6 +11331,61 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
       })}
     </div>
   );
+}
+
+================
+File: src/contexts/RoleContext.tsx
+================
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { useRoute } from 'wouter';
+import {
+  ROLE_FEATURE_CONFIG,
+  type FeatureRoleType,
+  type RoleFeatureConfig,
+} from '../lib/quality-utils.js';
+import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
+const VALID_ROLES = new Set<FeatureRoleType>(ROLES);
+interface RoleContextValue {
+  role: FeatureRoleType;
+  config: RoleFeatureConfig;
+  hasFeature: (feature: keyof RoleFeatureConfig) => boolean;
+}
+const RoleContext = createContext<RoleContextValue | null>(null);
+export function RoleProvider({ children }: { children: ReactNode }) {
+  const [, params] = useRoute('/role/:roleName');
+  const roleName = params?.roleName;
+  const role: FeatureRoleType =
+    roleName && VALID_ROLES.has(roleName as FeatureRoleType)
+      ? (roleName as FeatureRoleType)
+      : DEFAULT_ROLE;
+  useEffect(() => {
+    if (roleName && !VALID_ROLES.has(roleName as FeatureRoleType)) {
+      console.warn(`[RoleProvider] Unknown role "${roleName}", falling back to "executive". Valid roles: ${[...VALID_ROLES].join(', ')}`);
+    }
+  }, [roleName]);
+  const value = useMemo<RoleContextValue>(() => {
+    const config = ROLE_FEATURE_CONFIG[role];
+    return {
+      role,
+      config,
+      hasFeature: (feature: keyof RoleFeatureConfig) => {
+        const v = config[feature];
+        return typeof v === 'boolean' ? v : v != null;
+      },
+    };
+  }, [role]);
+  return (
+    <RoleContext.Provider value={value}>
+      {children}
+    </RoleContext.Provider>
+  );
+}
+export function useRole(): RoleContextValue {
+  const ctx = useContext(RoleContext);
+  if (!ctx) {
+    throw new Error('useRole must be used within a RoleProvider');
+  }
+  return ctx;
 }
 
 ================
@@ -11609,102 +11554,40 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
 }
 
 ================
-File: src/lib/dashboard-file-utils.ts
+File: src/main.tsx
 ================
-import { readFileSync, existsSync } from 'fs';
-import { createInterface } from 'readline';
-import { createReadStream } from 'fs';
-import type { z } from 'zod';
-export async function* streamJsonlWithValidation<T>(
-  filePath: string,
-  schema: z.ZodType<T>
-): AsyncGenerator<T> {
-  if (!existsSync(filePath)) return;
-  const stream = createReadStream(filePath, 'utf-8');
-  const rl = createInterface({
-    input: stream,
-    crlfDelay: Infinity,
-  });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      const parsed = JSON.parse(line);
-      const result = schema.safeParse(parsed);
-      if (result.success) {
-        yield result.data;
-      }
-    } catch {
-    }
-  }
+import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import { App } from './App.js';
+import './theme.css';
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+  return (
+    <div className="dashboard-container">
+      <div className="error-state">
+        <h2>Something went wrong</h2>
+        <p>{error instanceof Error ? error.message : String(error)}</p>
+        <button onClick={resetErrorBoundary} className="mt-3 cursor-pointer btn-sm">
+          Try again
+        </button>
+      </div>
+    </div>
+  );
 }
-export async function readJsonlWithValidation<T>(
-  filePath: string,
-  schema: z.ZodType<T>,
-  limit?: number
-): Promise<T[]> {
-  const results: T[] = [];
-  for await (const entry of streamJsonlWithValidation(filePath, schema)) {
-    results.push(entry);
-    if (limit && results.length >= limit) break;
-  }
-  return results;
-}
-export function readJsonlWithValidationSync<T>(
-  filePath: string,
-  schema: z.ZodType<T>,
-  limit?: number
-): T[] {
-  const results: T[] = [];
-  if (!existsSync(filePath)) return results;
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.trim().split('\n');
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line);
-        const result = schema.safeParse(parsed);
-        if (result.success) {
-          results.push(result.data);
-          if (limit && results.length >= limit) break;
-        }
-      } catch {
-      }
-    }
-  } catch {
-  }
-  return results;
-}
-export function loadJsonWithValidation<T>(
-  filePath: string,
-  schema: z.ZodType<T>
-): T | null {
-  if (!existsSync(filePath)) return null;
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(content);
-    const result = schema.safeParse(parsed);
-    if (result.success) {
-      return result.data;
-    } else {
-      throw new Error(`Validation failed: ${result.error.message}`);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to load ${filePath}: ${message}`, { cause: error });
-  }
-}
-export function loadJsonWithValidationSafe<T>(
-  filePath: string,
-  schema: z.ZodType<T>,
-  fallback: T
-): T {
-  try {
-    return loadJsonWithValidation(filePath, schema) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  </ErrorBoundary>
+);
 
 ================
 File: scripts/backtest-degradation.ts
@@ -11968,366 +11851,6 @@ main().catch(err => {
   console.error(err);
   process.exit(1);
 });
-
-================
-File: scripts/derive-evaluations.ts
-================
-#!/usr/bin/env tsx
-import { writeFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
-import {
-  computeCalibrationDistributions,
-  loadCalibrationState,
-  saveCalibrationState,
-  shouldRecalibrate,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
-import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
-const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  scoreUnit?: string;
-  explanation: string;
-  evaluator: string;
-  evaluatorType: string;
-  traceId: string;
-  sessionId?: string;
-}
-function toOTelRecord(ev: EvalRecord): object {
-  const attrs: Record<string, unknown> = {
-    'gen_ai.evaluation.name': ev.evaluationName,
-    'gen_ai.evaluation.score.value': ev.scoreValue,
-    'gen_ai.evaluation.explanation': ev.explanation,
-    'gen_ai.evaluation.evaluator': ev.evaluator,
-    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
-  };
-  if (ev.scoreUnit) attrs['gen_ai.evaluation.score.unit'] = ev.scoreUnit;
-  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
-  return {
-    timestamp: ev.timestamp,
-    name: 'gen_ai.evaluation.result',
-    attributes: attrs,
-    traceId: ev.traceId,
-  };
-}
-function hrtToSeconds(hrt: [number, number]): number {
-  return hrt[0] + hrt[1] / 1e9;
-}
-function hrtToISO(hrt: [number, number]): string {
-  return new Date(hrt[0] * 1000 + hrt[1] / 1e6).toISOString();
-}
-function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
-  const attrs = span.attributes;
-  const isBuiltin = span.name === 'hook:builtin-post-tool';
-  const isMcp = span.name === 'hook:mcp-post-tool';
-  if (!isBuiltin && !isMcp) return null;
-  const success = isBuiltin ? attrs['builtin.success'] : attrs['mcp.success'];
-  const tool = isBuiltin ? attrs['builtin.tool'] : attrs['mcp.tool'];
-  const errorType = isBuiltin ? attrs['builtin.error_type'] : attrs['mcp.error_type'];
-  const server = isMcp ? attrs['mcp.server'] : undefined;
-  const score = success === true ? 1.0 : 0.0;
-  const toolLabel = server ? `${server}/${tool}` : String(tool);
-  let explanation: string;
-  if (success) {
-    explanation = `Tool ${toolLabel} completed successfully`;
-  } else {
-    explanation = `Tool ${toolLabel} failed${errorType ? `: ${errorType}` : ''}`;
-  }
-  return {
-    timestamp: hrtToISO(span.startTime),
-    evaluationName: 'tool_correctness',
-    scoreValue: score,
-    explanation,
-    evaluator: 'telemetry-rule-engine',
-    evaluatorType: 'rule',
-    traceId: span.traceId,
-    sessionId: String(attrs['session.id'] ?? ''),
-  };
-}
-function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
-  // Only measure tool execution hooks (the meaningful ones)
-  const measurable = [
-    'hook:builtin-post-tool',
-    'hook:mcp-post-tool',
-    'hook:agent-post-tool',
-    'hook:session-start',
-    'hook:tsc-check',
-  ];
-  if (!measurable.includes(span.name)) return null;
-  const durationSec = hrtToSeconds(span.duration);
-  const attrs = span.attributes;
-  let hookType: string;
-  if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrs['builtin.tool']}`;
-  else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrs['mcp.tool']}`;
-  else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrs['agent.type']}`;
-  else hookType = span.name.replace('hook:', '');
-  return {
-    timestamp: hrtToISO(span.startTime),
-    evaluationName: 'evaluation_latency',
-    scoreValue: durationSec,
-    scoreUnit: 'seconds',
-    explanation: `Hook ${hookType} executed in ${durationSec.toFixed(4)}s`,
-    evaluator: 'telemetry-rule-engine',
-    evaluatorType: 'rule',
-    traceId: span.traceId,
-    sessionId: String(attrs['session.id'] ?? ''),
-  };
-}
-// Track per-session task status transitions for task_completion scoring
-// Graduated: pending=0.0, in_progress=0.5, completed=1.0
-interface TaskState {
-  statuses: Set<string>;
-  lastSpan: TraceSpan;
-}
-interface SessionTaskData {
-  tasks: Map<string, TaskState>;  // taskId -> state
-  creates: number;   // fallback counters for old trace data
-  updates: number;
-  lastSpan: TraceSpan | null;
-}
-const sessionTasks = new Map<string, SessionTaskData>();
-export const STATUS_SCORES: Record<string, number> = {
-  pending: 0.0,
-  in_progress: 0.5,
-  completed: 1.0,
-};
-export { sessionTasks };
-export function trackTaskActivity(span: TraceSpan): void {
-  if (span.name !== 'hook:builtin-post-tool') return;
-  const tool = span.attributes['builtin.tool'];
-  if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
-  const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  if (!sessionTasks.has(sessionId)) {
-    sessionTasks.set(sessionId, { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
-  }
-  const entry = sessionTasks.get(sessionId)!;
-  entry.lastSpan = span;
-  if (tool === 'TaskCreate') entry.creates++;
-  if (tool === 'TaskUpdate') entry.updates++;
-  const taskStatus = span.attributes['builtin.task_status'];
-  const taskId = span.attributes['builtin.task_id'];
-  if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
-    const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;
-    if (!entry.tasks.has(id)) {
-      entry.tasks.set(id, { statuses: new Set(), lastSpan: span });
-    }
-    const task = entry.tasks.get(id)!;
-    task.statuses.add(taskStatus);
-    task.lastSpan = span;
-  }
-}
-export function scoreTask(statuses: Set<string>): number {
-  if (statuses.has('completed')) return STATUS_SCORES.completed;
-  if (statuses.has('in_progress')) return STATUS_SCORES.in_progress;
-  return STATUS_SCORES.pending;
-}
-export function deriveTaskCompletionPerSession(): EvalRecord[] {
-  const evals: EvalRecord[] = [];
-  for (const [sessionId, data] of sessionTasks) {
-    if (data.creates === 0 && data.tasks.size === 0) continue;
-    if (!data.lastSpan) continue;
-    const lastSpan = data.lastSpan;
-    if (data.tasks.size > 0) {
-      const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
-      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-      const completed = scores.filter(s => s === 1.0).length;
-      const inProgress = scores.filter(s => s === 0.5).length;
-      const pending = scores.filter(s => s === 0.0).length;
-      const parts: string[] = [];
-      if (completed > 0) parts.push(`${completed} completed`);
-      if (inProgress > 0) parts.push(`${inProgress} in_progress`);
-      if (pending > 0) parts.push(`${pending} pending`);
-      evals.push({
-        timestamp: hrtToISO(lastSpan.startTime),
-        evaluationName: 'task_completion',
-        scoreValue: parseFloat(avg.toFixed(4)),
-        explanation: `Session ${sessionId.slice(0, 8)}: ${data.tasks.size} tasks (${parts.join(', ')})`,
-        evaluator: 'telemetry-rule-engine',
-        evaluatorType: 'rule',
-        traceId: lastSpan.traceId,
-        sessionId,
-      });
-    } else {
-      if (data.creates === 0) continue;
-      const completionRatio = Math.min(data.updates / (data.creates * 2), 1.0);
-      evals.push({
-        timestamp: hrtToISO(lastSpan.startTime),
-        evaluationName: 'task_completion',
-        scoreValue: parseFloat(completionRatio.toFixed(4)),
-        explanation: `Session ${sessionId.slice(0, 8)}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
-        evaluator: 'telemetry-rule-engine',
-        evaluatorType: 'rule',
-        traceId: lastSpan.traceId,
-        sessionId,
-      });
-    }
-  }
-  return evals;
-}
-interface AgentSessionData {
-  pre: number;
-  post: number;
-  spans: TraceSpan[];
-  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
-}
-const sessionAgents = new Map<string, AgentSessionData>();
-function trackAgentActivity(span: TraceSpan): void {
-  const isPre = span.name === 'hook:agent-pre-tool';
-  const isPost = span.name === 'hook:agent-post-tool';
-  if (!isPre && !isPost) return;
-  const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  if (!sessionAgents.has(sessionId)) {
-    sessionAgents.set(sessionId, { pre: 0, post: 0, spans: [], agentSequence: [] });
-  }
-  const entry = sessionAgents.get(sessionId)!;
-  if (isPre) entry.pre++;
-  if (isPost) {
-    entry.post++;
-    const agentName = String(span.attributes['gen_ai.agent.name'] ?? 'unknown');
-    const score = span.status?.code === 2 ? 0 : 1;
-    entry.agentSequence.push({ agentName, score, span });
-  }
-  entry.spans.push(span);
-}
-function deriveAgentCompletionPerSession(): EvalRecord[] {
-  const evals: EvalRecord[] = [];
-  for (const [sessionId, data] of sessionAgents) {
-    if (data.pre === 0) continue;
-    const rate = Math.min(data.post / data.pre, 1.0);
-    const lastSpan = data.spans[data.spans.length - 1];
-    evals.push({
-      timestamp: hrtToISO(lastSpan.startTime),
-      evaluationName: 'task_completion',
-      scoreValue: parseFloat(rate.toFixed(4)),
-      explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, 8)}`,
-      evaluator: 'telemetry-rule-engine',
-      evaluatorType: 'rule',
-      traceId: lastSpan.traceId,
-      sessionId,
-    });
-  }
-  return evals;
-}
-const MIN_HANDOFF_AGENTS = 2;
-const HANDOFF_CORRECT_THRESHOLD = 0.5;
-const HANDOFF_CONTEXT_THRESHOLD = 0.7;
-function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
-  const evals: EvalRecord[] = [];
-  for (const [sessionId, data] of sessionAgents) {
-    if (data.agentSequence.length < MIN_HANDOFF_AGENTS) continue;
-    const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
-    if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
-    const handoffScores: number[] = [];
-    for (let i = 1; i < data.agentSequence.length; i++) {
-      const prev = data.agentSequence[i - 1];
-      const curr = data.agentSequence[i];
-      if (curr.agentName !== prev.agentName) {
-        handoffScores.push(curr.score);
-      }
-    }
-    if (handoffScores.length === 0) continue;
-    const avgScore = handoffScores.reduce((a, b) => a + b, 0) / handoffScores.length;
-    const correct = handoffScores.filter(s => s >= HANDOFF_CORRECT_THRESHOLD).length;
-    const preserved = handoffScores.filter(s => s >= HANDOFF_CONTEXT_THRESHOLD).length;
-    const lastSpan = data.agentSequence[data.agentSequence.length - 1].span;
-    evals.push({
-      timestamp: hrtToISO(lastSpan.startTime),
-      evaluationName: 'handoff_correctness',
-      scoreValue: parseFloat(avgScore.toFixed(4)),
-      scoreUnit: 'ratio_0_1',
-      explanation: `Session ${sessionId.slice(0, 8)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
-      evaluator: 'telemetry-rule-engine',
-      evaluatorType: 'rule',
-      traceId: lastSpan.traceId,
-      sessionId,
-    });
-  }
-  return evals;
-}
-function main(): void {
-  const traceFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
-    .sort();
-  const allEvals: EvalRecord[] = [];
-  let _spanCount = 0;
-  for (const file of traceFiles) {
-    const filePath = join(TELEMETRY_DIR, file);
-    const spans = readJsonlWithValidationSync(filePath, traceSpanSchema);
-    for (const span of spans) {
-      _spanCount++;
-      const toolCorr = deriveToolCorrectness(span);
-      if (toolCorr) allEvals.push(toolCorr);
-      const latency = deriveEvaluationLatency(span);
-      if (latency) allEvals.push(latency);
-      trackTaskActivity(span);
-      trackAgentActivity(span);
-    }
-  }
-  allEvals.push(...deriveTaskCompletionPerSession());
-  allEvals.push(...deriveAgentCompletionPerSession());
-  allEvals.push(...deriveHandoffCorrectnessPerSession());
-  const byDate = new Map<string, EvalRecord[]>();
-  for (const ev of allEvals) {
-    const date = ev.timestamp.slice(0, 10);
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date)!.push(ev);
-  }
-  const RULE_EVALUATOR = 'telemetry-rule-engine';
-  let _totalWritten = 0;
-  let preservedCount = 0;
-  for (const [date, evals] of byDate) {
-    const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
-    const preserved: string[] = [];
-    if (existsSync(outFile)) {
-      const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
-      for (const rec of existingRecs) {
-        const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
-        if (evaluator && evaluator !== RULE_EVALUATOR) {
-          preserved.push(JSON.stringify(rec));
-        }
-      }
-    }
-    const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
-    const content = [...ruleLines, ...preserved].join('\n') + '\n';
-    writeFileSync(outFile, content);
-    _totalWritten += evals.length + preserved.length;
-    preservedCount += preserved.length;
-  }
-  const scoresByMetric: Record<string, number[]> = {};
-  for (const ev of allEvals) {
-    if (!scoresByMetric[ev.evaluationName]) scoresByMetric[ev.evaluationName] = [];
-    if (Number.isFinite(ev.scoreValue)) scoresByMetric[ev.evaluationName].push(ev.scoreValue);
-  }
-  const newDistributions = computeCalibrationDistributions(scoresByMetric);
-  if (Object.keys(newDistributions).length > 0) {
-    const previousState = loadCalibrationState(TELEMETRY_DIR);
-    const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
-    if (shouldWrite) {
-      saveCalibrationState(TELEMETRY_DIR, {
-        lastCalibrated: new Date().toISOString(),
-        distributions: newDistributions,
-        psiValues,
-        rawScores: Object.fromEntries(
-          Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
-        ),
-      });
-    }
-  }
-  const byCat = new Map<string, number>();
-  for (const ev of allEvals) {
-    byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
-  }
-  if (preservedCount > 0) {  }
-  for (const [_name, _count] of byCat) {  }
-}
-const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
-  process.argv[1]?.endsWith('derive-evaluations.js');
-if (isDirectRun) {
-  main();
-}
 
 ================
 File: src/__tests__/workflow-graph.test.ts
@@ -13248,6 +12771,103 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
 }
 
 ================
+File: src/lib/dashboard-file-utils.ts
+================
+import { readFileSync, existsSync, createReadStream } from 'fs';
+import { createInterface } from 'readline';
+import type { z } from 'zod';
+export async function* streamJsonlWithValidation<T>(
+  filePath: string,
+  schema: z.ZodType<T>
+): AsyncGenerator<T> {
+  if (!existsSync(filePath)) return;
+  const stream = createReadStream(filePath, 'utf-8');
+  const rl = createInterface({
+    input: stream,
+    crlfDelay: Infinity,
+  });
+  for await (const line of rl) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line);
+      const result = schema.safeParse(parsed);
+      if (result.success) {
+        yield result.data;
+      }
+    } catch {
+    }
+  }
+}
+export async function readJsonlWithValidation<T>(
+  filePath: string,
+  schema: z.ZodType<T>,
+  limit?: number
+): Promise<T[]> {
+  const results: T[] = [];
+  for await (const entry of streamJsonlWithValidation(filePath, schema)) {
+    results.push(entry);
+    if (limit && results.length >= limit) break;
+  }
+  return results;
+}
+export function readJsonlWithValidationSync<T>(
+  filePath: string,
+  schema: z.ZodType<T>,
+  limit?: number
+): T[] {
+  const results: T[] = [];
+  if (!existsSync(filePath)) return results;
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split('\n');
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line);
+        const result = schema.safeParse(parsed);
+        if (result.success) {
+          results.push(result.data);
+          if (limit && results.length >= limit) break;
+        }
+      } catch {
+      }
+    }
+  } catch {
+  }
+  return results;
+}
+export function loadJsonWithValidation<T>(
+  filePath: string,
+  schema: z.ZodType<T>
+): T | null {
+  if (!existsSync(filePath)) return null;
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(content);
+    const result = schema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    } else {
+      throw new Error(`Validation failed: ${result.error.message}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to load ${filePath}: ${message}`, { cause: error });
+  }
+}
+export function loadJsonWithValidationSafe<T>(
+  filePath: string,
+  schema: z.ZodType<T>,
+  fallback: T
+): T {
+  try {
+    return loadJsonWithValidation(filePath, schema) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+================
 File: src/lib/supabase-rest.ts
 ================
 export function supabasePost(
@@ -13268,32 +12888,6 @@ export function supabasePost(
     body: JSON.stringify(body),
     signal: controller.signal,
   }).catch(() => undefined).finally(() => clearTimeout(timeout));
-}
-
-================
-File: src/pages/LoginPage.tsx
-================
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
-export function LoginPage() {
-  const { loginWithRedirect } = useAuth0();
-  const handleLogin = () =>
-    loginWithRedirect({
-      authorizationParams: {
-        audience: AUTH0_AUDIENCE,
-        redirect_uri: `${window.location.origin}/callback`,
-      },
-    });
-  return (
-    <div className="login-page">
-      <div className="login-card">
-        <h1 className="login-title">Sign in</h1>
-        <button className="login-btn" onClick={handleLogin}>
-          Sign in
-        </button>
-      </div>
-    </div>
-  );
 }
 
 ================
@@ -13481,6 +13075,367 @@ export interface WorkflowGraph {
   rootNodeId: string | null;
   workflowShape: WorkflowShape;
   droppedTurns: number;
+}
+
+================
+File: scripts/derive-evaluations.ts
+================
+#!/usr/bin/env tsx
+import { writeFileSync, readdirSync, existsSync } from 'fs';
+import { join } from 'path';
+import {
+  computeCalibrationDistributions,
+  loadCalibrationState,
+  saveCalibrationState,
+  shouldRecalibrate,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
+import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
+const TELEMETRY_DIR = join(process.env.HOME ?? '', '.claude', 'telemetry');
+const SESSION_ID_PREVIEW_LEN = 8;
+export interface EvalRecord {
+  timestamp: string;
+  evaluationName: string;
+  scoreValue: number;
+  scoreUnit?: string;
+  explanation: string;
+  evaluator: string;
+  evaluatorType: string;
+  traceId: string;
+  sessionId?: string;
+}
+function toOTelRecord(ev: EvalRecord): object {
+  const attrs: Record<string, unknown> = {
+    'gen_ai.evaluation.name': ev.evaluationName,
+    'gen_ai.evaluation.score.value': ev.scoreValue,
+    'gen_ai.evaluation.explanation': ev.explanation,
+    'gen_ai.evaluation.evaluator': ev.evaluator,
+    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
+  };
+  if (ev.scoreUnit) attrs['gen_ai.evaluation.score.unit'] = ev.scoreUnit;
+  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
+  return {
+    timestamp: ev.timestamp,
+    name: 'gen_ai.evaluation.result',
+    attributes: attrs,
+    traceId: ev.traceId,
+  };
+}
+function hrtToSeconds(hrt: [number, number]): number {
+  return hrt[0] + hrt[1] / 1e9;
+}
+function hrtToISO(hrt: [number, number]): string {
+  return new Date(hrt[0] * 1000 + hrt[1] / 1e6).toISOString();
+}
+function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
+  const attrs = span.attributes;
+  const isBuiltin = span.name === 'hook:builtin-post-tool';
+  const isMcp = span.name === 'hook:mcp-post-tool';
+  if (!isBuiltin && !isMcp) return null;
+  const success = isBuiltin ? attrs['builtin.success'] : attrs['mcp.success'];
+  const tool = isBuiltin ? attrs['builtin.tool'] : attrs['mcp.tool'];
+  const errorType = isBuiltin ? attrs['builtin.error_type'] : attrs['mcp.error_type'];
+  const server = isMcp ? attrs['mcp.server'] : undefined;
+  const score = success === true ? 1.0 : 0.0;
+  const toolLabel = server ? `${server}/${tool}` : String(tool);
+  let explanation: string;
+  if (success) {
+    explanation = `Tool ${toolLabel} completed successfully`;
+  } else {
+    explanation = `Tool ${toolLabel} failed${errorType ? `: ${errorType}` : ''}`;
+  }
+  return {
+    timestamp: hrtToISO(span.startTime),
+    evaluationName: 'tool_correctness',
+    scoreValue: score,
+    explanation,
+    evaluator: 'telemetry-rule-engine',
+    evaluatorType: 'rule',
+    traceId: span.traceId,
+    sessionId: String(attrs['session.id'] ?? ''),
+  };
+}
+function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
+  // Only measure tool execution hooks (the meaningful ones)
+  const measurable = [
+    'hook:builtin-post-tool',
+    'hook:mcp-post-tool',
+    'hook:agent-post-tool',
+    'hook:session-start',
+    'hook:tsc-check',
+  ];
+  if (!measurable.includes(span.name)) return null;
+  const durationSec = hrtToSeconds(span.duration);
+  const attrs = span.attributes;
+  let hookType: string;
+  if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrs['builtin.tool']}`;
+  else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrs['mcp.tool']}`;
+  else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrs['agent.type']}`;
+  else hookType = span.name.replace('hook:', '');
+  return {
+    timestamp: hrtToISO(span.startTime),
+    evaluationName: 'evaluation_latency',
+    scoreValue: durationSec,
+    scoreUnit: 'seconds',
+    explanation: `Hook ${hookType} executed in ${durationSec.toFixed(4)}s`,
+    evaluator: 'telemetry-rule-engine',
+    evaluatorType: 'rule',
+    traceId: span.traceId,
+    sessionId: String(attrs['session.id'] ?? ''),
+  };
+}
+// Track per-session task status transitions for task_completion scoring
+// Graduated: pending=0.0, in_progress=0.5, completed=1.0
+interface TaskState {
+  statuses: Set<string>;
+  lastSpan: TraceSpan;
+}
+interface SessionTaskData {
+  tasks: Map<string, TaskState>;  // taskId -> state
+  creates: number;   // fallback counters for old trace data
+  updates: number;
+  lastSpan: TraceSpan | null;
+}
+const sessionTasks = new Map<string, SessionTaskData>();
+export const STATUS_SCORES: Record<string, number> = {
+  pending: 0.0,
+  in_progress: 0.5,
+  completed: 1.0,
+};
+export { sessionTasks };
+export function trackTaskActivity(span: TraceSpan): void {
+  if (span.name !== 'hook:builtin-post-tool') return;
+  const tool = span.attributes['builtin.tool'];
+  if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
+  const sessionId = String(span.attributes['session.id'] ?? 'unknown');
+  if (!sessionTasks.has(sessionId)) {
+    sessionTasks.set(sessionId, { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
+  }
+  const entry = sessionTasks.get(sessionId)!;
+  entry.lastSpan = span;
+  if (tool === 'TaskCreate') entry.creates++;
+  if (tool === 'TaskUpdate') entry.updates++;
+  const taskStatus = span.attributes['builtin.task_status'];
+  const taskId = span.attributes['builtin.task_id'];
+  if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
+    const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;
+    if (!entry.tasks.has(id)) {
+      entry.tasks.set(id, { statuses: new Set(), lastSpan: span });
+    }
+    const task = entry.tasks.get(id)!;
+    task.statuses.add(taskStatus);
+    task.lastSpan = span;
+  }
+}
+export function scoreTask(statuses: Set<string>): number {
+  if (statuses.has('completed')) return STATUS_SCORES.completed;
+  if (statuses.has('in_progress')) return STATUS_SCORES.in_progress;
+  return STATUS_SCORES.pending;
+}
+export function deriveTaskCompletionPerSession(): EvalRecord[] {
+  const evals: EvalRecord[] = [];
+  for (const [sessionId, data] of sessionTasks) {
+    if (data.creates === 0 && data.tasks.size === 0) continue;
+    if (!data.lastSpan) continue;
+    const lastSpan = data.lastSpan;
+    if (data.tasks.size > 0) {
+      const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const completed = scores.filter(s => s === 1.0).length;
+      const inProgress = scores.filter(s => s === 0.5).length;
+      const pending = scores.filter(s => s === 0.0).length;
+      const parts: string[] = [];
+      if (completed > 0) parts.push(`${completed} completed`);
+      if (inProgress > 0) parts.push(`${inProgress} in_progress`);
+      if (pending > 0) parts.push(`${pending} pending`);
+      evals.push({
+        timestamp: hrtToISO(lastSpan.startTime),
+        evaluationName: 'task_completion',
+        scoreValue: parseFloat(avg.toFixed(4)),
+        explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.tasks.size} tasks (${parts.join(', ')})`,
+        evaluator: 'telemetry-rule-engine',
+        evaluatorType: 'rule',
+        traceId: lastSpan.traceId,
+        sessionId,
+      });
+    } else {
+      if (data.creates === 0) continue;
+      const completionRatio = Math.min(data.updates / (data.creates * 2), 1.0);
+      evals.push({
+        timestamp: hrtToISO(lastSpan.startTime),
+        evaluationName: 'task_completion',
+        scoreValue: parseFloat(completionRatio.toFixed(4)),
+        explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
+        evaluator: 'telemetry-rule-engine',
+        evaluatorType: 'rule',
+        traceId: lastSpan.traceId,
+        sessionId,
+      });
+    }
+  }
+  return evals;
+}
+interface AgentSessionData {
+  pre: number;
+  post: number;
+  spans: TraceSpan[];
+  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
+}
+const sessionAgents = new Map<string, AgentSessionData>();
+function trackAgentActivity(span: TraceSpan): void {
+  const isPre = span.name === 'hook:agent-pre-tool';
+  const isPost = span.name === 'hook:agent-post-tool';
+  if (!isPre && !isPost) return;
+  const sessionId = String(span.attributes['session.id'] ?? 'unknown');
+  if (!sessionAgents.has(sessionId)) {
+    sessionAgents.set(sessionId, { pre: 0, post: 0, spans: [], agentSequence: [] });
+  }
+  const entry = sessionAgents.get(sessionId)!;
+  if (isPre) entry.pre++;
+  if (isPost) {
+    entry.post++;
+    const agentName = String(span.attributes['gen_ai.agent.name'] ?? 'unknown');
+    const score = span.status?.code === 2 ? 0 : 1;
+    entry.agentSequence.push({ agentName, score, span });
+  }
+  entry.spans.push(span);
+}
+function deriveAgentCompletionPerSession(): EvalRecord[] {
+  const evals: EvalRecord[] = [];
+  for (const [sessionId, data] of sessionAgents) {
+    if (data.pre === 0) continue;
+    const rate = Math.min(data.post / data.pre, 1.0);
+    const lastSpan = data.spans[data.spans.length - 1];
+    evals.push({
+      timestamp: hrtToISO(lastSpan.startTime),
+      evaluationName: 'task_completion',
+      scoreValue: parseFloat(rate.toFixed(4)),
+      explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+      evaluator: 'telemetry-rule-engine',
+      evaluatorType: 'rule',
+      traceId: lastSpan.traceId,
+      sessionId,
+    });
+  }
+  return evals;
+}
+const MIN_HANDOFF_AGENTS = 2;
+const HANDOFF_CORRECT_THRESHOLD = 0.5;
+const HANDOFF_CONTEXT_THRESHOLD = 0.7;
+function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
+  const evals: EvalRecord[] = [];
+  for (const [sessionId, data] of sessionAgents) {
+    if (data.agentSequence.length < MIN_HANDOFF_AGENTS) continue;
+    const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
+    if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
+    const handoffScores: number[] = [];
+    for (let i = 1; i < data.agentSequence.length; i++) {
+      const prev = data.agentSequence[i - 1];
+      const curr = data.agentSequence[i];
+      if (curr.agentName !== prev.agentName) {
+        handoffScores.push(curr.score);
+      }
+    }
+    if (handoffScores.length === 0) continue;
+    const avgScore = handoffScores.reduce((a, b) => a + b, 0) / handoffScores.length;
+    const correct = handoffScores.filter(s => s >= HANDOFF_CORRECT_THRESHOLD).length;
+    const preserved = handoffScores.filter(s => s >= HANDOFF_CONTEXT_THRESHOLD).length;
+    const lastSpan = data.agentSequence[data.agentSequence.length - 1].span;
+    evals.push({
+      timestamp: hrtToISO(lastSpan.startTime),
+      evaluationName: 'handoff_correctness',
+      scoreValue: parseFloat(avgScore.toFixed(4)),
+      scoreUnit: 'ratio_0_1',
+      explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
+      evaluator: 'telemetry-rule-engine',
+      evaluatorType: 'rule',
+      traceId: lastSpan.traceId,
+      sessionId,
+    });
+  }
+  return evals;
+}
+function main(): void {
+  const traceFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
+    .sort();
+  const allEvals: EvalRecord[] = [];
+  let _spanCount = 0;
+  for (const file of traceFiles) {
+    const filePath = join(TELEMETRY_DIR, file);
+    const spans = readJsonlWithValidationSync(filePath, traceSpanSchema);
+    for (const span of spans) {
+      _spanCount++;
+      const toolCorr = deriveToolCorrectness(span);
+      if (toolCorr) allEvals.push(toolCorr);
+      const latency = deriveEvaluationLatency(span);
+      if (latency) allEvals.push(latency);
+      trackTaskActivity(span);
+      trackAgentActivity(span);
+    }
+  }
+  allEvals.push(...deriveTaskCompletionPerSession());
+  allEvals.push(...deriveAgentCompletionPerSession());
+  allEvals.push(...deriveHandoffCorrectnessPerSession());
+  const byDate = new Map<string, EvalRecord[]>();
+  for (const ev of allEvals) {
+    const date = ev.timestamp.slice(0, 10);
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date)!.push(ev);
+  }
+  const RULE_EVALUATOR = 'telemetry-rule-engine';
+  let _totalWritten = 0;
+  let preservedCount = 0;
+  for (const [date, evals] of byDate) {
+    const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
+    const preserved: string[] = [];
+    if (existsSync(outFile)) {
+      const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
+      for (const rec of existingRecs) {
+        const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
+        if (evaluator && evaluator !== RULE_EVALUATOR) {
+          preserved.push(JSON.stringify(rec));
+        }
+      }
+    }
+    const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
+    const content = [...ruleLines, ...preserved].join('\n') + '\n';
+    writeFileSync(outFile, content);
+    _totalWritten += evals.length + preserved.length;
+    preservedCount += preserved.length;
+  }
+  const scoresByMetric: Record<string, number[]> = {};
+  for (const ev of allEvals) {
+    if (!scoresByMetric[ev.evaluationName]) scoresByMetric[ev.evaluationName] = [];
+    if (Number.isFinite(ev.scoreValue)) scoresByMetric[ev.evaluationName].push(ev.scoreValue);
+  }
+  const newDistributions = computeCalibrationDistributions(scoresByMetric);
+  if (Object.keys(newDistributions).length > 0) {
+    const previousState = loadCalibrationState(TELEMETRY_DIR);
+    const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
+    if (shouldWrite) {
+      saveCalibrationState(TELEMETRY_DIR, {
+        lastCalibrated: new Date().toISOString(),
+        distributions: newDistributions,
+        psiValues,
+        rawScores: Object.fromEntries(
+          Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
+        ),
+      });
+    }
+  }
+  const byCat = new Map<string, number>();
+  for (const ev of allEvals) {
+    byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+  }
+  if (preservedCount > 0) {  }
+  for (const [_name, _count] of byCat) {  }
+}
+const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
+  process.argv[1]?.endsWith('derive-evaluations.js');
+if (isDirectRun) {
+  main();
 }
 
 ================
@@ -14146,276 +14101,28 @@ export const routingTelemetryKvSchema = z.object({
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
-File: src/lib/quality-utils.ts
+File: src/pages/LoginPage.tsx
 ================
-export type ScoreDirection = 'maximize' | 'minimize';
-export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
-export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
-export interface LabelOrdinal {
-  ordinal: number;
-  category: LabelFilterCategory;
-  mapped: boolean;
-}
-import type { Role } from './constants.js';
-import { AGENT_PALETTE } from './constants.js';
-export type FeatureRoleType = Role;
-export function agentColor(agentName: string, agentNames: string[]): string {
-  const idx = agentNames.indexOf(agentName);
-  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
-}
-export interface RoleFeatureConfig {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
-}
-export function truncateText(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + '...' : text;
-}
-export function truncateId(id: string, max = 10): string {
-  if (id.length <= max) return id;
-  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
-}
-export function formatScore(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  return val.toFixed(4);
-}
-export function formatPercent(value: number, decimals = 1): string {
-  if (!Number.isFinite(value)) return '\u2014';
-  return `${value.toFixed(decimals)}%`;
-}
-export function plural(count: number, singular: string, suffix = 's'): string {
-  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
-}
-export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-  no_data: '#6b7280',
-};
-export function scoreColor(value: number, direction?: ScoreDirection): string {
-  return SCORE_COLORS[scoreColorBand(value, direction)];
-}
-export function scoreColorBand(
-  value: number,
-  direction: ScoreDirection = 'maximize',
-): ScoreColorBand {
-  const v = direction === 'minimize' ? 1 - value : value;
-  if (v >= 0.9) return 'excellent';
-  if (v >= 0.8) return 'good';
-  if (v >= 0.6) return 'adequate';
-  if (v >= 0.4) return 'poor';
-  return 'failing';
-}
-type ThresholdDirection = 'above' | 'below';
-export function inferScoreDirection(
-  alertDirection: ThresholdDirection | undefined,
-): ScoreDirection {
-  return alertDirection === 'above' ? 'minimize' : 'maximize';
-}
-const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
-  excellent: { ordinal: 4, category: 'Pass' },
-  highly_relevant: { ordinal: 4, category: 'Pass' },
-  fully_faithful: { ordinal: 4, category: 'Pass' },
-  perfect: { ordinal: 4, category: 'Pass' },
-  relevant: { ordinal: 3, category: 'Pass' },
-  good: { ordinal: 3, category: 'Pass' },
-  faithful: { ordinal: 3, category: 'Pass' },
-  pass: { ordinal: 3, category: 'Pass' },
-  correct: { ordinal: 3, category: 'Pass' },
-  coherent: { ordinal: 3, category: 'Pass' },
-  partial: { ordinal: 2, category: 'Review' },
-  borderline: { ordinal: 2, category: 'Review' },
-  adequate: { ordinal: 2, category: 'Review' },
-  mixed: { ordinal: 2, category: 'Review' },
-  off_topic: { ordinal: 1, category: 'Fail' },
-  irrelevant: { ordinal: 1, category: 'Fail' },
-  unfaithful: { ordinal: 1, category: 'Fail' },
-  fail: { ordinal: 1, category: 'Fail' },
-  incorrect: { ordinal: 1, category: 'Fail' },
-  incoherent: { ordinal: 1, category: 'Fail' },
-  hallucinated: { ordinal: 0, category: 'Fail' },
-  fabricated: { ordinal: 0, category: 'Fail' },
-  toxic: { ordinal: 0, category: 'Fail' },
-  dangerous: { ordinal: 0, category: 'Fail' },
-};
-function normalizeLabel(label: string): string {
-  return label.toLowerCase().replace(/-/g, '_').trim();
-}
-export function labelToOrdinal(label: string): LabelOrdinal {
-  const normalized = normalizeLabel(label);
-  const entry = LABEL_ORDINAL_MAP[normalized];
-  if (entry) {
-    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
-  }
-  return { ordinal: 2, category: 'Review', mapped: false };
-}
-export function ordinalToCategory(ordinal: number): LabelFilterCategory {
-  if (ordinal >= 3) return 'Pass';
-  if (ordinal === 2) return 'Review';
-  return 'Fail';
-}
-const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
-const OPERATOR_EXPLANATION_TRUNCATION = 500;
-const AUDITOR_EXPLANATION_TRUNCATION = 2000;
-const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
-const OPERATOR_MAX_WORST_EVALUATIONS = 5;
-const AUDITOR_MAX_WORST_EVALUATIONS = 10;
-export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
-  executive: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: false,
-    showAcceleration: false,
-    showProjectedBreach: true,
-    showCorrelationRemediation: false,
-    showCoverageHeatmap: false,
-    showPipelineFunnel: false,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
-  },
-  operator: {
-    showCQI: false,
-    showCQIBreakdown: false,
-    showVariance: true,
-    showAcceleration: true,
-    showProjectedBreach: true,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
-  },
-  auditor: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: true,
-    showAcceleration: false,
-    showProjectedBreach: false,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: true,
-    showRawExport: true,
-    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
-  },
-};
-export function shortPath(fullPath: string): string {
-  const parts = fullPath.replace(/\\/g, '/').split('/');
-  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
-}
-export function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-export interface PercentileDistribution {
-  p10: number; p25: number; p50: number; p75: number; p90: number;
-}
-export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
-export const MIN_QUANTILE_SAMPLE_SIZE = 100;
-const NUMERICAL_MIN_DENOMINATOR = 0.001;
-const LOG_SCALE_DIVISOR = 3;
-const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
-const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
-const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
-const QUANTILE_P10 = 0.1;
-const QUANTILE_P25 = 0.25;
-const QUANTILE_P50 = 0.5;
-const QUANTILE_P75 = 0.75;
-const QUANTILE_P90 = 0.9;
-export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
-  relevance: 'quantile',
-  faithfulness: 'binary',
-  coherence: 'uniform',
-  hallucination: 'log',
-  task_completion: 'step',
-  tool_correctness: 'categorical',
-  evaluation_latency: 'percentile_rank',
-};
-export function empiricalCDF(value: number, dist: PercentileDistribution): number {
-  if (!Number.isFinite(value)) return QUANTILE_P50;
-  const points: [number, number][] = [
-    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
-    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
-  ];
-  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
-  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
-  for (let i = 0; i < points.length - 1; i++) {
-    const [v0, p0] = points[i];
-    const [v1, p1] = points[i + 1];
-    if (value >= v0 && value <= v1) {
-      const range = v1 - v0;
-      if (range === 0) return p0;
-      return p0 + (p1 - p0) * ((value - v0) / range);
-    }
-  }
-  return QUANTILE_P50;
-}
-export function adaptiveScoreColorBand(
-  value: number,
-  metric: string,
-  direction: ScoreDirection = 'maximize',
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
-): ScoreColorBand {
-  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
-  switch (strategy) {
-    case 'quantile': {
-      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
-        return scoreColorBand(value, direction);
-      }
-      const rank = empiricalCDF(value, distribution);
-      if (rank >= QUANTILE_P90) return 'excellent';
-      if (rank >= QUANTILE_P75) return 'good';
-      if (rank >= QUANTILE_P50) return 'adequate';
-      if (rank >= QUANTILE_P25) return 'poor';
-      return 'failing';
-    }
-    case 'log': {
-      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
-      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
-      return scoreColorBand(logNorm, 'maximize');
-    }
-    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
-    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
-    case 'categorical': return scoreColorBand(value, direction);
-    case 'percentile_rank': {
-      if (!distribution) return scoreColorBand(value, direction);
-      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
-    }
-    case 'uniform':
-    default: return scoreColorBand(value, direction);
-  }
-}
-import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
-export function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return ts || '-';
-  const now = new Date();
-  const diffMin = differenceInMinutes(now, d);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = differenceInHours(now, d);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = differenceInDays(now, d);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return format(d, 'PP');
+import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
+export function LoginPage() {
+  const { loginWithRedirect } = useAuth0();
+  const handleLogin = () =>
+    loginWithRedirect({
+      authorizationParams: {
+        audience: AUTH0_AUDIENCE,
+        redirect_uri: `${window.location.origin}/callback`,
+      },
+    });
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <h1 className="login-title">Sign in</h1>
+        <button className="login-btn" onClick={handleLogin}>
+          Sign in
+        </button>
+      </div>
+    </div>
+  );
 }
 
 ================
@@ -14842,6 +14549,356 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
       </div>
     </div>
   );
+}
+
+================
+File: src/hooks/useApiQuery.ts
+================
+import { useQuery } from '@tanstack/react-query';
+import { STALE_TIME } from '../lib/constants.js';
+import { useAuth } from '../contexts/AuthContext.js';
+function defaultRetry(failureCount: number, error: unknown): boolean {
+  if (error instanceof Error && (
+    error.message === 'AUTH_REQUIRED' ||
+    error.message.startsWith('API error: 401')
+  )) return false;
+  return failureCount < 2;
+}
+export function useApiQuery<TRaw, T = TRaw>(
+  queryKey: readonly unknown[],
+  buildUrl: () => string,
+  options: {
+    enabled?: boolean;
+    staleTime?: number;
+    retry?: number | ((failureCount: number, error: unknown) => boolean);
+    refetchInterval?: number;
+    retryDelay?: (attempt: number) => number;
+    select?: (raw: TRaw) => T;
+  } = {},
+) {
+  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select } = options;
+  const { getAccessToken } = useAuth();
+  return useQuery<TRaw, Error, T>({
+    queryKey,
+    queryFn: async () => {
+      let token: string;
+      try {
+        token = await getAccessToken();
+      } catch {
+        throw new Error('AUTH_REQUIRED');
+      }
+      const url = buildUrl();
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
+      }
+      return res.json() as Promise<TRaw>;
+    },
+    select,
+    enabled,
+    staleTime,
+    retry: retry !== undefined ? retry : defaultRetry,
+    ...(refetchInterval !== undefined && { refetchInterval }),
+    ...(retryDelay !== undefined && { retryDelay }),
+  });
+}
+
+================
+File: src/lib/quality-utils.ts
+================
+export type ScoreDirection = 'maximize' | 'minimize';
+export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
+export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
+export interface LabelOrdinal {
+  ordinal: number;
+  category: LabelFilterCategory;
+  mapped: boolean;
+}
+import { type Role, AGENT_PALETTE } from './constants.js';
+export type FeatureRoleType = Role;
+export function agentColor(agentName: string, agentNames: string[]): string {
+  const idx = agentNames.indexOf(agentName);
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+}
+export interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;
+  maxWorstEvaluations: number;
+}
+export function truncateText(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+export function truncateId(id: string, max = 10): string {
+  if (id.length <= max) return id;
+  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+}
+export function formatScore(val: number | null | undefined): string {
+  if (val === null || val === undefined) return 'N/A';
+  return val.toFixed(4);
+}
+export function formatPercent(value: number, decimals = 1): string {
+  if (!Number.isFinite(value)) return '\u2014';
+  return `${value.toFixed(decimals)}%`;
+}
+export function plural(count: number, singular: string, suffix = 's'): string {
+  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
+}
+export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
+  excellent: '#26d97f',
+  good: '#34d399',
+  adequate: '#e5a00d',
+  poor: '#f97316',
+  failing: '#f04438',
+  no_data: '#6b7280',
+};
+export function scoreColor(value: number, direction?: ScoreDirection): string {
+  return SCORE_COLORS[scoreColorBand(value, direction)];
+}
+export function scoreColorBand(
+  value: number,
+  direction: ScoreDirection = 'maximize',
+): ScoreColorBand {
+  const v = direction === 'minimize' ? 1 - value : value;
+  if (v >= 0.9) return 'excellent';
+  if (v >= 0.8) return 'good';
+  if (v >= 0.6) return 'adequate';
+  if (v >= 0.4) return 'poor';
+  return 'failing';
+}
+type ThresholdDirection = 'above' | 'below';
+export function inferScoreDirection(
+  alertDirection: ThresholdDirection | undefined,
+): ScoreDirection {
+  return alertDirection === 'above' ? 'minimize' : 'maximize';
+}
+const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
+  excellent: { ordinal: 4, category: 'Pass' },
+  highly_relevant: { ordinal: 4, category: 'Pass' },
+  fully_faithful: { ordinal: 4, category: 'Pass' },
+  perfect: { ordinal: 4, category: 'Pass' },
+  relevant: { ordinal: 3, category: 'Pass' },
+  good: { ordinal: 3, category: 'Pass' },
+  faithful: { ordinal: 3, category: 'Pass' },
+  pass: { ordinal: 3, category: 'Pass' },
+  correct: { ordinal: 3, category: 'Pass' },
+  coherent: { ordinal: 3, category: 'Pass' },
+  partial: { ordinal: 2, category: 'Review' },
+  borderline: { ordinal: 2, category: 'Review' },
+  adequate: { ordinal: 2, category: 'Review' },
+  mixed: { ordinal: 2, category: 'Review' },
+  off_topic: { ordinal: 1, category: 'Fail' },
+  irrelevant: { ordinal: 1, category: 'Fail' },
+  unfaithful: { ordinal: 1, category: 'Fail' },
+  fail: { ordinal: 1, category: 'Fail' },
+  incorrect: { ordinal: 1, category: 'Fail' },
+  incoherent: { ordinal: 1, category: 'Fail' },
+  hallucinated: { ordinal: 0, category: 'Fail' },
+  fabricated: { ordinal: 0, category: 'Fail' },
+  toxic: { ordinal: 0, category: 'Fail' },
+  dangerous: { ordinal: 0, category: 'Fail' },
+};
+function normalizeLabel(label: string): string {
+  return label.toLowerCase().replace(/-/g, '_').trim();
+}
+export function labelToOrdinal(label: string): LabelOrdinal {
+  const normalized = normalizeLabel(label);
+  const entry = LABEL_ORDINAL_MAP[normalized];
+  if (entry) {
+    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
+  }
+  return { ordinal: 2, category: 'Review', mapped: false };
+}
+export function ordinalToCategory(ordinal: number): LabelFilterCategory {
+  if (ordinal >= 3) return 'Pass';
+  if (ordinal === 2) return 'Review';
+  return 'Fail';
+}
+const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
+const OPERATOR_EXPLANATION_TRUNCATION = 500;
+const AUDITOR_EXPLANATION_TRUNCATION = 2000;
+const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
+const OPERATOR_MAX_WORST_EVALUATIONS = 5;
+const AUDITOR_MAX_WORST_EVALUATIONS = 10;
+export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
+  executive: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: false,
+    showAcceleration: false,
+    showProjectedBreach: true,
+    showCorrelationRemediation: false,
+    showCoverageHeatmap: false,
+    showPipelineFunnel: false,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
+  },
+  operator: {
+    showCQI: false,
+    showCQIBreakdown: false,
+    showVariance: true,
+    showAcceleration: true,
+    showProjectedBreach: true,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
+  },
+  auditor: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: true,
+    showAcceleration: false,
+    showProjectedBreach: false,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: true,
+    showRawExport: true,
+    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
+  },
+};
+export function shortPath(fullPath: string): string {
+  const parts = fullPath.replace(/\\/g, '/').split('/');
+  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
+}
+export function fmtBytes(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+export interface PercentileDistribution {
+  p10: number; p25: number; p50: number; p75: number; p90: number;
+}
+export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
+export const MIN_QUANTILE_SAMPLE_SIZE = 100;
+const NUMERICAL_MIN_DENOMINATOR = 0.001;
+const LOG_SCALE_DIVISOR = 3;
+const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
+const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
+const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
+const QUANTILE_P10 = 0.1;
+const QUANTILE_P25 = 0.25;
+const QUANTILE_P50 = 0.5;
+const QUANTILE_P75 = 0.75;
+const QUANTILE_P90 = 0.9;
+export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
+  relevance: 'quantile',
+  faithfulness: 'binary',
+  coherence: 'uniform',
+  hallucination: 'log',
+  task_completion: 'step',
+  tool_correctness: 'categorical',
+  evaluation_latency: 'percentile_rank',
+};
+export function empiricalCDF(value: number, dist: PercentileDistribution): number {
+  if (!Number.isFinite(value)) return QUANTILE_P50;
+  const points: [number, number][] = [
+    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
+    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
+  ];
+  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
+  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
+  for (let i = 0; i < points.length - 1; i++) {
+    const [v0, p0] = points[i];
+    const [v1, p1] = points[i + 1];
+    if (value >= v0 && value <= v1) {
+      const range = v1 - v0;
+      if (range === 0) return p0;
+      return p0 + (p1 - p0) * ((value - v0) / range);
+    }
+  }
+  return QUANTILE_P50;
+}
+export function adaptiveScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection = 'maximize',
+  distribution?: PercentileDistribution,
+  sampleSize?: number,
+): ScoreColorBand {
+  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
+  switch (strategy) {
+    case 'quantile': {
+      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
+        return scoreColorBand(value, direction);
+      }
+      const rank = empiricalCDF(value, distribution);
+      if (rank >= QUANTILE_P90) return 'excellent';
+      if (rank >= QUANTILE_P75) return 'good';
+      if (rank >= QUANTILE_P50) return 'adequate';
+      if (rank >= QUANTILE_P25) return 'poor';
+      return 'failing';
+    }
+    case 'log': {
+      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
+      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
+      return scoreColorBand(logNorm, 'maximize');
+    }
+    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
+    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
+    case 'categorical': return scoreColorBand(value, direction);
+    case 'percentile_rank': {
+      if (!distribution) return scoreColorBand(value, direction);
+      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
+    }
+    case 'uniform':
+    default: return scoreColorBand(value, direction);
+  }
+}
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+export function formatTimestamp(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts || '-';
+  const now = new Date();
+  const diffMin = differenceInMinutes(now, d);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = differenceInHours(now, d);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = differenceInDays(now, d);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return format(d, 'PP');
+}
+
+================
+File: src/types/auth.ts
+================
+import type { RoleViewType } from '../types.js';
+export type DashboardPermission =
+  | 'dashboard.read'
+  | 'dashboard.executive'
+  | 'dashboard.operator'
+  | 'dashboard.auditor'
+  | 'dashboard.traces.read'
+  | 'dashboard.sessions.read'
+  | 'dashboard.agents.read'
+  | 'dashboard.pipeline.read'
+  | 'dashboard.compliance.read'
+  | 'dashboard.admin';
+export type DashboardView = RoleViewType;
+export interface AppSession {
+  authUserId?: string;
+  appUserId?: string;
+  email: string;
+  roles: string[];
+  permissions: DashboardPermission[];
+  allowedViews: DashboardView[];
 }
 
 ================
@@ -15528,201 +15585,6 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
 }
 
 ================
-File: src/hooks/useApiQuery.ts
-================
-import { useQuery } from '@tanstack/react-query';
-import { STALE_TIME } from '../lib/constants.js';
-import { useAuth } from '../contexts/AuthContext.js';
-function defaultRetry(failureCount: number, error: unknown): boolean {
-  if (error instanceof Error && (
-    error.message === 'AUTH_REQUIRED' ||
-    error.message.startsWith('API error: 401')
-  )) return false;
-  return failureCount < 2;
-}
-export function useApiQuery<TRaw, T = TRaw>(
-  queryKey: readonly unknown[],
-  buildUrl: () => string,
-  options: {
-    enabled?: boolean;
-    staleTime?: number;
-    retry?: number | ((failureCount: number, error: unknown) => boolean);
-    refetchInterval?: number;
-    retryDelay?: (attempt: number) => number;
-    select?: (raw: TRaw) => T;
-  } = {},
-) {
-  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select } = options;
-  const { getAccessToken } = useAuth();
-  return useQuery<TRaw, Error, T>({
-    queryKey,
-    queryFn: async () => {
-      let token: string;
-      try {
-        token = await getAccessToken();
-      } catch {
-        throw new Error('AUTH_REQUIRED');
-      }
-      const url = buildUrl();
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
-      }
-      return res.json() as Promise<TRaw>;
-    },
-    select,
-    enabled,
-    staleTime,
-    retry: retry !== undefined ? retry : defaultRetry,
-    ...(refetchInterval !== undefined && { refetchInterval }),
-    ...(retryDelay !== undefined && { retryDelay }),
-  });
-}
-
-================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-}
-export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
-export type InputKey = z.infer<typeof InputKeySchema>;
-export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
-export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
-export type SortBy = z.infer<typeof SortBySchema>;
-export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
-export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
-export type Role = z.infer<typeof RoleSchema>;
-export const ROLES = RoleSchema.options;
-export const DEFAULT_ROLE: Role = 'executive';
-export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
-export const TIME_MS = {
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-} as const;
-export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
-export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
-export const PeriodEnum = z.enum(PERIOD_KEYS);
-export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
-export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
-export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
-export const PERIOD_MS: Record<string, number> = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
-);
-export function computePeriodDates(period: string): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
-  return { start: start.toISOString(), end: now.toISOString() };
-}
-export const LLM_SAMPLE_RATE = 10;
-export const SCORE_THRESHOLD_GREEN = 0.8;
-export const SCORE_THRESHOLD_YELLOW = 0.5;
-export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-export const MAX_ERROR_ROWS = 10;
-export const MAX_HALLUCINATION_ROWS = 8;
-export const MAX_FAILED_EVAL_ROWS = 6;
-export const LIVE_WINDOW_MS = TIME_MS.DAY;
-export const QUERY_RETRY_COUNT = 2;
-export const POLL_INTERVAL_MS = 30_000;
-export const RETRY_DELAY_BASE = 1_000;
-export const RETRY_DELAY_CAP = 30_000;
-export const MAX_IDS = 50;
-export const EVAL_LIMIT = 100;
-export const SCORE_DISPLAY_PRECISION = 3;
-export const STALE_TIME = {
-  DEFAULT: 25_000,
-  DETAIL: 30_000,
-  AGGREGATE: 60_000,
-} as const;
-export const DEFAULT_TOP_N = 5;
-export const DEFAULT_BUCKET_COUNT = 10;
-export const METRIC_CARD_SKELETON_HEIGHT = 180;
-export const SKELETON_HEIGHT_SM = 200;
-export const SKELETON_HEIGHT_MD = 300;
-export const SKELETON_HEIGHT_LG = 400;
-export const ICON_BADGE_SIZE = 24;
-export const CALLOUT_MAX_WIDTH = 480;
-export const PAGE_CONTENT_MAX_WIDTH = 1100;
-export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
-export const AGENT_CARD_MIN_WIDTH = '220px';
-export const FILE_ACCESS_COL_MIN = '320px';
-export const DEFAULT_PAGE_LIMIT = 50;
-export const HEATMAP_ROW_HEADER_WIDTH = 80;
-export const HEATMAP_COL_HEADER_HEIGHT = 32;
-export const HEATMAP_CELL_MIN_HEIGHT = 36;
-export const COVERAGE_GRID_HEADER_WIDTH = 120;
-export const COVERAGE_GRID_CELL_SIZE = 28;
-export const COVERAGE_GRID_LEGEND_SIZE = 12;
-export const COVERAGE_GRID_MAX_INPUTS = 30;
-export const COVERAGE_GRID_HEADER_MAX_HEIGHT = 60;
-export const FUNNEL_BAR_HEIGHT = 32;
-export const FUNNEL_BAR_MIN_WIDTH = 40;
-export const FUNNEL_DROPOFF_WARN_PCT = 20;
-export const SPAN_TREE_INDENT = 20;
-export const SPAN_TREE_BASE_PADDING = 8;
-export const SPLIT_PANE_DIVIDER_WIDTH = 6;
-export const SPLIT_PANE_MIN_HEIGHT = 300;
-export const TURN_CARD_MIN_WIDTH = 120;
-export const AGENT_TABLE_MIN_WIDTH = 640;
-export const AGENT_BAR_MIN_WIDTH = 48;
-export const AGENT_EVAL_CARD_MIN_WIDTH = 140;
-export const SPARKLINE_WIDTH = 160;
-export const SPARKLINE_HEIGHT = 28;
-export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
-export const VARIANCE_LOW_PCT = 20;
-export const VARIANCE_MEDIUM_PCT = 50;
-export const VARIANCE_DISPLAY_MIN_WIDTH = 36;
-export const CHART_HEIGHT = 200;
-export const CHART_STROKE_WIDTH = 2;
-export const CHART_DOT_RADIUS = 4;
-export const CHART_DOT_RADIUS_ACTIVE = 6;
-export const CHART_DOT_RADIUS_PROJECTED = 3;
-export const CHART_DASH_THRESHOLD = '6 3';
-export const CHART_DASH_PROJECTED = '6 4';
-export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-export const EVAL_FILTER_INACTIVE_OPACITY = 0.6;
-export const SCORE_BADGE_ALPHA_HEX = '1a';
-export const CHART_COLORS = {
-  line: '#58a6ff',
-  grid: '#30363d',
-  text: '#8b949e',
-  surface: '#1f2937',
-  tooltip: '#161b22',
-  warning: '#d29922',
-  critical: '#f85149',
-} as const;
-export const AGENT_PALETTE = [
-  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
-  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
-] as const;
-export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
-export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
-export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
-export const CHART_TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: CHART_COLORS.tooltip,
-  border: `1px solid ${CHART_COLORS.grid}`,
-  borderRadius: 'var(--radius)',
-  color: CHART_COLORS.text,
-  fontSize: 12,
-};
-export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
-export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
-
-================
 File: src/lib/workflow-graph.ts
 ================
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
@@ -15898,868 +15760,6 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
     if (count > 1) return 'branching';
   }
   return 'linear';
-}
-
-================
-File: scripts/judge-evaluations.ts
-================
-#!/usr/bin/env tsx
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
-import { createHash } from 'crypto';
-import { join, basename } from 'path';
-import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
-import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import {
-  LLMJudge,
-} from '../../src/lib/judge/llm-judge-config.js';
-import type { DatasetRunRecord } from '../../src/backends/index.js';
-import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
-import {
-  traceSpanSchema,
-  otelLogEntrySchema,
-  transcriptEntrySchema,
-  otelEvaluationRecordSchema,
-} from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
-import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
-  name: 'tool_correctness',
-  criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-export const TOOL_SELECTION_CRITERIA: GEvalConfig = {
-  name: 'tool_selection',
-  criteria: 'Evaluate whether the assistant selected the appropriate tools for the given task. Were the chosen tools the best fit for the user request? Were unnecessary tools avoided? Were any required tools missing that should have been used?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-export const TOOL_ARGUMENTS_CRITERIA: GEvalConfig = {
-  name: 'tool_arguments',
-  criteria: 'Evaluate whether the tool arguments provided by the assistant were correct and appropriate. Were all required parameters provided with accurate values? Were parameter formats and types correct? Were optional parameters used effectively when beneficial?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
-  name: 'tool_integration',
-  criteria: 'Evaluate whether tool results were properly incorporated into the assistant response. Were results accurately reflected without distortion? Was relevant information extracted and presented clearly? Were errors or unexpected results handled appropriately?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-const HOME = process.env.HOME ?? '';
-export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
-export const CONCURRENCY = 3;
-export const BATCH_DELAY_MS = 500;
-export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
-export const MAX_TURN_TEXT_LEN = 8000;
-export const MAX_TOOL_CONTEXT_ITEMS = 10;
-export const MAX_TOOL_RESULTS_PER_TURN = 20;
-export const MAX_TURN_LIMIT = 10_000;
-export function normalizeScore(score: number): number {
-  return parseFloat(score.toFixed(4));
-}
-export interface TranscriptInfo {
-  path: string;
-  sessionId: string;
-  traceId: string;
-}
-export interface Turn {
-  sessionId: string;
-  traceId: string;
-  timestamp: string;
-  userText: string;
-  assistantText: string;
-  toolResults: string[];
-}
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  explanation: string;
-  evaluator: string;
-  evaluatorType: string;
-  traceId: string;
-  sessionId: string;
-}
-const TRANSCRIPT_DIRS = [
-  join(HOME, '.claude', 'projects'),
-  join(HOME, 'claude-tool-use', 'projects'),
-  join(HOME, '.claude-history', 'projects'),
-  join(HOME, 'claude-tool-use'),
-  join(HOME, '.claude-history'),
-];
-function resolveTranscriptPath(originalPath: string): string | null {
-  if (existsSync(originalPath)) return originalPath;
-  const projectsIdx = originalPath.indexOf('/projects/');
-  if (projectsIdx === -1) return null;
-  const suffix = originalPath.slice(projectsIdx + '/projects/'.length);
-  for (const dir of TRANSCRIPT_DIRS) {
-    const candidate = join(dir, suffix);
-    if (candidate !== originalPath && existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
-  const seen = new Set<string>();
-  const transcripts: TranscriptInfo[] = [];
-  const logFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('logs-') && f.endsWith('.jsonl'))
-    .sort();
-  for (const file of logFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
-      const attrs = entry.attributes as Record<string, unknown> | undefined;
-      if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
-      const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
-      if (!tPath) continue;
-      const sessionId = basename(tPath, '.jsonl');
-      if (seen.has(sessionId)) continue;
-      const resolved = resolveTranscriptPath(tPath);
-      if (!resolved) continue;
-      seen.add(sessionId);
-      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
-      transcripts.push({ path: resolved, sessionId, traceId });
-    }
-  }
-  // Phase 2: Directory scan for transcripts not referenced in logs
-  for (const dir of TRANSCRIPT_DIRS) {
-    if (!existsSync(dir)) continue;
-    let slugDirs: string[];
-    try {
-      slugDirs = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const slug of slugDirs) {
-      const slugPath = join(dir, slug);
-      let files: string[];
-      try {
-        files = readdirSync(slugPath);
-      } catch {
-        continue;
-      }
-      for (const f of files) {
-        if (!f.endsWith('.jsonl')) continue;
-        const sessionId = basename(f, '.jsonl');
-        if (!/^[0-9a-f]{8}-/.test(sessionId)) continue;
-        if (seen.has(sessionId)) continue;
-        seen.add(sessionId);
-        transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
-      }
-    }
-  }
-  return transcripts;
-}
-// ============================================================================
-// Trace-Based Session Discovery (for --backfill)
-// ============================================================================
-interface TraceSession {
-  sessionId: string;
-  traceId: string;
-  earliestTime: number; // epoch seconds
-  spanCount: number;
-}
-/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
-async function discoverSessionsFromTraces(): Promise<Turn[]> {
-  const traceFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
-    .sort();
-  const sessions = new Map<string, TraceSession>();
-  for (const file of traceFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    for await (const span of streamJsonlWithValidation(filepath, traceSpanSchema)) {
-      const attrs = span.attributes;
-      if (!attrs) continue;
-      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
-      if (!sessionId) continue;
-      const startTime = Array.isArray(span.startTime) ? span.startTime[0] as number : 0;
-      const traceId = span.traceId || '';
-      const existing = sessions.get(sessionId);
-      if (!existing) {
-        sessions.set(sessionId, { sessionId, traceId, earliestTime: startTime, spanCount: 1 });
-      } else {
-        existing.spanCount++;
-        if (startTime < existing.earliestTime) {
-          existing.earliestTime = startTime;
-          existing.traceId = traceId;
-        }
-      }
-    }
-  }
-  // Convert to Turn[] with synthetic entries (one per session)
-  const turns: Turn[] = [];
-  for (const s of sessions.values()) {
-    const timestamp = new Date(s.earliestTime * 1000).toISOString();
-    turns.push({
-      sessionId: s.sessionId,
-      traceId: s.traceId,
-      timestamp,
-      userText: '[trace-backfill]',
-      assistantText: '[trace-backfill]',
-      toolResults: [],
-    });
-  }
-  return turns;
-}
-// ============================================================================
-// Turn Extraction
-// ============================================================================
-/** B8: Discriminated union for transcript content blocks */
-export interface TextBlock { type: 'text'; text: string }
-export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
-export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
-export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
-function isContentBlock(value: unknown): value is ContentBlock {
-  if (typeof value !== 'object' || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return obj.type === 'text' || obj.type === 'tool_result' || obj.type === 'tool_use';
-}
-function asContentBlocks(content: unknown): ContentBlock[] {
-  if (!Array.isArray(content)) return [];
-  return content.filter(isContentBlock);
-}
-export function isSystemPrompt(text: string): boolean {
-  if (typeof text !== 'string') return false;
-  const trimmed = text.trimStart();
-  return trimmed.startsWith('<system-reminder>') || trimmed.startsWith('Stop hook feedback:');
-}
-export function isToolResultOnly(content: unknown): boolean {
-  if (!Array.isArray(content)) return false;
-  const blocks = asContentBlocks(content);
-  return blocks.length > 0 && blocks.every(b => b.type === 'tool_result');
-}
-export function extractTextFromContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  return asContentBlocks(content)
-    .filter((b): b is TextBlock => b.type === 'text')
-    .map(b => b.text)
-    .join('\n')
-    .trim();
-}
-export function extractToolResults(content: unknown): string[] {
-  return asContentBlocks(content)
-    .filter((b): b is ToolResultBlock => b.type === 'tool_result')
-    .map(b => {
-      if (typeof b.content === 'string') return b.content;
-      return b.content
-        .filter((inner): inner is TextBlock => inner.type === 'text')
-        .map(inner => inner.text)
-        .join('\n');
-    })
-    .filter(Boolean);
-}
-export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
-  const turns: Turn[] = [];
-  let pendingUser: { text: string; timestamp: string } | null = null;
-  const accumulatedToolResults: string[] = [];
-  for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
-    const type = entry.type;
-    if (type === 'progress' || type === 'file-history-snapshot') continue;
-    const message = entry.message;
-    if (!message) continue;
-    const role = message.role;
-    const content = message.content;
-    if (type === 'user' && role === 'user') {
-      const toolRes = extractToolResults(content);
-      if (toolRes.length > 0) {
-        accumulatedToolResults.push(...toolRes);
-        if (accumulatedToolResults.length > MAX_TOOL_RESULTS_PER_TURN) {
-          accumulatedToolResults.splice(0, accumulatedToolResults.length - MAX_TOOL_RESULTS_PER_TURN);
-        }
-      }
-      if (isToolResultOnly(content)) continue;
-      const userText = extractTextFromContent(content);
-      if (!userText || isSystemPrompt(userText)) continue;
-      const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : null;
-      if (!timestamp) continue;
-      const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
-      if (!sanitizedUser.trim()) continue;
-      pendingUser = {
-        text: sanitizedUser,
-        timestamp,
-      };
-    }
-    if (type === 'assistant' && role === 'assistant' && pendingUser) {
-      const assistantText = extractTextFromContent(content);
-      if (!assistantText) continue;
-      turns.push({
-        sessionId: info.sessionId,
-        traceId: info.traceId,
-        timestamp: pendingUser.timestamp,
-        userText: pendingUser.text,
-        assistantText: sanitizeForPrompt(assistantText, MAX_TURN_TEXT_LEN),
-        toolResults: accumulatedToolResults.slice(-MAX_TOOL_RESULTS_PER_TURN),
-      });
-      pendingUser = null;
-      accumulatedToolResults.length = 0;
-    }
-  }
-  return turns;
-}
-async function createAnthropicProvider(): Promise<LLMProvider> {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic();
-  return {
-    async generate(
-      prompt: string,
-      options?: { temperature?: number; logprobs?: boolean }
-    ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
-      const response = await client.messages.create({
-        model: HAIKU_MODEL,
-        max_tokens: 1024,
-        temperature: options?.temperature ?? 0.1,
-        messages: [{ role: 'user', content: prompt }],
-      });
-      const text = response.content
-        .filter((b: { type: string; text?: string }) => b.type === 'text')
-        .map((b: { type: string; text?: string }) => b.text)
-        .join('');
-      // B15: Anthropic Messages API doesn't support logprobs, so G-Eval
-      return { text };
-    },
-  };
-}
-export function hashToScore(input: string, min: number, max: number): number {
-  const hash = createHash('sha256').update(input).digest();
-  const value = hash.readUInt16BE(0) / 0xFFFF;
-  return normalizeScore(min + value * (max - min));
-}
-export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
-  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
-}
-export interface SeedResult {
-  evals: EvalRecord[];
-  canaryCount: number;
-}
-export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
-  const evals: EvalRecord[] = [];
-  let canaryCount = 0;
-  for (const turn of turns) {
-    const turnKey = turn.timestamp.slice(0, 19);
-    const canary = isCanaryTurn(turn.sessionId, turnKey);
-    if (canary) canaryCount++;
-    const relKey = `${turn.sessionId}:relevance:${turnKey}`;
-    if (!existingKeys.has(relKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'relevance',
-        scoreValue: canary
-          ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
-          : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
-        explanation: canary
-          ? `Relevance (canary) for session ${turn.sessionId.slice(0, 8)}`
-          : `Relevance (seeded) for session ${turn.sessionId.slice(0, 8)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: canary ? 'canary' : 'seed',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    }
-    const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
-    if (!existingKeys.has(cohKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'coherence',
-        scoreValue: canary
-          ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
-          : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-        explanation: canary
-          ? `Coherence (canary) for session ${turn.sessionId.slice(0, 8)}`
-          : `Coherence (seeded) for session ${turn.sessionId.slice(0, 8)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: canary ? 'canary' : 'seed',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    }
-    {
-      const halScore = canary
-        ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
-        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.09);
-      const faithScore = normalizeScore(1 - halScore);
-      const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
-      if (!existingKeys.has(faithKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'faithfulness',
-          scoreValue: faithScore,
-          explanation: canary
-            ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, 8)}`
-            : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: canary ? 'canary' : 'seed',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      }
-      const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
-      if (!existingKeys.has(halKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'hallucination',
-          scoreValue: halScore,
-          explanation: canary
-            ? `Hallucination (canary) for session ${turn.sessionId.slice(0, 8)}`
-            : `Hallucination (seeded) for session ${turn.sessionId.slice(0, 8)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: canary ? 'canary' : 'seed',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      }
-    }
-    if (turn.toolResults.length > 0) {
-      const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
-      if (!existingKeys.has(tcKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'tool_correctness',
-          scoreValue: canary
-            ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
-            : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-          explanation: canary
-            ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, 8)}`
-            : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, 8)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: canary ? 'canary' : 'seed',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      }
-    }
-  }
-  return { evals, canaryCount };
-}
-export const evalFailures: Record<string, number> = {};
-function trackFailure(metric: string): void {
-  evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
-}
-export async function evaluateTurn(
-  judge: LLMJudge,
-  turn: Turn,
-  existingKeys: Set<string>,
-): Promise<EvalRecord[]> {
-  const evals: EvalRecord[] = [];
-  const turnKey = turn.timestamp.slice(0, 19);
-  const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
-  const relKey = `${turn.sessionId}:relevance:${turnKey}`;
-  if (!existingKeys.has(relKey)) {
-    try {
-      const result = await judge.evaluateRelevance(
-        turn.userText,
-        turn.assistantText,
-        toolContext,
-      );
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'relevance',
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: 'llm',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    } catch (err) {
-      trackFailure('relevance');
-      console.warn(`  [relevance] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
-    }
-  }
-  const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
-  if (!existingKeys.has(cohKey)) {
-    try {
-      const result = await judge.evaluateCoherence(turn.assistantText);
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: 'coherence',
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
-        evaluator: 'llm-judge',
-        evaluatorType: 'llm',
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
-    } catch (err) {
-      trackFailure('coherence');
-      console.warn(`  [coherence] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
-    }
-  }
-  if (turn.toolResults.length > 0) {
-    const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
-    const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
-    const needsFaith = !existingKeys.has(faithKey);
-    const needsHal = !existingKeys.has(halKey);
-    if (needsFaith) {
-      try {
-        const faithResult = await judge.qagEvaluate(
-          turn.userText,
-          turn.assistantText,
-          toolContext,
-        );
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'faithfulness',
-          scoreValue: normalizeScore(faithResult.score),
-          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: 'llm',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      } catch (err) {
-        trackFailure('faithfulness');
-        console.warn(`  [faithfulness] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
-      }
-    }
-    if (needsHal) {
-      try {
-        const halResult = await judge.evaluateFaithfulness(
-          turn.userText,
-          turn.assistantText,
-          toolContext,
-        );
-        const halScore = normalizeScore(1 - halResult.score);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'hallucination',
-          scoreValue: halScore,
-          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: 'llm',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      } catch (err) {
-        trackFailure('hallucination');
-        console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
-      }
-    }
-    const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
-    if (!existingKeys.has(tcKey)) {
-      const tcTestCase = {
-        input: turn.userText,
-        output: turn.assistantText,
-        context: toolContext,
-      };
-      try {
-        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: 'tool_correctness',
-          scoreValue: normalizeScore(tcResult.score),
-          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
-          evaluator: 'llm-judge',
-          evaluatorType: 'llm',
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
-      } catch (err) {
-        trackFailure('tool_correctness');
-        console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
-      }
-      const subCriteria = [
-        { config: TOOL_SELECTION_CRITERIA, name: 'tool_selection' },
-        { config: TOOL_ARGUMENTS_CRITERIA, name: 'tool_arguments' },
-        { config: TOOL_INTEGRATION_CRITERIA, name: 'tool_integration' },
-      ] as const;
-      for (const { config, name } of subCriteria) {
-        const subKey = `${turn.sessionId}:${name}:${turnKey}`;
-        if (existingKeys.has(subKey)) continue;
-        try {
-          const result = await judge.gEval(config, tcTestCase);
-          evals.push({
-            timestamp: turn.timestamp,
-            evaluationName: name,
-            scoreValue: normalizeScore(result.score),
-            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, 8)}`,
-            evaluator: 'llm-judge',
-            evaluatorType: 'llm',
-            traceId: turn.traceId,
-            sessionId: turn.sessionId,
-          });
-        } catch (err) {
-          trackFailure(name);
-          console.warn(`  [${name}] Error for ${turn.sessionId.slice(0, 8)}: ${(err as Error).message}`);
-        }
-      }
-    }
-  }
-  return evals;
-}
-export function toOTelRecord(ev: EvalRecord): object {
-  const attrs: Record<string, unknown> = {
-    'gen_ai.evaluation.name': ev.evaluationName,
-    'gen_ai.evaluation.score.value': ev.scoreValue,
-    'gen_ai.evaluation.explanation': ev.explanation,
-    'gen_ai.evaluation.evaluator': ev.evaluator,
-    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
-  };
-  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
-  return {
-    timestamp: ev.timestamp,
-    name: 'gen_ai.evaluation.result',
-    attributes: attrs,
-    traceId: ev.traceId,
-  };
-}
-function _loadExistingKeys(): Set<string> {
-  const keys = new Set<string>();
-  const evalFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('evaluations-') && f.endsWith('.jsonl'));
-  for (const file of evalFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    const records = readJsonlWithValidationSync(filepath, otelEvaluationRecordSchema);
-    for (const record of records) {
-      const attrs = record.attributes;
-      if (!attrs) continue;
-      const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-      if (evalType !== 'llm' && evalType !== 'seed' && evalType !== 'trace-backfill') continue;
-      const sessionId = attrs['session.id'] as string || '';
-      const metricName = attrs['gen_ai.evaluation.name'] as string || '';
-      const timestamp = record.timestamp || '';
-      const turnKey = timestamp.slice(0, 19);
-      keys.add(`${sessionId}:${metricName}:${turnKey}`);
-    }
-  }
-  return keys;
-}
-// ============================================================================
-// Output
-// ============================================================================
-const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
-function acquireLock(): boolean {
-  try {
-    const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
-    writeFileSync(fd, String(process.pid));
-    closeSync(fd);
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
-    try {
-      const lockContent = readFileSync(LOCK_FILE, 'utf-8').trim();
-      const lockPid = parseInt(lockContent, 10);
-      if (!isNaN(lockPid) && lockPid > 0) {
-        try {
-          process.kill(lockPid, 0);
-          return false;
-        } catch (killErr) {
-          if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
-        }
-      }
-    } catch {
-      return false;
-    }
-    let stale = false;
-    {
-      try {
-        const lockStat = statSync(LOCK_FILE);
-        const lockAgeMs = Date.now() - lockStat.mtimeMs;
-        if (lockAgeMs > TIME_MS.HOUR) {
-          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
-          stale = true;
-        }
-      } catch {  }
-    }
-    if (stale) {
-      try { unlinkSync(LOCK_FILE); } catch {  }
-      try {
-        const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
-        writeFileSync(fd, String(process.pid));
-        closeSync(fd);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    return false;
-  }
-}
-function releaseLock(): void {
-  try { unlinkSync(LOCK_FILE); } catch {  }
-}
-function safeExit(code: number): never {
-  releaseLock();
-  process.exit(code);
-}
-function writeEvaluations(evals: EvalRecord[]): void {
-  const today = new Date().toISOString().slice(0, 10);
-  const outFile = join(TELEMETRY_DIR, `evaluations-${today}.jsonl`);
-  const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
-  appendFileSync(outFile, content);
-}
-export async function processBatch<T, R>(
-  items: T[],
-  concurrency: number,
-  delayMs: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = [];
-  for (let i = 0; i < items.length; i += concurrency) {
-    const batch = items.slice(i, i + concurrency);
-    const batchResults = await Promise.allSettled(batch.map(fn));
-    for (const r of batchResults) {
-      if (r.status === 'fulfilled') {
-        results.push(r.value);
-      }
-    }
-    if (i + concurrency < items.length) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-  }
-  return results;
-}
-async function main() {
-  const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
-  const seed = args.includes('--seed');
-  const backfill = args.includes('--backfill');
-  const limitIdx = args.indexOf('--limit');
-  let limit = Infinity;
-  if (limitIdx !== -1) {
-    const parsed = parseInt(args[limitIdx + 1], 10);
-    if (isNaN(parsed) || parsed < 1) {
-      console.error('Error: --limit must be a positive integer');
-      process.exit(1);
-    }
-    limit = Math.min(parsed, MAX_TURN_LIMIT);
-  }
-  const datasetIdx = args.indexOf('--dataset-id');
-  const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
-  if (backfill) {
-    const traceTurns = await discoverSessionsFromTraces();
-    console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
-    if (!acquireLock()) {
-      console.error('Error: Another judge-evaluations process is running (lockfile exists)');
-      process.exit(1);
-    }
-    try {
-      const existingKeys = _loadExistingKeys();
-      const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
-      const newTurns = traceTurns.filter(t => {
-        const turnKey = t.timestamp.slice(0, 19);
-        return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
-      });
-      console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
-      if (newTurns.length === 0) return;
-      const seedResult = seedEvaluations(newTurns, existingKeys);
-      for (const ev of seedResult.evals) {
-        if (ev.evaluatorType === 'seed') {
-          ev.evaluatorType = 'trace-backfill';
-        }
-      }
-      if (seedResult.evals.length > 0) {
-        writeEvaluations(seedResult.evals);
-        const byCat = new Map<string, number>();
-        for (const ev of seedResult.evals) {
-          byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
-        }
-        console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
-        for (const [name, count] of byCat) {
-          console.log(`  ${name}: ${count}`);
-        }
-      }
-    } finally {
-      releaseLock();
-    }
-    return;
-  }
-  const transcripts = await _discoverTranscripts();
-  const turnArrays = await Promise.all(transcripts.map(info => extractTurns(info)));
-  const allTurns = turnArrays.flat().slice(0, limit);
-  if (dryRun) {
-    const estEvals = allTurns.reduce((sum, t) =>
-      sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
-    const estInputTokens = allTurns.reduce((sum, t) => {
-      const contentChars = t.userText.length + t.assistantText.length
-        + t.toolResults.reduce((s, r) => s + r.length, 0);
-      const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
-      return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
-    }, 0);
-    const estOutputTokens = estEvals * 200;
-    const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
-    const estCost = (estInputTokens / TOKENS_PER_MILLION) * haikuPricing.input
-      + (estOutputTokens / TOKENS_PER_MILLION) * haikuPricing.output;
-    console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
-    console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
-    console.log(`[dry-run] estimated cost: $${estCost.toFixed(4)}`);
-    const bySession = new Map<string, number>();
-    for (const t of allTurns) {
-      const sid = t.sessionId.slice(0, 8);
-      bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
-    }
-    const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-    console.log('[dry-run] top sessions by turn count:');
-    for (const [sid, count] of sorted) {
-      console.log(`  ${sid}: ${count} turns`);
-    }
-    return;
-  }
-  if (!seed && !process.env.ANTHROPIC_API_KEY) {
-    console.error('Error: ANTHROPIC_API_KEY required (or use --seed for offline mode)');
-    process.exit(1);
-  }
-  if (!acquireLock()) {
-    console.error('Error: Another judge-evaluations process is running (lockfile exists)');
-    process.exit(1);
-  }
-  try {
-    const existingKeys = _loadExistingKeys();
-    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
-    let flatEvals: EvalRecord[];
-    if (seed) {
-      const seedResult = seedEvaluations(allTurns, existingKeys);
-      flatEvals = seedResult.evals;
-    } else {
-      const llm = await createAnthropicProvider();
-      const judge = new LLMJudge(llm, {
-        timeoutMs: TIME_MS.MINUTE,
-        maxRetries: 2,
-        evaluator: 'llm-judge',
-        evaluatorType: 'llm',
-        logger: {
-          warn: (msg) => console.warn(`  [warn] ${msg}`),
-          error: (msg) => console.error(`  [error] ${msg}`),
-        },
-      });
-      const allEvals = await processBatch(
-        allTurns,
-        CONCURRENCY,
-        BATCH_DELAY_MS,
-        (turn) => evaluateTurn(judge, turn, existingKeys),
-      );
-      flatEvals = allEvals.flat();
-    }
-    if (flatEvals.length === 0) {
-      return;
-    }
-    writeEvaluations(flatEvals);
-    if (datasetId) {
-      const backend = new LocalJsonlBackend(TELEMETRY_DIR);
-      const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
-      let datasetVersion = 1;
-      try {
-        const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
-        if (dsResult.action === 'get') datasetVersion = dsResult.dataset.version ?? 1;
-      } catch {  }
-      const runRecord: DatasetRunRecord = {
-        id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        datasetId,
-        datasetVersion,
-        runAt: new Date().toISOString(),
-        evaluationNames: evalNames,
-        resultCount: flatEvals.length,
-        evaluator: seed ? 'seed' : 'llm-judge',
-      };
-      await backend.appendDatasetRun(runRecord);
-    }
-  } finally {
-    releaseLock();
-  }
-}
-const isDirectRun = process.argv[1]?.endsWith('judge-evaluations.ts') ||
-  process.argv[1]?.endsWith('judge-evaluations.js');
-if (isDirectRun) {
-  main().catch(err => {
-    console.error('Fatal error:', err);
-    safeExit(1);
-  });
 }
 
 ================
@@ -17351,6 +16351,149 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 });
 
 ================
+File: src/lib/constants.ts
+================
+import { z } from 'zod';
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+}
+export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+export type InputKey = z.infer<typeof InputKeySchema>;
+export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
+export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
+export type SortBy = z.infer<typeof SortBySchema>;
+export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
+export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
+export type Role = z.infer<typeof RoleSchema>;
+export const ROLES = RoleSchema.options;
+export const DEFAULT_ROLE: Role = 'executive';
+export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
+export const TIME_MS = {
+  HOUR: 60 * 60 * 1000,
+  DAY: 24 * 60 * 60 * 1000,
+} as const;
+export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
+export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
+export const PeriodEnum = z.enum(PERIOD_KEYS);
+export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
+export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
+export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
+export const PERIOD_MS: Record<string, number> = Object.fromEntries(
+  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
+);
+export function computePeriodDates(period: string): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
+export const LLM_SAMPLE_RATE = 10;
+export const SCORE_THRESHOLD_GREEN = 0.8;
+export const SCORE_THRESHOLD_YELLOW = 0.5;
+export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
+export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+export const MAX_ERROR_ROWS = 10;
+export const MAX_HALLUCINATION_ROWS = 8;
+export const MAX_FAILED_EVAL_ROWS = 6;
+export const LIVE_WINDOW_MS = TIME_MS.DAY;
+export const QUERY_RETRY_COUNT = 2;
+export const POLL_INTERVAL_MS = 30_000;
+export const RETRY_DELAY_BASE = 1_000;
+export const RETRY_DELAY_CAP = 30_000;
+export const MAX_IDS = 50;
+export const EVAL_LIMIT = 100;
+export const SCORE_DISPLAY_PRECISION = 3;
+export const STALE_TIME = {
+  DEFAULT: 25_000,
+  DETAIL: 30_000,
+  AGGREGATE: 60_000,
+} as const;
+export const DEFAULT_TOP_N = 5;
+export const DEFAULT_BUCKET_COUNT = 10;
+export const METRIC_CARD_SKELETON_HEIGHT = 180;
+export const SKELETON_HEIGHT_SM = 200;
+export const SKELETON_HEIGHT_MD = 300;
+export const SKELETON_HEIGHT_LG = 400;
+export const SKELETON_HEIGHT_XL = 600;
+export const ICON_BADGE_SIZE = 24;
+export const CALLOUT_MAX_WIDTH = 480;
+export const PAGE_CONTENT_MAX_WIDTH = 1100;
+export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
+export const AGENT_CARD_MIN_WIDTH = '220px';
+export const FILE_ACCESS_COL_MIN = '320px';
+export const DEFAULT_PAGE_LIMIT = 50;
+export const HEATMAP_ROW_HEADER_WIDTH = 80;
+export const HEATMAP_COL_HEADER_HEIGHT = 32;
+export const HEATMAP_CELL_MIN_HEIGHT = 36;
+export const COVERAGE_GRID_HEADER_WIDTH = 120;
+export const COVERAGE_GRID_CELL_SIZE = 28;
+export const COVERAGE_GRID_LEGEND_SIZE = 12;
+export const COVERAGE_GRID_MAX_INPUTS = 30;
+export const COVERAGE_GRID_HEADER_MAX_HEIGHT = 60;
+export const FUNNEL_BAR_HEIGHT = 32;
+export const FUNNEL_BAR_MIN_WIDTH = 40;
+export const FUNNEL_DROPOFF_WARN_PCT = 20;
+export const SPAN_TREE_INDENT = 20;
+export const SPAN_TREE_BASE_PADDING = 8;
+export const SPLIT_PANE_DIVIDER_WIDTH = 6;
+export const SPLIT_PANE_MIN_HEIGHT = 300;
+export const TURN_CARD_MIN_WIDTH = 120;
+export const AGENT_TABLE_MIN_WIDTH = 640;
+export const AGENT_BAR_MIN_WIDTH = 48;
+export const AGENT_EVAL_CARD_MIN_WIDTH = 140;
+export const SPARKLINE_WIDTH = 160;
+export const SPARKLINE_HEIGHT = 28;
+export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
+export const VARIANCE_LOW_PCT = 20;
+export const VARIANCE_MEDIUM_PCT = 50;
+export const VARIANCE_DISPLAY_MIN_WIDTH = 36;
+export const CHART_HEIGHT = 200;
+export const CHART_STROKE_WIDTH = 2;
+export const CHART_DOT_RADIUS = 4;
+export const CHART_DOT_RADIUS_ACTIVE = 6;
+export const CHART_DOT_RADIUS_PROJECTED = 3;
+export const CHART_DASH_THRESHOLD = '6 3';
+export const CHART_DASH_PROJECTED = '6 4';
+export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
+export const EVAL_FILTER_INACTIVE_OPACITY = 0.6;
+export const SCORE_BADGE_ALPHA_HEX = '1a';
+export const CHART_COLORS = {
+  line: '#58a6ff',
+  grid: '#30363d',
+  text: '#8b949e',
+  surface: '#1f2937',
+  tooltip: '#161b22',
+  warning: '#d29922',
+  critical: '#f85149',
+} as const;
+export const AGENT_PALETTE = [
+  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
+  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
+] as const;
+export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
+export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
+export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
+export const CHART_TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: CHART_COLORS.tooltip,
+  border: `1px solid ${CHART_COLORS.grid}`,
+  borderRadius: 'var(--radius)',
+  color: CHART_COLORS.text,
+  fontSize: 12,
+};
+export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
+export const CHART_YAXIS_WIDTH = 48;
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
+
+================
 File: src/pages/AdminPage.tsx
 ================
 import { useState, useRef, useCallback } from 'react';
@@ -17556,28 +16699,1064 @@ export function AdminPage() {
 }
 
 ================
-File: src/types/auth.ts
+File: scripts/judge-evaluations.ts
 ================
-import type { RoleViewType } from '../types.js';
-export type DashboardPermission =
-  | 'dashboard.read'
-  | 'dashboard.executive'
-  | 'dashboard.operator'
-  | 'dashboard.auditor'
-  | 'dashboard.traces.read'
-  | 'dashboard.sessions.read'
-  | 'dashboard.agents.read'
-  | 'dashboard.pipeline.read'
-  | 'dashboard.compliance.read'
-  | 'dashboard.admin';
-export type DashboardView = RoleViewType;
-export interface AppSession {
-  authUserId?: string;
-  appUserId?: string;
-  email: string;
-  roles: string[];
-  permissions: DashboardPermission[];
-  allowedViews: DashboardView[];
+#!/usr/bin/env tsx
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
+import { createHash } from 'crypto';
+import { join, basename } from 'path';
+import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
+import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
+import {
+  LLMJudge,
+} from '../../src/lib/judge/llm-judge-config.js';
+import type { DatasetRunRecord } from '../../src/backends/index.js';
+import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
+import {
+  traceSpanSchema,
+  otelLogEntrySchema,
+  transcriptEntrySchema,
+  otelEvaluationRecordSchema,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
+import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
+  name: 'tool_correctness',
+  criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+export const TOOL_SELECTION_CRITERIA: GEvalConfig = {
+  name: 'tool_selection',
+  criteria: 'Evaluate whether the assistant selected the appropriate tools for the given task. Were the chosen tools the best fit for the user request? Were unnecessary tools avoided? Were any required tools missing that should have been used?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+export const TOOL_ARGUMENTS_CRITERIA: GEvalConfig = {
+  name: 'tool_arguments',
+  criteria: 'Evaluate whether the tool arguments provided by the assistant were correct and appropriate. Were all required parameters provided with accurate values? Were parameter formats and types correct? Were optional parameters used effectively when beneficial?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
+  name: 'tool_integration',
+  criteria: 'Evaluate whether tool results were properly incorporated into the assistant response. Were results accurately reflected without distortion? Was relevant information extracted and presented clearly? Were errors or unexpected results handled appropriately?',
+  evaluationParams: ['input', 'output', 'context'],
+};
+const HOME = process.env.HOME ?? '';
+export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
+export const SESSION_ID_PREVIEW_LEN = 8;
+export const CONCURRENCY = 3;
+export const BATCH_DELAY_MS = 500;
+export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const MAX_TURN_TEXT_LEN = 8000;
+export const MAX_TOOL_CONTEXT_ITEMS = 10;
+export const MAX_TOOL_RESULTS_PER_TURN = 20;
+export const MAX_TURN_LIMIT = 10_000;
+export function normalizeScore(score: number): number {
+  return parseFloat(score.toFixed(4));
+}
+export interface TranscriptInfo {
+  path: string;
+  sessionId: string;
+  traceId: string;
+}
+export interface Turn {
+  sessionId: string;
+  traceId: string;
+  timestamp: string;
+  userText: string;
+  assistantText: string;
+  toolResults: string[];
+}
+export interface EvalRecord {
+  timestamp: string;
+  evaluationName: string;
+  scoreValue: number;
+  explanation: string;
+  evaluator: string;
+  evaluatorType: string;
+  traceId: string;
+  sessionId: string;
+}
+const TRANSCRIPT_DIRS = [
+  join(HOME, '.claude', 'projects'),
+  join(HOME, 'claude-tool-use', 'projects'),
+  join(HOME, '.claude-history', 'projects'),
+  join(HOME, 'claude-tool-use'),
+  join(HOME, '.claude-history'),
+];
+function resolveTranscriptPath(originalPath: string): string | null {
+  if (existsSync(originalPath)) return originalPath;
+  const projectsIdx = originalPath.indexOf('/projects/');
+  if (projectsIdx === -1) return null;
+  const suffix = originalPath.slice(projectsIdx + '/projects/'.length);
+  for (const dir of TRANSCRIPT_DIRS) {
+    const candidate = join(dir, suffix);
+    if (candidate !== originalPath && existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
+  const seen = new Set<string>();
+  const transcripts: TranscriptInfo[] = [];
+  const logFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('logs-') && f.endsWith('.jsonl'))
+    .sort();
+  for (const file of logFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
+      const attrs = entry.attributes as Record<string, unknown> | undefined;
+      if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
+      const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
+      if (!tPath) continue;
+      const sessionId = basename(tPath, '.jsonl');
+      if (seen.has(sessionId)) continue;
+      const resolved = resolveTranscriptPath(tPath);
+      if (!resolved) continue;
+      seen.add(sessionId);
+      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
+      transcripts.push({ path: resolved, sessionId, traceId });
+    }
+  }
+  // Phase 2: Directory scan for transcripts not referenced in logs
+  for (const dir of TRANSCRIPT_DIRS) {
+    if (!existsSync(dir)) continue;
+    let slugDirs: string[];
+    try {
+      slugDirs = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const slug of slugDirs) {
+      const slugPath = join(dir, slug);
+      let files: string[];
+      try {
+        files = readdirSync(slugPath);
+      } catch {
+        continue;
+      }
+      for (const f of files) {
+        if (!f.endsWith('.jsonl')) continue;
+        const sessionId = basename(f, '.jsonl');
+        if (!/^[0-9a-f]{8}-/.test(sessionId)) continue;
+        if (seen.has(sessionId)) continue;
+        seen.add(sessionId);
+        transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
+      }
+    }
+  }
+  return transcripts;
+}
+// ============================================================================
+// Trace-Based Session Discovery (for --backfill)
+// ============================================================================
+interface TraceSession {
+  sessionId: string;
+  traceId: string;
+  earliestTime: number; // epoch seconds
+  spanCount: number;
+}
+/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
+async function discoverSessionsFromTraces(): Promise<Turn[]> {
+  const traceFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
+    .sort();
+  const sessions = new Map<string, TraceSession>();
+  for (const file of traceFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    for await (const span of streamJsonlWithValidation(filepath, traceSpanSchema)) {
+      const attrs = span.attributes;
+      if (!attrs) continue;
+      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
+      if (!sessionId) continue;
+      const startTime = Array.isArray(span.startTime) ? span.startTime[0] as number : 0;
+      const traceId = span.traceId || '';
+      const existing = sessions.get(sessionId);
+      if (!existing) {
+        sessions.set(sessionId, { sessionId, traceId, earliestTime: startTime, spanCount: 1 });
+      } else {
+        existing.spanCount++;
+        if (startTime < existing.earliestTime) {
+          existing.earliestTime = startTime;
+          existing.traceId = traceId;
+        }
+      }
+    }
+  }
+  // Convert to Turn[] with synthetic entries (one per session)
+  const turns: Turn[] = [];
+  for (const s of sessions.values()) {
+    const timestamp = new Date(s.earliestTime * 1000).toISOString();
+    turns.push({
+      sessionId: s.sessionId,
+      traceId: s.traceId,
+      timestamp,
+      userText: '[trace-backfill]',
+      assistantText: '[trace-backfill]',
+      toolResults: [],
+    });
+  }
+  return turns;
+}
+// ============================================================================
+// Turn Extraction
+// ============================================================================
+/** B8: Discriminated union for transcript content blocks */
+export interface TextBlock { type: 'text'; text: string }
+export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
+export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
+export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
+function isContentBlock(value: unknown): value is ContentBlock {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return obj.type === 'text' || obj.type === 'tool_result' || obj.type === 'tool_use';
+}
+function asContentBlocks(content: unknown): ContentBlock[] {
+  if (!Array.isArray(content)) return [];
+  return content.filter(isContentBlock);
+}
+export function isSystemPrompt(text: string): boolean {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trimStart();
+  return trimmed.startsWith('<system-reminder>') || trimmed.startsWith('Stop hook feedback:');
+}
+export function isToolResultOnly(content: unknown): boolean {
+  if (!Array.isArray(content)) return false;
+  const blocks = asContentBlocks(content);
+  return blocks.length > 0 && blocks.every(b => b.type === 'tool_result');
+}
+export function extractTextFromContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  return asContentBlocks(content)
+    .filter((b): b is TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('\n')
+    .trim();
+}
+export function extractToolResults(content: unknown): string[] {
+  return asContentBlocks(content)
+    .filter((b): b is ToolResultBlock => b.type === 'tool_result')
+    .map(b => {
+      if (typeof b.content === 'string') return b.content;
+      return b.content
+        .filter((inner): inner is TextBlock => inner.type === 'text')
+        .map(inner => inner.text)
+        .join('\n');
+    })
+    .filter(Boolean);
+}
+export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
+  const turns: Turn[] = [];
+  let pendingUser: { text: string; timestamp: string } | null = null;
+  const accumulatedToolResults: string[] = [];
+  for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
+    const type = entry.type;
+    if (type === 'progress' || type === 'file-history-snapshot') continue;
+    const message = entry.message;
+    if (!message) continue;
+    const role = message.role;
+    const content = message.content;
+    if (type === 'user' && role === 'user') {
+      const toolRes = extractToolResults(content);
+      if (toolRes.length > 0) {
+        accumulatedToolResults.push(...toolRes);
+        if (accumulatedToolResults.length > MAX_TOOL_RESULTS_PER_TURN) {
+          accumulatedToolResults.splice(0, accumulatedToolResults.length - MAX_TOOL_RESULTS_PER_TURN);
+        }
+      }
+      if (isToolResultOnly(content)) continue;
+      const userText = extractTextFromContent(content);
+      if (!userText || isSystemPrompt(userText)) continue;
+      const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : null;
+      if (!timestamp) continue;
+      const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
+      if (!sanitizedUser.trim()) continue;
+      pendingUser = {
+        text: sanitizedUser,
+        timestamp,
+      };
+    }
+    if (type === 'assistant' && role === 'assistant' && pendingUser) {
+      const assistantText = extractTextFromContent(content);
+      if (!assistantText) continue;
+      turns.push({
+        sessionId: info.sessionId,
+        traceId: info.traceId,
+        timestamp: pendingUser.timestamp,
+        userText: pendingUser.text,
+        assistantText: sanitizeForPrompt(assistantText, MAX_TURN_TEXT_LEN),
+        toolResults: accumulatedToolResults.slice(-MAX_TOOL_RESULTS_PER_TURN),
+      });
+      pendingUser = null;
+      accumulatedToolResults.length = 0;
+    }
+  }
+  return turns;
+}
+async function createAnthropicProvider(): Promise<LLMProvider> {
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client = new Anthropic();
+  return {
+    async generate(
+      prompt: string,
+      options?: { temperature?: number; logprobs?: boolean }
+    ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
+      const response = await client.messages.create({
+        model: HAIKU_MODEL,
+        max_tokens: 1024,
+        temperature: options?.temperature ?? 0.1,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const text = response.content
+        .filter((b: { type: string; text?: string }) => b.type === 'text')
+        .map((b: { type: string; text?: string }) => b.text)
+        .join('');
+      // B15: Anthropic Messages API doesn't support logprobs, so G-Eval
+      return { text };
+    },
+  };
+}
+export function hashToScore(input: string, min: number, max: number): number {
+  const hash = createHash('sha256').update(input).digest();
+  const value = hash.readUInt16BE(0) / 0xFFFF;
+  return normalizeScore(min + value * (max - min));
+}
+export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
+  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
+}
+export interface SeedResult {
+  evals: EvalRecord[];
+  canaryCount: number;
+}
+export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
+  const evals: EvalRecord[] = [];
+  let canaryCount = 0;
+  for (const turn of turns) {
+    const turnKey = turn.timestamp.slice(0, 19);
+    const canary = isCanaryTurn(turn.sessionId, turnKey);
+    if (canary) canaryCount++;
+    const relKey = `${turn.sessionId}:relevance:${turnKey}`;
+    if (!existingKeys.has(relKey)) {
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'relevance',
+        scoreValue: canary
+          ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
+          : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
+        explanation: canary
+          ? `Relevance (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+          : `Relevance (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: canary ? 'canary' : 'seed',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    }
+    const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
+    if (!existingKeys.has(cohKey)) {
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'coherence',
+        scoreValue: canary
+          ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
+          : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+        explanation: canary
+          ? `Coherence (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+          : `Coherence (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: canary ? 'canary' : 'seed',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    }
+    {
+      const halScore = canary
+        ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
+        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.09);
+      const faithScore = normalizeScore(1 - halScore);
+      const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
+      if (!existingKeys.has(faithKey)) {
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'faithfulness',
+          scoreValue: faithScore,
+          explanation: canary
+            ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: canary ? 'canary' : 'seed',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      }
+      const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
+      if (!existingKeys.has(halKey)) {
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'hallucination',
+          scoreValue: halScore,
+          explanation: canary
+            ? `Hallucination (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Hallucination (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: canary ? 'canary' : 'seed',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      }
+    }
+    if (turn.toolResults.length > 0) {
+      const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+      if (!existingKeys.has(tcKey)) {
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'tool_correctness',
+          scoreValue: canary
+            ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
+            : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+          explanation: canary
+            ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
+            : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: canary ? 'canary' : 'seed',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      }
+    }
+  }
+  return { evals, canaryCount };
+}
+export const evalFailures: Record<string, number> = {};
+function trackFailure(metric: string): void {
+  evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
+}
+export async function evaluateTurn(
+  judge: LLMJudge,
+  turn: Turn,
+  existingKeys: Set<string>,
+): Promise<EvalRecord[]> {
+  const evals: EvalRecord[] = [];
+  const turnKey = turn.timestamp.slice(0, 19);
+  const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
+  const relKey = `${turn.sessionId}:relevance:${turnKey}`;
+  if (!existingKeys.has(relKey)) {
+    try {
+      const result = await judge.evaluateRelevance(
+        turn.userText,
+        turn.assistantText,
+        toolContext,
+      );
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'relevance',
+        scoreValue: normalizeScore(result.score),
+        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: 'llm',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    } catch (err) {
+      trackFailure('relevance');
+      console.warn(`  [relevance] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+    }
+  }
+  const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
+  if (!existingKeys.has(cohKey)) {
+    try {
+      const result = await judge.evaluateCoherence(turn.assistantText);
+      evals.push({
+        timestamp: turn.timestamp,
+        evaluationName: 'coherence',
+        scoreValue: normalizeScore(result.score),
+        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+        evaluator: 'llm-judge',
+        evaluatorType: 'llm',
+        traceId: turn.traceId,
+        sessionId: turn.sessionId,
+      });
+    } catch (err) {
+      trackFailure('coherence');
+      console.warn(`  [coherence] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+    }
+  }
+  if (turn.toolResults.length > 0) {
+    const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
+    const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
+    const needsFaith = !existingKeys.has(faithKey);
+    const needsHal = !existingKeys.has(halKey);
+    if (needsFaith) {
+      try {
+        const faithResult = await judge.qagEvaluate(
+          turn.userText,
+          turn.assistantText,
+          toolContext,
+        );
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'faithfulness',
+          scoreValue: normalizeScore(faithResult.score),
+          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('faithfulness');
+        console.warn(`  [faithfulness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+      }
+    }
+    if (needsHal) {
+      try {
+        const halResult = await judge.evaluateFaithfulness(
+          turn.userText,
+          turn.assistantText,
+          toolContext,
+        );
+        const halScore = normalizeScore(1 - halResult.score);
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'hallucination',
+          scoreValue: halScore,
+          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('hallucination');
+        console.warn(`  [hallucination] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+      }
+    }
+    const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+    if (!existingKeys.has(tcKey)) {
+      const tcTestCase = {
+        input: turn.userText,
+        output: turn.assistantText,
+        context: toolContext,
+      };
+      try {
+        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
+        evals.push({
+          timestamp: turn.timestamp,
+          evaluationName: 'tool_correctness',
+          scoreValue: normalizeScore(tcResult.score),
+          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+          evaluator: 'llm-judge',
+          evaluatorType: 'llm',
+          traceId: turn.traceId,
+          sessionId: turn.sessionId,
+        });
+      } catch (err) {
+        trackFailure('tool_correctness');
+        console.warn(`  [tool_correctness] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+      }
+      const subCriteria = [
+        { config: TOOL_SELECTION_CRITERIA, name: 'tool_selection' },
+        { config: TOOL_ARGUMENTS_CRITERIA, name: 'tool_arguments' },
+        { config: TOOL_INTEGRATION_CRITERIA, name: 'tool_integration' },
+      ] as const;
+      for (const { config, name } of subCriteria) {
+        const subKey = `${turn.sessionId}:${name}:${turnKey}`;
+        if (existingKeys.has(subKey)) continue;
+        try {
+          const result = await judge.gEval(config, tcTestCase);
+          evals.push({
+            timestamp: turn.timestamp,
+            evaluationName: name,
+            scoreValue: normalizeScore(result.score),
+            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+            evaluator: 'llm-judge',
+            evaluatorType: 'llm',
+            traceId: turn.traceId,
+            sessionId: turn.sessionId,
+          });
+        } catch (err) {
+          trackFailure(name);
+          console.warn(`  [${name}] Error for ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${(err as Error).message}`);
+        }
+      }
+    }
+  }
+  return evals;
+}
+export function toOTelRecord(ev: EvalRecord): object {
+  const attrs: Record<string, unknown> = {
+    'gen_ai.evaluation.name': ev.evaluationName,
+    'gen_ai.evaluation.score.value': ev.scoreValue,
+    'gen_ai.evaluation.explanation': ev.explanation,
+    'gen_ai.evaluation.evaluator': ev.evaluator,
+    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
+  };
+  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
+  return {
+    timestamp: ev.timestamp,
+    name: 'gen_ai.evaluation.result',
+    attributes: attrs,
+    traceId: ev.traceId,
+  };
+}
+function _loadExistingKeys(): Set<string> {
+  const keys = new Set<string>();
+  const evalFiles = readdirSync(TELEMETRY_DIR)
+    .filter(f => f.startsWith('evaluations-') && f.endsWith('.jsonl'));
+  for (const file of evalFiles) {
+    const filepath = join(TELEMETRY_DIR, file);
+    const records = readJsonlWithValidationSync(filepath, otelEvaluationRecordSchema);
+    for (const record of records) {
+      const attrs = record.attributes;
+      if (!attrs) continue;
+      const evalType = attrs['gen_ai.evaluation.evaluator.type'];
+      if (evalType !== 'llm' && evalType !== 'seed' && evalType !== 'trace-backfill') continue;
+      const sessionId = attrs['session.id'] as string || '';
+      const metricName = attrs['gen_ai.evaluation.name'] as string || '';
+      const timestamp = record.timestamp || '';
+      const turnKey = timestamp.slice(0, 19);
+      keys.add(`${sessionId}:${metricName}:${turnKey}`);
+    }
+  }
+  return keys;
+}
+// ============================================================================
+// Output
+// ============================================================================
+const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
+function acquireLock(): boolean {
+  try {
+    const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+    writeFileSync(fd, String(process.pid));
+    closeSync(fd);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
+    try {
+      const lockContent = readFileSync(LOCK_FILE, 'utf-8').trim();
+      const lockPid = parseInt(lockContent, 10);
+      if (!isNaN(lockPid) && lockPid > 0) {
+        try {
+          process.kill(lockPid, 0);
+          return false;
+        } catch (killErr) {
+          if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
+        }
+      }
+    } catch {
+      return false;
+    }
+    let stale = false;
+    {
+      try {
+        const lockStat = statSync(LOCK_FILE);
+        const lockAgeMs = Date.now() - lockStat.mtimeMs;
+        if (lockAgeMs > TIME_MS.HOUR) {
+          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
+          stale = true;
+        }
+      } catch {  }
+    }
+    if (stale) {
+      try { unlinkSync(LOCK_FILE); } catch {  }
+      try {
+        const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+        writeFileSync(fd, String(process.pid));
+        closeSync(fd);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+}
+function releaseLock(): void {
+  try { unlinkSync(LOCK_FILE); } catch {  }
+}
+function safeExit(code: number): never {
+  releaseLock();
+  process.exit(code);
+}
+function writeEvaluations(evals: EvalRecord[]): void {
+  const today = new Date().toISOString().slice(0, 10);
+  const outFile = join(TELEMETRY_DIR, `evaluations-${today}.jsonl`);
+  const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
+  appendFileSync(outFile, content);
+}
+export async function processBatch<T, R>(
+  items: T[],
+  concurrency: number,
+  delayMs: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const batchResults = await Promise.allSettled(batch.map(fn));
+    for (const r of batchResults) {
+      if (r.status === 'fulfilled') {
+        results.push(r.value);
+      }
+    }
+    if (i + concurrency < items.length) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  return results;
+}
+async function main() {
+  const args = process.argv.slice(2);
+  const dryRun = args.includes('--dry-run');
+  const seed = args.includes('--seed');
+  const backfill = args.includes('--backfill');
+  const limitIdx = args.indexOf('--limit');
+  let limit = Infinity;
+  if (limitIdx !== -1) {
+    const parsed = parseInt(args[limitIdx + 1], 10);
+    if (isNaN(parsed) || parsed < 1) {
+      console.error('Error: --limit must be a positive integer');
+      process.exit(1);
+    }
+    limit = Math.min(parsed, MAX_TURN_LIMIT);
+  }
+  const datasetIdx = args.indexOf('--dataset-id');
+  const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
+  if (backfill) {
+    const traceTurns = await discoverSessionsFromTraces();
+    console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
+    if (!acquireLock()) {
+      console.error('Error: Another judge-evaluations process is running (lockfile exists)');
+      process.exit(1);
+    }
+    try {
+      const existingKeys = _loadExistingKeys();
+      const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
+      const newTurns = traceTurns.filter(t => {
+        const turnKey = t.timestamp.slice(0, 19);
+        return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
+      });
+      console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
+      if (newTurns.length === 0) return;
+      const seedResult = seedEvaluations(newTurns, existingKeys);
+      for (const ev of seedResult.evals) {
+        if (ev.evaluatorType === 'seed') {
+          ev.evaluatorType = 'trace-backfill';
+        }
+      }
+      if (seedResult.evals.length > 0) {
+        writeEvaluations(seedResult.evals);
+        const byCat = new Map<string, number>();
+        for (const ev of seedResult.evals) {
+          byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+        }
+        console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
+        for (const [name, count] of byCat) {
+          console.log(`  ${name}: ${count}`);
+        }
+      }
+    } finally {
+      releaseLock();
+    }
+    return;
+  }
+  const transcripts = await _discoverTranscripts();
+  const turnArrays = await Promise.all(transcripts.map(info => extractTurns(info)));
+  const allTurns = turnArrays.flat().slice(0, limit);
+  if (dryRun) {
+    const estEvals = allTurns.reduce((sum, t) =>
+      sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
+    const estInputTokens = allTurns.reduce((sum, t) => {
+      const contentChars = t.userText.length + t.assistantText.length
+        + t.toolResults.reduce((s, r) => s + r.length, 0);
+      const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
+      return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
+    }, 0);
+    const estOutputTokens = estEvals * 200;
+    const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
+    const estCost = (estInputTokens / TOKENS_PER_MILLION) * haikuPricing.input
+      + (estOutputTokens / TOKENS_PER_MILLION) * haikuPricing.output;
+    console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
+    console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
+    console.log(`[dry-run] estimated cost: $${estCost.toFixed(4)}`);
+    const bySession = new Map<string, number>();
+    for (const t of allTurns) {
+      const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
+      bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
+    }
+    const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+    console.log('[dry-run] top sessions by turn count:');
+    for (const [sid, count] of sorted) {
+      console.log(`  ${sid}: ${count} turns`);
+    }
+    return;
+  }
+  if (!seed && !process.env.ANTHROPIC_API_KEY) {
+    console.error('Error: ANTHROPIC_API_KEY required (or use --seed for offline mode)');
+    process.exit(1);
+  }
+  if (!acquireLock()) {
+    console.error('Error: Another judge-evaluations process is running (lockfile exists)');
+    process.exit(1);
+  }
+  try {
+    const existingKeys = _loadExistingKeys();
+    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+    let flatEvals: EvalRecord[];
+    if (seed) {
+      const seedResult = seedEvaluations(allTurns, existingKeys);
+      flatEvals = seedResult.evals;
+    } else {
+      const llm = await createAnthropicProvider();
+      const judge = new LLMJudge(llm, {
+        timeoutMs: TIME_MS.MINUTE,
+        maxRetries: 2,
+        evaluator: 'llm-judge',
+        evaluatorType: 'llm',
+        logger: {
+          warn: (msg) => console.warn(`  [warn] ${msg}`),
+          error: (msg) => console.error(`  [error] ${msg}`),
+        },
+      });
+      const allEvals = await processBatch(
+        allTurns,
+        CONCURRENCY,
+        BATCH_DELAY_MS,
+        (turn) => evaluateTurn(judge, turn, existingKeys),
+      );
+      flatEvals = allEvals.flat();
+    }
+    if (flatEvals.length === 0) {
+      return;
+    }
+    writeEvaluations(flatEvals);
+    if (datasetId) {
+      const backend = new LocalJsonlBackend(TELEMETRY_DIR);
+      const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
+      let datasetVersion = 1;
+      try {
+        const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
+        if (dsResult.action === 'get') datasetVersion = dsResult.dataset.version ?? 1;
+      } catch {  }
+      const runRecord: DatasetRunRecord = {
+        id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        datasetId,
+        datasetVersion,
+        runAt: new Date().toISOString(),
+        evaluationNames: evalNames,
+        resultCount: flatEvals.length,
+        evaluator: seed ? 'seed' : 'llm-judge',
+      };
+      await backend.appendDatasetRun(runRecord);
+    }
+  } finally {
+    releaseLock();
+  }
+}
+const isDirectRun = process.argv[1]?.endsWith('judge-evaluations.ts') ||
+  process.argv[1]?.endsWith('judge-evaluations.js');
+if (isDirectRun) {
+  main().catch(err => {
+    console.error('Fatal error:', err);
+    safeExit(1);
+  });
+}
+
+================
+File: src/lib/supabase.ts
+================
+import { fromUnixTime, isPast, subSeconds } from 'date-fns';
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Missing required env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
+}
+const SESSION_STORAGE_KEY = 'supabase.session';
+export interface SupabaseSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  user: { id: string; email: string };
+}
+export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
+type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
+type AuthTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: { id: string; email: string };
+};
+const listeners = new Set<AuthStateListener>();
+let cachedSession: SupabaseSession | null = null;
+function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void {
+  for (const listener of listeners) {
+    listener(session, event);
+  }
+}
+function saveSession(session: SupabaseSession): void {
+  cachedSession = session;
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+  }
+}
+function clearSession(): void {
+  cachedSession = null;
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+  }
+}
+function clearSessionAndNotify(): null {
+  clearSession();
+  notifyListeners(null, 'SIGNED_OUT');
+  return null;
+}
+function isValidSession(value: unknown): value is SupabaseSession {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['access_token'] === 'string' &&
+    typeof v['refresh_token'] === 'string' &&
+    typeof v['expires_at'] === 'number' &&
+    typeof v['user'] === 'object' && v['user'] !== null &&
+    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
+    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
+  );
+}
+function readRawSession(): SupabaseSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidSession(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function isValidTokenResponse(value: unknown): value is AuthTokenResponse {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['access_token'] === 'string' &&
+    typeof v['refresh_token'] === 'string' &&
+    typeof v['expires_in'] === 'number' &&
+    typeof v['user'] === 'object' && v['user'] !== null &&
+    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
+    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
+  );
+}
+function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+    user: data.user,
+  };
+}
+export function getSession(): SupabaseSession | null {
+  const session = cachedSession ?? readRawSession();
+  if (!session) return null;
+  if (isPast(subSeconds(fromUnixTime(session.expires_at), 60))) {
+    cachedSession = null;
+    return null;
+  }
+  if (!cachedSession) cachedSession = session;
+  return session;
+}
+export async function signIn(email: string, password: string): Promise<SupabaseSession> {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { message?: string } | null;
+    const message = body?.message;
+    throw new Error(message ? `Sign in failed: ${message}` : `Sign in failed (${res.status})`);
+  }
+  const body: unknown = await res.json().catch(() => null);
+  if (!isValidTokenResponse(body)) throw new Error('Sign in failed: unexpected response shape');
+  const session = sessionFromTokenResponse(body);
+  saveSession(session);
+  notifyListeners(session, 'SIGNED_IN');
+  return session;
+}
+export async function signOut(): Promise<void> {
+  const session = getSession();
+  if (session) {
+    try {
+      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+    } catch {
+    }
+  }
+  clearSession();
+  notifyListeners(null, 'SIGNED_OUT');
+}
+let refreshInFlight: Promise<SupabaseSession | null> | null = null;
+export function refreshSession(): Promise<SupabaseSession | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const stored = readRawSession();
+    if (!stored?.refresh_token) return null;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ refresh_token: stored.refresh_token }),
+      });
+      if (!res.ok) return clearSessionAndNotify();
+      const refreshBody: unknown = await res.json().catch(() => null);
+      if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
+      const refreshed = sessionFromTokenResponse(refreshBody);
+      saveSession(refreshed);
+      notifyListeners(refreshed, 'TOKEN_REFRESHED');
+      return refreshed;
+    } catch {
+      return clearSessionAndNotify();
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+export function onAuthStateChange(listener: AuthStateListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+const AUTO_REFRESH_INTERVAL_MS = 30_000;
+const TOKEN_EXPIRY_BUFFER_S = 120;
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let autoRefreshRefCount = 0;
+export function startAutoRefresh(): void {
+  autoRefreshRefCount++;
+  if (autoRefreshTimer !== null) return;
+  autoRefreshTimer = setInterval(() => {
+    const session = cachedSession ?? readRawSession();
+    if (!session) return;
+    const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000);
+    if (secondsUntilExpiry <= TOKEN_EXPIRY_BUFFER_S) {
+      void refreshSession();
+    }
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+export function stopAutoRefresh(): void {
+  autoRefreshRefCount = Math.max(0, autoRefreshRefCount - 1);
+  if (autoRefreshRefCount === 0 && autoRefreshTimer !== null) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
 }
 
 ================
@@ -17685,7 +17864,6 @@ import {
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
   CALLOUT_MAX_WIDTH,
-  PAGE_CONTENT_MAX_WIDTH,
   CODE_QUALITY_WARN_THRESHOLD,
   AGENT_CARD_MIN_WIDTH,
   FILE_ACCESS_COL_MIN,
@@ -17757,7 +17935,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const evalRows: EvalRow[] = evaluations.map(evalToRow);
   const models = [...new Set(tokenProgression.map(t => t.model).filter(Boolean))];
   return (
-    <div style={{ maxWidth: PAGE_CONTENT_MAX_WIDTH }}>
+    <div className="page-content">
       <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
       {}
       <div className="session-detail-header">
@@ -18116,204 +18294,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 }
 
 ================
-File: src/lib/supabase.ts
-================
-import { fromUnixTime, isPast, subSeconds } from 'date-fns';
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Missing required env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
-}
-const SESSION_STORAGE_KEY = 'supabase.session';
-export interface SupabaseSession {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  user: { id: string; email: string };
-}
-export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
-type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
-type AuthTokenResponse = {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: { id: string; email: string };
-};
-const listeners = new Set<AuthStateListener>();
-let cachedSession: SupabaseSession | null = null;
-function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void {
-  for (const listener of listeners) {
-    listener(session, event);
-  }
-}
-function saveSession(session: SupabaseSession): void {
-  cachedSession = session;
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-  } catch {
-  }
-}
-function clearSession(): void {
-  cachedSession = null;
-  try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-  } catch {
-  }
-}
-function clearSessionAndNotify(): null {
-  clearSession();
-  notifyListeners(null, 'SIGNED_OUT');
-  return null;
-}
-function isValidSession(value: unknown): value is SupabaseSession {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['access_token'] === 'string' &&
-    typeof v['refresh_token'] === 'string' &&
-    typeof v['expires_at'] === 'number' &&
-    typeof v['user'] === 'object' && v['user'] !== null &&
-    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
-    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
-  );
-}
-function readRawSession(): SupabaseSession | null {
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isValidSession(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-function isValidTokenResponse(value: unknown): value is AuthTokenResponse {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['access_token'] === 'string' &&
-    typeof v['refresh_token'] === 'string' &&
-    typeof v['expires_in'] === 'number' &&
-    typeof v['user'] === 'object' && v['user'] !== null &&
-    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
-    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
-  );
-}
-function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
-  return {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-    user: data.user,
-  };
-}
-export function getSession(): SupabaseSession | null {
-  const session = cachedSession ?? readRawSession();
-  if (!session) return null;
-  if (isPast(subSeconds(fromUnixTime(session.expires_at), 60))) {
-    cachedSession = null;
-    return null;
-  }
-  if (!cachedSession) cachedSession = session;
-  return session;
-}
-export async function signIn(email: string, password: string): Promise<SupabaseSession> {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null) as { message?: string } | null;
-    const message = body?.message;
-    throw new Error(message ? `Sign in failed: ${message}` : `Sign in failed (${res.status})`);
-  }
-  const body: unknown = await res.json().catch(() => null);
-  if (!isValidTokenResponse(body)) throw new Error('Sign in failed: unexpected response shape');
-  const session = sessionFromTokenResponse(body);
-  saveSession(session);
-  notifyListeners(session, 'SIGNED_IN');
-  return session;
-}
-export async function signOut(): Promise<void> {
-  const session = getSession();
-  if (session) {
-    try {
-      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
-    } catch {
-    }
-  }
-  clearSession();
-  notifyListeners(null, 'SIGNED_OUT');
-}
-let refreshInFlight: Promise<SupabaseSession | null> | null = null;
-export function refreshSession(): Promise<SupabaseSession | null> {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    const stored = readRawSession();
-    if (!stored?.refresh_token) return null;
-    try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ refresh_token: stored.refresh_token }),
-      });
-      if (!res.ok) return clearSessionAndNotify();
-      const refreshBody: unknown = await res.json().catch(() => null);
-      if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
-      const refreshed = sessionFromTokenResponse(refreshBody);
-      saveSession(refreshed);
-      notifyListeners(refreshed, 'TOKEN_REFRESHED');
-      return refreshed;
-    } catch {
-      return clearSessionAndNotify();
-    } finally {
-      refreshInFlight = null;
-    }
-  })();
-  return refreshInFlight;
-}
-export function onAuthStateChange(listener: AuthStateListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-const AUTO_REFRESH_INTERVAL_MS = 30_000;
-const TOKEN_EXPIRY_BUFFER_S = 120;
-let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
-let autoRefreshRefCount = 0;
-export function startAutoRefresh(): void {
-  autoRefreshRefCount++;
-  if (autoRefreshTimer !== null) return;
-  autoRefreshTimer = setInterval(() => {
-    const session = cachedSession ?? readRawSession();
-    if (!session) return;
-    const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000);
-    if (secondsUntilExpiry <= TOKEN_EXPIRY_BUFFER_S) {
-      void refreshSession();
-    }
-  }, AUTO_REFRESH_INTERVAL_MS);
-}
-export function stopAutoRefresh(): void {
-  autoRefreshRefCount = Math.max(0, autoRefreshRefCount - 1);
-  if (autoRefreshRefCount === 0 && autoRefreshTimer !== null) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-}
-
-================
 File: scripts/sync-to-kv.ts
 ================
 #!/usr/bin/env tsx
@@ -18332,7 +18312,7 @@ import {
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
-import type { RoleViewType, QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
 import {
   computePercentileDistribution,
@@ -19405,7 +19385,7 @@ import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
-import { AuthProvider } from './contexts/AuthContext.js';
+import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { Auth0Provider, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
@@ -19439,7 +19419,6 @@ import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './context/CalibrationContext.js';
-import { useAuth } from './contexts/AuthContext.js';
 import { ROLES, SKELETON_HEIGHT_MD, SKELETON_HEIGHT_XL } from './lib/constants.js';
 import type {
   Period,
@@ -19585,10 +19564,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
         <ViewSection title={<>
           Time Series ({trendData.totalEvaluations} evaluations)
           {trendData.narrowed && (
-            <span className="text-muted text-xs" style={{
-              fontWeight: 400,
-              marginLeft: 8,
-            }}>auto-narrowed to data range</span>
+            <span className="text-muted text-xs font-normal ml-2">auto-narrowed to data range</span>
           )}
         </>}>
           <div className="card">
@@ -19806,8 +19782,7 @@ export function App() {
 ================
 File: src/contexts/AuthContext.tsx
 ================
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import { API_BASE } from '../lib/constants.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
@@ -19988,6 +19963,7 @@ File: src/theme.css
   --space-8: 32px;
   --space-16: 64px;
   --layout-max-width: 1280px;
+  --page-content-max-width: 1100px;
   --bg-status-healthy: #0d1f12;
   --bg-status-warning: #1f1a0d;
   --bg-status-critical: #1f0d0d;
@@ -20402,6 +20378,7 @@ body {
   padding: var(--space-2-5) var(--space-3-5);
 }
 .issue-callout .callout-title { color: var(--s-fg); }
+.page-content { max-width: var(--page-content-max-width); }
 .centered-callout {
   max-width: var(--callout-max-width, 480px);
   margin: 0 auto;
@@ -20653,6 +20630,17 @@ details[open] > .cot-summary::before {
   color: var(--text-primary);
   font-weight: var(--light-bold);
 }
+.funnel-bar {
+  border-radius: var(--radius-sm);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-2-5);
+  transition: width 0.3s ease;
+}
+.funnel-dropoff {
+  padding-left: var(--space-2-5);
+  margin: var(--space-0-5) 0;
+}
 .metric-worst {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
@@ -20774,6 +20762,7 @@ details[open] > .cot-summary::before {
 .text-muted        { color: var(--text-muted); }
 .text-accent       { color: var(--accent); }
 .text-accent-hover { color: var(--accent-hover); }
+.text-on-accent    { color: var(--text-on-accent); }
 .d-flex         { display: flex; }
 .d-grid         { display: grid; }
 .d-inline-block { display: inline-block; }
@@ -20781,6 +20770,7 @@ details[open] > .cot-summary::before {
 .flex-center    { display: flex; align-items: center; }
 .align-start    { align-items: flex-start; }
 .uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
+.font-normal   { font-weight: 400; }
 .font-semibold { font-weight: var(--bold); }
 .chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
 .gap-half { gap: var(--space-px); }
@@ -20798,6 +20788,7 @@ details[open] > .cot-summary::before {
 .min-w-120 { min-width: 120px; }
 .m-0    { margin: 0; }
 .ml-1   { margin-left: var(--space-1); }
+.ml-2   { margin-left: var(--space-2); }
 .ml-auto { margin-left: auto; }
 .mr-1   { margin-right: var(--space-1); }
 .mb-0   { margin-bottom: 0; }
@@ -20855,6 +20846,7 @@ details[open] > .cot-summary::before {
 .form-select { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); border: 1px solid var(--border); }
 .btn-reset { background: none; border: none; padding: 0; }
 .btn-xs { border: 1px solid var(--border); padding: var(--space-1-5) var(--space-3); border-radius: var(--radius); }
+.btn-sm { padding: var(--space-1-5) var(--space-4); }
 .btn-expand { padding: var(--space-px) var(--space-1-5); }
 .expand-chevron {
   display: inline-block;
@@ -20914,6 +20906,16 @@ details[open] > .cot-summary::before {
 .section-rail {
   background: var(--bg-card);
   border-left: 3px solid var(--section-rail-color, var(--border-accent));
+}
+summary.section-rail {
+  padding: var(--space-3) var(--space-5);
+  transition: background var(--transition-fast);
+}
+.section-rail-body {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.section-rail-chevron {
+  transition: transform var(--transition-medium);
 }
 .workflow-node {
   width: 220px;
