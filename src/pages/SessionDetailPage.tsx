@@ -20,7 +20,6 @@ import {
   MAX_FAILED_EVAL_ROWS,
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
-  CALLOUT_MAX_WIDTH,
   CODE_QUALITY_WARN_THRESHOLD,
   AGENT_CARD_MIN_WIDTH,
   FILE_ACCESS_COL_MIN,
@@ -42,10 +41,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
         <div className="card card-spacious text-center">
           <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
-          <div className="mono-xs text-secondary leading-relaxed" style={{
-            maxWidth: CALLOUT_MAX_WIDTH,
-            margin: '0 auto',
-          }}>
+          <div className="mono-xs text-secondary leading-relaxed centered-callout">
             This session has not been synced to the dashboard KV store yet.
             Data is synced periodically &mdash; check back after the next pipeline run.
           </div>
