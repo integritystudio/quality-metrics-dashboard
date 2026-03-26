@@ -305,6 +305,212 @@ function makeHighPriorityEntries(count: number): KVEntry[]
 function makeTracePool(count: number):
 
 ================
+File: scripts/__tests__/sync-to-kv.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { buildCalibrationEntry } from '../sync-to-kv.js';
+import type { CalibrationState } from '../../../dist/lib/quality/quality-feature-engineering.js';
+type KVEntry = { key: string; value: string };
+function makeCalibrationState(overrides: Partial<CalibrationState> =
+
+================
+File: scripts/find_duplication_tsx.sh
+================
+set -euo pipefail
+PROJECT_FOLDER="${1:-.}"
+CONSTRUCT="${2:-component}"
+MIN_SIMILARITY="${3:-0.7}"
+MIN_LINES="${4:-5}"
+if ! [[ "$MIN_SIMILARITY" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+  echo "Error: min_similarity must be a number between 0.0 and 1.0, got '$MIN_SIMILARITY'"
+  exit 1
+fi
+if ! [[ "$MIN_LINES" =~ ^[0-9]+$ ]]; then
+  echo "Error: min_lines must be a positive integer, got '$MIN_LINES'"
+  exit 1
+fi
+if [ ! -d "$PROJECT_FOLDER" ]; then
+  echo "Error: directory does not exist: $PROJECT_FOLDER"
+  exit 1
+fi
+case "$CONSTRUCT" in
+  component|function|class|hook) ;;
+  *)
+    echo "Error: unknown construct '$CONSTRUCT'. Use: component | function | class | hook"
+    exit 1
+    ;;
+esac
+PROJECT_FOLDER="$(cd "$PROJECT_FOLDER" && pwd)"
+TMPDIR_WORK="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR_WORK"' EXIT
+CONSTRUCTS_FILE="$TMPDIR_WORK/constructs.tsv"
+BODIES_DIR="$TMPDIR_WORK/bodies"
+mkdir -p "$BODIES_DIR"
+echo "Scanning $PROJECT_FOLDER for TSX $CONSTRUCT constructs (min ${MIN_LINES} lines, similarity >= ${MIN_SIMILARITY})..."
+echo ""
+# Extract constructs from all .tsx files using a single awk invocation per file.
+# macOS awk doesn't support dynamic regex or capture groups, so we use
+extract_constructs() {
+  local file="$1"
+  local rel_path="${file#"$PROJECT_FOLDER"/}"
+  awk -v construct_type="$CONSTRUCT" -v min_lines="$MIN_LINES" \
+      -v rel="$rel_path" -v bodiesdir="$BODIES_DIR" '
+  BEGIN { idx = 0; in_block = 0; depth = 0; block = ""; start = 0; name = "" }
+  function is_match(line) {
+    # component: arrow-function or function-declaration components (PascalCase returning JSX)
+    # Matches: export const MyComponent = ..., export default function MyComponent(, function MyComponent(
+    if (construct_type == "component")
+      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?((const|let)[[:space:]]+[A-Z][A-Za-z0-9_]*[[:space:]]*[=:]|function[[:space:]]+[A-Z][A-Za-z0-9_]*[[:space:]]*[\(<])/)
+    # function: any named function (non-PascalCase) or arrow function assigned to lowercase var
+    if (construct_type == "function")
+      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?((const|let|var)[[:space:]]+[a-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*(async[[:space:]]*)?\(|function[[:space:]]+[a-z_][A-Za-z0-9_]*[[:space:]]*\()/)
+    # class: any class declaration
+    if (construct_type == "class")
+      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?(abstract[[:space:]]+)?class[[:space:]]+[A-Za-z_]/)
+    # hook: custom React hooks (use* naming convention)
+    if (construct_type == "hook")
+      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?((const|let)[[:space:]]+use[A-Z][A-Za-z0-9_]*[[:space:]]*=|function[[:space:]]+use[A-Z][A-Za-z0-9_]*[[:space:]]*\()/)
+    return 0
+  }
+  {
+    if (!in_block && is_match($0)) {
+      in_block = 1
+      depth = 0
+      block = ""
+      start = NR
+      # Extract name
+      name = $0
+      if (index(name, "class") > 0 && construct_type == "class") {
+        sub(/.*class[[:space:]]+/, "", name)
+        sub(/[^A-Za-z0-9_].*/, "", name)
+      } else if (construct_type == "hook") {
+        # Extract use* identifier (two-step: strip left of "use", then strip right)
+        sub(/.*[[:space:]]use/, "use", name)
+        sub(/[^A-Za-z0-9_].*/, "", name)
+      } else {
+        # Component or function: grab identifier after const/let/function
+        gsub(/export[[:space:]]+(default[[:space:]]+)?/, "", name)
+        if (match(name, /function[[:space:]]+/)) {
+          sub(/.*function[[:space:]]+/, "", name)
+          sub(/[^A-Za-z0-9_].*/, "", name)
+        } else {
+          sub(/^[[:space:]]*(const|let|var)[[:space:]]+/, "", name)
+          sub(/[^A-Za-z0-9_].*/, "", name)
+        }
+      }
+    }
+    if (in_block) {
+      block = block "\n" $0
+      n_chars = split($0, chars, "")
+      for (i = 1; i <= n_chars; i++) {
+        if (chars[i] == "{") depth++
+        if (chars[i] == "}") depth--
+      }
+      if (depth <= 0 && index(block, "{") > 0) {
+        lines = NR - start + 1
+        if (lines >= min_lines) {
+          idx++
+          # Use a flat filename with underscores
+          outname = rel
+          gsub(/\//, "__", outname)
+          outfile = bodiesdir "/" outname "___" idx ".txt"
+          print block > outfile
+          close(outfile)
+          printf "%s\t%s\t%d\t%d\t%s\n", rel, name, start, NR, outfile
+        }
+        in_block = 0
+        block = ""
+      }
+    }
+  }
+  ' "$file"
+}
+while IFS= read -r -d '' f; do
+  extract_constructs "$f"
+done < <(find "$PROJECT_FOLDER" -name '*.tsx' \
+  -not -path '*/node_modules/*' \
+  -not -path '*/dist/*' \
+  -not -path '*/build/*' \
+  -not -path '*/.next/*' \
+  -not -path '*/coverage/*' \
+  -not -name '*.d.ts' \
+  -not -name '*.test.tsx' \
+  -not -name '*.spec.tsx' \
+  -print0 | sort -z) >> "$CONSTRUCTS_FILE"
+TOTAL=$(wc -l < "$CONSTRUCTS_FILE" | tr -d ' ')
+if [ "$TOTAL" -eq 0 ]; then
+  echo "No $CONSTRUCT constructs found with >= $MIN_LINES lines."
+  exit 0
+fi
+echo "Found $TOTAL $CONSTRUCT constructs. Comparing pairs..."
+echo ""
+# Compare pairs using Jaccard similarity on word tokens
+awk -F'\t' -v min_sim="$MIN_SIMILARITY" '
+{
+  n++
+  file[n] = $1
+  name[n] = $2
+  startl[n] = $3
+  endl[n] = $4
+  bodyfile[n] = $5
+  body = ""
+  while ((getline line < bodyfile[n]) > 0) {
+    body = body " " line
+  }
+  close(bodyfile[n])
+  # Tokenise: split on non-alphanumeric
+  gsub(/[^a-zA-Z0-9_]+/, " ", body)
+  num = split(body, words, " ")
+  delete tokens
+  for (i = 1; i <= num; i++) {
+    w = tolower(words[i])
+    if (length(w) > 1) tokens[w] = 1
+  }
+  tset = ""
+  for (w in tokens) tset = tset " " w
+  tokenset[n] = tset
+}
+END {
+  found = 0
+  for (i = 1; i <= n; i++) {
+    split(tokenset[i], setA, " ")
+    delete mapA
+    sizeA = 0
+    for (k in setA) {
+      if (setA[k] != "") { mapA[setA[k]] = 1; sizeA++ }
+    }
+    for (j = i + 1; j <= n; j++) {
+      if (file[i] == file[j] && name[i] == name[j]) continue
+      split(tokenset[j], setB, " ")
+      sizeB = 0
+      intersection = 0
+      for (k in setB) {
+        if (setB[k] != "") {
+          sizeB++
+          if (setB[k] in mapA) intersection++
+        }
+      }
+      union_size = sizeA + sizeB - intersection
+      if (union_size == 0) continue
+      sim = intersection / union_size
+      if (sim >= min_sim) {
+        found++
+        printf "%.0f%% similar:\n", sim * 100
+        printf "  A: %s :: %s (lines %d-%d)\n", file[i], name[i], startl[i], endl[i]
+        printf "  B: %s :: %s (lines %d-%d)\n", file[j], name[j], startl[j], endl[j]
+        printf "\n"
+      }
+    }
+  }
+  if (found == 0) {
+    printf "No duplicate pairs found above %.0f%% similarity.\n", min_sim * 100
+  } else {
+    printf "Found %d similar pairs.\n", found
+  }
+}
+' "$CONSTRUCTS_FILE"
+
+================
 File: scripts/generate-token-tree.js
 ================
 
@@ -333,6 +539,139 @@ import { join } from 'path';
 interface StepResult { name: string; ms: number }
 ⋮----
 function runStep(name: string, script: string, extraArgs: string[] = []): void
+
+================
+File: scripts/update-readme-tree.sh
+================
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TREE_PATH="$ROOT/docs/repomix/token-count-tree.txt"
+README_PATH="$ROOT/README.md"
+MAX_SHOWN=5
+if [ ! -f "$TREE_PATH" ]; then
+  echo "Missing $TREE_PATH" >&2
+  exit 1
+fi
+total_tokens=$(head -1 "$TREE_PATH" | grep -oE '[0-9,]+ tokens' | cut -d' ' -f1)
+if [ -z "$total_tokens" ]; then
+  total_tokens="unknown"
+fi
+# Build condensed tree via awk
+condensed=$(awk -v max="$MAX_SHOWN" '
+function is_file(line) {
+  return (line ~ /\.[a-zA-Z0-9]+[[:space:]]+\([0-9,]+[[:space:]]+tokens\)/) && (line !~ /\/[[:space:]]+\(/)
+}
+function connector_pos(line,   i, c) {
+  for (i = 1; i <= length(line); i++) {
+    c = substr(line, i, 3)
+    if (c == "├" || c == "└") return i
+  }
+  return -1
+}
+function get_tokens(line,   s, p) {
+  p = match(line, /\([0-9,]+[[:space:]]+tokens\)/)
+  if (!p) return 0
+  s = substr(line, RSTART + 1, RLENGTH - 2)
+  sub(/[[:space:]]+tokens/, "", s)
+  gsub(/,/, "", s)
+  return int(s)
+}
+{
+  lines[NR] = $0
+}
+END {
+  i = 1
+  while (i <= NR) {
+    if (!is_file(lines[i])) {
+      print lines[i]
+      i++
+      continue
+    }
+    cp = connector_pos(lines[i])
+    # Collect consecutive file siblings at same connector position
+    n = 0
+    while (i <= NR && is_file(lines[i]) && connector_pos(lines[i]) == cp) {
+      n++
+      sib_line[n] = lines[i]
+      sib_tok[n] = get_tokens(lines[i])
+      i++
+    }
+    if (n > max) {
+      # Find top MAX_SHOWN by token count (selection via sorted indices)
+      for (j = 1; j <= n; j++) rank[j] = j
+      for (j = 1; j <= n; j++) {
+        for (k = j+1; k <= n; k++) {
+          if (sib_tok[rank[k]] > sib_tok[rank[j]]) {
+            tmp = rank[j]; rank[j] = rank[k]; rank[k] = tmp
+          }
+        }
+      }
+      # Mark top entries
+      for (j = 1; j <= n; j++) keep[j] = 0
+      for (j = 1; j <= max; j++) keep[rank[j]] = 1
+      # Print kept entries in original order, replacing └ with ├
+      for (j = 1; j <= n; j++) {
+        if (keep[j]) {
+          line = sib_line[j]
+          gsub(/└── /, "├── ", line)
+          print line
+        }
+      }
+      remaining = n - max
+      # Build prefix from first sibling up to connector
+      prefix = substr(sib_line[1], 1, cp - 1)
+      gsub(/[├└]/, "│", prefix)
+      # Check if more entries follow at this level
+      has_more = (i <= NR && connector_pos(lines[i]) == cp) ? 1 : 0
+      conn = has_more ? "├" : "└"
+      print prefix conn "── ... (" remaining " more)"
+      # Cleanup
+      for (j = 1; j <= n; j++) { delete sib_line[j]; delete sib_tok[j]; delete keep[j] }
+      delete rank
+    } else {
+      for (j = 1; j <= n; j++) {
+        print sib_line[j]
+        delete sib_line[j]; delete sib_tok[j]
+      }
+    }
+  }
+}
+' "$TREE_PATH")
+section_line=$(grep -n "^## Project Structure" "$README_PATH" | head -1 | cut -d: -f1)
+if [ -z "$section_line" ]; then
+  echo 'Could not find "## Project Structure" in README.md' >&2
+  exit 1
+fi
+fence_open=$(awk -v start="$section_line" 'NR > start && /^```$/ { print NR; exit }' "$README_PATH")
+fence_close=$(awk -v start="$fence_open" 'NR > start && /^```$/ { print NR; exit }' "$README_PATH")
+if [ -z "$fence_open" ] || [ -z "$fence_close" ]; then
+  echo "Could not find fenced code block under Project Structure" >&2
+  exit 1
+fi
+{
+  head -n "$((section_line - 1))" "$README_PATH"
+  echo "## Project Structure (${total_tokens} tokens)"
+  echo ""
+  echo '```'
+  echo "$condensed"
+  echo '```'
+  tail -n "+$((fence_close + 1))" "$README_PATH"
+} > "$README_PATH.tmp"
+mv "$README_PATH.tmp" "$README_PATH"
+
+================
+File: src/__tests__/api-agents.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+⋮----
+import { agentRoutes } from '../api/routes/agents.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> =
+function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
+function makeMockEval(traceId = 'trace-001')
 
 ================
 File: src/__tests__/api-compliance.test.ts
@@ -405,6 +744,18 @@ import { computePipelineView, computeDashboardSummary } from '../../../dist/lib/
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
 
 ================
+File: src/__tests__/api-sessions.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+⋮----
+import { sessionRoutes } from '../api/routes/sessions.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loader.js';
+⋮----
+function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> =
+
+================
 File: src/__tests__/api-traces.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -444,6 +795,32 @@ import type {
 function makeDashboard(overrides: Partial<QualityDashboardSummary> =
 function makeAlert(overrides: Partial<TriggeredAlert> =
 function makeSLA(overrides: Partial<SLAComplianceResult> =
+
+================
+File: src/__tests__/data-loader-trace-ids.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+⋮----
+class MockMultiDirectoryBackend
+
+================
+File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'fs';
+import { resolve } from 'path';
+⋮----
+// ---------------------------------------------------------------------------
+// Local @font-face declarations
+// ---------------------------------------------------------------------------
+⋮----
+function getFontFaceSource(): string
+⋮----
+// Find all @font-face blocks that mention this family
+⋮----
+// ---------------------------------------------------------------------------
+// public/fonts/ — font files exist on disk
+// ---------------------------------------------------------------------------
 
 ================
 File: src/__tests__/dr13-coverage.test.tsx
@@ -553,6 +930,19 @@ function makeAlerts(): (TriggeredAlert &
 const
 
 ================
+File: src/__tests__/quality-utils-adaptive.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import {
+  empiricalCDF,
+  adaptiveScoreColorBand,
+  MIN_QUANTILE_SAMPLE_SIZE,
+  METRIC_SCALE_STRATEGY,
+  type PercentileDistribution,
+} from '../lib/quality-utils.js';
+function makeDist(overrides: Partial<PercentileDistribution> =
+
+================
 File: src/__tests__/quality-utils-drift.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -565,6 +955,20 @@ import {
   ROLE_FEATURE_CONFIG,
   SCORE_COLORS,
 } from '../lib/quality-utils.js';
+
+================
+File: src/__tests__/score-badge-calibration.test.tsx
+================
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, within, cleanup } from '@testing-library/react';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import type { PercentileDistribution } from '../lib/quality-utils.js';
+⋮----
+function makeDistribution(overrides: Partial<PercentileDistribution> =
+function getBadgeLabel(container: HTMLElement): string
+// ---------------------------------------------------------------------------
+// ScoreBadge without calibration — existing behavior must be preserved
+// ---------------------------------------------------------------------------
 
 ================
 File: src/__tests__/setup.ts
@@ -584,13 +988,9 @@ import { POLL_INTERVAL_MS } from '../lib/constants.js';
 function makeQualityResponse(overrides: Partial<Record<string, unknown>> =
 
 ================
-File: src/api/routes/evaluations.ts
+File: src/__tests__/vite-web-worker-stub.test.ts
 ================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus } from '../../lib/constants.js';
-import { loadEvaluationsByTraceId } from '../data-loader.js';
+import { describe, it, expect } from 'vitest';
 
 ================
 File: src/api/routes/quality.ts
@@ -800,17 +1200,6 @@ interface DetailPageHeaderProps {
 }
 
 ================
-File: src/components/EmptyState.tsx
-================
-import type { ReactNode } from 'react';
-interface EmptyStateProps {
-  message?: string;
-  title?: string;
-  description?: ReactNode;
-  showSyncHint?: boolean;
-}
-
-================
 File: src/components/EvaluationEventOverlay.tsx
 ================
 import { Link } from 'wouter';
@@ -862,17 +1251,6 @@ export function TrendIndicator(
 export function ConfidenceBadge(
 
 ================
-File: src/components/IssueCallout.tsx
-================
-import type { ReactNode } from 'react';
-interface IssueCalloutProps {
-  severity: 'warning' | 'critical';
-  title: string;
-  children: ReactNode;
-}
-export function IssueCallout(
-
-================
 File: src/components/Layout.tsx
 ================
 import type { ReactNode } from 'react';
@@ -910,20 +1288,6 @@ function MetricCardInner({ metric, sparklineData }: {
 ⋮----
 
 ================
-File: src/components/MetricCompare.tsx
-================
-import { formatScore } from '../lib/quality-utils.js';
-import { TrendChart } from './TrendChart.js';
-import { useMetricDetail } from '../hooks/useMetricDetail.js';
-import type { Period, MetricDynamics } from '../types.js';
-interface MetricCompareProps {
-  metricName?: string;
-  period: Period;
-  availableMetrics: string[];
-  onMetricChange: (name: string) => void;
-}
-
-================
 File: src/components/PageShell.tsx
 ================
 import { type ReactNode } from 'react';
@@ -951,14 +1315,6 @@ interface PipelineFunnelProps {
 }
 
 ================
-File: src/components/QualityLiveIndicator.tsx
-================
-import { useQualityLive } from '../hooks/useQualityLive.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_BADGE_ALPHA_HEX } from '../lib/constants.js';
-function scoreToBadgeColor(score: number): string
-
-================
 File: src/components/ScoreHistogram.tsx
 ================
 
@@ -973,12 +1329,6 @@ interface SectionBlockProps {
   children: ReactNode;
 }
 export function SectionBlock(
-
-================
-File: src/components/ShortcutOverlay.tsx
-================
-import { useKeyboardNav } from '../contexts/KeyboardNavContext.js';
-export function ShortcutOverlay()
 
 ================
 File: src/components/SimpleAlertList.tsx
@@ -999,54 +1349,6 @@ import { formatScore } from '../lib/quality-utils.js';
 import type { SLAComplianceResult } from '../types.js';
 import { StatusBadge } from './Indicators.js';
 export function SLATable(
-
-================
-File: src/components/SpanTree.tsx
-================
-import type { CSSProperties } from 'react';
-import { plural } from '../lib/quality-utils.js';
-import { SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[]
-⋮----
-0: '',      // UNSET
-
-================
-File: src/components/Sparkline.tsx
-================
-import { memo } from 'react';
-interface SparklineProps {
-  data: (number | null)[];
-  width?: number;
-  height?: number;
-  color?: string;
-  label?: string;
-}
-function SparklineInner(
 
 ================
 File: src/components/SplitPane.tsx
@@ -1101,6 +1403,22 @@ renderItem: (item: T, index: number)
 ⋮----
 
 ================
+File: src/context/CalibrationContext.tsx
+================
+import { createContext, useContext, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { useCalibration, getMetricCalibration } from '../hooks/useCalibration.js';
+import type { CalibrationResponse, MetricCalibration } from '../hooks/useCalibration.js';
+interface CalibrationContextValue {
+  data: CalibrationResponse | undefined;
+  isLoading: boolean;
+}
+⋮----
+export function CalibrationProvider(
+export function useCalibrationData(): CalibrationContextValue
+export function useMetricCalibration(metricName: string): MetricCalibration | undefined
+
+================
 File: src/contexts/KeyboardNavContext.tsx
 ================
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -1127,6 +1445,30 @@ export function useKeyboardNav()
 export function KeyboardNavProvider(
 ⋮----
 function handleKeydown(e: KeyboardEvent)
+
+================
+File: src/hooks/useAgentSession.ts
+================
+import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
+interface AgentSessionResponse {
+  sessionId: string;
+  spans: Array<{
+    traceId: string;
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+  }>;
+  evaluation: MultiAgentEvaluation;
+  evaluations: EvaluationResult[];
+  agentMap: Record<string, string>;
+  graph: WorkflowGraph;
+}
+export function useAgentSession(sessionId: string | undefined)
 
 ================
 File: src/hooks/useAgentStats.ts
@@ -1165,6 +1507,27 @@ interface AgentStatsResponse {
 }
 function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResponse
 export function useAgentStats(period: Period)
+
+================
+File: src/hooks/useCalibration.ts
+================
+import type { PercentileDistribution } from '../lib/quality-utils.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
+export interface CalibrationResponse {
+  distributions: Record<string, PercentileDistribution>;
+  sampleCounts: Record<string, number>;
+  lastCalibrated: string;
+}
+export interface MetricCalibration {
+  distribution: PercentileDistribution;
+  sampleSize: number;
+}
+export function useCalibration()
+export function getMetricCalibration(
+  data: CalibrationResponse | undefined,
+  metricName: string,
+): MetricCalibration | undefined
 
 ================
 File: src/hooks/useCompliance.ts
@@ -1308,6 +1671,21 @@ File: src/lib/symbols.ts
 import type { ScoreColorBand } from './quality-utils.js';
 
 ================
+File: src/pages/AgentSessionPage.tsx
+================
+import { Link } from 'wouter';
+import { useAgentSession } from '../hooks/useAgentSession.js';
+import { TurnTimeline } from '../components/TurnTimeline.js';
+import { HandoffCard } from '../components/HandoffCard.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { ViewSection } from '../components/Section.js';
+import { plural } from '../lib/quality-utils.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+⋮----
+
+================
 File: src/pages/AgentsPage.tsx
 ================
 import { useAgentStats } from '../hooks/useAgentStats.js';
@@ -1347,48 +1725,6 @@ interface CorrelationsResponse {
 }
 
 ================
-File: src/pages/CoveragePage.tsx
-================
-import { useState } from 'react';
-import { CoverageGrid } from '../components/CoverageGrid.js';
-import { useCoverage } from '../hooks/useCoverage.js';
-import { PageShell } from '../components/PageShell.js';
-import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
-import type { Period } from '../types.js';
-
-================
-File: src/pages/EvaluationDetailPage.tsx
-================
-import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
-import { ProvenancePanel } from '../components/ProvenancePanel.js';
-import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
-import { PageShell } from '../components/PageShell.js';
-import { EmptyState } from '../components/EmptyState.js';
-import { formatScore, plural } from '../lib/quality-utils.js';
-import { routes } from '../lib/routes.js';
-import { TimestampCell } from '../components/TimestampCell.js';
-import { Link, useSearch } from 'wouter';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
-⋮----
-
-⋮----
-<Link href=
-⋮----
-href=
-
-================
-File: src/pages/PipelinePage.tsx
-================
-import { PipelineFunnel } from '../components/PipelineFunnel.js';
-import { usePipeline } from '../hooks/usePipeline.js';
-import { PageShell } from '../components/PageShell.js';
-import { LLM_SAMPLE_RATE, SKELETON_HEIGHT_MD, ICON_BADGE_SIZE } from '../lib/constants.js';
-import type { Period } from '../types.js';
-
-================
 File: src/pages/TraceDetailPage.tsx
 ================
 import { useTrace } from '../hooks/useTrace.js';
@@ -1401,6 +1737,11 @@ import { EmptyState } from '../components/EmptyState.js';
 import { plural } from '../lib/quality-utils.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 ⋮----
+
+================
+File: src/stubs/web-worker.ts
+================
+
 
 ================
 File: src/types.ts
@@ -1423,15 +1764,6 @@ export interface QualityLiveData {
 File: src/vite-env.d.ts
 ================
 
-
-================
-File: scripts/__tests__/sync-to-kv.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { buildCalibrationEntry } from '../sync-to-kv.js';
-import type { CalibrationState } from '../../../dist/lib/quality/quality-feature-engineering.js';
-type KVEntry = { key: string; value: string };
-function makeCalibrationState(overrides: Partial<CalibrationState> =
 
 ================
 File: scripts/.degradation-incidents.json
@@ -1484,348 +1816,6 @@ done
 echo "Done."
 
 ================
-File: scripts/find_duplication_tsx.sh
-================
-set -euo pipefail
-PROJECT_FOLDER="${1:-.}"
-CONSTRUCT="${2:-component}"
-MIN_SIMILARITY="${3:-0.7}"
-MIN_LINES="${4:-5}"
-if ! [[ "$MIN_SIMILARITY" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-  echo "Error: min_similarity must be a number between 0.0 and 1.0, got '$MIN_SIMILARITY'"
-  exit 1
-fi
-if ! [[ "$MIN_LINES" =~ ^[0-9]+$ ]]; then
-  echo "Error: min_lines must be a positive integer, got '$MIN_LINES'"
-  exit 1
-fi
-if [ ! -d "$PROJECT_FOLDER" ]; then
-  echo "Error: directory does not exist: $PROJECT_FOLDER"
-  exit 1
-fi
-case "$CONSTRUCT" in
-  component|function|class|hook) ;;
-  *)
-    echo "Error: unknown construct '$CONSTRUCT'. Use: component | function | class | hook"
-    exit 1
-    ;;
-esac
-PROJECT_FOLDER="$(cd "$PROJECT_FOLDER" && pwd)"
-TMPDIR_WORK="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_WORK"' EXIT
-CONSTRUCTS_FILE="$TMPDIR_WORK/constructs.tsv"
-BODIES_DIR="$TMPDIR_WORK/bodies"
-mkdir -p "$BODIES_DIR"
-echo "Scanning $PROJECT_FOLDER for TSX $CONSTRUCT constructs (min ${MIN_LINES} lines, similarity >= ${MIN_SIMILARITY})..."
-echo ""
-# Extract constructs from all .tsx files using a single awk invocation per file.
-# macOS awk doesn't support dynamic regex or capture groups, so we use
-extract_constructs() {
-  local file="$1"
-  local rel_path="${file#"$PROJECT_FOLDER"/}"
-  awk -v construct_type="$CONSTRUCT" -v min_lines="$MIN_LINES" \
-      -v rel="$rel_path" -v bodiesdir="$BODIES_DIR" '
-  BEGIN { idx = 0; in_block = 0; depth = 0; block = ""; start = 0; name = "" }
-  function is_match(line) {
-    # component: arrow-function or function-declaration components (PascalCase returning JSX)
-    # Matches: export const MyComponent = ..., export default function MyComponent(, function MyComponent(
-    if (construct_type == "component")
-      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?((const|let)[[:space:]]+[A-Z][A-Za-z0-9_]*[[:space:]]*[=:]|function[[:space:]]+[A-Z][A-Za-z0-9_]*[[:space:]]*[\(<])/)
-    # function: any named function (non-PascalCase) or arrow function assigned to lowercase var
-    if (construct_type == "function")
-      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?((const|let|var)[[:space:]]+[a-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*(async[[:space:]]*)?\(|function[[:space:]]+[a-z_][A-Za-z0-9_]*[[:space:]]*\()/)
-    # class: any class declaration
-    if (construct_type == "class")
-      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?(abstract[[:space:]]+)?class[[:space:]]+[A-Za-z_]/)
-    # hook: custom React hooks (use* naming convention)
-    if (construct_type == "hook")
-      return match(line, /^[[:space:]]*(export[[:space:]]+(default[[:space:]]+)?)?((const|let)[[:space:]]+use[A-Z][A-Za-z0-9_]*[[:space:]]*=|function[[:space:]]+use[A-Z][A-Za-z0-9_]*[[:space:]]*\()/)
-    return 0
-  }
-  {
-    if (!in_block && is_match($0)) {
-      in_block = 1
-      depth = 0
-      block = ""
-      start = NR
-      # Extract name
-      name = $0
-      if (index(name, "class") > 0 && construct_type == "class") {
-        sub(/.*class[[:space:]]+/, "", name)
-        sub(/[^A-Za-z0-9_].*/, "", name)
-      } else if (construct_type == "hook") {
-        # Extract use* identifier (two-step: strip left of "use", then strip right)
-        sub(/.*[[:space:]]use/, "use", name)
-        sub(/[^A-Za-z0-9_].*/, "", name)
-      } else {
-        # Component or function: grab identifier after const/let/function
-        gsub(/export[[:space:]]+(default[[:space:]]+)?/, "", name)
-        if (match(name, /function[[:space:]]+/)) {
-          sub(/.*function[[:space:]]+/, "", name)
-          sub(/[^A-Za-z0-9_].*/, "", name)
-        } else {
-          sub(/^[[:space:]]*(const|let|var)[[:space:]]+/, "", name)
-          sub(/[^A-Za-z0-9_].*/, "", name)
-        }
-      }
-    }
-    if (in_block) {
-      block = block "\n" $0
-      n_chars = split($0, chars, "")
-      for (i = 1; i <= n_chars; i++) {
-        if (chars[i] == "{") depth++
-        if (chars[i] == "}") depth--
-      }
-      if (depth <= 0 && index(block, "{") > 0) {
-        lines = NR - start + 1
-        if (lines >= min_lines) {
-          idx++
-          # Use a flat filename with underscores
-          outname = rel
-          gsub(/\//, "__", outname)
-          outfile = bodiesdir "/" outname "___" idx ".txt"
-          print block > outfile
-          close(outfile)
-          printf "%s\t%s\t%d\t%d\t%s\n", rel, name, start, NR, outfile
-        }
-        in_block = 0
-        block = ""
-      }
-    }
-  }
-  ' "$file"
-}
-while IFS= read -r -d '' f; do
-  extract_constructs "$f"
-done < <(find "$PROJECT_FOLDER" -name '*.tsx' \
-  -not -path '*/node_modules/*' \
-  -not -path '*/dist/*' \
-  -not -path '*/build/*' \
-  -not -path '*/.next/*' \
-  -not -path '*/coverage/*' \
-  -not -name '*.d.ts' \
-  -not -name '*.test.tsx' \
-  -not -name '*.spec.tsx' \
-  -print0 | sort -z) >> "$CONSTRUCTS_FILE"
-TOTAL=$(wc -l < "$CONSTRUCTS_FILE" | tr -d ' ')
-if [ "$TOTAL" -eq 0 ]; then
-  echo "No $CONSTRUCT constructs found with >= $MIN_LINES lines."
-  exit 0
-fi
-echo "Found $TOTAL $CONSTRUCT constructs. Comparing pairs..."
-echo ""
-# Compare pairs using Jaccard similarity on word tokens
-awk -F'\t' -v min_sim="$MIN_SIMILARITY" '
-{
-  n++
-  file[n] = $1
-  name[n] = $2
-  startl[n] = $3
-  endl[n] = $4
-  bodyfile[n] = $5
-  body = ""
-  while ((getline line < bodyfile[n]) > 0) {
-    body = body " " line
-  }
-  close(bodyfile[n])
-  # Tokenise: split on non-alphanumeric
-  gsub(/[^a-zA-Z0-9_]+/, " ", body)
-  num = split(body, words, " ")
-  delete tokens
-  for (i = 1; i <= num; i++) {
-    w = tolower(words[i])
-    if (length(w) > 1) tokens[w] = 1
-  }
-  tset = ""
-  for (w in tokens) tset = tset " " w
-  tokenset[n] = tset
-}
-END {
-  found = 0
-  for (i = 1; i <= n; i++) {
-    split(tokenset[i], setA, " ")
-    delete mapA
-    sizeA = 0
-    for (k in setA) {
-      if (setA[k] != "") { mapA[setA[k]] = 1; sizeA++ }
-    }
-    for (j = i + 1; j <= n; j++) {
-      if (file[i] == file[j] && name[i] == name[j]) continue
-      split(tokenset[j], setB, " ")
-      sizeB = 0
-      intersection = 0
-      for (k in setB) {
-        if (setB[k] != "") {
-          sizeB++
-          if (setB[k] in mapA) intersection++
-        }
-      }
-      union_size = sizeA + sizeB - intersection
-      if (union_size == 0) continue
-      sim = intersection / union_size
-      if (sim >= min_sim) {
-        found++
-        printf "%.0f%% similar:\n", sim * 100
-        printf "  A: %s :: %s (lines %d-%d)\n", file[i], name[i], startl[i], endl[i]
-        printf "  B: %s :: %s (lines %d-%d)\n", file[j], name[j], startl[j], endl[j]
-        printf "\n"
-      }
-    }
-  }
-  if (found == 0) {
-    printf "No duplicate pairs found above %.0f%% similarity.\n", min_sim * 100
-  } else {
-    printf "Found %d similar pairs.\n", found
-  }
-}
-' "$CONSTRUCTS_FILE"
-
-================
-File: scripts/update-readme-tree.sh
-================
-set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TREE_PATH="$ROOT/docs/repomix/token-count-tree.txt"
-README_PATH="$ROOT/README.md"
-MAX_SHOWN=5
-if [ ! -f "$TREE_PATH" ]; then
-  echo "Missing $TREE_PATH" >&2
-  exit 1
-fi
-total_tokens=$(head -1 "$TREE_PATH" | grep -oE '[0-9,]+ tokens' | cut -d' ' -f1)
-if [ -z "$total_tokens" ]; then
-  total_tokens="unknown"
-fi
-# Build condensed tree via awk
-condensed=$(awk -v max="$MAX_SHOWN" '
-function is_file(line) {
-  return (line ~ /\.[a-zA-Z0-9]+[[:space:]]+\([0-9,]+[[:space:]]+tokens\)/) && (line !~ /\/[[:space:]]+\(/)
-}
-function connector_pos(line,   i, c) {
-  for (i = 1; i <= length(line); i++) {
-    c = substr(line, i, 3)
-    if (c == "├" || c == "└") return i
-  }
-  return -1
-}
-function get_tokens(line,   s, p) {
-  p = match(line, /\([0-9,]+[[:space:]]+tokens\)/)
-  if (!p) return 0
-  s = substr(line, RSTART + 1, RLENGTH - 2)
-  sub(/[[:space:]]+tokens/, "", s)
-  gsub(/,/, "", s)
-  return int(s)
-}
-{
-  lines[NR] = $0
-}
-END {
-  i = 1
-  while (i <= NR) {
-    if (!is_file(lines[i])) {
-      print lines[i]
-      i++
-      continue
-    }
-    cp = connector_pos(lines[i])
-    # Collect consecutive file siblings at same connector position
-    n = 0
-    while (i <= NR && is_file(lines[i]) && connector_pos(lines[i]) == cp) {
-      n++
-      sib_line[n] = lines[i]
-      sib_tok[n] = get_tokens(lines[i])
-      i++
-    }
-    if (n > max) {
-      # Find top MAX_SHOWN by token count (selection via sorted indices)
-      for (j = 1; j <= n; j++) rank[j] = j
-      for (j = 1; j <= n; j++) {
-        for (k = j+1; k <= n; k++) {
-          if (sib_tok[rank[k]] > sib_tok[rank[j]]) {
-            tmp = rank[j]; rank[j] = rank[k]; rank[k] = tmp
-          }
-        }
-      }
-      # Mark top entries
-      for (j = 1; j <= n; j++) keep[j] = 0
-      for (j = 1; j <= max; j++) keep[rank[j]] = 1
-      # Print kept entries in original order, replacing └ with ├
-      for (j = 1; j <= n; j++) {
-        if (keep[j]) {
-          line = sib_line[j]
-          gsub(/└── /, "├── ", line)
-          print line
-        }
-      }
-      remaining = n - max
-      # Build prefix from first sibling up to connector
-      prefix = substr(sib_line[1], 1, cp - 1)
-      gsub(/[├└]/, "│", prefix)
-      # Check if more entries follow at this level
-      has_more = (i <= NR && connector_pos(lines[i]) == cp) ? 1 : 0
-      conn = has_more ? "├" : "└"
-      print prefix conn "── ... (" remaining " more)"
-      # Cleanup
-      for (j = 1; j <= n; j++) { delete sib_line[j]; delete sib_tok[j]; delete keep[j] }
-      delete rank
-    } else {
-      for (j = 1; j <= n; j++) {
-        print sib_line[j]
-        delete sib_line[j]; delete sib_tok[j]
-      }
-    }
-  }
-}
-' "$TREE_PATH")
-section_line=$(grep -n "^## Project Structure" "$README_PATH" | head -1 | cut -d: -f1)
-if [ -z "$section_line" ]; then
-  echo 'Could not find "## Project Structure" in README.md' >&2
-  exit 1
-fi
-fence_open=$(awk -v start="$section_line" 'NR > start && /^```$/ { print NR; exit }' "$README_PATH")
-fence_close=$(awk -v start="$fence_open" 'NR > start && /^```$/ { print NR; exit }' "$README_PATH")
-if [ -z "$fence_open" ] || [ -z "$fence_close" ]; then
-  echo "Could not find fenced code block under Project Structure" >&2
-  exit 1
-fi
-{
-  head -n "$((section_line - 1))" "$README_PATH"
-  echo "## Project Structure (${total_tokens} tokens)"
-  echo ""
-  echo '```'
-  echo "$condensed"
-  echo '```'
-  tail -n "+$((fence_close + 1))" "$README_PATH"
-} > "$README_PATH.tmp"
-mv "$README_PATH.tmp" "$README_PATH"
-
-================
-File: src/__tests__/api-agents.test.ts
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-⋮----
-import { agentRoutes } from '../api/routes/agents.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> =
-function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
-function makeMockEval(traceId = 'trace-001')
-
-================
-File: src/__tests__/api-sessions.test.ts
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-⋮----
-import { sessionRoutes } from '../api/routes/sessions.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loader.js';
-⋮----
-function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> =
-
-================
 File: src/__tests__/auth0-env-validation.test.ts
 ================
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -1838,63 +1828,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Simulate production (non-DEV) by ensuring DEV is falsy — jsdom env has no DEV flag
 
 ================
-File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-⋮----
-// ---------------------------------------------------------------------------
-// Local @font-face declarations
-// ---------------------------------------------------------------------------
-⋮----
-function getFontFaceSource(): string
-⋮----
-// Find all @font-face blocks that mention this family
-⋮----
-// ---------------------------------------------------------------------------
-// public/fonts/ — font files exist on disk
-// ---------------------------------------------------------------------------
-
-================
-File: src/__tests__/quality-utils-adaptive.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import {
-  empiricalCDF,
-  adaptiveScoreColorBand,
-  MIN_QUANTILE_SAMPLE_SIZE,
-  METRIC_SCALE_STRATEGY,
-  type PercentileDistribution,
-} from '../lib/quality-utils.js';
-function makeDist(overrides: Partial<PercentileDistribution> =
-
-================
-File: src/__tests__/score-badge-calibration.test.tsx
-================
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, within, cleanup } from '@testing-library/react';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import type { PercentileDistribution } from '../lib/quality-utils.js';
-⋮----
-function makeDistribution(overrides: Partial<PercentileDistribution> =
-function getBadgeLabel(container: HTMLElement): string
-// ---------------------------------------------------------------------------
-// ScoreBadge without calibration — existing behavior must be preserved
-// ---------------------------------------------------------------------------
-
-================
 File: src/__tests__/supabase-refresh.test.ts
 ================
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 ⋮----
 function makeStoredSession(refreshToken: string)
 function makeTokenResponse(accessToken: string, refreshToken: string)
-
-================
-File: src/__tests__/vite-web-worker-stub.test.ts
-================
-import { describe, it, expect } from 'vitest';
 
 ================
 File: src/__tests__/WorkflowTimeline.test.tsx
@@ -1942,6 +1881,16 @@ function filterJudgeEvaluations(
 ): Map<string, EvaluationResult[]>
 
 ================
+File: src/api/routes/evaluations.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { HttpStatus } from '../../lib/constants.js';
+import { MAX_TRACE_ID_LEN } from '../api-constants.js';
+import { loadEvaluationsByTraceId } from '../data-loader.js';
+
+================
 File: src/api/routes/pipeline.ts
 ================
 import { Hono } from 'hono';
@@ -1954,12 +1903,35 @@ import { loadEvaluationsByMetric } from '../data-loader.js';
 import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 ================
-File: src/components/EvaluationDetail.tsx
+File: src/api/server.ts
 ================
-import { useState } from 'react';
-import { EvaluationTable, type EvalRow } from './EvaluationTable.js';
-import { useMetricEvaluations } from '../hooks/useMetricEvaluations.js';
-import type { Period } from '../types.js';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { serve } from '@hono/node-server';
+import { dashboardRoutes } from './routes/dashboard.js';
+import { metricsRoutes } from './routes/metrics.js';
+import { correlationRoutes } from './routes/correlations.js';
+import { evaluationRoutes } from './routes/evaluations.js';
+import { trendRoutes } from './routes/trends.js';
+import { coverageRoutes } from './routes/coverage.js';
+import { pipelineRoutes } from './routes/pipeline.js';
+import { complianceRoutes } from './routes/compliance.js';
+import { traceRoutes } from './routes/traces.js';
+import { agentRoutes } from './routes/agents.js';
+import { sessionRoutes } from './routes/sessions.js';
+import { qualityRoutes } from './routes/quality.js';
+import { API_HOST, API_PORT } from './config.js';
+
+================
+File: src/components/EmptyState.tsx
+================
+import type { ReactNode } from 'react';
+interface EmptyStateProps {
+  message?: string;
+  title?: string;
+  description?: ReactNode;
+  showSyncHint?: boolean;
+}
 
 ================
 File: src/components/ExpandChevron.tsx
@@ -1978,21 +1950,29 @@ interface HandoffCardProps {
 export function HandoffCard(
 
 ================
-File: src/components/HealthOverview.tsx
+File: src/components/IssueCallout.tsx
 ================
-import type { QualityDashboardSummary } from '../types.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { HealthBanner } from './HealthBanner.js';
-import { StatDisplay } from './StatDisplay.js';
-interface PipelineHealth {
-  evalVolume: number;
-  lastEvalAge: string | null;
-  evalRate: string;
+import type { ReactNode } from 'react';
+interface IssueCalloutProps {
+  severity: 'warning' | 'critical';
+  title: string;
+  children: ReactNode;
 }
-function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth
-function formatVolume(n: number): string
-⋮----
-Eval Volume: <span className="stat-value">
+export function IssueCallout(
+
+================
+File: src/components/MetricCompare.tsx
+================
+import { formatScore } from '../lib/quality-utils.js';
+import { TrendChart } from './TrendChart.js';
+import { useMetricDetail } from '../hooks/useMetricDetail.js';
+import type { Period, MetricDynamics } from '../types.js';
+interface MetricCompareProps {
+  metricName?: string;
+  period: Period;
+  availableMetrics: string[];
+  onMetricChange: (name: string) => void;
+}
 
 ================
 File: src/components/MetricGrid.tsx
@@ -2013,35 +1993,12 @@ export interface TableColumn {
 export function MonoTableHead(
 
 ================
-File: src/components/ProvenancePanel.tsx
+File: src/components/QualityLiveIndicator.tsx
 ================
-import { useCallback } from 'react';
-import { Link } from 'wouter';
-import { formatScore } from '../lib/quality-utils.js';
-import { routes } from '../lib/routes.js';
-interface EvaluatorTypeCounts {
-  rule: number;
-  llm: number;
-  seed: number;
-  canary: number;
-}
-interface ProvenancePanelProps {
-  evaluationName: string;
-  scoreValue?: number;
-  scoreLabel?: string;
-  traceId?: string;
-  spanId?: string;
-  sessionId?: string;
-  timestamp: string;
-  evaluator?: string;
-  evaluatorType?: string;
-  scoreUnit?: string;
-  agentName?: string;
-  rawData?: Record<string, unknown>;
-  evaluatorTypeCounts?: EvaluatorTypeCounts;
-}
-⋮----
-<Link href=
+import { useQualityLive } from '../hooks/useQualityLive.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
+import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_BADGE_ALPHA_HEX } from '../lib/constants.js';
+function scoreToBadgeColor(score: number): string
 
 ================
 File: src/components/RoleSelector.tsx
@@ -2049,6 +2006,30 @@ File: src/components/RoleSelector.tsx
 import { useLocation } from 'wouter';
 import type { RoleViewType } from '../types.js';
 import { useAuth } from '../contexts/AuthContext.js';
+
+================
+File: src/components/ScoreBadge.tsx
+================
+import { Link } from 'wouter';
+import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
+import { SCORE_SHAPES } from '../lib/symbols.js';
+import { useMetricCalibration } from '../context/CalibrationContext.js';
+import type { ReactNode } from 'react';
+function MetadataRow(
+interface ScoreBadgeProps {
+  score: number | null;
+  metricName: string;
+  direction?: ScoreDirection;
+  label?: string;
+  evaluator?: string;
+  evaluatorType?: string;
+  explanation?: string;
+  traceId?: string;
+  calibration?: { distribution: PercentileDistribution; sampleSize: number };
+}
+⋮----
+<Link href=
 
 ================
 File: src/components/Section.tsx
@@ -2066,6 +2047,60 @@ export interface SectionProps {
 }
 
 ================
+File: src/components/ShortcutOverlay.tsx
+================
+import { useKeyboardNav } from '../contexts/KeyboardNavContext.js';
+export function ShortcutOverlay()
+
+================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { plural } from '../lib/quality-utils.js';
+import { SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[]
+⋮----
+0: '',      // UNSET
+
+================
+File: src/components/Sparkline.tsx
+================
+import { memo } from 'react';
+interface SparklineProps {
+  data: (number | null)[];
+  width?: number;
+  height?: number;
+  color?: string;
+  label?: string;
+}
+function SparklineInner(
+
+================
 File: src/components/TimestampCell.tsx
 ================
 import { format } from 'date-fns';
@@ -2075,68 +2110,6 @@ interface TimestampCellProps {
   className?: string;
 }
 export function TimestampCell(
-
-================
-File: src/components/TrendChart.tsx
-================
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ResponsiveContainer,
-} from 'recharts';
-import type { MetricDynamics, MetricTrend } from '../types.js';
-import {
-  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
-  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
-  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
-  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED,
-} from '../lib/constants.js';
-import { formatPercent } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-interface TrendChartProps {
-  trend?: MetricTrend;
-  dynamics?: MetricDynamics;
-  warningThreshold?: number;
-  criticalThreshold?: number;
-  metricName: string;
-}
-function formatValue(v: number): string
-function formatBreachTime(iso: string): string
-⋮----
-
-================
-File: src/components/TurnTimeline.tsx
-================
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { TURN_CARD_MIN_WIDTH } from '../lib/constants.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult } from '../types.js';
-interface TurnTimelineProps {
-  turns: TurnLevelResult[];
-  agentNames: string[];
-}
-
-================
-File: src/context/CalibrationContext.tsx
-================
-import { createContext, useContext, useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { useCalibration, getMetricCalibration } from '../hooks/useCalibration.js';
-import type { CalibrationResponse, MetricCalibration } from '../hooks/useCalibration.js';
-interface CalibrationContextValue {
-  data: CalibrationResponse | undefined;
-  isLoading: boolean;
-}
-⋮----
-export function CalibrationProvider(
-export function useCalibrationData(): CalibrationContextValue
-export function useMetricCalibration(metricName: string): MetricCalibration | undefined
 
 ================
 File: src/contexts/RoleContext.tsx
@@ -2159,51 +2132,6 @@ interface RoleContextValue {
 ⋮----
 export function RoleProvider(
 export function useRole(): RoleContextValue
-
-================
-File: src/hooks/useAgentSession.ts
-================
-import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
-import { useApiQuery } from './useApiQuery.js';
-interface AgentSessionResponse {
-  sessionId: string;
-  spans: Array<{
-    traceId: string;
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-  }>;
-  evaluation: MultiAgentEvaluation;
-  evaluations: EvaluationResult[];
-  agentMap: Record<string, string>;
-  graph: WorkflowGraph;
-}
-export function useAgentSession(sessionId: string | undefined)
-
-================
-File: src/hooks/useCalibration.ts
-================
-import type { PercentileDistribution } from '../lib/quality-utils.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
-import { useApiQuery } from './useApiQuery.js';
-export interface CalibrationResponse {
-  distributions: Record<string, PercentileDistribution>;
-  sampleCounts: Record<string, number>;
-  lastCalibrated: string;
-}
-export interface MetricCalibration {
-  distribution: PercentileDistribution;
-  sampleSize: number;
-}
-export function useCalibration()
-export function getMetricCalibration(
-  data: CalibrationResponse | undefined,
-  metricName: string,
-): MetricCalibration | undefined
 
 ================
 File: src/hooks/useRoutingTelemetry.ts
@@ -2270,24 +2198,59 @@ File: src/lib/auth0.ts
 
 
 ================
-File: src/pages/AgentSessionPage.tsx
+File: src/pages/CoveragePage.tsx
 ================
-import { Link } from 'wouter';
-import { useAgentSession } from '../hooks/useAgentSession.js';
-import { TurnTimeline } from '../components/TurnTimeline.js';
-import { HandoffCard } from '../components/HandoffCard.js';
-import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { useState } from 'react';
+import { CoverageGrid } from '../components/CoverageGrid.js';
+import { useCoverage } from '../hooks/useCoverage.js';
 import { PageShell } from '../components/PageShell.js';
-import { ViewSection } from '../components/Section.js';
-import { plural } from '../lib/quality-utils.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
+import type { Period } from '../types.js';
+
+================
+File: src/pages/EvaluationDetailPage.tsx
+================
+import { useTraceEvaluations } from '../hooks/useTraceEvaluations.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
+import { ProvenancePanel } from '../components/ProvenancePanel.js';
+import { StepScoreChip } from '../components/EvaluationExpandedRow.js';
+import { PageShell } from '../components/PageShell.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { formatScore, plural } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
+import { TimestampCell } from '../components/TimestampCell.js';
+import { Link, useSearch } from 'wouter';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
 ⋮----
 
-================
-File: src/stubs/web-worker.ts
-================
+⋮----
+<Link href=
+⋮----
+href=
 
+================
+File: src/pages/PipelinePage.tsx
+================
+import { PipelineFunnel } from '../components/PipelineFunnel.js';
+import { usePipeline } from '../hooks/usePipeline.js';
+import { PageShell } from '../components/PageShell.js';
+import { LLM_SAMPLE_RATE, SKELETON_HEIGHT_MD, ICON_BADGE_SIZE } from '../lib/constants.js';
+import type { Period } from '../types.js';
+function T2SamplingStage()
+export function PipelinePage(
+
+================
+File: src/pages/WorkflowPage.tsx
+================
+import { useCallback } from 'react';
+import { useLocation } from 'wouter';
+import { useAgentSession } from '../hooks/useAgentSession.js';
+import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 ================
 File: src/types/activity.ts
@@ -2305,6 +2268,19 @@ import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { App } from './App.js';
 
 ================
+File: scripts/.kv-sync-coverage.json
+================
+{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
+
+================
+File: src/__tests__/api-calibration.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import app from '../../worker/index.js';
+function makeKV(store: Record<string, unknown> =
+function makeCalibrationData()
+
+================
 File: src/__tests__/auth-context-refresh.test.tsx
 ================
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -2318,13 +2294,6 @@ function TestConsumer()
 function Wrapper(
 ⋮----
 function SignOutTrigger()
-
-================
-File: src/__tests__/data-loader-trace-ids.test.ts
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-⋮----
-class MockMultiDirectoryBackend
 
 ================
 File: src/__tests__/test-types.ts
@@ -2386,53 +2355,66 @@ import { PARAM_METRIC_NAME_RE } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 ================
-File: src/api/server.ts
+File: src/api/data-loader.ts
 ================
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { serve } from '@hono/node-server';
-import { dashboardRoutes } from './routes/dashboard.js';
-import { metricsRoutes } from './routes/metrics.js';
-import { correlationRoutes } from './routes/correlations.js';
-import { evaluationRoutes } from './routes/evaluations.js';
-import { trendRoutes } from './routes/trends.js';
-import { coverageRoutes } from './routes/coverage.js';
-import { pipelineRoutes } from './routes/pipeline.js';
-import { complianceRoutes } from './routes/compliance.js';
-import { traceRoutes } from './routes/traces.js';
-import { agentRoutes } from './routes/agents.js';
-import { sessionRoutes } from './routes/sessions.js';
-import { qualityRoutes } from './routes/quality.js';
-import { API_HOST, API_PORT } from './config.js';
-
-================
-File: src/components/AgentActivityPanel.tsx
-================
-import { Fragment, useCallback, useMemo, useState } from 'react';
-import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
-import { TruncatedIdLink } from './TruncatedIdLink.js';
-import {
-  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
-  AGENT_TABLE_MIN_WIDTH, AGENT_BAR_MIN_WIDTH, AGENT_EVAL_CARD_MIN_WIDTH,
-  SPARKLINE_WIDTH, SPARKLINE_HEIGHT,
-} from '../lib/constants.js';
-import { routes } from '../lib/routes.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { Sparkline } from './Sparkline.js';
-import { StatDisplay } from './StatDisplay.js';
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
 ⋮----
-type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
-function errorRateColor(rate: number): string
-interface AgentActivityPanelProps {
-  agents: AgentStat[];
-}
+function getBackend(): MultiDirectoryBackend
+function toDateOnly(d: string): string
+function defaultRange(lookbackMs: number):
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>>
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]>
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
 ⋮----
-const sortIndicator = (key: SortKey)
-⋮----
-onClick=
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]>
+function traceQueryDates(startDate?: string, endDate?: string):
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string)
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string)
+async function queryLogsWithDefaultRange(
+  filter: { traceId?: string; sessionId?: string },
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]>
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
+export async function checkHealth(): Promise<
 
 ================
 File: src/components/AgentWorkflowView.tsx
@@ -2460,6 +2442,14 @@ export function AgentWorkflowView({
 onClick=
 
 ================
+File: src/components/EvaluationDetail.tsx
+================
+import { useState } from 'react';
+import { EvaluationTable, type EvalRow } from './EvaluationTable.js';
+import { useMetricEvaluations } from '../hooks/useMetricEvaluations.js';
+import type { Period } from '../types.js';
+
+================
 File: src/components/EvaluationExpandedRow.tsx
 ================
 import { Link } from 'wouter';
@@ -2484,28 +2474,77 @@ export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score
 <Link href=
 
 ================
-File: src/components/ScoreBadge.tsx
+File: src/components/HealthOverview.tsx
 ================
+import type { QualityDashboardSummary } from '../types.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
+import { TIME_MS } from '../lib/constants.js';
+import { HealthBanner } from './HealthBanner.js';
+import { StatDisplay } from './StatDisplay.js';
+interface PipelineHealth {
+  evalVolume: number;
+  lastEvalAge: string | null;
+  evalRate: string;
+}
+function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth
+function formatVolume(n: number): string
+⋮----
+Eval Volume: <span className="stat-value">
+
+================
+File: src/components/ProvenancePanel.tsx
+================
+import { useCallback } from 'react';
 import { Link } from 'wouter';
-import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, SCORE_COLORS, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
+import { formatScore } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
-import { SCORE_SHAPES } from '../lib/symbols.js';
-import { useMetricCalibration } from '../context/CalibrationContext.js';
-import type { ReactNode } from 'react';
-function MetadataRow(
-interface ScoreBadgeProps {
-  score: number | null;
-  metricName: string;
-  direction?: ScoreDirection;
-  label?: string;
+interface EvaluatorTypeCounts {
+  rule: number;
+  llm: number;
+  seed: number;
+  canary: number;
+}
+interface ProvenancePanelProps {
+  evaluationName: string;
+  scoreValue?: number;
+  scoreLabel?: string;
+  traceId?: string;
+  spanId?: string;
+  sessionId?: string;
+  timestamp: string;
   evaluator?: string;
   evaluatorType?: string;
-  explanation?: string;
-  traceId?: string;
-  calibration?: { distribution: PercentileDistribution; sampleSize: number };
+  scoreUnit?: string;
+  agentName?: string;
+  rawData?: Record<string, unknown>;
+  evaluatorTypeCounts?: EvaluatorTypeCounts;
 }
 ⋮----
 <Link href=
+
+================
+File: src/components/RequireAuth.tsx
+================
+import { type ReactNode } from 'react';
+import { Redirect, useLocation } from 'wouter';
+import { useAuth } from '../contexts/AuthContext.js';
+interface RequireAuthProps {
+  children: ReactNode;
+}
+export function RequireAuth(
+
+================
+File: src/components/TurnTimeline.tsx
+================
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { TURN_CARD_MIN_WIDTH } from '../lib/constants.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult } from '../types.js';
+interface TurnTimelineProps {
+  turns: TurnLevelResult[];
+  agentNames: string[];
+}
 
 ================
 File: src/hooks/useSessionDetail.ts
@@ -2717,165 +2756,6 @@ function printSummaryTable(metricName: string, result: BacktestSweepResult, eval
 async function main(): Promise<void>
 
 ================
-File: src/__tests__/api-calibration.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import app from '../../worker/index.js';
-function makeKV(store: Record<string, unknown> =
-function makeCalibrationData()
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, TIME_MS } from '../api-constants.js';
-⋮----
-type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-
-================
-File: src/api/api-constants.ts
-================
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-
-================
-File: src/components/EvaluationTable.tsx
-================
-import { useState, Fragment } from 'react';
-import type { EvaluationResult } from '../types.js';
-import {
-  createColumnHelper,
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getExpandedRowModel,
-  flexRender,
-  type SortingState,
-  type ColumnFiltersState,
-  type ExpandedState,
-  type SortingFn,
-  type FilterFn,
-} from '@tanstack/react-table';
-import {
-  labelToOrdinal,
-  ordinalToCategory,
-  truncateText,
-  formatScore,
-  SCORE_COLORS,
-  type LabelFilterCategory,
-} from '../lib/quality-utils.js';
-import { EVAL_TABLE_EXPAND_COL_SIZE, EVAL_FILTER_INACTIVE_OPACITY } from '../lib/constants.js';
-import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
-import { TimestampCell } from './TimestampCell.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { ColoredChip } from './Chip.js';
-import { ScoreBadge } from './ScoreBadge.js';
-export interface EvalRow {
-  score: number | null;
-  explanation?: string;
-  traceId?: string;
-  timestamp?: string;
-  evaluator?: string;
-  label?: string;
-  evaluatorType?: string;
-  spanId?: string;
-  sessionId?: string;
-  agentName?: string;
-  trajectoryLength?: number;
-  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
-  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
-}
-⋮----
-const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) =>
-const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) =>
-⋮----
-aria-label=
-⋮----
-const toggleCategory = (cat: LabelFilterCategory) =>
-const sortDir = (colId: string): 'ascending' | 'descending' | 'none' =>
-⋮----
-aria-sort=
-⋮----
-<tr className=
-⋮----
-<td colSpan=
-
-================
-File: src/components/RequireAuth.tsx
-================
-import { type ReactNode } from 'react';
-import { Redirect, useLocation } from 'wouter';
-import { useAuth } from '../contexts/AuthContext.js';
-interface RequireAuthProps {
-  children: ReactNode;
-}
-export function RequireAuth(
-
-================
-File: src/components/TrendSeries.tsx
-================
-import {
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Area,
-  ResponsiveContainer,
-} from 'recharts';
-import { format, differenceInMilliseconds } from 'date-fns';
-import type { TrendBucket } from '../hooks/useTrend.js';
-import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
-import { formatScore } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-interface TrendSeriesProps {
-  data: TrendBucket[];
-  metricName: string;
-}
-⋮----
-function formatTime(iso: string, spanDays: number): string
-
-================
-File: src/lib/supabase-rest.ts
-================
-export function supabasePost(
-  url: string,
-  body: unknown,
-  key: string,
-): void
-
-================
-File: src/pages/RoutingTelemetryPage.tsx
-================
-import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
-import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { Period } from '../types.js';
-⋮----
-function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
-
-================
-File: scripts/.kv-sync-coverage.json
-================
-{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
-
-================
 File: scripts/derive-evaluations.ts
 ================
 import { writeFileSync, readdirSync, existsSync } from 'fs';
@@ -2942,6 +2822,19 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[]
 function main(): void
 
 ================
+File: src/__tests__/workflow-graph.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult } from '../types.js';
+import type { TraceSpan } from '../types.js';
+function makeHandoff(overrides: Partial<HandoffEvaluation> =
+function makeTurn(overrides: Partial<TurnLevelResult> =
+function makeEvaluation(overrides: Partial<MultiAgentEvaluation> =
+function makeSpan(overrides: Partial<TraceSpan> =
+
+================
 File: src/__tests__/WorkflowPage.test.tsx
 ================
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
@@ -2951,6 +2844,122 @@ import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShel
 onClick=
 ⋮----
 function makeEvaluation(overrides: Record<string, unknown> =
+
+================
+File: src/components/TrendChart.tsx
+================
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  ResponsiveContainer,
+} from 'recharts';
+import type { MetricDynamics, MetricTrend } from '../types.js';
+import {
+  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
+  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
+  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
+  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS,
+} from '../lib/constants.js';
+import { formatPercent } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+interface TrendChartProps {
+  trend?: MetricTrend;
+  dynamics?: MetricDynamics;
+  warningThreshold?: number;
+  criticalThreshold?: number;
+  metricName: string;
+}
+function formatValue(v: number): string
+function formatBreachTime(iso: string): string
+⋮----
+
+================
+File: src/components/TrendSeries.tsx
+================
+import {
+  ComposedChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Area,
+  ResponsiveContainer,
+} from 'recharts';
+import { format, differenceInMilliseconds } from 'date-fns';
+import type { TrendBucket } from '../hooks/useTrend.js';
+import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import { formatScore } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+interface TrendSeriesProps {
+  data: TrendBucket[];
+  metricName: string;
+}
+⋮----
+function formatTime(iso: string, spanDays: number): string
+
+================
+File: src/lib/supabase-rest.ts
+================
+export function supabasePost(
+  url: string,
+  body: unknown,
+  key: string,
+): void
+
+================
+File: src/pages/LoginPage.tsx
+================
+import { useAuth0 } from '../lib/auth0.js';
+import { AUTH0_AUDIENCE } from '../lib/auth0.js';
+export function LoginPage()
+⋮----
+const handleLogin = ()
+
+================
+File: src/pages/RoutingTelemetryPage.tsx
+================
+import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
+import { PageShell } from '../components/PageShell.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { Period } from '../types.js';
+⋮----
+function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
+
+================
+File: src/types/workflow-graph.ts
+================
+export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
+export interface WorkflowNode {
+  id: string;
+  label: string;
+  evaluationScore: number | null;
+  toolCallCount: number;
+  totalTokens: number | null;
+  durationMs: number;
+  turnCount: number;
+  hasError: boolean;
+}
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  handoffScore: number | null;
+  contextPreserved: boolean;
+  label?: string;
+}
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  rootNodeId: string | null;
+  workflowShape: WorkflowShape;
+  droppedTurns: number;
+}
 
 ================
 File: src/api/routes/dashboard.ts
@@ -2975,66 +2984,38 @@ function computeSparklineData(
 ): (number | null)[]
 
 ================
-File: src/api/data-loader.ts
+File: src/api/api-constants.ts
 ================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+
+================
+File: src/components/AgentActivityPanel.tsx
+================
+import { Fragment, useCallback, useMemo, useState } from 'react';
+import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
+import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
+import { TruncatedIdLink } from './TruncatedIdLink.js';
+import {
+  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
+  AGENT_TABLE_MIN_WIDTH, AGENT_BAR_MIN_WIDTH, AGENT_EVAL_CARD_MIN_WIDTH,
+  SPARKLINE_WIDTH, SPARKLINE_HEIGHT,
+} from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { Sparkline } from './Sparkline.js';
+import { StatDisplay } from './StatDisplay.js';
 ⋮----
-function getBackend(): MultiDirectoryBackend
-function toDateOnly(d: string): string
-function defaultRange(lookbackMs: number):
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>>
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]>
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
+type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
+function errorRateColor(rate: number): string
+interface AgentActivityPanelProps {
+  agents: AgentStat[];
+}
 ⋮----
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]>
-function traceQueryDates(startDate?: string, endDate?: string):
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string)
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string)
-async function queryLogsWithDefaultRange(
-  filter: { traceId?: string; sessionId?: string },
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]>
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
-export async function checkHealth(): Promise<
+const sortIndicator = (key: SortKey)
+⋮----
+onClick=
 
 ================
 File: src/components/ConfidencePanel.tsx
@@ -3083,157 +3064,6 @@ export type KvEntryValue = z.infer<typeof kvEntryValueSchema>;
 export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 ⋮----
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
-
-================
-File: src/pages/LoginPage.tsx
-================
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
-export function LoginPage()
-⋮----
-const handleLogin = ()
-
-================
-File: src/pages/SessionDetailPage.tsx
-================
-import { Link } from 'wouter';
-import { format } from 'date-fns';
-import { useSessionDetail } from '../hooks/useSessionDetail.js';
-import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { PageShell } from '../components/PageShell.js';
-import { Section, type SectionHealth } from '../components/Section.js';
-import { StatDisplay } from '../components/StatDisplay.js';
-import { FreqBar } from '../components/FreqBar.js';
-import { FreqBarGrid } from '../components/FreqBarGrid.js';
-import { TruncatedList } from '../components/TruncatedList.js';
-import { IssueCallout } from '../components/IssueCallout.js';
-import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
-import {
-  HALLUCINATION_SCORE_THRESHOLD,
-  MAX_ERROR_ROWS,
-  MAX_HALLUCINATION_ROWS,
-  MAX_FAILED_EVAL_ROWS,
-  SCORE_DISPLAY_PRECISION,
-  SKELETON_HEIGHT_LG,
-  CALLOUT_MAX_WIDTH,
-  PAGE_CONTENT_MAX_WIDTH,
-  CODE_QUALITY_WARN_THRESHOLD,
-  AGENT_CARD_MIN_WIDTH,
-  FILE_ACCESS_COL_MIN,
-} from '../lib/constants.js';
-export function SessionDetailPage(
-⋮----
-// Derive computed values
-⋮----
-// Issue detection
-⋮----
-<FreqBarGrid entries=
-⋮----
-label=
-
-================
-File: src/pages/WorkflowPage.tsx
-================
-import { useCallback } from 'react';
-import { useLocation } from 'wouter';
-import { useAgentSession } from '../hooks/useAgentSession.js';
-import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-
-================
-File: src/types/workflow-graph.ts
-================
-export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
-export interface WorkflowNode {
-  id: string;
-  label: string;
-  evaluationScore: number | null;
-  toolCallCount: number;
-  totalTokens: number | null;
-  durationMs: number;
-  turnCount: number;
-  hasError: boolean;
-}
-export interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-  handoffScore: number | null;
-  contextPreserved: boolean;
-  label?: string;
-}
-export interface WorkflowGraph {
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  rootNodeId: string | null;
-  workflowShape: WorkflowShape;
-  droppedTurns: number;
-}
-
-================
-File: src/components/WorkflowTimeline.tsx
-================
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-⋮----
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[]
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock(
-⋮----
-const turnX = (turnIndex: number): number
-const laneY = (laneIndex: number): number
-
-================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-}
-⋮----
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-⋮----
-export type InputKey = z.infer<typeof InputKeySchema>;
-⋮----
-export type SortBy = z.infer<typeof SortBySchema>;
-⋮----
-export type Role = z.infer<typeof RoleSchema>;
-⋮----
-export function computePeriodDates(period: string):
-⋮----
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
 
 ================
 File: src/lib/quality-utils.ts
@@ -3303,17 +3133,59 @@ import { format, differenceInMinutes, differenceInHours, differenceInDays } from
 export function formatTimestamp(ts: string): string
 
 ================
-File: src/__tests__/workflow-graph.test.ts
+File: src/api/routes/trends.ts
 ================
-import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult } from '../types.js';
-import type { TraceSpan } from '../types.js';
-function makeHandoff(overrides: Partial<HandoffEvaluation> =
-function makeTurn(overrides: Partial<TurnLevelResult> =
-function makeEvaluation(overrides: Partial<MultiAgentEvaluation> =
-function makeSpan(overrides: Partial<TraceSpan> =
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR } from '../api-constants.js';
+⋮----
+type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
+File: src/components/WorkflowTimeline.tsx
+================
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+⋮----
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[]
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock(
+⋮----
+const turnX = (turnIndex: number): number
+const laneY = (laneIndex: number): number
 
 ================
 File: src/api/routes/agents.ts
@@ -3324,9 +3196,102 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
 import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+
+================
+File: src/components/EvaluationTable.tsx
+================
+import { useState, Fragment } from 'react';
+import type { EvaluationResult } from '../types.js';
+import {
+  createColumnHelper,
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  getExpandedRowModel,
+  flexRender,
+  type SortingState,
+  type ColumnFiltersState,
+  type ExpandedState,
+  type SortingFn,
+  type FilterFn,
+} from '@tanstack/react-table';
+import {
+  labelToOrdinal,
+  ordinalToCategory,
+  truncateText,
+  formatScore,
+  SCORE_COLORS,
+  type LabelFilterCategory,
+} from '../lib/quality-utils.js';
+import { EVAL_TABLE_EXPAND_COL_SIZE, EVAL_FILTER_INACTIVE_OPACITY } from '../lib/constants.js';
+import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { TimestampCell } from './TimestampCell.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { ColoredChip } from './Chip.js';
+import { ScoreBadge } from './ScoreBadge.js';
+export interface EvalRow {
+  score: number | null;
+  explanation?: string;
+  traceId?: string;
+  timestamp?: string;
+  evaluator?: string;
+  label?: string;
+  evaluatorType?: string;
+  spanId?: string;
+  sessionId?: string;
+  agentName?: string;
+  trajectoryLength?: number;
+  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
+  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
+}
+⋮----
+const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) =>
+const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) =>
+⋮----
+aria-label=
+⋮----
+const toggleCategory = (cat: LabelFilterCategory) =>
+const sortDir = (colId: string): 'ascending' | 'descending' | 'none' =>
+⋮----
+aria-sort=
+⋮----
+<tr className=
+⋮----
+<td colSpan=
+
+================
+File: src/components/WorkflowGraph.tsx
+================
+import React, { memo, useCallback, useEffect, useState } from 'react';
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+⋮----
+import ELK from 'elkjs/lib/elk.bundled.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+⋮----
+function getScoreBand(score: number | null)
+⋮----
+function isWorkflowNode(value: unknown): value is WorkflowNode
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): Promise<
 
 ================
 File: src/hooks/useApiQuery.ts
@@ -3344,350 +3309,50 @@ export function useApiQuery<TRaw, T = TRaw>(
 retry?: number | ((failureCount: number, error: unknown)
 
 ================
-File: src/api/routes/sessions.ts
+File: src/lib/constants.ts
 ================
-import { Hono } from 'hono';
-import { subMilliseconds, formatISO } from 'date-fns';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
-import {
-  COMMIT_BODY_START_LINE_INDEX,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
-  FILE_ACCESS_TOP_N,
-  LATENCY_P50,
-  LATENCY_P95,
-  LOG_SUMMARY_FIELDS,
-  LOG_SUMMARY_MAX_ENTRIES,
-  type SafeLogEntry,
-  TIME_MS,
-  OTEL_STATUS_ERROR_CODE,
-  PARAM_ID_RE,
-  PERCENT_BASE,
-} from '../api-constants.js';
-import {
-  loadEvaluationsBySessionId,
-  loadLogsBySessionId,
-} from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
+import { z } from 'zod';
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+}
 ⋮----
-function attr<T>(span:
-function parseTimestamp(value: string | undefined | null): number | null
-function percentile(sorted: number[], p: number): number
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
 ⋮----
-async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string)
+export type InputKey = z.infer<typeof InputKeySchema>;
 ⋮----
-// ---- Token Totals ----
+export type SortBy = z.infer<typeof SortBySchema>;
 ⋮----
-// ---- Tool Usage ----
+export type Role = z.infer<typeof RoleSchema>;
 ⋮----
-// ---- Alert Summary ----
+export function computePeriodDates(period: string):
 ⋮----
-// ---- Evaluation Breakdown (from direct sessionId query) ----
-⋮----
-// ---- Log Summary ----
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
 
 ================
-File: src/pages/AdminPage.tsx
+File: src/lib/workflow-graph.ts
 ================
-import { useState, useRef, useCallback } from 'react';
-import { format } from 'date-fns';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { useAuth } from '../contexts/AuthContext.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
 ⋮----
-function RoleChip({
-  role,
-  onRevoke,
-  revoking,
-}: {
-  role: { id: string; name: string };
-onRevoke: (roleId: string, roleName: string)
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
 ⋮----
-async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
-async function handleAssign()
-async function handleRevoke(roleId: string, roleName: string)
-
-================
-File: src/theme.css
-================
-@font-face {
+function dfs(nodeId: string): boolean
 ⋮----
-:root {
-.overflow-x-auto { overflow-x: auto; }
-.select-none { user-select: none; }
-.cursor-pointer { cursor: pointer; }
-* {
-.summary-count .label,
-.back-link,
-.back-link:hover,
-.summary-count { text-align: center; }
-.card:hover { border-color: var(--border); }
-.trend.stable { color: var(--text-secondary); }
-.card.glow-critical { box-shadow: var(--shadow-glow-critical); }
-.card.glow-warning { box-shadow: var(--shadow-glow-warning); }
-body {
-⋮----
-*, *::before, *::after {
-⋮----
-.dashboard-container {
-.metric-grid {
-.card {
-.card-link {
-[data-status="healthy"]  { --s-bg: var(--bg-status-healthy);  --s-border: var(--border-status-healthy);  --s-fg: var(--status-healthy); }
-[data-status="warning"]  { --s-bg: var(--bg-status-warning);  --s-border: var(--border-status-warning);  --s-fg: var(--status-warning); }
-[data-status="critical"] { --s-bg: var(--bg-status-critical); --s-border: var(--border-status-critical); --s-fg: var(--status-critical); }
-[data-status="no_data"]  { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--status-no-data); }
-[data-status="info"]     { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--text-secondary); }
-.health-banner {
-.health-banner[data-status] { background: var(--s-bg); border: 1px solid var(--s-border); }
-.summary-count .value {
-.status-badge {
-.status-badge[data-status] { color: var(--s-fg); background: var(--s-bg); }
-.trend {
-.trend.improving { color: var(--status-healthy); }
-.trend.degrading { color: var(--status-critical); }
-.metric-card-header {
-.metric-card-header h3 {
-.metric-values {
-.metric-values .primary {
-.metric-values .secondary {
-.metric-footer,
-.metric-footer {
-.alert-list {
-.alert-item {
-.alert-item[data-status] { border-left-color: var(--s-fg); }
-.alert-item .alert-meta,
-.alert-item .remediation { color: var(--accent); }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th,
-.data-table th {
-.sla-table { font-size: var(--font-size-base); }
-.sla-table th,
-.histogram {
-.histogram-bar {
-.histogram-bar:hover {
-.histogram-bar .tooltip,
-.histogram-bar .tooltip {
-.histogram-bar:hover .tooltip {
-.histogram-labels {
-.eval-table {
-.eval-table th,
-.eval-table td {
-.eval-table .explanation {
-.eval-table tbody tr:hover,
-.eval-table .eval-expanded-panel td {
-.eval-expanded-content {
-.pad-panel-section { padding: var(--space-2-5) 0 var(--space-2); }
-.pad-panel-sparse  { padding: var(--space-2-5) 0 var(--space-1); }
-.tab-btn,
-.tab-nav {
-.tab-btn {
-.tab-btn:hover {
-.tab-btn[aria-selected="true"] {
-.period-selector {
-.period-btn {
-.period-btn.active {
-.header {
-.header h1 {
-.skeleton {
-⋮----
-.empty-state {
-.empty-state h2 {
-.empty-state code {
-.back-link {
-.error-state {
-.error-state h2 {
-.error-state .error-actions {
-.error-state .error-actions button,
-.section-heading {
-.stat-item {
-.stat-value {
-.stat-label {
-.freq-bar-row {
-.vitals-divider {
-.freq-grid {
-.view-section {
-.refetch-indicator {
-⋮----
-.score-badge-wrapper {
-.score-badge-tooltip {
-.score-badge-wrapper:hover .score-badge-tooltip,
-.tooltip-row {
-.tooltip-link {
-.cot-panel {
-.cot-summary {
-.cot-summary::-webkit-details-marker {
-.cot-summary::before {
-details[open] > .cot-summary::before {
-.cot-content {
-.eval-detail-header {
-.eval-detail-meta {
-.eval-detail-card {
-.eval-summary-card.card:hover {
-.metric-card-compact {
-.grid-two-col {
-.score-label-width {
-.agent-expanded-grid {
-.alert-compound {
-.alert-related {
-.alert-metric-link {
-.alert-metric-link:hover {
-.remediation-list {
-.remediation-list li {
-.threshold-bar {
-.threshold-bar-fill,
-.threshold-bar-fill { border-radius: var(--radius-bar); }
-.variance-bar-fill  { border-radius: var(--radius-xs); }
-.threshold-bar-marker {
-.pipeline-stat {
-.pipeline-stat .stat-value {
-.metric-worst {
-.metric-worst .worst-score {
-.provenance-grid,
-.provenance-grid { grid-template-columns: auto 1fr; }
-.provenance-grid .prov-label {
-.provenance-grid .prov-value {
-.provenance-actions {
-.provenance-actions button {
-.provenance-actions button:hover {
-.confidence-header {
-.confidence-stats-grid {
-.confidence-method {
-.agreement-grid { grid-template-columns: 1fr auto auto; }
-.agreement-grid .ag-header {
-.agreement-summary .summary-value {
-.variance-bar {
-.variance-bar-track {
-.mini-bar {
-.mini-bar-fill {
-.card--empty {
-.mono      { font-family: var(--font-mono); }
-.mono-2xs  { font-family: var(--font-mono); font-size: var(--font-size-2xs); }
-.mono-xs   { font-family: var(--font-mono); font-size: var(--font-size-xs); }
-.mono-base { font-family: var(--font-mono); font-size: var(--font-size-base); }
-.mono-md   { font-family: var(--font-mono); font-size: var(--font-size-md); }
-.mono-lg   { font-family: var(--font-mono); font-size: var(--font-size-lg); }
-.mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
-.mono-2xl  { font-family: var(--font-mono); font-size: var(--font-size-2xl); }
-.text-2xs  { font-size: var(--font-size-2xs); }
-.text-xs   { font-size: var(--font-size-xs); }
-.text-base { font-size: var(--font-size-base); }
-.text-md   { font-size: var(--font-size-md); }
-.text-lg   { font-size: var(--font-size-lg); }
-.text-xl   { font-size: var(--font-size-xl); }
-.text-2xl  { font-size: var(--font-size-2xl); }
-.text-secondary    { color: var(--text-secondary); }
-.text-muted        { color: var(--text-muted); }
-.text-accent       { color: var(--accent); }
-.text-accent-hover { color: var(--accent-hover); }
-.d-flex         { display: flex; }
-.d-grid         { display: grid; }
-.d-inline-block { display: inline-block; }
-.flex-center    { display: flex; align-items: center; }
-.align-start    { align-items: flex-start; }
-.uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
-.font-semibold { font-weight: var(--bold); }
-.chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
-.gap-half { gap: var(--space-px); }
-.gap-1    { gap: var(--space-1); }
-.gap-1-5  { gap: var(--space-1-5); }
-.gap-2    { gap: var(--space-2); }
-.gap-2-5  { gap: var(--space-2-5); }
-.gap-3    { gap: var(--space-3); }
-.gap-4    { gap: var(--space-4); }
-.gap-5    { gap: var(--space-5); }
-.gap-6    { gap: var(--space-6); }
-.gap-8    { gap: var(--space-8); }
-.gap-16   { gap: var(--space-16); }
-.w-full   { width: 100%; }
-.min-w-120 { min-width: 120px; }
-.m-0    { margin: 0; }
-.ml-auto { margin-left: auto; }
-.mb-0   { margin-bottom: 0; }
-.mb-1   { margin-bottom: var(--space-1); }
-.mb-1-5 { margin-bottom: var(--space-1-5); }
-.mb-2   { margin-bottom: var(--space-2); }
-.mb-2-5 { margin-bottom: var(--space-2-5); }
-.mb-3   { margin-bottom: var(--space-3); }
-.mb-4   { margin-bottom: var(--space-4); }
-.mb-5   { margin-bottom: var(--space-5); }
-.mb-6   { margin-bottom: var(--space-6); }
-.mt-1   { margin-top: var(--space-1); }
-.mt-2   { margin-top: var(--space-2); }
-.mt-3   { margin-top: var(--space-3); }
-.mt-4   { margin-top: var(--space-4); }
-.p-4    { padding: var(--space-4); }
-.p-6    { padding: var(--space-6); }
-.text-center { text-align: center; }
-.text-right  { text-align: right; }
-.text-left   { text-align: left; }
-.flex-wrap          { display: flex; flex-wrap: wrap; }
-.flex-col           { display: flex; flex-direction: column; }
-.inline-flex-center { display: inline-flex; align-items: center; }
-.shrink-0           { flex-shrink: 0; }
-.flex-1             { flex: 1; }
-.justify-between    { justify-content: space-between; }
-.justify-center     { justify-content: center; }
-.contents { display: contents; }
-.opacity-50 { opacity: 0.5; }
-.list-none { list-style: none; }
-.valign-middle { vertical-align: middle; }
-.table-collapse { border-collapse: collapse; }
-.sr-only {
-.font-medium { font-weight: var(--light-bold); }
-.font-bold   { font-weight: 700; }
-.italic      { font-style: italic; }
-.nowrap      { white-space: nowrap; }
-.truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.break-all { word-break: break-all; }
-.leading-normal  { line-height: 1.5; }
-.leading-relaxed { line-height: 1.6; }
-.pt-3 { padding-top: var(--space-3); }
-.btn-reset { background: none; border: none; padding: 0; }
-.expand-chevron {
-.expand-chevron--open {
-.text-healthy  { color: var(--status-healthy); }
-.text-warning  { color: var(--status-warning); }
-.text-critical { color: var(--status-critical); }
-.text-primary  { color: var(--text-primary); }
-.surface-elevated { background: var(--bg-elevated); border: 1px solid var(--border); }
-.surface-elevated-card {
-.link-accent { color: var(--accent); text-decoration: none; }
-.cell-pad      { padding: var(--space-1) var(--space-2-5); }
-.cell-pad-wide { padding: var(--space-1) var(--space-3); }
-.border-b        { border-bottom: 1px solid var(--border); }
-.border-b-subtle { border-bottom: 1px solid var(--border-subtle); }
-.border-t        { border-top: 1px solid var(--border); }
-.chip-badge {
-.chip-accent {
-.dot-sm,
-.dot-sm { width: 8px; height: 8px; }
-.dot-xs { width: 6px; height: 6px; }
-.badge-warning {
-.section-rail {
-.workflow-node {
-.workflow-node__label {
-.workflow-node__score {
-.workflow-node__meta,
-.workflow-node__meta { margin-top: var(--space-1); }
-.workflow-node__error {
-.workflow-fallback {
-.workflow-fallback__title {
-.workflow-fallback__subtitle {
-.workflow-fallback__empty {
-.workflow-oversize {
-.workflow-oversize__heading {
-.workflow-oversize__note {
-.workflow-oversize__list {
-.workflow-tabs {
-.workflow-tab {
-.workflow-tab[aria-selected='true'] {
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
 
 ================
 File: scripts/judge-evaluations.ts
@@ -3816,34 +3481,110 @@ export async function processBatch<T, R>(
 async function main()
 
 ================
-File: src/components/WorkflowGraph.tsx
+File: src/__tests__/WorkflowGraph.test.tsx
 ================
-import React, { memo, useCallback, useEffect, useState } from 'react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import type { ReactNode } from 'react';
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) => void;
+  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
+⋮----
+<div key=
+⋮----
+interface ELKGraph {
+  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+⋮----
+layout(graph: ELKGraph)
+⋮----
+import { WorkflowGraphView } from '../components/WorkflowGraph.js';
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
+
+================
+File: src/api/routes/sessions.ts
+================
+import { Hono } from 'hono';
+import { subMilliseconds, formatISO } from 'date-fns';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
 import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from '@xyflow/react';
+  COMMIT_BODY_START_LINE_INDEX,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  FILE_ACCESS_TOP_N,
+  LATENCY_P50,
+  LATENCY_P95,
+  LOG_SUMMARY_FIELDS,
+  LOG_SUMMARY_MAX_ENTRIES,
+  type SafeLogEntry,
+  OTEL_STATUS_ERROR_CODE,
+  PARAM_ID_RE,
+  PERCENT_BASE,
+  LATENCY_DISPLAY_PRECISION,
+} from '../api-constants.js';
+import {
+  loadEvaluationsBySessionId,
+  loadLogsBySessionId,
+} from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
 ⋮----
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+function attr<T>(span:
+function parseTimestamp(value: string | undefined | null): number | null
+function percentile(sorted: number[], p: number): number
 ⋮----
-function getScoreBand(score: number | null)
+async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string)
 ⋮----
-function isWorkflowNode(value: unknown): value is WorkflowNode
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-): Promise<
+// ---- Token Totals ----
+⋮----
+// ---- Tool Usage ----
+⋮----
+// ---- Alert Summary ----
+⋮----
+// ---- Evaluation Breakdown (from direct sessionId query) ----
+⋮----
+// ---- Log Summary ----
+
+================
+File: src/pages/AdminPage.tsx
+================
+import { useState, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useAuth } from '../contexts/AuthContext.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
+⋮----
+function RoleChip({
+  role,
+  onRevoke,
+  revoking,
+}: {
+  role: { id: string; name: string };
+onRevoke: (roleId: string, roleName: string)
+⋮----
+async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
+async function handleAssign()
+async function handleRevoke(roleId: string, roleName: string)
 
 ================
 File: src/types/auth.ts
@@ -3869,6 +3610,107 @@ export interface AppSession {
   permissions: DashboardPermission[];
   allowedViews: DashboardView[];
 }
+
+================
+File: src/lib/validation/auth-schemas.ts
+================
+import { z } from 'zod';
+import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
+⋮----
+export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
+⋮----
+export type PublicUser = z.infer<typeof PublicUserSchema>;
+⋮----
+export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
+⋮----
+export type AdminRole = z.infer<typeof AdminRoleSchema>;
+⋮----
+export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
+⋮----
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+⋮----
+export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
+⋮----
+export type MeResponse = z.infer<typeof MeResponseSchema>;
+
+================
+File: src/pages/SessionDetailPage.tsx
+================
+import { Link } from 'wouter';
+import { format } from 'date-fns';
+import { useSessionDetail } from '../hooks/useSessionDetail.js';
+import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { PageShell } from '../components/PageShell.js';
+import { Section, type SectionHealth } from '../components/Section.js';
+import { StatDisplay } from '../components/StatDisplay.js';
+import { FreqBar } from '../components/FreqBar.js';
+import { FreqBarGrid } from '../components/FreqBarGrid.js';
+import { TruncatedList } from '../components/TruncatedList.js';
+import { IssueCallout } from '../components/IssueCallout.js';
+import { SCORE_COLORS, scoreColorBand, shortPath, fmtBytes, truncateText, plural } from '../lib/quality-utils.js';
+import {
+  HALLUCINATION_SCORE_THRESHOLD,
+  MAX_ERROR_ROWS,
+  MAX_HALLUCINATION_ROWS,
+  MAX_FAILED_EVAL_ROWS,
+  SCORE_DISPLAY_PRECISION,
+  SKELETON_HEIGHT_LG,
+  CALLOUT_MAX_WIDTH,
+  PAGE_CONTENT_MAX_WIDTH,
+  CODE_QUALITY_WARN_THRESHOLD,
+  AGENT_CARD_MIN_WIDTH,
+  FILE_ACCESS_COL_MIN,
+} from '../lib/constants.js';
+export function SessionDetailPage(
+⋮----
+// Derive computed values
+⋮----
+// Issue detection
+⋮----
+<FreqBarGrid entries=
+⋮----
+label=
+
+================
+File: src/lib/supabase.ts
+================
+import { fromUnixTime, isPast, subSeconds } from 'date-fns';
+⋮----
+export interface SupabaseSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  user: { id: string; email: string };
+}
+export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
+type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
+type AuthTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: { id: string; email: string };
+};
+⋮----
+function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void
+function saveSession(session: SupabaseSession): void
+function clearSession(): void
+function clearSessionAndNotify(): null
+function isValidSession(value: unknown): value is SupabaseSession
+function readRawSession(): SupabaseSession | null
+function isValidTokenResponse(value: unknown): value is AuthTokenResponse
+function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession
+export function getSession(): SupabaseSession | null
+export async function signIn(email: string, password: string): Promise<SupabaseSession>
+export async function signOut(): Promise<void>
+⋮----
+export function refreshSession(): Promise<SupabaseSession | null>
+export function onAuthStateChange(listener: AuthStateListener): () => void
+⋮----
+export function startAutoRefresh(): void
+export function stopAutoRefresh(): void
 
 ================
 File: scripts/sync-to-kv.ts
@@ -3920,6 +3762,10 @@ import {
   FILE_ACCESS_TOP_N,
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
   COMMIT_BODY_START_LINE_INDEX,
+  SCORE_ROUND_FACTOR,
+  LATENCY_P50,
+  LATENCY_P95,
+  LATENCY_DISPLAY_PRECISION,
 } from '../src/api/api-constants.js';
 function resolveNamespaceId(): string
 ⋮----
@@ -4031,121 +3877,9 @@ async function main(): Promise<void>
 ⋮----
 type Span = (typeof allSpans)[number];
 ⋮----
+// Sort agent list by invocations descending
+⋮----
 const isTraceKey = (e: KVEntry)
-
-================
-File: src/lib/validation/auth-schemas.ts
-================
-import { z } from 'zod';
-import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
-⋮----
-export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
-⋮----
-export type PublicUser = z.infer<typeof PublicUserSchema>;
-⋮----
-export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
-⋮----
-export type AdminRole = z.infer<typeof AdminRoleSchema>;
-⋮----
-export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
-⋮----
-export type AdminUser = z.infer<typeof AdminUserSchema>;
-⋮----
-export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
-⋮----
-export type MeResponse = z.infer<typeof MeResponseSchema>;
-
-================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-⋮----
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
-⋮----
-function dfs(nodeId: string): boolean
-⋮----
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
-
-================
-File: src/__tests__/WorkflowGraph.test.tsx
-================
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import type { ReactNode } from 'react';
-interface MockNode {
-  id: string;
-  type: string;
-  data: Record<string, unknown>;
-}
-interface MockEdge {
-  id: string;
-  label?: string;
-}
-interface ReactFlowProps {
-  nodes?: MockNode[];
-  edges?: MockEdge[];
-  onNodeClick?: (event: unknown, node: MockNode) => void;
-  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
-  children?: ReactNode;
-  [key: string]: unknown;
-}
-⋮----
-<div key=
-⋮----
-interface ELKGraph {
-  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
-  [key: string]: unknown;
-}
-⋮----
-layout(graph: ELKGraph)
-⋮----
-import { WorkflowGraphView } from '../components/WorkflowGraph.js';
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
-
-================
-File: src/lib/supabase.ts
-================
-import { fromUnixTime, isPast, subSeconds } from 'date-fns';
-⋮----
-export interface SupabaseSession {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  user: { id: string; email: string };
-}
-export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
-type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
-type AuthTokenResponse = {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: { id: string; email: string };
-};
-⋮----
-function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void
-function saveSession(session: SupabaseSession): void
-function clearSession(): void
-function clearSessionAndNotify(): null
-function isValidSession(value: unknown): value is SupabaseSession
-function readRawSession(): SupabaseSession | null
-function isValidTokenResponse(value: unknown): value is AuthTokenResponse
-function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession
-export function getSession(): SupabaseSession | null
-export async function signIn(email: string, password: string): Promise<SupabaseSession>
-export async function signOut(): Promise<void>
-⋮----
-export function refreshSession(): Promise<SupabaseSession | null>
-export function onAuthStateChange(listener: AuthStateListener): () => void
-⋮----
-export function startAutoRefresh(): void
-export function stopAutoRefresh(): void
 
 ================
 File: src/App.tsx
@@ -4191,7 +3925,7 @@ import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './context/CalibrationContext.js';
 import { useAuth } from './contexts/AuthContext.js';
-import { ROLES } from './lib/constants.js';
+import { ROLES, SKELETON_HEIGHT_MD, SKELETON_HEIGHT_XL } from './lib/constants.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -4205,8 +3939,7 @@ File: src/contexts/AuthContext.tsx
 ================
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { useAuth0 } from '../lib/auth0.js';
-import { AUTH0_AUDIENCE } from '../lib/auth0.js';
+import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import { API_BASE } from '../lib/constants.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
 import type { AppSession } from '../types/auth.js';
@@ -4221,6 +3954,316 @@ interface AuthContextValue {
 async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null>
 export function AuthProvider(
 export function useAuth(): AuthContextValue
+
+================
+File: src/theme.css
+================
+@font-face {
+⋮----
+:root {
+.overflow-x-auto { overflow-x: auto; }
+.select-none { user-select: none; }
+.cursor-pointer { cursor: pointer; }
+* {
+.summary-count .label,
+.back-link,
+.back-link:hover,
+.summary-count { text-align: center; }
+.card:hover { border-color: var(--border); }
+.trend.stable { color: var(--text-secondary); }
+.card.glow-critical { box-shadow: var(--shadow-glow-critical); }
+.card.glow-warning { box-shadow: var(--shadow-glow-warning); }
+body {
+⋮----
+*, *::before, *::after {
+⋮----
+.dashboard-container {
+.metric-grid {
+.card {
+.card-link {
+[data-status="healthy"]  { --s-bg: var(--bg-status-healthy);  --s-border: var(--border-status-healthy);  --s-fg: var(--status-healthy); }
+[data-status="warning"]  { --s-bg: var(--bg-status-warning);  --s-border: var(--border-status-warning);  --s-fg: var(--status-warning); }
+[data-status="critical"] { --s-bg: var(--bg-status-critical); --s-border: var(--border-status-critical); --s-fg: var(--status-critical); }
+[data-status="no_data"]  { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--status-no-data); }
+[data-status="info"]     { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--text-secondary); }
+.health-banner {
+.health-banner[data-status] { background: var(--s-bg); border: 1px solid var(--s-border); }
+.summary-count .value {
+.status-badge {
+.status-badge[data-status] { color: var(--s-fg); background: var(--s-bg); }
+.trend {
+.trend.improving { color: var(--status-healthy); }
+.trend.degrading { color: var(--status-critical); }
+.metric-card-header {
+.metric-card-header h3 {
+.metric-values {
+.metric-values .primary {
+.metric-values .secondary {
+.metric-footer,
+.metric-footer {
+.alert-list {
+.alert-item {
+.alert-item[data-status] { border-left-color: var(--s-fg); }
+.alert-item .alert-meta,
+.alert-item .remediation { color: var(--accent); }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th,
+.data-table th {
+.sla-table { font-size: var(--font-size-base); }
+.sla-table th,
+.sla-table .col-agent { width: 30%; }
+.t2-stage-notice {
+.t2-stage-badge {
+.turn-card {
+.histogram {
+.histogram-bar {
+.histogram-bar:hover {
+.histogram-bar .tooltip,
+.histogram-bar .tooltip {
+.histogram-bar:hover .tooltip {
+.histogram-labels {
+.eval-table {
+.eval-table th,
+.eval-table td {
+.eval-table .explanation {
+.eval-table tbody tr:hover,
+.eval-table .eval-expanded-panel td {
+.eval-expanded-content {
+.pad-panel-section { padding: var(--space-2-5) 0 var(--space-2); }
+.pad-panel-sparse  { padding: var(--space-2-5) 0 var(--space-1); }
+.tab-btn,
+.tab-nav {
+.tab-btn {
+.tab-btn:hover {
+.tab-btn[aria-selected="true"] {
+.period-selector {
+.period-btn {
+.period-btn.active {
+.header {
+.header h1 {
+.skeleton {
+⋮----
+.empty-state {
+.empty-state h2 {
+.empty-state code {
+.back-link {
+.error-state {
+.error-state h2 {
+.error-state .error-actions {
+.error-state .error-actions button,
+.section-heading {
+.ls-id { letter-spacing: var(--letter-spacing-id); }
+.issue-callout {
+.issue-callout .callout-title { color: var(--s-fg); }
+.centered-callout {
+.card-spacious {
+.stat-label-section {
+.commit-summary {
+.commit-detail {
+.commit-body {
+.agent-stat-card {
+.agent-stat-card[data-has-error='true'] {
+.session-detail-header {
+.session-vitals-strip {
+.stat-item {
+.stat-value {
+.stat-label {
+.freq-bar-row {
+.vitals-divider {
+.freq-grid {
+.view-section {
+.refetch-indicator {
+⋮----
+.score-badge-wrapper {
+.score-badge-tooltip {
+.score-badge-wrapper:hover .score-badge-tooltip,
+.tooltip-row {
+.tooltip-row--col { flex-direction: column; }
+.tooltip-link {
+.cot-panel {
+.cot-summary {
+.cot-summary::-webkit-details-marker {
+.cot-summary::before {
+details[open] > .cot-summary::before {
+.cot-content {
+.eval-detail-header {
+.eval-detail-meta {
+.eval-detail-card {
+.eval-summary-card.card:hover {
+.metric-card-compact {
+.grid-two-col {
+.score-label-width {
+.agent-expanded-grid {
+.alert-compound {
+.alert-related {
+.alert-metric-link {
+.alert-metric-link:hover {
+.remediation-list {
+.remediation-list li {
+.threshold-bar {
+.threshold-bar-fill,
+.threshold-bar-fill { border-radius: var(--radius-bar); }
+.variance-bar-fill  { border-radius: var(--radius-xs); }
+.threshold-bar-marker {
+.pipeline-stat {
+.pipeline-stat .stat-value {
+.metric-worst {
+.metric-worst .worst-score {
+.provenance-grid,
+.provenance-grid { grid-template-columns: auto 1fr; }
+.provenance-grid .prov-label {
+.provenance-grid .prov-value {
+.provenance-actions {
+.provenance-actions button {
+.provenance-actions button:hover {
+.confidence-header {
+.confidence-stats-grid {
+.confidence-method {
+.agreement-grid { grid-template-columns: 1fr auto auto; }
+.agreement-grid .ag-header {
+.agreement-summary .summary-value {
+.variance-bar {
+.bar-track {
+.variance-bar-track {
+.mini-bar {
+.mini-bar-fill {
+.card--empty {
+.mono      { font-family: var(--font-mono); }
+.mono-2xs  { font-family: var(--font-mono); font-size: var(--font-size-2xs); }
+.mono-xs   { font-family: var(--font-mono); font-size: var(--font-size-xs); }
+.mono-base { font-family: var(--font-mono); font-size: var(--font-size-base); }
+.mono-md   { font-family: var(--font-mono); font-size: var(--font-size-md); }
+.mono-lg   { font-family: var(--font-mono); font-size: var(--font-size-lg); }
+.mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
+.mono-2xl  { font-family: var(--font-mono); font-size: var(--font-size-2xl); }
+.text-2xs  { font-size: var(--font-size-2xs); }
+.text-xs   { font-size: var(--font-size-xs); }
+.text-base { font-size: var(--font-size-base); }
+.text-md   { font-size: var(--font-size-md); }
+.text-lg   { font-size: var(--font-size-lg); }
+.text-xl   { font-size: var(--font-size-xl); }
+.text-2xl  { font-size: var(--font-size-2xl); }
+.text-secondary    { color: var(--text-secondary); }
+.text-muted        { color: var(--text-muted); }
+.text-accent       { color: var(--accent); }
+.text-accent-hover { color: var(--accent-hover); }
+.d-flex         { display: flex; }
+.d-grid         { display: grid; }
+.d-inline-block { display: inline-block; }
+.d-block        { display: block; }
+.flex-center    { display: flex; align-items: center; }
+.align-start    { align-items: flex-start; }
+.uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
+.font-semibold { font-weight: var(--bold); }
+.chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
+.gap-half { gap: var(--space-px); }
+.gap-1    { gap: var(--space-1); }
+.gap-1-5  { gap: var(--space-1-5); }
+.gap-2    { gap: var(--space-2); }
+.gap-2-5  { gap: var(--space-2-5); }
+.gap-3    { gap: var(--space-3); }
+.gap-4    { gap: var(--space-4); }
+.gap-5    { gap: var(--space-5); }
+.gap-6    { gap: var(--space-6); }
+.gap-8    { gap: var(--space-8); }
+.gap-16   { gap: var(--space-16); }
+.w-full   { width: 100%; }
+.min-w-120 { min-width: 120px; }
+.m-0    { margin: 0; }
+.ml-1   { margin-left: var(--space-1); }
+.ml-auto { margin-left: auto; }
+.mr-1   { margin-right: var(--space-1); }
+.mb-0   { margin-bottom: 0; }
+.mb-1   { margin-bottom: var(--space-1); }
+.mb-1-5 { margin-bottom: var(--space-1-5); }
+.mb-2   { margin-bottom: var(--space-2); }
+.mb-2-5 { margin-bottom: var(--space-2-5); }
+.mb-3   { margin-bottom: var(--space-3); }
+.mb-4   { margin-bottom: var(--space-4); }
+.mb-5   { margin-bottom: var(--space-5); }
+.mb-6   { margin-bottom: var(--space-6); }
+.mt-0-5 { margin-top: var(--space-0-5); }
+.mt-1   { margin-top: var(--space-1); }
+.mt-2   { margin-top: var(--space-2); }
+.mt-3   { margin-top: var(--space-3); }
+.mt-4   { margin-top: var(--space-4); }
+.my-2   { margin-top: var(--space-2); margin-bottom: var(--space-2); }
+.p-4    { padding: var(--space-4); }
+.p-4-5  { padding: var(--space-4) var(--space-5); }
+.p-6    { padding: var(--space-6); }
+.py-2   { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+.text-center { text-align: center; }
+.text-right  { text-align: right; }
+.text-left   { text-align: left; }
+.flex-wrap          { display: flex; flex-wrap: wrap; }
+.flex-col           { display: flex; flex-direction: column; }
+.inline-flex-center { display: inline-flex; align-items: center; }
+.shrink-0           { flex-shrink: 0; }
+.flex-1             { flex: 1; }
+.justify-between    { justify-content: space-between; }
+.justify-center     { justify-content: center; }
+.contents { display: contents; }
+.opacity-50 { opacity: 0.5; }
+.list-none { list-style: none; }
+.valign-middle { vertical-align: middle; }
+.table-collapse { border-collapse: collapse; }
+.sr-only {
+.font-medium { font-weight: var(--light-bold); }
+.font-bold   { font-weight: 700; }
+.italic      { font-style: italic; }
+.nowrap      { white-space: nowrap; }
+.truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.break-all { word-break: break-all; }
+.leading-normal  { line-height: 1.5; }
+.leading-relaxed { line-height: 1.6; }
+.pt-2 { padding-top: var(--space-2); }
+.pt-3 { padding-top: var(--space-3); }
+.form-select { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.btn-reset { background: none; border: none; padding: 0; }
+.btn-xs { border: 1px solid var(--border); padding: var(--space-1-5) var(--space-3); border-radius: var(--radius); }
+.btn-expand { padding: var(--space-px) var(--space-1-5); }
+.expand-chevron {
+.expand-chevron--open {
+.text-healthy  { color: var(--status-healthy); }
+.text-warning  { color: var(--status-warning); }
+.text-critical { color: var(--status-critical); }
+.text-primary  { color: var(--text-primary); }
+.surface-elevated { background: var(--bg-elevated); border: 1px solid var(--border); }
+.surface-elevated-card {
+.link-accent { color: var(--accent); text-decoration: none; }
+.cell-pad      { padding: var(--space-1) var(--space-2-5); }
+.cell-pad-wide { padding: var(--space-1) var(--space-3); }
+.border-b        { border-bottom: 1px solid var(--border); }
+.border-b-subtle { border-bottom: 1px solid var(--border-subtle); }
+.border-t        { border-top: 1px solid var(--border); }
+.chip-badge {
+.chip-accent {
+.chip-accent-muted {
+.chip-healthy {
+.dot-sm,
+.dot-sm { width: 8px; height: 8px; }
+.dot-xs { width: 6px; height: 6px; }
+.badge-warning {
+.section-rail {
+.workflow-node {
+.workflow-node__label {
+.workflow-node__score {
+.workflow-node__meta,
+.workflow-node__meta { margin-top: var(--space-1); }
+.workflow-node__error {
+.workflow-fallback {
+.workflow-fallback__title {
+.workflow-fallback__subtitle {
+.workflow-fallback__empty {
+.workflow-oversize {
+.workflow-oversize__heading {
+.workflow-oversize__note {
+.workflow-oversize__list {
+.workflow-tabs {
+.workflow-tab {
+.workflow-tab[aria-selected='true'] {
+.shortcut-row {
+.kbd-chip {
 
 
 

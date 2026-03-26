@@ -1,3 +1,66 @@
+9c64a2d 2026-03-26 refactor(ui): replace static inline styles in MetricCompare and Sparkline
+  src/theme.css
+
+01233d5 2026-03-26 refactor(shortcut-overlay): replace inline styles with shortcut-row and kbd-chip CSS classes
+  src/theme.css
+
+6ec68ec 2026-03-26 refactor(pipeline-page): replace T2 stage inline styles with t2-stage-notice/badge classes
+  src/theme.css
+
+5fffcc8 2026-03-26 refactor(sync): replace percentile/latency magic numbers with named constants
+  scripts/sync-to-kv.ts
+
+624f56d 2026-03-26 refactor(pages): replace static inline styles with CSS classes (text-critical, pt-2, form-select)
+  src/theme.css
+
+b8d3281 2026-03-26 refactor(ui): replace inline display/align styles with CSS utility classes
+  src/theme.css
+
+27c6fe5 2026-03-26 refactor(evaluation-table): replace sort indicator inline styles with ml-1 text-2xs classes
+  src/theme.css
+
+4a610c9 2026-03-26 refactor(evaluation-table): replace expand button inline padding with btn-expand class
+  src/theme.css
+
+939242d 2026-03-26 refactor(evaluation-detail): replace inline button styles with btn-xs class
+  src/theme.css
+
+7d574ad 2026-03-26 refactor(turn-timeline): extract static card styles to turn-card CSS class
+  src/theme.css
+
+4788c91 2026-03-26 refactor(components): replace inline styles with CSS utilities across multiple components
+  src/theme.css
+
+bf9fd85 2026-03-26 refactor(issue-callout): replace inline styles with issue-callout CSS class using data-status
+  src/theme.css
+
+66cfab6 2026-03-26 refactor(agent-panel): replace inline width 30% with col-agent CSS class
+  src/theme.css
+
+43a9f5d 2026-03-26 refactor(constants): promote SCORE_ROUND_FACTOR to shared api-constants
+  scripts/sync-to-kv.ts
+
+813179b 2026-03-26 refactor(pages): clean up remaining inline styles in SessionDetailPage
+  src/theme.css
+
+5e9ebfb 2026-03-26 refactor(sync): add MAX_RECENT_SESSIONS constant and simplify ISO date sort
+  scripts/sync-to-kv.ts
+
+35e105d 2026-03-26 refactor(pages): replace inline styles in SessionDetailPage commit section and labels
+  src/theme.css
+
+16a61a0 2026-03-26 refactor(pages): replace inline styles in SessionDetailPage agent cards and issue list
+  src/theme.css
+
+dea5fe0 2026-03-26 refactor(pages): replace inline styles with CSS classes in SessionDetailPage header/vitals
+  src/theme.css
+
+f4389f8 2026-03-26 chore: regenerate repomix docs after simplification round 1
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 d5649a4 2026-03-26 refactor(sync-to-kv): hoist inline constants to module level, use arrayAvg helper
   scripts/sync-to-kv.ts
 
@@ -276,72 +339,4 @@ d4590d4 2026-03-16 fix(DR-L4): self-host Google Fonts to prevent IP leak to CDN
   scripts/sync-to-kv.ts
 
 6a661fc 2026-03-16 fix(DR-L6,L7,L8): clean up SPA fallback tests and fix /api guard
-  worker/index.ts
-
-5771486 2026-03-16 fix(AGENTS-404): add SPA fallback for client-side routes on deployed worker
-  worker/index.ts
-
-8e27662 2026-03-16 feat(FE-R1-UI): adaptive score color bands with calibration support
-  worker/index.ts
-
-a065d42 2026-03-11 fix(test): change const to let for mutated maxConcurrent/current in judge-evaluations
-  scripts/__tests__/judge-evaluations.test.ts
-
-01819df 2026-03-11 fix(review): address high/medium code review findings
-  scripts/sync-to-kv.ts
-
-30d3f1b 2026-03-11 fix(scripts): compute previous-period trend for metric detail KV entries
-  scripts/sync-to-kv.ts
-
-01de7ff 2026-03-10 chore: update wrangler 4.65->4.72, gitignore cleanup, backlog reset
-  package-lock.json
-
-b2c36d5 2026-03-10 chore(docs): regenerate repomix snapshot to fix invalid TIME_MS const syntax (L1)
-  docs/repomix/docs-compressed.xml
-  docs/repomix/docs.xml
-
-049169e 2026-03-10 fix(worker): align degradation-signals fallback shape and document KV key
-  worker/index.ts
-
-5f61110 2026-03-10 feat(worker): add GET /api/degradation-signals route (R5-API)
-  worker/index.ts
-
-90e3a14 2026-03-06 chore(docs): update repomix snapshot and kv-sync coverage
-  docs/repomix/docs.xml
-
-e647e7e 2026-03-06 fix(H1): broaden backfill pre-filter to check all seed metrics
-  scripts/__tests__/judge-evaluations.test.ts
-  scripts/judge-evaluations.ts
-
-1c623c5 2026-03-06 fix dashboard imports for toolkit dist paths
-  src/__tests__/dr13-coverage.test.tsx
-
-73c2da5 2026-03-06 fix(tests): repair TIME_MS/constants imports and stabilize toxic-cell assertion
-  scripts/__tests__/judge-evaluations.test.ts
-  scripts/sync-to-kv.ts
-
-ad5f0c3 2026-03-03 (feat) update kv-sync for flexibility
-  docs/repomix/docs-compressed.xml
-  docs/repomix/docs.xml
-  src/theme.css
-
-b8d83e5 2026-03-03 fix(sync): respect --days flag and raise span query limit for sessions
-  scripts/sync-to-kv.ts
-
-2446f81 2026-03-02 feat(judge): add --backfill flag to generate trace-based seed evaluations
-  scripts/judge-evaluations.ts
-  scripts/sync-to-kv.ts
-
-9435af6 2026-03-02 feat(sync-to-kv): wire R5 degradation signals after trend loop
-  scripts/sync-to-kv.ts
-
-97158fb 2026-03-02 refactor(theme,pages): consolidate magic numbers and table base styles
-  src/theme.css
-
-1c7e799 2026-03-02 refactor(components): consolidate 5 small components into shared modules
-  docs/repomix/docs-compressed.xml
-  docs/repomix/docs.xml
-
-7cc9729 2026-03-02 fix(worker): add missing /api/metrics/:name/evaluations route and redeploy
-  scripts/sync-to-kv.ts
   worker/index.ts
