@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
+import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
@@ -91,7 +91,7 @@ agentRoutes.get('/agents', async (c) => {
       acc[name].invocations++;
       // Bucket into daily counts
       if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / 1_000_000));
+        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) acc[name].dailyCounts[idx]++;
       }

@@ -47,3 +47,6 @@ export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 't
 
 /** Sanitized log entry shape derived from LOG_SUMMARY_FIELDS allowlist. */
 export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+
+/** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
+export const NANOS_TO_MS = 1_000_000;
