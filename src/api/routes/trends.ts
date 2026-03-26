@@ -107,7 +107,6 @@ trendRoutes.get('/trends/:name', async (c) => {
       }
     }
 
-    // Compute per-bucket aggregations and trends
     const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
     let previousTrend: MetricTrend | undefined;
 
@@ -117,7 +116,6 @@ trendRoutes.get('/trends/:name', async (c) => {
       const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
       const count = scores.length;
 
-      // Compute previous bucket aggregations for trend
       const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
         ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
         : undefined;
@@ -142,7 +140,6 @@ trendRoutes.get('/trends/:name', async (c) => {
       };
     });
 
-    // Overall percentile distribution across the full period
     const allScores = extractFiniteScores(evaluations);
     const overallPercentiles = computePercentileDistribution(allScores);
 
