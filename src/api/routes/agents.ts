@@ -33,7 +33,7 @@ agentRoutes.get('/agents', async (c) => {
     // Build date bucket keys for the period (YYYY-MM-DD strings)
     const dateBuckets: string[] = [];
     for (let d = 0; d < periodDays; d++) {
-      const day = new Date(now.getTime() - (periodDays - 1 - d) * 24 * 60 * 60 * 1000);
+      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
       dateBuckets.push(day.toISOString().split('T')[0]);
     }
     const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
