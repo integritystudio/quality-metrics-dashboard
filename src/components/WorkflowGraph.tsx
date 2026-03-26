@@ -15,6 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { fmtDuration } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 const NODE_WIDTH = 220;
@@ -140,9 +141,7 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
         {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
       </div>
       <div className="workflow-node__duration">
-        {d.durationMs < 1000
-          ? `${d.durationMs}ms`
-          : `${(d.durationMs / 1000).toFixed(1)}s`}
+        {fmtDuration(d.durationMs)}
       </div>
       {d.hasError && <div className="workflow-node__error">Error</div>}
       <Handle type="target" position={Position.Top} />

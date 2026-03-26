@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { plural } from '../lib/quality-utils.js';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
 import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -91,7 +91,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
             </div>
             {node.durationMs != null && (
               <span className="mono-xs text-secondary nowrap">
-                {node.durationMs < 1000 ? `${node.durationMs.toFixed(0)}ms` : `${(node.durationMs / 1000).toFixed(2)}s`}
+                {fmtDuration(node.durationMs, 2)}
               </span>
             )}
           </div>

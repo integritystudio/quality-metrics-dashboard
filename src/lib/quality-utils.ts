@@ -210,6 +210,11 @@ export function shortPath(fullPath: string): string {
   return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
 }
 
+/** Format a duration in milliseconds as a human-readable string (e.g. "42ms" or "1.5s"). */
+export function fmtDuration(ms: number, secDecimals = 1): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
+}
+
 export function fmtBytes(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
