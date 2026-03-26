@@ -4,9 +4,11 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus } from '../../lib/constants.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION } from '../../lib/constants.js';
 import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+
+const LIMIT_AGENT_SPANS = 1000;
 
 export const agentRoutes = new Hono();
 
@@ -25,7 +27,7 @@ agentRoutes.get('/agents', async (c) => {
       attributeFilter: { 'hook.name': 'agent-post-tool' },
       startDate,
       endDate,
-      limit: 1000,
+      limit: LIMIT_AGENT_SPANS,
     });
 
     // Build date bucket keys for the period (YYYY-MM-DD strings)
@@ -106,9 +108,9 @@ agentRoutes.get('/agents', async (c) => {
       for (const [metric, scores] of Object.entries(evalMetrics)) {
         const sorted = [...scores].sort((a, b) => a - b);
         evalSummary[metric] = {
-          avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(3),
-          min: +sorted[0].toFixed(3),
-          max: +sorted[sorted.length - 1].toFixed(3),
+          avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+          min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+          max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
           count: sorted.length,
         };
       }
@@ -120,7 +122,7 @@ agentRoutes.get('/agents', async (c) => {
         agentName,
         invocations: d.invocations,
         errors: d.errors,
-        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(3) : 0,
+        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
         rateLimitCount: d.rateLimitCount,
         avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
         sessionCount: d.sessions.size,  // total unique sessions (invariant: >= sessionIds.length)
