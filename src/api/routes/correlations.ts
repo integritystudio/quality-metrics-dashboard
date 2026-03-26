@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { computeCorrelationMatrix } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 export const correlationRoutes = new Hono();
 
@@ -13,10 +13,8 @@ correlationRoutes.get('/correlations', async (c) => {
   }
 
   try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['30d'];
-    const start = new Date(now.getTime() - periodMs);
-    const evaluationsByMetric = await loadEvaluationsByMetric(start.toISOString(), now.toISOString());
+    const { start, end } = computePeriodDates(periodResult.data);
+    const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
 
     const metricTimeSeries = new Map<string, number[]>();
     const metricNames: string[] = [];

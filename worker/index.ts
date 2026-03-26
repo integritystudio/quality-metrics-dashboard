@@ -273,8 +273,8 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
 
   let rows = data.rows;
   if (scoreLabel) rows = rows.filter((r: Record<string, unknown>) => r.label === scoreLabel);
-  if (sortBy === 'score_asc') rows.sort((a, b) => ((a.score as number) ?? 0) - ((b.score as number) ?? 0));
-  else if (sortBy === 'score_desc') rows.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0));
+  if (sortBy === 'score_asc') rows.sort((a, b) => (typeof a.score === 'number' ? a.score : 0) - (typeof b.score === 'number' ? b.score : 0));
+  else if (sortBy === 'score_desc') rows.sort((a, b) => (typeof b.score === 'number' ? b.score : 0) - (typeof a.score === 'number' ? a.score : 0));
 
   const total = rows.length;
   const page = rows.slice(offset, offset + limit);

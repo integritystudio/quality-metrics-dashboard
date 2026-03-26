@@ -194,10 +194,6 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
   },
 };
 
-export function getRoleFeatureConfig(role: FeatureRoleType): RoleFeatureConfig {
-  return ROLE_FEATURE_CONFIG[role];
-}
-
 // -- Path/byte formatters ---------------------------------------------------
 
 export function shortPath(fullPath: string): string {

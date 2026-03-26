@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useRoute } from 'wouter';
 import {
-  getRoleFeatureConfig,
+  ROLE_FEATURE_CONFIG,
   type FeatureRoleType,
   type RoleFeatureConfig,
 } from '../lib/quality-utils.js';
@@ -34,7 +34,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, [roleName]);
 
   const value = useMemo<RoleContextValue>(() => {
-    const config = getRoleFeatureConfig(role);
+    const config = ROLE_FEATURE_CONFIG[role];
     return {
       role,
       config,

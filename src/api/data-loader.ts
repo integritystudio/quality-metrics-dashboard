@@ -124,38 +124,19 @@ export async function loadEvaluationsByTraceIds(
   return all;
 }
 
-export async function loadTracesByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-) {
+function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryTracesTool({
-    traceId,
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_TRACES,
-  });
-  return result.traces;
+  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
 }
 
-export async function loadTracesBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-) {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryTracesTool({
-    attributeFilter: { 'session.id': sessionId },
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_TRACES,
-  });
-  return result.traces;
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
 }
 
 export async function loadLogsByTraceId(

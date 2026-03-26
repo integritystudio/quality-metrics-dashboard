@@ -13,7 +13,7 @@ import {
 } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD } from '../api-constants.js';
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
@@ -176,15 +176,13 @@ trendRoutes.get('/trends', async (c) => {
   }
 
   try {
-    const now = new Date();
     const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
+    const { start, end } = computePeriodDates(period);
 
     const metricNames = Object.keys(QUALITY_METRICS);
     const summaries = await Promise.all(
       metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
+        const evals = await loadEvaluationsForMetric(name, start, end);
         const scores = evals
           .map(e => e.scoreValue)
           .filter((v): v is number => v != null && Number.isFinite(v));

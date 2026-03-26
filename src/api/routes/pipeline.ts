@@ -5,7 +5,7 @@ import {
 } from '../../../../dist/lib/quality/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 export const pipelineRoutes = new Hono();
 
@@ -23,15 +23,10 @@ pipelineRoutes.get('/pipeline', async (c) => {
   }
 
   try {
-    const now = new Date();
     const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
+    const { start, end } = computePeriodDates(period);
 
-    const evaluationsByMetric = await loadEvaluationsByMetric(
-      start.toISOString(),
-      now.toISOString(),
-    );
+    const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
 
     const dashboard = computeDashboardSummary(evaluationsByMetric);
     const pipeline = computePipelineView(evaluationsByMetric, dashboard);

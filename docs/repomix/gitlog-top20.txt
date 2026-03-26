@@ -1,3 +1,10 @@
+55cf6e3 2026-03-26 docs(auth0): mark migration complete, add tenant deploy script
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  docs/roadmap/users.md
+
 6a53313 2026-03-26 feat(auth): migrate frontend and worker auth from Supabase to Auth0
   worker/index.ts
 
@@ -326,9 +333,4 @@ f1d36ee 2026-03-01 fix(theme): add info token rule for data-status attribute
   src/theme.css
 
 ea59b38 2026-03-01 refactor(theme): consolidate status color mapping with data-status attribute selectors (H1)
-  src/theme.css
-
-aaf11fa 2026-03-01 refactor(components): DRY consolidation — ScoreChip, EmptyState, ExpandChevron, symbols
-  docs/repomix/docs-compressed.xml
-  docs/repomix/docs.xml
   src/theme.css

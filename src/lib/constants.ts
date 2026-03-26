@@ -58,6 +58,12 @@ export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
 export const PERIOD_MS: Record<string, number> = Object.fromEntries(
   Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
 );
+/** Compute { start, end } ISO strings for a validated period key (e.g. '7d'). */
+export function computePeriodDates(period: string): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
 
 
 /** Percentage of events sampled for T2 LLM evaluation. */

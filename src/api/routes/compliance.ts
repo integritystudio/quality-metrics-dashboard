@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 export const complianceRoutes = new Hono();
 
@@ -17,11 +17,8 @@ complianceRoutes.get('/compliance/sla', async (c) => {
   }
 
   try {
-    const now = new Date();
     const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
-    const dates = { start: start.toISOString(), end: now.toISOString() };
+    const dates = computePeriodDates(period);
 
     const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
     const summary = computeDashboardSummary(evaluationsByMetric, undefined, dates);
@@ -47,14 +44,12 @@ complianceRoutes.get('/compliance/verifications', async (c) => {
   }
 
   try {
-    const now = new Date();
     const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
+    const { start, end } = computePeriodDates(period);
 
     const verifications = await loadVerifications({
-      startDate: start.toISOString(),
-      endDate: now.toISOString(),
+      startDate: start,
+      endDate: end,
     });
 
     return c.json({ period, count: verifications.length, verifications });

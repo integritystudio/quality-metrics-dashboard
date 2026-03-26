@@ -3,7 +3,7 @@ import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-met
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, InputKeySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { PeriodSchema, InputKeySchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 /** Filter out rule-based per-span evaluations; they have incompatible
  *  traceId granularity that inflates the coverage input universe.
@@ -42,15 +42,10 @@ coverageRoutes.get('/coverage', async (c) => {
   }
 
   try {
-    const now = new Date();
     const period = periodResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const start = new Date(now.getTime() - periodMs);
+    const { start, end } = computePeriodDates(period);
 
-    const allEvaluations = await loadEvaluationsByMetric(
-      start.toISOString(),
-      now.toISOString(),
-    );
+    const allEvaluations = await loadEvaluationsByMetric(start, end);
     const evaluationsByMetric = filterJudgeEvaluations(allEvaluations);
 
     const heatmap = computeCoverageHeatmap(evaluationsByMetric, {
