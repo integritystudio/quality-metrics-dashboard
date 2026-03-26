@@ -165,32 +165,46 @@ export async function signOut(): Promise<void> {
   notifyListeners(null, 'SIGNED_OUT');
 }
 
-export async function refreshSession(): Promise<SupabaseSession | null> {
-  const stored = readRawSession();
-  if (!stored?.refresh_token) return null;
+// In-flight refresh promise — coalesces concurrent callers (e.g. multiple tabs firing
+// the auto-refresh timer simultaneously) onto a single network request. Supabase rotates
+// the refresh token on first use, so a second concurrent call would consume a stale token
+// and trigger an unexpected sign-out.
+let refreshInFlight: Promise<SupabaseSession | null> | null = null;
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ refresh_token: stored.refresh_token }),
-    });
+export function refreshSession(): Promise<SupabaseSession | null> {
+  if (refreshInFlight) return refreshInFlight;
 
-    if (!res.ok) return clearSessionAndNotify();
+  refreshInFlight = (async () => {
+    const stored = readRawSession();
+    if (!stored?.refresh_token) return null;
 
-    const refreshBody: unknown = await res.json().catch(() => null);
-    if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ refresh_token: stored.refresh_token }),
+      });
 
-    const refreshed = sessionFromTokenResponse(refreshBody);
-    saveSession(refreshed);
-    notifyListeners(refreshed, 'TOKEN_REFRESHED');
-    return refreshed;
-  } catch {
-    return clearSessionAndNotify();
-  }
+      if (!res.ok) return clearSessionAndNotify();
+
+      const refreshBody: unknown = await res.json().catch(() => null);
+      if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
+
+      const refreshed = sessionFromTokenResponse(refreshBody);
+      saveSession(refreshed);
+      notifyListeners(refreshed, 'TOKEN_REFRESHED');
+      return refreshed;
+    } catch {
+      return clearSessionAndNotify();
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
 }
 
 export function onAuthStateChange(listener: AuthStateListener): () => void {
@@ -204,13 +218,22 @@ const AUTO_REFRESH_INTERVAL_MS = 30_000;
 const TOKEN_EXPIRY_BUFFER_S = 120;
 
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+/**
+ * Reference counter tracking active callers of startAutoRefresh.
+ * Guards against React Strict Mode double-mount and multiple AuthProvider
+ * instances leaking timers (CR-AUTH-1).
+ */
+let autoRefreshRefCount = 0;
 
 /**
  * Starts a background timer that proactively refreshes the session when the
  * access token is within TOKEN_EXPIRY_BUFFER_S seconds of expiry.
- * Safe to call multiple times — subsequent calls are no-ops if already running.
+ * Reference-counted: each call to startAutoRefresh must be paired with a
+ * call to stopAutoRefresh. The timer starts only on the first caller and
+ * stops only when the last caller releases it.
  */
 export function startAutoRefresh(): void {
+  autoRefreshRefCount++;
   if (autoRefreshTimer !== null) return;
   autoRefreshTimer = setInterval(() => {
     const session = cachedSession ?? readRawSession();
@@ -223,10 +246,12 @@ export function startAutoRefresh(): void {
 }
 
 /**
- * Stops the background auto-refresh timer.
+ * Releases one reference to the auto-refresh timer.
+ * The timer is cleared only when the reference count reaches zero.
  */
 export function stopAutoRefresh(): void {
-  if (autoRefreshTimer !== null) {
+  autoRefreshRefCount = Math.max(0, autoRefreshRefCount - 1);
+  if (autoRefreshRefCount === 0 && autoRefreshTimer !== null) {
     clearInterval(autoRefreshTimer);
     autoRefreshTimer = null;
   }
