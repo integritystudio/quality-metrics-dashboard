@@ -566,9 +566,12 @@ app.get('/api/admin/users', async (c) => {
 
   const users = [];
   for (const raw of rawUsers) {
+    const r = raw as Record<string, unknown>;
     const parsed = AdminUserSchema.safeParse({
-      ...(raw as object),
-      roles: rolesByUser.get((raw as { id: string }).id) ?? [],
+      id: r['id'],
+      email: r['email'],
+      created_at: r['created_at'],
+      roles: rolesByUser.get(r['id'] as string) ?? [],
     });
     if (parsed.success) users.push(parsed.data);
   }

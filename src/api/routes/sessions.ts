@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import {
   COMMIT_BODY_START_LINE_INDEX,
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
@@ -97,7 +97,7 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
 sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
+    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
   }
   const startDate = c.req.query('startDate');
   const endDate = c.req.query('endDate');

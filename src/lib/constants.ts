@@ -21,6 +21,9 @@ export const enum ErrorMessage {
   InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
   InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
   InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
+  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
+  InvalidSessionIdFormat = 'Invalid sessionId format',
+  InvalidTraceId = 'Invalid traceId',
 }
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
 export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');

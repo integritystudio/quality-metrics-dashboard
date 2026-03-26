@@ -38,7 +38,7 @@ coverageRoutes.get('/coverage', async (c) => {
   }
   const inputKeyResult = InputKeySchema.safeParse(c.req.query('inputKey'));
   if (!inputKeyResult.success) {
-    return c.json({ error: 'Invalid inputKey. Must be traceId or sessionId.' }, HttpStatus.BadRequest);
+    return c.json({ error: ErrorMessage.InvalidInputKey }, HttpStatus.BadRequest);
   }
 
   try {
