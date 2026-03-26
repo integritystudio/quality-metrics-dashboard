@@ -82,7 +82,7 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
     <>
       <div
         className="flex-center gap-2 border-b span-row"
-        style={{ paddingLeft: depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING }}
+        style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
       >
         <span className="text-base span-status-icon" data-error={isError || undefined}>
           {STATUS_ICONS[statusCode]}
