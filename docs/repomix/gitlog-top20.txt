@@ -1,3 +1,8 @@
+28c5f5d 2026-03-26 chore: regenerate repomix docs
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 8de0763 2026-03-26 refactor(scripts): add EVAL_SCORE_PRECISION constant for toFixed(4) pattern
   scripts/judge-evaluations.ts
 
@@ -334,7 +339,4 @@ fedb21d 2026-03-20 refactor(auth): simplify phase 1 implementation per code-simp
   worker/index.ts
 
 e7afb28 2026-03-20 fix(types+worker): add authUserId and appUserId to MeResponse
-  worker/index.ts
-
-11f4c53 2026-03-20 fix(worker): change /api/me from POST to GET
   worker/index.ts
