@@ -2,7 +2,7 @@
 
 **Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
 **Date**: 2026-03-26
-**Status**: Code implementation complete (2026-03-26). Manual Auth0 tenant setup and deployment remain.
+**Status**: Code + tenant setup complete (2026-03-26). Worker secret provisioning and deployment remain.
 **Parent**: [`docs/roadmap/users.md`](users.md) (Phase 4 — Auth0 canonical decision)
 
 ---
@@ -21,8 +21,8 @@ Supabase Auth (JWT verification via `/auth/v1/user`) has been replaced with Auth
 
 | Task | File(s) | Status |
 |------|---------|--------|
-| Auth0 tenant setup | Auth0 dashboard | [ ] |
-| Auth0 Post-Login Action | Auth0 dashboard | [ ] |
+| Auth0 tenant setup | `.auth0_cli`, `local/tenant.yaml` | ✅ Done (2026-03-26) |
+| Auth0 Post-Login Action | `.auth0_cli`, `local/actions/provision-user-and-enrich-token/code.js` | ✅ Done (2026-03-26) |
 | Worker: JWKS JWT verification | `worker/index.ts` | ✅ Done (2026-03-26) |
 | Worker: user lookup by `auth0_id` | `worker/index.ts` | ✅ Done (2026-03-26) |
 | Worker: activity logging via service role | `worker/index.ts` | ✅ Done (2026-03-26) |
@@ -38,7 +38,7 @@ Supabase Auth (JWT verification via `/auth/v1/user`) has been replaced with Auth
 | Tests: update worker auth mocks | `worker/__tests__/` | ✅ Done (2026-03-26) |
 | DB: fix permissions mismatch (`dashboard.*` format) | Supabase `public.roles` | ✅ Done (2026-03-26) |
 
-**Remaining**: Auth0 tenant setup (manual) → Post-Login Action deploy → provision worker secrets → set frontend `.env` → deploy both workers → delete `src/lib/supabase.ts`.
+**Remaining**: provision worker secrets → deploy both workers → smoke test → delete `src/lib/supabase.ts`.
 
 ---
 
@@ -556,9 +556,9 @@ Permissions are now stored in the DB as the source of truth and the Post-Login A
 - ✅ Worker changes: JWKS verification, `auth0_id` lookup, service-role activity logging (section 3)
 - ✅ Frontend changes: Auth0 SDK, `AuthContext`, `LoginPage`, `App.tsx` (section 4–5)
 - ✅ Tests: worker auth mocks updated, `auth-context-refresh` rewritten (section 8)
-- [ ] Auth0 tenant setup + Post-Login Action (section 1–2) — **manual, required before go-live**
+- ✅ Auth0 tenant setup + Post-Login Action (section 1–2) — deployed via `.auth0_cli` / `a0deploy` (2026-03-26)
+- ✅ Set frontend `.env`: generated from Doppler via `.auth0_cli` (2026-03-26)
 - [ ] Provision worker secrets: `wrangler secret put SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY` for both workers
-- [ ] Set frontend `.env`: `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`
 - [ ] Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`)
 - [ ] Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging
 - [ ] Monitor Supabase logs for auth errors for 48h
