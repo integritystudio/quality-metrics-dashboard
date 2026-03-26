@@ -237,15 +237,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     let tsMin = Infinity;
     let tsMax = -Infinity;
-    for (const ev of evaluations) {
-      const t = parseTimestamp(ev.timestamp);
-      if (t !== null) {
-        if (t < tsMin) tsMin = t;
-        if (t > tsMax) tsMax = t;
-      }
-    }
-    for (const l of logs) {
-      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
+    const tsItems = [
+      ...evaluations.map(ev => ev.timestamp),
+      ...logs.map(l => (l as { timestamp?: string }).timestamp),
+    ];
+    for (const ts of tsItems) {
+      const t = parseTimestamp(ts);
       if (t !== null) {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
