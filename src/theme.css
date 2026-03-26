@@ -819,6 +819,13 @@ details[open] > .cot-summary::before {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   padding: var(--space-2) var(--space-2-5);
+  min-width: 140px;
+}
+.agent-activity-table {
+  min-width: 640px;
+}
+.agent-inv-bar {
+  min-width: 48px;
 }
 
 /* Two-column equal grid */

@@ -4,7 +4,6 @@ import { scoreColor, fmtBytes, formatPercent } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
-  AGENT_TABLE_MIN_WIDTH, AGENT_BAR_MIN_WIDTH, AGENT_EVAL_CARD_MIN_WIDTH,
   SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
 } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
@@ -97,7 +96,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="data-table sla-table" style={{ minWidth: AGENT_TABLE_MIN_WIDTH }}>
+      <table className="data-table sla-table agent-activity-table">
         <thead>
           <tr>
             <th className="col-agent">Agent</th>
@@ -152,7 +151,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       <span className="mono-xs" style={{ minWidth: 'var(--space-8)' }}>
                         {agent.invocations}
                       </span>
-                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1" style={{ minWidth: AGENT_BAR_MIN_WIDTH }} />
+                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
                     </div>
                   </td>
 
@@ -284,7 +283,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
         {metrics.map(([name, m]) => {
           const barColor = scoreColor(m.avg);
           return (
-            <div key={name} className="metric-card-compact" style={{ minWidth: AGENT_EVAL_CARD_MIN_WIDTH }}>
+            <div key={name} className="metric-card-compact">
               <div className="text-secondary mb-1 text-xs truncate">
                 {name}
               </div>
