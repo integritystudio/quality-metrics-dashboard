@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { useAgentSession } from '../hooks/useAgentSession.js';
-import { WorkflowGraphView } from '../components/WorkflowGraph.js';
+import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
@@ -24,8 +24,9 @@ export function WorkflowPage({ sessionId }: { sessionId: string }) {
             </span>
           </DetailPageHeader>
           <div className="card">
-            <WorkflowGraphView
+            <AgentWorkflowView
               graph={data.graph}
+              evaluation={data.evaluation}
               onNodeClick={handleNodeClick}
             />
           </div>

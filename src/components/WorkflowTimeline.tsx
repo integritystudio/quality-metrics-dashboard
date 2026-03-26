@@ -1,0 +1,317 @@
+import { AGENT_PALETTE } from '../lib/constants.js';
+import { scoreColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult } from '../types.js';
+import type { HandoffEvaluation } from '../types.js';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const LANE_HEIGHT = 64;
+const LANE_PADDING_TOP = 12;
+const LANE_PADDING_BOTTOM = 12;
+const TURN_BLOCK_HEIGHT = 32;
+const TURN_BLOCK_MIN_WIDTH = 40;
+const TURN_BLOCK_GAP = 6;
+const LABEL_WIDTH = 120;
+const HANDOFF_MARKER_RADIUS = 7;
+const HEADER_HEIGHT = 28;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function agentColor(agentName: string, agentNames: string[]): string {
+  const idx = agentNames.indexOf(agentName);
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+}
+
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  /** Index of the lane (display order). */
+  laneIndex: number;
+}
+
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[] {
+  return agentNames.map((name, laneIndex) => ({
+    agentName: name,
+    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
+    laneIndex,
+  }));
+}
+
+/** Return the 1-based display index of a handoff in the flat turn list. */
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null {
+  // Find first turn by the target agent that follows any turn by the source agent.
+  let sawSource = false;
+  for (const t of turns) {
+    const agent = t.agentName ?? 'unknown';
+    if (agent === handoff.sourceAgent) sawSource = true;
+    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+
+function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
+  const barColor = scoreColor(turn.relevance);
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(2)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
+  return (
+    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
+      {/* Main block */}
+      <rect
+        width={width}
+        height={TURN_BLOCK_HEIGHT}
+        rx={4}
+        fill={color}
+        fillOpacity={0.15}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      {/* Relevance bar at top */}
+      <rect
+        width={Math.max(2, width * turn.relevance)}
+        height={4}
+        rx={2}
+        fill={barColor}
+        fillOpacity={0.85}
+      />
+      {/* Error indicator */}
+      {turn.hasError && (
+        <rect
+          x={width - 6}
+          width={4}
+          height={TURN_BLOCK_HEIGHT}
+          rx={2}
+          fill="var(--status-critical)"
+          fillOpacity={0.85}
+        />
+      )}
+      {/* Turn index label */}
+      <text
+        x={width / 2}
+        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        textAnchor="middle"
+        fontSize={10}
+        fill={color}
+        fontFamily="var(--font-mono)"
+      >
+        {turn.turnIndex}
+      </text>
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export interface WorkflowTimelineProps {
+  turns: TurnLevelResult[];
+  handoffs?: HandoffEvaluation[];
+  agentNames: string[];
+}
+
+export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+
+  const lanes = buildLanes(turns, agentNames);
+  const totalTurns = turns.length;
+
+  // Each turn gets equal width
+  const availableWidth = totalTurns * (TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP);
+  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
+  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
+
+  // Map turnIndex → x offset within the tracks area
+  const turnX = (turnIndex: number): number =>
+    LABEL_WIDTH + turnIndex * (TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP) + TURN_BLOCK_GAP;
+
+  // Y center of a lane (for handoff markers)
+  const laneY = (laneIndex: number): number =>
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+
+  return (
+    <div
+      className="overflow-x-auto"
+      role="img"
+      aria-label={`Workflow timeline: ${agentNames.length} agents, ${totalTurns} turns`}
+    >
+      <svg
+        width={svgWidth}
+        height={svgHeight}
+        style={{ display: 'block', minWidth: svgWidth }}
+      >
+        {/* Column header: turn indices */}
+        <g>
+          {turns.map(t => (
+            <text
+              key={t.turnIndex}
+              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
+              y={HEADER_HEIGHT - 8}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--text-muted)"
+              fontFamily="var(--font-mono)"
+            >
+              {t.turnIndex}
+            </text>
+          ))}
+        </g>
+
+        {/* Lanes */}
+        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
+          const color = agentColor(agentName, agentNames);
+          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
+
+          return (
+            <g key={agentName}>
+              {/* Lane background */}
+              <rect
+                x={0}
+                y={laneTop}
+                width={svgWidth}
+                height={LANE_HEIGHT}
+                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
+                fillOpacity={0.5}
+              />
+
+              {/* Lane separator */}
+              <line
+                x1={0}
+                y1={laneTop}
+                x2={svgWidth}
+                y2={laneTop}
+                stroke="var(--border-subtle)"
+                strokeWidth={1}
+              />
+
+              {/* Agent label */}
+              <text
+                x={LABEL_WIDTH - 8}
+                y={laneTop + LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2 + 4}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight={600}
+                fill={color}
+                fontFamily="var(--font-mono)"
+              >
+                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+              </text>
+
+              {/* Turn blocks */}
+              {laneTurns.map(turn => (
+                <TurnBlock
+                  key={turn.turnIndex}
+                  turn={turn}
+                  color={color}
+                  width={TURN_BLOCK_MIN_WIDTH}
+                  x={turnX(turn.turnIndex)}
+                  y={laneTop + LANE_PADDING_TOP}
+                />
+              ))}
+            </g>
+          );
+        })}
+
+        {/* Bottom border */}
+        <line
+          x1={0}
+          y1={svgHeight}
+          x2={svgWidth}
+          y2={svgHeight}
+          stroke="var(--border-subtle)"
+          strokeWidth={1}
+        />
+
+        {/* Handoff markers — drawn on top of lanes */}
+        {handoffs.map((h, i) => {
+          const turnIndex = findHandoffTurnIndex(h, turns);
+          if (turnIndex == null) return null;
+
+          const sourceLaneIdx = agentNames.indexOf(h.sourceAgent);
+          const targetLaneIdx = agentNames.indexOf(h.targetAgent);
+          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
+
+          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
+          const y1 = laneY(sourceLaneIdx);
+          const y2 = laneY(targetLaneIdx);
+          const midY = (y1 + y2) / 2;
+
+          const handoffColor = h.correctTarget
+            ? 'var(--status-healthy)'
+            : 'var(--status-warning)';
+
+          return (
+            <g
+              key={`handoff-${i}`}
+              role="img"
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(2)}`}
+            >
+              {/* Connecting line */}
+              <line
+                x1={x}
+                y1={y1}
+                x2={x}
+                y2={y2}
+                stroke={handoffColor}
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                opacity={0.7}
+              />
+              {/* Score label at midpoint */}
+              <circle
+                cx={x}
+                cy={midY}
+                r={HANDOFF_MARKER_RADIUS}
+                fill="var(--bg-card)"
+                stroke={handoffColor}
+                strokeWidth={1.5}
+              />
+              <text
+                x={x}
+                y={midY + 4}
+                textAnchor="middle"
+                fontSize={8}
+                fill={handoffColor}
+                fontFamily="var(--font-mono)"
+                fontWeight={600}
+              >
+                {h.score.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Legend */}
+      <div className="flex-wrap gap-4 mt-2" style={{ paddingLeft: LABEL_WIDTH }}>
+        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
+        {handoffs.length > 0 && (
+          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
+        )}
+      </div>
+    </div>
+  );
+}
