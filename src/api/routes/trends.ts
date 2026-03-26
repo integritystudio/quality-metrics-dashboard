@@ -58,14 +58,15 @@ trendRoutes.get('/trends/:name', async (c) => {
 
     const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
 
+    // Pre-compute timestamps once; reuse for both range detection and bucketing.
+    const evWithTs = evaluations.map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }));
+    const validTs = evWithTs.filter(({ ts }) => Number.isFinite(ts));
+
     // Determine actual data range — auto-narrow if data is concentrated
-    const timestamps = evaluations
-      .map(e => new Date(e.timestamp).getTime())
-      .filter(Number.isFinite);
-    const dataMin = timestamps.length > 0 ? Math.min(...timestamps) : periodStart.getTime();
-    const dataMax = timestamps.length > 0 ? Math.max(...timestamps) : now.getTime();
+    const dataMin = validTs.length > 0 ? Math.min(...validTs.map(({ ts }) => ts)) : periodStart.getTime();
+    const dataMax = validTs.length > 0 ? Math.max(...validTs.map(({ ts }) => ts)) : now.getTime();
     const dataSpan = dataMax - dataMin;
-    const narrowed = timestamps.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
     const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
     const start = narrowed ? new Date(dataMin - pad) : periodStart;
     const end = narrowed ? new Date(dataMax + pad) : now;
@@ -87,8 +88,8 @@ trendRoutes.get('/trends/:name', async (c) => {
       });
     }
 
-    for (const ev of evaluations) {
-      const ts = new Date(ev.timestamp).getTime();
+    for (const { ev, ts } of evWithTs) {
+      if (!Number.isFinite(ts)) continue;
       const bucketIdx = Math.min(
         Math.floor((ts - start.getTime()) / bucketMs),
         bucketCount - 1,
