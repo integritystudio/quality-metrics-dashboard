@@ -1,7 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME, ErrorName } from '../lib/constants.js';
-import { useAuth } from '../contexts/AuthContext.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
 
 export interface SessionInfo {
   projectName: string;
@@ -132,34 +131,17 @@ export interface SessionDetailResponse {
   evaluations: EvaluationResult[];
 }
 
-export class SessionNotFoundError extends Error {
-  constructor(sessionId: string) {
-    super(`Session ${sessionId} has not been synced to the dashboard yet.`);
-    this.name = ErrorName.SessionNotFound;
-  }
-}
-
 export function useSessionDetail(sessionId: string | undefined) {
-  const { getAccessToken } = useAuth();
-  return useQuery<SessionDetailResponse>({
-    queryKey: ['session-detail', sessionId],
-    queryFn: async () => {
-      let token: string;
-      try {
-        token = await getAccessToken();
-      } catch {
-        throw new Error('AUTH_REQUIRED');
-      }
-      const res = await fetch(`${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 404) throw new SessionNotFoundError(sessionId!);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      return res.json();
+  return useApiQuery<SessionDetailResponse>(
+    ['session-detail', sessionId],
+    () => `${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`,
+    {
+      enabled: !!sessionId,
+      staleTime: STALE_TIME.DETAIL,
+      retry: (failureCount, error) =>
+        error instanceof Error && error.message.startsWith('API error: 404')
+          ? false
+          : failureCount < 2,
     },
-    enabled: !!sessionId,
-    staleTime: STALE_TIME.DETAIL,
-    retry: (failureCount, error) =>
-      error instanceof SessionNotFoundError ? false : failureCount < 2,
-  });
+  );
 }

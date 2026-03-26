@@ -1,10 +1,5 @@
 import { z } from 'zod';
 
-/** Named error identifiers for custom error classes. */
-export const enum ErrorName {
-  SessionNotFound = 'SessionNotFoundError',
-}
-
 /** HTTP status codes used in API error responses. */
 export const enum HttpStatus {
   BadRequest = 400,

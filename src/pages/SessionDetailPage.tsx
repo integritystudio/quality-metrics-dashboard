@@ -1,6 +1,6 @@
 import { Link } from 'wouter';
 import { format } from 'date-fns';
-import { useSessionDetail, SessionNotFoundError } from '../hooks/useSessionDetail.js';
+import { useSessionDetail } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
 import { ScoreBadge } from '../components/ScoreBadge.js';
@@ -31,7 +31,7 @@ import {
 
 export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useSessionDetail(sessionId);
-  const isNotSynced = !isLoading && error instanceof SessionNotFoundError;
+  const isNotSynced = !isLoading && error instanceof Error && error.message.startsWith('API error: 404');
 
   if (isLoading || (!isNotSynced && error)) {
     return <PageShell isLoading={isLoading} error={error ?? null} skeletonHeight={SKELETON_HEIGHT_LG}>{null}</PageShell>;
