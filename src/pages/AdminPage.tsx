@@ -61,8 +61,8 @@ function UserRow({
 }: {
   user: AdminUser;
   availableRoles: AdminRole[];
-  onMutationStart: () => void;
-  onMutationEnd: () => void;
+  onMutationStart: () => string;
+  onMutationEnd: (id: string) => void;
 }) {
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,7 +76,7 @@ function UserRow({
     if (!selectedRoleId) return;
     setBusy(true);
     setError(null);
-    onMutationStart();
+    const mutationId = onMutationStart();
     try {
       const res = await adminFetch(`/api/admin/users/${user.id}/roles`, 'POST', { role_id: selectedRoleId });
       if (!res.ok) {
@@ -89,7 +89,7 @@ function UserRow({
       setError('Network error');
     } finally {
       setBusy(false);
-      onMutationEnd();
+      onMutationEnd(mutationId);
     }
   }
 
@@ -97,7 +97,7 @@ function UserRow({
     if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
     setBusy(true);
     setError(null);
-    onMutationStart();
+    const mutationId = onMutationStart();
     try {
       const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, 'DELETE');
       if (!res.ok) {
@@ -108,7 +108,7 @@ function UserRow({
       setError('Network error');
     } finally {
       setBusy(false);
-      onMutationEnd();
+      onMutationEnd(mutationId);
     }
   }
 
@@ -158,16 +158,21 @@ function UserRow({
 
 export function AdminPage() {
   const [refreshKey, setRefreshKey] = useState(0);
-  // Tracks in-flight mutations — refetch only after all concurrent mutations settle.
-  const pendingMutationsRef = useRef(0);
+  // CR-AUTH-2: replaced numeric counter with a Set of in-flight request IDs.
+  // A numeric counter gets stuck if a mutation throws before onMutationEnd;
+  // a Set is self-correcting — duplicate remove() calls are safe no-ops.
+  const pendingMutationsRef = useRef<Set<string>>(new Set());
+  const mutationIdRef = useRef(0);
 
-  const onMutationStart = useCallback(() => {
-    pendingMutationsRef.current += 1;
+  const onMutationStart = useCallback((): string => {
+    const id = String(++mutationIdRef.current);
+    pendingMutationsRef.current.add(id);
+    return id;
   }, []);
 
-  const onMutationEnd = useCallback(() => {
-    pendingMutationsRef.current -= 1;
-    if (pendingMutationsRef.current === 0) {
+  const onMutationEnd = useCallback((id: string) => {
+    pendingMutationsRef.current.delete(id);
+    if (pendingMutationsRef.current.size === 0) {
       setRefreshKey((k) => k + 1);
     }
   }, []);
