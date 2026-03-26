@@ -972,12 +972,13 @@ details[open] > .cot-summary::before {
   height: 100%;
   transition: var(--transition-bar);
 }
-.threshold-bar-fill { border-radius: var(--radius-bar); background: var(--status-healthy); }
+.threshold-bar-fill { width: var(--bar-fill-width); border-radius: var(--radius-bar); background: var(--status-healthy); }
 .threshold-bar-fill[data-violating] { background: var(--status-critical); }
 .variance-bar-fill  { border-radius: var(--radius-xs); }
 .threshold-bar-marker {
   position: absolute;
   top: -3px;
+  left: var(--bar-marker-left);
   width: 2px;
   height: 12px;
   background: var(--text-primary);

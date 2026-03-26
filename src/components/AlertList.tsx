@@ -1,4 +1,5 @@
 import { Link } from 'wouter';
+import type { CSSProperties } from 'react';
 import { formatScore } from '../lib/quality-utils.js';
 import type { TriggeredAlert } from '../types.js';
 
@@ -35,11 +36,11 @@ function ThresholdBar({ actual, threshold, direction }: {
       <div
         className="threshold-bar-fill"
         data-violating={isViolating || undefined}
-        style={{ width: `${actualPct}%` }}
+        style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
       />
       <div
         className="threshold-bar-marker"
-        style={{ left: `${thresholdPct}%` }}
+        style={{ '--bar-marker-left': `${thresholdPct}%` } as CSSProperties}
         title={`Threshold: ${formatScore(threshold)}`}
       />
     </div>
