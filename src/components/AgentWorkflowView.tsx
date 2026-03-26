@@ -4,10 +4,6 @@ import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type WorkflowTab = 'dag' | 'timeline';
 
 interface AgentWorkflowViewProps {
@@ -17,20 +13,12 @@ interface AgentWorkflowViewProps {
   height?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const TAB_LABELS: Record<WorkflowTab, string> = {
   dag: 'DAG',
   timeline: 'Timeline',
 };
 
 const TABS: WorkflowTab[] = ['dag', 'timeline'];
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function AgentWorkflowView({
   graph,
