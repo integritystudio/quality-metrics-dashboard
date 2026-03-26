@@ -1,11 +1,10 @@
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION } from './constants.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
 
 const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 const ATTR_AGENT_ID = 'gen_ai.agent.id';
 const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
-const SPAN_STATUS_ERROR = 2;
 /**
  * Epsilon tolerance (nanoseconds) for near-concurrent span edge inference.
  * Spans whose end and start differ by less than this value are treated as
@@ -130,7 +129,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
       totalTokens,
       durationMs,
       turnCount: group.length,
-      hasError: group.some(s => s.status?.code === SPAN_STATUS_ERROR),
+      hasError: group.some(s => s.status?.code === OTEL_STATUS_ERROR_CODE),
     });
   }
 

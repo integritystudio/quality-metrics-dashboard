@@ -95,6 +95,9 @@ export const SCORE_CHIP_PRECISION = 2;
 /** Decimal places for formatted raw score values in formatScore. */
 export const SCORE_FORMAT_PRECISION = 4;
 
+/** OpenTelemetry span status code for errors. */
+export const OTEL_STATUS_ERROR_CODE = 2;
+
 /** React Query staleTime tiers (ms). */
 export const STALE_TIME = {
   /** Standard data queries (metrics, trends, coverage, compliance, pipeline, evaluations). */
