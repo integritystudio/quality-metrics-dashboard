@@ -114,7 +114,6 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       loadEvaluationsBySessionId(sessionId, startDate, endDate),
     ]);
 
-    // Single consolidated pass over spans — collects all per-span data structures.
     const traceIds = new Set<string>();
     let firstSessionStart: (typeof spans)[0] | undefined;
     let lastSessionStart: (typeof spans)[0] | undefined;
@@ -169,8 +168,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       incrementCount(spanBreakdown, s.name);
       const ms = s.durationMs ?? 0;
       if (ms > 0) {
-        if (!hookDurations[s.name]) hookDurations[s.name] = [];
-        hookDurations[s.name].push(ms);
+        (hookDurations[s.name] ??= []).push(ms);
       }
 
       const hasError = attr<boolean>(s, 'builtin.has_error') === true
@@ -277,7 +275,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       uncommittedAtStart: attr<number>(firstSessionStart, 'git.uncommitted') ?? 0,
     } : null;
 
-    const tokenProgression = tokenProgressionRaw.sort((a, b) => a.messages - b.messages);
+    const tokenProgression = tokenProgressionRaw.slice().sort((a, b) => a.messages - b.messages);
     const tokenTotals = {
       input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
       models: {} as Record<string, number>,
