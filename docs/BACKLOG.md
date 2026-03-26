@@ -14,6 +14,8 @@ Open items from code reviews and deferred work.
 | G5-D | Session list multi-agent badge (indicator on sessions with >1 agent) | P4 | impl-g5 Phase 5 |
 | G5-E | Bundle size spike — verify workflow-viz chunk with `npx vite-bundle-visualizer` | P3 | impl-g5 v2.0 |
 
+**Status**: G5-A (daea286), G5-B (daea286), G5-D (b7ee1e5) — Done. G5-E — Audited: workflow-viz chunk is 1,608 KB (499 KB gzip), driven by @xyflow/react + elkjs. WorkflowPage is already lazy-loaded via dynamic import() in App.tsx, isolating the chunk correctly. No further action needed.
+
 ### G5: Code Review Deferred Items
 
 | # | Item | Priority | Source |
