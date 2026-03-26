@@ -1,3 +1,8 @@
+0847cea 2026-03-26 (chore) update docs
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 4e4449e 2026-03-26 chore(docs): regenerate repomix snapshots after recent auth/judge refactors
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -344,7 +349,4 @@ ad2c40f 2026-03-20 docs: update auth documentation with Zod validation completio
   worker/index.ts
 
 beae4b7 2026-03-20 fix(auth): P3 hardening — token guard, CORS, comments, auth timeout (AUTH-12/13/16/17)
-  worker/index.ts
-
-398d6eb 2026-03-20 fix(auth): validate name path param in metrics and trends routes (AUTH-15)
   worker/index.ts

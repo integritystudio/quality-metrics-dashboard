@@ -6532,166 +6532,6 @@ export function ComplianceFrameworkMap() {
 }
 
 ================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE, COVERAGE_GRID_LEGEND_SIZE,
-  COVERAGE_GRID_MAX_INPUTS, COVERAGE_GRID_HEADER_MAX_HEIGHT,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-const STATUS_COLORS: Record<CoverageStatus, string> = {
-  covered: 'var(--score-good, #0072B2)',
-  partial: 'var(--score-fair, #E69F00)',
-  missing: 'var(--score-poor, #D55E00)',
-};
-function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
-  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
-  const cellMap = useMemo(() => {
-    const map = new Map<string, CoverageCell>();
-    if (!Array.isArray(cells)) return map;
-    for (const cell of cells) {
-      map.set(`${cell.metric}|${cell.input}`, cell);
-    }
-    return map;
-  }, [cells]);
-  if (metrics.length === 0 || inputs.length === 0) {
-    return <EmptyState message="No coverage data available." />;
-  }
-  const maxInputs = COVERAGE_GRID_MAX_INPUTS;
-  const displayInputs = inputs.slice(0, maxInputs);
-  const truncated = inputs.length > maxInputs;
-  return (
-    <div role="region" aria-label="Evaluation coverage heatmap">
-      {}
-      <div className="flex-center mb-3 gap-3">
-        <span className="mono-xl font-semibold">
-          {formatPercent(overallCoveragePercent)}
-        </span>
-        <span className="text-secondary text-base">
-          coverage ({metrics.length} metrics x {inputs.length} inputs)
-        </span>
-      </div>
-      {}
-      <div className="mb-3 text-xs flex-wrap gap-4">
-        {(['covered', 'partial', 'missing'] as const).map(status => (
-          <div key={status} className="flex-center gap-1">
-            <div style={{
-              width: COVERAGE_GRID_LEGEND_SIZE, height: COVERAGE_GRID_LEGEND_SIZE, borderRadius: 'var(--radius-xs)',
-              background: STATUS_COLORS[status],
-            }} />
-            <span>{status}</span>
-          </div>
-        ))}
-      </div>
-      {}
-      <div className="overflow-x-auto">
-        <div
-          role="table"
-          aria-label="Coverage matrix"
-          className="gap-half"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
-          }}
-        >
-          {}
-          <div role="row" className="contents">
-            <div role="columnheader" className="text-xs font-semibold" />
-            {displayInputs.map(input => (
-              <div
-                key={input}
-                role="columnheader"
-                title={input}
-                className="text-secondary text-2xs"
-                style={{
-                  writingMode: 'vertical-lr',
-                  textAlign: 'end',
-                  overflow: 'hidden',
-                  maxHeight: COVERAGE_GRID_HEADER_MAX_HEIGHT,
-                }}
-              >
-                {truncateId(input, 8)}
-              </div>
-            ))}
-          </div>
-          {}
-          {metrics.map(metric => (
-            <div key={metric} role="row" className="contents">
-              <div
-                role="rowheader"
-                className="text-xs flex-center truncate font-medium"
-                title={metric}
-              >
-                {metric}
-              </div>
-              {displayInputs.map(input => {
-                const cell = cellMap.get(`${metric}|${input}`);
-                const status = cell?.status ?? 'missing';
-                const count = cell?.count ?? 0;
-                const isHovered = hovered?.metric === metric && hovered?.input === input;
-                return (
-                  <div
-                    key={input}
-                    role="cell"
-                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
-                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
-                    onMouseEnter={() => setHovered({ metric, input })}
-                    onMouseLeave={() => setHovered(null)}
-                    className="mono text-2xs flex-center justify-center"
-                    style={{
-                      width: COVERAGE_GRID_CELL_SIZE,
-                      height: COVERAGE_GRID_CELL_SIZE,
-                      borderRadius: 'var(--radius-bar)',
-                      background: STATUS_COLORS[status],
-                      opacity: isHovered ? 1 : 0.8,
-                      cursor: 'default',
-                      color: 'var(--text-on-accent)',
-                      transition: 'opacity var(--transition-fast)',
-                    }}
-                  >
-                    {count > 0 ? count : ''}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-      {truncated && (
-        <p className="text-secondary text-xs mt-2">
-          Showing {maxInputs} of {inputs.length} inputs.
-        </p>
-      )}
-      {/* Gap summary */}
-      {gaps.length > 0 && (
-        <div className="mt-4">
-          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
-          <ul className="m-0 text-xs" style={{ paddingLeft: 'var(--space-5)' }}>
-            {gaps.map(gap => (
-              <li key={gap.metric} className="mb-1">
-                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
-                ({plural(gap.missingInputs.length, 'input')} missing)
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-export const CoverageGrid = memo(CoverageGridInner);
-
-================
 File: src/components/DetailPageHeader.tsx
 ================
 import type { ReactNode } from 'react';
@@ -8660,6 +8500,167 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
     </div>
   );
 }
+
+================
+File: src/components/CoverageGrid.tsx
+================
+import { memo, useState, useMemo } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE, COVERAGE_GRID_LEGEND_SIZE,
+  COVERAGE_GRID_MAX_INPUTS, COVERAGE_GRID_HEADER_MAX_HEIGHT,
+} from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
+}
+const STATUS_COLORS: Record<CoverageStatus, string> = {
+  covered: 'var(--score-good, #0072B2)',
+  partial: 'var(--score-fair, #E69F00)',
+  missing: 'var(--score-poor, #D55E00)',
+};
+const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
+function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
+  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
+  const cellMap = useMemo(() => {
+    const map = new Map<string, CoverageCell>();
+    if (!Array.isArray(cells)) return map;
+    for (const cell of cells) {
+      map.set(`${cell.metric}|${cell.input}`, cell);
+    }
+    return map;
+  }, [cells]);
+  if (metrics.length === 0 || inputs.length === 0) {
+    return <EmptyState message="No coverage data available." />;
+  }
+  const maxInputs = COVERAGE_GRID_MAX_INPUTS;
+  const displayInputs = inputs.slice(0, maxInputs);
+  const truncated = inputs.length > maxInputs;
+  return (
+    <div role="region" aria-label="Evaluation coverage heatmap">
+      {}
+      <div className="flex-center mb-3 gap-3">
+        <span className="mono-xl font-semibold">
+          {formatPercent(overallCoveragePercent)}
+        </span>
+        <span className="text-secondary text-base">
+          coverage ({metrics.length} metrics x {inputs.length} inputs)
+        </span>
+      </div>
+      {}
+      <div className="mb-3 text-xs flex-wrap gap-4">
+        {COVERAGE_STATUSES.map(status => (
+          <div key={status} className="flex-center gap-1">
+            <div style={{
+              width: COVERAGE_GRID_LEGEND_SIZE, height: COVERAGE_GRID_LEGEND_SIZE, borderRadius: 'var(--radius-xs)',
+              background: STATUS_COLORS[status],
+            }} />
+            <span>{status}</span>
+          </div>
+        ))}
+      </div>
+      {}
+      <div className="overflow-x-auto">
+        <div
+          role="table"
+          aria-label="Coverage matrix"
+          className="gap-half"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
+          }}
+        >
+          {}
+          <div role="row" className="contents">
+            <div role="columnheader" className="text-xs font-semibold" />
+            {displayInputs.map(input => (
+              <div
+                key={input}
+                role="columnheader"
+                title={input}
+                className="text-secondary text-2xs"
+                style={{
+                  writingMode: 'vertical-lr',
+                  textAlign: 'end',
+                  overflow: 'hidden',
+                  maxHeight: COVERAGE_GRID_HEADER_MAX_HEIGHT,
+                }}
+              >
+                {truncateId(input, 8)}
+              </div>
+            ))}
+          </div>
+          {}
+          {metrics.map(metric => (
+            <div key={metric} role="row" className="contents">
+              <div
+                role="rowheader"
+                className="text-xs flex-center truncate font-medium"
+                title={metric}
+              >
+                {metric}
+              </div>
+              {displayInputs.map(input => {
+                const cell = cellMap.get(`${metric}|${input}`);
+                const status = cell?.status ?? 'missing';
+                const count = cell?.count ?? 0;
+                const isHovered = hovered?.metric === metric && hovered?.input === input;
+                return (
+                  <div
+                    key={input}
+                    role="cell"
+                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
+                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
+                    onMouseEnter={() => setHovered({ metric, input })}
+                    onMouseLeave={() => setHovered(null)}
+                    className="mono text-2xs flex-center justify-center"
+                    style={{
+                      width: COVERAGE_GRID_CELL_SIZE,
+                      height: COVERAGE_GRID_CELL_SIZE,
+                      borderRadius: 'var(--radius-bar)',
+                      background: STATUS_COLORS[status],
+                      opacity: isHovered ? 1 : 0.8,
+                      cursor: 'default',
+                      color: 'var(--text-on-accent)',
+                      transition: 'opacity var(--transition-fast)',
+                    }}
+                  >
+                    {count > 0 ? count : ''}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      {truncated && (
+        <p className="text-secondary text-xs mt-2">
+          Showing {maxInputs} of {inputs.length} inputs.
+        </p>
+      )}
+      {/* Gap summary */}
+      {gaps.length > 0 && (
+        <div className="mt-4">
+          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
+          <ul className="m-0 text-xs" style={{ paddingLeft: 'var(--space-5)' }}>
+            {gaps.map(gap => (
+              <li key={gap.metric} className="mb-1">
+                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
+                ({plural(gap.missingInputs.length, 'input')} missing)
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+export const CoverageGrid = memo(CoverageGridInner);
 
 ================
 File: src/components/CQIHero.tsx
@@ -12870,6 +12871,204 @@ export const routingTelemetryKvSchema = z.object({
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
+File: src/lib/supabase.ts
+================
+import { fromUnixTime, isPast, subSeconds } from 'date-fns';
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Missing required env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
+}
+const SESSION_STORAGE_KEY = 'supabase.session';
+export interface SupabaseSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  user: { id: string; email: string };
+}
+export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
+type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
+type AuthTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: { id: string; email: string };
+};
+const listeners = new Set<AuthStateListener>();
+let cachedSession: SupabaseSession | null = null;
+function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void {
+  for (const listener of listeners) {
+    listener(session, event);
+  }
+}
+function saveSession(session: SupabaseSession): void {
+  cachedSession = session;
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+  }
+}
+function clearSession(): void {
+  cachedSession = null;
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+  }
+}
+function clearSessionAndNotify(): null {
+  clearSession();
+  notifyListeners(null, 'SIGNED_OUT');
+  return null;
+}
+function isValidSession(value: unknown): value is SupabaseSession {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['access_token'] === 'string' &&
+    typeof v['refresh_token'] === 'string' &&
+    typeof v['expires_at'] === 'number' &&
+    typeof v['user'] === 'object' && v['user'] !== null &&
+    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
+    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
+  );
+}
+function readRawSession(): SupabaseSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidSession(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function isValidTokenResponse(value: unknown): value is AuthTokenResponse {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['access_token'] === 'string' &&
+    typeof v['refresh_token'] === 'string' &&
+    typeof v['expires_in'] === 'number' &&
+    typeof v['user'] === 'object' && v['user'] !== null &&
+    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
+    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
+  );
+}
+function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+    user: data.user,
+  };
+}
+export function getSession(): SupabaseSession | null {
+  const session = cachedSession ?? readRawSession();
+  if (!session) return null;
+  if (isPast(subSeconds(fromUnixTime(session.expires_at), 60))) {
+    cachedSession = null;
+    return null;
+  }
+  if (!cachedSession) cachedSession = session;
+  return session;
+}
+export async function signIn(email: string, password: string): Promise<SupabaseSession> {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { message?: string } | null;
+    const message = body?.message;
+    throw new Error(message ? `Sign in failed: ${message}` : `Sign in failed (${res.status})`);
+  }
+  const body: unknown = await res.json().catch(() => null);
+  if (!isValidTokenResponse(body)) throw new Error('Sign in failed: unexpected response shape');
+  const session = sessionFromTokenResponse(body);
+  saveSession(session);
+  notifyListeners(session, 'SIGNED_IN');
+  return session;
+}
+export async function signOut(): Promise<void> {
+  const session = getSession();
+  if (session) {
+    try {
+      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+    } catch {
+    }
+  }
+  clearSession();
+  notifyListeners(null, 'SIGNED_OUT');
+}
+let refreshInFlight: Promise<SupabaseSession | null> | null = null;
+export function refreshSession(): Promise<SupabaseSession | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const stored = readRawSession();
+    if (!stored?.refresh_token) return null;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ refresh_token: stored.refresh_token }),
+      });
+      if (!res.ok) return clearSessionAndNotify();
+      const refreshBody: unknown = await res.json().catch(() => null);
+      if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
+      const refreshed = sessionFromTokenResponse(refreshBody);
+      saveSession(refreshed);
+      notifyListeners(refreshed, 'TOKEN_REFRESHED');
+      return refreshed;
+    } catch {
+      return clearSessionAndNotify();
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+export function onAuthStateChange(listener: AuthStateListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+const AUTO_REFRESH_INTERVAL_MS = 30_000;
+const TOKEN_EXPIRY_BUFFER_S = 120;
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let autoRefreshRefCount = 0;
+export function startAutoRefresh(): void {
+  autoRefreshRefCount++;
+  if (autoRefreshTimer !== null) return;
+  autoRefreshTimer = setInterval(() => {
+    const session = cachedSession ?? readRawSession();
+    if (!session) return;
+    const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000);
+    if (secondsUntilExpiry <= TOKEN_EXPIRY_BUFFER_S) {
+      void refreshSession();
+    }
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+export function stopAutoRefresh(): void {
+  autoRefreshRefCount = Math.max(0, autoRefreshRefCount - 1);
+  if (autoRefreshRefCount === 0 && autoRefreshTimer !== null) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+================
 File: src/pages/RoutingTelemetryPage.tsx
 ================
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
@@ -13853,202 +14052,83 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
 }
 
 ================
-File: src/lib/supabase.ts
+File: src/lib/validation/auth-schemas.ts
 ================
-import { fromUnixTime, isPast, subSeconds } from 'date-fns';
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Missing required env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
-}
-const SESSION_STORAGE_KEY = 'supabase.session';
-export interface SupabaseSession {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  user: { id: string; email: string };
-}
-export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
-type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
-type AuthTokenResponse = {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: { id: string; email: string };
-};
-const listeners = new Set<AuthStateListener>();
-let cachedSession: SupabaseSession | null = null;
-function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void {
-  for (const listener of listeners) {
-    listener(session, event);
-  }
-}
-function saveSession(session: SupabaseSession): void {
-  cachedSession = session;
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-  } catch {
-  }
-}
-function clearSession(): void {
-  cachedSession = null;
-  try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-  } catch {
-  }
-}
-function clearSessionAndNotify(): null {
-  clearSession();
-  notifyListeners(null, 'SIGNED_OUT');
-  return null;
-}
-function isValidSession(value: unknown): value is SupabaseSession {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['access_token'] === 'string' &&
-    typeof v['refresh_token'] === 'string' &&
-    typeof v['expires_at'] === 'number' &&
-    typeof v['user'] === 'object' && v['user'] !== null &&
-    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
-    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
-  );
-}
-function readRawSession(): SupabaseSession | null {
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isValidSession(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-function isValidTokenResponse(value: unknown): value is AuthTokenResponse {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['access_token'] === 'string' &&
-    typeof v['refresh_token'] === 'string' &&
-    typeof v['expires_in'] === 'number' &&
-    typeof v['user'] === 'object' && v['user'] !== null &&
-    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
-    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
-  );
-}
-function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
-  return {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-    user: data.user,
-  };
-}
-export function getSession(): SupabaseSession | null {
-  const session = cachedSession ?? readRawSession();
-  if (!session) return null;
-  if (isPast(subSeconds(fromUnixTime(session.expires_at), 60))) {
-    cachedSession = null;
-    return null;
-  }
-  if (!cachedSession) cachedSession = session;
-  return session;
-}
-export async function signIn(email: string, password: string): Promise<SupabaseSession> {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null) as { message?: string } | null;
-    const message = body?.message;
-    throw new Error(message ? `Sign in failed: ${message}` : `Sign in failed (${res.status})`);
-  }
-  const body: unknown = await res.json().catch(() => null);
-  if (!isValidTokenResponse(body)) throw new Error('Sign in failed: unexpected response shape');
-  const session = sessionFromTokenResponse(body);
-  saveSession(session);
-  notifyListeners(session, 'SIGNED_IN');
-  return session;
-}
-export async function signOut(): Promise<void> {
-  const session = getSession();
-  if (session) {
-    try {
-      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
-    } catch {
-    }
-  }
-  clearSession();
-  notifyListeners(null, 'SIGNED_OUT');
-}
-let refreshInFlight: Promise<SupabaseSession | null> | null = null;
-export function refreshSession(): Promise<SupabaseSession | null> {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    const stored = readRawSession();
-    if (!stored?.refresh_token) return null;
-    try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ refresh_token: stored.refresh_token }),
-      });
-      if (!res.ok) return clearSessionAndNotify();
-      const refreshBody: unknown = await res.json().catch(() => null);
-      if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
-      const refreshed = sessionFromTokenResponse(refreshBody);
-      saveSession(refreshed);
-      notifyListeners(refreshed, 'TOKEN_REFRESHED');
-      return refreshed;
-    } catch {
-      return clearSessionAndNotify();
-    } finally {
-      refreshInFlight = null;
-    }
-  })();
-  return refreshInFlight;
-}
-export function onAuthStateChange(listener: AuthStateListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-const AUTO_REFRESH_INTERVAL_MS = 30_000;
-const TOKEN_EXPIRY_BUFFER_S = 120;
-let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
-let autoRefreshRefCount = 0;
-export function startAutoRefresh(): void {
-  autoRefreshRefCount++;
-  if (autoRefreshTimer !== null) return;
-  autoRefreshTimer = setInterval(() => {
-    const session = cachedSession ?? readRawSession();
-    if (!session) return;
-    const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000);
-    if (secondsUntilExpiry <= TOKEN_EXPIRY_BUFFER_S) {
-      void refreshSession();
-    }
-  }, AUTO_REFRESH_INTERVAL_MS);
-}
-export function stopAutoRefresh(): void {
-  autoRefreshRefCount = Math.max(0, autoRefreshRefCount - 1);
-  if (autoRefreshRefCount === 0 && autoRefreshTimer !== null) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-}
+import { z } from 'zod';
+import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
+export const Auth0JwtPayloadSchema = z.object({
+  sub: z.string(),
+  email: z.email().optional(),
+  email_verified: z.boolean().optional(),
+  name: z.string().optional(),
+  picture: z.string().optional(),
+  iss: z.string(),
+  aud: z.union([z.string(), z.array(z.string())]),
+  iat: z.number(),
+  exp: z.number(),
+});
+export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
+export const PublicUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.email(),
+  created_at: z.iso.datetime().optional(),
+  updated_at: z.iso.datetime().optional(),
+});
+export type PublicUser = z.infer<typeof PublicUserSchema>;
+export const UserRoleRowSchema = z.object({
+  roles: z.object({
+    name: z.string(),
+    permissions: z.array(z.string()),
+  }).nullable(),
+});
+export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
+export const ActivityRequestSchema = z.object({
+  activity_type: z.enum(FRONTEND_ACTIVITY_EVENTS),
+});
+export const AdminRoleSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  permissions: z.array(z.string()),
+});
+export type AdminRole = z.infer<typeof AdminRoleSchema>;
+export const AdminUserRoleRowSchema = z.object({
+  user_id: z.string().uuid(),
+  role_id: z.string().uuid(),
+  roles: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+  }).nullable(),
+});
+export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
+export const AdminUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.email().optional(),
+  created_at: z.iso.datetime().optional(),
+  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+});
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+export const AssignRoleRequestSchema = z.object({
+  role_id: z.string().uuid(),
+});
+export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
+export const MeResponseSchema = z.object({
+  email: z.email(),
+  roles: z.array(z.string()),
+  permissions: z.array(z.enum([
+    'dashboard.read',
+    'dashboard.executive',
+    'dashboard.operator',
+    'dashboard.auditor',
+    'dashboard.traces.read',
+    'dashboard.sessions.read',
+    'dashboard.agents.read',
+    'dashboard.pipeline.read',
+    'dashboard.compliance.read',
+    'dashboard.admin',
+  ])),
+  allowedViews: z.array(z.enum(['executive', 'operator', 'auditor'])),
+});
+export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 ================
 File: src/api/routes/trends.ts
@@ -14536,281 +14616,6 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
 }
 
 ================
-File: src/components/WorkflowTimeline.tsx
-================
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const LANE_HEIGHT = 64;
-const LANE_PADDING_TOP = 12;
-const TURN_BLOCK_HEIGHT = 32;
-const TURN_BLOCK_MIN_WIDTH = 40;
-const TURN_BLOCK_GAP = 6;
-const LABEL_WIDTH = 120;
-const HANDOFF_MARKER_RADIUS = 7;
-const HEADER_HEIGHT = 28;
-const MAX_VISIBLE_TURNS = 200;
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[] {
-  return agentNames.map((name, laneIndex) => ({
-    agentName: name,
-    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
-    laneIndex,
-  }));
-}
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null {
-  let sawSource = false;
-  for (const t of turns) {
-    const agent = t.agentName ?? 'unknown';
-    if (agent === handoff.sourceAgent) sawSource = true;
-    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
-  }
-  return null;
-}
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
-  const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
-  return (
-    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
-      {}
-      <rect
-        width={width}
-        height={TURN_BLOCK_HEIGHT}
-        rx={4}
-        fill={color}
-        fillOpacity={0.15}
-        stroke={color}
-        strokeWidth={1.5}
-      />
-      {}
-      <rect
-        width={Math.max(2, width * turn.relevance)}
-        height={4}
-        rx={2}
-        fill={barColor}
-        fillOpacity={0.85}
-      />
-      {}
-      {turn.hasError && (
-        <rect
-          x={width - 6}
-          width={4}
-          height={TURN_BLOCK_HEIGHT}
-          rx={2}
-          fill="var(--status-critical)"
-          fillOpacity={0.85}
-        />
-      )}
-      {}
-      <text
-        x={width / 2}
-        y={TURN_BLOCK_HEIGHT / 2 + 5}
-        textAnchor="middle"
-        fontSize={10}
-        fill={color}
-        fontFamily="var(--font-mono)"
-      >
-        {turn.turnIndex}
-      </text>
-    </g>
-  );
-}
-export interface WorkflowTimelineProps {
-  turns: TurnLevelResult[];
-  handoffs?: HandoffEvaluation[];
-  agentNames: string[];
-}
-export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
-  const truncated = turns.length > MAX_VISIBLE_TURNS;
-  const lanes = buildLanes(visibleTurns, agentNames);
-  const totalTurns = visibleTurns.length;
-  const availableWidth = totalTurns * (TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP);
-  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
-  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
-  const turnX = (turnIndex: number): number =>
-    LABEL_WIDTH + turnIndex * (TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP) + TURN_BLOCK_GAP;
-  const laneY = (laneIndex: number): number =>
-    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
-  return (
-    <div
-      className="overflow-x-auto"
-      role="img"
-      aria-label={`Workflow timeline: ${agentNames.length} agents, ${totalTurns} turns`}
-    >
-      <svg
-        width={svgWidth}
-        height={svgHeight}
-        style={{ display: 'block', minWidth: svgWidth }}
-      >
-        {}
-        <g>
-          {turns.map(t => (
-            <text
-              key={t.turnIndex}
-              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
-              y={HEADER_HEIGHT - 8}
-              textAnchor="middle"
-              fontSize={9}
-              fill="var(--text-muted)"
-              fontFamily="var(--font-mono)"
-            >
-              {t.turnIndex}
-            </text>
-          ))}
-        </g>
-        {}
-        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
-          const color = agentColor(agentName, agentNames);
-          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
-          return (
-            <g key={agentName}>
-              {}
-              <rect
-                x={0}
-                y={laneTop}
-                width={svgWidth}
-                height={LANE_HEIGHT}
-                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
-                fillOpacity={0.5}
-              />
-              {}
-              <line
-                x1={0}
-                y1={laneTop}
-                x2={svgWidth}
-                y2={laneTop}
-                stroke="var(--border-subtle)"
-                strokeWidth={1}
-              />
-              {}
-              <text
-                x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2 + 4}
-                textAnchor="end"
-                fontSize={11}
-                fontWeight={600}
-                fill={color}
-                fontFamily="var(--font-mono)"
-              >
-                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
-              </text>
-              {}
-              {laneTurns.map(turn => (
-                <TurnBlock
-                  key={turn.turnIndex}
-                  turn={turn}
-                  color={color}
-                  width={TURN_BLOCK_MIN_WIDTH}
-                  x={turnX(turn.turnIndex)}
-                  y={laneTop + LANE_PADDING_TOP}
-                />
-              ))}
-            </g>
-          );
-        })}
-        {}
-        <line
-          x1={0}
-          y1={svgHeight}
-          x2={svgWidth}
-          y2={svgHeight}
-          stroke="var(--border-subtle)"
-          strokeWidth={1}
-        />
-        {}
-        {handoffs.map((h, i) => {
-          const turnIndex = findHandoffTurnIndex(h, turns);
-          if (turnIndex == null) return null;
-          const sourceLaneIdx = agentNames.indexOf(h.sourceAgent);
-          const targetLaneIdx = agentNames.indexOf(h.targetAgent);
-          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
-          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
-          const y1 = laneY(sourceLaneIdx);
-          const y2 = laneY(targetLaneIdx);
-          const midY = (y1 + y2) / 2;
-          const handoffColor = h.correctTarget
-            ? 'var(--status-healthy)'
-            : 'var(--status-warning)';
-          return (
-            <g
-              key={`handoff-${i}`}
-              role="img"
-              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
-            >
-              {}
-              <line
-                x1={x}
-                y1={y1}
-                x2={x}
-                y2={y2}
-                stroke={handoffColor}
-                strokeWidth={2}
-                strokeDasharray="4 2"
-                opacity={0.7}
-              />
-              {}
-              <circle
-                cx={x}
-                cy={midY}
-                r={HANDOFF_MARKER_RADIUS}
-                fill="var(--bg-card)"
-                stroke={handoffColor}
-                strokeWidth={1.5}
-              />
-              <text
-                x={x}
-                y={midY + 4}
-                textAnchor="middle"
-                fontSize={8}
-                fill={handoffColor}
-                fontFamily="var(--font-mono)"
-                fontWeight={600}
-              >
-                {h.score.toFixed(1)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      {}
-      <div className="flex-wrap gap-4 mt-2" style={{ paddingLeft: LABEL_WIDTH }}>
-        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
-        {handoffs.length > 0 && (
-          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
-        )}
-        {truncated && (
-          <span className="text-2xs text-warning">
-            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-================
 File: src/lib/quality-utils.ts
 ================
 export type ScoreDirection = 'maximize' | 'minimize';
@@ -15083,6 +14888,211 @@ export function formatTimestamp(ts: string): string {
 }
 
 ================
+File: src/pages/AdminPage.tsx
+================
+import { useState, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useAuth } from '../contexts/AuthContext.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
+const ADMIN_TABLE_COLUMNS = [
+  { label: 'Email', align: 'left' as const },
+  { label: 'Roles', align: 'left' as const },
+  { label: 'Assign Role', align: 'left' as const },
+  { label: 'Joined', align: 'right' as const },
+];
+function RoleChip({
+  role,
+  onRevoke,
+  revoking,
+}: {
+  role: { id: string; name: string };
+  onRevoke: (roleId: string, roleName: string) => void;
+  revoking: boolean;
+}) {
+  return (
+    <span className="chip">
+      {role.name}
+      <button
+        className="chip-remove"
+        onClick={() => onRevoke(role.id, role.name)}
+        disabled={revoking}
+        aria-label={`Remove role ${role.name}`}
+      >
+        &times;
+      </button>
+    </span>
+  );
+}
+function UserRow({
+  user,
+  availableRoles,
+  onMutationStart,
+  onMutationEnd,
+}: {
+  user: AdminUser;
+  availableRoles: AdminRole[];
+  onMutationStart: () => string;
+  onMutationEnd: (id: string) => void;
+}) {
+  const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { getAccessToken } = useAuth();
+  const assignableRoles = availableRoles.filter(
+    (r) => !user.roles.some((ur) => ur.id === r.id),
+  );
+  async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
+    const token = await getAccessToken();
+    return fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+  }
+  async function handleAssign() {
+    if (!selectedRoleId) return;
+    setBusy(true);
+    setError(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(`/api/admin/users/${user.id}/roles`, 'POST', { role_id: selectedRoleId });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || 'Failed to assign role');
+      } else {
+        setSelectedRoleId('');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+  async function handleRevoke(roleId: string, roleName: string) {
+    if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
+    setBusy(true);
+    setError(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, 'DELETE');
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || 'Failed to revoke role');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+  return (
+    <tr className="border-b">
+      <td className="cell-pad text-left">
+        <span className="mono-sm">{user.email ?? <span className="text-muted">(no email)</span>}</span>
+      </td>
+      <td className="cell-pad text-left">
+        <div className="chip-list">
+          {user.roles.length === 0 && <span className="text-muted text-xs">No roles</span>}
+          {user.roles.map((r) => (
+            <RoleChip key={r.id} role={r} onRevoke={handleRevoke} revoking={busy} />
+          ))}
+        </div>
+        {error && <div className="text-xs text-error mt-1">{error}</div>}
+      </td>
+      <td className="cell-pad text-left">
+        <div className="inline-flex-center gap-4">
+          <select
+            className="select-sm"
+            value={selectedRoleId}
+            onChange={(e) => setSelectedRoleId(e.target.value)}
+            disabled={busy || assignableRoles.length === 0}
+            aria-label={`Assign role to ${user.email ?? user.id}`}
+          >
+            <option value="">Select role...</option>
+            {assignableRoles.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+          <button
+            className="btn-sm"
+            onClick={handleAssign}
+            disabled={busy || !selectedRoleId}
+          >
+            Assign
+          </button>
+        </div>
+      </td>
+      <td className="cell-pad text-right text-muted text-xs nowrap">
+        {user.created_at ? format(new Date(user.created_at), 'PP') : '—'}
+      </td>
+    </tr>
+  );
+}
+export function AdminPage() {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const pendingMutationsRef = useRef<Set<string>>(new Set());
+  const mutationIdRef = useRef(0);
+  const onMutationStart = useCallback((): string => {
+    const id = String(++mutationIdRef.current);
+    pendingMutationsRef.current.add(id);
+    return id;
+  }, []);
+  const onMutationEnd = useCallback((id: string) => {
+    pendingMutationsRef.current.delete(id);
+    if (pendingMutationsRef.current.size === 0) {
+      setRefreshKey((k) => k + 1);
+    }
+  }, []);
+  const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
+    ['admin', 'users', refreshKey],
+    () => `${API_BASE}/api/admin/users`,
+  );
+  const { data: roles, isLoading: rolesLoading, error: rolesError } = useApiQuery<AdminRole[]>(
+    ['admin', 'roles'],
+    () => `${API_BASE}/api/admin/roles`,
+  );
+  const isLoading = usersLoading || rolesLoading;
+  const error = usersError ?? rolesError;
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
+      <DetailPageHeader title="User Management" />
+      <div className="card">
+        {!users || users.length === 0 ? (
+          <div className="empty-state text-secondary">No users found.</div>
+        ) : (
+          <div className="table-scroll">
+            <table className="mono-table">
+              <MonoTableHead columns={ADMIN_TABLE_COLUMNS} />
+              <tbody>
+                {users.map((user) => (
+                  <UserRow
+                    key={user.id}
+                    user={user}
+                    availableRoles={roles ?? []}
+                    onMutationStart={onMutationStart}
+                    onMutationEnd={onMutationEnd}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </PageShell>
+  );
+}
+
+================
 File: src/__tests__/WorkflowGraph.test.tsx
 ================
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -15336,174 +15346,6 @@ describe('WorkflowGraphView stress (ST-G5)', () => {
     expect(screen.queryByTestId('rf-node-a-1')).not.toBeInTheDocument();
     expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
   });
-});
-
-================
-File: src/api/routes/agents.ts
-================
-import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-const LIMIT_AGENT_SPANS = 1000;
-function toDateOnly(d: Date): string {
-  return d.toISOString().split('T')[0];
-}
-export const agentRoutes = new Hono();
-agentRoutes.get('/agents', async (c) => {
-  const periodParam = c.req.query('period') ?? '30d';
-  const periodDays = VALID_PERIODS[periodParam];
-  if (periodDays === undefined) {
-    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
-  }
-  const now = new Date();
-  const endDate = toDateOnly(now);
-  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
-  try {
-    const result = await queryTraces({
-      attributeFilter: { 'hook.name': 'agent-post-tool' },
-      startDate,
-      endDate,
-      limit: LIMIT_AGENT_SPANS,
-    });
-    const dateBuckets: string[] = [];
-    for (let d = 0; d < periodDays; d++) {
-      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
-      dateBuckets.push(toDateOnly(day));
-    }
-    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
-    const acc: Record<string, {
-      invocations: number;
-      errors: number;
-      rateLimitCount: number;
-      totalOutputSize: number;
-      sessions: Set<string>;
-      traceIds: Set<string>;
-      sourceTypes: Record<string, number>;
-      dailyCounts: number[];
-    }> = Object.create(null);
-    const traceToAgents = new Map<string, Set<string>>();
-    for (const span of result.traces) {
-      const rawName = span.attributes?.['gen_ai.agent.name'];
-      const name = typeof rawName === 'string' ? rawName : 'unknown';
-      if (!acc[name]) {
-        acc[name] = { invocations: 0, errors: 0, rateLimitCount: 0, totalOutputSize: 0, sessions: new Set(), traceIds: new Set(), sourceTypes: Object.create(null), dailyCounts: new Array(periodDays).fill(0) };
-      }
-      acc[name].invocations++;
-      if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / 1_000_000));
-        const idx = bucketIndex.get(dayKey);
-        if (idx !== undefined) acc[name].dailyCounts[idx]++;
-      }
-      if (span.attributes?.['agent.has_error']) acc[name].errors++;
-      if (span.attributes?.['agent.has_rate_limit']) acc[name].rateLimitCount++;
-      const rawOutputSize = span.attributes?.['agent.output_size'];
-      acc[name].totalOutputSize += typeof rawOutputSize === 'number' ? rawOutputSize : 0;
-      const rawSid = span.attributes?.['session.id'];
-      const sid = typeof rawSid === 'string' ? rawSid : undefined;
-      if (sid) acc[name].sessions.add(sid);
-      if (span.traceId) {
-        acc[name].traceIds.add(span.traceId);
-        if (!traceToAgents.has(span.traceId)) traceToAgents.set(span.traceId, new Set());
-        traceToAgents.get(span.traceId)!.add(name);
-      }
-      const rawSrcVal = span.attributes?.['agent.source_type'];
-      const rawSrc = typeof rawSrcVal === 'string' ? rawSrcVal : 'unknown';
-      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
-      acc[name].sourceTypes[src] = (acc[name].sourceTypes[src] ?? 0) + 1;
-    }
-    const allTraceIds = [...traceToAgents.keys()];
-    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
-    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
-    for (const ev of evaluations) {
-      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
-      const agentNames = traceToAgents.get(ev.traceId);
-      if (!agentNames) continue;
-      for (const agent of agentNames) {
-        if (!agentEvalAcc[agent]) agentEvalAcc[agent] = Object.create(null);
-        if (!agentEvalAcc[agent][ev.evaluationName]) agentEvalAcc[agent][ev.evaluationName] = [];
-        agentEvalAcc[agent][ev.evaluationName].push(ev.scoreValue);
-      }
-    }
-    const agents = Object.entries(acc).map(([agentName, d]) => {
-      const evalMetrics = agentEvalAcc[agentName] ?? {};
-      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
-      for (const [metric, scores] of Object.entries(evalMetrics)) {
-        const sorted = [...scores].sort((a, b) => a - b);
-        evalSummary[metric] = {
-          avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-          min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-          max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
-          count: sorted.length,
-        };
-      }
-      const sessionIdList = [...d.sessions];
-      const traceIdList = [...d.traceIds];
-      return {
-        agentName,
-        invocations: d.invocations,
-        errors: d.errors,
-        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
-        rateLimitCount: d.rateLimitCount,
-        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-        sessionCount: d.sessions.size,
-        sessionIds: sessionIdList.slice(0, MAX_IDS),
-        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
-        traceIdsTotal: traceIdList.length,
-        traceIds: traceIdList.slice(0, MAX_IDS),
-        traceIdsTruncated: traceIdList.length > MAX_IDS,
-        sourceTypes: d.sourceTypes,
-        dailyCounts: d.dailyCounts,
-        evalSummary,
-      };
-    }).sort((a, b) => b.invocations - a.invocations);
-    return c.json({ period: periodParam, startDate, endDate, agents });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-agentRoutes.get('/agents/:sessionId', async (c) => {
-  const sessionId = c.req.param('sessionId');
-  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
-    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
-  }
-  try {
-    const spans = await loadTracesBySessionId(sessionId);
-    const agentMap = new Map<number, string>();
-    const traceIds = new Set<string>();
-    spans.forEach((span, i) => {
-      const rawAgent = span.attributes?.['agent.name'] ?? span.attributes?.['gen_ai.agent.name'];
-      const agent = typeof rawAgent === 'string' ? rawAgent : undefined;
-      if (agent) agentMap.set(i, agent);
-      if (span.traceId) traceIds.add(span.traceId);
-    });
-    const stepScores: StepScore[] = spans.map((span, i) => ({
-      step: i,
-      score: typeof span.attributes?.['evaluation.score'] === 'number'
-        ? span.attributes['evaluation.score'] as number
-        : (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
-      explanation: span.name,
-    }));
-    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
-    const evaluations = await loadEvaluationsByTraceIds([...traceIds]);
-    const serializedAgentMap = Object.fromEntries(agentMap);
-    const graph = buildWorkflowGraph(evaluation, spans);
-    return c.json({
-      sessionId,
-      spans,
-      evaluation,
-      evaluations,
-      agentMap: serializedAgentMap,
-      graph,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
 });
 
 ================
@@ -16026,286 +15868,279 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
 }
 
 ================
-File: src/lib/validation/auth-schemas.ts
+File: src/components/WorkflowTimeline.tsx
 ================
-import { z } from 'zod';
-import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
-export const Auth0JwtPayloadSchema = z.object({
-  sub: z.string(),
-  email: z.email().optional(),
-  email_verified: z.boolean().optional(),
-  name: z.string().optional(),
-  picture: z.string().optional(),
-  iss: z.string(),
-  aud: z.union([z.string(), z.array(z.string())]),
-  iat: z.number(),
-  exp: z.number(),
-});
-export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
-export const PublicUserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.email(),
-  created_at: z.iso.datetime().optional(),
-  updated_at: z.iso.datetime().optional(),
-});
-export type PublicUser = z.infer<typeof PublicUserSchema>;
-export const UserRoleRowSchema = z.object({
-  roles: z.object({
-    name: z.string(),
-    permissions: z.array(z.string()),
-  }).nullable(),
-});
-export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
-export const ActivityRequestSchema = z.object({
-  activity_type: z.enum(FRONTEND_ACTIVITY_EVENTS),
-});
-export const AdminRoleSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  permissions: z.array(z.string()),
-});
-export type AdminRole = z.infer<typeof AdminRoleSchema>;
-export const AdminUserRoleRowSchema = z.object({
-  user_id: z.string().uuid(),
-  role_id: z.string().uuid(),
-  roles: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-  }).nullable(),
-});
-export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
-export const AdminUserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.email().optional(),
-  created_at: z.iso.datetime().optional(),
-  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
-});
-export type AdminUser = z.infer<typeof AdminUserSchema>;
-export const AssignRoleRequestSchema = z.object({
-  role_id: z.string().uuid(),
-});
-export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
-export const MeResponseSchema = z.object({
-  email: z.email(),
-  roles: z.array(z.string()),
-  permissions: z.array(z.enum([
-    'dashboard.read',
-    'dashboard.executive',
-    'dashboard.operator',
-    'dashboard.auditor',
-    'dashboard.traces.read',
-    'dashboard.sessions.read',
-    'dashboard.agents.read',
-    'dashboard.pipeline.read',
-    'dashboard.compliance.read',
-    'dashboard.admin',
-  ])),
-  allowedViews: z.array(z.enum(['executive', 'operator', 'auditor'])),
-});
-export type MeResponse = z.infer<typeof MeResponseSchema>;
-
-================
-File: src/pages/AdminPage.tsx
-================
-import { useState, useRef, useCallback } from 'react';
-import { format } from 'date-fns';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { useAuth } from '../contexts/AuthContext.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
-const ADMIN_TABLE_COLUMNS = [
-  { label: 'Email', align: 'left' as const },
-  { label: 'Roles', align: 'left' as const },
-  { label: 'Assign Role', align: 'left' as const },
-  { label: 'Joined', align: 'right' as const },
-];
-function RoleChip({
-  role,
-  onRevoke,
-  revoking,
-}: {
-  role: { id: string; name: string };
-  onRevoke: (roleId: string, roleName: string) => void;
-  revoking: boolean;
-}) {
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const LANE_HEIGHT = 64;
+const LANE_PADDING_TOP = 12;
+const TURN_BLOCK_HEIGHT = 32;
+const TURN_BLOCK_MIN_WIDTH = 40;
+const TURN_BLOCK_GAP = 6;
+const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
+const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+const LABEL_WIDTH = 120;
+const HANDOFF_MARKER_RADIUS = 7;
+const HEADER_HEIGHT = 28;
+const MAX_VISIBLE_TURNS = 200;
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[] {
+  return agentNames.map((name, laneIndex) => ({
+    agentName: name,
+    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
+    laneIndex,
+  }));
+}
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null {
+  let sawSource = false;
+  for (const t of turns) {
+    const agent = t.agentName ?? 'unknown';
+    if (agent === handoff.sourceAgent) sawSource = true;
+    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
+  }
+  return null;
+}
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
+  const barColor = scoreColor(turn.relevance);
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
   return (
-    <span className="chip">
-      {role.name}
-      <button
-        className="chip-remove"
-        onClick={() => onRevoke(role.id, role.name)}
-        disabled={revoking}
-        aria-label={`Remove role ${role.name}`}
+    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
+      {}
+      <rect
+        width={width}
+        height={TURN_BLOCK_HEIGHT}
+        rx={4}
+        fill={color}
+        fillOpacity={0.15}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      {}
+      <rect
+        width={Math.max(2, width * turn.relevance)}
+        height={4}
+        rx={2}
+        fill={barColor}
+        fillOpacity={0.85}
+      />
+      {}
+      {turn.hasError && (
+        <rect
+          x={width - 6}
+          width={4}
+          height={TURN_BLOCK_HEIGHT}
+          rx={2}
+          fill="var(--status-critical)"
+          fillOpacity={0.85}
+        />
+      )}
+      {}
+      <text
+        x={width / 2}
+        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        textAnchor="middle"
+        fontSize={10}
+        fill={color}
+        fontFamily="var(--font-mono)"
       >
-        &times;
-      </button>
-    </span>
+        {turn.turnIndex}
+      </text>
+    </g>
   );
 }
-function UserRow({
-  user,
-  availableRoles,
-  onMutationStart,
-  onMutationEnd,
-}: {
-  user: AdminUser;
-  availableRoles: AdminRole[];
-  onMutationStart: () => string;
-  onMutationEnd: (id: string) => void;
-}) {
-  const [selectedRoleId, setSelectedRoleId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { getAccessToken } = useAuth();
-  const assignableRoles = availableRoles.filter(
-    (r) => !user.roles.some((ur) => ur.id === r.id),
-  );
-  async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
-    const token = await getAccessToken();
-    return fetch(`${API_BASE}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
+export interface WorkflowTimelineProps {
+  turns: TurnLevelResult[];
+  handoffs?: HandoffEvaluation[];
+  agentNames: string[];
+}
+export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
   }
-  async function handleAssign() {
-    if (!selectedRoleId) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles`, 'POST', { role_id: selectedRoleId });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to assign role');
-      } else {
-        setSelectedRoleId('');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
-  }
-  async function handleRevoke(roleId: string, roleName: string) {
-    if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, 'DELETE');
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to revoke role');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
-  }
+  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
+  const truncated = turns.length > MAX_VISIBLE_TURNS;
+  const lanes = buildLanes(visibleTurns, agentNames);
+  const totalTurns = visibleTurns.length;
+  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
+  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
+  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
+  const turnX = (turnIndex: number): number =>
+    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
+  const laneY = (laneIndex: number): number =>
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
   return (
-    <tr className="border-b">
-      <td className="cell-pad text-left">
-        <span className="mono-sm">{user.email ?? <span className="text-muted">(no email)</span>}</span>
-      </td>
-      <td className="cell-pad text-left">
-        <div className="chip-list">
-          {user.roles.length === 0 && <span className="text-muted text-xs">No roles</span>}
-          {user.roles.map((r) => (
-            <RoleChip key={r.id} role={r} onRevoke={handleRevoke} revoking={busy} />
+    <div
+      className="overflow-x-auto"
+      role="img"
+      aria-label={`Workflow timeline: ${agentNames.length} agents, ${totalTurns} turns`}
+    >
+      <svg
+        width={svgWidth}
+        height={svgHeight}
+        style={{ display: 'block', minWidth: svgWidth }}
+      >
+        {}
+        <g>
+          {turns.map(t => (
+            <text
+              key={t.turnIndex}
+              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
+              y={HEADER_HEIGHT - 8}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--text-muted)"
+              fontFamily="var(--font-mono)"
+            >
+              {t.turnIndex}
+            </text>
           ))}
-        </div>
-        {error && <div className="text-xs text-error mt-1">{error}</div>}
-      </td>
-      <td className="cell-pad text-left">
-        <div className="inline-flex-center gap-4">
-          <select
-            className="select-sm"
-            value={selectedRoleId}
-            onChange={(e) => setSelectedRoleId(e.target.value)}
-            disabled={busy || assignableRoles.length === 0}
-            aria-label={`Assign role to ${user.email ?? user.id}`}
-          >
-            <option value="">Select role...</option>
-            {assignableRoles.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <button
-            className="btn-sm"
-            onClick={handleAssign}
-            disabled={busy || !selectedRoleId}
-          >
-            Assign
-          </button>
-        </div>
-      </td>
-      <td className="cell-pad text-right text-muted text-xs nowrap">
-        {user.created_at ? format(new Date(user.created_at), 'PP') : '—'}
-      </td>
-    </tr>
-  );
-}
-export function AdminPage() {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const pendingMutationsRef = useRef<Set<string>>(new Set());
-  const mutationIdRef = useRef(0);
-  const onMutationStart = useCallback((): string => {
-    const id = String(++mutationIdRef.current);
-    pendingMutationsRef.current.add(id);
-    return id;
-  }, []);
-  const onMutationEnd = useCallback((id: string) => {
-    pendingMutationsRef.current.delete(id);
-    if (pendingMutationsRef.current.size === 0) {
-      setRefreshKey((k) => k + 1);
-    }
-  }, []);
-  const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
-    ['admin', 'users', refreshKey],
-    () => `${API_BASE}/api/admin/users`,
-  );
-  const { data: roles, isLoading: rolesLoading, error: rolesError } = useApiQuery<AdminRole[]>(
-    ['admin', 'roles'],
-    () => `${API_BASE}/api/admin/roles`,
-  );
-  const isLoading = usersLoading || rolesLoading;
-  const error = usersError ?? rolesError;
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      <DetailPageHeader title="User Management" />
-      <div className="card">
-        {!users || users.length === 0 ? (
-          <div className="empty-state text-secondary">No users found.</div>
-        ) : (
-          <div className="table-scroll">
-            <table className="mono-table">
-              <MonoTableHead columns={ADMIN_TABLE_COLUMNS} />
-              <tbody>
-                {users.map((user) => (
-                  <UserRow
-                    key={user.id}
-                    user={user}
-                    availableRoles={roles ?? []}
-                    onMutationStart={onMutationStart}
-                    onMutationEnd={onMutationEnd}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+        </g>
+        {}
+        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
+          const color = agentColor(agentName, agentNames);
+          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
+          return (
+            <g key={agentName}>
+              {}
+              <rect
+                x={0}
+                y={laneTop}
+                width={svgWidth}
+                height={LANE_HEIGHT}
+                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
+                fillOpacity={0.5}
+              />
+              {}
+              <line
+                x1={0}
+                y1={laneTop}
+                x2={svgWidth}
+                y2={laneTop}
+                stroke="var(--border-subtle)"
+                strokeWidth={1}
+              />
+              {}
+              <text
+                x={LABEL_WIDTH - 8}
+                y={laneTop + LANE_CENTER_OFFSET + 4}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight={600}
+                fill={color}
+                fontFamily="var(--font-mono)"
+              >
+                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+              </text>
+              {}
+              {laneTurns.map(turn => (
+                <TurnBlock
+                  key={turn.turnIndex}
+                  turn={turn}
+                  color={color}
+                  width={TURN_BLOCK_MIN_WIDTH}
+                  x={turnX(turn.turnIndex)}
+                  y={laneTop + LANE_PADDING_TOP}
+                />
+              ))}
+            </g>
+          );
+        })}
+        {}
+        <line
+          x1={0}
+          y1={svgHeight}
+          x2={svgWidth}
+          y2={svgHeight}
+          stroke="var(--border-subtle)"
+          strokeWidth={1}
+        />
+        {}
+        {handoffs.map((h, i) => {
+          const turnIndex = findHandoffTurnIndex(h, turns);
+          if (turnIndex == null) return null;
+          const sourceLaneIdx = agentNames.indexOf(h.sourceAgent);
+          const targetLaneIdx = agentNames.indexOf(h.targetAgent);
+          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
+          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
+          const y1 = laneY(sourceLaneIdx);
+          const y2 = laneY(targetLaneIdx);
+          const midY = (y1 + y2) / 2;
+          const handoffColor = h.correctTarget
+            ? 'var(--status-healthy)'
+            : 'var(--status-warning)';
+          return (
+            <g
+              key={`handoff-${i}`}
+              role="img"
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
+            >
+              {}
+              <line
+                x1={x}
+                y1={y1}
+                x2={x}
+                y2={y2}
+                stroke={handoffColor}
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                opacity={0.7}
+              />
+              {}
+              <circle
+                cx={x}
+                cy={midY}
+                r={HANDOFF_MARKER_RADIUS}
+                fill="var(--bg-card)"
+                stroke={handoffColor}
+                strokeWidth={1.5}
+              />
+              <text
+                x={x}
+                y={midY + 4}
+                textAnchor="middle"
+                fontSize={8}
+                fill={handoffColor}
+                fontFamily="var(--font-mono)"
+                fontWeight={600}
+              >
+                {h.score.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {}
+      <div className="flex-wrap gap-4 mt-2" style={{ paddingLeft: LABEL_WIDTH }}>
+        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
+        {handoffs.length > 0 && (
+          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
+        )}
+        {truncated && (
+          <span className="text-2xs text-warning">
+            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
+          </span>
         )}
       </div>
-    </PageShell>
+    </div>
   );
 }
 
@@ -17352,294 +17187,164 @@ if (isDirectRun) {
 }
 
 ================
-File: src/api/routes/sessions.ts
+File: src/api/routes/agents.ts
 ================
 import { Hono } from 'hono';
-import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import {
-  COMMIT_BODY_START_LINE_INDEX,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
-  FILE_ACCESS_TOP_N,
-  LATENCY_P50,
-  LATENCY_P95,
-  LOG_SUMMARY_FIELDS,
-  LOG_SUMMARY_MAX_ENTRIES,
-  type SafeLogEntry,
-  OTEL_STATUS_ERROR_CODE,
-  PARAM_ID_RE,
-  PERCENT_BASE,
-  LATENCY_DISPLAY_PRECISION,
-} from '../api-constants.js';
-import {
-  loadEvaluationsBySessionId,
-  loadLogsBySessionId,
-} from '../data-loader.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
-export const sessionRoutes = new Hono();
-function attr<T>(span: { attributes?: Record<string, unknown> }, key: string): T | undefined {
-  return span.attributes?.[key] as T | undefined;
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+const LIMIT_AGENT_SPANS = 1000;
+function toDateOnly(d: Date): string {
+  return d.toISOString().split('T')[0];
 }
-function parseTimestamp(value: string | undefined | null): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  return isNaN(ms) ? null : ms;
+type AgentAcc = {
+  invocations: number;
+  errors: number;
+  rateLimitCount: number;
+  totalOutputSize: number;
+  sessions: Set<string>;
+  traceIds: Set<string>;
+  sourceTypes: Record<string, number>;
+  dailyCounts: number[];
+};
+function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+    count: sorted.length,
+  };
 }
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
-  return sorted[Math.max(0, idx)];
+function createAgentAccumulator(periodDays: number): AgentAcc {
+  return {
+    invocations: 0,
+    errors: 0,
+    rateLimitCount: 0,
+    totalOutputSize: 0,
+    sessions: new Set(),
+    traceIds: new Set(),
+    sourceTypes: Object.create(null),
+    dailyCounts: new Array(periodDays).fill(0),
+  };
 }
-function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
-}
-const LIMIT_SESSION_SPANS = 1000;
-async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
+export const agentRoutes = new Hono();
+agentRoutes.get('/agents', async (c) => {
+  const periodParam = c.req.query('period') ?? '30d';
+  const periodDays = VALID_PERIODS[periodParam];
+  if (periodDays === undefined) {
+    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
+  }
   const now = new Date();
-  const end = endDate ?? formatISO(now, { representation: 'date' });
-  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
-  const result = await queryTraces({
-    attributeFilter: { 'session.id': sessionId },
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_SESSION_SPANS,
-  });
-  return result.traces;
-}
-sessionRoutes.get('/sessions/:sessionId', async (c) => {
+  const endDate = toDateOnly(now);
+  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
+  try {
+    const result = await queryTraces({
+      attributeFilter: { 'hook.name': 'agent-post-tool' },
+      startDate,
+      endDate,
+      limit: LIMIT_AGENT_SPANS,
+    });
+    const dateBuckets: string[] = [];
+    for (let d = 0; d < periodDays; d++) {
+      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
+      dateBuckets.push(toDateOnly(day));
+    }
+    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
+    const acc: Record<string, AgentAcc> = Object.create(null);
+    const traceToAgents = new Map<string, Set<string>>();
+    for (const span of result.traces) {
+      const rawName = span.attributes?.['gen_ai.agent.name'];
+      const name = typeof rawName === 'string' ? rawName : 'unknown';
+      if (!acc[name]) {
+        acc[name] = createAgentAccumulator(periodDays);
+      }
+      acc[name].invocations++;
+      if (span.startTimeUnixNano) {
+        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / 1_000_000));
+        const idx = bucketIndex.get(dayKey);
+        if (idx !== undefined) acc[name].dailyCounts[idx]++;
+      }
+      if (span.attributes?.['agent.has_error']) acc[name].errors++;
+      if (span.attributes?.['agent.has_rate_limit']) acc[name].rateLimitCount++;
+      const rawOutputSize = span.attributes?.['agent.output_size'];
+      acc[name].totalOutputSize += typeof rawOutputSize === 'number' ? rawOutputSize : 0;
+      const rawSid = span.attributes?.['session.id'];
+      const sid = typeof rawSid === 'string' ? rawSid : undefined;
+      if (sid) acc[name].sessions.add(sid);
+      if (span.traceId) {
+        acc[name].traceIds.add(span.traceId);
+        if (!traceToAgents.has(span.traceId)) traceToAgents.set(span.traceId, new Set());
+        traceToAgents.get(span.traceId)!.add(name);
+      }
+      const rawSrcVal = span.attributes?.['agent.source_type'];
+      const rawSrc = typeof rawSrcVal === 'string' ? rawSrcVal : 'unknown';
+      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
+      acc[name].sourceTypes[src] = (acc[name].sourceTypes[src] ?? 0) + 1;
+    }
+    const allTraceIds = [...traceToAgents.keys()];
+    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
+    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
+    for (const ev of evaluations) {
+      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+      const agentNames = traceToAgents.get(ev.traceId);
+      if (!agentNames) continue;
+      for (const agent of agentNames) {
+        if (!agentEvalAcc[agent]) agentEvalAcc[agent] = Object.create(null);
+        if (!agentEvalAcc[agent][ev.evaluationName]) agentEvalAcc[agent][ev.evaluationName] = [];
+        agentEvalAcc[agent][ev.evaluationName].push(ev.scoreValue);
+      }
+    }
+    const agents = Object.entries(acc).map(([agentName, d]) => {
+      const evalMetrics = agentEvalAcc[agentName] ?? {};
+      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
+      for (const [metric, scores] of Object.entries(evalMetrics)) {
+        evalSummary[metric] = computeEvalMetricSummary(scores);
+      }
+      const sessionIdList = [...d.sessions];
+      const traceIdList = [...d.traceIds];
+      return {
+        agentName,
+        invocations: d.invocations,
+        errors: d.errors,
+        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
+        rateLimitCount: d.rateLimitCount,
+        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+        sessionCount: d.sessions.size,
+        sessionIds: sessionIdList.slice(0, MAX_IDS),
+        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
+        traceIdsTotal: traceIdList.length,
+        traceIds: traceIdList.slice(0, MAX_IDS),
+        traceIdsTruncated: traceIdList.length > MAX_IDS,
+        sourceTypes: d.sourceTypes,
+        dailyCounts: d.dailyCounts,
+        evalSummary,
+      };
+    }).sort((a, b) => b.invocations - a.invocations);
+    return c.json({ period: periodParam, startDate, endDate, agents });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+agentRoutes.get('/agents/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
     return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
   }
-  const startDate = c.req.query('startDate');
-  const endDate = c.req.query('endDate');
   try {
-    const [spans, logs, evaluations] = await Promise.all([
-      loadSessionSpans(sessionId, startDate, endDate),
-      loadLogsBySessionId(sessionId, startDate, endDate),
-      loadEvaluationsBySessionId(sessionId, startDate, endDate),
-    ]);
+    const spans = await loadTracesBySessionId(sessionId);
+    const agentMap = new Map<number, string>();
     const traceIds = new Set<string>();
-    for (const s of spans) {
-      if (s.traceId) traceIds.add(s.traceId);
-    }
-    const dataSources = {
-      traces: { count: spans.length, traceIds: traceIds.size },
-      logs: { count: logs.length },
-      evaluations: { count: evaluations.length },
-      total: spans.length + logs.length + evaluations.length,
-    };
-    let tsMin = Infinity;
-    let tsMax = -Infinity;
-    for (const ev of evaluations) {
-      const t = parseTimestamp(ev.timestamp);
-      if (t !== null) {
-        if (t < tsMin) tsMin = t;
-        if (t > tsMax) tsMax = t;
-      }
-    }
-    for (const l of logs) {
-      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
-      if (t !== null) {
-        if (t < tsMin) tsMin = t;
-        if (t > tsMax) tsMax = t;
-      }
-    }
-    const timespan = tsMin < Infinity ? {
-      start: new Date(tsMin).toISOString(),
-      end: new Date(tsMax).toISOString(),
-      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
-    } : null;
-    const sessionStarts = spans.filter(s => attr<string>(s, 'hook.name') === 'session-start');
-    const first = sessionStarts[0];
-    const last = sessionStarts[sessionStarts.length - 1] ?? first;
-    const sessionInfo = first ? {
-      projectName: attr<string>(first, 'project.name') ?? 'unknown',
-      workingDirectory: attr<string>(first, 'working.directory') ?? '',
-      gitRepository: attr<string>(first, 'git.repository') ?? '',
-      gitBranch: attr<string>(first, 'git.branch') ?? '',
-      nodeVersion: attr<string>(first, 'node.version') ?? '',
-      resumeCount: sessionStarts.length,
-      initialMessageCount: attr<number>(first, 'context.message_count') ?? 0,
-      initialContextTokens: attr<number>(first, 'context.estimated_tokens') ?? 0,
-      finalMessageCount: attr<number>(last, 'context.message_count') ?? 0,
-      taskCount: attr<number>(first, 'tasks.active') ?? 0,
-      uncommittedAtStart: attr<number>(first, 'git.uncommitted') ?? 0,
-    } : null;
-    const tokenProgression = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'token-metrics-extraction')
-      .map(s => ({
-        messages: attr<number>(s, 'tokens.messages') ?? 0,
-        inputTokens: attr<number>(s, 'tokens.input') ?? 0,
-        outputTokens: attr<number>(s, 'tokens.output') ?? 0,
-        cacheRead: attr<number>(s, 'tokens.cache_read') ?? 0,
-        cacheCreation: attr<number>(s, 'tokens.cache_creation') ?? 0,
-        model: attr<string>(s, 'tokens.model') ?? '',
-      }))
-      .sort((a, b) => a.messages - b.messages);
-    // ---- Token Totals ----
-    const tokenTotals = {
-      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
-      models: {} as Record<string, number>,
-    };
-    for (const t of tokenProgression) {
-      tokenTotals.input += t.inputTokens;
-      tokenTotals.output += t.outputTokens;
-      tokenTotals.cacheRead += t.cacheRead;
-      tokenTotals.cacheCreation += t.cacheCreation;
-      tokenTotals.messages += t.messages;
-      if (t.model) incrementCount(tokenTotals.models, t.model);
-    }
-    // ---- Tool Usage ----
-    const toolUsage: Record<string, number> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.type') === 'builtin' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
-        const tool = attr<string>(s, 'builtin.tool') ?? 'unknown';
-        incrementCount(toolUsage, tool);
-      }
-    }
-    const mcpUsage: Record<string, number> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.type') === 'mcp' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
-        const tool = attr<string>(s, 'mcp.tool') ?? 'unknown';
-        incrementCount(mcpUsage, tool);
-      }
-    }
-    const spanBreakdown: Record<string, number> = {};
-    const hookDurations: Record<string, number[]> = {};
-    for (const s of spans) {
-      incrementCount(spanBreakdown, s.name);
-      const ms = s.durationMs ?? 0;
-      if (ms > 0) {
-        if (!hookDurations[s.name]) hookDurations[s.name] = [];
-        hookDurations[s.name].push(ms);
-      }
-    }
-    const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
-    for (const [name, durations] of Object.entries(hookDurations)) {
-      const sorted = [...durations].sort((a, b) => a - b);
-      hookLatency[name] = {
-        count: sorted.length,
-        avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
-        p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
-        p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
-        max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
-      };
-    }
-    const errorsByCategory: Record<string, number> = {};
-    const errorDetails: Array<{
-      spanName: string;
-      tool?: string;
-      errorType?: string;
-      filePath?: string;
-    }> = [];
-    for (const s of spans) {
-      const hasError = attr<boolean>(s, 'builtin.has_error') === true
-        || attr<boolean>(s, 'agent.has_error') === true
-        || s.status?.code === OTEL_STATUS_ERROR_CODE;
-      if (!hasError) continue;
-      const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
-      const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
-      const key = `${tool} -> ${errType}`;
-      incrementCount(errorsByCategory, key);
-      errorDetails.push({
-        spanName: s.name,
-        tool,
-        errorType: errType,
-        filePath: attr<string>(s, 'builtin.file_path'),
-      });
-    }
-    const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
-    for (const s of spans) {
-      if (attr<string>(s, 'hook.name') === 'agent-post-tool') {
-        const name = attr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
-        if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
-        agentAcc[name].invocations++;
-        if (attr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
-        if (attr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
-        agentAcc[name].totalOutputSize += attr<number>(s, 'agent.output_size') ?? 0;
-      }
-    }
-    const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
-      agentName,
-      invocations: d.invocations,
-      errors: d.errors,
-      hasRateLimit: d.hasRateLimit,
-      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-    }));
-    const fileCount: Record<string, number> = {};
-    for (const s of spans) {
-      const fp = attr<string>(s, 'builtin.file_path');
-      if (fp) incrementCount(fileCount, fp);
-    }
-    const fileAccess = Object.entries(fileCount)
-      .map(([path, count]) => ({ path, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, FILE_ACCESS_TOP_N);
-    const gitCommits = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'post-commit-review')
-      .map(s => {
-        const raw = attr<string>(s, 'git.command') ?? '';
-        const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
-        const files = filesMatch ? filesMatch[1].trim() : '';
-        const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
-        const fullMessage = msgMatch ? msgMatch[1] : '';
-        const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
-        const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
-        return { subject, body, files };
-      });
-    // ---- Alert Summary ----
-    const alertSpans = spans.filter(s => attr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
-    const alertSummary = {
-      totalFired: alertSpans.reduce((sum, s) => sum + (attr<number>(s, 'alerts.triggered_count') ?? 0), 0),
-      stopEvents: alertSpans.length,
-    };
-    const codeStructure = spans
-      .filter(s => attr<string>(s, 'hook.name') === 'code-structure')
-      .map(s => ({
-        file: attr<string>(s, 'code.structure.file') ?? '',
-        lines: attr<number>(s, 'code.structure.lines') ?? 0,
-        exports: attr<number>(s, 'code.structure.exports') ?? 0,
-        functions: attr<number>(s, 'code.structure.functions') ?? 0,
-        hasTypes: attr<boolean>(s, 'code.structure.has_types') ?? false,
-        score: attr<number>(s, 'code.structure.score') ?? 0,
-        tool: attr<string>(s, 'code.structure.tool') ?? '',
-      }));
-    // ---- Evaluation Breakdown (from direct sessionId query) ----
-    const evalByName: Record<string, { count: number; scores: number[] }> = {};
-    for (const ev of evaluations) {
-      const name = ev.evaluationName;
-      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
-      evalByName[name].count++;
-      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-        evalByName[name].scores.push(ev.scoreValue);
-      }
-    }
-    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
-      const sorted = [...d.scores].sort((a, b) => a - b);
-      return {
-        name,
-        count: d.count,
-        avg: sorted.length > 0 ? +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION) : null,
-        min: sorted.length > 0 ? +sorted[0].toFixed(SCORE_DISPLAY_PRECISION) : null,
-        max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION) : null,
-      };
-    });
-    // ---- Log Summary ----
-    const logBySeverity: Record<string, number> = {};
-    for (const l of logs) {
-      const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
-      incrementCount(logBySeverity, sev);
-    }
-    const agentMapForEval = new Map<number, string>();
     spans.forEach((span, i) => {
-      const agent =
-        (span.attributes?.['agent.name'] as string | undefined) ??
-        (span.attributes?.['gen_ai.agent.name'] as string | undefined);
-      if (agent) agentMapForEval.set(i, agent);
+      const rawAgent = span.attributes?.['agent.name'] ?? span.attributes?.['gen_ai.agent.name'];
+      const agent = typeof rawAgent === 'string' ? rawAgent : undefined;
+      if (agent) agentMap.set(i, agent);
+      if (span.traceId) traceIds.add(span.traceId);
     });
     const stepScores: StepScore[] = spans.map((span, i) => ({
       step: i,
@@ -17648,187 +17353,22 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         : (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
       explanation: span.name,
     }));
-    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
+    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
+    const evaluations = await loadEvaluationsByTraceIds([...traceIds]);
+    const serializedAgentMap = Object.fromEntries(agentMap);
+    const graph = buildWorkflowGraph(evaluation, spans);
     return c.json({
       sessionId,
-      dataSources,
-      timespan,
-      sessionInfo,
-      tokenTotals,
-      tokenProgression,
-      toolUsage,
-      mcpUsage,
-      spanBreakdown,
-      hookLatency,
-      errors: { byCategory: errorsByCategory, details: errorDetails },
-      agentActivity,
-      fileAccess,
-      gitCommits,
-      alertSummary,
-      codeStructure,
-      evaluationBreakdown,
-      logSummary: {
-        bySeverity: logBySeverity,
-        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
-          const entry: SafeLogEntry = {};
-          for (const key of LOG_SUMMARY_FIELDS) {
-            const val = l[key];
-            if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
-          }
-          return entry;
-        }),
-      },
-      multiAgentEvaluation,
+      spans,
+      evaluation,
       evaluations,
+      agentMap: serializedAgentMap,
+      graph,
     });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
-
-================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-}
-export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
-export type InputKey = z.infer<typeof InputKeySchema>;
-export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
-export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
-export type SortBy = z.infer<typeof SortBySchema>;
-export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
-export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
-export type Role = z.infer<typeof RoleSchema>;
-export const ROLES = RoleSchema.options;
-export const DEFAULT_ROLE: Role = 'executive';
-export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
-export const TIME_MS = {
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-} as const;
-export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
-export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
-export const PeriodEnum = z.enum(PERIOD_KEYS);
-export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
-export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
-export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
-export const PERIOD_MS: Record<string, number> = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
-);
-export function computePeriodDates(period: string): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
-  return { start: start.toISOString(), end: now.toISOString() };
-}
-export const LLM_SAMPLE_RATE = 10;
-export const SCORE_THRESHOLD_GREEN = 0.8;
-export const SCORE_THRESHOLD_YELLOW = 0.5;
-export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-export const MAX_ERROR_ROWS = 10;
-export const MAX_HALLUCINATION_ROWS = 8;
-export const MAX_FAILED_EVAL_ROWS = 6;
-export const LIVE_WINDOW_MS = TIME_MS.DAY;
-export const QUERY_RETRY_COUNT = 2;
-export const POLL_INTERVAL_MS = 30_000;
-export const RETRY_DELAY_BASE = 1_000;
-export const RETRY_DELAY_CAP = 30_000;
-export const MAX_IDS = 50;
-export const EVAL_LIMIT = 100;
-export const SCORE_DISPLAY_PRECISION = 3;
-export const SCORE_CHIP_PRECISION = 2;
-export const SCORE_FORMAT_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const STALE_TIME = {
-  DEFAULT: 25_000,
-  DETAIL: 30_000,
-  AGGREGATE: 60_000,
-} as const;
-export const DEFAULT_TOP_N = 5;
-export const DEFAULT_BUCKET_COUNT = 10;
-export const METRIC_CARD_SKELETON_HEIGHT = 180;
-export const SKELETON_HEIGHT_SM = 200;
-export const SKELETON_HEIGHT_MD = 300;
-export const SKELETON_HEIGHT_LG = 400;
-export const SKELETON_HEIGHT_XL = 600;
-export const ICON_BADGE_SIZE = 24;
-export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
-export const AGENT_CARD_MIN_WIDTH = '220px';
-export const FILE_ACCESS_COL_MIN = '320px';
-export const DEFAULT_PAGE_LIMIT = 50;
-export const HEATMAP_ROW_HEADER_WIDTH = 80;
-export const HEATMAP_COL_HEADER_HEIGHT = 32;
-export const HEATMAP_CELL_MIN_HEIGHT = 36;
-export const COVERAGE_GRID_HEADER_WIDTH = 120;
-export const COVERAGE_GRID_CELL_SIZE = 28;
-export const COVERAGE_GRID_LEGEND_SIZE = 12;
-export const COVERAGE_GRID_MAX_INPUTS = 30;
-export const COVERAGE_GRID_HEADER_MAX_HEIGHT = 60;
-export const FUNNEL_BAR_HEIGHT = 32;
-export const FUNNEL_BAR_MIN_WIDTH = 40;
-export const FUNNEL_DROPOFF_WARN_PCT = 20;
-export const SPAN_TREE_INDENT = 20;
-export const SPAN_TREE_BASE_PADDING = 8;
-export const SPLIT_PANE_DIVIDER_WIDTH = 6;
-export const SPLIT_PANE_MIN_HEIGHT = 300;
-export const TURN_CARD_MIN_WIDTH = 120;
-export const AGENT_TABLE_MIN_WIDTH = 640;
-export const AGENT_BAR_MIN_WIDTH = 48;
-export const AGENT_EVAL_CARD_MIN_WIDTH = 140;
-export const SPARKLINE_WIDTH = 160;
-export const SPARKLINE_HEIGHT = 28;
-export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
-export const VARIANCE_LOW_PCT = 20;
-export const VARIANCE_MEDIUM_PCT = 50;
-export const VARIANCE_DISPLAY_MIN_WIDTH = 36;
-export const CHART_HEIGHT = 200;
-export const CHART_STROKE_WIDTH = 2;
-export const CHART_DOT_RADIUS = 4;
-export const CHART_DOT_RADIUS_ACTIVE = 6;
-export const CHART_DOT_RADIUS_PROJECTED = 3;
-export const CHART_DASH_THRESHOLD = '6 3';
-export const CHART_DASH_PROJECTED = '6 4';
-export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-export const EVAL_FILTER_INACTIVE_OPACITY = 0.6;
-export const SCORE_BADGE_ALPHA_HEX = '1a';
-export const CHART_COLORS = {
-  line: '#58a6ff',
-  grid: '#30363d',
-  text: '#8b949e',
-  surface: '#1f2937',
-  tooltip: '#161b22',
-  warning: '#d29922',
-  critical: '#f85149',
-} as const;
-export const AGENT_PALETTE = [
-  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
-  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
-] as const;
-export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
-export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
-export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
-export const CHART_TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: CHART_COLORS.tooltip,
-  border: `1px solid ${CHART_COLORS.grid}`,
-  borderRadius: 'var(--radius)',
-  color: CHART_COLORS.text,
-  fontSize: 12,
-};
-export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
-export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
 
 ================
 File: src/App.tsx
@@ -18326,6 +17866,493 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 }
+
+================
+File: src/api/routes/sessions.ts
+================
+import { Hono } from 'hono';
+import { subMilliseconds, formatISO } from 'date-fns';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import {
+  COMMIT_BODY_START_LINE_INDEX,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  FILE_ACCESS_TOP_N,
+  LATENCY_P50,
+  LATENCY_P95,
+  LOG_SUMMARY_FIELDS,
+  LOG_SUMMARY_MAX_ENTRIES,
+  type SafeLogEntry,
+  OTEL_STATUS_ERROR_CODE,
+  PARAM_ID_RE,
+  PERCENT_BASE,
+  LATENCY_DISPLAY_PRECISION,
+} from '../api-constants.js';
+import {
+  loadEvaluationsBySessionId,
+  loadLogsBySessionId,
+} from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+export const sessionRoutes = new Hono();
+function attr<T>(span: { attributes?: Record<string, unknown> }, key: string): T | undefined {
+  return span.attributes?.[key] as T | undefined;
+}
+function parseTimestamp(value: string | undefined | null): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return isNaN(ms) ? null : ms;
+}
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
+  return sorted[Math.max(0, idx)];
+}
+function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
+function computeLatencyStats(durations: number[]): LatencyStats {
+  const sorted = [...durations].sort((a, b) => a - b);
+  return {
+    count: sorted.length,
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
+    p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
+    p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
+  };
+}
+type ScoreStats = { avg: number | null; min: number | null; max: number | null };
+function computeScoreStats(scores: number[]): ScoreStats {
+  if (scores.length === 0) return { avg: null, min: null, max: null };
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+  };
+}
+const LIMIT_SESSION_SPANS = 1000;
+async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
+  const now = new Date();
+  const end = endDate ?? formatISO(now, { representation: 'date' });
+  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
+  const result = await queryTraces({
+    attributeFilter: { 'session.id': sessionId },
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_SESSION_SPANS,
+  });
+  return result.traces;
+}
+sessionRoutes.get('/sessions/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  if (!sessionId || !PARAM_ID_RE.test(sessionId)) {
+    return c.json({ error: 'Invalid sessionId format' }, HttpStatus.BadRequest);
+  }
+  const startDate = c.req.query('startDate');
+  const endDate = c.req.query('endDate');
+  try {
+    const [spans, logs, evaluations] = await Promise.all([
+      loadSessionSpans(sessionId, startDate, endDate),
+      loadLogsBySessionId(sessionId, startDate, endDate),
+      loadEvaluationsBySessionId(sessionId, startDate, endDate),
+    ]);
+    const traceIds = new Set<string>();
+    for (const s of spans) {
+      if (s.traceId) traceIds.add(s.traceId);
+    }
+    const dataSources = {
+      traces: { count: spans.length, traceIds: traceIds.size },
+      logs: { count: logs.length },
+      evaluations: { count: evaluations.length },
+      total: spans.length + logs.length + evaluations.length,
+    };
+    let tsMin = Infinity;
+    let tsMax = -Infinity;
+    for (const ev of evaluations) {
+      const t = parseTimestamp(ev.timestamp);
+      if (t !== null) {
+        if (t < tsMin) tsMin = t;
+        if (t > tsMax) tsMax = t;
+      }
+    }
+    for (const l of logs) {
+      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
+      if (t !== null) {
+        if (t < tsMin) tsMin = t;
+        if (t > tsMax) tsMax = t;
+      }
+    }
+    const timespan = tsMin < Infinity ? {
+      start: new Date(tsMin).toISOString(),
+      end: new Date(tsMax).toISOString(),
+      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
+    } : null;
+    const sessionStarts = spans.filter(s => attr<string>(s, 'hook.name') === 'session-start');
+    const first = sessionStarts[0];
+    const last = sessionStarts[sessionStarts.length - 1] ?? first;
+    const sessionInfo = first ? {
+      projectName: attr<string>(first, 'project.name') ?? 'unknown',
+      workingDirectory: attr<string>(first, 'working.directory') ?? '',
+      gitRepository: attr<string>(first, 'git.repository') ?? '',
+      gitBranch: attr<string>(first, 'git.branch') ?? '',
+      nodeVersion: attr<string>(first, 'node.version') ?? '',
+      resumeCount: sessionStarts.length,
+      initialMessageCount: attr<number>(first, 'context.message_count') ?? 0,
+      initialContextTokens: attr<number>(first, 'context.estimated_tokens') ?? 0,
+      finalMessageCount: attr<number>(last, 'context.message_count') ?? 0,
+      taskCount: attr<number>(first, 'tasks.active') ?? 0,
+      uncommittedAtStart: attr<number>(first, 'git.uncommitted') ?? 0,
+    } : null;
+    const tokenProgression = spans
+      .filter(s => attr<string>(s, 'hook.name') === 'token-metrics-extraction')
+      .map(s => ({
+        messages: attr<number>(s, 'tokens.messages') ?? 0,
+        inputTokens: attr<number>(s, 'tokens.input') ?? 0,
+        outputTokens: attr<number>(s, 'tokens.output') ?? 0,
+        cacheRead: attr<number>(s, 'tokens.cache_read') ?? 0,
+        cacheCreation: attr<number>(s, 'tokens.cache_creation') ?? 0,
+        model: attr<string>(s, 'tokens.model') ?? '',
+      }))
+      .sort((a, b) => a.messages - b.messages);
+    // ---- Token Totals ----
+    const tokenTotals = {
+      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
+      models: {} as Record<string, number>,
+    };
+    for (const t of tokenProgression) {
+      tokenTotals.input += t.inputTokens;
+      tokenTotals.output += t.outputTokens;
+      tokenTotals.cacheRead += t.cacheRead;
+      tokenTotals.cacheCreation += t.cacheCreation;
+      tokenTotals.messages += t.messages;
+      if (t.model) incrementCount(tokenTotals.models, t.model);
+    }
+    // ---- Tool Usage ----
+    const toolUsage: Record<string, number> = {};
+    for (const s of spans) {
+      if (attr<string>(s, 'hook.type') === 'builtin' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
+        const tool = attr<string>(s, 'builtin.tool') ?? 'unknown';
+        incrementCount(toolUsage, tool);
+      }
+    }
+    const mcpUsage: Record<string, number> = {};
+    for (const s of spans) {
+      if (attr<string>(s, 'hook.type') === 'mcp' && attr<string>(s, 'hook.trigger') === 'PostToolUse') {
+        const tool = attr<string>(s, 'mcp.tool') ?? 'unknown';
+        incrementCount(mcpUsage, tool);
+      }
+    }
+    const spanBreakdown: Record<string, number> = {};
+    const hookDurations: Record<string, number[]> = {};
+    for (const s of spans) {
+      incrementCount(spanBreakdown, s.name);
+      const ms = s.durationMs ?? 0;
+      if (ms > 0) {
+        if (!hookDurations[s.name]) hookDurations[s.name] = [];
+        hookDurations[s.name].push(ms);
+      }
+    }
+    const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
+    for (const [name, durations] of Object.entries(hookDurations)) {
+      hookLatency[name] = computeLatencyStats(durations);
+    }
+    const errorsByCategory: Record<string, number> = {};
+    const errorDetails: Array<{
+      spanName: string;
+      tool?: string;
+      errorType?: string;
+      filePath?: string;
+    }> = [];
+    for (const s of spans) {
+      const hasError = attr<boolean>(s, 'builtin.has_error') === true
+        || attr<boolean>(s, 'agent.has_error') === true
+        || s.status?.code === OTEL_STATUS_ERROR_CODE;
+      if (!hasError) continue;
+      const tool = attr<string>(s, 'builtin.tool') ?? attr<string>(s, 'agent.type') ?? 'unknown';
+      const errType = attr<string>(s, 'builtin.error_type') ?? 'unknown';
+      const key = `${tool} -> ${errType}`;
+      incrementCount(errorsByCategory, key);
+      errorDetails.push({
+        spanName: s.name,
+        tool,
+        errorType: errType,
+        filePath: attr<string>(s, 'builtin.file_path'),
+      });
+    }
+    const agentAcc: Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }> = {};
+    for (const s of spans) {
+      if (attr<string>(s, 'hook.name') === 'agent-post-tool') {
+        const name = attr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
+        if (!agentAcc[name]) agentAcc[name] = { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 };
+        agentAcc[name].invocations++;
+        if (attr<boolean>(s, 'agent.has_error')) agentAcc[name].errors++;
+        if (attr<boolean>(s, 'agent.has_rate_limit')) agentAcc[name].hasRateLimit = true;
+        agentAcc[name].totalOutputSize += attr<number>(s, 'agent.output_size') ?? 0;
+      }
+    }
+    const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
+      agentName,
+      invocations: d.invocations,
+      errors: d.errors,
+      hasRateLimit: d.hasRateLimit,
+      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+    }));
+    const fileCount: Record<string, number> = {};
+    for (const s of spans) {
+      const fp = attr<string>(s, 'builtin.file_path');
+      if (fp) incrementCount(fileCount, fp);
+    }
+    const fileAccess = Object.entries(fileCount)
+      .map(([path, count]) => ({ path, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, FILE_ACCESS_TOP_N);
+    const gitCommits = spans
+      .filter(s => attr<string>(s, 'hook.name') === 'post-commit-review')
+      .map(s => {
+        const raw = attr<string>(s, 'git.command') ?? '';
+        const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
+        const files = filesMatch ? filesMatch[1].trim() : '';
+        const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
+        const fullMessage = msgMatch ? msgMatch[1] : '';
+        const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
+        const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
+        return { subject, body, files };
+      });
+    // ---- Alert Summary ----
+    const alertSpans = spans.filter(s => attr<string>(s, 'hook.name') === 'telemetry-alert-evaluation');
+    const alertSummary = {
+      totalFired: alertSpans.reduce((sum, s) => sum + (attr<number>(s, 'alerts.triggered_count') ?? 0), 0),
+      stopEvents: alertSpans.length,
+    };
+    const codeStructure = spans
+      .filter(s => attr<string>(s, 'hook.name') === 'code-structure')
+      .map(s => ({
+        file: attr<string>(s, 'code.structure.file') ?? '',
+        lines: attr<number>(s, 'code.structure.lines') ?? 0,
+        exports: attr<number>(s, 'code.structure.exports') ?? 0,
+        functions: attr<number>(s, 'code.structure.functions') ?? 0,
+        hasTypes: attr<boolean>(s, 'code.structure.has_types') ?? false,
+        score: attr<number>(s, 'code.structure.score') ?? 0,
+        tool: attr<string>(s, 'code.structure.tool') ?? '',
+      }));
+    // ---- Evaluation Breakdown (from direct sessionId query) ----
+    const evalByName: Record<string, { count: number; scores: number[] }> = {};
+    for (const ev of evaluations) {
+      const name = ev.evaluationName;
+      if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
+      evalByName[name].count++;
+      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+        evalByName[name].scores.push(ev.scoreValue);
+      }
+    }
+    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
+      const { avg, min, max } = computeScoreStats(d.scores);
+      return { name, count: d.count, avg, min, max };
+    });
+    // ---- Log Summary ----
+    const logBySeverity: Record<string, number> = {};
+    for (const l of logs) {
+      const sev = (l as { severity?: string }).severity ?? 'UNKNOWN';
+      incrementCount(logBySeverity, sev);
+    }
+    const agentMapForEval = new Map<number, string>();
+    spans.forEach((span, i) => {
+      const agent =
+        (span.attributes?.['agent.name'] as string | undefined) ??
+        (span.attributes?.['gen_ai.agent.name'] as string | undefined);
+      if (agent) agentMapForEval.set(i, agent);
+    });
+    const stepScores: StepScore[] = spans.map((span, i) => ({
+      step: i,
+      score: typeof span.attributes?.['evaluation.score'] === 'number'
+        ? span.attributes['evaluation.score'] as number
+        : (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+      explanation: span.name,
+    }));
+    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
+    return c.json({
+      sessionId,
+      dataSources,
+      timespan,
+      sessionInfo,
+      tokenTotals,
+      tokenProgression,
+      toolUsage,
+      mcpUsage,
+      spanBreakdown,
+      hookLatency,
+      errors: { byCategory: errorsByCategory, details: errorDetails },
+      agentActivity,
+      fileAccess,
+      gitCommits,
+      alertSummary,
+      codeStructure,
+      evaluationBreakdown,
+      logSummary: {
+        bySeverity: logBySeverity,
+        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
+          const entry: SafeLogEntry = {};
+          for (const key of LOG_SUMMARY_FIELDS) {
+            const val = l[key];
+            if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
+          }
+          return entry;
+        }),
+      },
+      multiAgentEvaluation,
+      evaluations,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/lib/constants.ts
+================
+import { z } from 'zod';
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+}
+export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+export type InputKey = z.infer<typeof InputKeySchema>;
+export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
+export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
+export type SortBy = z.infer<typeof SortBySchema>;
+export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
+export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
+export type Role = z.infer<typeof RoleSchema>;
+export const ROLES = RoleSchema.options;
+export const DEFAULT_ROLE: Role = 'executive';
+export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
+export const TIME_MS = {
+  HOUR: 60 * 60 * 1000,
+  DAY: 24 * 60 * 60 * 1000,
+} as const;
+export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
+export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
+export const PeriodEnum = z.enum(PERIOD_KEYS);
+export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
+export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
+export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
+export const PERIOD_MS: Record<string, number> = Object.fromEntries(
+  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
+);
+export function computePeriodDates(period: string): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
+export const LLM_SAMPLE_RATE = 10;
+export const SCORE_THRESHOLD_GREEN = 0.8;
+export const SCORE_THRESHOLD_YELLOW = 0.5;
+export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
+export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+export const MAX_ERROR_ROWS = 10;
+export const MAX_HALLUCINATION_ROWS = 8;
+export const MAX_FAILED_EVAL_ROWS = 6;
+export const LIVE_WINDOW_MS = TIME_MS.DAY;
+export const QUERY_RETRY_COUNT = 2;
+export const POLL_INTERVAL_MS = 30_000;
+export const RETRY_DELAY_BASE = 1_000;
+export const RETRY_DELAY_CAP = 30_000;
+export const MAX_IDS = 50;
+export const EVAL_LIMIT = 100;
+export const SCORE_DISPLAY_PRECISION = 3;
+export const SCORE_CHIP_PRECISION = 2;
+export const SCORE_FORMAT_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const STALE_TIME = {
+  DEFAULT: 25_000,
+  DETAIL: 30_000,
+  AGGREGATE: 60_000,
+} as const;
+export const DEFAULT_TOP_N = 5;
+export const DEFAULT_BUCKET_COUNT = 10;
+export const METRIC_CARD_SKELETON_HEIGHT = 180;
+export const SKELETON_HEIGHT_SM = 200;
+export const SKELETON_HEIGHT_MD = 300;
+export const SKELETON_HEIGHT_LG = 400;
+export const SKELETON_HEIGHT_XL = 600;
+export const ICON_BADGE_SIZE = 24;
+export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
+export const AGENT_CARD_MIN_WIDTH = '220px';
+export const FILE_ACCESS_COL_MIN = '320px';
+export const DEFAULT_PAGE_LIMIT = 50;
+export const HEATMAP_ROW_HEADER_WIDTH = 80;
+export const HEATMAP_COL_HEADER_HEIGHT = 32;
+export const HEATMAP_CELL_MIN_HEIGHT = 36;
+export const COVERAGE_GRID_HEADER_WIDTH = 120;
+export const COVERAGE_GRID_CELL_SIZE = 28;
+export const COVERAGE_GRID_LEGEND_SIZE = 12;
+export const COVERAGE_GRID_MAX_INPUTS = 30;
+export const COVERAGE_GRID_HEADER_MAX_HEIGHT = 60;
+export const FUNNEL_BAR_HEIGHT = 32;
+export const FUNNEL_BAR_MIN_WIDTH = 40;
+export const FUNNEL_DROPOFF_WARN_PCT = 20;
+export const SPAN_TREE_INDENT = 20;
+export const SPAN_TREE_BASE_PADDING = 8;
+export const SPLIT_PANE_DIVIDER_WIDTH = 6;
+export const SPLIT_PANE_MIN_HEIGHT = 300;
+export const TURN_CARD_MIN_WIDTH = 120;
+export const AGENT_TABLE_MIN_WIDTH = 640;
+export const AGENT_BAR_MIN_WIDTH = 48;
+export const AGENT_EVAL_CARD_MIN_WIDTH = 140;
+export const SPARKLINE_WIDTH = 160;
+export const SPARKLINE_HEIGHT = 28;
+export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
+export const VARIANCE_LOW_PCT = 20;
+export const VARIANCE_MEDIUM_PCT = 50;
+export const VARIANCE_DISPLAY_MIN_WIDTH = 36;
+export const CHART_HEIGHT = 200;
+export const CHART_STROKE_WIDTH = 2;
+export const CHART_DOT_RADIUS = 4;
+export const CHART_DOT_RADIUS_ACTIVE = 6;
+export const CHART_DOT_RADIUS_PROJECTED = 3;
+export const CHART_DASH_THRESHOLD = '6 3';
+export const CHART_DASH_PROJECTED = '6 4';
+export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
+export const EVAL_FILTER_INACTIVE_OPACITY = 0.6;
+export const SCORE_BADGE_ALPHA_HEX = '1a';
+export const CHART_COLORS = {
+  line: '#58a6ff',
+  grid: '#30363d',
+  text: '#8b949e',
+  surface: '#1f2937',
+  tooltip: '#161b22',
+  warning: '#d29922',
+  critical: '#f85149',
+} as const;
+export const AGENT_PALETTE = [
+  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
+  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
+] as const;
+export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
+export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
+export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
+export const CHART_TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: CHART_COLORS.tooltip,
+  border: `1px solid ${CHART_COLORS.grid}`,
+  borderRadius: 'var(--radius)',
+  color: CHART_COLORS.text,
+  fontSize: 12,
+};
+export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
+export const CHART_YAXIS_WIDTH = 48;
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
 
 ================
 File: src/pages/SessionDetailPage.tsx
@@ -21020,6 +21047,18 @@ npm run deploy:worker        # Deploy Cloudflare Worker
 - **Validation**: Zod schemas in `src/lib/validation/` for all auth and dashboard types
 - **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
 - **React Compiler**: Active via `babel-plugin-react-compiler`. Libraries incompatible with it (e.g., `useReactTable`) require `// eslint-disable-next-line react-compiler/react-compiler` suppression with a comment explaining why.
+
+## Constants Architecture
+
+Two constants files with a hard module boundary — do not cross-import:
+- **`src/lib/constants.ts`** — frontend + API server shared; uses `import.meta.env` (Vite). Imported by React components, hooks, and Hono API routes.
+- **`src/api/api-constants.ts`** — API server only (Node context). Imported by `src/api/routes/` and `scripts/`. Cannot be imported in Vite-rendered code.
+- **`worker/index.ts`** — has its own local `Http` constants object; cannot import either file above safely.
+
+Score display precision constants (use these, never raw `.toFixed()` literals):
+- `SCORE_CHIP_PRECISION = 2` — compact chips/cells
+- `SCORE_DISPLAY_PRECISION = 3` — standard display
+- `SCORE_FORMAT_PRECISION = 4` — raw value formatting
 
 ## Data Pipeline (`scripts/`)
 

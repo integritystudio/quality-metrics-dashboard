@@ -1122,27 +1122,6 @@ File: src/components/ComplianceFrameworkMap.tsx
 
 
 ================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE, COVERAGE_GRID_LEGEND_SIZE,
-  COVERAGE_GRID_MAX_INPUTS, COVERAGE_GRID_HEADER_MAX_HEIGHT,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-⋮----
-onMouseLeave=
-
-================
 File: src/components/DetailPageHeader.tsx
 ================
 import type { ReactNode } from 'react';
@@ -1860,6 +1839,27 @@ function lookupCorrelation(
   a: string,
   b: string,
 ): CorrelationFeature | undefined
+
+================
+File: src/components/CoverageGrid.tsx
+================
+import { memo, useState, useMemo } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE, COVERAGE_GRID_LEGEND_SIZE,
+  COVERAGE_GRID_MAX_INPUTS, COVERAGE_GRID_HEADER_MAX_HEIGHT,
+} from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
+}
+⋮----
+onMouseLeave=
 
 ================
 File: src/components/CQIHero.tsx
@@ -2966,6 +2966,44 @@ export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
+File: src/lib/supabase.ts
+================
+import { fromUnixTime, isPast, subSeconds } from 'date-fns';
+⋮----
+export interface SupabaseSession {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  user: { id: string; email: string };
+}
+export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
+type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
+type AuthTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: { id: string; email: string };
+};
+⋮----
+function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void
+function saveSession(session: SupabaseSession): void
+function clearSession(): void
+function clearSessionAndNotify(): null
+function isValidSession(value: unknown): value is SupabaseSession
+function readRawSession(): SupabaseSession | null
+function isValidTokenResponse(value: unknown): value is AuthTokenResponse
+function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession
+export function getSession(): SupabaseSession | null
+export async function signIn(email: string, password: string): Promise<SupabaseSession>
+export async function signOut(): Promise<void>
+⋮----
+export function refreshSession(): Promise<SupabaseSession | null>
+export function onAuthStateChange(listener: AuthStateListener): () => void
+⋮----
+export function startAutoRefresh(): void
+export function stopAutoRefresh(): void
+
+================
 File: src/pages/RoutingTelemetryPage.tsx
 ================
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
@@ -3077,42 +3115,26 @@ function VarianceBar(
 function JudgePanel(
 
 ================
-File: src/lib/supabase.ts
+File: src/lib/validation/auth-schemas.ts
 ================
-import { fromUnixTime, isPast, subSeconds } from 'date-fns';
+import { z } from 'zod';
+import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
 ⋮----
-export interface SupabaseSession {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  user: { id: string; email: string };
-}
-export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
-type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
-type AuthTokenResponse = {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: { id: string; email: string };
-};
+export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
 ⋮----
-function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void
-function saveSession(session: SupabaseSession): void
-function clearSession(): void
-function clearSessionAndNotify(): null
-function isValidSession(value: unknown): value is SupabaseSession
-function readRawSession(): SupabaseSession | null
-function isValidTokenResponse(value: unknown): value is AuthTokenResponse
-function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession
-export function getSession(): SupabaseSession | null
-export async function signIn(email: string, password: string): Promise<SupabaseSession>
-export async function signOut(): Promise<void>
+export type PublicUser = z.infer<typeof PublicUserSchema>;
 ⋮----
-export function refreshSession(): Promise<SupabaseSession | null>
-export function onAuthStateChange(listener: AuthStateListener): () => void
+export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
 ⋮----
-export function startAutoRefresh(): void
-export function stopAutoRefresh(): void
+export type AdminRole = z.infer<typeof AdminRoleSchema>;
+⋮----
+export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
+⋮----
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+⋮----
+export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
+⋮----
+export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 ================
 File: src/api/routes/trends.ts
@@ -3173,39 +3195,6 @@ interface IdListColumnProps {
 }
 ⋮----
 onClick=
-
-================
-File: src/components/WorkflowTimeline.tsx
-================
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[]
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock(
-⋮----
-const turnX = (turnIndex: number): number
-const laneY = (laneIndex: number): number
 
 ================
 File: src/lib/quality-utils.ts
@@ -3274,6 +3263,31 @@ import { format, differenceInMinutes, differenceInHours, differenceInDays } from
 export function formatTimestamp(ts: string): string
 
 ================
+File: src/pages/AdminPage.tsx
+================
+import { useState, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useAuth } from '../contexts/AuthContext.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
+⋮----
+function RoleChip({
+  role,
+  onRevoke,
+  revoking,
+}: {
+  role: { id: string; name: string };
+onRevoke: (roleId: string, roleName: string)
+⋮----
+async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
+async function handleAssign()
+async function handleRevoke(roleId: string, roleName: string)
+
+================
 File: src/__tests__/WorkflowGraph.test.tsx
 ================
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -3308,21 +3322,6 @@ layout(graph: ELKGraph)
 ⋮----
 import { WorkflowGraphView } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
-
-================
-File: src/api/routes/agents.ts
-================
-import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-⋮----
-function toDateOnly(d: Date): string
 
 ================
 File: src/components/EvaluationTable.tsx
@@ -3419,51 +3418,37 @@ async function computeLayout(
 ): Promise<
 
 ================
-File: src/lib/validation/auth-schemas.ts
+File: src/components/WorkflowTimeline.tsx
 ================
-import { z } from 'zod';
-import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 ⋮----
-export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[]
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock(
 ⋮----
-export type PublicUser = z.infer<typeof PublicUserSchema>;
-⋮----
-export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
-⋮----
-export type AdminRole = z.infer<typeof AdminRoleSchema>;
-⋮----
-export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
-⋮----
-export type AdminUser = z.infer<typeof AdminUserSchema>;
-⋮----
-export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
-⋮----
-export type MeResponse = z.infer<typeof MeResponseSchema>;
-
-================
-File: src/pages/AdminPage.tsx
-================
-import { useState, useRef, useCallback } from 'react';
-import { format } from 'date-fns';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { useAuth } from '../contexts/AuthContext.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
-⋮----
-function RoleChip({
-  role,
-  onRevoke,
-  revoking,
-}: {
-  role: { id: string; name: string };
-onRevoke: (roleId: string, roleName: string)
-⋮----
-async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
-async function handleAssign()
-async function handleRevoke(roleId: string, roleName: string)
+const turnX = (turnIndex: number): number
+const laneY = (laneIndex: number): number
 
 ================
 File: src/lib/workflow-graph.ts
@@ -3611,78 +3596,31 @@ export async function processBatch<T, R>(
 async function main()
 
 ================
-File: src/api/routes/sessions.ts
+File: src/api/routes/agents.ts
 ================
 import { Hono } from 'hono';
-import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
-import {
-  COMMIT_BODY_START_LINE_INDEX,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
-  FILE_ACCESS_TOP_N,
-  LATENCY_P50,
-  LATENCY_P95,
-  LOG_SUMMARY_FIELDS,
-  LOG_SUMMARY_MAX_ENTRIES,
-  type SafeLogEntry,
-  OTEL_STATUS_ERROR_CODE,
-  PARAM_ID_RE,
-  PERCENT_BASE,
-  LATENCY_DISPLAY_PRECISION,
-} from '../api-constants.js';
-import {
-  loadEvaluationsBySessionId,
-  loadLogsBySessionId,
-} from '../data-loader.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import { OTEL_STATUS_ERROR_CODE, PARAM_ID_RE } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 ⋮----
-function attr<T>(span:
-function parseTimestamp(value: string | undefined | null): number | null
-function percentile(sorted: number[], p: number): number
-function incrementCount(map: Record<string, number>, key: string): void
-⋮----
-async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string)
-⋮----
-// ---- Token Totals ----
-⋮----
-// ---- Tool Usage ----
-⋮----
-// ---- Alert Summary ----
-⋮----
-// ---- Evaluation Breakdown (from direct sessionId query) ----
-⋮----
-// ---- Log Summary ----
-
-================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-}
-⋮----
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-⋮----
-export type InputKey = z.infer<typeof InputKeySchema>;
-⋮----
-export type SortBy = z.infer<typeof SortBySchema>;
-⋮----
-export type Role = z.infer<typeof RoleSchema>;
-⋮----
-export function computePeriodDates(period: string):
-⋮----
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
+function toDateOnly(d: Date): string
+type AgentAcc = {
+  invocations: number;
+  errors: number;
+  rateLimitCount: number;
+  totalOutputSize: number;
+  sessions: Set<string>;
+  traceIds: Set<string>;
+  sourceTypes: Record<string, number>;
+  dailyCounts: number[];
+};
+function computeEvalMetricSummary(scores: number[]):
+function createAgentAccumulator(periodDays: number): AgentAcc
 
 ================
 File: src/App.tsx
@@ -3755,6 +3693,84 @@ interface AuthContextValue {
 async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null>
 export function AuthProvider(
 export function useAuth(): AuthContextValue
+
+================
+File: src/api/routes/sessions.ts
+================
+import { Hono } from 'hono';
+import { subMilliseconds, formatISO } from 'date-fns';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS } from '../../lib/constants.js';
+import {
+  COMMIT_BODY_START_LINE_INDEX,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  FILE_ACCESS_TOP_N,
+  LATENCY_P50,
+  LATENCY_P95,
+  LOG_SUMMARY_FIELDS,
+  LOG_SUMMARY_MAX_ENTRIES,
+  type SafeLogEntry,
+  OTEL_STATUS_ERROR_CODE,
+  PARAM_ID_RE,
+  PERCENT_BASE,
+  LATENCY_DISPLAY_PRECISION,
+} from '../api-constants.js';
+import {
+  loadEvaluationsBySessionId,
+  loadLogsBySessionId,
+} from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+⋮----
+function attr<T>(span:
+function parseTimestamp(value: string | undefined | null): number | null
+function percentile(sorted: number[], p: number): number
+function incrementCount(map: Record<string, number>, key: string): void
+type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
+function computeLatencyStats(durations: number[]): LatencyStats
+type ScoreStats = { avg: number | null; min: number | null; max: number | null };
+function computeScoreStats(scores: number[]): ScoreStats
+⋮----
+async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string)
+⋮----
+// ---- Token Totals ----
+⋮----
+// ---- Tool Usage ----
+⋮----
+// ---- Alert Summary ----
+⋮----
+// ---- Evaluation Breakdown (from direct sessionId query) ----
+⋮----
+// ---- Log Summary ----
+
+================
+File: src/lib/constants.ts
+================
+import { z } from 'zod';
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+}
+⋮----
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+⋮----
+export type InputKey = z.infer<typeof InputKeySchema>;
+⋮----
+export type SortBy = z.infer<typeof SortBySchema>;
+⋮----
+export type Role = z.infer<typeof RoleSchema>;
+⋮----
+export function computePeriodDates(period: string):
+⋮----
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
 
 ================
 File: src/pages/SessionDetailPage.tsx
@@ -4315,6 +4331,18 @@ npm run deploy:worker        # Deploy Cloudflare Worker
 - **Validation**: Zod schemas in `src/lib/validation/` for all auth and dashboard types
 - **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
 - **React Compiler**: Active via `babel-plugin-react-compiler`. Libraries incompatible with it (e.g., `useReactTable`) require `// eslint-disable-next-line react-compiler/react-compiler` suppression with a comment explaining why.
+
+## Constants Architecture
+
+Two constants files with a hard module boundary — do not cross-import:
+- **`src/lib/constants.ts`** — frontend + API server shared; uses `import.meta.env` (Vite). Imported by React components, hooks, and Hono API routes.
+- **`src/api/api-constants.ts`** — API server only (Node context). Imported by `src/api/routes/` and `scripts/`. Cannot be imported in Vite-rendered code.
+- **`worker/index.ts`** — has its own local `Http` constants object; cannot import either file above safely.
+
+Score display precision constants (use these, never raw `.toFixed()` literals):
+- `SCORE_CHIP_PRECISION = 2` — compact chips/cells
+- `SCORE_DISPLAY_PRECISION = 3` — standard display
+- `SCORE_FORMAT_PRECISION = 4` — raw value formatting
 
 ## Data Pipeline (`scripts/`)
 
