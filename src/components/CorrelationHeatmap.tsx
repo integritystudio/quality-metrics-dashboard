@@ -37,7 +37,6 @@ function shortName(metric: string): string {
  */
 function contrastText(pearsonR: number): string {
   const bg = colorScale(pearsonR);
-  // Parse "rgb(r, g, b)" string from d3
   const m = bg.match(/(\d+)/g);
   if (!m || m.length < 3) return CONTRAST_DARK;
   const [r, g, b] = m.map(Number);
