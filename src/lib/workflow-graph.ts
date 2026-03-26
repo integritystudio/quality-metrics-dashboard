@@ -150,16 +150,45 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges) };
 }
 
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
+  // DFS-based cycle detection — correctly handles 3+ node cycles (e.g. A→B→C→A).
+  // Skips self-loops (WG-2): single-node self-references are not classified as cyclic.
+  const adjacency = new Map<string, string[]>();
+  for (const n of nodes) adjacency.set(n.id, []);
+  for (const e of edges) {
+    if (e.source !== e.target) {
+      adjacency.get(e.source)?.push(e.target);
+    }
+  }
+
+  const UNVISITED = 0;
+  const IN_STACK = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
+
+  function dfs(nodeId: string): boolean {
+    state.set(nodeId, IN_STACK);
+    for (const neighbor of adjacency.get(nodeId) ?? []) {
+      const neighborState = state.get(neighbor) ?? UNVISITED;
+      if (neighborState === IN_STACK) return true;
+      if (neighborState === UNVISITED && dfs(neighbor)) return true;
+    }
+    state.set(nodeId, DONE);
+    return false;
+  }
+
+  for (const n of nodes) {
+    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  }
+  return false;
+}
+
 function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
   if (nodes.length <= 1) return 'single_agent';
   if (edges.length === 0) return 'single_agent'; // WG-6: disconnected agents
 
-  // Check cyclic: skip self-loops (WG-2)
-  const edgeSet = new Set(edges.map(e => `${e.source}->${e.target}`));
-  for (const e of edges) {
-    if (e.source === e.target) continue;
-    if (edgeSet.has(`${e.target}->${e.source}`)) return 'cyclic';
-  }
+  // Check cyclic using DFS — detects both pairwise (A↔B) and multi-node (A→B→C→A) cycles
+  if (hasCycle(nodes, edges)) return 'cyclic';
 
   // Check branching: any source with >1 outgoing edge
   const outDegree = new Map<string, number>();

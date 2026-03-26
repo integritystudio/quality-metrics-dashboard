@@ -165,6 +165,38 @@ describe('buildWorkflowGraph — cyclic workflow', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3b. 3-node cyclic workflow: A → B → C → A (WG-M1)
+// ---------------------------------------------------------------------------
+
+describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
+      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentC', score: 0.8 }),
+      makeHandoff({ sourceAgent: 'agentC', targetAgent: 'agentA', score: 0.7 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
+    ],
+    totalTurns: 3,
+  });
+
+  const spans: TraceSpan[] = [];
+
+  it('shape is cyclic for 3-node cycle', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('cyclic');
+  });
+
+  it('produces 3 nodes', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. Branching workflow: A → B and A → C
 // ---------------------------------------------------------------------------
 
