@@ -5,12 +5,12 @@ import type { DashboardPermission, AppSession, DashboardView } from '../src/type
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { AuthUserResponseSchema, PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
 import { routingTelemetryKvSchema } from '../src/lib/validation/dashboard-schemas.js';
+import { userAuthHeaders, supabasePost } from '../src/lib/supabase-rest.js';
 
 export type { DashboardPermission, AppSession };
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
-// 3s timeout prevents hung fetch from blocking worker execution on slow/unreliable networks.
 // Auth: uses the user's JWT (not service-role). Requires RLS policy:
 //   create policy "users can insert own activity" on public.user_activity for insert
 //   to authenticated with check (user_id = auth.uid());
@@ -20,19 +20,12 @@ function logActivity(
   env: { SUPABASE_URL: string; SUPABASE_ANON_KEY: string },
   jwt: string,
 ): void {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-  void fetch(`${env.SUPABASE_URL}/rest/v1/user_activity`, {
-    method: 'POST',
-    headers: {
-      'apikey': env.SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${jwt}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal',
-    },
-    body: JSON.stringify({ user_id: appUserId, activity_type: activityType }),
-    signal: controller.signal,
-  }).catch(() => undefined).finally(() => clearTimeout(timeout));
+  supabasePost(
+    `${env.SUPABASE_URL}/rest/v1/user_activity`,
+    { user_id: appUserId, activity_type: activityType },
+    env,
+    jwt,
+  );
 }
 
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
@@ -128,10 +121,7 @@ app.use('/api/*', async (c, next) => {
     let authUserId: string;
     try {
       const verifyRes = await fetch(`${c.env.SUPABASE_URL}/auth/v1/user`, {
-        headers: {
-          'Authorization': `Bearer ${jwt}`,
-          'apikey': c.env.SUPABASE_ANON_KEY,
-        },
+        headers: userAuthHeaders(c.env, jwt),
         signal: controller.signal,
       });
       if (!verifyRes.ok) return c.json({ error: 'Unauthorized' }, 401);
@@ -148,13 +138,7 @@ app.use('/api/*', async (c, next) => {
     try {
       const userRes = await fetch(
         `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email&id=eq.${encodeURIComponent(authUserId)}&limit=1`,
-        {
-          headers: {
-            'apikey': c.env.SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${jwt}`,
-          },
-          signal: controller.signal,
-        },
+        { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
       );
       if (!userRes.ok) return c.json({ error: 'Unauthorized' }, 401);
       const users = await userRes.json() as Array<unknown>;
@@ -172,13 +156,7 @@ app.use('/api/*', async (c, next) => {
     try {
       const rolesRes = await fetch(
         `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
-        {
-          headers: {
-            'apikey': c.env.SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${jwt}`,
-          },
-          signal: controller.signal,
-        },
+        { headers: userAuthHeaders(c.env, jwt), signal: controller.signal },
       );
       if (rolesRes.ok) {
         const rows = await rolesRes.json() as Array<unknown>;
