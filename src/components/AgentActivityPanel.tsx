@@ -17,6 +17,37 @@ import { StatDisplay } from './StatDisplay.js';
 const COLUMN_COUNT = 7;
 type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
 
+interface IdListColumnProps {
+  label: string;
+  ids: string[];
+  totalCount: number;
+  isTruncated: boolean;
+  routeFn: (id: string) => string;
+}
+
+function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListColumnProps) {
+  return (
+    <div>
+      <div className="text-muted mb-1-5 text-xs uppercase">{label} ({totalCount})</div>
+      <div className="flex-col gap-1">
+        {ids.map(id => (
+          <TruncatedIdLink
+            key={id}
+            id={id}
+            href={routeFn(id)}
+            maxLen={12}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ))}
+        {ids.length === 0 && <span className="text-muted text-xs">none</span>}
+        {isTruncated && (
+          <span className="text-muted text-2xs italic">+{totalCount - ids.length} more</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function errorRateColor(rate: number): string {
   if (rate === 0) return 'var(--status-healthy)';
   if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
@@ -205,58 +236,21 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                       )}
 
                       <div className="agent-expanded-grid">
-                        {/* Sessions column */}
-                        <div>
-                          <div className="text-muted mb-1-5 text-xs uppercase">
-                            Sessions ({agent.sessionCount})
-                          </div>
-                          <div className="flex-col gap-1">
-                            {agent.sessionIds.map(sid => (
-                              <TruncatedIdLink
-                                key={sid}
-                                id={sid}
-                                href={routes.session(sid)}
-                                maxLen={12}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            ))}
-                            {agent.sessionIds.length === 0 && (
-                              <span className="text-muted text-xs">none</span>
-                            )}
-                            {/* sessionCount === total unique sessions; sessionIds is capped at 50 */}
-                            {agent.sessionIdsTruncated && (
-                              <span className="text-muted text-2xs italic">
-                                +{agent.sessionCount - agent.sessionIds.length} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Traces column */}
-                        <div>
-                          <div className="text-muted mb-1-5 text-xs uppercase">
-                            Traces ({agent.traceIdsTotal ?? agent.traceIds.length})
-                          </div>
-                          <div className="flex-col gap-1">
-                            {agent.traceIds.map(tid => (
-                              <TruncatedIdLink
-                                key={tid}
-                                id={tid}
-                                href={routes.trace(tid)}
-                                maxLen={12}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            ))}
-                            {agent.traceIds.length === 0 && (
-                              <span className="text-muted text-xs">none</span>
-                            )}
-                            {agent.traceIdsTruncated && (
-                              <span className="text-muted text-2xs italic">
-                                +{(agent.traceIdsTotal ?? 0) - agent.traceIds.length} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        {/* sessionCount === total unique sessions; sessionIds is capped at 50 */}
+                        <IdListColumn
+                          label="Sessions"
+                          ids={agent.sessionIds}
+                          totalCount={agent.sessionCount}
+                          isTruncated={agent.sessionIdsTruncated}
+                          routeFn={routes.session}
+                        />
+                        <IdListColumn
+                          label="Traces"
+                          ids={agent.traceIds}
+                          totalCount={agent.traceIdsTotal ?? agent.traceIds.length}
+                          isTruncated={agent.traceIdsTruncated}
+                          routeFn={routes.trace}
+                        />
                       </div>
                     </td>
                   </tr>
