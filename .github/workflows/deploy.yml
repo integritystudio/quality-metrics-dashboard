@@ -39,7 +39,7 @@ jobs:
         uses: dopplerhq/cli-action@v3
       - run: npm ci
       - name: Build with env vars from Doppler
-        run: doppler run -- npm run build
+        run: doppler run --project integrity-studio --config dev -- npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
@@ -69,7 +69,7 @@ jobs:
         uses: dopplerhq/cli-action@v3
       - run: npm ci
       - name: Build with env vars from Doppler
-        run: doppler run -- npm run build
+        run: doppler run --project integrity-studio --config dev -- npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Deploy default worker
