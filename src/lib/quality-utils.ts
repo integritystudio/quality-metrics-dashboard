@@ -215,9 +215,11 @@ export function fmtDuration(ms: number, secDecimals = 1): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
 }
 
-/** Groups items into a Map by a string key; items with undefined keys are skipped. */
-export function groupBy<T>(items: T[], keyFn: (item: T) => string | undefined): Map<string, T[]> {
-  const map = new Map<string, T[]>();
+export function groupBy<T, K extends PropertyKey = string>(
+  items: T[],
+  keyFn: (item: T) => K | undefined,
+): Map<K, T[]> {
+  const map = new Map<K, T[]>();
   for (const item of items) {
     const key = keyFn(item);
     if (key == null) continue;

@@ -39,9 +39,9 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       droppedTurns++;
       continue;
     }
-    const existing = agentTurns.get(turn.agentName) ?? [];
-    existing.push(turn);
-    agentTurns.set(turn.agentName, existing);
+    const existing = agentTurns.get(turn.agentName);
+    if (existing) existing.push(turn);
+    else agentTurns.set(turn.agentName, [turn]);
 
     if (
       turn.turnIndex < minTurnIndex ||
@@ -138,11 +138,16 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   }
 
   // Infer edges from temporal ordering
-  const agentTimings = [...agentSpans.entries()].map(([id, group]) => ({
-    id,
-    minStart: Math.min(...group.map(s => s.startTimeUnixNano)),
-    maxEnd: Math.max(...group.map(s => s.endTimeUnixNano ?? s.startTimeUnixNano)),
-  })).sort((a, b) => a.minStart - b.minStart);
+  const agentTimings = [...agentSpans.entries()].map(([id, group]) => {
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
+    return { id, minStart, maxEnd };
+  }).sort((a, b) => a.minStart - b.minStart);
 
   const edges: WorkflowEdge[] = [];
   for (let i = 0; i < agentTimings.length - 1; i++) {
