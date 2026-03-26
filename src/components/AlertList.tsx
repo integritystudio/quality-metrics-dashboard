@@ -34,10 +34,8 @@ function ThresholdBar({ actual, threshold, direction }: {
     <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
       <div
         className="threshold-bar-fill"
-        style={{
-          width: `${actualPct}%`,
-          background: isViolating ? 'var(--status-critical)' : 'var(--status-healthy)',
-        }}
+        data-violating={isViolating || undefined}
+        style={{ width: `${actualPct}%` }}
       />
       <div
         className="threshold-bar-marker"
