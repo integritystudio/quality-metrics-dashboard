@@ -1,59 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult, TraceSpan } from '../types.js';
-
-// ---------------------------------------------------------------------------
-// Factory helpers
-// ---------------------------------------------------------------------------
-
-function makeHandoff(overrides: Partial<HandoffEvaluation> = {}): HandoffEvaluation {
-  return {
-    sourceAgent: 'agentA',
-    targetAgent: 'agentB',
-    correctTarget: true,
-    contextPreserved: true,
-    score: 0.8,
-    ...overrides,
-  };
-}
-
-function makeTurn(overrides: Partial<TurnLevelResult> = {}): TurnLevelResult {
-  return {
-    turnIndex: 0,
-    agentName: 'agentA',
-    relevance: 0.75,
-    taskProgress: 0.5,
-    hasError: false,
-    ...overrides,
-  };
-}
-
-function makeEvaluation(overrides: Partial<MultiAgentEvaluation> = {}): MultiAgentEvaluation {
-  return {
-    handoffs: [],
-    turns: [],
-    handoffScore: null,
-    avgTurnRelevance: null,
-    conversationCompleteness: null,
-    totalTurns: 0,
-    errorPropagationTurns: 0,
-    ...overrides,
-  };
-}
-
-function makeSpan(overrides: Partial<TraceSpan> = {}): TraceSpan {
-  return {
-    traceId: 'trace-1',
-    spanId: 'span-1',
-    name: 'agent_turn',
-    startTimeUnixNano: 1000000000,
-    endTimeUnixNano: 2000000000,
-    durationMs: 1000,
-    attributes: {},
-    ...overrides,
-  };
-}
+import type { TraceSpan } from '../types.js';
+import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
 
 // ---------------------------------------------------------------------------
 // 1. 3-agent linear workflow

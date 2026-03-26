@@ -1,4 +1,5 @@
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation, HandoffEvaluation, TurnLevelResult, TraceSpan } from '../types.js';
 
 export function makeNode(overrides: Partial<WorkflowNode> = {}): WorkflowNode {
   return {
@@ -33,6 +34,54 @@ export function makeGraph(overrides: Partial<WorkflowGraph> = {}): WorkflowGraph
     rootNodeId: 'planner',
     workflowShape: 'linear',
     droppedTurns: 0,
+    ...overrides,
+  };
+}
+
+export function makeTurn(overrides: Partial<TurnLevelResult> = {}): TurnLevelResult {
+  return {
+    turnIndex: 0,
+    agentName: 'planner',
+    relevance: 0.8,
+    taskProgress: 0.5,
+    hasError: false,
+    ...overrides,
+  };
+}
+
+export function makeHandoff(overrides: Partial<HandoffEvaluation> = {}): HandoffEvaluation {
+  return {
+    sourceAgent: 'planner',
+    targetAgent: 'executor',
+    score: 0.85,
+    correctTarget: true,
+    contextPreserved: true,
+    ...overrides,
+  };
+}
+
+export function makeEvaluation(overrides: Partial<MultiAgentEvaluation> = {}): MultiAgentEvaluation {
+  return {
+    handoffs: [],
+    turns: [],
+    handoffScore: null,
+    avgTurnRelevance: null,
+    conversationCompleteness: null,
+    totalTurns: 0,
+    errorPropagationTurns: 0,
+    ...overrides,
+  };
+}
+
+export function makeSpan(overrides: Partial<TraceSpan> = {}): TraceSpan {
+  return {
+    traceId: 'trace-1',
+    spanId: 'span-1',
+    name: 'agent_turn',
+    startTimeUnixNano: 1000000000,
+    endTimeUnixNano: 2000000000,
+    durationMs: 1000,
+    attributes: {},
     ...overrides,
   };
 }

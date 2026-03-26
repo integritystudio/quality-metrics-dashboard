@@ -20,34 +20,7 @@ vi.mock('../components/WorkflowGraph.js', () => ({
 
 import { WorkflowTimeline } from '../components/WorkflowTimeline.js';
 import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
-import { makeNode, makeGraph } from './workflow-fixtures.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
-function makeTurn(overrides: Partial<TurnLevelResult> = {}): TurnLevelResult {
-  return {
-    turnIndex: 0,
-    agentName: 'planner',
-    relevance: 0.8,
-    taskProgress: 0.5,
-    hasError: false,
-    ...overrides,
-  };
-}
-
-function makeHandoff(overrides: Partial<HandoffEvaluation> = {}): HandoffEvaluation {
-  return {
-    sourceAgent: 'planner',
-    targetAgent: 'executor',
-    score: 0.85,
-    correctTarget: true,
-    contextPreserved: true,
-    ...overrides,
-  };
-}
+import { makeNode, makeGraph, makeTurn, makeHandoff } from './workflow-fixtures.js';
 
 // ---------------------------------------------------------------------------
 // WorkflowTimeline tests
