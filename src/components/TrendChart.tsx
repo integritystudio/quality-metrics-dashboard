@@ -141,7 +141,7 @@ export function TrendChart({
         </ResponsiveContainer>
       </div>
       {dynamics && (
-        <div className="flex-wrap text-xs gap-6 mt-2 py-2" style={{ color: CHART_COLORS.text }}>
+        <div className="flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics">
           <div>
             <span className="font-semibold">Velocity:</span>{' '}
             <span className="mono">
@@ -157,9 +157,7 @@ export function TrendChart({
           {dynamics.projectedBreachTime && (
             <div>
               <span className="font-semibold">Breach in:</span>{' '}
-              <span className="mono" style={{
-                color: dynamics.projectedStatus === 'critical' ? CHART_COLORS.critical : CHART_COLORS.warning,
-              }}>
+              <span className="mono chart-breach-time" data-status={dynamics.projectedStatus}>
                 {formatBreachTime(dynamics.projectedBreachTime)}
               </span>
             </div>

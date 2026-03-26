@@ -62,6 +62,7 @@
   --text-secondary: #94a3b8;
   --text-muted: #475569;
   --text-on-accent: #ffffff;
+  --chart-text: #8b949e;
 
   /* Status */
   --status-healthy: #26d97f;
@@ -298,6 +299,9 @@ body {
 }
 .trend.improving { color: var(--status-healthy); }
 .trend.degrading { color: var(--status-critical); }
+.chart-dynamics { color: var(--chart-text); }
+.chart-breach-time { color: var(--status-warning); }
+.chart-breach-time[data-status="critical"] { color: var(--status-critical); }
 /* Metric card */
 .metric-card-header {
   justify-content: space-between;
