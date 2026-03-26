@@ -1,6 +1,6 @@
 import type { QualityDashboardSummary } from '../types.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
-import { TIME_MS } from '../lib/constants.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { HealthBanner } from './HealthBanner.js';
 import { StatDisplay } from './StatDisplay.js';
 
@@ -24,7 +24,7 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
 
   // Compute rate based on period
   const period = dashboard.metrics[0]?.period;
-  const DEFAULT_PERIOD_HOURS = 7 * 24;
+  const DEFAULT_PERIOD_HOURS = PERIOD_MS['7d'] / TIME_MS.HOUR;
   let periodHours = DEFAULT_PERIOD_HOURS;
   if (period) {
     const diffMs = new Date(period.end).getTime() - new Date(period.start).getTime();
