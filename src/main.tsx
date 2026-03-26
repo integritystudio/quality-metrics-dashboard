@@ -18,7 +18,7 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       <div className="error-state">
         <h2>Something went wrong</h2>
         <p>{error instanceof Error ? error.message : String(error)}</p>
-        <button onClick={resetErrorBoundary} className="mt-3 cursor-pointer" style={{ padding: '6px 16px' }}>
+        <button onClick={resetErrorBoundary} className="mt-3 cursor-pointer btn-sm">
           Try again
         </button>
       </div>
