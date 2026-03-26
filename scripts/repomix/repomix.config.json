@@ -1,0 +1,135 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+
+  "input": {
+    "maxFileSize": 50000000
+  },
+
+  "output": {
+    "filePath": "docs/repomix/repo-compressed.xml",
+    "style": "plain",
+    "parsableStyle": true,
+
+    "removeComments": true,
+    "removeEmptyLines": true,
+    "truncateBase64": true,
+
+    "fileSummary": false,
+    "directoryStructure": true,
+    "files": true,
+
+    "topFilesLength": 20,
+    "showLineNumbers": false,
+    "copyToClipboard": false,
+
+    "includeEmptyDirectories": false,
+    "includeFullDirectoryStructure": false,
+
+    "instructionFilePath": "CLAUDE.md",
+
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 200,
+      "includeDiffs": false,
+      "includeLogs": false,
+      "includeLogsCount": 1
+    }
+  },
+
+  "include": [
+    "src/**/*",
+    "services/**/*",
+    "scripts/**/*",
+    "rules/**/*",
+    "skills/**/*"
+  ],
+
+  "ignore": {
+    "useGitignore": true,
+    "useDotIgnore": true,
+    "useDefaultPatterns": true,
+
+    "customPatterns": [
+      "**/docs/**",
+      "docs/**",
+
+      "docs/repomix/**",
+      "scripts/repomix/**",
+
+      ".github/**/*",
+      ".git/**/*",
+
+      "**/.ast-grep-backups/**",
+      ".ast-grep-backups/**",
+
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/out/**",
+      "**/.next/**",
+      "**/.turbo/**",
+      "**/.vite/**",
+      "**/coverage/**",
+
+      "**/*.log",
+      "**/*.tmp",
+      "**/*.temp",
+      "**/*.cache",
+      "**/*.swp",
+      "**/*.swo",
+      "**/*.tsbuildinfo",
+      "**/*.map",
+      "**/*.min.js",
+      "**/*.min.css",
+
+      "**/__snapshots__/**",
+      "**/*.snap",
+      "tests/**",
+      "**/*.test.*",
+      "**/*.spec.*",
+
+      "**/fixtures/**",
+      "**/test-files/**",
+      "**/manual/**",
+      "**/results/**",
+
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.gif",
+      "**/*.webp",
+      "**/*.ico",
+      "**/*.pdf",
+      "**/*.zip",
+      "**/*.tar",
+      "**/*.gz",
+      "**/*.tgz",
+      "**/*.7z",
+      "**/*.mp4",
+      "**/*.mov",
+      "**/*.avi",
+      "**/*.mp3",
+      "**/*.wav",
+
+      "**/.env",
+      "**/.env.*",
+      "**/*.pem",
+      "**/*.key",
+      "**/*.p12",
+      "**/*.pfx",
+      "**/*secret*"
+    ]
+  },
+
+  "security": {
+    "enableSecurityCheck": true
+  },
+
+  "tokenCount": {
+    "encoding": "o200k_base"
+  },
+
+  "tokenBudget": {
+    "maxTokens": 200000
+  }
+}

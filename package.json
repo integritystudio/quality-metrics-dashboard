@@ -63,7 +63,7 @@
     "jsdom": "^29.0.1",
     "repomix": "^1.13.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.2",
     "typescript-eslint": "^8.57.2",
     "vite": "^8.0.2",
     "vitest": "^4.1.1",

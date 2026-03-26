@@ -48,6 +48,16 @@ Open items from code reviews and deferred work.
 | ADMIN-P4-2 | `AdminPage.tsx` `onChanged` refetch invalidates all users after each role mutation — no concurrent mutation guard, races possible if multiple UserRow components assign/revoke simultaneously | P3 | code-reviewer feedback on c9a38dc |
 | ADMIN-P4-3 | Admin routes return generic error messages on Supabase REST failures — currently safe (no body exposure), but document error handling policy for consistency with other endpoints | P4 | code-reviewer feedback on c9a38dc |
 
+### Test Fixture Consolidation
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| TF-1 | Audit test files for local `makeNode`/`makeGraph` factories that duplicate `workflow-fixtures.ts` — replace with shared imports | P3 | 431e456 simplify review |
+| TF-2 | Audit test files for inline `WorkflowGraph` object literals that could use `makeGraph()` with overrides | P3 | 431e456 simplify review |
+| TF-3 | Audit test files for repeated chain-graph construction (Array.from + edge wiring) that could use `makeChainGraph()` | P3 | 431e456 simplify review |
+| TF-4 | Audit test files for duplicated `@xyflow/react` or `elkjs` mock definitions that could be extracted to a shared mock module | P4 | 431e456 simplify review |
+| TF-5 | Audit test files for redundant section-banner comments (`// ---`, `// ===`) where `describe` blocks already provide structure | P4 | 431e456 simplify review |
+
 ### E2E & Integration Testing
 
 | # | Item | Priority | Source |
