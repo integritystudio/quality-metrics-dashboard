@@ -581,6 +581,21 @@ body {
 }
 
 /* Session detail — stat item, stat value, stat label, vitals divider, frequency grid */
+.session-detail-header {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-bottom: none;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  margin-bottom: 0;
+}
+.session-vitals-strip {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-3-5) var(--space-6);
+  row-gap: var(--space-3);
+  margin-bottom: var(--space-0-5);
+}
 .stat-item {
   flex: 1 1 100px;
   min-width: 80px;
@@ -1106,6 +1121,16 @@ details[open] > .cot-summary::before {
 .chip-accent {
   background: var(--accent-alpha-10);
   color: var(--accent);
+}
+/* Chip with accent-muted background (e.g. "RESUMED" session badge) */
+.chip-accent-muted {
+  background: var(--accent-muted);
+  color: var(--accent-hover);
+}
+/* Chip with status-healthy tint (e.g. "MULTI-AGENT" badge) */
+.chip-healthy {
+  background: var(--status-healthy-muted, rgba(34, 197, 94, 0.12));
+  color: var(--status-healthy);
 }
 
 /* Compound: colored dot indicators */

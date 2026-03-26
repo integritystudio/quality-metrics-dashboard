@@ -112,13 +112,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
 
       {/* ── Header ── */}
-      <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-subtle)',
-        borderBottom: 'none',
-        padding: 'var(--space-5) var(--space-6) var(--space-4)',
-        marginBottom: 0,
-      }}>
+      <div className="session-detail-header">
         <div className="flex-wrap gap-4 justify-between align-start">
           <div>
             <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
@@ -134,16 +128,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 </span>
               )}
               {si.resumeCount > 1 && (
-                <span className="mono text-2xs chip uppercase" style={{
-                  background: 'var(--accent-muted)',
-                  color: 'var(--accent-hover)',
-                }}>RESUMED ×{si.resumeCount}</span>
+                <span className="mono text-2xs chip chip-accent-muted uppercase">RESUMED ×{si.resumeCount}</span>
               )}
               {agentActivity.length > 1 && (
-                <span className="mono text-2xs chip uppercase" style={{
-                  background: 'var(--status-healthy-muted, rgba(34,197,94,0.12))',
-                  color: 'var(--status-healthy)',
-                }}>MULTI-AGENT ×{agentActivity.length}</span>
+                <span className="mono text-2xs chip chip-healthy uppercase">MULTI-AGENT ×{agentActivity.length}</span>
               )}
               {models.map(m => (
                 <span key={m} className="mono text-2xs text-muted chip chip-badge">{m}</span>
@@ -162,15 +150,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
       </div>
 
       {/* ── Vitals strip ── */}
-      <div className="flex-wrap" style={{
-        gap: 0,
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border-subtle)',
-        borderBottom: '1px solid var(--border)',
-        padding: 'var(--space-3-5) var(--space-6)',
-        rowGap: 'var(--space-3)',
-        marginBottom: 'var(--space-0-5)',
-      }}>
+      <div className="flex-wrap session-vitals-strip">
         <StatDisplay label="Spans" value={spanCount} />
         <div className="vitals-divider" />
         <StatDisplay label="Tool calls" value={totalToolCalls} />
