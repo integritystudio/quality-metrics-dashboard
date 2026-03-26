@@ -34,7 +34,6 @@ export interface EvalRecord {
   sessionId?: string;
 }
 
-/** Serialize to OTel flat evaluation format expected by the backend */
 function toOTelRecord(ev: EvalRecord): object {
   const attrs: Record<string, unknown> = {
     'gen_ai.evaluation.name': ev.evaluationName,
@@ -282,11 +281,8 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
   return evals;
 }
 
-/** Minimum distinct agents required to detect handoffs */
 const MIN_HANDOFF_AGENTS = 2;
-/** Minimum score for handoff target correctness (step score >= threshold) */
 const HANDOFF_CORRECT_THRESHOLD = 0.5;
-/** Minimum score for context preservation (step score >= threshold) */
 const HANDOFF_CONTEXT_THRESHOLD = 0.7;
 
 function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
