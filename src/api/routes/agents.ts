@@ -85,8 +85,8 @@ agentRoutes.get('/agents', async (c) => {
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) entry.dailyCounts[idx]++;
       }
-      if (spanAttr<boolean>(span, 'agent.has_error')) entry.errors++;
-      if (spanAttr<boolean>(span, 'agent.has_rate_limit')) entry.rateLimitCount++;
+      if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
+      if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
       entry.totalOutputSize += attrNum(span, 'agent.output_size');
       const sid = attrStr(span, 'session.id', '');
       if (sid) entry.sessions.add(sid);

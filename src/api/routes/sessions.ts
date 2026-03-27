@@ -130,9 +130,9 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     for (let i = 0; i < spans.length; i++) {
       const s = spans[i];
-      const hookName = spanAttr<string>(s, 'hook.name');
-      const hookType = spanAttr<string>(s, 'hook.type');
-      const hookTrigger = spanAttr<string>(s, 'hook.trigger');
+      const hookName = spanAttr(s, 'hook.name', 'string');
+      const hookType = spanAttr(s, 'hook.type', 'string');
+      const hookTrigger = spanAttr(s, 'hook.trigger', 'string');
 
       if (s.traceId) traceIds.add(s.traceId);
 
@@ -144,18 +144,18 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
       if (hookName === HOOK_NAME.TOKEN_METRICS) {
         tokenProgressionRaw.push({
-          messages: spanAttr<number>(s, 'tokens.messages') ?? 0,
-          inputTokens: spanAttr<number>(s, 'tokens.input') ?? 0,
-          outputTokens: spanAttr<number>(s, 'tokens.output') ?? 0,
-          cacheRead: spanAttr<number>(s, 'tokens.cache_read') ?? 0,
-          cacheCreation: spanAttr<number>(s, 'tokens.cache_creation') ?? 0,
-          model: spanAttr<string>(s, 'tokens.model') ?? '',
+          messages: spanAttr(s, 'tokens.messages', 'number') ?? 0,
+          inputTokens: spanAttr(s, 'tokens.input', 'number') ?? 0,
+          outputTokens: spanAttr(s, 'tokens.output', 'number') ?? 0,
+          cacheRead: spanAttr(s, 'tokens.cache_read', 'number') ?? 0,
+          cacheCreation: spanAttr(s, 'tokens.cache_creation', 'number') ?? 0,
+          model: spanAttr(s, 'tokens.model', 'string') ?? '',
         });
       }
 
       if (hookTrigger === 'PostToolUse') {
-        if (hookType === 'builtin') incrementCount(toolUsage, spanAttr<string>(s, 'builtin.tool') ?? 'unknown');
-        else if (hookType === 'mcp') incrementCount(mcpUsage, spanAttr<string>(s, 'mcp.tool') ?? 'unknown');
+        if (hookType === 'builtin') incrementCount(toolUsage, spanAttr(s, 'builtin.tool', 'string') ?? 'unknown');
+        else if (hookType === 'mcp') incrementCount(mcpUsage, spanAttr(s, 'mcp.tool', 'string') ?? 'unknown');
       }
 
       incrementCount(spanBreakdown, s.name);
@@ -164,30 +164,30 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         (hookDurations[s.name] ??= []).push(ms);
       }
 
-      const hasError = spanAttr<boolean>(s, 'builtin.has_error') === true
-        || spanAttr<boolean>(s, 'agent.has_error') === true
+      const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
+        || spanAttr(s, 'agent.has_error', 'boolean') === true
         || s.status?.code === OTEL_STATUS_ERROR_CODE;
       if (hasError) {
-        const tool = spanAttr<string>(s, 'builtin.tool') ?? spanAttr<string>(s, 'agent.type') ?? 'unknown';
-        const errType = spanAttr<string>(s, 'builtin.error_type') ?? 'unknown';
+        const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'agent.type', 'string') ?? 'unknown';
+        const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
         incrementCount(errorsByCategory, `${tool} -> ${errType}`);
-        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr<string>(s, 'builtin.file_path') });
+        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr(s, 'builtin.file_path', 'string') });
       }
 
       if (hookName === HOOK_NAME.AGENT_POST_TOOL) {
-        const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
+        const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
         const agentEntry = (agentAcc[name] ??= { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 });
         agentEntry.invocations++;
-        if (spanAttr<boolean>(s, 'agent.has_error')) agentEntry.errors++;
-        if (spanAttr<boolean>(s, 'agent.has_rate_limit')) agentEntry.hasRateLimit = true;
-        agentEntry.totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
+        if (spanAttr(s, 'agent.has_error', 'boolean')) agentEntry.errors++;
+        if (spanAttr(s, 'agent.has_rate_limit', 'boolean')) agentEntry.hasRateLimit = true;
+        agentEntry.totalOutputSize += spanAttr(s, 'agent.output_size', 'number') ?? 0;
       }
 
-      const fp = spanAttr<string>(s, 'builtin.file_path');
+      const fp = spanAttr(s, 'builtin.file_path', 'string');
       if (fp) incrementCount(fileCount, fp);
 
       if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
-        const raw = spanAttr<string>(s, 'git.command') ?? '';
+        const raw = spanAttr(s, 'git.command', 'string') ?? '';
         const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
         const files = filesMatch ? filesMatch[1].trim() : '';
         const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
@@ -200,27 +200,27 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
 
       if (hookName === HOOK_NAME.ALERT_EVALUATION) {
-        alertTotalFired += spanAttr<number>(s, 'alerts.triggered_count') ?? 0;
+        alertTotalFired += spanAttr(s, 'alerts.triggered_count', 'number') ?? 0;
         alertStopEvents++;
       }
 
       if (hookName === HOOK_NAME.CODE_STRUCTURE) {
         codeStructure.push({
-          file: spanAttr<string>(s, 'code.structure.file') ?? '',
-          lines: spanAttr<number>(s, 'code.structure.lines') ?? 0,
-          exports: spanAttr<number>(s, 'code.structure.exports') ?? 0,
-          functions: spanAttr<number>(s, 'code.structure.functions') ?? 0,
-          hasTypes: spanAttr<boolean>(s, 'code.structure.has_types') ?? false,
-          score: spanAttr<number>(s, 'code.structure.score') ?? 0,
-          tool: spanAttr<string>(s, 'code.structure.tool') ?? '',
+          file: spanAttr(s, 'code.structure.file', 'string') ?? '',
+          lines: spanAttr(s, 'code.structure.lines', 'number') ?? 0,
+          exports: spanAttr(s, 'code.structure.exports', 'number') ?? 0,
+          functions: spanAttr(s, 'code.structure.functions', 'number') ?? 0,
+          hasTypes: spanAttr(s, 'code.structure.has_types', 'boolean') ?? false,
+          score: spanAttr(s, 'code.structure.score', 'number') ?? 0,
+          tool: spanAttr(s, 'code.structure.tool', 'string') ?? '',
         });
       }
 
-      const agent = spanAttr<string>(s, 'agent.name') ?? spanAttr<string>(s, 'gen_ai.agent.name');
+      const agent = spanAttr(s, 'agent.name', 'string') ?? spanAttr(s, 'gen_ai.agent.name', 'string');
       if (agent) agentMapForEval.set(i, agent);
       stepScores.push({
         step: i,
-        score: spanAttr<number>(s, 'evaluation.score') ?? (s.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+        score: spanAttr(s, 'evaluation.score', 'number') ?? (s.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
         explanation: s.name,
       });
     }
@@ -263,17 +263,17 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     } : null;
 
     const sessionInfo = firstSessionStart ? {
-      projectName: spanAttr<string>(firstSessionStart, 'project.name') ?? 'unknown',
-      workingDirectory: spanAttr<string>(firstSessionStart, 'working.directory') ?? '',
-      gitRepository: spanAttr<string>(firstSessionStart, 'git.repository') ?? '',
-      gitBranch: spanAttr<string>(firstSessionStart, 'git.branch') ?? '',
-      nodeVersion: spanAttr<string>(firstSessionStart, 'node.version') ?? '',
+      projectName: spanAttr(firstSessionStart, 'project.name', 'string') ?? 'unknown',
+      workingDirectory: spanAttr(firstSessionStart, 'working.directory', 'string') ?? '',
+      gitRepository: spanAttr(firstSessionStart, 'git.repository', 'string') ?? '',
+      gitBranch: spanAttr(firstSessionStart, 'git.branch', 'string') ?? '',
+      nodeVersion: spanAttr(firstSessionStart, 'node.version', 'string') ?? '',
       resumeCount: sessionStartCount,
-      initialMessageCount: spanAttr<number>(firstSessionStart, 'context.message_count') ?? 0,
-      initialContextTokens: spanAttr<number>(firstSessionStart, 'context.estimated_tokens') ?? 0,
-      finalMessageCount: spanAttr<number>(lastSessionStart ?? firstSessionStart, 'context.message_count') ?? 0,
-      taskCount: spanAttr<number>(firstSessionStart, 'tasks.active') ?? 0,
-      uncommittedAtStart: spanAttr<number>(firstSessionStart, 'git.uncommitted') ?? 0,
+      initialMessageCount: spanAttr(firstSessionStart, 'context.message_count', 'number') ?? 0,
+      initialContextTokens: spanAttr(firstSessionStart, 'context.estimated_tokens', 'number') ?? 0,
+      finalMessageCount: spanAttr(lastSessionStart ?? firstSessionStart, 'context.message_count', 'number') ?? 0,
+      taskCount: spanAttr(firstSessionStart, 'tasks.active', 'number') ?? 0,
+      uncommittedAtStart: spanAttr(firstSessionStart, 'git.uncommitted', 'number') ?? 0,
     } : null;
 
     const tokenProgression = tokenProgressionRaw.slice().sort((a, b) => a.messages - b.messages);

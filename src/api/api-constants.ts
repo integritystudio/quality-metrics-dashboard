@@ -80,8 +80,25 @@ export function attrNum(span: SpanLike, key: string, fallback = 0): number {
   return typeof v === 'number' ? v : fallback;
 }
 
-export function spanAttr<T>(span: SpanLike, key: string): T | undefined {
-  return span.attributes?.[key] as T | undefined;
+/** Primitive type tags accepted by spanAttr for validated attribute extraction. */
+export type SpanAttrType = 'string' | 'number' | 'boolean';
+
+/** Type-level mapping from SpanAttrType tag to the corresponding primitive. */
+type SpanAttrValue<K extends SpanAttrType> =
+  K extends 'string' ? string :
+  K extends 'number' ? number :
+  K extends 'boolean' ? boolean :
+  never;
+
+/**
+ * Extracts and validates a span attribute by primitive type.
+ * Returns `undefined` if the attribute is missing or fails the type check.
+ * Prevents silent `unknown`-to-T casts by enforcing a runtime type guard.
+ */
+export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, type: K): SpanAttrValue<K> | undefined {
+  const v = span.attributes?.[key];
+  if (typeof v === type) return v as SpanAttrValue<K>;
+  return undefined;
 }
 
 export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
