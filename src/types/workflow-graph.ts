@@ -24,6 +24,11 @@ export interface WorkflowEdge {
   /** null for inferred edges (no evaluation data); real zero score is a valid low score. */
   handoffScore: number | null;
   contextPreserved: boolean;
+  /**
+   * Time in milliseconds between the last span of the source agent and the first span of
+   * the target agent. null when timing data is unavailable (evaluation-path builds).
+   */
+  latencyMs: number | null;
   label?: string;
 }
 

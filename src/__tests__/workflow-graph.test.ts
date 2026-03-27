@@ -229,10 +229,17 @@ describe('buildWorkflowGraph — edge data binding', () => {
     expect(edge?.contextPreserved).toBe(false);
   });
 
-  it('edge label is formatted as "score: X.XX"', () => {
+  it('edge label contains formatted score', () => {
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.label).toBe('score: 0.72');
+    // Label contains the score; no latency suffix when spans provide no timing data
+    expect(edge?.label).toBe('0.72');
+  });
+
+  it('edge latencyMs is null when no span timing data', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.latencyMs).toBeNull();
   });
 
   it('edge id is non-empty string', () => {

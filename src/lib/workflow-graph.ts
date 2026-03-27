@@ -14,6 +14,8 @@ const SPAN_NAME_TOOL_PREFIX = 'tool:';
  * sequential. Set to 1 ms = 1_000_000 ns.
  */
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
+/** Conversion factor from nanoseconds to milliseconds. */
+const NS_TO_MS = 1_000_000;
 
 export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
@@ -54,6 +56,23 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
   }
 
   const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
+
+  // Build per-agent span timing bounds for handoff latency computation.
+  // lastEndNs: the latest endTimeUnixNano seen for an agent's spans.
+  // firstStartNs: the earliest startTimeUnixNano seen for an agent's spans.
+  const agentLastEndNs = new Map<string, number>();
+  const agentFirstStartNs = new Map<string, number>();
+  for (const [agentId, group] of spansByAgent) {
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
+    if (isFinite(minStart)) agentFirstStartNs.set(agentId, minStart);
+    if (isFinite(maxEnd)) agentLastEndNs.set(agentId, maxEnd);
+  }
 
   const nodes: WorkflowNode[] = [];
   for (const [agentName, turns] of agentTurns) {
@@ -97,13 +116,25 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     if (seenEdges.has(key)) continue;
     seenEdges.add(key);
     const score = isFinite(h.score) ? h.score : 0;
+
+    // Compute handoff latency: time from source agent's last span end to target's first span start.
+    const sourceEnd = agentLastEndNs.get(h.sourceAgent);
+    const targetStart = agentFirstStartNs.get(h.targetAgent);
+    const latencyMs = sourceEnd !== undefined && targetStart !== undefined && targetStart > sourceEnd
+      ? Math.round((targetStart - sourceEnd) / NS_TO_MS)
+      : null;
+
+    const labelParts = [`${score.toFixed(SCORE_CHIP_PRECISION)}`];
+    if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
+
     edges.push({
       id: key,
       source: h.sourceAgent,
       target: h.targetAgent,
       handoffScore: score,
       contextPreserved: h.contextPreserved,
-      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
+      latencyMs,
+      label: labelParts.join(' · '),
     });
   }
 
@@ -160,6 +191,10 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     // Use epsilon tolerance to catch near-concurrent spans that a strict <= would miss
     if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
       const key = `${curr.id}->${next.id}`;
+      const gapNs = next.minStart - curr.maxEnd;
+      const latencyMs = gapNs >= 0 ? Math.round(gapNs / NS_TO_MS) : null;
+      const labelParts: string[] = ['inferred'];
+      if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
       edges.push({
         id: key,
         source: curr.id,
@@ -167,7 +202,8 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
         // null distinguishes inferred edges (no evaluation data) from a real handoff score of 0
         handoffScore: null,
         contextPreserved: false,
-        label: 'inferred',
+        latencyMs,
+        label: labelParts.join(' · '),
       });
     }
   }
