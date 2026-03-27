@@ -102,6 +102,9 @@ const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
 const MAX_RECENT_SESSIONS = 20;
 
+const META_LAST_SYNC_KEY = META_LAST_SYNC_KEY;
+const META_SYNC_COVERAGE_KEY = META_SYNC_COVERAGE_KEY;
+
 type KVEntry = { key: string; value: string };
 
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
@@ -1136,10 +1139,10 @@ async function main(): Promise<void> {
 
   if (changed.length === 0) {
     // Still update lastSync timestamp
-    const metaEntry: KVEntry = { key: 'meta:lastSync', value: JSON.stringify(now.toISOString()) };
-    if (prevState['meta:lastSync'] !== hashValue(metaEntry.value)) {
+    const metaEntry: KVEntry = { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) };
+    if (prevState[META_LAST_SYNC_KEY] !== hashValue(metaEntry.value)) {
       kvBulkPut([metaEntry]);
-      prevState['meta:lastSync'] = hashValue(metaEntry.value);
+      prevState[META_LAST_SYNC_KEY] = hashValue(metaEntry.value);
       saveSyncState(prevState);
     }
     // L1: Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
@@ -1163,7 +1166,7 @@ async function main(): Promise<void> {
   const toWrite: KVEntry[] = [
     ...highPriority.slice(0, highPriorityBudget),
     ...prioritizedTraces.slice(0, traceBudget),
-    { key: 'meta:lastSync', value: JSON.stringify(now.toISOString()) },
+    { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) },
   ];
   const deferred = changed.length - (toWrite.length - 1); // -1 excludes meta:lastSync
 
@@ -1182,8 +1185,8 @@ async function main(): Promise<void> {
     newState[e.key] = hashValue(e.value);
   }
   const computedKeys = new Set(allEntries.map(e => e.key));
-  computedKeys.add('meta:lastSync');
-  computedKeys.add('meta:syncCoverage');
+  computedKeys.add(META_LAST_SYNC_KEY);
+  computedKeys.add(META_SYNC_COVERAGE_KEY);
   for (const key of Object.keys(newState)) {
     if (!computedKeys.has(key)) delete newState[key];
   }
@@ -1216,11 +1219,11 @@ async function main(): Promise<void> {
   // does not burn a KV write every run. Only the stable numeric fields gate whether we write.
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
-  const coverageEntry: KVEntry = { key: 'meta:syncCoverage', value: JSON.stringify(coverage) };
-  if (newState['meta:syncCoverage'] !== coverageHash) {
+  const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: JSON.stringify(coverage) };
+  if (newState[META_SYNC_COVERAGE_KEY] !== coverageHash) {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
-      newState['meta:syncCoverage'] = coverageHash;
+      newState[META_SYNC_COVERAGE_KEY] = coverageHash;
       saveSyncState(newState);
     }
   }
