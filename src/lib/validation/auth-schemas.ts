@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
+import { RoleSchema } from '../constants.js';
 
 /**
  * Auth0 JWT payload — result of jwtVerify() in the worker.
@@ -117,7 +118,7 @@ export const MeResponseSchema = z.object({
     'dashboard.compliance.read',
     'dashboard.admin',
   ])),
-  allowedViews: z.array(z.enum(['executive', 'operator', 'auditor'])),
+  allowedViews: z.array(RoleSchema),
 });
 
 export type MeResponse = z.infer<typeof MeResponseSchema>;

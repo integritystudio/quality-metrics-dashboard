@@ -7,6 +7,7 @@ const ATTR_AGENT_NAME = 'gen_ai.agent.name';
 const ATTR_AGENT_ID = 'gen_ai.agent.id';
 const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
 const SPAN_NAME_TOOL_CALL = 'tool_call';
+const SPAN_NAME_TOOL_PREFIX = 'tool:';
 /**
  * Epsilon tolerance (nanoseconds) for near-concurrent span edge inference.
  * Spans whose end and start differ by less than this value are treated as
@@ -128,7 +129,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     let minStart = Infinity;
     let maxEnd = -Infinity;
     for (const s of group) {
-      if (s.name.startsWith('tool:')) toolCallCount++;
+      if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
       const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
       if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
       durationMs += s.durationMs ?? 0;
