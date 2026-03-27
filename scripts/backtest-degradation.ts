@@ -30,10 +30,9 @@ import type {
   BacktestConfig,
 } from '../../src/lib/quality/quality-feature-engineering.js';
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
 
 const INCIDENTS_FILE = join(import.meta.dirname ?? process.cwd(), '.degradation-incidents.json');
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 /** F1 improvement above which best config triggers graduation recommendation */
 const F1_GRADUATION_THRESHOLD = 0.05;
 /** Minimum incidents for a meaningful backtest (warns if below) */
@@ -107,12 +106,12 @@ function buildDailyBuckets(
   bucketCount: number,
 ): DailyBucket[] {
   const buckets: DailyBucket[] = Array.from({ length: bucketCount }, (_, i) => ({
-    timestamp: startMs + i * DAY_MS,
+    timestamp: startMs + i * TIME_MS.DAY,
     scores: [],
   }));
   for (const ev of evaluations) {
     const ts = new Date(ev.timestamp).getTime();
-    const idx = Math.floor((ts - startMs) / DAY_MS);
+    const idx = Math.floor((ts - startMs) / TIME_MS.DAY);
     if (idx >= 0 && idx < bucketCount) {
       buckets[idx].scores.push(ev.scoreValue);
     }
@@ -248,7 +247,7 @@ async function main(): Promise<void> {
 
   const backend = new MultiDirectoryBackend(undefined, true);
   const now = Date.now();
-  const startMs = now - days * DAY_MS;
+  const startMs = now - days * TIME_MS.DAY;
   const startDate = new Date(startMs).toISOString();
   const endDate = new Date(now).toISOString();
 
