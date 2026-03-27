@@ -1,14 +1,14 @@
 import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
 import { PageShell } from '../components/PageShell.js';
 import { StatusBadge } from '../components/Indicators.js';
-import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
-const VARIANCE_TREND_LABELS: Record<string, string> = {
-  increasing: 'Increasing',
-  stable: 'Stable',
-  decreasing: 'Decreasing',
-};
+const VARIANCE_RATIO_PRECISION = 3;
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 function ReportRow({ report }: { report: DegradationReport }) {
   const { signal } = report;
@@ -19,8 +19,8 @@ function ReportRow({ report }: { report: DegradationReport }) {
         <StatusBadge status={signal.predictedStatus} />
       </td>
       <td className="mono">{signal.ewmaDriftDetected ? 'Yes' : 'No'}</td>
-      <td className="mono">{VARIANCE_TREND_LABELS[signal.varianceTrend] ?? signal.varianceTrend}</td>
-      <td className="mono">{signal.varianceRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
+      <td className="mono">{capitalize(signal.varianceTrend)}</td>
+      <td className="mono">{signal.varianceRatio.toFixed(VARIANCE_RATIO_PRECISION)}</td>
       <td className="mono">{signal.consecutiveBreaches}</td>
       <td className="mono">{signal.confirmed ? 'Yes' : 'No'}</td>
     </tr>
