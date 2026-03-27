@@ -1,3 +1,61 @@
+34d779b 2026-03-27 style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments
+  worker/index.ts
+
+7586436 2026-03-27 perf(sync-to-kv): parallelize metric detail queries with Promise.all
+  scripts/sync-to-kv.ts
+
+4c4166c 2026-03-27 style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments
+  scripts/judge-evaluations.ts
+
+9758158 2026-03-27 refactor(sync-to-kv): use activePeriods in remaining period loops
+  scripts/sync-to-kv.ts
+
+6b05712 2026-03-27 perf(sync-to-kv): parallelize period batch queries with Promise.all
+  scripts/sync-to-kv.ts
+
+48fae89 2026-03-27 style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments
+  scripts/sync-to-kv.ts
+
+c120375 2026-03-27 fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations
+  scripts/sync-to-kv.ts
+
+835c8c3 2026-03-27 refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants
+  scripts/sync-to-kv.ts
+
+f1dadeb 2026-03-27 refactor(judge-evaluations): extract JUDGE_MAX_TOKENS and JUDGE_DEFAULT_TEMPERATURE constants
+  scripts/judge-evaluations.ts
+
+d61d1b6 2026-03-27 style(judge-evaluations): remove task-tracker prefixes and WHAT comments from seedEvaluations/evaluateTurn
+  scripts/judge-evaluations.ts
+
+fa7315f 2026-03-27 feat(workflow): add graph controls, critical path, and PNG export
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  package-lock.json
+  src/theme.css
+
+0bd623c 2026-03-27 refactor(judge-evaluations): use TOOL_CORRECTNESS_CRITERIA.name; simplify subCriteria to drop redundant name field
+  scripts/judge-evaluations.ts
+
+058b71a 2026-03-27 refactor(judge-evaluations): extract RELEVANCE/COHERENCE/FAITHFULNESS/HALLUCINATION_EVAL_NAME constants; replace 20 raw strings
+  scripts/judge-evaluations.ts
+
+7174e88 2026-03-27 refactor(judge-evaluations): replace raw evaluator type strings at evalType filter and dataset run record
+  scripts/judge-evaluations.ts
+
+635b81f 2026-03-27 refactor(judge-evaluations): extract TRACE_BACKFILL_EVALUATOR_TYPE; replace raw strings at backfill override
+  scripts/judge-evaluations.ts
+
+a3fbb92 2026-03-27 refactor(sync-to-kv): remove unnecessary Record<string,unknown> cast in filterCanary
+  scripts/sync-to-kv.ts
+
+9ce79aa 2026-03-27 refactor(sync-to-kv): replace raw 'canary' string with CANARY_EVALUATOR_TYPE constant
+  scripts/sync-to-kv.ts
+
+f34ce33 2026-03-27 refactor(scripts): extract RULE_EVALUATOR_TYPE constant; replace 6 raw 'rule' literals
+  scripts/judge-evaluations.ts
+
 4c8321b 2026-03-27 refactor(scripts): add CANARY/SEED_EVALUATOR_TYPE constants; hoist sessionPreview
   scripts/judge-evaluations.ts
 
@@ -276,58 +334,4 @@ fdb952c 2026-03-26 refactor(trend-chart): replace dynamics panel color styles wi
   src/theme.css
 
 ccc35e3 2026-03-26 refactor(score-badge): replace color inline style with score-band CSS utility
-  src/theme.css
-
-e91b1cb 2026-03-26 refactor(cqi-hero): hoist overall color to CSS var, extract segment min-width to CSS
-  src/theme.css
-
-9120de8 2026-03-26 refactor(score-badge): replace no_data color inline style with CSS class
-  src/theme.css
-
-a2ec418 2026-03-26 refactor(agent-activity): replace err-rate and score-label color styles with data attrs
-  src/theme.css
-
-fa7de1c 2026-03-26 refactor(agent-activity): consolidate agent color dot and inv-count width into CSS
-  src/theme.css
-
-23a93be 2026-03-26 refactor(quality-live-indicator): consolidate chip colors into CSS custom property
-  src/theme.css
-
-7e317a8 2026-03-26 refactor(section): remove redundant railColor style on chevron, use CSS var
-  src/theme.css
-
-3851866 2026-03-26 refactor(turn-timeline): consolidate agent color into CSS custom property
-  src/theme.css
-
-4316cf3 2026-03-26 refactor(confidence-panel): replace dynamic color styles with data-level/data-band CSS
-  src/theme.css
-
-0575aef 2026-03-26 refactor(sla-table): replace conditional color style with data-noncompliant CSS
-  src/theme.css
-
-f9da05a 2026-03-26 refactor(coverage-grid): move cell/swatch size and opacity to CSS
-  src/theme.css
-
-d0ff9f0 2026-03-26 refactor(correlation-heatmap): extract static inline styles to CSS classes
-  src/theme.css
-
-dfe75f3 2026-03-26 refactor: extract static inline styles to CSS in QualityLiveIndicator and PipelineFunnel
-  src/theme.css
-
-0fa01ac 2026-03-26 refactor(cqi-hero): extract static layout inline styles to CSS classes
-  src/theme.css
-
-32ab606 2026-03-26 refactor(span-tree): extract padding/color inline styles to CSS classes
-  src/theme.css
-
-2edf9ec 2026-03-26 refactor(eval-overlay): extract card/link inline styles to CSS classes
-  src/theme.css
-
-7302a44 2026-03-26 refactor(turn-timeline): move min-width to CSS class, simplify inline style
-  src/theme.css
-
-4fc9e75 2026-03-26 refactor: move skeleton height constants to CSS classes
-  src/theme.css
-
-a288b8d 2026-03-26 refactor: move constant-based dimension inline styles to CSS classes
   src/theme.css

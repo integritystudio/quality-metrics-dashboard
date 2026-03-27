@@ -60,6 +60,9 @@ export default defineConfig(({ command, mode }) => {
       alias: {
         '@parent': path.resolve(__dirname, '../dist'),
         'web-worker': path.resolve(__dirname, 'src/stubs/web-worker.ts'),
+        ...(process.env.VITE_E2E ? {
+          '@auth0/auth0-react': path.resolve(__dirname, 'src/stubs/auth0-e2e.ts'),
+        } : {}),
       },
     },
     server: {

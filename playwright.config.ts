@@ -50,6 +50,7 @@ export default defineConfig({
     timeout: 30_000,
     env: {
       ...process.env,
+      VITE_E2E: '1',
     },
   },
 });

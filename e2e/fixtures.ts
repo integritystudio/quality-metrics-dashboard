@@ -1,12 +1,6 @@
 import { test as base, expect } from '@playwright/test';
 
-const TEST_SESSION = {
-  access_token: 'test-token',
-  refresh_token: 'test-refresh',
-  expires_at: 9_999_999_999, // year 2286 — never expires in tests
-  user: { id: 'test-user-id', email: 'test@example.com' },
-};
-
+// Must match TEST_TOKEN in src/stubs/auth0-e2e.ts
 const MOCK_ME_RESPONSE = {
   email: 'test@example.com',
   roles: ['test'],
@@ -16,12 +10,9 @@ const MOCK_ME_RESPONSE = {
 
 export const test = base.extend<object>({
   page: async ({ page }, use) => {
-    // Seed session into localStorage before page JS runs
-    await page.addInitScript((session: unknown) => {
-      localStorage.setItem('supabase.session', JSON.stringify(session));
-    }, TEST_SESSION);
-
-    // Mock /api/me so AuthContext.fetchAppSession() resolves successfully
+    // Mock /api/me so AuthContext.fetchAppSession() resolves with a valid session.
+    // The Auth0 stub (active when VITE_E2E=1) calls getAccessTokenSilently() → 'test-token',
+    // which AuthContext passes as Bearer to /api/me.
     await page.route('**/api/me', route =>
       route.fulfill({
         status: 200,
