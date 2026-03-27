@@ -242,6 +242,18 @@ describe('buildWorkflowGraph — edge data binding', () => {
     expect(edge?.latencyMs).toBeNull();
   });
 
+  it('edge latencyMs is computed from span timing when spans are provided', () => {
+    // agentA ends at 2_000_000 ns, agentB starts at 7_000_000 ns → gap = 5_000_000 ns = 5 ms
+    const spansWithTiming: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.name': 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { 'gen_ai.agent.name': 'agentB' }, startTimeUnixNano: 7_000_000, endTimeUnixNano: 9_000_000, durationMs: 2 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spansWithTiming);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.latencyMs).toBe(5);
+    expect(edge?.label).toBe('0.72 · 5ms');
+  });
+
   it('edge id is non-empty string', () => {
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
     const edge = graph.edges[0];

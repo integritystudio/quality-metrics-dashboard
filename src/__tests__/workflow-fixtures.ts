@@ -23,7 +23,7 @@ export function makeEdge(overrides: Partial<WorkflowEdge> = {}): WorkflowEdge {
     handoffScore: 0.85,
     contextPreserved: true,
     latencyMs: null,
-    label: 'score: 0.85',
+    label: '0.85',
     ...overrides,
   };
 }

@@ -118,10 +118,12 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     const score = isFinite(h.score) ? h.score : 0;
 
     // Compute handoff latency: time from source agent's last span end to target's first span start.
+    // Use >= to include zero-latency handoffs (target starts exactly when source ends).
     const sourceEnd = agentLastEndNs.get(h.sourceAgent);
     const targetStart = agentFirstStartNs.get(h.targetAgent);
-    const latencyMs = sourceEnd !== undefined && targetStart !== undefined && targetStart > sourceEnd
-      ? Math.round((targetStart - sourceEnd) / NS_TO_MS)
+    const gapNs = sourceEnd !== undefined && targetStart !== undefined ? targetStart - sourceEnd : null;
+    const latencyMs = gapNs !== null && gapNs >= 0 && isFinite(gapNs)
+      ? Math.round(gapNs / NS_TO_MS)
       : null;
 
     const labelParts = [`${score.toFixed(SCORE_CHIP_PRECISION)}`];
@@ -192,7 +194,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
       const key = `${curr.id}->${next.id}`;
       const gapNs = next.minStart - curr.maxEnd;
-      const latencyMs = gapNs >= 0 ? Math.round(gapNs / NS_TO_MS) : null;
+      const latencyMs = gapNs >= 0 && isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
       const labelParts: string[] = ['inferred'];
       if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
       edges.push({
