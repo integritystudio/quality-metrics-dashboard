@@ -12,10 +12,12 @@ export function supabasePost(
   url: string,
   body: unknown,
   key: string,
-): void {
+): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
-  void fetch(url, {
+  // Fetch errors are intentionally swallowed. Failures are visible
+  // at the network level; this function is fire-and-forget for non-critical writes.
+  return fetch(url, {
     method: 'POST',
     headers: {
       'apikey': key,
@@ -25,7 +27,5 @@ export function supabasePost(
     },
     body: JSON.stringify(body),
     signal: controller.signal,
-    // Fetch errors are intentionally swallowed. Failures are visible
-    // at the network level; this function is fire-and-forget for non-critical writes.
-  }).catch(() => undefined).finally(() => clearTimeout(timeout));
+  }).then(() => undefined).catch(() => undefined).finally(() => clearTimeout(timeout));
 }

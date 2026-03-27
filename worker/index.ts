@@ -66,17 +66,20 @@ function isValidId(id: string | undefined): id is string {
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
 // Failures are intentionally swallowed — audit logging must not fail user requests.
 // Auth: uses service role key (Auth0 JWTs are not valid Supabase session tokens for RLS).
+// waitUntil: CF ExecutionContext.waitUntil — required to prevent the Worker runtime from
+// cancelling the in-flight fetch after the response is sent.
 function logActivity(
   appUserId: string | undefined,
   activityType: UserActivityEvent,
   env: { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string },
+  waitUntil: (promise: Promise<unknown>) => void,
 ): void {
   if (!appUserId) return;
-  supabasePost(
+  waitUntil(supabasePost(
     `${env.SUPABASE_URL}/rest/v1/user_activity`,
     { user_id: appUserId, activity_type: activityType },
     env.SUPABASE_SERVICE_ROLE_KEY,
-  );
+  ));
 }
 
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
@@ -270,7 +273,7 @@ app.get('/api/me', (c) => {
 
 app.post('/api/logout', (c) => {
   const session = c.get('session');
-  logActivity(session.appUserId, 'logout', c.env);
+  logActivity(session.appUserId, 'logout', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
 
@@ -278,7 +281,7 @@ app.post('/api/activity', async (c) => {
   const body: unknown = await c.req.json().catch(() => null);
   const result = ActivityRequestSchema.safeParse(body);
   if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  logActivity(c.get('session').appUserId, result.data.activity_type as UserActivityEvent, c.env);
+  logActivity(c.get('session').appUserId, result.data.activity_type as UserActivityEvent, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
 
@@ -300,7 +303,7 @@ app.get('/api/dashboard', async (c) => {
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await c.env.DASHBOARD.get(key, 'json');
   if (!data) return c.json({ error: ERR_NO_DATA }, Http.NotFound);
-  logActivity(session.appUserId, 'dashboard_view', c.env);
+  logActivity(session.appUserId, 'dashboard_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
 });
 
@@ -376,7 +379,7 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
   if (!data) return c.json({ evaluations: [] });
-  logActivity(session.appUserId, 'trace_view', c.env);
+  logActivity(session.appUserId, 'trace_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
 });
 
@@ -387,7 +390,7 @@ app.get('/api/traces/:traceId', async (c) => {
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, Http.NotFound);
-  logActivity(session.appUserId, 'trace_view', c.env);
+  logActivity(session.appUserId, 'trace_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
 });
 
@@ -447,7 +450,7 @@ app.get('/api/sessions/:sessionId', async (c) => {
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
   const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
-  logActivity(session.appUserId, 'session_view', c.env);
+  logActivity(session.appUserId, 'session_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
 });
 
@@ -491,7 +494,7 @@ app.get('/api/compliance/sla', async (c) => {
   }
   const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
-  logActivity(session.appUserId, 'compliance_view', c.env);
+  logActivity(session.appUserId, 'compliance_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   const slaResults = safeArray(dashboard['slaCompliance']);
   return c.json({
     period,
@@ -507,7 +510,7 @@ app.get('/api/compliance/verifications', async (c) => {
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
-  logActivity(session.appUserId, 'compliance_view', c.env);
+  logActivity(session.appUserId, 'compliance_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json({ period, count: 0, verifications: [] });
 });
 

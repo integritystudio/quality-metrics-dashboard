@@ -18,5 +18,7 @@ jobs:
         with:
           token: ${{ secrets.DOPPLER_TOKEN }}
       - run: npm ci
+      - run: npx playwright install chromium --with-deps
       - run: npm run build
       - run: doppler run --project integrity-studio --config prd -- npm test
+      - run: npm run test:e2e

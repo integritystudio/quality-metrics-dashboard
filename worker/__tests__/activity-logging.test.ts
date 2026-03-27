@@ -36,6 +36,10 @@ function makeEnv() {
   };
 }
 
+function makeCtx(): ExecutionContext {
+  return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+}
+
 function authHeaders() {
   return { Authorization: 'Bearer mock-jwt' };
 }
@@ -100,6 +104,7 @@ describe('logActivity: dashboard_view', () => {
       '/api/dashboard?period=7d',
       { headers: authHeaders() },
       makeEnv(),
+      makeCtx(),
     );
     expect(res.status).toBe(200);
 
@@ -119,7 +124,7 @@ describe('logActivity: dashboard_view', () => {
     mockAuthSequence(fetchMock);
     mockKV.get.mockResolvedValue(null);
 
-    const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeEnv());
+    const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeEnv(), makeCtx());
     expect(res.status).toBe(404);
 
     // Wait for microtasks
@@ -139,6 +144,7 @@ describe('logActivity: trace_view', () => {
       '/api/traces/trace-1',
       { headers: authHeaders() },
       makeEnv(),
+      makeCtx(),
     );
     expect(res.status).toBe(200);
 
@@ -163,6 +169,7 @@ describe('logActivity: session_view', () => {
       '/api/sessions/sess-1',
       { headers: authHeaders() },
       makeEnv(),
+      makeCtx(),
     );
     expect(res.status).toBe(200);
 
@@ -186,6 +193,7 @@ describe('logActivity: compliance_view', () => {
       '/api/compliance/sla',
       { headers: authHeaders() },
       makeEnv(),
+      makeCtx(),
     );
     expect(res.status).toBe(200);
 
@@ -209,6 +217,7 @@ describe('logActivity: failure resilience', () => {
       '/api/dashboard',
       { headers: authHeaders() },
       makeEnv(),
+      makeCtx(),
     );
     expect(res.status).toBe(200);
   });
