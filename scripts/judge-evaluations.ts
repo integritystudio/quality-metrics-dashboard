@@ -68,6 +68,8 @@ export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
 export const LLM_JUDGE_EVALUATOR = 'llm-judge';
 export const LLM_EVALUATOR_TYPE = 'llm';
+export const CANARY_EVALUATOR_TYPE = 'canary';
+export const SEED_EVALUATOR_TYPE = 'seed';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -440,7 +442,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           ? `Relevance (canary) for session ${sessionPreview}`
           : `Relevance (seeded) for session ${sessionPreview}`,
         evaluator: LLM_JUDGE_EVALUATOR,
-        evaluatorType: canary ? 'canary' : 'seed',
+        evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
         traceId: turn.traceId,
         sessionId: turn.sessionId,
       });
@@ -459,7 +461,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           ? `Coherence (canary) for session ${sessionPreview}`
           : `Coherence (seeded) for session ${sessionPreview}`,
         evaluator: LLM_JUDGE_EVALUATOR,
-        evaluatorType: canary ? 'canary' : 'seed',
+        evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
         traceId: turn.traceId,
         sessionId: turn.sessionId,
       });
@@ -481,7 +483,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             ? `Faithfulness (canary) for session ${sessionPreview}`
             : `Faithfulness (seeded) for session ${sessionPreview}`,
           evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: canary ? 'canary' : 'seed',
+          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });
@@ -497,7 +499,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             ? `Hallucination (canary) for session ${sessionPreview}`
             : `Hallucination (seeded) for session ${sessionPreview}`,
           evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: canary ? 'canary' : 'seed',
+          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });
@@ -518,7 +520,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             ? `Tool correctness (canary) for session ${sessionPreview}`
             : `Tool correctness (seeded) for session ${sessionPreview}`,
           evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: canary ? 'canary' : 'seed',
+          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           traceId: turn.traceId,
           sessionId: turn.sessionId,
         });

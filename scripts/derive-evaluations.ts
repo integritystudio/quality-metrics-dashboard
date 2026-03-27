@@ -186,6 +186,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
     if (data.creates === 0 && data.tasks.size === 0) continue;
     if (!data.lastSpan) continue;
     const lastSpan = data.lastSpan;
+    const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
     if (data.tasks.size > 0) {
       const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
@@ -203,7 +204,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         timestamp: hrtToISO(lastSpan.startTime),
         evaluationName: 'task_completion',
         scoreValue: normalizeScore(avg),
-        explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.tasks.size} tasks (${parts.join(', ')})`,
+        explanation: `Session ${sessionPreview}: ${data.tasks.size} tasks (${parts.join(', ')})`,
         evaluator: RULE_EVALUATOR,
         evaluatorType: 'rule',
         traceId: lastSpan.traceId,
@@ -218,7 +219,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         timestamp: hrtToISO(lastSpan.startTime),
         evaluationName: 'task_completion',
         scoreValue: normalizeScore(completionRatio),
-        explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
+        explanation: `Session ${sessionPreview}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
         evaluator: RULE_EVALUATOR,
         evaluatorType: 'rule',
         traceId: lastSpan.traceId,
