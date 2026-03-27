@@ -79,6 +79,8 @@ export const HALLUCINATION_EVAL_NAME = 'hallucination';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const JUDGE_MAX_TOKENS = 1024;
+export const JUDGE_DEFAULT_TEMPERATURE = 0.1;
 export const MAX_TURN_TEXT_LEN = 8000;
 export const MAX_TOOL_CONTEXT_ITEMS = 10;
 export const MAX_TOOL_RESULTS_PER_TURN = 20;
@@ -391,8 +393,8 @@ async function createAnthropicProvider(): Promise<LLMProvider> {
     ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
       const response = await client.messages.create({
         model: HAIKU_MODEL,
-        max_tokens: 1024,
-        temperature: options?.temperature ?? 0.1,
+        max_tokens: JUDGE_MAX_TOKENS,
+        temperature: options?.temperature ?? JUDGE_DEFAULT_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
       });
 
