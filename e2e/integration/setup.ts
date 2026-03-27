@@ -40,6 +40,45 @@ export interface IntegrationState {
   workerUrl: string;
 }
 
+const E2E_EMAIL_PATTERN = 'test+e2e';
+const E2E_INTEGRATION_EMAIL_DOMAIN = '@integritystudio.ai';
+
+async function purgeOrphanedE2eUsers(
+  supabaseUrl: string,
+  serviceHeaders: Record<string, string>,
+): Promise<void> {
+  // Find stale test users from prior runs (pattern: test+e2e<timestamp>@integritystudio.ai)
+  const listRes = await fetch(
+    `${supabaseUrl}/rest/v1/users?select=id,email&email=like.${E2E_EMAIL_PATTERN}*${E2E_INTEGRATION_EMAIL_DOMAIN}`,
+    { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  );
+  if (!listRes.ok) return;
+
+  const orphans = await listRes.json() as Array<{ id: string; email: string }>;
+  if (!orphans.length) return;
+
+  console.log(`[integration setup] Purging ${orphans.length} orphaned e2e user(s)…`);
+  for (const { id, email } of orphans) {
+    await fetch(`${supabaseUrl}/rest/v1/user_roles?user_id=eq.${id}`, {
+      method: 'DELETE', headers: serviceHeaders,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).catch(() => undefined);
+    await fetch(`${supabaseUrl}/rest/v1/user_activity?user_id=eq.${id}`, {
+      method: 'DELETE', headers: serviceHeaders,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).catch(() => undefined);
+    await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${id}`, {
+      method: 'DELETE', headers: serviceHeaders,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).catch(() => undefined);
+    await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+      method: 'DELETE', headers: serviceHeaders,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).catch(() => undefined);
+    console.log(`[integration setup] Purged orphan: ${email}`);
+  }
+}
+
 async function setup(): Promise<void> {
   const supabaseUrl = requireEnv('SUPABASE_URL');
   const anonKey = requireEnv('SUPABASE_ANON_KEY');
@@ -60,6 +99,9 @@ async function setup(): Promise<void> {
     'Authorization': `Bearer ${serviceKey}`,
     'Content-Type': 'application/json',
   };
+
+  // 0. Purge stale test users from prior failed runs
+  await purgeOrphanedE2eUsers(supabaseUrl, serviceHeaders);
 
   // 1. Create user via admin API (bypasses signup rate limits)
   const createUserRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
