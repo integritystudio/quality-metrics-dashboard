@@ -72,6 +72,10 @@ export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
 export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
+export const RELEVANCE_EVAL_NAME = 'relevance';
+export const COHERENCE_EVAL_NAME = 'coherence';
+export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
+export const HALLUCINATION_EVAL_NAME = 'hallucination';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -432,11 +436,11 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
     if (canary) canaryCount++;
 
     // Relevance: realistic range for code assistant turns (0.70-1.0)
-    const relKey = `${turn.sessionId}:relevance:${turnKey}`;
+    const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(relKey)) {
       evals.push({
         timestamp: turn.timestamp,
-        evaluationName: 'relevance',
+        evaluationName: RELEVANCE_EVAL_NAME,
         scoreValue: canary
           ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
           : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
@@ -451,11 +455,11 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
     }
 
     // Coherence: realistic range (0.75-1.0)
-    const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
+    const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(cohKey)) {
       evals.push({
         timestamp: turn.timestamp,
-        evaluationName: 'coherence',
+        evaluationName: COHERENCE_EVAL_NAME,
         scoreValue: canary
           ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
           : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
@@ -475,11 +479,11 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
         : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.09);
       const faithScore = normalizeScore(1 - halScore);
 
-      const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
+      const faithKey = `${turn.sessionId}:${FAITHFULNESS_EVAL_NAME}:${turnKey}`;
       if (!existingKeys.has(faithKey)) {
         evals.push({
           timestamp: turn.timestamp,
-          evaluationName: 'faithfulness',
+          evaluationName: FAITHFULNESS_EVAL_NAME,
           scoreValue: faithScore,
           explanation: canary
             ? `Faithfulness (canary) for session ${sessionPreview}`
@@ -491,11 +495,11 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
         });
       }
 
-      const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
+      const halKey = `${turn.sessionId}:${HALLUCINATION_EVAL_NAME}:${turnKey}`;
       if (!existingKeys.has(halKey)) {
         evals.push({
           timestamp: turn.timestamp,
-          evaluationName: 'hallucination',
+          evaluationName: HALLUCINATION_EVAL_NAME,
           scoreValue: halScore,
           explanation: canary
             ? `Hallucination (canary) for session ${sessionPreview}`
@@ -550,7 +554,7 @@ export async function evaluateTurn(
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
 
-  const relKey = `${turn.sessionId}:relevance:${turnKey}`;
+  const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
   if (!existingKeys.has(relKey)) {
     try {
       const result = await judge.evaluateRelevance(
@@ -560,7 +564,7 @@ export async function evaluateTurn(
       );
       evals.push({
         timestamp: turn.timestamp,
-        evaluationName: 'relevance',
+        evaluationName: RELEVANCE_EVAL_NAME,
         scoreValue: normalizeScore(result.score),
         explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
         evaluator: LLM_JUDGE_EVALUATOR,
@@ -569,18 +573,18 @@ export async function evaluateTurn(
         sessionId: turn.sessionId,
       });
     } catch (err) {
-      trackFailure('relevance');
-      console.warn(`  [relevance] Error for ${sessionPreview}: ${(err as Error).message}`);
+      trackFailure(RELEVANCE_EVAL_NAME);
+      console.warn(`  [${RELEVANCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
     }
   }
 
-  const cohKey = `${turn.sessionId}:coherence:${turnKey}`;
+  const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
   if (!existingKeys.has(cohKey)) {
     try {
       const result = await judge.evaluateCoherence(turn.assistantText);
       evals.push({
         timestamp: turn.timestamp,
-        evaluationName: 'coherence',
+        evaluationName: COHERENCE_EVAL_NAME,
         scoreValue: normalizeScore(result.score),
         explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
         evaluator: LLM_JUDGE_EVALUATOR,
@@ -589,14 +593,14 @@ export async function evaluateTurn(
         sessionId: turn.sessionId,
       });
     } catch (err) {
-      trackFailure('coherence');
-      console.warn(`  [coherence] Error for ${sessionPreview}: ${(err as Error).message}`);
+      trackFailure(COHERENCE_EVAL_NAME);
+      console.warn(`  [${COHERENCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
     }
   }
 
   if (turn.toolResults.length > 0) {
-    const faithKey = `${turn.sessionId}:faithfulness:${turnKey}`;
-    const halKey = `${turn.sessionId}:hallucination:${turnKey}`;
+    const faithKey = `${turn.sessionId}:${FAITHFULNESS_EVAL_NAME}:${turnKey}`;
+    const halKey = `${turn.sessionId}:${HALLUCINATION_EVAL_NAME}:${turnKey}`;
     const needsFaith = !existingKeys.has(faithKey);
     const needsHal = !existingKeys.has(halKey);
 
@@ -610,7 +614,7 @@ export async function evaluateTurn(
         );
         evals.push({
           timestamp: turn.timestamp,
-          evaluationName: 'faithfulness',
+          evaluationName: FAITHFULNESS_EVAL_NAME,
           scoreValue: normalizeScore(faithResult.score),
           explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
           evaluator: LLM_JUDGE_EVALUATOR,
@@ -619,8 +623,8 @@ export async function evaluateTurn(
           sessionId: turn.sessionId,
         });
       } catch (err) {
-        trackFailure('faithfulness');
-        console.warn(`  [faithfulness] Error for ${sessionPreview}: ${(err as Error).message}`);
+        trackFailure(FAITHFULNESS_EVAL_NAME);
+        console.warn(`  [${FAITHFULNESS_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
     }
 
@@ -636,7 +640,7 @@ export async function evaluateTurn(
         const halScore = normalizeScore(1 - halResult.score);
         evals.push({
           timestamp: turn.timestamp,
-          evaluationName: 'hallucination',
+          evaluationName: HALLUCINATION_EVAL_NAME,
           scoreValue: halScore,
           explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${sessionPreview}`,
           evaluator: LLM_JUDGE_EVALUATOR,
@@ -645,8 +649,8 @@ export async function evaluateTurn(
           sessionId: turn.sessionId,
         });
       } catch (err) {
-        trackFailure('hallucination');
-        console.warn(`  [hallucination] Error for ${sessionPreview}: ${(err as Error).message}`);
+        trackFailure(HALLUCINATION_EVAL_NAME);
+        console.warn(`  [${HALLUCINATION_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
     }
 
@@ -887,7 +891,7 @@ async function main() {
       const existingKeys = _loadExistingKeys();
 
       // Checking only hallucination would skip sessions with partial coverage.
-      const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
+      const SEED_METRICS = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, HALLUCINATION_EVAL_NAME] as const;
       const newTurns = traceTurns.filter(t => {
         const turnKey = t.timestamp.slice(0, 19);
         return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
