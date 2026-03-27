@@ -291,20 +291,21 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
     if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
 
-    const handoffScores: number[] = [];
+    let sum = 0, count = 0, correct = 0, preserved = 0;
     for (let i = 1; i < data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
       const curr = data.agentSequence[i];
       if (curr.agentName !== prev.agentName) {
-        handoffScores.push(curr.score);
+        sum += curr.score;
+        count++;
+        if (curr.score >= HANDOFF_CORRECT_THRESHOLD) correct++;
+        if (curr.score >= HANDOFF_CONTEXT_THRESHOLD) preserved++;
       }
     }
 
-    if (handoffScores.length === 0) continue;
+    if (count === 0) continue;
 
-    const avgScore = handoffScores.reduce((a, b) => a + b, 0) / handoffScores.length;
-    const correct = handoffScores.filter(s => s >= HANDOFF_CORRECT_THRESHOLD).length;
-    const preserved = handoffScores.filter(s => s >= HANDOFF_CONTEXT_THRESHOLD).length;
+    const avgScore = sum / count;
     const lastSpan = data.agentSequence[data.agentSequence.length - 1].span;
 
     evals.push({
@@ -312,7 +313,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       evaluationName: 'handoff_correctness',
       scoreValue: normalizeScore(avgScore),
       scoreUnit: 'ratio_0_1',
-      explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
+      explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${count} handoffs across ${distinctAgents.size} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
       evaluator: 'telemetry-rule-engine',
       evaluatorType: 'rule',
       traceId: lastSpan.traceId,
