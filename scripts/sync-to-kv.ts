@@ -803,9 +803,7 @@ async function main(): Promise<void> {
     entries.push({ key: `metric:${name}`, value: JSON.stringify(detail) });
   }
 
-  for (const period of PERIODS) {
-    const ms = PERIOD_MS[period];
-    if (ms > MAX_DAYS_MS) continue;
+  for (const period of activePeriods) {
     const grouped = groupedByPeriod.get(period);
     if (!grouped) continue;
     for (const name of metricNames) {
@@ -850,9 +848,8 @@ async function main(): Promise<void> {
 
   // Collect time buckets per period×metric for degradation signal computation
   const degradationBuckets = new Map<string, Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>>>();
-  for (const period of PERIODS) {
+  for (const period of activePeriods) {
     const ms = PERIOD_MS[period];
-    if (ms > MAX_DAYS_MS) continue;
     const cached = groupedByPeriod.get(period);
     if (!cached) continue;
     const start = new Date(now.getTime() - ms);
