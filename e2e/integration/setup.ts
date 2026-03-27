@@ -1,8 +1,12 @@
 /**
- * Integration test setup — creates a test user against real Supabase,
- * assigns dashboard.read role, signs in, and writes the JWT to a shared file.
+ * Integration test setup — obtains a real Auth0 JWT via ROPC for the permanent
+ * test user, upserts them into public.users, assigns the e2e role, and writes
+ * the JWT + user metadata to a shared state file for tests and teardown.
  *
- * Requires Doppler env vars: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, DEV_WORKER_URL
+ * Requires Doppler env vars:
+ *   VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE
+ *   AUTH0_TEST_EMAIL, AUTH0_TEST_PASSWORD, AUTH0_TEST_USER_ID
+ *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEV_WORKER_URL
  *
  * Run: doppler run --project integrity-studio --config dev -- npx playwright test --project integration
  */
@@ -10,25 +14,29 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-interface SupabaseAdminUserResponse {
-  id?: string;
-  error?: { message: string };
-}
+const E2E_ROLE_NAME = 'e2e-dashboard-reader';
+const E2E_PERMISSIONS = [
+  'dashboard.read',
+  'dashboard.executive',
+  'dashboard.operator',
+  'dashboard.auditor',
+  'dashboard.traces.read',
+  'dashboard.sessions.read',
+  'dashboard.agents.read',
+  'dashboard.pipeline.read',
+  'dashboard.compliance.read',
+];
 
-interface SupabaseSignInResponse {
+interface Auth0TokenResponse {
   access_token?: string;
-  error?: { message: string };
-}
-
-function requireEnv(name: string): string {
-  const val = process.env[name];
-  if (!val) throw new Error(`Missing env var: ${name}. Run with: doppler run --project integrity-studio --config dev`);
-  return val;
+  error?: string;
+  error_description?: string;
 }
 
 export const STATE_FILE = join(__dirname, '.integration-state.json');
@@ -40,132 +48,106 @@ export interface IntegrationState {
   workerUrl: string;
 }
 
-const E2E_EMAIL_PATTERN = 'test+e2e';
-const E2E_INTEGRATION_EMAIL_DOMAIN = '@integritystudio.ai';
-
-async function purgeOrphanedE2eUsers(
-  supabaseUrl: string,
-  serviceHeaders: Record<string, string>,
-): Promise<void> {
-  // Find stale test users from prior runs (pattern: test+e2e<timestamp>@integritystudio.ai)
-  const listRes = await fetch(
-    `${supabaseUrl}/rest/v1/users?select=id,email&email=like.${E2E_EMAIL_PATTERN}*${E2E_INTEGRATION_EMAIL_DOMAIN}`,
-    { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
-  );
-  if (!listRes.ok) return;
-
-  const orphans = await listRes.json() as Array<{ id: string; email: string }>;
-  if (!orphans.length) return;
-
-  console.log(`[integration setup] Purging ${orphans.length} orphaned e2e user(s)…`);
-  for (const { id, email } of orphans) {
-    await fetch(`${supabaseUrl}/rest/v1/user_roles?user_id=eq.${id}`, {
-      method: 'DELETE', headers: serviceHeaders,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    }).catch(() => undefined);
-    await fetch(`${supabaseUrl}/rest/v1/user_activity?user_id=eq.${id}`, {
-      method: 'DELETE', headers: serviceHeaders,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    }).catch(() => undefined);
-    await fetch(`${supabaseUrl}/rest/v1/users?id=eq.${id}`, {
-      method: 'DELETE', headers: serviceHeaders,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    }).catch(() => undefined);
-    await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
-      method: 'DELETE', headers: serviceHeaders,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    }).catch(() => undefined);
-    console.log(`[integration setup] Purged orphan: ${email}`);
-  }
+function requireEnv(name: string): string {
+  const val = process.env[name];
+  if (!val) throw new Error(`Missing env var: ${name}. Run with: doppler run --project integrity-studio --config dev`);
+  return val;
 }
 
-async function setup(): Promise<void> {
-  const supabaseUrl = requireEnv('SUPABASE_URL');
-  const anonKey = requireEnv('SUPABASE_ANON_KEY');
-  const serviceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const workerUrl = requireEnv('DEV_WORKER_URL');
-
-  const uniqueSuffix = Math.random().toString(36).substring(2, 8);
-  const email = `test+e2e${Date.now()}${uniqueSuffix}@integritystudio.ai`;
-  const password = `E2ePass!${Date.now()}`;
-
-  const headers = {
-    'apikey': anonKey,
-    'Content-Type': 'application/json',
-  };
-
-  const serviceHeaders = {
-    'apikey': serviceKey,
-    'Authorization': `Bearer ${serviceKey}`,
-    'Content-Type': 'application/json',
-  };
-
-  // 0. Purge stale test users from prior failed runs
-  await purgeOrphanedE2eUsers(supabaseUrl, serviceHeaders);
-
-  // 1. Create user via admin API (bypasses signup rate limits)
-  const createUserRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+async function getAuth0Jwt(
+  domain: string,
+  clientId: string,
+  audience: string,
+  email: string,
+  password: string,
+): Promise<string> {
+  const res = await fetch(`https://${domain}/oauth/token`, {
     method: 'POST',
-    headers: serviceHeaders,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email,
+      grant_type: 'password',
+      username: email,
       password,
-      email_confirm: true,
+      client_id: clientId,
+      audience,
+      scope: 'openid profile email',
     }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  const createUserData = await createUserRes.json() as SupabaseAdminUserResponse;
-  const userId = createUserData.id;
-  if (!userId) throw new Error(`admin user create failed: ${createUserData.error?.message ?? createUserRes.status}`);
+  const data = await res.json() as Auth0TokenResponse;
+  if (!data.access_token) {
+    throw new Error(`Auth0 ROPC failed: ${data.error} — ${data.error_description}`);
+  }
+  return data.access_token;
+}
 
-  // 3. Insert into public.users
+async function upsertPublicUser(
+  supabaseUrl: string,
+  serviceHeaders: Record<string, string>,
+  auth0Id: string,
+  email: string,
+): Promise<string> {
+  // Check if user already exists
+  const lookupRes = await fetch(
+    `${supabaseUrl}/rest/v1/users?select=id&auth0_id=eq.${encodeURIComponent(auth0Id)}&limit=1`,
+    { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  );
+  if (lookupRes.ok) {
+    const rows = await lookupRes.json() as Array<{ id: string }>;
+    if (rows[0]?.id) return rows[0].id;
+  }
+
+  // Insert new row
+  const id = randomUUID();
   const insertRes = await fetch(`${supabaseUrl}/rest/v1/users`, {
     method: 'POST',
     headers: { ...serviceHeaders, 'Prefer': 'return=minimal' },
-    body: JSON.stringify({ id: userId, email, auth0_id: userId }),
+    body: JSON.stringify({ id, email, auth0_id: auth0Id }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!insertRes.ok) {
     const errText = await insertRes.text();
     throw new Error(`public.users insert failed: ${insertRes.status} ${errText}`);
   }
+  return id;
+}
 
-  // 4. Assign dashboard reader role — find or create
-  const E2E_ROLE_NAME = 'e2e-dashboard-reader';
-  const E2E_PERMISSIONS = [
-    'dashboard.read',
-    'dashboard.executive',
-    'dashboard.operator',
-    'dashboard.auditor',
-    'dashboard.traces.read',
-    'dashboard.sessions.read',
-    'dashboard.agents.read',
-    'dashboard.pipeline.read',
-    'dashboard.compliance.read',
-  ];
-
+async function ensureE2eRole(
+  supabaseUrl: string,
+  serviceHeaders: Record<string, string>,
+  userId: string,
+): Promise<void> {
+  // Find or create e2e role
   const rolesRes = await fetch(
-    `${supabaseUrl}/rest/v1/roles?select=id,name,permissions&name=eq.${E2E_ROLE_NAME}`,
+    `${supabaseUrl}/rest/v1/roles?select=id&name=eq.${E2E_ROLE_NAME}`,
     { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
   );
-  let roles = await rolesRes.json() as Array<{ id: string; name: string; permissions: string[] }>;
+  let roles = await rolesRes.json() as Array<{ id: string }>;
 
   if (!roles.length) {
-    // Create the e2e role with dashboard permissions
-    const createRoleRes = await fetch(`${supabaseUrl}/rest/v1/roles`, {
+    const createRes = await fetch(`${supabaseUrl}/rest/v1/roles`, {
       method: 'POST',
       headers: { ...serviceHeaders, 'Prefer': 'return=representation' },
       body: JSON.stringify({ name: E2E_ROLE_NAME, permissions: E2E_PERMISSIONS }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!createRoleRes.ok) {
-      const errText = await createRoleRes.text();
-      throw new Error(`role create failed: ${createRoleRes.status} ${errText}`);
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      throw new Error(`role create failed: ${createRes.status} ${errText}`);
     }
-    roles = await createRoleRes.json() as Array<{ id: string; name: string; permissions: string[] }>;
+    roles = await createRes.json() as Array<{ id: string }>;
   }
 
   const roleId = roles[0].id;
+
+  // Assign only if not already assigned
+  const checkRes = await fetch(
+    `${supabaseUrl}/rest/v1/user_roles?select=id&user_id=eq.${userId}&role_id=eq.${roleId}&limit=1`,
+    { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  );
+  const existing = checkRes.ok ? await checkRes.json() as Array<{ id: string }> : [];
+  if (existing.length) return;
+
   const assignRes = await fetch(`${supabaseUrl}/rest/v1/user_roles`, {
     method: 'POST',
     headers: { ...serviceHeaders, 'Prefer': 'return=minimal' },
@@ -176,24 +158,40 @@ async function setup(): Promise<void> {
     const errText = await assignRes.text();
     throw new Error(`role assignment failed: ${assignRes.status} ${errText}`);
   }
+}
 
-  // 5. Sign in to get JWT
-  const signInRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ email, password }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  const signInData = await signInRes.json() as SupabaseSignInResponse;
-  const jwt = signInData.access_token;
-  if (!jwt) throw new Error(`signin failed: ${signInData.error?.message ?? signInRes.status}`);
+async function setup(): Promise<void> {
+  const auth0Domain = requireEnv('VITE_AUTH0_DOMAIN');
+  const auth0ClientId = requireEnv('VITE_AUTH0_CLIENT_ID');
+  const auth0Audience = requireEnv('VITE_AUTH0_AUDIENCE');
+  const testEmail = requireEnv('AUTH0_TEST_EMAIL');
+  const testPassword = requireEnv('AUTH0_TEST_PASSWORD');
+  const testAuth0Id = requireEnv('AUTH0_TEST_USER_ID');
+  const supabaseUrl = requireEnv('SUPABASE_URL');
+  const serviceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const workerUrl = requireEnv('DEV_WORKER_URL');
 
-  // Write state to file for tests and teardown
-  const state: IntegrationState = { jwt, userId, email, workerUrl };
+  const serviceHeaders = {
+    'apikey': serviceKey,
+    'Authorization': `Bearer ${serviceKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  // 1. Get real Auth0 JWT via ROPC
+  const jwt = await getAuth0Jwt(auth0Domain, auth0ClientId, auth0Audience, testEmail, testPassword);
+
+  // 2. Upsert test user into public.users
+  const userId = await upsertPublicUser(supabaseUrl, serviceHeaders, testAuth0Id, testEmail);
+
+  // 3. Ensure e2e role is assigned
+  await ensureE2eRole(supabaseUrl, serviceHeaders, userId);
+
+  // Write state for tests and teardown
+  const state: IntegrationState = { jwt, userId, email: testEmail, workerUrl };
   mkdirSync(__dirname, { recursive: true });
   writeFileSync(STATE_FILE, JSON.stringify(state));
 
-  console.log(`[integration setup] Created test user ${email} (${userId}), role: ${roles[0].name}`);
+  console.log(`[integration setup] Auth0 JWT acquired for ${testEmail} (userId: ${userId})`);
 }
 
 export default setup;

@@ -1,6 +1,7 @@
 /**
- * Integration test teardown — cleans up the test user created by setup.ts.
- * Deletes: user_roles, user_activity, public.users, auth.users entry.
+ * Integration test teardown — cleans up DB rows created by setup.ts.
+ * Deletes: user_roles, user_activity, public.users row.
+ * Does NOT delete the Auth0 user — it is a permanent test account.
  */
 
 import { readFileSync, unlinkSync } from 'node:fs';
@@ -45,7 +46,7 @@ async function teardown(): Promise<void> {
 
   const { userId } = state;
 
-  // Best-effort cleanup in dependency order
+  // Best-effort cleanup in dependency order (Auth0 user is permanent — DB rows only)
   const deletions = [
     ['user_roles', `user_id=eq.${userId}`],
     ['user_activity', `user_id=eq.${userId}`],
@@ -59,13 +60,6 @@ async function teardown(): Promise<void> {
       signal: AbortSignal.timeout(TEARDOWN_TIMEOUT_MS),
     }).catch(() => undefined);
   }
-
-  // Delete auth user
-  await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers,
-    signal: AbortSignal.timeout(TEARDOWN_TIMEOUT_MS),
-  }).catch(() => undefined);
 
   // Clean up state file
   try { unlinkSync(STATE_FILE); } catch { /* ignore */ }

@@ -10,7 +10,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: [['html', { open: 'never' }]],
+  reporter: [
+    ['html', { open: 'never' }],
+    ...(isIntegration ? [['./e2e/integration/sentry-reporter.ts'] as const] : []),
+  ],
   timeout: 30_000,
   expect: { timeout: 5_000 },
 
