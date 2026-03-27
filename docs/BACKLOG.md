@@ -17,6 +17,18 @@ Open items from code reviews and deferred work.
 
 **Status**: CR-TS-1 open: `attr<T>` has 60+ call sites in sessions.ts; requires a type-guard parameter or Zod schema-per-attribute refactor — deferred as a larger refactor.
 
+### FU-G5-LAYOUT + R5: Code Review Findings (Open Items)
+
+| # | Item | Priority | Source |
+|---|------|----------|--------|
+| R5-CR-1 | **`DegradationSignal` fields not rendered** — `coverageDropoutRate` and `latencySkewRatio` are present in the API response and typed in the hook interface but not shown in `DegradationSignalsPage`. Add columns or a detail panel so operators can act on these signals. | P3 | code-review 2026-03-27 |
+
+**Notes — no critical or important issues found across 7 commits (6a402c8..b4e8358)**:
+- `latencyMs` computation: uses globally earliest `startTimeUnixNano` per agent vs. globally latest `endTimeUnixNano` per source agent. For single-turn workflows this is exact; for multi-turn it approximates total agent lifespan gap. Intentional; documented in JSDoc.
+- `inferFromSpans` epsilon tolerance `<= next.minStart + SPAN_SEQUENCE_EPSILON_NS`: negative-latency guard preserves existing behaviour; `latencyMs` will be null for those edges.
+- `DegradationSignalsPage` keyboard-only navigation (`g d`) matches the established pattern for `RoutingTelemetryPage` (`g r`) — not a regression.
+- Pre-existing TS errors in `sessions.ts` / `agents.ts` (unstaged local changes, not introduced by this session).
+
 ## Completed
 
 ### Worker API — Resolved
@@ -47,6 +59,16 @@ Open items from code reviews and deferred work.
 |---|------|----------|--------|
 | G5-M1 | `classifyShape` now uses DFS cycle detection — correctly handles 3+ node cycles | P3 | Done (cb90cfc) |
 | FU-G5-FILTER | Agent filter chip bar in `AgentWorkflowView` — multi-select toggles filter both DAG (dim) and Timeline (hide lane + handoffs); shown when 2+ agents | P3 | Done |
+| FU-G5-LAYOUT-LATENCY | Edge labels showing handoff latency (`latencyMs`) on workflow graph — computed from `gen_ai.agent.name` span timing; format `"score · Nms"` | P3 | Done (6a402c8..e9da2ae) |
+
+### R5: Regression Detection (Completed)
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| R5-HOOK | `useDegradationSignals` hook + `DegradationSignalsResponse` types | P3 | Done (ce7ec1d) |
+| R5-PAGE | `DegradationSignalsPage` table: metric, status, EWMA drift, variance trend, variance ratio, breaches, confirmed | P3 | Done (dbeb1c3..b4e8358) |
+| R5-ROUTE | `/degradation-signals` route + `g d` keyboard shortcut wired in `App.tsx` | P3 | Done (013bba0) |
+| R5-DEV-API | `GET /api/degradation-signals` on dev Hono server — computes EWMA signals from local eval data via `computeRollingDegradationSignals` | P3 | Done (680ef9b) |
 
 ### Phase 4 Admin: Code Review Deferred Items
 
