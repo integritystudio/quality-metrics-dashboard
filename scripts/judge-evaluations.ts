@@ -70,6 +70,7 @@ export const LLM_JUDGE_EVALUATOR = 'llm-judge';
 export const LLM_EVALUATOR_TYPE = 'llm';
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
+export const RULE_EVALUATOR_TYPE = 'rule';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';

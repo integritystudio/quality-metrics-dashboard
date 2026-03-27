@@ -17,7 +17,7 @@ import {
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 
 export interface EvalRecord {
@@ -85,7 +85,7 @@ function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
     scoreValue: score,
     explanation,
     evaluator: RULE_EVALUATOR,
-    evaluatorType: 'rule',
+    evaluatorType: RULE_EVALUATOR_TYPE,
     traceId: span.traceId,
     sessionId: String(attrs['session.id'] ?? ''),
   };
@@ -117,7 +117,7 @@ function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
     scoreUnit: 'seconds',
     explanation: `Hook ${hookType} executed in ${durationSec.toFixed(EVAL_SCORE_PRECISION)}s`,
     evaluator: RULE_EVALUATOR,
-    evaluatorType: 'rule',
+    evaluatorType: RULE_EVALUATOR_TYPE,
     traceId: span.traceId,
     sessionId: String(attrs['session.id'] ?? ''),
   };
@@ -206,7 +206,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         scoreValue: normalizeScore(avg),
         explanation: `Session ${sessionPreview}: ${data.tasks.size} tasks (${parts.join(', ')})`,
         evaluator: RULE_EVALUATOR,
-        evaluatorType: 'rule',
+        evaluatorType: RULE_EVALUATOR_TYPE,
         traceId: lastSpan.traceId,
         sessionId,
       });
@@ -221,7 +221,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         scoreValue: normalizeScore(completionRatio),
         explanation: `Session ${sessionPreview}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
         evaluator: RULE_EVALUATOR,
-        evaluatorType: 'rule',
+        evaluatorType: RULE_EVALUATOR_TYPE,
         traceId: lastSpan.traceId,
         sessionId,
       });
@@ -272,7 +272,7 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
       scoreValue: normalizeScore(rate),
       explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
       evaluator: RULE_EVALUATOR,
-      evaluatorType: 'rule',
+      evaluatorType: RULE_EVALUATOR_TYPE,
       traceId: lastSpan.traceId,
       sessionId,
     });
@@ -321,7 +321,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       scoreUnit: 'ratio_0_1',
       explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${count} handoffs across ${distinctAgents.size} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
       evaluator: RULE_EVALUATOR,
-      evaluatorType: 'rule',
+      evaluatorType: RULE_EVALUATOR_TYPE,
       traceId: lastSpan.traceId,
       sessionId,
     });
