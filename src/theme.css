@@ -1485,7 +1485,7 @@ summary.section-rail {
   padding-left: var(--space-5);
 }
 
-/* AgentWorkflowView: agent filter chip bar (FU-G5-FILTER) */
+/* AgentWorkflowView: agent filter chip bar */
 .workflow-filter {
   display: flex;
   flex-wrap: wrap;
