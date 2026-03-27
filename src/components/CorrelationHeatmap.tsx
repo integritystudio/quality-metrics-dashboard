@@ -74,8 +74,8 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
       className="gap-half w-full heatmap-grid"
       style={{
         '--heatmap-aspect': `${cols} / ${cols}`,
-        gridTemplateColumns: `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
-        gridTemplateRows: `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
+        '--heatmap-grid-cols': `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
+        '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
       } as CSSProperties}
     >
       <div role="cell" />
