@@ -72,7 +72,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           className="coverage-grid gap-half"
           style={{
             '--coverage-grid-cols': `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
-          }}
+          } as CSSProperties}
         >
           <div role="row" className="contents">
             <div role="columnheader" className="text-xs font-semibold" />
