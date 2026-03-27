@@ -15,7 +15,7 @@ const LABEL_WIDTH = 120;
 const HANDOFF_MARKER_RADIUS = 7;
 const HEADER_HEIGHT = 28;
 /**
- * CR-PERF-1: Maximum turns rendered in the SVG viewport.
+ * Maximum turns rendered in the SVG viewport.
  * Sessions with 10K+ turns would produce 400KB+ SVG without a cap.
  * Excess turns are hidden with a truncation notice below the timeline.
  */
@@ -119,7 +119,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
     return <EmptyState message="No turns to display." />;
   }
 
-  // CR-PERF-1: cap rendered turns to avoid unbounded SVG on high-turn sessions
   const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
   const truncated = turns.length > MAX_VISIBLE_TURNS;
 

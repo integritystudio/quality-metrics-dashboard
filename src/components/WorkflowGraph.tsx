@@ -23,7 +23,7 @@ const NODE_HEIGHT = 120;
 /** Show MiniMap only when there are enough nodes to benefit from an overview. */
 const MINIMAP_THRESHOLD = 5;
 /**
- * CR-PERF-2: Maximum nodes passed to ELK layout.
+ * Maximum nodes passed to ELK layout.
  * Graphs with 100+ agents would block the main thread during synchronous ELK layout.
  * Graphs exceeding this limit are rendered in a degraded list fallback instead.
  */
@@ -59,7 +59,7 @@ const elk = new ELK();
 
 /**
  * Type guard for WorkflowNode.
- * CR-TS-4: replaces `data as unknown as WorkflowNode` double-cast in AgentNodeComponent.
+ * Replaces `data as unknown as WorkflowNode` double-cast in AgentNodeComponent.
  * Validates the minimum fields needed for rendering; avoids silent mismatches if ReactFlow
  * passes unexpected data to a node component.
  */
@@ -202,7 +202,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
         }
       });
     return () => { cancelled = true; };
-    // CR-PERF-3: setNodes/setEdges are stable refs from useNodesState/useEdgesState but
+    // setNodes/setEdges are stable refs from useNodesState/useEdgesState but
     // were in the dep array, causing unnecessary ELK re-runs each render cycle.
     // Omitted here — layout should only recompute when graph data or filter actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -212,10 +212,10 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
     onNodeClick?.(node.id);
   }, [onNodeClick]);
 
-  // Large-graph fallback: skip ELK layout to avoid blocking the main thread (CR-PERF-2)
+  // Large-graph fallback: skip ELK layout to avoid blocking the main thread
   if (graph.nodes.length > MAX_ELK_NODES) {
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
         <div className="workflow-oversize text-secondary text-xs">
           <div className="workflow-oversize__heading">
             Graph too large to render ({graph.nodes.length} agents)
@@ -239,7 +239,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
     const node = graph.nodes[0];
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
         <div className="workflow-fallback">
           {node ? (
             <>
@@ -258,7 +258,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
 
   if (layoutError) {
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
         <div className="error-state workflow-fallback">
           Failed to compute workflow layout: {layoutError}
         </div>
@@ -269,7 +269,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
 
   return (
-    <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+    <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
       <ReactFlow
         nodes={nodes}
         edges={edges}
