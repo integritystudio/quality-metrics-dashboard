@@ -342,7 +342,7 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
 
       // P0-1: Sanitize text before LLM evaluation to mitigate prompt injection
       const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
-      if (!sanitizedUser.trim()) continue; // H2: skip if sanitization removed all content
+      if (!sanitizedUser.trim()) continue;
 
       pendingUser = {
         text: sanitizedUser,
