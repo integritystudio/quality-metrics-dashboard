@@ -77,7 +77,7 @@ export default defineConfig(({ command, mode }) => {
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/__tests__/setup.ts'],
-      exclude: ['node_modules/**', 'scripts/__tests__/**', 'e2e/**'],
+      exclude: ['node_modules/**', 'scripts/__tests__/**', 'e2e/**', '.claude/worktrees/**'],
     },
   };
 });
