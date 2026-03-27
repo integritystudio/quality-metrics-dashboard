@@ -700,21 +700,25 @@ async function main(): Promise<void> {
 
   const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
 
-  for (const period of PERIODS) {
-    const ms = PERIOD_MS[period];
-    if (ms > MAX_DAYS_MS) continue;
+  const activePeriods = PERIODS.filter(p => PERIOD_MS[p] <= MAX_DAYS_MS);
+  const periodQueryResults = await Promise.all(
+    activePeriods.map(async period => {
+      const ms = PERIOD_MS[period];
+      const start = new Date(now.getTime() - ms);
+      const dates = { start: start.toISOString(), end: now.toISOString() };
+      const evals = await backend.queryEvaluations({
+        startDate: dates.start,
+        endDate: dates.end,
+        limit: QUERY_LIMIT,
+      });
+      if (evals.length === QUERY_LIMIT) {
+        console.warn(`[sync-to-kv] Query returned ${QUERY_LIMIT} results for period ${period} — data may be truncated`);
+      }
+      return { period, evals, dates };
+    })
+  );
 
-    const start = new Date(now.getTime() - ms);
-    const dates = { start: start.toISOString(), end: now.toISOString() };
-    const evals = await backend.queryEvaluations({
-      startDate: dates.start,
-      endDate: dates.end,
-      limit: QUERY_LIMIT,
-    });
-    if (evals.length === QUERY_LIMIT) {
-      console.warn(`[sync-to-kv] Query returned ${QUERY_LIMIT} results for period ${period} — data may be truncated`);
-    }
-
+  for (const { period, evals, dates } of periodQueryResults) {
     const filtered = filterCanary(evals);
 
     const grouped = new Map<string, typeof filtered>();
