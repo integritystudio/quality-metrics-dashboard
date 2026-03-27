@@ -137,6 +137,8 @@ interface SessionTaskData {
 
 const sessionTasks = new Map<string, SessionTaskData>();
 
+export const RULE_EVALUATOR = 'telemetry-rule-engine';
+
 export const STATUS_SCORES: Record<string, number> = {
   pending: 0.0,
   in_progress: 0.5,
@@ -333,14 +335,12 @@ function main(): void {
     .sort();
 
   const allEvals: EvalRecord[] = [];
-  let _spanCount = 0;
 
   for (const file of traceFiles) {
     const filePath = join(TELEMETRY_DIR, file);
     const spans = readJsonlWithValidationSync(filePath, traceSpanSchema);
 
     for (const span of spans) {
-      _spanCount++;
 
       const toolCorr = deriveToolCorrectness(span);
       if (toolCorr) allEvals.push(toolCorr);
@@ -365,8 +365,6 @@ function main(): void {
     group.push(ev);
   }
 
-  const RULE_EVALUATOR = 'telemetry-rule-engine';
-  let _totalWritten = 0;
   let preservedCount = 0;
   for (const [date, evals] of byDate) {
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
@@ -384,7 +382,6 @@ function main(): void {
     const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
     const content = [...ruleLines, ...preserved].join('\n') + '\n';
     writeFileSync(outFile, content);
-    _totalWritten += evals.length + preserved.length;
     preservedCount += preserved.length;
   }
 
