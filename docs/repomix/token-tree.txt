@@ -1,6 +1,6 @@
 🔢 Token Count Tree:
 ────────────────────
-├── scripts/ (31,262 tokens)
+├── scripts/ (31,190 tokens)
 │   ├── .degradation-incidents.json (277 tokens)
 │   ├── .kv-sync-coverage.json (71 tokens)
 │   ├── backtest-degradation.ts (2,696 tokens)
@@ -11,7 +11,7 @@
 │   ├── generate-token-tree.sh (128 tokens)
 │   ├── judge-evaluations.ts (8,522 tokens)
 │   ├── populate-dashboard.ts (583 tokens)
-│   ├── sync-to-kv.ts (11,313 tokens)
+│   ├── sync-to-kv.ts (11,241 tokens)
 │   └── update-readme-tree.sh (1,175 tokens)
 └── src/ (96,544 tokens)
     ├── App.tsx (3,872 tokens)

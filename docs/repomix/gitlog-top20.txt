@@ -1,0 +1,332 @@
+8df9944 2026-03-26 refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME
+  scripts/sync-to-kv.ts
+
+6a39352 2026-03-26 docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+9265670 2026-03-26 refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable
+  src/theme.css
+
+b89436f 2026-03-26 refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables
+  src/theme.css
+
+c07f7f3 2026-03-26 refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds
+  worker/index.ts
+
+74ca2f1 2026-03-26 chore: regenerate repomix docs after Round 6 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+1609a58 2026-03-26 refactor(worker): extract remaining inline error strings to ERR_ constants
+  worker/index.ts
+
+c1ba1fc 2026-03-26 refactor(constants): extract inline error strings into ErrorMessage enum
+  worker/index.ts
+
+7a046d1 2026-03-26 refactor(worker): split userId/roleId validation for precise error messages
+  worker/index.ts
+
+bb8d081 2026-03-26 refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants
+  worker/index.ts
+
+d98d147 2026-03-26 refactor(worker): extract safeArray helper for Array.isArray KV guard pattern
+  worker/index.ts
+
+488b543 2026-03-26 fix(worker): replace unsafe KV payload casts with Array.isArray guards
+  worker/index.ts
+
+a3b4012 2026-03-26 chore: regenerate repomix docs
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+af4a3a0 2026-03-26 fix(worker): guard logActivity against undefined appUserId instead of passing empty string
+  worker/index.ts
+
+a660547 2026-03-26 refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore
+  scripts/judge-evaluations.ts
+
+792c364 2026-03-26 refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants
+  scripts/sync-to-kv.ts
+
+31fb8f1 2026-03-26 refactor(components,worker): remove WHAT JSDoc prop comments and route comment
+  worker/index.ts
+
+b6a7361 2026-03-26 refactor(worker): remove WHAT comments from admin route handlers
+  worker/index.ts
+
+26bab40 2026-03-26 refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants
+  scripts/sync-to-kv.ts
+
+9d197f5 2026-03-26 refactor(sync-to-kv): eliminate double Map.get() in degradationBuckets
+  scripts/sync-to-kv.ts
+
+257cd0e 2026-03-26 refactor(scripts): eliminate double Map.get() in pushToGroup and byDate grouping
+  scripts/sync-to-kv.ts
+
+b27a65e 2026-03-26 refactor(judge): remove two more what-comments in turn extraction and sub-criteria
+  scripts/judge-evaluations.ts
+
+d78a765 2026-03-26 refactor(worker): ERR_UNAUTHORIZED constant; VALID_ROLES for allowedViews; remove WHAT comment
+  worker/index.ts
+
+c625ad9 2026-03-26 refactor(judge): remove remaining what-comments inside function bodies
+  scripts/judge-evaluations.ts
+
+672a198 2026-03-26 refactor(worker): extract remaining inline literals/arrays to named constants
+  worker/index.ts
+
+ba1460e 2026-03-26 refactor(judge): remove metric section header comments in evaluateTurn
+  scripts/judge-evaluations.ts
+
+56cb5c8 2026-03-26 refactor(worker): extract repeated error message string literals to constants
+  worker/index.ts
+
+54ee7fe 2026-03-26 refactor(judge): remove remaining section header comments
+  scripts/judge-evaluations.ts
+
+a8895a0 2026-03-26 refactor(judge): remove section header comments
+  scripts/judge-evaluations.ts
+
+5a146c8 2026-03-26 fix(worker): validate sortBy param against enum constant
+  worker/index.ts
+
+f720297 2026-03-26 docs(backlog): add worker API validation/security code review items (CR-WK-1 through CR-WK-9)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+977bd3c 2026-03-26 refactor(sync-to-kv): remove what-comment before composite priority calculation
+  scripts/sync-to-kv.ts
+
+06d0de7 2026-03-26 refactor(scripts): trim what-prefixes from comments in judge and sync-to-kv
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+f16648a 2026-03-26 refactor(judge): remove what-comments in directory scan and turn conversion
+  scripts/judge-evaluations.ts
+
+81cc510 2026-03-26 refactor(sync-to-kv): remove what-comments in session grouping and phase 3
+  scripts/sync-to-kv.ts
+
+72b0798 2026-03-26 refactor(sync-to-kv): remove section separators and what-comments
+  scripts/sync-to-kv.ts
+
+406095a 2026-03-26 refactor(api): consolidate attrStr/attrNum/spanAttr helpers into api-constants
+  scripts/sync-to-kv.ts
+
+5c57a9d 2026-03-26 chore: regenerate repomix docs after Round 13 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+ce7da7d 2026-03-26 chore: regenerate repomix docs after Round 12 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+0d40ca0 2026-03-26 chore: regenerate repomix docs after Round 11 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+690d5d9 2026-03-26 refactor(tests): remove standalone label comments from dr13-coverage
+  src/__tests__/dr13-coverage.test.tsx
+
+83a05a8 2026-03-26 refactor(heatmap): extract display:grid and aspectRatio to CSS class
+  src/theme.css
+
+a7dad5d 2026-03-26 chore: regenerate repomix docs after Round 10 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+dfe7a15 2026-03-26 refactor(judge-evaluations): remove section-separator divider comments
+  scripts/judge-evaluations.ts
+
+e7849fe 2026-03-26 chore: regenerate repomix docs after Round 9 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+1aea9a6 2026-03-26 refactor(sync-to-kv): remove remaining what-comments and section separators
+  scripts/sync-to-kv.ts
+
+2a9175d 2026-03-26 refactor(sync-to-kv): remove what-comments from main sync loop
+  scripts/sync-to-kv.ts
+
+f6ecfed 2026-03-26 refactor(sync-to-kv): remove what-comments from session detail pre-computation
+  scripts/sync-to-kv.ts
+
+12cfc88 2026-03-26 refactor(sync-to-kv): remove section-separator divider comments
+  scripts/sync-to-kv.ts
+
+6080269 2026-03-26 chore: regenerate repomix after Round 8 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+39098f4 2026-03-26 refactor(tests): remove section-separator divider comments from components, dr13-coverage
+  src/__tests__/dr13-coverage.test.tsx
+
+e8a33b1 2026-03-26 chore: regenerate repomix docs after final simplification rounds
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+02b70b1 2026-03-26 refactor(bar-indicator): replace fillStyle inline object with CSS custom properties
+  src/theme.css
+
+1ded19e 2026-03-26 refactor(span-tree): replace barStyle inline object with span-bar CSS class and custom properties
+  src/theme.css
+
+5649fa5 2026-03-26 refactor(workflow-timeline): replace minWidth inline style with --timeline-min-width CSS custom property
+  src/theme.css
+
+2131feb 2026-03-26 refactor(coverage-grid): replace status background inline styles with --coverage-status-color CSS custom property
+  src/theme.css
+
+b6caaf6 2026-03-26 refactor(page-shell): replace skeleton height inline style with CSS custom property
+  src/theme.css
+
+d747de2 2026-03-26 refactor(alert-list): replace threshold bar width+left inline styles with CSS custom properties
+  src/theme.css
+
+e7a1b5d 2026-03-26 refactor(workflow-graph): replace 4x height inline style with --graph-height CSS custom property
+  src/theme.css
+
+0061304 2026-03-26 refactor(pipeline-funnel): replace bar width+background inline with CSS custom properties
+  src/theme.css
+
+21bd926 2026-03-26 refactor(split-pane): move static overflow:auto to CSS, width as --split-width custom property
+  src/theme.css
+
+5ca96cb 2026-03-26 refactor(span-tree): replace paddingLeft inline calc with CSS custom property --span-row-indent
+  src/theme.css
+
+f504585 2026-03-26 refactor(score-histogram): replace bar height inline style with CSS custom property
+  src/theme.css
+
+e12de1e 2026-03-26 refactor(correlation-heatmap): replace cell backgroundColor+color inline with CSS custom properties
+  src/theme.css
+
+03239f7 2026-03-26 refactor(cqi-hero): replace segment flex+backgroundColor inline with CSS custom properties
+  src/theme.css
+
+4d2f859 2026-03-26 refactor(chip): replace hex-alpha inline color+bg with CSS custom property --chip-color
+  src/theme.css
+
+c89a59e 2026-03-26 refactor(alert-list): replace threshold-bar background ternary with data-violating CSS
+  src/theme.css
+
+34be70d 2026-03-26 refactor(correlation-heatmap): move toxic border/animation to CSS data-toxic selector
+  src/theme.css
+
+c42cc05 2026-03-26 refactor(trend-series): replace chart legend color styles with CSS classes
+  src/theme.css
+
+fdb952c 2026-03-26 refactor(trend-chart): replace dynamics panel color styles with CSS classes
+  src/theme.css
+
+ccc35e3 2026-03-26 refactor(score-badge): replace color inline style with score-band CSS utility
+  src/theme.css
+
+e91b1cb 2026-03-26 refactor(cqi-hero): hoist overall color to CSS var, extract segment min-width to CSS
+  src/theme.css
+
+9120de8 2026-03-26 refactor(score-badge): replace no_data color inline style with CSS class
+  src/theme.css
+
+a2ec418 2026-03-26 refactor(agent-activity): replace err-rate and score-label color styles with data attrs
+  src/theme.css
+
+fa7de1c 2026-03-26 refactor(agent-activity): consolidate agent color dot and inv-count width into CSS
+  src/theme.css
+
+23a93be 2026-03-26 refactor(quality-live-indicator): consolidate chip colors into CSS custom property
+  src/theme.css
+
+7e317a8 2026-03-26 refactor(section): remove redundant railColor style on chevron, use CSS var
+  src/theme.css
+
+3851866 2026-03-26 refactor(turn-timeline): consolidate agent color into CSS custom property
+  src/theme.css
+
+4316cf3 2026-03-26 refactor(confidence-panel): replace dynamic color styles with data-level/data-band CSS
+  src/theme.css
+
+0575aef 2026-03-26 refactor(sla-table): replace conditional color style with data-noncompliant CSS
+  src/theme.css
+
+f9da05a 2026-03-26 refactor(coverage-grid): move cell/swatch size and opacity to CSS
+  src/theme.css
+
+d0ff9f0 2026-03-26 refactor(correlation-heatmap): extract static inline styles to CSS classes
+  src/theme.css
+
+dfe75f3 2026-03-26 refactor: extract static inline styles to CSS in QualityLiveIndicator and PipelineFunnel
+  src/theme.css
+
+0fa01ac 2026-03-26 refactor(cqi-hero): extract static layout inline styles to CSS classes
+  src/theme.css
+
+32ab606 2026-03-26 refactor(span-tree): extract padding/color inline styles to CSS classes
+  src/theme.css
+
+2edf9ec 2026-03-26 refactor(eval-overlay): extract card/link inline styles to CSS classes
+  src/theme.css
+
+7302a44 2026-03-26 refactor(turn-timeline): move min-width to CSS class, simplify inline style
+  src/theme.css
+
+4fc9e75 2026-03-26 refactor: move skeleton height constants to CSS classes
+  src/theme.css
+
+a288b8d 2026-03-26 refactor: move constant-based dimension inline styles to CSS classes
+  src/theme.css
+
+63528bf 2026-03-26 refactor(workflow-timeline): move legend paddingLeft to CSS class
+  src/theme.css
+
+ed795a4 2026-03-26 refactor(eval-table): extract filter chip inline styles to CSS class
+  src/theme.css
+
+b4cd850 2026-03-26 refactor(agent-activity): move minWidth inline styles to CSS classes
+  src/theme.css
+
+20f19d0 2026-03-26 refactor(session-detail): move inline grid/column styles to CSS classes
+  src/theme.css
+
+5cb443b 2026-03-26 refactor(coverage-grid): move static inline styles to CSS classes
+  src/theme.css
+
+52e5fdd 2026-03-26 chore: regenerate repomix docs after Round 6 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+0847cea 2026-03-26 (chore) update docs
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+4e4449e 2026-03-26 chore(docs): regenerate repomix snapshots after recent auth/judge refactors
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+accbd8c 2026-03-26 refactor(worker): use as const satisfies Record<string, number> for Http constants
+  worker/index.ts
+
+16924ea 2026-03-26 refactor(worker): extract VALID_PERIOD_KEYS and ERR_INVALID_PERIOD constants to consolidate 10 repeated inline arrays
+  worker/index.ts
+
+5218b9b 2026-03-26 chore: regenerate repomix docs after round 3 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml

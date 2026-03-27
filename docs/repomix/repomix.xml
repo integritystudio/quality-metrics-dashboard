@@ -5206,6 +5206,173 @@ export function TimestampCell({ timestamp, className }: TimestampCellProps) {
 }
 
 ================
+File: src/components/TrendChart.tsx
+================
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  ResponsiveContainer,
+} from 'recharts';
+import type { MetricDynamics, MetricTrend } from '../types.js';
+import {
+  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
+  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
+  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
+  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
+} from '../lib/constants.js';
+import { formatPercent } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+interface TrendChartProps {
+  trend?: MetricTrend;
+  dynamics?: MetricDynamics;
+  warningThreshold?: number;
+  criticalThreshold?: number;
+  metricName: string;
+}
+function formatValue(v: number): string {
+  return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
+}
+function formatBreachTime(iso: string): string {
+  const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
+  if (hours <= 0) return 'threshold exceeded';
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  if (hours < 48) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+export function TrendChart({
+  trend,
+  dynamics,
+  warningThreshold,
+  criticalThreshold,
+  metricName,
+}: TrendChartProps) {
+  if (!trend) {
+    return <EmptyState message="No trend data available" />;
+  }
+  const data: Array<{ label: string; value: number; projected?: number }> = [
+    { label: 'Previous', value: trend.previousValue },
+    { label: 'Current', value: trend.currentValue },
+  ];
+  if (dynamics && dynamics.velocity !== 0) {
+    const projectedValue = trend.currentValue + dynamics.velocity;
+    data.push({
+      label: 'Projected',
+      value: trend.currentValue,
+      projected: projectedValue,
+    });
+    data[1].projected = trend.currentValue;
+  }
+  const allValues = data.flatMap((d) => [d.value, d.projected].filter((v): v is number => v != null));
+  if (warningThreshold != null) allValues.push(warningThreshold);
+  if (criticalThreshold != null) allValues.push(criticalThreshold);
+  if (allValues.length === 0) {
+    return <EmptyState message="Insufficient data" />;
+  }
+  const yMin = Math.min(...allValues);
+  const yMax = Math.max(...allValues);
+  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  return (
+    <div>
+      <div role="img" aria-label={`Trend chart for ${metricName}`}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+          <LineChart data={data} margin={CHART_MARGIN}>
+            <CartesianGrid {...CHART_GRID_PROPS} />
+            <XAxis
+              dataKey="label"
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
+            />
+            <YAxis
+              domain={[yMin - yPad, yMax + yPad]}
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
+              tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+              width={CHART_YAXIS_WIDTH}
+            />
+            <Tooltip
+              contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+              formatter={(v) => [typeof v === 'number' ? formatValue(v) : 'N/A', '']}
+              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+            />
+            {warningThreshold != null && (
+              <ReferenceLine
+                y={warningThreshold}
+                stroke={CHART_COLORS.warning}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: 'Warning', fill: CHART_COLORS.warning, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
+              />
+            )}
+            {criticalThreshold != null && (
+              <ReferenceLine
+                y={criticalThreshold}
+                stroke={CHART_COLORS.critical}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: 'Critical', fill: CHART_COLORS.critical, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
+              />
+            )}
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={CHART_COLORS.line}
+              strokeWidth={CHART_STROKE_WIDTH}
+              dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS }}
+              activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
+              connectNulls
+            />
+            {dynamics && dynamics.velocity !== 0 && (
+              <Line
+                type="monotone"
+                dataKey="projected"
+                stroke={CHART_COLORS.line}
+                strokeWidth={CHART_STROKE_WIDTH}
+                strokeDasharray={CHART_DASH_PROJECTED}
+                dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS_PROJECTED, strokeDasharray: '' }}
+                connectNulls
+              />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      {dynamics && (
+        <div className="flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics">
+          <div>
+            <span className="font-semibold">Velocity:</span>{' '}
+            <span className="mono">
+              {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
+            </span>
+          </div>
+          <div>
+            <span className="font-semibold">Acceleration:</span>{' '}
+            <span className="mono">
+              {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
+            </span>
+          </div>
+          {dynamics.projectedBreachTime && (
+            <div>
+              <span className="font-semibold">Breach in:</span>{' '}
+              <span className="mono chart-breach-time" data-status={dynamics.projectedStatus}>
+                {formatBreachTime(dynamics.projectedBreachTime)}
+              </span>
+            </div>
+          )}
+          <div>
+            <span className="font-semibold">Confidence:</span>{' '}
+            <span className="mono">
+              {formatPercent(dynamics.confidence * 100, 0)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+================
 File: src/components/TruncatedList.tsx
 ================
 import type { ReactNode } from 'react';
@@ -5257,106 +5424,6 @@ export function useMetricCalibration(metricName: string): MetricCalibration | un
   const ctx = useContext(CalibrationContext);
   if (!ctx) return undefined;
   return getMetricCalibration(ctx.data, metricName);
-}
-
-================
-File: src/contexts/AuthContext.tsx
-================
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
-import { API_BASE } from '../lib/constants.js';
-import { postActivityEvent } from '../lib/activity-logger.js';
-import type { AppSession } from '../types/auth.js';
-import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
-interface AuthContextValue {
-  session: AppSession | null;
-  isLoading: boolean;
-  signOut: () => Promise<void>;
-  getAccessToken: () => Promise<string>;
-}
-const AuthContext = createContext<AuthContextValue | null>(null);
-async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
-  try {
-    const res = await fetch(`${API_BASE}/api/me`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${jwt}` },
-      signal,
-    });
-    if (!res.ok) return null;
-    const data: unknown = await res.json();
-    const meResult = MeResponseSchema.safeParse(data);
-    if (!meResult.success) return null;
-    const me = meResult.data;
-    return {
-      email: me.email,
-      roles: me.roles,
-      permissions: me.permissions,
-      allowedViews: me.allowedViews,
-    };
-  } catch {
-    return null;
-  }
-}
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
-  const [session, setSession] = useState<AppSession | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const getAccessToken = useCallback(
-    () => getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
-    [getAccessTokenSilently],
-  );
-  useEffect(() => {
-    if (auth0Loading) return;
-    const controller = new AbortController();
-    let cancelled = false;
-    if (!isAuthenticated) {
-      Promise.resolve().then(() => {
-        if (!cancelled) {
-          setSession(null);
-          setIsLoading(false);
-        }
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-    getAccessToken()
-      .then((jwt) => (cancelled ? null : fetchAppSession(jwt, controller.signal)))
-      .then((appSession) => {
-        if (!cancelled) {
-          setSession(appSession);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSession(null);
-          setIsLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [auth0Loading, isAuthenticated, getAccessToken]);
-  const handleSignOut = useCallback(async () => {
-    if (session) {
-      const jwt = await getAccessToken().catch(() => null);
-      if (jwt) void postActivityEvent('logout', jwt);
-    }
-    logout({ logoutParams: { returnTo: window.location.origin } });
-    setSession(null);
-  }, [session, logout, getAccessToken]);
-  return (
-    <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
-  return ctx;
 }
 
 ================
@@ -9205,6 +9272,78 @@ export function HealthBanner({ status, message, children }: HealthBannerProps) {
 }
 
 ================
+File: src/components/HealthOverview.tsx
+================
+import type { QualityDashboardSummary } from '../types.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { HealthBanner } from './HealthBanner.js';
+import { StatDisplay } from './StatDisplay.js';
+interface PipelineHealth {
+  evalVolume: number;
+  lastEvalAge: string | null;
+  evalRate: string;
+}
+function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth {
+  let totalSamples = 0;
+  let latestTs: string | null = null;
+  for (const m of dashboard.metrics) {
+    totalSamples += m.sampleCount;
+    const worst = (m as QualityDashboardSummary['metrics'][number] & { worstExplanation?: { timestamp?: string } }).worstExplanation;
+    if (worst?.timestamp && (!latestTs || worst.timestamp > latestTs)) latestTs = worst.timestamp;
+  }
+  const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
+  const period = dashboard.metrics[0]?.period;
+  let periodHours = PERIOD_MS['7d'] / TIME_MS.HOUR;
+  if (period) {
+    const diffMs = new Date(period.end).getTime() - new Date(period.start).getTime();
+    periodHours = Math.max(1, diffMs / TIME_MS.HOUR);
+  }
+  const perHour = totalSamples / periodHours;
+  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(1)}k/hr`
+    : perHour >= 1 ? `${perHour.toFixed(0)}/hr`
+    : `${(perHour * 24).toFixed(1)}/day`;
+  return { evalVolume: totalSamples, lastEvalAge, evalRate };
+}
+function formatVolume(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSummary }) {
+  const { overallStatus, summary } = dashboard;
+  const pipeline = computePipelineHealth(dashboard);
+  const statusMessage = <>
+    <span className="text-base">
+      {overallStatus === 'healthy' && 'All metrics within thresholds'}
+      {overallStatus === 'warning' && 'Some metrics need attention'}
+      {overallStatus === 'critical' && 'Critical issues detected'}
+      {overallStatus === 'no_data' && 'No evaluation data available'}
+    </span>
+    <div className="pipeline-stats d-flex gap-6">
+      <div className="pipeline-stat flex-center">
+        Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
+      </div>
+      <div className="pipeline-stat flex-center">
+        Rate: <span className="stat-value">{pipeline.evalRate}</span>
+      </div>
+      {pipeline.lastEvalAge && (
+        <div className="pipeline-stat flex-center">
+          Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
+        </div>
+      )}
+    </div>
+  </>;
+  return (
+    <HealthBanner status={overallStatus} message={statusMessage}>
+      <StatDisplay value={summary.totalMetrics} label="Total" />
+      <StatDisplay value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
+      <StatDisplay value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
+      <StatDisplay value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
+    </HealthBanner>
+  );
+}
+
+================
 File: src/components/PageShell.tsx
 ================
 import { type ReactNode, type CSSProperties } from 'react';
@@ -9278,173 +9417,6 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
         }}
       />
       <div className="split-pane-panel" style={{ '--split-width': `${100 - splitPct}%` } as CSSProperties}>{right}</div>
-    </div>
-  );
-}
-
-================
-File: src/components/TrendChart.tsx
-================
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ResponsiveContainer,
-} from 'recharts';
-import type { MetricDynamics, MetricTrend } from '../types.js';
-import {
-  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
-  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
-  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
-  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
-} from '../lib/constants.js';
-import { formatPercent } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-interface TrendChartProps {
-  trend?: MetricTrend;
-  dynamics?: MetricDynamics;
-  warningThreshold?: number;
-  criticalThreshold?: number;
-  metricName: string;
-}
-function formatValue(v: number): string {
-  return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
-}
-function formatBreachTime(iso: string): string {
-  const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
-  if (hours <= 0) return 'threshold exceeded';
-  if (hours < 1) return `${Math.round(hours * 60)}m`;
-  if (hours < 48) return `${hours.toFixed(1)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
-}
-export function TrendChart({
-  trend,
-  dynamics,
-  warningThreshold,
-  criticalThreshold,
-  metricName,
-}: TrendChartProps) {
-  if (!trend) {
-    return <EmptyState message="No trend data available" />;
-  }
-  const data: Array<{ label: string; value: number; projected?: number }> = [
-    { label: 'Previous', value: trend.previousValue },
-    { label: 'Current', value: trend.currentValue },
-  ];
-  if (dynamics && dynamics.velocity !== 0) {
-    const projectedValue = trend.currentValue + dynamics.velocity;
-    data.push({
-      label: 'Projected',
-      value: trend.currentValue,
-      projected: projectedValue,
-    });
-    data[1].projected = trend.currentValue;
-  }
-  const allValues = data.flatMap((d) => [d.value, d.projected].filter((v): v is number => v != null));
-  if (warningThreshold != null) allValues.push(warningThreshold);
-  if (criticalThreshold != null) allValues.push(criticalThreshold);
-  if (allValues.length === 0) {
-    return <EmptyState message="Insufficient data" />;
-  }
-  const yMin = Math.min(...allValues);
-  const yMax = Math.max(...allValues);
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
-  return (
-    <div>
-      <div role="img" aria-label={`Trend chart for ${metricName}`}>
-        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-          <LineChart data={data} margin={CHART_MARGIN}>
-            <CartesianGrid {...CHART_GRID_PROPS} />
-            <XAxis
-              dataKey="label"
-              tick={CHART_AXIS_TICK}
-              stroke={CHART_COLORS.grid}
-            />
-            <YAxis
-              domain={[yMin - yPad, yMax + yPad]}
-              tick={CHART_AXIS_TICK}
-              stroke={CHART_COLORS.grid}
-              tickFormatter={CHART_YAXIS_TICK_FORMATTER}
-              width={CHART_YAXIS_WIDTH}
-            />
-            <Tooltip
-              contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-              formatter={(v) => [typeof v === 'number' ? formatValue(v) : 'N/A', '']}
-              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
-            />
-            {warningThreshold != null && (
-              <ReferenceLine
-                y={warningThreshold}
-                stroke={CHART_COLORS.warning}
-                strokeDasharray={CHART_DASH_THRESHOLD}
-                label={{ value: 'Warning', fill: CHART_COLORS.warning, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
-              />
-            )}
-            {criticalThreshold != null && (
-              <ReferenceLine
-                y={criticalThreshold}
-                stroke={CHART_COLORS.critical}
-                strokeDasharray={CHART_DASH_THRESHOLD}
-                label={{ value: 'Critical', fill: CHART_COLORS.critical, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
-              />
-            )}
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke={CHART_COLORS.line}
-              strokeWidth={CHART_STROKE_WIDTH}
-              dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS }}
-              activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
-              connectNulls
-            />
-            {dynamics && dynamics.velocity !== 0 && (
-              <Line
-                type="monotone"
-                dataKey="projected"
-                stroke={CHART_COLORS.line}
-                strokeWidth={CHART_STROKE_WIDTH}
-                strokeDasharray={CHART_DASH_PROJECTED}
-                dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS_PROJECTED, strokeDasharray: '' }}
-                connectNulls
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      {dynamics && (
-        <div className="flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics">
-          <div>
-            <span className="font-semibold">Velocity:</span>{' '}
-            <span className="mono">
-              {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold">Acceleration:</span>{' '}
-            <span className="mono">
-              {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
-            </span>
-          </div>
-          {dynamics.projectedBreachTime && (
-            <div>
-              <span className="font-semibold">Breach in:</span>{' '}
-              <span className="mono chart-breach-time" data-status={dynamics.projectedStatus}>
-                {formatBreachTime(dynamics.projectedBreachTime)}
-              </span>
-            </div>
-          )}
-          <div>
-            <span className="font-semibold">Confidence:</span>{' '}
-            <span className="mono">
-              {formatPercent(dynamics.confidence * 100, 0)}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -9594,6 +9566,106 @@ export function TruncatedIdLink({ id, href, maxLen = 8, className = 'mono-xs lin
       {truncateId(id, maxLen)}
     </Link>
   );
+}
+
+================
+File: src/contexts/AuthContext.tsx
+================
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
+import { API_BASE } from '../lib/constants.js';
+import { postActivityEvent } from '../lib/activity-logger.js';
+import type { AppSession } from '../types/auth.js';
+import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
+interface AuthContextValue {
+  session: AppSession | null;
+  isLoading: boolean;
+  signOut: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
+}
+const AuthContext = createContext<AuthContextValue | null>(null);
+async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/me`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${jwt}` },
+      signal,
+    });
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    const meResult = MeResponseSchema.safeParse(data);
+    if (!meResult.success) return null;
+    const me = meResult.data;
+    return {
+      email: me.email,
+      roles: me.roles,
+      permissions: me.permissions,
+      allowedViews: me.allowedViews,
+    };
+  } catch {
+    return null;
+  }
+}
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
+  const [session, setSession] = useState<AppSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const getAccessToken = useCallback(
+    () => getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
+    [getAccessTokenSilently],
+  );
+  useEffect(() => {
+    if (auth0Loading) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    if (!isAuthenticated) {
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    getAccessToken()
+      .then((jwt) => (cancelled ? null : fetchAppSession(jwt, controller.signal)))
+      .then((appSession) => {
+        if (!cancelled) {
+          setSession(appSession);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [auth0Loading, isAuthenticated, getAccessToken]);
+  const handleSignOut = useCallback(async () => {
+    if (session) {
+      const jwt = await getAccessToken().catch(() => null);
+      if (jwt) void postActivityEvent('logout', jwt);
+    }
+    logout({ logoutParams: { returnTo: window.location.origin } });
+    setSession(null);
+  }, [session, logout, getAccessToken]);
+  return (
+    <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  return ctx;
 }
 
 ================
@@ -13056,78 +13128,6 @@ export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
 }
 
 ================
-File: src/components/HealthOverview.tsx
-================
-import type { QualityDashboardSummary } from '../types.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { HealthBanner } from './HealthBanner.js';
-import { StatDisplay } from './StatDisplay.js';
-interface PipelineHealth {
-  evalVolume: number;
-  lastEvalAge: string | null;
-  evalRate: string;
-}
-function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth {
-  let totalSamples = 0;
-  let latestTs: string | null = null;
-  for (const m of dashboard.metrics) {
-    totalSamples += m.sampleCount;
-    const worst = (m as QualityDashboardSummary['metrics'][number] & { worstExplanation?: { timestamp?: string } }).worstExplanation;
-    if (worst?.timestamp && (!latestTs || worst.timestamp > latestTs)) latestTs = worst.timestamp;
-  }
-  const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
-  const period = dashboard.metrics[0]?.period;
-  let periodHours = PERIOD_MS['7d'] / TIME_MS.HOUR;
-  if (period) {
-    const diffMs = new Date(period.end).getTime() - new Date(period.start).getTime();
-    periodHours = Math.max(1, diffMs / TIME_MS.HOUR);
-  }
-  const perHour = totalSamples / periodHours;
-  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(1)}k/hr`
-    : perHour >= 1 ? `${perHour.toFixed(0)}/hr`
-    : `${(perHour * 24).toFixed(1)}/day`;
-  return { evalVolume: totalSamples, lastEvalAge, evalRate };
-}
-function formatVolume(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
-export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSummary }) {
-  const { overallStatus, summary } = dashboard;
-  const pipeline = computePipelineHealth(dashboard);
-  const statusMessage = <>
-    <span className="text-base">
-      {overallStatus === 'healthy' && 'All metrics within thresholds'}
-      {overallStatus === 'warning' && 'Some metrics need attention'}
-      {overallStatus === 'critical' && 'Critical issues detected'}
-      {overallStatus === 'no_data' && 'No evaluation data available'}
-    </span>
-    <div className="pipeline-stats d-flex gap-6">
-      <div className="pipeline-stat flex-center">
-        Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
-      </div>
-      <div className="pipeline-stat flex-center">
-        Rate: <span className="stat-value">{pipeline.evalRate}</span>
-      </div>
-      {pipeline.lastEvalAge && (
-        <div className="pipeline-stat flex-center">
-          Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
-        </div>
-      )}
-    </div>
-  </>;
-  return (
-    <HealthBanner status={overallStatus} message={statusMessage}>
-      <StatDisplay value={summary.totalMetrics} label="Total" />
-      <StatDisplay value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
-      <StatDisplay value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
-      <StatDisplay value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
-    </HealthBanner>
-  );
-}
-
-================
 File: src/components/ScoreHistogram.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -14765,6 +14765,233 @@ export async function checkHealth(): Promise<{ status: string; hasData: boolean 
 }
 
 ================
+File: src/components/WorkflowGraph.tsx
+================
+import React, { memo, useCallback, useEffect, useState } from 'react';
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import ELK from 'elkjs/lib/elk.bundled.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { fmtDuration } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
+const MINIMAP_THRESHOLD = 5;
+const MAX_ELK_NODES = 50;
+const WORKFLOW_SCORE_HIGH_MIN = 0.7;
+const WORKFLOW_SCORE_MID_MIN = 0.4;
+const SCORE_BANDS = {
+  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: 'Good', bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
+  MID: { min: WORKFLOW_SCORE_MID_MIN, label: 'Fair', bg: '#fef9c3', border: '#ca8a04', text: '#a16207' },
+  LOW: { min: 0, label: 'Poor', bg: '#fee2e2', border: '#dc2626', text: '#b91c1c' },
+} as const;
+const ELK_OPTIONS = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'DOWN',
+  'elk.layered.cycleBreaking.strategy': 'GREEDY',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+  'elk.spacing.nodeNode': '60',
+  'elk.layered.feedbackEdges': 'true',
+} as const;
+function getScoreBand(score: number | null) {
+  if (score === null) return null;
+  if (score >= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
+  if (score >= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
+  return SCORE_BANDS.LOW;
+}
+const elk = new ELK();
+function isWorkflowNode(value: unknown): value is WorkflowNode {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['id'] === 'string' &&
+    typeof v['label'] === 'string' &&
+    typeof v['toolCallCount'] === 'number' &&
+    typeof v['turnCount'] === 'number' &&
+    typeof v['durationMs'] === 'number' &&
+    typeof v['hasError'] === 'boolean'
+  );
+}
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
+  return new Map(nodes.map(n => [n.id, n]));
+}
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const nodeDataMap = buildNodeDataMap(nodes);
+  const elkGraph = {
+    id: 'root',
+    layoutOptions: ELK_OPTIONS,
+    children: nodes.map(n => ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT })),
+    edges: edges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+  };
+  const layout = await elk.layout(elkGraph);
+  const rfNodes: Node[] = (layout.children ?? [])
+    .filter(elkNode => nodeDataMap.has(elkNode.id))
+    .map(elkNode => ({
+      id: elkNode.id,
+      position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+      data: nodeDataMap.get(elkNode.id) as unknown as Record<string, unknown>,
+      type: 'agentNode',
+    }));
+  const rfEdges: Edge[] = edges.map(e => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label,
+  }));
+  return { nodes: rfNodes, edges: rfEdges };
+}
+const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
+  if (!isWorkflowNode(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.evaluationScore);
+  return (
+    <div
+      className="workflow-node"
+      style={{
+        '--workflow-node-border': band?.border ?? '#d1d5db',
+        '--workflow-node-bg': band?.bg ?? '#f9fafb',
+        '--workflow-node-score-color': band?.text ?? 'inherit',
+      } as React.CSSProperties}
+      role="group"
+      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
+    >
+      <div className="workflow-node__label">{d.label}</div>
+      {band && (
+        <div className="workflow-node__score">
+          <span>{band.label}</span>: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
+        </div>
+      )}
+      <div className="workflow-node__meta">
+        <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
+        {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
+      </div>
+      <div className="workflow-node__duration">
+        {fmtDuration(d.durationMs)}
+      </div>
+      {d.hasError && <div className="workflow-node__error">Error</div>}
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+});
+const NODE_TYPES = { agentNode: AgentNodeComponent };
+interface WorkflowGraphProps {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
+}
+export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: WorkflowGraphProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
+  useEffect(() => {
+    if (graph.nodes.length === 0) return;
+    let cancelled = false;
+    computeLayout(graph.nodes, graph.edges)
+      .then(({ nodes: rfNodes, edges: rfEdges }) => {
+        if (!cancelled) {
+          setLayoutError(null);
+          setNodes(rfNodes);
+          setEdges(rfEdges);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [graph.nodes, graph.edges]);
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    onNodeClick?.(node.id);
+  }, [onNodeClick]);
+  if (graph.nodes.length > MAX_ELK_NODES) {
+    return (
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+        <div className="workflow-oversize text-secondary text-xs">
+          <div className="workflow-oversize__heading">
+            Graph too large to render ({graph.nodes.length} agents)
+          </div>
+          <div className="workflow-oversize__note text-muted">
+            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
+          </div>
+          <ul className="workflow-oversize__list">
+            {graph.nodes.map(n => (
+              <li key={n.id} className="mono-xs mb-1">
+                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
+                {n.hasError && <span className="text-warning"> (error)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+  if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
+    const node = graph.nodes[0];
+    return (
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+        <div className="workflow-fallback">
+          {node ? (
+            <>
+              <div className="workflow-fallback__title">{node.label}</div>
+              <div className="workflow-fallback__subtitle">
+                {node.turnCount} turns | {node.toolCallCount} tools
+              </div>
+            </>
+          ) : (
+            <div className="workflow-fallback__empty">No agent data</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (layoutError) {
+    return (
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+        <div className="error-state workflow-fallback">
+          Failed to compute workflow layout: {layoutError}
+        </div>
+      </div>
+    );
+  }
+  const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
+  return (
+    <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        nodeTypes={NODE_TYPES}
+        fitView
+      >
+        <Controls />
+        <Background />
+        {showMiniMap && <MiniMap pannable zoomable />}
+      </ReactFlow>
+    </div>
+  );
+}
+
+================
 File: src/lib/quality-utils.ts
 ================
 export type ScoreDirection = 'maximize' | 'minimize';
@@ -15192,233 +15419,6 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   );
 }
 export const CoverageGrid = memo(CoverageGridInner);
-
-================
-File: src/components/WorkflowGraph.tsx
-================
-import React, { memo, useCallback, useEffect, useState } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 120;
-const MINIMAP_THRESHOLD = 5;
-const MAX_ELK_NODES = 50;
-const WORKFLOW_SCORE_HIGH_MIN = 0.7;
-const WORKFLOW_SCORE_MID_MIN = 0.4;
-const SCORE_BANDS = {
-  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: 'Good', bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
-  MID: { min: WORKFLOW_SCORE_MID_MIN, label: 'Fair', bg: '#fef9c3', border: '#ca8a04', text: '#a16207' },
-  LOW: { min: 0, label: 'Poor', bg: '#fee2e2', border: '#dc2626', text: '#b91c1c' },
-} as const;
-const ELK_OPTIONS = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'DOWN',
-  'elk.layered.cycleBreaking.strategy': 'GREEDY',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '80',
-  'elk.spacing.nodeNode': '60',
-  'elk.layered.feedbackEdges': 'true',
-} as const;
-function getScoreBand(score: number | null) {
-  if (score === null) return null;
-  if (score >= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
-  if (score >= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
-  return SCORE_BANDS.LOW;
-}
-const elk = new ELK();
-function isWorkflowNode(value: unknown): value is WorkflowNode {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['id'] === 'string' &&
-    typeof v['label'] === 'string' &&
-    typeof v['toolCallCount'] === 'number' &&
-    typeof v['turnCount'] === 'number' &&
-    typeof v['durationMs'] === 'number' &&
-    typeof v['hasError'] === 'boolean'
-  );
-}
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
-  return new Map(nodes.map(n => [n.id, n]));
-}
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const nodeDataMap = buildNodeDataMap(nodes);
-  const elkGraph = {
-    id: 'root',
-    layoutOptions: ELK_OPTIONS,
-    children: nodes.map(n => ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT })),
-    edges: edges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] })),
-  };
-  const layout = await elk.layout(elkGraph);
-  const rfNodes: Node[] = (layout.children ?? [])
-    .filter(elkNode => nodeDataMap.has(elkNode.id))
-    .map(elkNode => ({
-      id: elkNode.id,
-      position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-      data: nodeDataMap.get(elkNode.id) as unknown as Record<string, unknown>,
-      type: 'agentNode',
-    }));
-  const rfEdges: Edge[] = edges.map(e => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    label: e.label,
-  }));
-  return { nodes: rfNodes, edges: rfEdges };
-}
-const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
-  if (!isWorkflowNode(data)) return null;
-  const d = data;
-  const band = getScoreBand(d.evaluationScore);
-  return (
-    <div
-      className="workflow-node"
-      style={{
-        '--workflow-node-border': band?.border ?? '#d1d5db',
-        '--workflow-node-bg': band?.bg ?? '#f9fafb',
-        '--workflow-node-score-color': band?.text ?? 'inherit',
-      } as React.CSSProperties}
-      role="group"
-      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
-    >
-      <div className="workflow-node__label">{d.label}</div>
-      {band && (
-        <div className="workflow-node__score">
-          <span>{band.label}</span>: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
-        </div>
-      )}
-      <div className="workflow-node__meta">
-        <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
-        {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
-      </div>
-      <div className="workflow-node__duration">
-        {fmtDuration(d.durationMs)}
-      </div>
-      {d.hasError && <div className="workflow-node__error">Error</div>}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  );
-});
-const NODE_TYPES = { agentNode: AgentNodeComponent };
-interface WorkflowGraphProps {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-}
-export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: WorkflowGraphProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [layoutError, setLayoutError] = useState<string | null>(null);
-  useEffect(() => {
-    if (graph.nodes.length === 0) return;
-    let cancelled = false;
-    computeLayout(graph.nodes, graph.edges)
-      .then(({ nodes: rfNodes, edges: rfEdges }) => {
-        if (!cancelled) {
-          setLayoutError(null);
-          setNodes(rfNodes);
-          setEdges(rfEdges);
-        }
-      })
-      .catch(err => {
-        if (!cancelled) {
-          setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
-        }
-      });
-    return () => { cancelled = true; };
-  }, [graph.nodes, graph.edges]);
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    onNodeClick?.(node.id);
-  }, [onNodeClick]);
-  if (graph.nodes.length > MAX_ELK_NODES) {
-    return (
-      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-        <div className="workflow-oversize text-secondary text-xs">
-          <div className="workflow-oversize__heading">
-            Graph too large to render ({graph.nodes.length} agents)
-          </div>
-          <div className="workflow-oversize__note text-muted">
-            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
-          </div>
-          <ul className="workflow-oversize__list">
-            {graph.nodes.map(n => (
-              <li key={n.id} className="mono-xs mb-1">
-                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
-                {n.hasError && <span className="text-warning"> (error)</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    );
-  }
-  if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
-    const node = graph.nodes[0];
-    return (
-      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-        <div className="workflow-fallback">
-          {node ? (
-            <>
-              <div className="workflow-fallback__title">{node.label}</div>
-              <div className="workflow-fallback__subtitle">
-                {node.turnCount} turns | {node.toolCallCount} tools
-              </div>
-            </>
-          ) : (
-            <div className="workflow-fallback__empty">No agent data</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-  if (layoutError) {
-    return (
-      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-        <div className="error-state workflow-fallback">
-          Failed to compute workflow layout: {layoutError}
-        </div>
-      </div>
-    );
-  }
-  const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
-  return (
-    <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        nodeTypes={NODE_TYPES}
-        fitView
-      >
-        <Controls />
-        <Background />
-        {showMiniMap && <MiniMap pannable zoomable />}
-      </ReactFlow>
-    </div>
-  );
-}
 
 ================
 File: src/pages/SessionDetailPage.tsx
@@ -17360,6 +17360,273 @@ if (isDirectRun) {
 }
 
 ================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const LANE_HEIGHT = 64;
+const LANE_PADDING_TOP = 12;
+const TURN_BLOCK_HEIGHT = 32;
+const TURN_BLOCK_MIN_WIDTH = 40;
+const TURN_BLOCK_GAP = 6;
+const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
+const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+const LABEL_WIDTH = 120;
+const HANDOFF_MARKER_RADIUS = 7;
+const HEADER_HEIGHT = 28;
+const MAX_VISIBLE_TURNS = 200;
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[] {
+  return agentNames.map((name, laneIndex) => ({
+    agentName: name,
+    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
+    laneIndex,
+  }));
+}
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null {
+  let sawSource = false;
+  for (const t of turns) {
+    const agent = t.agentName ?? 'unknown';
+    if (agent === handoff.sourceAgent) sawSource = true;
+    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
+  }
+  return null;
+}
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
+  const barColor = scoreColor(turn.relevance);
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
+  return (
+    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
+      <rect
+        width={width}
+        height={TURN_BLOCK_HEIGHT}
+        rx={4}
+        fill={color}
+        fillOpacity={0.15}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      <rect
+        width={Math.max(2, width * turn.relevance)}
+        height={4}
+        rx={2}
+        fill={barColor}
+        fillOpacity={0.85}
+      />
+      {turn.hasError && (
+        <rect
+          x={width - 6}
+          width={4}
+          height={TURN_BLOCK_HEIGHT}
+          rx={2}
+          fill="var(--status-critical)"
+          fillOpacity={0.85}
+        />
+      )}
+      <text
+        x={width / 2}
+        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        textAnchor="middle"
+        fontSize={10}
+        fill={color}
+        fontFamily="var(--font-mono)"
+      >
+        {turn.turnIndex}
+      </text>
+    </g>
+  );
+}
+export interface WorkflowTimelineProps {
+  turns: TurnLevelResult[];
+  handoffs?: HandoffEvaluation[];
+  agentNames: string[];
+}
+export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
+  const truncated = turns.length > MAX_VISIBLE_TURNS;
+  const lanes = buildLanes(visibleTurns, agentNames);
+  const totalTurns = visibleTurns.length;
+  const agentLaneIndex = new Map(agentNames.map((name, i) => [name, i]));
+  const agentColorMap = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
+  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
+  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
+  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
+  const turnX = (turnIndex: number): number =>
+    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
+  const laneY = (laneIndex: number): number =>
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
+  return (
+    <div
+      className="overflow-x-auto"
+      role="img"
+      aria-label={`Workflow timeline: ${agentNames.length} agents, ${totalTurns} turns`}
+    >
+      <svg
+        width={svgWidth}
+        height={svgHeight}
+        className="d-block timeline-svg"
+        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
+      >
+        <g>
+          {turns.map(t => (
+            <text
+              key={t.turnIndex}
+              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
+              y={HEADER_HEIGHT - 8}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--text-muted)"
+              fontFamily="var(--font-mono)"
+            >
+              {t.turnIndex}
+            </text>
+          ))}
+        </g>
+        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
+          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
+          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
+          return (
+            <g key={agentName}>
+              <rect
+                x={0}
+                y={laneTop}
+                width={svgWidth}
+                height={LANE_HEIGHT}
+                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
+                fillOpacity={0.5}
+              />
+              <line
+                x1={0}
+                y1={laneTop}
+                x2={svgWidth}
+                y2={laneTop}
+                stroke="var(--border-subtle)"
+                strokeWidth={1}
+              />
+              <text
+                x={LABEL_WIDTH - 8}
+                y={laneTop + LANE_CENTER_OFFSET + 4}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight={600}
+                fill={color}
+                fontFamily="var(--font-mono)"
+              >
+                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+              </text>
+              {laneTurns.map(turn => (
+                <TurnBlock
+                  key={turn.turnIndex}
+                  turn={turn}
+                  color={color}
+                  width={TURN_BLOCK_MIN_WIDTH}
+                  x={turnX(turn.turnIndex)}
+                  y={laneTop + LANE_PADDING_TOP}
+                />
+              ))}
+            </g>
+          );
+        })}
+        <line
+          x1={0}
+          y1={svgHeight}
+          x2={svgWidth}
+          y2={svgHeight}
+          stroke="var(--border-subtle)"
+          strokeWidth={1}
+        />
+        {}
+        {handoffs.map((h, i) => {
+          const turnIndex = findHandoffTurnIndex(h, turns);
+          if (turnIndex == null) return null;
+          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
+          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
+          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
+          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
+          const y1 = laneY(sourceLaneIdx);
+          const y2 = laneY(targetLaneIdx);
+          const midY = (y1 + y2) / 2;
+          const handoffColor = h.correctTarget
+            ? 'var(--status-healthy)'
+            : 'var(--status-warning)';
+          return (
+            <g
+              key={`handoff-${i}`}
+              role="img"
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
+            >
+              <line
+                x1={x}
+                y1={y1}
+                x2={x}
+                y2={y2}
+                stroke={handoffColor}
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                opacity={0.7}
+              />
+              <circle
+                cx={x}
+                cy={midY}
+                r={HANDOFF_MARKER_RADIUS}
+                fill="var(--bg-card)"
+                stroke={handoffColor}
+                strokeWidth={1.5}
+              />
+              <text
+                x={x}
+                y={midY + 4}
+                textAnchor="middle"
+                fontSize={8}
+                fill={handoffColor}
+                fontFamily="var(--font-mono)"
+                fontWeight={600}
+              >
+                {h.score.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex-wrap gap-4 mt-2 workflow-legend">
+        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
+        {handoffs.length > 0 && (
+          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
+        )}
+        {truncated && (
+          <span className="text-2xs text-warning">
+            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+================
 File: scripts/derive-evaluations.ts
 ================
 #!/usr/bin/env tsx
@@ -17710,273 +17977,6 @@ const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
   process.argv[1]?.endsWith('derive-evaluations.js');
 if (isDirectRun) {
   main();
-}
-
-================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const LANE_HEIGHT = 64;
-const LANE_PADDING_TOP = 12;
-const TURN_BLOCK_HEIGHT = 32;
-const TURN_BLOCK_MIN_WIDTH = 40;
-const TURN_BLOCK_GAP = 6;
-const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
-const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
-const LABEL_WIDTH = 120;
-const HANDOFF_MARKER_RADIUS = 7;
-const HEADER_HEIGHT = 28;
-const MAX_VISIBLE_TURNS = 200;
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[] {
-  return agentNames.map((name, laneIndex) => ({
-    agentName: name,
-    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
-    laneIndex,
-  }));
-}
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null {
-  let sawSource = false;
-  for (const t of turns) {
-    const agent = t.agentName ?? 'unknown';
-    if (agent === handoff.sourceAgent) sawSource = true;
-    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
-  }
-  return null;
-}
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
-  const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
-  return (
-    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
-      <rect
-        width={width}
-        height={TURN_BLOCK_HEIGHT}
-        rx={4}
-        fill={color}
-        fillOpacity={0.15}
-        stroke={color}
-        strokeWidth={1.5}
-      />
-      <rect
-        width={Math.max(2, width * turn.relevance)}
-        height={4}
-        rx={2}
-        fill={barColor}
-        fillOpacity={0.85}
-      />
-      {turn.hasError && (
-        <rect
-          x={width - 6}
-          width={4}
-          height={TURN_BLOCK_HEIGHT}
-          rx={2}
-          fill="var(--status-critical)"
-          fillOpacity={0.85}
-        />
-      )}
-      <text
-        x={width / 2}
-        y={TURN_BLOCK_HEIGHT / 2 + 5}
-        textAnchor="middle"
-        fontSize={10}
-        fill={color}
-        fontFamily="var(--font-mono)"
-      >
-        {turn.turnIndex}
-      </text>
-    </g>
-  );
-}
-export interface WorkflowTimelineProps {
-  turns: TurnLevelResult[];
-  handoffs?: HandoffEvaluation[];
-  agentNames: string[];
-}
-export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
-  const truncated = turns.length > MAX_VISIBLE_TURNS;
-  const lanes = buildLanes(visibleTurns, agentNames);
-  const totalTurns = visibleTurns.length;
-  const agentLaneIndex = new Map(agentNames.map((name, i) => [name, i]));
-  const agentColorMap = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
-  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
-  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
-  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
-  const turnX = (turnIndex: number): number =>
-    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
-  const laneY = (laneIndex: number): number =>
-    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
-  return (
-    <div
-      className="overflow-x-auto"
-      role="img"
-      aria-label={`Workflow timeline: ${agentNames.length} agents, ${totalTurns} turns`}
-    >
-      <svg
-        width={svgWidth}
-        height={svgHeight}
-        className="d-block timeline-svg"
-        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
-      >
-        <g>
-          {turns.map(t => (
-            <text
-              key={t.turnIndex}
-              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
-              y={HEADER_HEIGHT - 8}
-              textAnchor="middle"
-              fontSize={9}
-              fill="var(--text-muted)"
-              fontFamily="var(--font-mono)"
-            >
-              {t.turnIndex}
-            </text>
-          ))}
-        </g>
-        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
-          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
-          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
-          return (
-            <g key={agentName}>
-              <rect
-                x={0}
-                y={laneTop}
-                width={svgWidth}
-                height={LANE_HEIGHT}
-                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
-                fillOpacity={0.5}
-              />
-              <line
-                x1={0}
-                y1={laneTop}
-                x2={svgWidth}
-                y2={laneTop}
-                stroke="var(--border-subtle)"
-                strokeWidth={1}
-              />
-              <text
-                x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_CENTER_OFFSET + 4}
-                textAnchor="end"
-                fontSize={11}
-                fontWeight={600}
-                fill={color}
-                fontFamily="var(--font-mono)"
-              >
-                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
-              </text>
-              {laneTurns.map(turn => (
-                <TurnBlock
-                  key={turn.turnIndex}
-                  turn={turn}
-                  color={color}
-                  width={TURN_BLOCK_MIN_WIDTH}
-                  x={turnX(turn.turnIndex)}
-                  y={laneTop + LANE_PADDING_TOP}
-                />
-              ))}
-            </g>
-          );
-        })}
-        <line
-          x1={0}
-          y1={svgHeight}
-          x2={svgWidth}
-          y2={svgHeight}
-          stroke="var(--border-subtle)"
-          strokeWidth={1}
-        />
-        {}
-        {handoffs.map((h, i) => {
-          const turnIndex = findHandoffTurnIndex(h, turns);
-          if (turnIndex == null) return null;
-          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
-          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
-          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
-          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
-          const y1 = laneY(sourceLaneIdx);
-          const y2 = laneY(targetLaneIdx);
-          const midY = (y1 + y2) / 2;
-          const handoffColor = h.correctTarget
-            ? 'var(--status-healthy)'
-            : 'var(--status-warning)';
-          return (
-            <g
-              key={`handoff-${i}`}
-              role="img"
-              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
-            >
-              <line
-                x1={x}
-                y1={y1}
-                x2={x}
-                y2={y2}
-                stroke={handoffColor}
-                strokeWidth={2}
-                strokeDasharray="4 2"
-                opacity={0.7}
-              />
-              <circle
-                cx={x}
-                cy={midY}
-                r={HANDOFF_MARKER_RADIUS}
-                fill="var(--bg-card)"
-                stroke={handoffColor}
-                strokeWidth={1.5}
-              />
-              <text
-                x={x}
-                y={midY + 4}
-                textAnchor="middle"
-                fontSize={8}
-                fill={handoffColor}
-                fontFamily="var(--font-mono)"
-                fontWeight={600}
-              >
-                {h.score.toFixed(1)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="flex-wrap gap-4 mt-2 workflow-legend">
-        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
-        {handoffs.length > 0 && (
-          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
-        )}
-        {truncated && (
-          <span className="text-2xs text-warning">
-            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
-          </span>
-        )}
-      </div>
-    </div>
-  );
 }
 
 ================
@@ -18364,6 +18364,7 @@ import {
   LATENCY_P95,
   LATENCY_DISPLAY_PRECISION,
   RATE_DISPLAY_PRECISION,
+  HOOK_NAME,
   spanAttr,
 } from '../src/api/api-constants.js';
 function resolveNamespaceId(): string {
@@ -18391,14 +18392,6 @@ const PERIODS = ['24h', '7d', '30d'] as const;
 const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
 const MAX_RECENT_SESSIONS = 20;
-const HOOK_NAMES = {
-  SESSION_START: 'session-start',
-  TOKEN_METRICS: 'token-metrics-extraction',
-  AGENT_POST_TOOL: 'agent-post-tool',
-  POST_COMMIT_REVIEW: 'post-commit-review',
-  ALERT_EVALUATION: 'telemetry-alert-evaluation',
-  CODE_STRUCTURE: 'code-structure',
-} as const;
 type KVEntry = { key: string; value: string };
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev => (ev as Record<string, unknown>).evaluatorType !== 'canary');
@@ -18631,7 +18624,7 @@ function computeTimespan(evaluations: EvaluationResult[]) {
   } : null;
 }
 function computeSessionInfo(spans: SessionSpan[]) {
-  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.SESSION_START);
+  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.SESSION_START);
   const first = sessionStarts[0];
   const last = sessionStarts[sessionStarts.length - 1] ?? first;
   return first ? {
@@ -18650,7 +18643,7 @@ function computeSessionInfo(spans: SessionSpan[]) {
 }
 function computeTokenMetrics(spans: SessionSpan[]) {
   const tokenProgression = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.TOKEN_METRICS)
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.TOKEN_METRICS)
     .map(s => ({
       messages: spanAttr<number>(s, 'tokens.messages') ?? 0,
       inputTokens: spanAttr<number>(s, 'tokens.input') ?? 0,
@@ -18776,7 +18769,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
     truncatedCount: number; emptyCount: number;
   }> = {};
   for (const s of spans) {
-    if (spanAttr<string>(s, 'hook.name') === HOOK_NAMES.AGENT_POST_TOOL) {
+    if (spanAttr<string>(s, 'hook.name') === HOOK_NAME.AGENT_POST_TOOL) {
       const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
       if (!acc[name]) acc[name] = {
         invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
@@ -18856,7 +18849,7 @@ function computeSessionDetail(
     .sort((a, b) => b.count - a.count)
     .slice(0, FILE_ACCESS_TOP_N);
   const gitCommits = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.POST_COMMIT_REVIEW)
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.POST_COMMIT_REVIEW)
     .map(s => {
       const raw = spanAttr<string>(s, 'git.command') ?? '';
       const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
@@ -18867,13 +18860,13 @@ function computeSessionDetail(
       const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
       return { subject, body, files };
     });
-  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.ALERT_EVALUATION);
+  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.ALERT_EVALUATION);
   const alertSummary = {
     totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr<number>(s, 'alerts.triggered_count') ?? 0), 0),
     stopEvents: alertSpans.length,
   };
   const codeStructure = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.CODE_STRUCTURE)
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.CODE_STRUCTURE)
     .map(s => ({
       file: spanAttr<string>(s, 'code.structure.file') ?? '',
       lines: spanAttr<number>(s, 'code.structure.lines') ?? 0,

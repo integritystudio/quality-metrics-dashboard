@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { z } from 'zod';
 import type { DashboardPermission, AppSession, DashboardView } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
@@ -25,6 +26,12 @@ const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
 
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
 const ERR_INVALID_SORT_BY = 'Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.';
+
+const PaginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+const ERR_INVALID_PAGINATION = 'Invalid pagination params. limit must be 1–200, offset must be >= 0.';
 
 const ERR_UNAUTHORIZED = 'Unauthorized';
 const ERR_FORBIDDEN = 'Forbidden';
@@ -308,8 +315,9 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
-  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '50', 10) || 50, 1), 200);
-  const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
+  const pagination = PaginationSchema.safeParse({ limit: c.req.query('limit'), offset: c.req.query('offset') });
+  if (!pagination.success) return c.json({ error: ERR_INVALID_PAGINATION }, Http.BadRequest);
+  const { limit, offset } = pagination.data;
   const sortBy = c.req.query('sortBy') ?? 'timestamp_desc';
   if (!VALID_SORT_BY.includes(sortBy as typeof VALID_SORT_BY[number])) {
     return c.json({ error: ERR_INVALID_SORT_BY }, Http.BadRequest);

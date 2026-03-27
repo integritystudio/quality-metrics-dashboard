@@ -48,14 +48,8 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
-    // Provide placeholder Supabase env vars as fallback (used only when npm run test:e2e
-    // is called directly without doppler run). In CI/normal usage, values come from:
-    // - Doppler injection via: doppler run ... npm run test:e2e
-    // - Existing shell environment (reuseExistingServer=true in local dev)
     env: {
       ...process.env,
-      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ?? 'https://placeholder.supabase.co',
-      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
     },
   },
 });

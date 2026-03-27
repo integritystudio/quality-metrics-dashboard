@@ -4,10 +4,10 @@ set -euo pipefail
 # Sync Supabase secrets from Doppler to both Cloudflare Workers.
 # Usage: doppler run --project integrity-studio --config dev -- npm run deploy:secrets
 #
-# Requires: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY in Doppler
+# Requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY in Doppler
 
 WORKERS=("obs-toolkit-quality-metrics-api" "quality-metrics-api")
-SECRETS=("SUPABASE_URL" "SUPABASE_ANON_KEY" "SUPABASE_SERVICE_ROLE_KEY")
+SECRETS=("SUPABASE_URL" "SUPABASE_SERVICE_ROLE_KEY")
 
 for worker in "${WORKERS[@]}"; do
   echo "==> Syncing secrets to ${worker}"
