@@ -17,7 +17,7 @@ import {
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 
 export interface EvalRecord {
@@ -81,7 +81,7 @@ function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
 
   return {
     timestamp: hrtToISO(span.startTime),
-    evaluationName: 'tool_correctness',
+    evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
     scoreValue: score,
     explanation,
     evaluator: RULE_EVALUATOR,
@@ -138,6 +138,7 @@ interface SessionTaskData {
 const sessionTasks = new Map<string, SessionTaskData>();
 
 export const RULE_EVALUATOR = 'telemetry-rule-engine';
+export const TASK_COMPLETION_EVAL_NAME = 'task_completion';
 
 export const STATUS_SCORES: Record<string, number> = {
   pending: 0.0,
@@ -202,7 +203,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
 
       evals.push({
         timestamp: hrtToISO(lastSpan.startTime),
-        evaluationName: 'task_completion',
+        evaluationName: TASK_COMPLETION_EVAL_NAME,
         scoreValue: normalizeScore(avg),
         explanation: `Session ${sessionPreview}: ${data.tasks.size} tasks (${parts.join(', ')})`,
         evaluator: RULE_EVALUATOR,
@@ -217,7 +218,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
 
       evals.push({
         timestamp: hrtToISO(lastSpan.startTime),
-        evaluationName: 'task_completion',
+        evaluationName: TASK_COMPLETION_EVAL_NAME,
         scoreValue: normalizeScore(completionRatio),
         explanation: `Session ${sessionPreview}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
         evaluator: RULE_EVALUATOR,
@@ -269,7 +270,7 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
 
     evals.push({
       timestamp: hrtToISO(lastSpan.startTime),
-      evaluationName: 'task_completion',
+      evaluationName: TASK_COMPLETION_EVAL_NAME,
       scoreValue: normalizeScore(rate),
       explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionPreview}`,
       evaluator: RULE_EVALUATOR,
