@@ -1497,7 +1497,7 @@ summary.section-rail {
 }
 
 /* CoverageGrid */
-.coverage-grid { display: grid; }
+.coverage-grid { display: grid; grid-template-columns: var(--coverage-grid-cols); }
 .coverage-header-cell {
   writing-mode: vertical-lr;
   text-align: end;

@@ -71,7 +71,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
           aria-label="Coverage matrix"
           className="coverage-grid gap-half"
           style={{
-            gridTemplateColumns: `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
+            '--coverage-grid-cols': `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
           }}
         >
           <div role="row" className="contents">
