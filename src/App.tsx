@@ -29,6 +29,7 @@ import { AgentsPage } from './pages/AgentsPage.js';
 import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
+import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
@@ -278,6 +279,7 @@ function GlobalShortcuts({ setPeriod, navigate }: {
   // useShortcut('g v', 'Go to coverage', 'Navigation', useCallback(() => navigate('/coverage'), [navigate]));  // hidden until data compression
   useShortcut('g a', 'Go to agents', 'Navigation', useCallback(() => navigate('/agents'), [navigate]));
   useShortcut('g r', 'Go to routing telemetry', 'Navigation', useCallback(() => navigate('/routing-telemetry'), [navigate]));
+  useShortcut('g d', 'Go to degradation signals', 'Navigation', useCallback(() => navigate('/degradation-signals'), [navigate]));
   return null;
 }
 
@@ -399,6 +401,11 @@ export function App() {
                       <Route path="/routing-telemetry">
                         <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
                           <RoutingTelemetryPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/degradation-signals">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <DegradationSignalsPage period={period} />
                         </ErrorBoundary>
                       </Route>
                       <Route path="/admin">
