@@ -49,14 +49,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (auth0Loading) return;
-    if (!isAuthenticated) {
-      setSession(null);
-      setIsLoading(false);
-      return;
-    }
 
     const controller = new AbortController();
     let cancelled = false;
+
+    if (!isAuthenticated) {
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
 
     getAccessToken()
       .then((jwt) => (cancelled ? null : fetchAppSession(jwt, controller.signal)))
