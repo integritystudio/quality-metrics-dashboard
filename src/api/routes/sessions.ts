@@ -30,15 +30,19 @@ import type { StepScore } from '../../../../dist/backends/index.js';
 
 export const sessionRoutes = new Hono();
 
+// Max ms value safe for Date.toISOString() — ±100,000,000 days from epoch (ECMAScript spec).
+const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
+
 /**
  * Parses a timestamp string to milliseconds since epoch.
- * Returns null for empty, missing, or invalid strings that would produce NaN
- * and corrupt tsMin/tsMax comparisons (CR-ERR-1).
+ * Returns null for empty, missing, NaN, or out-of-range values that would
+ * corrupt tsMin/tsMax comparisons or cause Date.toISOString() to throw (CR-ERR-1, CR-WK-4).
  */
 function parseTimestamp(value: string | undefined | null): number | null {
   if (!value) return null;
   const ms = new Date(value).getTime();
-  return isNaN(ms) ? null : ms;
+  if (isNaN(ms) || ms < -DATE_ISO_SAFE_MAX_MS || ms > DATE_ISO_SAFE_MAX_MS) return null;
+  return ms;
 }
 
 function percentile(sorted: number[], p: number): number {
