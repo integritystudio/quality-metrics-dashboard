@@ -768,40 +768,43 @@ async function main(): Promise<void> {
   const twoWeeksAgo = new Date(now.getTime() - 2 * PERIOD_MS['7d']);
   const metricNames = Object.keys(QUALITY_METRICS);
 
-  for (const name of metricNames) {
-    const config = getQualityMetric(name);
-    if (!config) continue;
-    const rawEvals = await backend.queryEvaluations({
-      startDate: weekAgo.toISOString(),
-      endDate: now.toISOString(),
-      evaluationName: name,
-      limit: QUERY_LIMIT,
-    });
-    const evals = filterCanary(rawEvals);
-    if (evals.length === 0) continue;
+  const metricDetailEntries = (await Promise.all(
+    metricNames.map(async name => {
+      const config = getQualityMetric(name);
+      if (!config) return null;
+      const rawEvals = await backend.queryEvaluations({
+        startDate: weekAgo.toISOString(),
+        endDate: now.toISOString(),
+        evaluationName: name,
+        limit: QUERY_LIMIT,
+      });
+      const evals = filterCanary(rawEvals);
+      if (evals.length === 0) return null;
 
-    const prevRawEvals = await backend.queryEvaluations({
-      startDate: twoWeeksAgo.toISOString(),
-      endDate: weekAgo.toISOString(),
-      evaluationName: name,
-      limit: QUERY_LIMIT,
-    });
-    if (prevRawEvals.length === QUERY_LIMIT) {
-      console.warn(`[sync-to-kv] Previous-period query for ${name} returned ${QUERY_LIMIT} results — trend may use truncated data`);
-    }
-    const prevEvals = filterCanary(prevRawEvals);
-    const prevScores = prevEvals.map(e => e.scoreValue).filter(isValidScore);
-    const previousValues = prevScores.length > 0
-      ? computeAggregations(prevScores, config.aggregations)
-      : undefined;
+      const prevRawEvals = await backend.queryEvaluations({
+        startDate: twoWeeksAgo.toISOString(),
+        endDate: weekAgo.toISOString(),
+        evaluationName: name,
+        limit: QUERY_LIMIT,
+      });
+      if (prevRawEvals.length === QUERY_LIMIT) {
+        console.warn(`[sync-to-kv] Previous-period query for ${name} returned ${QUERY_LIMIT} results — trend may use truncated data`);
+      }
+      const prevEvals = filterCanary(prevRawEvals);
+      const prevScores = prevEvals.map(e => e.scoreValue).filter(isValidScore);
+      const previousValues = prevScores.length > 0
+        ? computeAggregations(prevScores, config.aggregations)
+        : undefined;
 
-    const detail = computeMetricDetail(evals, config as QualityMetricConfig, {
-      topN: DEFAULT_TOP_N,
-      bucketCount: DEFAULT_BUCKET_COUNT,
-      previousValues,
-    });
-    entries.push({ key: `metric:${name}`, value: JSON.stringify(detail) });
-  }
+      const detail = computeMetricDetail(evals, config as QualityMetricConfig, {
+        topN: DEFAULT_TOP_N,
+        bucketCount: DEFAULT_BUCKET_COUNT,
+        previousValues,
+      });
+      return { key: `metric:${name}`, value: JSON.stringify(detail) };
+    })
+  )).filter((e): e is NonNullable<typeof e> => e !== null);
+  entries.push(...metricDetailEntries);
 
   for (const period of activePeriods) {
     const grouped = groupedByPeriod.get(period);
