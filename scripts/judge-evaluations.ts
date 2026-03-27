@@ -71,6 +71,7 @@ export const LLM_EVALUATOR_TYPE = 'llm';
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
+export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -896,10 +897,10 @@ async function main() {
       if (newTurns.length === 0) return;
 
       const seedResult = seedEvaluations(newTurns, existingKeys);
-      // Override evaluatorType to 'trace-backfill' for transparency
+      // Override evaluatorType for transparency — backfilled data is not organic seed
       for (const ev of seedResult.evals) {
-        if (ev.evaluatorType === 'seed') {
-          ev.evaluatorType = 'trace-backfill';
+        if (ev.evaluatorType === SEED_EVALUATOR_TYPE) {
+          ev.evaluatorType = TRACE_BACKFILL_EVALUATOR_TYPE;
         }
       }
 
