@@ -68,6 +68,7 @@ import {
   RATE_DISPLAY_PRECISION,
   HOOK_NAME,
   spanAttr,
+  KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE } from './judge-evaluations.js';
 
@@ -210,7 +211,11 @@ function kvBulkPut(entries: KVEntry[]): number {
       : '';
     const tmpFile = join(tmpdir(), `kv-sync-${Date.now()}-${randomBytes(4).toString('hex')}-${i}.json`);
     try {
-      writeFileSync(tmpFile, JSON.stringify(batch));
+      const enveloped = batch.map(e => ({
+        key: e.key,
+        value: JSON.stringify({ v: KV_SCHEMA_VERSION, data: JSON.parse(e.value) }),
+      }));
+      writeFileSync(tmpFile, JSON.stringify(enveloped));
       if (dryRun) {
         written += batch.length;
         continue;

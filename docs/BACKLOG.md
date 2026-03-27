@@ -7,8 +7,6 @@ Open items from code reviews and deferred work.
 ### CR: Worker API — Validation / Security (Open Items)
 
 | # | Item | Priority | Source |
-|---|------|----------|--------|
-| CR-WK-6 | **KV data lacks schema versioning** — no version field in KV payloads; schema changes during deploy can cause old cached data to be read with the new schema without detection | P3 | code-review 2026-03-26 |
 
 
 ### CR: Type Safety — Critical / High (Open Items)
@@ -25,6 +23,7 @@ Open items from code reviews and deferred work.
 
 | # | Item | Priority | Status |
 |---|------|----------|--------|
+| CR-WK-6 | **KV schema versioning** — `{ v, data }` envelope written by `sync-to-kv.ts`; `getKv<T>()` in worker unwraps, rejects mismatches, passes legacy entries through | P3 | Done (2026-03-27) |
 | CR-WK-9 | `supabasePost` returns `Promise<void>`; all `logActivity` call sites use `ctx.waitUntil` — events no longer dropped after response | P4 | Done (2026-03-27) |
 
 ### Phase 3 Auth: Code Review Deferred Items

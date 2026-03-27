@@ -54,6 +54,8 @@ const ERR_NO_CALIBRATION_DATA = 'No calibration data available';
 const ERR_ROUTING_TELEMETRY_MALFORMED = 'Routing telemetry data is malformed';
 const ERR_FAILED_LOAD_USER_ROLES = 'Failed to load user roles';
 
+const KV_SCHEMA_VERSION = 1;
+
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
 function safeArray<T>(val: unknown): T[] {
@@ -61,6 +63,44 @@ function safeArray<T>(val: unknown): T[] {
 }
 function isValidId(id: string | undefined): id is string {
   return !!id && id.length <= MAX_PARAM_LEN && PARAM_RE.test(id);
+}
+
+// Reads a KV entry and unwraps the { v, data } version envelope written by sync-to-kv.ts.
+// - Versioned entries (v === KV_SCHEMA_VERSION): returns data field.
+// - Version mismatch: logs a warning and returns null (stale cache treated as missing).
+// - Legacy entries (no envelope): passes through as-is for backwards compatibility.
+async function getKv<T>(kv: KVNamespace, key: string): Promise<T | null> {
+  const raw = await kv.get(key, 'json') as unknown;
+  if (raw === null) return null;
+  if (typeof raw === 'object' && raw !== null && 'v' in raw && 'data' in raw) {
+    const envelope = raw as { v: unknown; data: unknown };
+    if (envelope.v !== KV_SCHEMA_VERSION) {
+      console.warn(`[kv] schema version mismatch for "${key}": expected ${KV_SCHEMA_VERSION}, got ${String(envelope.v)} — treating as missing`);
+      return null;
+    }
+    return envelope.data as T;
+  }
+  // Legacy entry (no envelope): pass through unchanged.
+  return raw as T;
+}
+
+type AuditAction = 'role.assign' | 'role.revoke';
+
+// Fire-and-forget: logs sensitive admin mutations to audit_log without blocking the response.
+// Only fires on success — never called when the upstream Supabase operation fails.
+function logAuditEvent(
+  actorUserId: string,
+  action: AuditAction,
+  targetUserId: string,
+  roleId: string,
+  env: { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string },
+  waitUntil: (promise: Promise<unknown>) => void,
+): void {
+  waitUntil(supabasePost(
+    `${env.SUPABASE_URL}/rest/v1/audit_log`,
+    { actor_user_id: actorUserId, action, target_user_id: targetUserId, role_id: roleId },
+    env.SUPABASE_SERVICE_ROLE_KEY,
+  ));
 }
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
@@ -81,6 +121,7 @@ function logActivity(
     env.SUPABASE_SERVICE_ROLE_KEY,
   ));
 }
+
 
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
   ['dashboard.executive', 'executive'],
@@ -301,7 +342,7 @@ app.get('/api/dashboard', async (c) => {
   }
 
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
-  const data = await c.env.DASHBOARD.get(key, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, key);
   if (!data) return c.json({ error: ERR_NO_DATA }, Http.NotFound);
   logActivity(session.appUserId, 'dashboard_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
@@ -324,8 +365,7 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
   }
   const scoreLabel = c.req.query('scoreLabel');
 
-  const data = await c.env.DASHBOARD.get(`metric:evaluations:${name}:${period}`, 'json') as
-    | { rows: Record<string, unknown>[] } | null;
+  const data = await getKv<{ rows: Record<string, unknown>[] }>(c.env.DASHBOARD, `metric:evaluations:${name}:${period}`);
   if (!data) return c.json({ rows: [], total: 0, limit, offset, hasMore: false });
 
   let rows = data.rows;
@@ -342,7 +382,7 @@ app.get('/api/metrics/:name', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
-  const data = await c.env.DASHBOARD.get(`metric:${name}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `metric:${name}`);
   if (!data) {
     return c.json({
       name,
@@ -367,7 +407,7 @@ app.get('/api/trends/:name', async (c) => {
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
-  const data = await c.env.DASHBOARD.get(`trend:${name}:${period}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `trend:${name}:${period}`);
   if (!data) return c.json({ metric: name, period, points: [], bucketCount: 0 });
   return c.json(data);
 });
@@ -377,7 +417,7 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
   if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const traceId = c.req.param('traceId');
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
-  const data = await c.env.DASHBOARD.get(`evaluations:trace:${traceId}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `evaluations:trace:${traceId}`);
   if (!data) return c.json({ evaluations: [] });
   logActivity(session.appUserId, 'trace_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
@@ -388,7 +428,7 @@ app.get('/api/traces/:traceId', async (c) => {
   if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const traceId = c.req.param('traceId');
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
-  const data = await c.env.DASHBOARD.get(`trace:${traceId}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `trace:${traceId}`);
   if (!data) return c.json({ error: `No trace data for: ${traceId}` }, Http.NotFound);
   logActivity(session.appUserId, 'trace_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
@@ -400,7 +440,7 @@ app.get('/api/correlations', async (c) => {
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
-  const data = await c.env.DASHBOARD.get(`correlations:${period}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `correlations:${period}`);
   if (!data) return c.json({ correlations: [], metrics: [] });
   return c.json(data);
 });
@@ -412,7 +452,7 @@ app.get('/api/degradation-signals', async (c) => {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
   // Key matches DEGRADATION_KV_KEY in src/lib/quality/quality-constants.ts + period suffix
-  const data = await c.env.DASHBOARD.get(`meta/dashboard/degradation-signals:${period}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `meta/dashboard/degradation-signals:${period}`);
   if (!data) return c.json({ period, reports: [], computedAt: null });
   return c.json(data);
 });
@@ -427,7 +467,7 @@ app.get('/api/coverage', async (c) => {
   if (!VALID_INPUT_KEYS.includes(inputKey as typeof VALID_INPUT_KEYS[number])) {
     return c.json({ error: ERR_INVALID_INPUT_KEY }, Http.BadRequest);
   }
-  const data = await c.env.DASHBOARD.get(`coverage:${period}:${inputKey}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `coverage:${period}:${inputKey}`);
   if (!data) return c.json({ period, metrics: [], inputs: [], heatmap: [] });
   return c.json(data);
 });
@@ -438,7 +478,7 @@ app.get('/api/pipeline', async (c) => {
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
-  const data = await c.env.DASHBOARD.get(`pipeline:${period}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `pipeline:${period}`);
   if (!data) return c.json({ period, stages: [], totalEvaluations: 0 });
   return c.json(data);
 });
@@ -448,7 +488,7 @@ app.get('/api/sessions/:sessionId', async (c) => {
   if (!hasPermission(session, 'dashboard.sessions.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
-  const data = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `session:${sessionId}`);
   if (!data) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
   logActivity(session.appUserId, 'session_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
@@ -456,7 +496,7 @@ app.get('/api/sessions/:sessionId', async (c) => {
 
 app.get('/api/agents', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const data = await c.env.DASHBOARD.get('meta:agents', 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, 'meta:agents');
   if (!data) return c.json([]);
   return c.json(data);
 });
@@ -465,7 +505,7 @@ app.get('/api/agents/detail/:agentId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const agentId = c.req.param('agentId');
   if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, Http.BadRequest);
-  const data = await c.env.DASHBOARD.get(`agent:${agentId}`, 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, `agent:${agentId}`);
   if (!data) return c.json({ error: `No data for agent: ${agentId}` }, Http.NotFound);
   return c.json(data);
 });
@@ -474,7 +514,7 @@ app.get('/api/agents/:sessionId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
-  const session = await c.env.DASHBOARD.get(`session:${sessionId}`, 'json') as Record<string, unknown> | null;
+  const session = await getKv<Record<string, unknown>>(c.env.DASHBOARD, `session:${sessionId}`);
   if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
   return c.json({
     sessionId,
@@ -492,7 +532,7 @@ app.get('/api/compliance/sla', async (c) => {
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
-  const dashboard = await c.env.DASHBOARD.get(`dashboard:${period}`, 'json') as Record<string, unknown> | null;
+  const dashboard = await getKv<Record<string, unknown>>(c.env.DASHBOARD, `dashboard:${period}`);
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
   logActivity(session.appUserId, 'compliance_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   const slaResults = safeArray(dashboard['slaCompliance']);
@@ -516,7 +556,7 @@ app.get('/api/compliance/verifications', async (c) => {
 
 app.get('/api/calibration', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const data = await c.env.DASHBOARD.get('meta:calibration', 'json');
+  const data = await getKv<unknown>(c.env.DASHBOARD, 'meta:calibration');
   if (!data) return c.json({ error: ERR_NO_CALIBRATION_DATA }, Http.NotFound);
   return c.json(data);
 });
@@ -527,7 +567,7 @@ app.get('/api/routing-telemetry', async (c) => {
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
   }
-  const raw = await c.env.DASHBOARD.get(`routing-telemetry:${period}`, 'json');
+  const raw = await getKv<unknown>(c.env.DASHBOARD, `routing-telemetry:${period}`);
   const result = routingTelemetryKvSchema.safeParse(raw ?? {});
   if (!result.success) {
     console.error('[/api/routing-telemetry] schema validation failed:', result.error.issues);
@@ -537,7 +577,7 @@ app.get('/api/routing-telemetry', async (c) => {
 });
 
 app.get('/api/health', async (c) => {
-  const lastSync = await c.env.DASHBOARD.get('meta:lastSync');
+  const lastSync = await getKv<string>(c.env.DASHBOARD, 'meta:lastSync');
   return c.json({
     status: lastSync ? 'ok' : 'no_data',
     lastSync: lastSync ?? null,
@@ -627,6 +667,7 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
     body: JSON.stringify({ user_id: userId, role_id: result.data.role_id }),
   });
   if (!res.ok) return c.json({ error: 'Failed to assign role' }, Http.InternalServerError);
+  logAuditEvent(c.get('session').appUserId, 'role.assign', userId, result.data.role_id, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
 
@@ -643,6 +684,7 @@ app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
     { method: 'DELETE', headers: serviceRoleHeaders(c.env) },
   );
   if (!res.ok) return c.json({ error: 'Failed to revoke role' }, Http.InternalServerError);
+  logAuditEvent(c.get('session').appUserId, 'role.revoke', userId, roleId, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
 

@@ -91,6 +91,10 @@ function mockAuditorAuthSequence(fetchMock: ReturnType<typeof vi.fn>) {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
+function makeCtx(): ExecutionContext {
+  return { waitUntil: vi.fn((p: Promise<unknown>) => { void p; }), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+}
+
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(),
   jwtVerify: vi.fn(),
@@ -238,6 +242,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
+      makeCtx(),
     );
     expect(res.status).toBe(204);
   });
@@ -292,6 +297,7 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
       { method: 'DELETE', headers: adminHeaders() },
       makeEnv(),
+      makeCtx(),
     );
     expect(res.status).toBe(204);
   });

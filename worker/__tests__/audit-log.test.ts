@@ -61,6 +61,7 @@ function withAdminAuth(
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
+let mockExecutionCtx: { waitUntil: ReturnType<typeof vi.fn>; passThroughOnException: ReturnType<typeof vi.fn> };
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -68,6 +69,10 @@ beforeEach(async () => {
   jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
+  mockExecutionCtx = {
+    waitUntil: vi.fn((p: Promise<unknown>) => { void p; }),
+    passThroughOnException: vi.fn(),
+  };
 });
 
 afterEach(() => {
@@ -100,6 +105,7 @@ describe('audit log: role.assign', () => {
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
+      mockExecutionCtx as unknown as ExecutionContext,
     );
     expect(res.status).toBe(204);
 
@@ -132,6 +138,7 @@ describe('audit log: role.assign', () => {
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
+      mockExecutionCtx as unknown as ExecutionContext,
     );
     expect(res.status).toBe(500);
 
@@ -160,6 +167,7 @@ describe('audit log: role.assign', () => {
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
+      mockExecutionCtx as unknown as ExecutionContext,
     );
     expect(res.status).toBe(204);
   });
@@ -184,6 +192,7 @@ describe('audit log: role.revoke', () => {
         headers: { Authorization: 'Bearer mock-admin-jwt' },
       },
       makeEnv(),
+      mockExecutionCtx as unknown as ExecutionContext,
     );
     expect(res.status).toBe(204);
 
@@ -214,6 +223,7 @@ describe('audit log: role.revoke', () => {
         headers: { Authorization: 'Bearer mock-admin-jwt' },
       },
       makeEnv(),
+      mockExecutionCtx as unknown as ExecutionContext,
     );
     expect(res.status).toBe(500);
 

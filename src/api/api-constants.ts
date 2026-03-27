@@ -1,5 +1,8 @@
 export const PERCENT_BASE = 100;
 
+/** Schema version embedded in every KV payload envelope. Increment when the payload shape changes. */
+export const KV_SCHEMA_VERSION = 1;
+
 export const LATENCY_P50 = 50;
 export const LATENCY_P95 = 95;
 
