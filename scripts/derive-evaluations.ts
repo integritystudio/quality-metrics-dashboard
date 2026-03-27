@@ -265,12 +265,13 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
     if (data.pre === 0) continue;
     const rate = Math.min(data.post / data.pre, 1.0);
     const lastSpan = data.spans[data.spans.length - 1];
+    const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
     evals.push({
       timestamp: hrtToISO(lastSpan.startTime),
       evaluationName: 'task_completion',
       scoreValue: normalizeScore(rate),
-      explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
+      explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionPreview}`,
       evaluator: RULE_EVALUATOR,
       evaluatorType: RULE_EVALUATOR_TYPE,
       traceId: lastSpan.traceId,
@@ -313,13 +314,14 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
 
     const avgScore = sum / count;
     const lastSpan = data.agentSequence[data.agentSequence.length - 1].span;
+    const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
     evals.push({
       timestamp: hrtToISO(lastSpan.startTime),
       evaluationName: 'handoff_correctness',
       scoreValue: normalizeScore(avgScore),
       scoreUnit: 'ratio_0_1',
-      explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${count} handoffs across ${distinctAgents.size} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
+      explanation: `Session ${sessionPreview}: ${count} handoffs across ${distinctAgents.size} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
       evaluator: RULE_EVALUATOR,
       evaluatorType: RULE_EVALUATOR_TYPE,
       traceId: lastSpan.traceId,
