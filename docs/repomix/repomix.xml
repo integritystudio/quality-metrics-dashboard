@@ -3438,6 +3438,351 @@ export function makeChainGraph(
 }
 
 ================
+File: src/__tests__/workflow-graph.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { TraceSpan } from '../types.js';
+import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
+describe('buildWorkflowGraph — 3-agent linear workflow', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'planner', targetAgent: 'coder', score: 0.9, contextPreserved: true }),
+      makeHandoff({ sourceAgent: 'coder', targetAgent: 'reviewer', score: 0.7, contextPreserved: false }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'planner' }),
+      makeTurn({ turnIndex: 1, agentName: 'coder' }),
+      makeTurn({ turnIndex: 2, agentName: 'reviewer' }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it('produces 3 nodes', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(3);
+  });
+  it('produces 2 edges', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.edges).toHaveLength(2);
+  });
+  it('shape is linear', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('linear');
+  });
+  it('rootNodeId is planner', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.rootNodeId).toBe('planner');
+  });
+});
+describe('buildWorkflowGraph — single-agent session', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [],
+    turns: [makeTurn({ turnIndex: 0, agentName: 'solo' })],
+    totalTurns: 1,
+  });
+  const spans: TraceSpan[] = [];
+  it('produces 1 node', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(1);
+  });
+  it('produces 0 edges', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it('shape is single_agent', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('single_agent');
+  });
+});
+describe('buildWorkflowGraph — cyclic workflow', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.85 }),
+      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentA', score: 0.75 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      makeTurn({ turnIndex: 2, agentName: 'agentA' }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it('shape is cyclic', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('cyclic');
+  });
+  it('has an edge from agentA to agentB', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+  it('has an edge from agentB back to agentA', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentB' && e.target === 'agentA');
+    expect(edge).toBeDefined();
+  });
+});
+describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
+      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentC', score: 0.8 }),
+      makeHandoff({ sourceAgent: 'agentC', targetAgent: 'agentA', score: 0.7 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it('shape is cyclic for 3-node cycle', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('cyclic');
+  });
+  it('produces 3 nodes', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(3);
+  });
+});
+describe('buildWorkflowGraph — branching workflow', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentC', score: 0.8 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it('shape is branching', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('branching');
+  });
+});
+describe('buildWorkflowGraph — node data binding', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'worker', relevance: 0.65, taskProgress: 0.7, hasError: true }),
+    ],
+    totalTurns: 1,
+  });
+  const spans: TraceSpan[] = [
+    makeSpan({ attributes: { 'gen_ai.agent.name': 'worker', 'llm.usage.total_tokens': 512 }, durationMs: 2500 }),
+    makeSpan({ spanId: 'span-2', name: 'tool_call', attributes: { 'gen_ai.agent.name': 'worker' } }),
+  ];
+  it('node evaluationScore reflects turn relevance', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.evaluationScore).toBeCloseTo(0.65, 5);
+  });
+  it('node hasError is true when any turn has an error', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.hasError).toBe(true);
+  });
+  it('node turnCount matches turn count for that agent', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.turnCount).toBe(1);
+  });
+  it('node label matches agent name', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.label).toBe('worker');
+  });
+});
+describe('buildWorkflowGraph — edge data binding', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.72, contextPreserved: false }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+    ],
+    totalTurns: 2,
+  });
+  const spans: TraceSpan[] = [];
+  it('edge handoffScore matches handoff score', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.handoffScore).toBeCloseTo(0.72, 5);
+  });
+  it('edge contextPreserved is false when handoff contextPreserved is false', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.contextPreserved).toBe(false);
+  });
+  it('edge label is formatted as "score: X.XX"', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.label).toBe('score: 0.72');
+  });
+  it('edge id is non-empty string', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges[0];
+    expect(typeof edge?.id).toBe('string');
+    expect(edge?.id.length).toBeGreaterThan(0);
+  });
+});
+describe('buildWorkflowGraph — null evaluation', () => {
+  const spans: TraceSpan[] = [];
+  it('returns 0 nodes', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(0);
+  });
+  it('returns 0 edges', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it('rootNodeId is null', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.rootNodeId).toBeNull();
+  });
+  it('workflowShape is single_agent for empty/null input', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.workflowShape).toBe('single_agent');
+  });
+});
+describe('buildWorkflowGraph — root node identification', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'orchestrator', targetAgent: 'executor', score: 0.88 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'orchestrator' }),
+      makeTurn({ turnIndex: 1, agentName: 'executor' }),
+    ],
+    totalTurns: 2,
+  });
+  const spans: TraceSpan[] = [];
+  it('rootNodeId is orchestrator (the first agent)', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.rootNodeId).toBe('orchestrator');
+  });
+  it('rootNodeId corresponds to an existing node id', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const rootNode = graph.nodes.find(n => n.id === graph.rootNodeId);
+    expect(rootNode).toBeDefined();
+  });
+});
+describe('buildWorkflowGraph — droppedTurns counter', () => {
+  it('counts turns where agentName is undefined', () => {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+        { turnIndex: 1, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+        { turnIndex: 2, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+      ],
+      totalTurns: 3,
+    });
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(2);
+  });
+  it('returns droppedTurns 0 when all turns have agentName', () => {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+        makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      ],
+      handoffs: [makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB' })],
+      totalTurns: 2,
+    });
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(0);
+  });
+  it('returns droppedTurns 0 for span-inferred graphs (no evaluation)', () => {
+    const spans = [
+      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.id': 'agentA' } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.droppedTurns).toBe(0);
+  });
+});
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+describe('buildWorkflowGraph — span-inference fallback', () => {
+  it('infers 2 nodes from spans when evaluation is null', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(2);
+  });
+  it('infers sequential edge when agent A spans end before agent B spans start', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+  it('sets rootNodeId to the agent with the earliest span start time', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.rootNodeId).toBe('agentA');
+  });
+  it('sets node hasError to true when any span for that agent has status.code === 2', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const node = graph.nodes.find(n => n.id === 'agentA');
+    expect(node?.hasError).toBe(true);
+  });
+  it('returns empty graph when evaluation is null and no spans have gen_ai.agent.id', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { 'some.other.attr': 'value' } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(0);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it('infers edge between near-concurrent spans within epsilon tolerance (WG-M2)', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+  it('does not infer edge when spans overlap by more than epsilon', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeUndefined();
+  });
+  it('counts tool calls from span names starting with "tool:"', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
+      makeSpan({ spanId: 's2', name: 'tool:write', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
+      makeSpan({ spanId: 's3', name: 'agent_turn', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const node = graph.nodes.find(n => n.id === 'agentA');
+    expect(node?.toolCallCount).toBe(2);
+  });
+});
+
+================
 File: src/api/routes/compliance.ts
 ================
 import { Hono } from 'hono';
@@ -7430,25 +7775,6 @@ export function WorkflowPage({ sessionId }: { sessionId: string }) {
 }
 
 ================
-File: src/stubs/auth0-e2e.ts
-================
-import { type ReactNode, createElement } from 'react';
-const TEST_TOKEN = 'test-token';
-export function Auth0Provider({ children }: { children: ReactNode }) {
-  return createElement('div', { 'data-testid': 'auth0-stub' }, children);
-}
-export function useAuth0() {
-  return {
-    isLoading: false,
-    isAuthenticated: true,
-    user: { email: 'test@example.com', sub: 'test-user-id' },
-    getAccessTokenSilently: () => Promise.resolve(TEST_TOKEN),
-    logout: () => Promise.resolve(),
-    loginWithRedirect: () => Promise.resolve(),
-  };
-}
-
-================
 File: src/stubs/web-worker.ts
 ================
 export default typeof Worker !== 'undefined' ? Worker : class {};
@@ -8964,349 +9290,224 @@ describe('DR-L4: public/fonts/ directory and font files exist', () => {
 });
 
 ================
-File: src/__tests__/workflow-graph.test.ts
+File: src/__tests__/quality-utils-drift.test.ts
 ================
 import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import {
+  scoreColorBand,
+  inferScoreDirection,
+  labelToOrdinal,
+  ordinalToCategory,
+  truncateText,
+  ROLE_FEATURE_CONFIG,
+  SCORE_COLORS,
+} from '../lib/quality-utils.js';
+describe('scoreColorBand', () => {
+  describe('maximize direction (default)', () => {
+    it.each<[number, string]>([
+      [1.0, 'excellent'],
+      [0.95, 'excellent'],
+      [0.9, 'excellent'],
+      [0.89, 'good'],
+      [0.8, 'good'],
+      [0.79, 'adequate'],
+      [0.6, 'adequate'],
+      [0.59, 'poor'],
+      [0.4, 'poor'],
+      [0.39, 'failing'],
+      [0.0, 'failing'],
+    ])('score %f → %s', (score, expected) => {
+      expect(scoreColorBand(score, 'maximize')).toBe(expected);
+    });
+  });
+  describe('minimize direction', () => {
+    it.each<[number, string]>([
+      [0.0, 'excellent'],
+      [0.1, 'excellent'],
+      [0.11, 'good'],
+      [0.2, 'good'],
+      [0.4, 'adequate'],
+      [0.6, 'poor'],
+      [0.61, 'failing'],
+    ])('score %f → %s', (score, expected) => {
+      expect(scoreColorBand(score, 'minimize')).toBe(expected);
+    });
+  });
+  it('defaults to maximize when direction omitted', () => {
+    expect(scoreColorBand(0.95)).toBe('excellent');
+    expect(scoreColorBand(0.5)).toBe('poor');
+  });
+});
+describe('inferScoreDirection', () => {
+  it('above → minimize', () => {
+    expect(inferScoreDirection('above')).toBe('minimize');
+  });
+  it('below → maximize', () => {
+    expect(inferScoreDirection('below')).toBe('maximize');
+  });
+  it('undefined → maximize', () => {
+    expect(inferScoreDirection(undefined)).toBe('maximize');
+  });
+});
+describe('labelToOrdinal', () => {
+  it.each([
+    ['excellent', 4, 'Pass'],
+    ['highly_relevant', 4, 'Pass'],
+    ['fully_faithful', 4, 'Pass'],
+    ['perfect', 4, 'Pass'],
+    ['relevant', 3, 'Pass'],
+    ['good', 3, 'Pass'],
+    ['faithful', 3, 'Pass'],
+    ['pass', 3, 'Pass'],
+    ['correct', 3, 'Pass'],
+    ['coherent', 3, 'Pass'],
+    ['partial', 2, 'Review'],
+    ['borderline', 2, 'Review'],
+    ['adequate', 2, 'Review'],
+    ['mixed', 2, 'Review'],
+    ['off_topic', 1, 'Fail'],
+    ['irrelevant', 1, 'Fail'],
+    ['unfaithful', 1, 'Fail'],
+    ['fail', 1, 'Fail'],
+    ['incorrect', 1, 'Fail'],
+    ['incoherent', 1, 'Fail'],
+    ['hallucinated', 0, 'Fail'],
+    ['fabricated', 0, 'Fail'],
+    ['toxic', 0, 'Fail'],
+    ['dangerous', 0, 'Fail'],
+  ] as [string, number, string][])('"%s" → ordinal %i, category %s', (label, ordinal, category) => {
+    const result = labelToOrdinal(label);
+    expect(result.ordinal).toBe(ordinal);
+    expect(result.category).toBe(category);
+    expect(result.mapped).toBe(true);
+  });
+  it('normalizes case and hyphens', () => {
+    expect(labelToOrdinal('EXCELLENT').ordinal).toBe(4);
+    expect(labelToOrdinal('highly-relevant').ordinal).toBe(4);
+    expect(labelToOrdinal('Fully_Faithful').ordinal).toBe(4);
+  });
+  it('unknown label → ordinal 2, Review, mapped false', () => {
+    const result = labelToOrdinal('unknown_label');
+    expect(result).toEqual({ ordinal: 2, category: 'Review', mapped: false });
+  });
+});
+describe('ordinalToCategory', () => {
+  it.each<[number, string]>([
+    [4, 'Pass'],
+    [3, 'Pass'],
+    [2, 'Review'],
+    [1, 'Fail'],
+    [0, 'Fail'],
+  ])('ordinal %i → %s', (ordinal, expected) => {
+    expect(ordinalToCategory(ordinal)).toBe(expected);
+  });
+});
+describe('SCORE_COLORS', () => {
+  it('has all required bands', () => {
+    const bands = ['excellent', 'good', 'adequate', 'poor', 'failing', 'no_data'] as const;
+    for (const band of bands) {
+      expect(SCORE_COLORS[band]).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+  it('pins exact color values (drift sentinel)', () => {
+    expect(SCORE_COLORS.excellent).toBe('#26d97f');
+    expect(SCORE_COLORS.good).toBe('#34d399');
+    expect(SCORE_COLORS.adequate).toBe('#e5a00d');
+    expect(SCORE_COLORS.poor).toBe('#f97316');
+    expect(SCORE_COLORS.failing).toBe('#f04438');
+    expect(SCORE_COLORS.no_data).toBe('#6b7280');
+  });
+});
+describe('ROLE_FEATURE_CONFIG', () => {
+  const roles = ['executive', 'operator', 'auditor'] as const;
+  it('has all three roles', () => {
+    for (const role of roles) {
+      expect(ROLE_FEATURE_CONFIG[role]).toBeDefined();
+    }
+  });
+  it('executive hides variance and operator controls', () => {
+    expect(ROLE_FEATURE_CONFIG.executive.showVariance).toBe(false);
+    expect(ROLE_FEATURE_CONFIG.executive.showAcceleration).toBe(false);
+    expect(ROLE_FEATURE_CONFIG.executive.showRawExport).toBe(false);
+    expect(ROLE_FEATURE_CONFIG.executive.maxWorstEvaluations).toBe(1);
+  });
+  it('operator shows operational metrics', () => {
+    expect(ROLE_FEATURE_CONFIG.operator.showVariance).toBe(true);
+    expect(ROLE_FEATURE_CONFIG.operator.showCorrelationRemediation).toBe(true);
+    expect(ROLE_FEATURE_CONFIG.operator.showCoverageHeatmap).toBe(true);
+    expect(ROLE_FEATURE_CONFIG.operator.maxWorstEvaluations).toBe(5);
+  });
+  it('auditor has full access with raw export', () => {
+    expect(ROLE_FEATURE_CONFIG.auditor.showProvenance).toBe(true);
+    expect(ROLE_FEATURE_CONFIG.auditor.showRawExport).toBe(true);
+    expect(ROLE_FEATURE_CONFIG.auditor.maxWorstEvaluations).toBe(10);
+    expect(ROLE_FEATURE_CONFIG.auditor.explanationTruncation).toBe(2000);
+  });
+});
+describe('truncateText', () => {
+  it('returns original text when under limit', () => {
+    expect(truncateText('hello', 10)).toBe('hello');
+  });
+  it('truncates at max and appends ellipsis', () => {
+    expect(truncateText('hello world', 5)).toBe('hello...');
+  });
+  it('returns original when exactly at limit', () => {
+    expect(truncateText('hello', 5)).toBe('hello');
+  });
+});
+
+================
+File: src/__tests__/test-types.ts
+================
+import { z } from 'zod';
+import type { ReactNode } from 'react';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { TraceSpan } from '../types.js';
-import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
-describe('buildWorkflowGraph — 3-agent linear workflow', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'planner', targetAgent: 'coder', score: 0.9, contextPreserved: true }),
-      makeHandoff({ sourceAgent: 'coder', targetAgent: 'reviewer', score: 0.7, contextPreserved: false }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'planner' }),
-      makeTurn({ turnIndex: 1, agentName: 'coder' }),
-      makeTurn({ turnIndex: 2, agentName: 'reviewer' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('produces 3 nodes', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
-  });
-  it('produces 2 edges', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.edges).toHaveLength(2);
-  });
-  it('shape is linear', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('linear');
-  });
-  it('rootNodeId is planner', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.rootNodeId).toBe('planner');
-  });
+export const LinkPropsSchema = z.object({
+  href: z.string(),
+  children: z.instanceof(Object),
 });
-describe('buildWorkflowGraph — single-agent session', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [],
-    turns: [makeTurn({ turnIndex: 0, agentName: 'solo' })],
-    totalTurns: 1,
-  });
-  const spans: TraceSpan[] = [];
-  it('produces 1 node', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(1);
-  });
-  it('produces 0 edges', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it('shape is single_agent', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('single_agent');
-  });
+export type LinkProps = z.infer<typeof LinkPropsSchema> & {
+  children: ReactNode;
+  [key: string]: unknown;
+};
+export const WorkflowGraphViewPropsSchema = z.object({
+  graph: z.object({
+    nodes: z.array(z.object({
+      id: z.string(),
+      label: z.string(),
+    })),
+    edges: z.array(z.unknown()).optional(),
+    rootNodeId: z.string().nullable().optional(),
+    workflowShape: z.string().optional(),
+  }),
+  onNodeClick: z.custom<(nodeId: string) => void>().optional(),
 });
-describe('buildWorkflowGraph — cyclic workflow', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.85 }),
-      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentA', score: 0.75 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      makeTurn({ turnIndex: 2, agentName: 'agentA' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('shape is cyclic', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('cyclic');
-  });
-  it('has an edge from agentA to agentB', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeDefined();
-  });
-  it('has an edge from agentB back to agentA', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentB' && e.target === 'agentA');
-    expect(edge).toBeDefined();
-  });
+export type WorkflowGraphViewProps = {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) => void;
+};
+export const DetailPageHeaderPropsSchema = z.object({
+  title: z.string(),
+  id: z.string().optional(),
+  children: z.instanceof(Object).optional(),
 });
-describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
-      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentC', score: 0.8 }),
-      makeHandoff({ sourceAgent: 'agentC', targetAgent: 'agentA', score: 0.7 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('shape is cyclic for 3-node cycle', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('cyclic');
-  });
-  it('produces 3 nodes', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
-  });
+export type DetailPageHeaderProps = {
+  title: string;
+  id?: string;
+  children?: ReactNode;
+};
+export const PageShellPropsSchema = z.object({
+  isLoading: z.boolean(),
+  error: z.object({
+    message: z.string(),
+  }).nullable(),
+  children: z.instanceof(Object),
 });
-describe('buildWorkflowGraph — branching workflow', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentC', score: 0.8 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('shape is branching', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('branching');
-  });
-});
-describe('buildWorkflowGraph — node data binding', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'worker', relevance: 0.65, taskProgress: 0.7, hasError: true }),
-    ],
-    totalTurns: 1,
-  });
-  const spans: TraceSpan[] = [
-    makeSpan({ attributes: { 'gen_ai.agent.name': 'worker', 'llm.usage.total_tokens': 512 }, durationMs: 2500 }),
-    makeSpan({ spanId: 'span-2', name: 'tool_call', attributes: { 'gen_ai.agent.name': 'worker' } }),
-  ];
-  it('node evaluationScore reflects turn relevance', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.evaluationScore).toBeCloseTo(0.65, 5);
-  });
-  it('node hasError is true when any turn has an error', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.hasError).toBe(true);
-  });
-  it('node turnCount matches turn count for that agent', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.turnCount).toBe(1);
-  });
-  it('node label matches agent name', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.label).toBe('worker');
-  });
-});
-describe('buildWorkflowGraph — edge data binding', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.72, contextPreserved: false }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-    ],
-    totalTurns: 2,
-  });
-  const spans: TraceSpan[] = [];
-  it('edge handoffScore matches handoff score', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.handoffScore).toBeCloseTo(0.72, 5);
-  });
-  it('edge contextPreserved is false when handoff contextPreserved is false', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.contextPreserved).toBe(false);
-  });
-  it('edge label is formatted as "score: X.XX"', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.label).toBe('score: 0.72');
-  });
-  it('edge id is non-empty string', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges[0];
-    expect(typeof edge?.id).toBe('string');
-    expect(edge?.id.length).toBeGreaterThan(0);
-  });
-});
-describe('buildWorkflowGraph — null evaluation', () => {
-  const spans: TraceSpan[] = [];
-  it('returns 0 nodes', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(0);
-  });
-  it('returns 0 edges', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it('rootNodeId is null', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.rootNodeId).toBeNull();
-  });
-  it('workflowShape is single_agent for empty/null input', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.workflowShape).toBe('single_agent');
-  });
-});
-describe('buildWorkflowGraph — root node identification', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'orchestrator', targetAgent: 'executor', score: 0.88 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'orchestrator' }),
-      makeTurn({ turnIndex: 1, agentName: 'executor' }),
-    ],
-    totalTurns: 2,
-  });
-  const spans: TraceSpan[] = [];
-  it('rootNodeId is orchestrator (the first agent)', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.rootNodeId).toBe('orchestrator');
-  });
-  it('rootNodeId corresponds to an existing node id', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const rootNode = graph.nodes.find(n => n.id === graph.rootNodeId);
-    expect(rootNode).toBeDefined();
-  });
-});
-describe('buildWorkflowGraph — droppedTurns counter', () => {
-  it('counts turns where agentName is undefined', () => {
-    const evaluation = makeEvaluation({
-      turns: [
-        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-        { turnIndex: 1, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
-        { turnIndex: 2, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
-      ],
-      totalTurns: 3,
-    });
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
-    expect(graph.droppedTurns).toBe(2);
-  });
-  it('returns droppedTurns 0 when all turns have agentName', () => {
-    const evaluation = makeEvaluation({
-      turns: [
-        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-        makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      ],
-      handoffs: [makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB' })],
-      totalTurns: 2,
-    });
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
-    expect(graph.droppedTurns).toBe(0);
-  });
-  it('returns droppedTurns 0 for span-inferred graphs (no evaluation)', () => {
-    const spans = [
-      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.id': 'agentA' } }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.droppedTurns).toBe(0);
-  });
-});
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-describe('buildWorkflowGraph — span-inference fallback', () => {
-  it('infers 2 nodes from spans when evaluation is null', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(2);
-  });
-  it('infers sequential edge when agent A spans end before agent B spans start', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeDefined();
-  });
-  it('sets rootNodeId to the agent with the earliest span start time', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.rootNodeId).toBe('agentA');
-  });
-  it('sets node hasError to true when any span for that agent has status.code === 2', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const node = graph.nodes.find(n => n.id === 'agentA');
-    expect(node?.hasError).toBe(true);
-  });
-  it('returns empty graph when evaluation is null and no spans have gen_ai.agent.id', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { 'some.other.attr': 'value' } }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(0);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it('infers edge between near-concurrent spans within epsilon tolerance (WG-M2)', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeDefined();
-  });
-  it('does not infer edge when spans overlap by more than epsilon', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeUndefined();
-  });
-  it('counts tool calls from span names starting with "tool:"', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
-      makeSpan({ spanId: 's2', name: 'tool:write', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
-      makeSpan({ spanId: 's3', name: 'agent_turn', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const node = graph.nodes.find(n => n.id === 'agentA');
-    expect(node?.toolCallCount).toBe(2);
-  });
-});
+export type PageShellProps = {
+  isLoading: boolean;
+  error: { message: string } | null;
+  children: ReactNode;
+};
 
 ================
 File: src/__tests__/WorkflowGraph.test.tsx
@@ -10818,6 +11019,25 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
       ) : null}
     </PageShell>
   );
+}
+
+================
+File: src/stubs/auth0-e2e.ts
+================
+import { type ReactNode, createElement } from 'react';
+const TEST_TOKEN = 'test-token';
+export function Auth0Provider({ children }: { children: ReactNode }) {
+  return createElement('div', { 'data-testid': 'auth0-stub' }, children);
+}
+export function useAuth0() {
+  return {
+    isLoading: false,
+    isAuthenticated: true,
+    user: { email: 'test@example.com', sub: 'test-user-id' },
+    getAccessTokenSilently: () => Promise.resolve(TEST_TOKEN),
+    logout: () => Promise.resolve(),
+    loginWithRedirect: () => Promise.resolve(),
+  };
 }
 
 ================
@@ -12808,173 +13028,6 @@ describe('EvaluationDetailPage', () => {
 });
 
 ================
-File: src/__tests__/quality-utils-drift.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import {
-  scoreColorBand,
-  inferScoreDirection,
-  labelToOrdinal,
-  ordinalToCategory,
-  truncateText,
-  ROLE_FEATURE_CONFIG,
-  SCORE_COLORS,
-} from '../lib/quality-utils.js';
-describe('scoreColorBand', () => {
-  describe('maximize direction (default)', () => {
-    it.each<[number, string]>([
-      [1.0, 'excellent'],
-      [0.95, 'excellent'],
-      [0.9, 'excellent'],
-      [0.89, 'good'],
-      [0.8, 'good'],
-      [0.79, 'adequate'],
-      [0.6, 'adequate'],
-      [0.59, 'poor'],
-      [0.4, 'poor'],
-      [0.39, 'failing'],
-      [0.0, 'failing'],
-    ])('score %f → %s', (score, expected) => {
-      expect(scoreColorBand(score, 'maximize')).toBe(expected);
-    });
-  });
-  describe('minimize direction', () => {
-    it.each<[number, string]>([
-      [0.0, 'excellent'],
-      [0.1, 'excellent'],
-      [0.11, 'good'],
-      [0.2, 'good'],
-      [0.4, 'adequate'],
-      [0.6, 'poor'],
-      [0.61, 'failing'],
-    ])('score %f → %s', (score, expected) => {
-      expect(scoreColorBand(score, 'minimize')).toBe(expected);
-    });
-  });
-  it('defaults to maximize when direction omitted', () => {
-    expect(scoreColorBand(0.95)).toBe('excellent');
-    expect(scoreColorBand(0.5)).toBe('poor');
-  });
-});
-describe('inferScoreDirection', () => {
-  it('above → minimize', () => {
-    expect(inferScoreDirection('above')).toBe('minimize');
-  });
-  it('below → maximize', () => {
-    expect(inferScoreDirection('below')).toBe('maximize');
-  });
-  it('undefined → maximize', () => {
-    expect(inferScoreDirection(undefined)).toBe('maximize');
-  });
-});
-describe('labelToOrdinal', () => {
-  it.each([
-    ['excellent', 4, 'Pass'],
-    ['highly_relevant', 4, 'Pass'],
-    ['fully_faithful', 4, 'Pass'],
-    ['perfect', 4, 'Pass'],
-    ['relevant', 3, 'Pass'],
-    ['good', 3, 'Pass'],
-    ['faithful', 3, 'Pass'],
-    ['pass', 3, 'Pass'],
-    ['correct', 3, 'Pass'],
-    ['coherent', 3, 'Pass'],
-    ['partial', 2, 'Review'],
-    ['borderline', 2, 'Review'],
-    ['adequate', 2, 'Review'],
-    ['mixed', 2, 'Review'],
-    ['off_topic', 1, 'Fail'],
-    ['irrelevant', 1, 'Fail'],
-    ['unfaithful', 1, 'Fail'],
-    ['fail', 1, 'Fail'],
-    ['incorrect', 1, 'Fail'],
-    ['incoherent', 1, 'Fail'],
-    ['hallucinated', 0, 'Fail'],
-    ['fabricated', 0, 'Fail'],
-    ['toxic', 0, 'Fail'],
-    ['dangerous', 0, 'Fail'],
-  ] as [string, number, string][])('"%s" → ordinal %i, category %s', (label, ordinal, category) => {
-    const result = labelToOrdinal(label);
-    expect(result.ordinal).toBe(ordinal);
-    expect(result.category).toBe(category);
-    expect(result.mapped).toBe(true);
-  });
-  it('normalizes case and hyphens', () => {
-    expect(labelToOrdinal('EXCELLENT').ordinal).toBe(4);
-    expect(labelToOrdinal('highly-relevant').ordinal).toBe(4);
-    expect(labelToOrdinal('Fully_Faithful').ordinal).toBe(4);
-  });
-  it('unknown label → ordinal 2, Review, mapped false', () => {
-    const result = labelToOrdinal('unknown_label');
-    expect(result).toEqual({ ordinal: 2, category: 'Review', mapped: false });
-  });
-});
-describe('ordinalToCategory', () => {
-  it.each<[number, string]>([
-    [4, 'Pass'],
-    [3, 'Pass'],
-    [2, 'Review'],
-    [1, 'Fail'],
-    [0, 'Fail'],
-  ])('ordinal %i → %s', (ordinal, expected) => {
-    expect(ordinalToCategory(ordinal)).toBe(expected);
-  });
-});
-describe('SCORE_COLORS', () => {
-  it('has all required bands', () => {
-    const bands = ['excellent', 'good', 'adequate', 'poor', 'failing', 'no_data'] as const;
-    for (const band of bands) {
-      expect(SCORE_COLORS[band]).toMatch(/^#[0-9a-f]{6}$/i);
-    }
-  });
-  it('pins exact color values (drift sentinel)', () => {
-    expect(SCORE_COLORS.excellent).toBe('#26d97f');
-    expect(SCORE_COLORS.good).toBe('#34d399');
-    expect(SCORE_COLORS.adequate).toBe('#e5a00d');
-    expect(SCORE_COLORS.poor).toBe('#f97316');
-    expect(SCORE_COLORS.failing).toBe('#f04438');
-    expect(SCORE_COLORS.no_data).toBe('#6b7280');
-  });
-});
-describe('ROLE_FEATURE_CONFIG', () => {
-  const roles = ['executive', 'operator', 'auditor'] as const;
-  it('has all three roles', () => {
-    for (const role of roles) {
-      expect(ROLE_FEATURE_CONFIG[role]).toBeDefined();
-    }
-  });
-  it('executive hides variance and operator controls', () => {
-    expect(ROLE_FEATURE_CONFIG.executive.showVariance).toBe(false);
-    expect(ROLE_FEATURE_CONFIG.executive.showAcceleration).toBe(false);
-    expect(ROLE_FEATURE_CONFIG.executive.showRawExport).toBe(false);
-    expect(ROLE_FEATURE_CONFIG.executive.maxWorstEvaluations).toBe(1);
-  });
-  it('operator shows operational metrics', () => {
-    expect(ROLE_FEATURE_CONFIG.operator.showVariance).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.operator.showCorrelationRemediation).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.operator.showCoverageHeatmap).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.operator.maxWorstEvaluations).toBe(5);
-  });
-  it('auditor has full access with raw export', () => {
-    expect(ROLE_FEATURE_CONFIG.auditor.showProvenance).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.auditor.showRawExport).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.auditor.maxWorstEvaluations).toBe(10);
-    expect(ROLE_FEATURE_CONFIG.auditor.explanationTruncation).toBe(2000);
-  });
-});
-describe('truncateText', () => {
-  it('returns original text when under limit', () => {
-    expect(truncateText('hello', 10)).toBe('hello');
-  });
-  it('truncates at max and appends ellipsis', () => {
-    expect(truncateText('hello world', 5)).toBe('hello...');
-  });
-  it('returns original when exactly at limit', () => {
-    expect(truncateText('hello', 5)).toBe('hello');
-  });
-});
-
-================
 File: src/__tests__/score-badge-calibration.test.tsx
 ================
 import { describe, it, expect, afterEach } from 'vitest';
@@ -13103,59 +13156,6 @@ describe('ScoreBadge with calibration prop', () => {
     expect(ariaLabel).toMatch(/excellent|good/i);
   });
 });
-
-================
-File: src/__tests__/test-types.ts
-================
-import { z } from 'zod';
-import type { ReactNode } from 'react';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-export const LinkPropsSchema = z.object({
-  href: z.string(),
-  children: z.instanceof(Object),
-});
-export type LinkProps = z.infer<typeof LinkPropsSchema> & {
-  children: ReactNode;
-  [key: string]: unknown;
-};
-export const WorkflowGraphViewPropsSchema = z.object({
-  graph: z.object({
-    nodes: z.array(z.object({
-      id: z.string(),
-      label: z.string(),
-    })),
-    edges: z.array(z.unknown()).optional(),
-    rootNodeId: z.string().nullable().optional(),
-    workflowShape: z.string().optional(),
-  }),
-  onNodeClick: z.custom<(nodeId: string) => void>().optional(),
-});
-export type WorkflowGraphViewProps = {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) => void;
-};
-export const DetailPageHeaderPropsSchema = z.object({
-  title: z.string(),
-  id: z.string().optional(),
-  children: z.instanceof(Object).optional(),
-});
-export type DetailPageHeaderProps = {
-  title: string;
-  id?: string;
-  children?: ReactNode;
-};
-export const PageShellPropsSchema = z.object({
-  isLoading: z.boolean(),
-  error: z.object({
-    message: z.string(),
-  }).nullable(),
-  children: z.instanceof(Object),
-});
-export type PageShellProps = {
-  isLoading: boolean;
-  error: { message: string } | null;
-  children: ReactNode;
-};
 
 ================
 File: src/__tests__/useQualityLive.test.tsx

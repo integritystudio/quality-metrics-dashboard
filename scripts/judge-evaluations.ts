@@ -415,7 +415,7 @@ export function hashToScore(input: string, min: number, max: number): number {
   return normalizeScore(min + value * (max - min));
 }
 
-/** B6: Deterministic canary check — ~2% of turns get intentionally low scores */
+/** Deterministic canary check — ~2% of turns get intentionally low scores */
 export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
   return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
 }

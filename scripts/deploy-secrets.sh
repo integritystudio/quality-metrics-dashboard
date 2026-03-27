@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Sync Supabase secrets from Doppler to both Cloudflare Workers.
-# Usage: doppler run --project integrity-studio --config dev -- npm run deploy:secrets
+# Usage: doppler run --project integrity-studio --config prd -- npm run deploy:secrets
 #
 # Requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY in Doppler
 

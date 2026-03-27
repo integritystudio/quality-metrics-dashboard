@@ -1,3 +1,8 @@
+48f38b5 2026-03-27 feat(e2e): replace localStorage session seeding with Auth0 stub
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 34d779b 2026-03-27 style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments
   worker/index.ts
 
@@ -331,7 +336,4 @@ c42cc05 2026-03-26 refactor(trend-series): replace chart legend color styles wit
   src/theme.css
 
 fdb952c 2026-03-26 refactor(trend-chart): replace dynamics panel color styles with CSS classes
-  src/theme.css
-
-ccc35e3 2026-03-26 refactor(score-badge): replace color inline style with score-band CSS utility
   src/theme.css

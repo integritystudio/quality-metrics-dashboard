@@ -861,6 +861,15 @@ export function makeChainGraph(
 ): WorkflowGraph
 
 ================
+File: src/__tests__/workflow-graph.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { TraceSpan } from '../types.js';
+import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
+
+================
 File: src/api/routes/compliance.ts
 ================
 import { Hono } from 'hono';
@@ -2158,14 +2167,6 @@ import { PageShell } from '../components/PageShell.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 ================
-File: src/stubs/auth0-e2e.ts
-================
-import { type ReactNode, createElement } from 'react';
-⋮----
-export function Auth0Provider(
-export function useAuth0()
-
-================
 File: src/stubs/web-worker.ts
 ================
 
@@ -2418,13 +2419,47 @@ function getFontFaceSource(): string
 // Find all @font-face blocks that mention this family
 
 ================
-File: src/__tests__/workflow-graph.test.ts
+File: src/__tests__/quality-utils-drift.test.ts
 ================
 import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import {
+  scoreColorBand,
+  inferScoreDirection,
+  labelToOrdinal,
+  ordinalToCategory,
+  truncateText,
+  ROLE_FEATURE_CONFIG,
+  SCORE_COLORS,
+} from '../lib/quality-utils.js';
+
+================
+File: src/__tests__/test-types.ts
+================
+import { z } from 'zod';
+import type { ReactNode } from 'react';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { TraceSpan } from '../types.js';
-import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
+⋮----
+export type LinkProps = z.infer<typeof LinkPropsSchema> & {
+  children: ReactNode;
+  [key: string]: unknown;
+};
+⋮----
+export type WorkflowGraphViewProps = {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) => void;
+};
+⋮----
+export type DetailPageHeaderProps = {
+  title: string;
+  id?: string;
+  children?: ReactNode;
+};
+⋮----
+export type PageShellProps = {
+  isLoading: boolean;
+  error: { message: string } | null;
+  children: ReactNode;
+};
 
 ================
 File: src/__tests__/WorkflowGraph.test.tsx
@@ -2715,6 +2750,14 @@ import type { Period } from '../types.js';
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
 
 ================
+File: src/stubs/auth0-e2e.ts
+================
+import { type ReactNode, createElement } from 'react';
+⋮----
+export function Auth0Provider(
+export function useAuth0()
+
+================
 File: src/__tests__/api-agents.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -2856,20 +2899,6 @@ function makeAlerts(): (TriggeredAlert &
 const
 
 ================
-File: src/__tests__/quality-utils-drift.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import {
-  scoreColorBand,
-  inferScoreDirection,
-  labelToOrdinal,
-  ordinalToCategory,
-  truncateText,
-  ROLE_FEATURE_CONFIG,
-  SCORE_COLORS,
-} from '../lib/quality-utils.js';
-
-================
 File: src/__tests__/score-badge-calibration.test.tsx
 ================
 import { describe, it, expect, afterEach } from 'vitest';
@@ -2879,35 +2908,6 @@ import type { PercentileDistribution } from '../lib/quality-utils.js';
 ⋮----
 function makeDistribution(overrides: Partial<PercentileDistribution> =
 function getBadgeLabel(container: HTMLElement): string
-
-================
-File: src/__tests__/test-types.ts
-================
-import { z } from 'zod';
-import type { ReactNode } from 'react';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-⋮----
-export type LinkProps = z.infer<typeof LinkPropsSchema> & {
-  children: ReactNode;
-  [key: string]: unknown;
-};
-⋮----
-export type WorkflowGraphViewProps = {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) => void;
-};
-⋮----
-export type DetailPageHeaderProps = {
-  title: string;
-  id?: string;
-  children?: ReactNode;
-};
-⋮----
-export type PageShellProps = {
-  isLoading: boolean;
-  error: { message: string } | null;
-  children: ReactNode;
-};
 
 ================
 File: src/__tests__/useQualityLive.test.tsx

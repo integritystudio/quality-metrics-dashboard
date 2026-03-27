@@ -19,4 +19,4 @@ jobs:
           token: ${{ secrets.DOPPLER_TOKEN }}
       - run: npm ci
       - run: npm run build
-      - run: doppler run --project integrity-studio --config dev -- npm test
+      - run: doppler run --project integrity-studio --config prd -- npm test
