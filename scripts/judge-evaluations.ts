@@ -333,7 +333,7 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
       const toolRes = extractToolResults(content);
       if (toolRes.length > 0) {
         accumulatedToolResults.push(...toolRes);
-        // P1-7: Bound tool results to prevent unbounded memory growth
+        // Bound tool results to prevent unbounded memory growth
         if (accumulatedToolResults.length > MAX_TOOL_RESULTS_PER_TURN) {
           accumulatedToolResults.splice(0, accumulatedToolResults.length - MAX_TOOL_RESULTS_PER_TURN);
         }
@@ -344,11 +344,11 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
       const userText = extractTextFromContent(content);
       if (!userText || isSystemPrompt(userText)) continue;
 
-      // P2-10: Skip entries without valid timestamp (required for correlation)
+      // Skip entries without valid timestamp (required for correlation)
       const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : null;
       if (!timestamp) continue;
 
-      // P0-1: Sanitize text before LLM evaluation to mitigate prompt injection
+      // Sanitize text before LLM evaluation to mitigate prompt injection
       const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
       if (!sanitizedUser.trim()) continue;
 
@@ -535,7 +535,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
   return { evals, canaryCount };
 }
 
-/** Track evaluation failures for summary reporting (P1-6) */
+/** Track evaluation failures for summary reporting */
 export const evalFailures: Record<string, number> = {};
 
 function trackFailure(metric: string): void {
@@ -756,7 +756,7 @@ function _loadExistingKeys(): Set<string> {
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 
 function acquireLock(): boolean {
-  // P1-1: Atomic create via O_CREAT | O_EXCL eliminates TOCTOU race
+  // Atomic create via O_CREAT | O_EXCL eliminates TOCTOU race
   try {
     const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
     writeFileSync(fd, String(process.pid));
@@ -962,13 +962,13 @@ async function main() {
     return;
   }
 
-  // P1-5: Validate API key early (before expensive operations)
+  // Validate API key early (before expensive operations)
   if (!seed && !process.env.ANTHROPIC_API_KEY) {
     console.error('Error: ANTHROPIC_API_KEY required (or use --seed for offline mode)');
     process.exit(1);
   }
 
-  // P0-2: Acquire lock to prevent concurrent writes
+  // Acquire lock to prevent concurrent writes
   if (!acquireLock()) {
     console.error('Error: Another judge-evaluations process is running (lockfile exists)');
     process.exit(1);

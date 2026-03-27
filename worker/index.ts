@@ -541,7 +541,7 @@ app.get('/api/health', async (c) => {
   });
 });
 
-// Admin error handling policy (ADMIN-P4-3):
+// Admin error handling policy:
 // All admin routes (/api/admin/*) return generic error messages on Supabase REST failures,
 // e.g. "Failed to fetch users" instead of the raw Supabase error body. This is intentional:
 // - The service role key is used, so Supabase error bodies may contain table/column metadata.

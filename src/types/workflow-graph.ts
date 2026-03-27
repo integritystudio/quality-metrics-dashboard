@@ -8,7 +8,7 @@ export interface WorkflowNode {
   totalTokens: number | null;
   /**
    * Sum of durationMs for all spans attributed to this agent.
-   * NOTE (WG-9): Nested spans are counted independently, so parent spans that
+   * NOTE: Nested spans are counted independently, so parent spans that
    * encompass child spans cause double-counting of wall time. Treat as a
    * relative indicator of agent work, not an accurate wall-clock duration.
    */
@@ -32,6 +32,6 @@ export interface WorkflowGraph {
   edges: WorkflowEdge[];
   rootNodeId: string | null;
   workflowShape: WorkflowShape;
-  /** Count of turns dropped because agentName was undefined/null (WG-5 observability). */
+  /** Count of turns dropped because agentName was undefined/null. */
   droppedTurns: number;
 }

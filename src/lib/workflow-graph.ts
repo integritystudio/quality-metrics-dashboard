@@ -10,7 +10,7 @@ const SPAN_NAME_TOOL_CALL = 'tool_call';
 /**
  * Epsilon tolerance (nanoseconds) for near-concurrent span edge inference.
  * Spans whose end and start differ by less than this value are treated as
- * sequential (WG-M2). Set to 1 ms = 1_000_000 ns.
+ * sequential. Set to 1 ms = 1_000_000 ns.
  */
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
 
@@ -30,7 +30,7 @@ export function buildWorkflowGraph(
 function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
   const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
   let droppedTurns = 0;
-  // Root: agent with lowest turnIndex, lexicographic tiebreak (WG-7)
+  // Root: agent with lowest turnIndex, lexicographic tiebreak
   let rootAgentName: string | null = null;
   let minTurnIndex = Infinity;
 
@@ -88,7 +88,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     });
   }
 
-  // Deduplicate edges (WG-1, WG-3), guard NaN scores (WG-8)
+  // Deduplicate edges, guard NaN scores
   const seenEdges = new Set<string>();
   const edges: WorkflowEdge[] = [];
   for (const h of evaluation.handoffs) {
@@ -156,7 +156,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   for (let i = 0; i < agentTimings.length - 1; i++) {
     const curr = agentTimings[i];
     const next = agentTimings[i + 1];
-    // Use epsilon tolerance to catch near-concurrent spans that a strict <= would miss (WG-M2)
+    // Use epsilon tolerance to catch near-concurrent spans that a strict <= would miss
     if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
       const key = `${curr.id}->${next.id}`;
       edges.push({
@@ -177,7 +177,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
 
 function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
   // DFS-based cycle detection — correctly handles 3+ node cycles (e.g. A→B→C→A).
-  // Skips self-loops (WG-2): single-node self-references are not classified as cyclic.
+  // Skips self-loops: single-node self-references are not classified as cyclic.
   const adjacency = new Map<string, string[]>();
   for (const n of nodes) adjacency.set(n.id, []);
   for (const e of edges) {

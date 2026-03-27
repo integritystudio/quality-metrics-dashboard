@@ -1,4 +1,4 @@
-/* JetBrains Mono — self-hosted (DR-L4) */
+/* JetBrains Mono — self-hosted */
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
@@ -21,7 +21,7 @@
   src: url('/fonts/JetBrainsMono-SemiBold.woff2') format('woff2');
 }
 
-/* IBM Plex Sans — self-hosted (DR-L4) */
+/* IBM Plex Sans — self-hosted */
 @font-face {
   font-family: 'IBM Plex Sans';
   font-style: normal;
