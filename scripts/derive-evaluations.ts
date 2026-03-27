@@ -6,7 +6,7 @@
  * in the format expected by the observability-toolkit backend.
  */
 
-import { writeFileSync, readdirSync, existsSync } from 'fs';
+import { writeFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,
@@ -373,13 +373,11 @@ function main(): void {
 
     // Read existing evaluations and keep any that weren't produced by derive (e.g. LLM judge)
     const preserved: string[] = [];
-    if (existsSync(outFile)) {
-      const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
-      for (const rec of existingRecs) {
-        const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
-        if (evaluator && evaluator !== RULE_EVALUATOR) {
-          preserved.push(JSON.stringify(rec));
-        }
+    const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
+    for (const rec of existingRecs) {
+      const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
+      if (evaluator && evaluator !== RULE_EVALUATOR) {
+        preserved.push(JSON.stringify(rec));
       }
     }
 
