@@ -36,7 +36,7 @@ const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
 /**
  * Parses a timestamp string to milliseconds since epoch.
  * Returns null for empty, missing, NaN, or out-of-range values that would
- * corrupt tsMin/tsMax comparisons or cause Date.toISOString() to throw (CR-ERR-1, CR-WK-4).
+ * corrupt tsMin/tsMax comparisons or cause Date.toISOString() to throw.
  */
 function parseTimestamp(value: string | undefined | null): number | null {
   if (!value) return null;
