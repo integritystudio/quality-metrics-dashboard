@@ -1451,6 +1451,57 @@ summary.section-rail {
   z-index: 1;
 }
 
+/* WorkflowGraph: collapsed cluster node */
+.workflow-cluster-node {
+  width: 240px;
+  height: 90px;
+  border: 2px dashed #6366f1;
+  border-radius: var(--radius-lg);
+  background: #eef2ff;
+  padding: var(--space-3);
+  font-size: var(--font-size-xs);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.workflow-cluster-node--score-high { border-color: #16a34a; background: #dcfce7; }
+.workflow-cluster-node--score-mid  { border-color: #ca8a04; background: #fef9c3; }
+.workflow-cluster-node--score-low  { border-color: #dc2626; background: #fee2e2; }
+.workflow-cluster-node--error      { border-color: var(--status-critical); }
+.workflow-cluster-node__label {
+  font-weight: var(--bold);
+  margin-bottom: var(--space-1);
+  color: #4338ca;
+}
+.workflow-cluster-node__meta {
+  font-size: var(--font-size-xs);
+  color: var(--status-no-data);
+}
+
+/* WorkflowGraph: cluster toggle controls bar */
+.workflow-cluster-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-3);
+}
+.workflow-cluster-toggle {
+  font-size: var(--font-size-2xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+  border: 1px solid #6366f1;
+  color: #4338ca;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.workflow-cluster-toggle--collapsed {
+  background: #6366f1;
+  color: #fff;
+}
+
 /* WorkflowGraph: fallback containers */
 .workflow-fallback {
   padding: var(--space-6);

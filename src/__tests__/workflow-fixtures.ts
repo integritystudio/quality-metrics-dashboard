@@ -87,6 +87,41 @@ export function makeSpan(overrides: Partial<TraceSpan> = {}): TraceSpan {
   };
 }
 
+export function makeClusteredGraph(
+  clusterIds: string[],
+  nodesPerCluster: number,
+): WorkflowGraph {
+  const nodes: WorkflowNode[] = [];
+  const edges: WorkflowEdge[] = [];
+
+  for (const cId of clusterIds) {
+    for (let i = 0; i < nodesPerCluster; i++) {
+      nodes.push(makeNode({ id: `${cId}-node-${i}`, label: `${cId}-agent-${i}`, clusterId: cId }));
+      if (i > 0) {
+        edges.push(makeEdge({
+          id: `${cId}-${i - 1}->${cId}-${i}`,
+          source: `${cId}-node-${i - 1}`,
+          target: `${cId}-node-${i}`,
+        }));
+      }
+    }
+  }
+
+  // Connect last node of each cluster to first node of the next
+  for (let c = 0; c < clusterIds.length - 1; c++) {
+    const src = `${clusterIds[c]}-node-${nodesPerCluster - 1}`;
+    const tgt = `${clusterIds[c + 1]}-node-0`;
+    edges.push(makeEdge({ id: `${src}->${tgt}`, source: src, target: tgt }));
+  }
+
+  return makeGraph({
+    nodes,
+    edges,
+    rootNodeId: `${clusterIds[0]}-node-0`,
+    workflowShape: 'branching',
+  });
+}
+
 export function makeChainGraph(
   size: number,
   labelPrefix: string,

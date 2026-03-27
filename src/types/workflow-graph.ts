@@ -15,6 +15,12 @@ export interface WorkflowNode {
   durationMs: number;
   turnCount: number;
   hasError: boolean;
+  /**
+   * Optional cluster identifier. Nodes sharing a clusterId can be collapsed
+   * into a single group node in the graph view. Undefined means the node
+   * belongs to no cluster.
+   */
+  clusterId?: string;
 }
 
 export interface WorkflowEdge {

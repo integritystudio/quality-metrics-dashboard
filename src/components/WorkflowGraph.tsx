@@ -20,6 +20,8 @@ import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
+const CLUSTER_NODE_WIDTH = 240;
+const CLUSTER_NODE_HEIGHT = 90;
 /** Show MiniMap only when there are enough nodes to benefit from an overview. */
 const MINIMAP_THRESHOLD = 5;
 /**
@@ -70,6 +72,15 @@ interface WorkflowNodeWithMeta extends WorkflowNode {
   critical?: boolean;
 }
 
+/** Data shape for a collapsed cluster node. */
+interface ClusterNodeData {
+  clusterId: string;
+  clusterLabel: string;
+  memberCount: number;
+  hasError: boolean;
+  avgScore: number | null;
+}
+
 function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
@@ -83,8 +94,110 @@ function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
   );
 }
 
+function isClusterNodeData(value: unknown): value is ClusterNodeData {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['clusterId'] === 'string' &&
+    typeof v['clusterLabel'] === 'string' &&
+    typeof v['memberCount'] === 'number' &&
+    typeof v['hasError'] === 'boolean'
+  );
+}
+
 function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
   return new Map(nodes.map(n => [n.id, n]));
+}
+
+/**
+ * Returns a synthetic cluster node id from a clusterId string.
+ * Kept as a pure function so both collapse and layout can use the same convention.
+ */
+function clusterNodeId(clusterId: string): string {
+  return `__cluster__${clusterId}`;
+}
+
+/**
+ * Collapses nodes belonging to collapsed clusters into single synthetic nodes.
+ * External edges that connect to/from cluster members are rerouted to the cluster node.
+ * Intra-cluster edges are dropped.
+ */
+export function applyClusterCollapse(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  collapsedClusters: ReadonlySet<string>,
+): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
+  if (collapsedClusters.size === 0) return { nodes, edges };
+
+  // Build map from node id → clusterId for collapsed clusters only
+  const nodeClusterMap = new Map<string, string>();
+  for (const n of nodes) {
+    if (n.clusterId && collapsedClusters.has(n.clusterId)) {
+      nodeClusterMap.set(n.id, n.clusterId);
+    }
+  }
+
+  // Build synthetic cluster nodes
+  const clusterMembers = new Map<string, WorkflowNode[]>();
+  for (const [nodeId, cId] of nodeClusterMap) {
+    const existing = clusterMembers.get(cId) ?? [];
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) existing.push(node);
+    clusterMembers.set(cId, existing);
+  }
+
+  const syntheticNodes: WorkflowNode[] = [];
+  for (const [cId, members] of clusterMembers) {
+    const scores = members.map(m => m.evaluationScore).filter((s): s is number => s !== null);
+    const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    syntheticNodes.push({
+      id: clusterNodeId(cId),
+      label: `[Cluster] ${cId}`,
+      evaluationScore: avgScore,
+      toolCallCount: members.reduce((s, m) => s + m.toolCallCount, 0),
+      totalTokens: members.reduce((s, m) => s + (m.totalTokens ?? 0), 0),
+      durationMs: members.reduce((s, m) => s + m.durationMs, 0),
+      turnCount: members.reduce((s, m) => s + m.turnCount, 0),
+      hasError: members.some(m => m.hasError),
+      clusterId: cId,
+    });
+  }
+
+  const outNodes = [
+    ...nodes.filter(n => !nodeClusterMap.has(n.id)),
+    ...syntheticNodes,
+  ];
+
+  // Reroute edges: replace collapsed-cluster member ids with their cluster node id
+  const resolveId = (id: string): string => {
+    const cId = nodeClusterMap.get(id);
+    return cId ? clusterNodeId(cId) : id;
+  };
+
+  const seenEdgeKeys = new Set<string>();
+  const outEdges: WorkflowEdge[] = [];
+  for (const e of edges) {
+    const src = resolveId(e.source);
+    const tgt = resolveId(e.target);
+    if (src === tgt) continue; // intra-cluster: drop
+    const key = `${src}->${tgt}`;
+    if (seenEdgeKeys.has(key)) continue; // dedup rerouted edges
+    seenEdgeKeys.add(key);
+    outEdges.push({ ...e, id: key, source: src, target: tgt });
+  }
+
+  return { nodes: outNodes, edges: outEdges };
+}
+
+/**
+ * Returns all distinct clusterIds present in a node list.
+ */
+export function extractClusterIds(nodes: WorkflowNode[]): string[] {
+  const seen = new Set<string>();
+  for (const n of nodes) {
+    if (n.clusterId) seen.add(n.clusterId);
+  }
+  return [...seen].sort();
 }
 
 async function computeLayout(
@@ -98,7 +211,14 @@ async function computeLayout(
   const elkGraph = {
     id: 'root',
     layoutOptions: ELK_OPTIONS,
-    children: nodes.map(n => ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT })),
+    children: nodes.map(n => {
+      const isCluster = n.id.startsWith('__cluster__');
+      return {
+        id: n.id,
+        width: isCluster ? CLUSTER_NODE_WIDTH : NODE_WIDTH,
+        height: isCluster ? CLUSTER_NODE_HEIGHT : NODE_HEIGHT,
+      };
+    }),
     edges: edges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] })),
   };
 
@@ -110,6 +230,26 @@ async function computeLayout(
       const workflowNode = nodeDataMap.get(elkNode.id)!;
       const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
       const critical = criticalPath != null && criticalPath.has(elkNode.id);
+      const isCluster = elkNode.id.startsWith('__cluster__');
+
+      if (isCluster) {
+        const scores = [workflowNode.evaluationScore].filter((s): s is number => s !== null);
+        const avgScore = scores.length > 0 ? scores[0] : null;
+        const data: ClusterNodeData = {
+          clusterId: workflowNode.clusterId ?? elkNode.id,
+          clusterLabel: workflowNode.clusterId ?? elkNode.id,
+          memberCount: workflowNode.turnCount, // re-used as member aggregate indicator
+          hasError: workflowNode.hasError,
+          avgScore,
+        };
+        return {
+          id: elkNode.id,
+          position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+          data: data as unknown as Record<string, unknown>,
+          type: 'clusterNode',
+        };
+      }
+
       return {
         id: elkNode.id,
         position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
@@ -166,7 +306,38 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
   );
 });
 
-const NODE_TYPES = { agentNode: AgentNodeComponent };
+const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodeProps) {
+  if (!isClusterNodeData(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.avgScore);
+
+  const nodeClass = [
+    'workflow-cluster-node',
+    band?.className,
+    d.hasError && 'workflow-cluster-node--error',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div
+      className={nodeClass}
+      role="group"
+      aria-label={`Cluster: ${d.clusterLabel}, ${d.memberCount} agents`}
+    >
+      <div className="workflow-cluster-node__label">{d.clusterLabel}</div>
+      <div className="workflow-cluster-node__meta">
+        {d.memberCount} agents
+        {d.avgScore !== null && (
+          <span> · avg {d.avgScore.toFixed(SCORE_CHIP_PRECISION)}</span>
+        )}
+      </div>
+      {d.hasError && <div className="workflow-node__error">Error</div>}
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+});
+
+const NODE_TYPES = { agentNode: AgentNodeComponent, clusterNode: ClusterNodeComponent };
 
 interface WorkflowGraphProps {
   graph: WorkflowGraph;
@@ -185,11 +356,31 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [collapsedClusters, setCollapsedClusters] = useState<ReadonlySet<string>>(new Set());
+
+  const clusterIds = extractClusterIds(graph.nodes);
+
+  const toggleCluster = useCallback((clusterId: string) => {
+    setCollapsedClusters(prev => {
+      const next = new Set(prev);
+      if (next.has(clusterId)) {
+        next.delete(clusterId);
+      } else {
+        next.add(clusterId);
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (graph.nodes.length === 0) return;
     let cancelled = false;
-    computeLayout(graph.nodes, graph.edges, selectedAgents, criticalPath)
+    const { nodes: visibleNodes, edges: visibleEdges } = applyClusterCollapse(
+      graph.nodes,
+      graph.edges,
+      collapsedClusters,
+    );
+    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath)
       .then(({ nodes: rfNodes, edges: rfEdges }) => {
         if (!cancelled) {
           setLayoutError(null);
@@ -207,7 +398,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
     // were in the dep array, causing unnecessary ELK re-runs each render cycle.
     // Omitted here — layout should only recompute when graph data or filter actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph.nodes, graph.edges, selectedAgents, criticalPath]);
+  }, [graph.nodes, graph.edges, selectedAgents, criticalPath, collapsedClusters]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onNodeClick?.(node.id);
@@ -271,6 +462,21 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
 
   return (
     <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+      {clusterIds.length > 0 && (
+        <div className="workflow-cluster-controls" role="group" aria-label="Cluster toggles">
+          {clusterIds.map(cId => (
+            <button
+              key={cId}
+              type="button"
+              className={`workflow-cluster-toggle${collapsedClusters.has(cId) ? ' workflow-cluster-toggle--collapsed' : ''}`}
+              onClick={() => toggleCluster(cId)}
+              aria-pressed={collapsedClusters.has(cId)}
+            >
+              {collapsedClusters.has(cId) ? '▶' : '▼'} {cId}
+            </button>
+          ))}
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}

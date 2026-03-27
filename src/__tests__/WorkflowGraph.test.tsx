@@ -80,8 +80,8 @@ vi.mock('elkjs/lib/elk.bundled.js', () => ({
   },
 }));
 
-import { WorkflowGraphView } from '../components/WorkflowGraph.js';
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
+import { WorkflowGraphView, applyClusterCollapse, extractClusterIds } from '../components/WorkflowGraph.js';
+import { makeNode, makeEdge, makeGraph, makeChainGraph, makeClusteredGraph } from './workflow-fixtures.js';
 
 afterEach(cleanup);
 
@@ -290,5 +290,146 @@ describe('WorkflowGraphView stress', () => {
     unmountA();
     expect(screen.queryByTestId('rf-node-a-1')).not.toBeInTheDocument();
     expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
+  });
+});
+
+describe('extractClusterIds', () => {
+  it('returns empty array when no nodes have clusterId', () => {
+    const nodes = [makeNode({ id: 'a' }), makeNode({ id: 'b' })];
+    expect(extractClusterIds(nodes)).toEqual([]);
+  });
+
+  it('returns sorted unique cluster ids', () => {
+    const nodes = [
+      makeNode({ id: 'a', clusterId: 'beta' }),
+      makeNode({ id: 'b', clusterId: 'alpha' }),
+      makeNode({ id: 'c', clusterId: 'beta' }),
+      makeNode({ id: 'd' }),
+    ];
+    expect(extractClusterIds(nodes)).toEqual(['alpha', 'beta']);
+  });
+});
+
+describe('applyClusterCollapse', () => {
+  const nodeA = makeNode({ id: 'a', clusterId: 'c1' });
+  const nodeB = makeNode({ id: 'b', clusterId: 'c1' });
+  const nodeC = makeNode({ id: 'c' }); // no cluster
+  const edgeAB = makeEdge({ id: 'ab', source: 'a', target: 'b' });
+  const edgeBC = makeEdge({ id: 'bc', source: 'b', target: 'c' });
+
+  it('returns original nodes/edges when no clusters collapsed', () => {
+    const result = applyClusterCollapse([nodeA, nodeB, nodeC], [edgeAB, edgeBC], new Set());
+    expect(result.nodes).toHaveLength(3);
+    expect(result.edges).toHaveLength(2);
+  });
+
+  it('replaces cluster members with a single synthetic node', () => {
+    const result = applyClusterCollapse([nodeA, nodeB, nodeC], [edgeAB, edgeBC], new Set(['c1']));
+    const ids = result.nodes.map(n => n.id);
+    expect(ids).not.toContain('a');
+    expect(ids).not.toContain('b');
+    expect(ids).toContain('c');
+    expect(ids.find(i => i.includes('c1'))).toBeTruthy();
+    expect(result.nodes).toHaveLength(2);
+  });
+
+  it('drops intra-cluster edges and reroutes external edges to cluster node', () => {
+    const result = applyClusterCollapse([nodeA, nodeB, nodeC], [edgeAB, edgeBC], new Set(['c1']));
+    // intra-cluster edge ab should be gone
+    const edgeSources = result.edges.map(e => e.source);
+    const edgeTargets = result.edges.map(e => e.target);
+    expect(edgeSources).not.toContain('a');
+    expect(edgeSources).not.toContain('b');
+    // external edge b->c should be rerouted: cluster_node->c
+    expect(edgeTargets).toContain('c');
+    expect(result.edges).toHaveLength(1);
+  });
+
+  it('deduplicates rerouted edges when multiple members have same external connection', () => {
+    const nodeA2 = makeNode({ id: 'a2', clusterId: 'c1' });
+    const edgeA2C = makeEdge({ id: 'a2c', source: 'a2', target: 'c' });
+    const result = applyClusterCollapse(
+      [nodeA, nodeB, nodeA2, nodeC],
+      [edgeAB, edgeBC, edgeA2C],
+      new Set(['c1']),
+    );
+    // Both b->c and a2->c reroute to cluster_node->c — should be deduped to 1 edge
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].target).toBe('c');
+  });
+
+  it('aggregates hasError: true when any member has error', () => {
+    const errNode = makeNode({ id: 'a', clusterId: 'c1', hasError: true });
+    const okNode = makeNode({ id: 'b', clusterId: 'c1', hasError: false });
+    const result = applyClusterCollapse([errNode, okNode], [], new Set(['c1']));
+    const clusterNode = result.nodes.find(n => n.id.includes('c1'));
+    expect(clusterNode?.hasError).toBe(true);
+  });
+
+  it('averages evaluationScore across cluster members', () => {
+    const n1 = makeNode({ id: 'n1', clusterId: 'cx', evaluationScore: 0.8 });
+    const n2 = makeNode({ id: 'n2', clusterId: 'cx', evaluationScore: 0.6 });
+    const result = applyClusterCollapse([n1, n2], [], new Set(['cx']));
+    const clusterNode = result.nodes.find(n => n.id.includes('cx'));
+    expect(clusterNode?.evaluationScore).toBeCloseTo(0.7);
+  });
+
+  it('sets evaluationScore to null when all members have null score', () => {
+    const n1 = makeNode({ id: 'n1', clusterId: 'cx', evaluationScore: null });
+    const n2 = makeNode({ id: 'n2', clusterId: 'cx', evaluationScore: null });
+    const result = applyClusterCollapse([n1, n2], [], new Set(['cx']));
+    const clusterNode = result.nodes.find(n => n.id.includes('cx'));
+    expect(clusterNode?.evaluationScore).toBeNull();
+  });
+});
+
+describe('WorkflowGraphView cluster toggle UI', () => {
+  it('renders cluster toggle buttons when graph has clustered nodes', async () => {
+    const graph = makeClusteredGraph(['alpha', 'beta'], 2);
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /▼ alpha/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /▼ beta/ })).toBeInTheDocument();
+    });
+  });
+
+  it('does not render cluster controls when graph has no clustered nodes', async () => {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: 'n1' }), makeNode({ id: 'n2' })],
+      edges: [makeEdge({ id: 'e1', source: 'n1', target: 'n2' })],
+    });
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.queryByRole('group', { name: 'Cluster toggles' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('collapses a cluster when its toggle button is clicked', async () => {
+    const graph = makeClusteredGraph(['grp'], 2);
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /grp/ })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /grp/ }));
+    await waitFor(() => {
+      // After collapse the individual nodes should no longer appear
+      expect(screen.queryByTestId('rf-node-grp-node-0')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('rf-node-grp-node-1')).not.toBeInTheDocument();
+    });
+  });
+
+  it('expands a cluster when its toggle button is clicked again', async () => {
+    const graph = makeClusteredGraph(['grp'], 2);
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => screen.getByRole('button', { name: /grp/ }));
+    // collapse
+    fireEvent.click(screen.getByRole('button', { name: /grp/ }));
+    await waitFor(() => expect(screen.queryByTestId('rf-node-grp-node-0')).not.toBeInTheDocument());
+    // expand
+    fireEvent.click(screen.getByRole('button', { name: /grp/ }));
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-grp-node-0')).toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-grp-node-1')).toBeInTheDocument();
+    });
   });
 });
