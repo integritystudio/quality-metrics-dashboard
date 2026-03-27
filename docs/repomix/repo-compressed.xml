@@ -821,6 +821,16 @@ import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
 
 ================
+File: src/__tests__/WorkflowTimeline.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+⋮----
+import { WorkflowTimeline } from '../components/WorkflowTimeline.js';
+import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
+import { makeNode, makeGraph, makeTurn, makeHandoff } from './workflow-fixtures.js';
+
+================
 File: src/api/routes/compliance.ts
 ================
 import { Hono } from 'hono';
@@ -1350,6 +1360,41 @@ import { formatScore } from '../lib/quality-utils.js';
 import type { SLAComplianceResult } from '../types.js';
 import { StatusBadge } from './Indicators.js';
 export function SLATable(
+
+================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[]
+⋮----
+0: '',      // UNSET
 
 ================
 File: src/components/Sparkline.tsx
@@ -1967,31 +2012,6 @@ File: src/lib/symbols.ts
 import type { ScoreColorBand } from './quality-utils.js';
 
 ================
-File: src/pages/AdminPage.tsx
-================
-import { useState, useRef, useCallback } from 'react';
-import { format } from 'date-fns';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { useAuth } from '../contexts/AuthContext.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
-⋮----
-function RoleChip({
-  role,
-  onRevoke,
-  revoking,
-}: {
-  role: { id: string; name: string };
-onRevoke: (roleId: string, roleName: string)
-⋮----
-async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
-async function handleAssign()
-async function handleRevoke(roleId: string, roleName: string)
-
-================
 File: src/pages/AgentSessionPage.tsx
 ================
 import { Link } from 'wouter';
@@ -2140,36 +2160,6 @@ export interface AppSession {
   roles: string[];
   permissions: DashboardPermission[];
   allowedViews: DashboardView[];
-}
-
-================
-File: src/types/workflow-graph.ts
-================
-export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
-export interface WorkflowNode {
-  id: string;
-  label: string;
-  evaluationScore: number | null;
-  toolCallCount: number;
-  totalTokens: number | null;
-  durationMs: number;
-  turnCount: number;
-  hasError: boolean;
-}
-export interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-  handoffScore: number | null;
-  contextPreserved: boolean;
-  label?: string;
-}
-export interface WorkflowGraph {
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  rootNodeId: string | null;
-  workflowShape: WorkflowShape;
-  droppedTurns: number;
 }
 
 ================
@@ -2530,6 +2520,17 @@ import {
 } from '../lib/quality-utils.js';
 
 ================
+File: src/__tests__/score-badge-calibration.test.tsx
+================
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, within, cleanup } from '@testing-library/react';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import type { PercentileDistribution } from '../lib/quality-utils.js';
+⋮----
+function makeDistribution(overrides: Partial<PercentileDistribution> =
+function getBadgeLabel(container: HTMLElement): string
+
+================
 File: src/__tests__/test-types.ts
 ================
 import { z } from 'zod';
@@ -2557,6 +2558,16 @@ export type PageShellProps = {
   error: { message: string } | null;
   children: ReactNode;
 };
+
+================
+File: src/__tests__/useQualityLive.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { useQualityLive } from '../hooks/useQualityLive.js';
+import { POLL_INTERVAL_MS } from '../lib/constants.js';
+⋮----
+function makeQualityResponse(overrides: Partial<Record<string, unknown>> =
 
 ================
 File: src/__tests__/WorkflowGraph.test.tsx
@@ -2595,14 +2606,15 @@ import { WorkflowGraphView } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
 
 ================
-File: src/__tests__/WorkflowTimeline.test.tsx
+File: src/__tests__/WorkflowPage.test.tsx
 ================
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 ⋮----
-import { WorkflowTimeline } from '../components/WorkflowTimeline.js';
-import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
-import { makeNode, makeGraph, makeTurn, makeHandoff } from './workflow-fixtures.js';
+onClick=
+⋮----
+function makeEvaluation(overrides: Record<string, unknown> =
 
 ================
 File: src/api/routes/coverage.ts
@@ -2616,6 +2628,37 @@ import { PeriodSchema, InputKeySchema, ErrorMessage, HttpStatus, computePeriodDa
 function filterJudgeEvaluations(
   byMetric: Map<string, EvaluationResult[]>,
 ): Map<string, EvaluationResult[]>
+
+================
+File: src/api/routes/dashboard.ts
+================
+import { Hono } from 'hono';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  type RoleViewType,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
+import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+⋮----
+function computeSparklineData(
+  evaluations: EvaluationResult[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): (number | null)[]
+
+================
+File: src/api/routes/quality.ts
+================
+import { Hono } from 'hono';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
+import type { LiveMetric, QualityLiveData } from '../../types.js';
 
 ================
 File: src/api/config.ts
@@ -2715,41 +2758,6 @@ function formatVolume(n: number): string
 Eval Volume: <span className="stat-value">
 
 ================
-File: src/components/SpanTree.tsx
-================
-import type { CSSProperties } from 'react';
-import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[]
-⋮----
-0: '',      // UNSET
-
-================
 File: src/components/TruncatedIdLink.tsx
 ================
 import type { MouseEvent } from 'react';
@@ -2831,6 +2839,31 @@ export function supabasePost(
 ): void
 
 ================
+File: src/pages/AdminPage.tsx
+================
+import { useState, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useAuth } from '../contexts/AuthContext.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
+⋮----
+function RoleChip({
+  role,
+  onRevoke,
+  revoking,
+}: {
+  role: { id: string; name: string };
+onRevoke: (roleId: string, roleName: string)
+⋮----
+async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
+async function handleAssign()
+async function handleRevoke(roleId: string, roleName: string)
+
+================
 File: src/pages/CorrelationsPage.tsx
 ================
 import { useState, useCallback } from 'react';
@@ -2867,6 +2900,36 @@ export function Auth0Provider(
 export function useAuth0()
 
 ================
+File: src/types/workflow-graph.ts
+================
+export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
+export interface WorkflowNode {
+  id: string;
+  label: string;
+  evaluationScore: number | null;
+  toolCallCount: number;
+  totalTokens: number | null;
+  durationMs: number;
+  turnCount: number;
+  hasError: boolean;
+}
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  handoffScore: number | null;
+  contextPreserved: boolean;
+  label?: string;
+}
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  rootNodeId: string | null;
+  workflowShape: WorkflowShape;
+  droppedTurns: number;
+}
+
+================
 File: scripts/deploy-secrets.sh
 ================
 set -euo pipefail
@@ -2900,38 +2963,6 @@ function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
 function makeMockEval(traceId = 'trace-001')
 
 ================
-File: src/__tests__/score-badge-calibration.test.tsx
-================
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, within, cleanup } from '@testing-library/react';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import type { PercentileDistribution } from '../lib/quality-utils.js';
-⋮----
-function makeDistribution(overrides: Partial<PercentileDistribution> =
-function getBadgeLabel(container: HTMLElement): string
-
-================
-File: src/__tests__/useQualityLive.test.tsx
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
-import { useQualityLive } from '../hooks/useQualityLive.js';
-import { POLL_INTERVAL_MS } from '../lib/constants.js';
-⋮----
-function makeQualityResponse(overrides: Partial<Record<string, unknown>> =
-
-================
-File: src/__tests__/WorkflowPage.test.tsx
-================
-import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
-⋮----
-onClick=
-⋮----
-function makeEvaluation(overrides: Record<string, unknown> =
-
-================
 File: src/api/routes/correlations.ts
 ================
 import { Hono } from 'hono';
@@ -2942,28 +2973,6 @@ import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../.
 import { extractFiniteScores } from '../api-constants.js';
 
 ================
-File: src/api/routes/dashboard.ts
-================
-import { Hono } from 'hono';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-  type RoleViewType,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
-⋮----
-function computeSparklineData(
-  evaluations: EvaluationResult[],
-  startMs: number,
-  endMs: number,
-  buckets: number,
-): (number | null)[]
-
-================
 File: src/api/routes/evaluations.ts
 ================
 import { Hono } from 'hono';
@@ -2971,15 +2980,6 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { HttpStatus, ErrorMessage } from '../../lib/constants.js';
 import { PARAM_ID_RE, isValidParam } from '../api-constants.js';
 import { loadEvaluationsByTraceId } from '../data-loader.js';
-
-================
-File: src/api/routes/quality.ts
-================
-import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
-import type { LiveMetric, QualityLiveData } from '../../types.js';
 
 ================
 File: src/api/routes/traces.ts
@@ -3091,84 +3091,6 @@ export function KeyboardNavProvider(
 function handleKeydown(e: KeyboardEvent)
 
 ================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo, type CSSProperties } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
-  COVERAGE_GRID_MAX_INPUTS,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-⋮----
-onMouseLeave=
-
-================
-File: src/pages/SessionDetailPage.tsx
-================
-import { Link } from 'wouter';
-import { format } from 'date-fns';
-import { useSessionDetail } from '../hooks/useSessionDetail.js';
-import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { PageShell } from '../components/PageShell.js';
-import { Section, type SectionHealth } from '../components/Section.js';
-import { StatDisplay } from '../components/StatDisplay.js';
-import { FreqBar } from '../components/FreqBar.js';
-import { FreqBarGrid } from '../components/FreqBarGrid.js';
-import { TruncatedList } from '../components/TruncatedList.js';
-import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
-import {
-  HALLUCINATION_SCORE_THRESHOLD,
-  MAX_ERROR_ROWS,
-  MAX_HALLUCINATION_ROWS,
-  MAX_FAILED_EVAL_ROWS,
-  SCORE_DISPLAY_PRECISION,
-  SKELETON_HEIGHT_LG,
-  CODE_QUALITY_WARN_THRESHOLD,
-} from '../lib/constants.js';
-export function SessionDetailPage(
-⋮----
-<FreqBarGrid entries=
-⋮----
-label=
-⋮----
-<td className="cell-pad text-right font-semibold score-band" data-band=
-
-================
-File: src/components/AgentWorkflowView.tsx
-================
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import { WorkflowGraphView } from './WorkflowGraph.js';
-import { WorkflowTimeline } from './WorkflowTimeline.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation } from '../types.js';
-import { agentColor, fmtDuration } from '../lib/quality-utils.js';
-import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
-type WorkflowTab = 'dag' | 'timeline';
-interface AgentWorkflowViewProps {
-  graph: WorkflowGraph;
-  evaluation?: MultiAgentEvaluation;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-}
-⋮----
-function dfs(nodeId: string, visiting: Set<string>): [string[], number]
-⋮----
-onClick=
-
-================
 File: src/components/CorrelationHeatmap.tsx
 ================
 import { useMemo } from 'react';
@@ -3192,76 +3114,25 @@ const toLinear = (c: number) =>
 function corrKey(a: string, b: string): string
 
 ================
-File: src/components/WorkflowGraph.tsx
+File: src/components/CoverageGrid.tsx
 ================
-import React, { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useState, useMemo, type CSSProperties } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
 import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from '@xyflow/react';
-⋮----
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-function getScoreBand(score: number | null)
-⋮----
-interface WorkflowNodeWithMeta extends WorkflowNode {
-  dimmed?: boolean;
-  critical?: boolean;
-}
-function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  selectedAgents?: ReadonlySet<string>,
-  criticalPath?: ReadonlySet<string>,
-): Promise<
-
-================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
+  COVERAGE_GRID_MAX_INPUTS,
+} from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
 }
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[]
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock(
 ⋮----
-const turnX = (turnIndex: number): number
-const laneY = (laneIndex: number): number
+onMouseLeave=
 
 ================
 File: src/lib/quality-utils.ts
@@ -3336,6 +3207,80 @@ import { format, differenceInMinutes, differenceInHours, differenceInDays } from
 export function formatTimestamp(ts: string): string
 
 ================
+File: src/pages/SessionDetailPage.tsx
+================
+import { Link } from 'wouter';
+import { format } from 'date-fns';
+import { useSessionDetail } from '../hooks/useSessionDetail.js';
+import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { PageShell } from '../components/PageShell.js';
+import { Section, type SectionHealth } from '../components/Section.js';
+import { StatDisplay } from '../components/StatDisplay.js';
+import { FreqBar } from '../components/FreqBar.js';
+import { FreqBarGrid } from '../components/FreqBarGrid.js';
+import { TruncatedList } from '../components/TruncatedList.js';
+import { IssueCallout } from '../components/IssueCallout.js';
+import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import {
+  HALLUCINATION_SCORE_THRESHOLD,
+  MAX_ERROR_ROWS,
+  MAX_HALLUCINATION_ROWS,
+  MAX_FAILED_EVAL_ROWS,
+  SCORE_DISPLAY_PRECISION,
+  SKELETON_HEIGHT_LG,
+  CODE_QUALITY_WARN_THRESHOLD,
+} from '../lib/constants.js';
+export function SessionDetailPage(
+⋮----
+<FreqBarGrid entries=
+⋮----
+label=
+⋮----
+<td className="cell-pad text-right font-semibold score-band" data-band=
+
+================
+File: src/components/AgentWorkflowView.tsx
+================
+import React, { useState, useCallback, useMemo, useRef } from 'react';
+import { WorkflowGraphView } from './WorkflowGraph.js';
+import { WorkflowTimeline } from './WorkflowTimeline.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation } from '../types.js';
+import { agentColor, fmtDuration } from '../lib/quality-utils.js';
+import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
+type WorkflowTab = 'dag' | 'timeline';
+interface AgentWorkflowViewProps {
+  graph: WorkflowGraph;
+  evaluation?: MultiAgentEvaluation;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
+}
+⋮----
+function dfs(nodeId: string, visiting: Set<string>): [string[], number]
+⋮----
+onClick=
+
+================
+File: src/api/routes/metrics.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { subMilliseconds } from 'date-fns';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+
+================
 File: src/api/data-loader.ts
 ================
 import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
@@ -3398,6 +3343,154 @@ export async function loadEvaluationsBySessionId(
   endDate?: string,
 ): Promise<EvaluationResult[]>
 export async function checkHealth(): Promise<
+
+================
+File: src/components/WorkflowGraph.tsx
+================
+import React, { memo, useCallback, useEffect, useState } from 'react';
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+⋮----
+import ELK from 'elkjs/lib/elk.bundled.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { fmtDuration } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+⋮----
+function getScoreBand(score: number | null)
+⋮----
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  dimmed?: boolean;
+  critical?: boolean;
+}
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet<string>,
+  criticalPath?: ReadonlySet<string>,
+): Promise<
+
+================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+⋮----
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[]
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock(
+⋮----
+const turnX = (turnIndex: number): number
+const laneY = (laneIndex: number): number
+
+================
+File: src/lib/constants.ts
+================
+import { z } from 'zod';
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+  InvalidMetricNameFormat = 'Invalid metric name format',
+  InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
+  InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
+  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
+  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
+  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
+  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
+  InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
+  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
+  InvalidSessionIdFormat = 'Invalid sessionId format',
+  InvalidTraceId = 'Invalid traceId',
+}
+⋮----
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+⋮----
+export type InputKey = z.infer<typeof InputKeySchema>;
+⋮----
+export type SortBy = z.infer<typeof SortBySchema>;
+⋮----
+export type Role = z.infer<typeof RoleSchema>;
+⋮----
+export function computePeriodDates(period: string):
+⋮----
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
+
+================
+File: src/api/api-constants.ts
+================
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+⋮----
+export function incrementCount(map: Record<string, number>, key: string): void
+⋮----
+export function isValidParam(value: string | undefined, re: RegExp): boolean
+export function toDateOnly(d: Date): string;
+export function toDateOnly(d: string): string;
+export function toDateOnly(d: Date | string): string
+export type SpanLike = { attributes?: Record<string, unknown> };
+export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string
+export function attrNum(span: SpanLike, key: string, fallback = 0): number
+export function spanAttr<T>(span: SpanLike, key: string): T | undefined
+export function extractFiniteScores(evals: Array<
+
+================
+File: src/lib/workflow-graph.ts
+================
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
+⋮----
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
+⋮----
+function dfs(nodeId: string): boolean
+⋮----
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
 
 ================
 File: src/theme.css
@@ -3749,6 +3842,7 @@ details[open] > .cot-summary::before {
 summary.section-rail {
 .section-rail-body {
 .section-rail-chevron {
+.workflow-graph-container { height: var(--workflow-graph-height, 600px); }
 .workflow-node {
 .workflow-node--score-high { border-color: #16a34a; background: #dcfce7; }
 .workflow-node--score-mid  { border-color: #ca8a04; background: #fef9c3; }
@@ -3805,99 +3899,6 @@ summary.section-rail {
 .skeleton-md {
 .skeleton-xl {
 .metric-grid .skeleton {
-
-================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-  InvalidMetricNameFormat = 'Invalid metric name format',
-  InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
-  InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
-  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
-  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
-  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
-  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
-  InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
-  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
-  InvalidSessionIdFormat = 'Invalid sessionId format',
-  InvalidTraceId = 'Invalid traceId',
-}
-⋮----
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-⋮----
-export type InputKey = z.infer<typeof InputKeySchema>;
-⋮----
-export type SortBy = z.infer<typeof SortBySchema>;
-⋮----
-export type Role = z.infer<typeof RoleSchema>;
-⋮----
-export function computePeriodDates(period: string):
-⋮----
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
-
-================
-File: src/api/routes/metrics.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { subMilliseconds } from 'date-fns';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-
-================
-File: src/api/api-constants.ts
-================
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-⋮----
-export function incrementCount(map: Record<string, number>, key: string): void
-⋮----
-export function isValidParam(value: string | undefined, re: RegExp): boolean
-export function toDateOnly(d: Date): string;
-export function toDateOnly(d: string): string;
-export function toDateOnly(d: Date | string): string
-export type SpanLike = { attributes?: Record<string, unknown> };
-export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string
-export function attrNum(span: SpanLike, key: string, fallback = 0): number
-export function spanAttr<T>(span: SpanLike, key: string): T | undefined
-export function extractFiniteScores(evals: Array<
-
-================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-import { groupBy } from './quality-utils.js';
-⋮----
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
-⋮----
-function dfs(nodeId: string): boolean
-⋮----
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
 
 ================
 File: src/api/routes/trends.ts

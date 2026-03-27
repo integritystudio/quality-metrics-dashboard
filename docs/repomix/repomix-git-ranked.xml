@@ -12427,207 +12427,7 @@ export const CONFIDENCE_SYMBOLS: Record&lt;string, string&gt; = {
   high: &apos;\u25CF&apos;,
   medium: &apos;\u25D0&apos;,
   low: &apos;\u25CB&apos;,
-};</file><file path="src/pages/AdminPage.tsx">import { useState, useRef, useCallback } from &apos;react&apos;;
-import { format } from &apos;date-fns&apos;;
-import { useApiQuery } from &apos;../hooks/useApiQuery.js&apos;;
-import { useAuth } from &apos;../contexts/AuthContext.js&apos;;
-import { DetailPageHeader } from &apos;../components/DetailPageHeader.js&apos;;
-import { PageShell } from &apos;../components/PageShell.js&apos;;
-import { MonoTableHead } from &apos;../components/MonoTableHead.js&apos;;
-import { API_BASE, SKELETON_HEIGHT_MD } from &apos;../lib/constants.js&apos;;
-import type { AdminUser, AdminRole } from &apos;../lib/validation/auth-schemas.js&apos;;
-const ADMIN_TABLE_COLUMNS = [
-  { label: &apos;Email&apos;, align: &apos;left&apos; as const },
-  { label: &apos;Roles&apos;, align: &apos;left&apos; as const },
-  { label: &apos;Assign Role&apos;, align: &apos;left&apos; as const },
-  { label: &apos;Joined&apos;, align: &apos;right&apos; as const },
-];
-function RoleChip({
-  role,
-  onRevoke,
-  revoking,
-}: {
-  role: { id: string; name: string };
-  onRevoke: (roleId: string, roleName: string) =&gt; void;
-  revoking: boolean;
-}) {
-  return (
-    &lt;span className=&quot;chip&quot;&gt;
-      {role.name}
-      &lt;button
-        className=&quot;chip-remove&quot;
-        onClick={() =&gt; onRevoke(role.id, role.name)}
-        disabled={revoking}
-        aria-label={`Remove role ${role.name}`}
-      &gt;
-        &amp;times;
-      &lt;/button&gt;
-    &lt;/span&gt;
-  );
-}
-function UserRow({
-  user,
-  availableRoles,
-  onMutationStart,
-  onMutationEnd,
-}: {
-  user: AdminUser;
-  availableRoles: AdminRole[];
-  onMutationStart: () =&gt; string;
-  onMutationEnd: (id: string) =&gt; void;
-}) {
-  const [selectedRoleId, setSelectedRoleId] = useState(&apos;&apos;);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState&lt;string | null&gt;(null);
-  const { getAccessToken } = useAuth();
-  const assignableRoles = availableRoles.filter(
-    (r) =&gt; !user.roles.some((ur) =&gt; ur.id === r.id),
-  );
-  async function adminFetch(path: string, method: string, body?: unknown): Promise&lt;Response&gt; {
-    const token = await getAccessToken();
-    return fetch(`${API_BASE}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        &apos;Content-Type&apos;: &apos;application/json&apos;,
-      },
-      ...(body !== undefined &amp;&amp; { body: JSON.stringify(body) }),
-    });
-  }
-  async function handleAssign() {
-    if (!selectedRoleId) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles`, &apos;POST&apos;, { role_id: selectedRoleId });
-      if (!res.ok) {
-        const text = await res.text().catch(() =&gt; &apos;&apos;);
-        setError(text || &apos;Failed to assign role&apos;);
-      } else {
-        setSelectedRoleId(&apos;&apos;);
-      }
-    } catch {
-      setError(&apos;Network error&apos;);
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
-  }
-  async function handleRevoke(roleId: string, roleName: string) {
-    if (!window.confirm(`Remove role &quot;${roleName}&quot; from this user?`)) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, &apos;DELETE&apos;);
-      if (!res.ok) {
-        const text = await res.text().catch(() =&gt; &apos;&apos;);
-        setError(text || &apos;Failed to revoke role&apos;);
-      }
-    } catch {
-      setError(&apos;Network error&apos;);
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
-  }
-  return (
-    &lt;tr className=&quot;border-b&quot;&gt;
-      &lt;td className=&quot;cell-pad text-left&quot;&gt;
-        &lt;span className=&quot;mono-sm&quot;&gt;{user.email ?? &lt;span className=&quot;text-muted&quot;&gt;(no email)&lt;/span&gt;}&lt;/span&gt;
-      &lt;/td&gt;
-      &lt;td className=&quot;cell-pad text-left&quot;&gt;
-        &lt;div className=&quot;chip-list&quot;&gt;
-          {user.roles.length === 0 &amp;&amp; &lt;span className=&quot;text-muted text-xs&quot;&gt;No roles&lt;/span&gt;}
-          {user.roles.map((r) =&gt; (
-            &lt;RoleChip key={r.id} role={r} onRevoke={handleRevoke} revoking={busy} /&gt;
-          ))}
-        &lt;/div&gt;
-        {error &amp;&amp; &lt;div className=&quot;text-xs text-error mt-1&quot;&gt;{error}&lt;/div&gt;}
-      &lt;/td&gt;
-      &lt;td className=&quot;cell-pad text-left&quot;&gt;
-        &lt;div className=&quot;inline-flex-center gap-4&quot;&gt;
-          &lt;select
-            className=&quot;select-sm&quot;
-            value={selectedRoleId}
-            onChange={(e) =&gt; setSelectedRoleId(e.target.value)}
-            disabled={busy || assignableRoles.length === 0}
-            aria-label={`Assign role to ${user.email ?? user.id}`}
-          &gt;
-            &lt;option value=&quot;&quot;&gt;Select role...&lt;/option&gt;
-            {assignableRoles.map((r) =&gt; (
-              &lt;option key={r.id} value={r.id}&gt;{r.name}&lt;/option&gt;
-            ))}
-          &lt;/select&gt;
-          &lt;button
-            className=&quot;btn-sm&quot;
-            onClick={handleAssign}
-            disabled={busy || !selectedRoleId}
-          &gt;
-            Assign
-          &lt;/button&gt;
-        &lt;/div&gt;
-      &lt;/td&gt;
-      &lt;td className=&quot;cell-pad text-right text-muted text-xs nowrap&quot;&gt;
-        {user.created_at ? format(new Date(user.created_at), &apos;PP&apos;) : &apos;—&apos;}
-      &lt;/td&gt;
-    &lt;/tr&gt;
-  );
-}
-export function AdminPage() {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const pendingMutationsRef = useRef&lt;Set&lt;string&gt;&gt;(new Set());
-  const mutationIdRef = useRef(0);
-  const onMutationStart = useCallback((): string =&gt; {
-    const id = String(++mutationIdRef.current);
-    pendingMutationsRef.current.add(id);
-    return id;
-  }, []);
-  const onMutationEnd = useCallback((id: string) =&gt; {
-    pendingMutationsRef.current.delete(id);
-    if (pendingMutationsRef.current.size === 0) {
-      setRefreshKey((k) =&gt; k + 1);
-    }
-  }, []);
-  const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery&lt;AdminUser[]&gt;(
-    [&apos;admin&apos;, &apos;users&apos;, refreshKey],
-    () =&gt; `${API_BASE}/api/admin/users`,
-  );
-  const { data: roles, isLoading: rolesLoading, error: rolesError } = useApiQuery&lt;AdminRole[]&gt;(
-    [&apos;admin&apos;, &apos;roles&apos;],
-    () =&gt; `${API_BASE}/api/admin/roles`,
-  );
-  const isLoading = usersLoading || rolesLoading;
-  const error = usersError ?? rolesError;
-  return (
-    &lt;PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}&gt;
-      &lt;DetailPageHeader title=&quot;User Management&quot; /&gt;
-      &lt;div className=&quot;card&quot;&gt;
-        {!users || users.length === 0 ? (
-          &lt;div className=&quot;empty-state text-secondary&quot;&gt;No users found.&lt;/div&gt;
-        ) : (
-          &lt;div className=&quot;table-scroll&quot;&gt;
-            &lt;table className=&quot;mono-table&quot;&gt;
-              &lt;MonoTableHead columns={ADMIN_TABLE_COLUMNS} /&gt;
-              &lt;tbody&gt;
-                {users.map((user) =&gt; (
-                  &lt;UserRow
-                    key={user.id}
-                    user={user}
-                    availableRoles={roles ?? []}
-                    onMutationStart={onMutationStart}
-                    onMutationEnd={onMutationEnd}
-                  /&gt;
-                ))}
-              &lt;/tbody&gt;
-            &lt;/table&gt;
-          &lt;/div&gt;
-        )}
-      &lt;/div&gt;
-    &lt;/PageShell&gt;
-  );
-}</file><file path="src/pages/AgentSessionPage.tsx">import { Link } from &apos;wouter&apos;;
+};</file><file path="src/pages/AgentSessionPage.tsx">import { Link } from &apos;wouter&apos;;
 import { useAgentSession } from &apos;../hooks/useAgentSession.js&apos;;
 import { TurnTimeline } from &apos;../components/TurnTimeline.js&apos;;
 import { HandoffCard } from &apos;../components/HandoffCard.js&apos;;
@@ -13593,31 +13393,6 @@ export interface AppSession {
   roles: string[];
   permissions: DashboardPermission[];
   allowedViews: DashboardView[];
-}</file><file path="src/types/workflow-graph.ts">export type WorkflowShape = &apos;single_agent&apos; | &apos;linear&apos; | &apos;branching&apos; | &apos;cyclic&apos;;
-export interface WorkflowNode {
-  id: string;
-  label: string;
-  evaluationScore: number | null;
-  toolCallCount: number;
-  totalTokens: number | null;
-  durationMs: number;
-  turnCount: number;
-  hasError: boolean;
-}
-export interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-  handoffScore: number | null;
-  contextPreserved: boolean;
-  label?: string;
-}
-export interface WorkflowGraph {
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  rootNodeId: string | null;
-  workflowShape: WorkflowShape;
-  droppedTurns: number;
 }</file><file path="src/App.tsx">import { useState, useCallback, lazy, Suspense, type ReactNode } from &apos;react&apos;;
 import { Route, Switch, Link, useLocation, Router } from &apos;wouter&apos;;
 import { ErrorBoundary, type FallbackProps } from &apos;react-error-boundary&apos;;
@@ -14347,7 +14122,21 @@ async function main(): Promise&lt;void&gt; {
 main().catch(err =&gt; {
   console.error(err);
   process.exit(1);
-});</file><file path="src/__tests__/WorkflowGraph.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
+});</file><file path="scripts/deploy-secrets.sh">set -euo pipefail
+WORKERS=(&quot;obs-toolkit-quality-metrics-api&quot; &quot;quality-metrics-api&quot;)
+SECRETS=(&quot;SUPABASE_URL&quot; &quot;SUPABASE_SERVICE_ROLE_KEY&quot;)
+for worker in &quot;${WORKERS[@]}&quot;; do
+  echo &quot;==&gt; Syncing secrets to ${worker}&quot;
+  for secret in &quot;${SECRETS[@]}&quot;; do
+    value=&quot;${!secret:-}&quot;
+    if [ -z &quot;$value&quot; ]; then
+      echo &quot;  SKIP ${secret} (not set in environment)&quot;
+      continue
+    fi
+    echo &quot;$value&quot; | npx wrangler secret put &quot;$secret&quot; --name &quot;$worker&quot; 2&gt;&amp;1 | tail -1
+  done
+done
+echo &quot;Done.&quot;</file><file path="src/__tests__/WorkflowGraph.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
 import { render, screen, fireEvent, waitFor, cleanup } from &apos;@testing-library/react&apos;;
 import type { ReactNode } from &apos;react&apos;;
 interface MockNode {
@@ -14767,7 +14556,972 @@ agentRoutes.get(&apos;/agents/:sessionId&apos;, async (c) =&gt; {
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
-});</file><file path="src/components/WorkflowTimeline.tsx">import React from &apos;react&apos;;
+});</file><file path="src/api/routes/sessions.ts">import { Hono } from &apos;hono&apos;;
+import { subMilliseconds, formatISO } from &apos;date-fns&apos;;
+import { computeMultiAgentEvaluation } from &apos;../../../../dist/lib/quality/quality-multi-agent.js&apos;;
+import { sanitizeErrorForResponse } from &apos;../../../../dist/lib/errors/error-sanitizer.js&apos;;
+import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from &apos;../../lib/constants.js&apos;;
+import {
+  COMMIT_BODY_START_LINE_INDEX,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  FILE_ACCESS_TOP_N,
+  HOOK_NAME,
+  incrementCount,
+  LATENCY_P50,
+  LATENCY_P95,
+  LOG_SUMMARY_FIELDS,
+  LOG_SUMMARY_MAX_ENTRIES,
+  type SafeLogEntry,
+  OTEL_STATUS_ERROR_CODE,
+  PARAM_ID_RE,
+  isValidParam,
+  PERCENT_BASE,
+  LATENCY_DISPLAY_PRECISION,
+  spanAttr,
+} from &apos;../api-constants.js&apos;;
+import {
+  loadEvaluationsBySessionId,
+  loadLogsBySessionId,
+} from &apos;../data-loader.js&apos;;
+import { queryTraces } from &apos;../../../../dist/tools/query-traces.js&apos;;
+import type { StepScore } from &apos;../../../../dist/backends/index.js&apos;;
+export const sessionRoutes = new Hono();
+const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
+function parseTimestamp(value: string | undefined | null): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  if (isNaN(ms) || ms &lt; -DATE_ISO_SAFE_MAX_MS || ms &gt; DATE_ISO_SAFE_MAX_MS) return null;
+  return ms;
+}
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
+  return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
+}
+type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
+function computeLatencyStats(durations: number[]): LatencyStats {
+  if (durations.length === 0) return { count: 0, avg: 0, p50: 0, p95: 0, max: 0 };
+  const sorted = [...durations].sort((a, b) =&gt; a - b);
+  return {
+    count: sorted.length,
+    avg: +(sorted.reduce((a, b) =&gt; a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
+    p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
+    p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
+  };
+}
+type ScoreStats = { avg: number | null; min: number | null; max: number | null };
+function computeScoreStats(scores: number[]): ScoreStats {
+  if (scores.length === 0) return { avg: null, min: null, max: null };
+  const sorted = [...scores].sort((a, b) =&gt; a - b);
+  return {
+    avg: +(sorted.reduce((a, b) =&gt; a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+  };
+}
+const LIMIT_SESSION_SPANS = 1000;
+async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
+  const now = new Date();
+  const end = endDate ?? formatISO(now, { representation: &apos;date&apos; });
+  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS[&apos;30d&apos;]), { representation: &apos;date&apos; });
+  const result = await queryTraces({
+    attributeFilter: { &apos;session.id&apos;: sessionId },
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_SESSION_SPANS,
+  });
+  return result.traces;
+}
+sessionRoutes.get(&apos;/sessions/:sessionId&apos;, async (c) =&gt; {
+  const sessionId = c.req.param(&apos;sessionId&apos;);
+  if (!isValidParam(sessionId, PARAM_ID_RE)) {
+    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  }
+  const startDate = c.req.query(&apos;startDate&apos;);
+  const endDate = c.req.query(&apos;endDate&apos;);
+  try {
+    const [spans, logs, evaluations] = await Promise.all([
+      loadSessionSpans(sessionId, startDate, endDate),
+      loadLogsBySessionId(sessionId, startDate, endDate),
+      loadEvaluationsBySessionId(sessionId, startDate, endDate),
+    ]);
+    const traceIds = new Set&lt;string&gt;();
+    let firstSessionStart: (typeof spans)[0] | undefined;
+    let lastSessionStart: (typeof spans)[0] | undefined;
+    let sessionStartCount = 0;
+    const tokenProgressionRaw: Array&lt;{ messages: number; inputTokens: number; outputTokens: number; cacheRead: number; cacheCreation: number; model: string }&gt; = [];
+    const toolUsage: Record&lt;string, number&gt; = {};
+    const mcpUsage: Record&lt;string, number&gt; = {};
+    const spanBreakdown: Record&lt;string, number&gt; = {};
+    const hookDurations: Record&lt;string, number[]&gt; = {};
+    const errorsByCategory: Record&lt;string, number&gt; = {};
+    const errorDetails: Array&lt;{ spanName: string; tool?: string; errorType?: string; filePath?: string }&gt; = [];
+    const agentAcc = Object.create(null) as Record&lt;string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }&gt;;
+    const fileCount: Record&lt;string, number&gt; = {};
+    const gitCommits: Array&lt;{ subject: string; body: string; files: string }&gt; = [];
+    let alertTotalFired = 0;
+    let alertStopEvents = 0;
+    const codeStructure: Array&lt;{ file: string; lines: number; exports: number; functions: number; hasTypes: boolean; score: number; tool: string }&gt; = [];
+    const agentMapForEval = new Map&lt;number, string&gt;();
+    const stepScores: StepScore[] = [];
+    for (let i = 0; i &lt; spans.length; i++) {
+      const s = spans[i];
+      const hookName = spanAttr&lt;string&gt;(s, &apos;hook.name&apos;);
+      const hookType = spanAttr&lt;string&gt;(s, &apos;hook.type&apos;);
+      const hookTrigger = spanAttr&lt;string&gt;(s, &apos;hook.trigger&apos;);
+      if (s.traceId) traceIds.add(s.traceId);
+      if (hookName === HOOK_NAME.SESSION_START) {
+        if (!firstSessionStart) firstSessionStart = s;
+        lastSessionStart = s;
+        sessionStartCount++;
+      }
+      if (hookName === HOOK_NAME.TOKEN_METRICS) {
+        tokenProgressionRaw.push({
+          messages: spanAttr&lt;number&gt;(s, &apos;tokens.messages&apos;) ?? 0,
+          inputTokens: spanAttr&lt;number&gt;(s, &apos;tokens.input&apos;) ?? 0,
+          outputTokens: spanAttr&lt;number&gt;(s, &apos;tokens.output&apos;) ?? 0,
+          cacheRead: spanAttr&lt;number&gt;(s, &apos;tokens.cache_read&apos;) ?? 0,
+          cacheCreation: spanAttr&lt;number&gt;(s, &apos;tokens.cache_creation&apos;) ?? 0,
+          model: spanAttr&lt;string&gt;(s, &apos;tokens.model&apos;) ?? &apos;&apos;,
+        });
+      }
+      if (hookTrigger === &apos;PostToolUse&apos;) {
+        if (hookType === &apos;builtin&apos;) incrementCount(toolUsage, spanAttr&lt;string&gt;(s, &apos;builtin.tool&apos;) ?? &apos;unknown&apos;);
+        else if (hookType === &apos;mcp&apos;) incrementCount(mcpUsage, spanAttr&lt;string&gt;(s, &apos;mcp.tool&apos;) ?? &apos;unknown&apos;);
+      }
+      incrementCount(spanBreakdown, s.name);
+      const ms = s.durationMs ?? 0;
+      if (ms &gt; 0) {
+        (hookDurations[s.name] ??= []).push(ms);
+      }
+      const hasError = spanAttr&lt;boolean&gt;(s, &apos;builtin.has_error&apos;) === true
+        || spanAttr&lt;boolean&gt;(s, &apos;agent.has_error&apos;) === true
+        || s.status?.code === OTEL_STATUS_ERROR_CODE;
+      if (hasError) {
+        const tool = spanAttr&lt;string&gt;(s, &apos;builtin.tool&apos;) ?? spanAttr&lt;string&gt;(s, &apos;agent.type&apos;) ?? &apos;unknown&apos;;
+        const errType = spanAttr&lt;string&gt;(s, &apos;builtin.error_type&apos;) ?? &apos;unknown&apos;;
+        incrementCount(errorsByCategory, `${tool} -&gt; ${errType}`);
+        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr&lt;string&gt;(s, &apos;builtin.file_path&apos;) });
+      }
+      if (hookName === HOOK_NAME.AGENT_POST_TOOL) {
+        const name = spanAttr&lt;string&gt;(s, &apos;gen_ai.agent.name&apos;) ?? &apos;unknown&apos;;
+        const agentEntry = (agentAcc[name] ??= { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 });
+        agentEntry.invocations++;
+        if (spanAttr&lt;boolean&gt;(s, &apos;agent.has_error&apos;)) agentEntry.errors++;
+        if (spanAttr&lt;boolean&gt;(s, &apos;agent.has_rate_limit&apos;)) agentEntry.hasRateLimit = true;
+        agentEntry.totalOutputSize += spanAttr&lt;number&gt;(s, &apos;agent.output_size&apos;) ?? 0;
+      }
+      const fp = spanAttr&lt;string&gt;(s, &apos;builtin.file_path&apos;);
+      if (fp) incrementCount(fileCount, fp);
+      if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
+        const raw = spanAttr&lt;string&gt;(s, &apos;git.command&apos;) ?? &apos;&apos;;
+        const filesMatch = raw.match(/git add (.+?)(?:\s+&amp;&amp;)/s);
+        const files = filesMatch ? filesMatch[1].trim() : &apos;&apos;;
+        const msgMatch = raw.match(/&lt;&lt;&apos;?EOF&apos;?\n([\s\S]+?)\nCo-Authored/);
+        const fullMessage = msgMatch ? msgMatch[1] : &apos;&apos;;
+        gitCommits.push({
+          subject: fullMessage ? fullMessage.split(&apos;\n&apos;)[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS),
+          body: fullMessage ? fullMessage.split(&apos;\n&apos;).slice(COMMIT_BODY_START_LINE_INDEX).join(&apos;\n&apos;).trim() : &apos;&apos;,
+          files,
+        });
+      }
+      if (hookName === HOOK_NAME.ALERT_EVALUATION) {
+        alertTotalFired += spanAttr&lt;number&gt;(s, &apos;alerts.triggered_count&apos;) ?? 0;
+        alertStopEvents++;
+      }
+      if (hookName === HOOK_NAME.CODE_STRUCTURE) {
+        codeStructure.push({
+          file: spanAttr&lt;string&gt;(s, &apos;code.structure.file&apos;) ?? &apos;&apos;,
+          lines: spanAttr&lt;number&gt;(s, &apos;code.structure.lines&apos;) ?? 0,
+          exports: spanAttr&lt;number&gt;(s, &apos;code.structure.exports&apos;) ?? 0,
+          functions: spanAttr&lt;number&gt;(s, &apos;code.structure.functions&apos;) ?? 0,
+          hasTypes: spanAttr&lt;boolean&gt;(s, &apos;code.structure.has_types&apos;) ?? false,
+          score: spanAttr&lt;number&gt;(s, &apos;code.structure.score&apos;) ?? 0,
+          tool: spanAttr&lt;string&gt;(s, &apos;code.structure.tool&apos;) ?? &apos;&apos;,
+        });
+      }
+      const agent = spanAttr&lt;string&gt;(s, &apos;agent.name&apos;) ?? spanAttr&lt;string&gt;(s, &apos;gen_ai.agent.name&apos;);
+      if (agent) agentMapForEval.set(i, agent);
+      stepScores.push({
+        step: i,
+        score: spanAttr&lt;number&gt;(s, &apos;evaluation.score&apos;) ?? (s.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+        explanation: s.name,
+      });
+    }
+    const dataSources = {
+      traces: { count: spans.length, traceIds: traceIds.size },
+      logs: { count: logs.length },
+      evaluations: { count: evaluations.length },
+      total: spans.length + logs.length + evaluations.length,
+    };
+    let tsMin = Infinity;
+    let tsMax = -Infinity;
+    const evalByName = Object.create(null) as Record&lt;string, { count: number; scores: number[] }&gt;;
+    for (const ev of evaluations) {
+      const t = parseTimestamp(ev.timestamp);
+      if (t !== null) {
+        if (t &lt; tsMin) tsMin = t;
+        if (t &gt; tsMax) tsMax = t;
+      }
+      const entry = (evalByName[ev.evaluationName] ??= { count: 0, scores: [] });
+      entry.count++;
+      if (ev.scoreValue != null &amp;&amp; Number.isFinite(ev.scoreValue)) {
+        entry.scores.push(ev.scoreValue);
+      }
+    }
+    const logBySeverity: Record&lt;string, number&gt; = Object.create(null);
+    for (const l of logs) {
+      const t = parseTimestamp(l.timestamp);
+      if (t !== null) {
+        if (t &lt; tsMin) tsMin = t;
+        if (t &gt; tsMax) tsMax = t;
+      }
+      incrementCount(logBySeverity, l.severity);
+    }
+    const timespan = tsMin &lt; Infinity ? {
+      start: new Date(tsMin).toISOString(),
+      end: new Date(tsMax).toISOString(),
+      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
+    } : null;
+    const sessionInfo = firstSessionStart ? {
+      projectName: spanAttr&lt;string&gt;(firstSessionStart, &apos;project.name&apos;) ?? &apos;unknown&apos;,
+      workingDirectory: spanAttr&lt;string&gt;(firstSessionStart, &apos;working.directory&apos;) ?? &apos;&apos;,
+      gitRepository: spanAttr&lt;string&gt;(firstSessionStart, &apos;git.repository&apos;) ?? &apos;&apos;,
+      gitBranch: spanAttr&lt;string&gt;(firstSessionStart, &apos;git.branch&apos;) ?? &apos;&apos;,
+      nodeVersion: spanAttr&lt;string&gt;(firstSessionStart, &apos;node.version&apos;) ?? &apos;&apos;,
+      resumeCount: sessionStartCount,
+      initialMessageCount: spanAttr&lt;number&gt;(firstSessionStart, &apos;context.message_count&apos;) ?? 0,
+      initialContextTokens: spanAttr&lt;number&gt;(firstSessionStart, &apos;context.estimated_tokens&apos;) ?? 0,
+      finalMessageCount: spanAttr&lt;number&gt;(lastSessionStart ?? firstSessionStart, &apos;context.message_count&apos;) ?? 0,
+      taskCount: spanAttr&lt;number&gt;(firstSessionStart, &apos;tasks.active&apos;) ?? 0,
+      uncommittedAtStart: spanAttr&lt;number&gt;(firstSessionStart, &apos;git.uncommitted&apos;) ?? 0,
+    } : null;
+    const tokenProgression = tokenProgressionRaw.slice().sort((a, b) =&gt; a.messages - b.messages);
+    const tokenTotals = {
+      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
+      models: {} as Record&lt;string, number&gt;,
+    };
+    for (const t of tokenProgression) {
+      tokenTotals.input += t.inputTokens;
+      tokenTotals.output += t.outputTokens;
+      tokenTotals.cacheRead += t.cacheRead;
+      tokenTotals.cacheCreation += t.cacheCreation;
+      tokenTotals.messages += t.messages;
+      if (t.model) incrementCount(tokenTotals.models, t.model);
+    }
+    const hookLatency: Record&lt;string, { count: number; avg: number; p50: number; p95: number; max: number }&gt; = {};
+    for (const [name, durations] of Object.entries(hookDurations)) {
+      hookLatency[name] = computeLatencyStats(durations);
+    }
+    const agentActivity = Object.entries(agentAcc).map(([agentName, d]) =&gt; ({
+      agentName,
+      invocations: d.invocations,
+      errors: d.errors,
+      hasRateLimit: d.hasRateLimit,
+      avgOutputSize: d.invocations &gt; 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+    }));
+    const fileAccess = Object.entries(fileCount)
+      .map(([path, count]) =&gt; ({ path, count }))
+      .sort((a, b) =&gt; b.count - a.count)
+      .slice(0, FILE_ACCESS_TOP_N);
+    const alertSummary = { totalFired: alertTotalFired, stopEvents: alertStopEvents };
+    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) =&gt; {
+      const { avg, min, max } = computeScoreStats(d.scores);
+      return { name, count: d.count, avg, min, max };
+    });
+    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
+    return c.json({
+      sessionId,
+      dataSources,
+      timespan,
+      sessionInfo,
+      tokenTotals,
+      tokenProgression,
+      toolUsage,
+      mcpUsage,
+      spanBreakdown,
+      hookLatency,
+      errors: { byCategory: errorsByCategory, details: errorDetails },
+      agentActivity,
+      fileAccess,
+      gitCommits,
+      alertSummary,
+      codeStructure,
+      evaluationBreakdown,
+      logSummary: {
+        bySeverity: logBySeverity,
+        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l =&gt; {
+          const entry: SafeLogEntry = {};
+          for (const key of LOG_SUMMARY_FIELDS) {
+            const val = l[key];
+            if (val !== undefined) (entry as Record&lt;string, unknown&gt;)[key] = val;
+          }
+          return entry;
+        }),
+      },
+      multiAgentEvaluation,
+      evaluations,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});</file><file path="src/contexts/AuthContext.tsx">import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from &apos;react&apos;;
+import { useAuth0, AUTH0_AUDIENCE } from &apos;../lib/auth0.js&apos;;
+import { API_BASE } from &apos;../lib/constants.js&apos;;
+import type { AppSession } from &apos;../types/auth.js&apos;;
+import { MeResponseSchema } from &apos;../lib/validation/auth-schemas.js&apos;;
+interface AuthContextValue {
+  session: AppSession | null;
+  isLoading: boolean;
+  signOut: () =&gt; Promise&lt;void&gt;;
+  getAccessToken: () =&gt; Promise&lt;string&gt;;
+}
+const AuthContext = createContext&lt;AuthContextValue | null&gt;(null);
+async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise&lt;AppSession | null&gt; {
+  try {
+    const res = await fetch(`${API_BASE}/api/me`, {
+      method: &apos;GET&apos;,
+      headers: { &apos;Authorization&apos;: `Bearer ${jwt}` },
+      signal,
+    });
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    const meResult = MeResponseSchema.safeParse(data);
+    if (!meResult.success) return null;
+    const me = meResult.data;
+    return {
+      email: me.email,
+      roles: me.roles,
+      permissions: me.permissions,
+      allowedViews: me.allowedViews,
+    };
+  } catch {
+    return null;
+  }
+}
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
+  const [session, setSession] = useState&lt;AppSession | null&gt;(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const getAccessToken = useCallback(
+    () =&gt; getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
+    [getAccessTokenSilently],
+  );
+  useEffect(() =&gt; {
+    if (auth0Loading) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    if (!isAuthenticated) {
+      Promise.resolve().then(() =&gt; {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+      });
+      return () =&gt; {
+        cancelled = true;
+      };
+    }
+    getAccessToken()
+      .then((jwt) =&gt; (cancelled ? null : fetchAppSession(jwt, controller.signal)))
+      .then((appSession) =&gt; {
+        if (!cancelled) {
+          setSession(appSession);
+          setIsLoading(false);
+        }
+      })
+      .catch(() =&gt; {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+      });
+    return () =&gt; {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [auth0Loading, isAuthenticated, getAccessToken]);
+  const handleSignOut = useCallback(async () =&gt; {
+    if (session) {
+      const jwt = await getAccessToken().catch(() =&gt; null);
+      if (jwt) void fetch(`${API_BASE}/api/logout`, { method: &apos;POST&apos;, headers: { &apos;Authorization&apos;: `Bearer ${jwt}` } }).catch(() =&gt; undefined);
+    }
+    logout({ logoutParams: { returnTo: window.location.origin } });
+    setSession(null);
+  }, [session, logout, getAccessToken]);
+  return (
+    &lt;AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}&gt;
+      {children}
+    &lt;/AuthContext.Provider&gt;
+  );
+}
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error(&apos;useAuth must be used within an AuthProvider&apos;);
+  return ctx;
+}</file><file path="src/lib/activity-logger.ts">import { API_BASE } from &apos;./constants.js&apos;;
+import type { FrontendActivityEvent } from &apos;../types/activity.js&apos;;
+const ACTIVITY_TIMEOUT_MS = 3000;
+export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise&lt;void&gt; {
+  const controller = new AbortController();
+  const timeout = setTimeout(() =&gt; controller.abort(), ACTIVITY_TIMEOUT_MS);
+  try {
+    await fetch(`${API_BASE}/api/activity`, {
+      method: &apos;POST&apos;,
+      headers: {
+        &apos;Authorization&apos;: `Bearer ${jwt}`,
+        &apos;Content-Type&apos;: &apos;application/json&apos;,
+      },
+      body: JSON.stringify({ activity_type: activityType }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (import.meta.env?.DEV) {
+      console.warn(&apos;[activity-logger] Failed to post activity event:&apos;, activityType, err);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}</file><file path="src/lib/constants.ts">import { z } from &apos;zod&apos;;
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = &apos;Invalid response shape&apos;,
+  MissingPeriodOrAgents = &apos;Invalid response: missing period or agents&apos;,
+  InvalidPeriod = &apos;Invalid period. Must be 24h, 7d, or 30d.&apos;,
+  InvalidRole = &apos;Invalid role. Must be executive, operator, or auditor.&apos;,
+  InvalidMetricNameFormat = &apos;Invalid metric name format&apos;,
+  InvalidTopN = &apos;Invalid topN parameter. Must be integer 1-50.&apos;,
+  InvalidBucketCount = &apos;Invalid bucketCount parameter. Must be integer 2-20.&apos;,
+  InvalidLimit = &apos;Invalid limit. Must be integer 1-200.&apos;,
+  InvalidOffset = &apos;Invalid offset. Must be non-negative integer.&apos;,
+  InvalidSortBy = &apos;Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.&apos;,
+  InvalidScoreLabel = &apos;Invalid scoreLabel. Max 100 characters.&apos;,
+  InvalidBuckets = &apos;Invalid buckets. Must be integer 3-30.&apos;,
+  InvalidInputKey = &apos;Invalid inputKey. Must be traceId or sessionId.&apos;,
+  InvalidSessionIdFormat = &apos;Invalid sessionId format&apos;,
+  InvalidTraceId = &apos;Invalid traceId&apos;,
+}
+export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? &apos;http://127.0.0.1:3001&apos; : &apos;&apos;);
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+export const InputKeySchema = z.enum([&apos;traceId&apos;, &apos;sessionId&apos;]).default(&apos;traceId&apos;);
+export type InputKey = z.infer&lt;typeof InputKeySchema&gt;;
+export const DEFAULT_INPUT_KEY: InputKey = &apos;traceId&apos;;
+export const SortBySchema = z.enum([&apos;score_asc&apos;, &apos;score_desc&apos;, &apos;timestamp_desc&apos;]).default(&apos;timestamp_desc&apos;);
+export type SortBy = z.infer&lt;typeof SortBySchema&gt;;
+export const DEFAULT_SORT_BY: SortBy = &apos;timestamp_desc&apos;;
+export const RoleSchema = z.enum([&apos;executive&apos;, &apos;operator&apos;, &apos;auditor&apos;]);
+export type Role = z.infer&lt;typeof RoleSchema&gt;;
+export const ROLES = RoleSchema.options;
+export const DEFAULT_ROLE: Role = &apos;executive&apos;;
+export const KNOWN_SOURCE_TYPES = new Set([&apos;active&apos;, &apos;lazy&apos;, &apos;builtin&apos;, &apos;skill&apos;, &apos;settings&apos;, &apos;unknown&apos;]);
+export const TIME_MS = {
+  HOUR: 60 * 60 * 1000,
+  DAY: 24 * 60 * 60 * 1000,
+} as const;
+export const VALID_PERIODS: Record&lt;string, number&gt; = { &apos;24h&apos;: 1, &apos;7d&apos;: 7, &apos;30d&apos;: 30 };
+export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
+export const PeriodEnum = z.enum(PERIOD_KEYS);
+export const DEFAULT_PERIOD = PeriodEnum.parse(&apos;7d&apos;) as &apos;7d&apos;;
+export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse(&apos;30d&apos;) as &apos;30d&apos;;
+export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
+export const PERIOD_MS: Record&lt;string, number&gt; = Object.fromEntries(
+  Object.entries(VALID_PERIODS).map(([k, days]) =&gt; [k, days * TIME_MS.DAY]),
+);
+export function computePeriodDates(period: string): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS[&apos;7d&apos;]));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
+export const LLM_SAMPLE_RATE = 10;
+export const SCORE_THRESHOLD_GREEN = 0.8;
+export const SCORE_THRESHOLD_YELLOW = 0.5;
+export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
+export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+export const MAX_ERROR_ROWS = 10;
+export const MAX_HALLUCINATION_ROWS = 8;
+export const MAX_FAILED_EVAL_ROWS = 6;
+export const LIVE_WINDOW_MS = TIME_MS.DAY;
+export const QUERY_RETRY_COUNT = 2;
+export const POLL_INTERVAL_MS = 30_000;
+export const RETRY_DELAY_BASE = 1_000;
+export const RETRY_DELAY_CAP = 30_000;
+export const MAX_IDS = 50;
+export const EVAL_LIMIT = 100;
+export const SCORE_DISPLAY_PRECISION = 3;
+export const SCORE_CHIP_PRECISION = 2;
+export const SCORE_FORMAT_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const STALE_TIME = {
+  DEFAULT: 25_000,
+  DETAIL: 30_000,
+  AGGREGATE: 60_000,
+} as const;
+export const DEFAULT_TOP_N = 5;
+export const DEFAULT_BUCKET_COUNT = 10;
+export const SKELETON_HEIGHT_SM = 200;
+export const SKELETON_HEIGHT_MD = 300;
+export const SKELETON_HEIGHT_LG = 400;
+export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
+export const DEFAULT_PAGE_LIMIT = 50;
+export const HEATMAP_ROW_HEADER_WIDTH = 80;
+export const HEATMAP_COL_HEADER_HEIGHT = 32;
+export const COVERAGE_GRID_HEADER_WIDTH = 120;
+export const COVERAGE_GRID_CELL_SIZE = 28;
+export const COVERAGE_GRID_MAX_INPUTS = 30;
+export const FUNNEL_DROPOFF_WARN_PCT = 20;
+export const WORKFLOW_FILTER_MIN_AGENTS = 2;
+export const SPAN_TREE_INDENT = 20;
+export const SPAN_TREE_BASE_PADDING = 8;
+export const SPARKLINE_WIDTH = 160;
+export const SPARKLINE_HEIGHT = 28;
+export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
+export const VARIANCE_LOW_PCT = 20;
+export const VARIANCE_MEDIUM_PCT = 50;
+export const CHART_HEIGHT = 200;
+export const CHART_STROKE_WIDTH = 2;
+export const CHART_DOT_RADIUS = 4;
+export const CHART_DOT_RADIUS_ACTIVE = 6;
+export const CHART_DOT_RADIUS_PROJECTED = 3;
+export const CHART_DASH_THRESHOLD = &apos;6 3&apos;;
+export const CHART_DASH_PROJECTED = &apos;6 4&apos;;
+export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
+export const CHART_COLORS = {
+  line: &apos;#58a6ff&apos;,
+  grid: &apos;#30363d&apos;,
+  text: &apos;#8b949e&apos;,
+  surface: &apos;#1f2937&apos;,
+  tooltip: &apos;#161b22&apos;,
+  warning: &apos;#d29922&apos;,
+  critical: &apos;#f85149&apos;,
+} as const;
+export const AGENT_PALETTE = [
+  &apos;#6366f1&apos;, &apos;#ec4899&apos;, &apos;#14b8a6&apos;, &apos;#f59e0b&apos;,
+  &apos;#8b5cf6&apos;, &apos;#06b6d4&apos;, &apos;#f97316&apos;, &apos;#84cc16&apos;,
+] as const;
+export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
+export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: &apos;3 3&apos; };
+export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
+export const CHART_TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: CHART_COLORS.tooltip,
+  border: `1px solid ${CHART_COLORS.grid}`,
+  borderRadius: &apos;var(--radius)&apos;,
+  color: CHART_COLORS.text,
+  fontSize: 12,
+};
+export const CHART_TOOLTIP_LABEL_STYLE = { color: &apos;#e6edf3&apos; };
+export const CHART_YAXIS_WIDTH = 48;
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string =&gt; v.toFixed(2);</file><file path="src/lib/supabase-rest.ts">export function supabasePost(
+  url: string,
+  body: unknown,
+  key: string,
+): void {
+  const controller = new AbortController();
+  const timeout = setTimeout(() =&gt; controller.abort(), 3000);
+  void fetch(url, {
+    method: &apos;POST&apos;,
+    headers: {
+      &apos;apikey&apos;: key,
+      &apos;Authorization&apos;: `Bearer ${key}`,
+      &apos;Content-Type&apos;: &apos;application/json&apos;,
+      &apos;Prefer&apos;: &apos;return=minimal&apos;,
+    },
+    body: JSON.stringify(body),
+    signal: controller.signal,
+  }).catch(() =&gt; undefined).finally(() =&gt; clearTimeout(timeout));
+}</file><file path="src/pages/AdminPage.tsx">import { useState, useRef, useCallback } from &apos;react&apos;;
+import { format } from &apos;date-fns&apos;;
+import { useApiQuery } from &apos;../hooks/useApiQuery.js&apos;;
+import { useAuth } from &apos;../contexts/AuthContext.js&apos;;
+import { DetailPageHeader } from &apos;../components/DetailPageHeader.js&apos;;
+import { PageShell } from &apos;../components/PageShell.js&apos;;
+import { MonoTableHead } from &apos;../components/MonoTableHead.js&apos;;
+import { API_BASE, SKELETON_HEIGHT_MD } from &apos;../lib/constants.js&apos;;
+import type { AdminUser, AdminRole } from &apos;../lib/validation/auth-schemas.js&apos;;
+const ADMIN_TABLE_COLUMNS = [
+  { label: &apos;Email&apos;, align: &apos;left&apos; as const },
+  { label: &apos;Roles&apos;, align: &apos;left&apos; as const },
+  { label: &apos;Assign Role&apos;, align: &apos;left&apos; as const },
+  { label: &apos;Joined&apos;, align: &apos;right&apos; as const },
+];
+function RoleChip({
+  role,
+  onRevoke,
+  revoking,
+}: {
+  role: { id: string; name: string };
+  onRevoke: (roleId: string, roleName: string) =&gt; void;
+  revoking: boolean;
+}) {
+  return (
+    &lt;span className=&quot;chip&quot;&gt;
+      {role.name}
+      &lt;button
+        className=&quot;chip-remove&quot;
+        onClick={() =&gt; onRevoke(role.id, role.name)}
+        disabled={revoking}
+        aria-label={`Remove role ${role.name}`}
+      &gt;
+        &amp;times;
+      &lt;/button&gt;
+    &lt;/span&gt;
+  );
+}
+function UserRow({
+  user,
+  availableRoles,
+  onMutationStart,
+  onMutationEnd,
+}: {
+  user: AdminUser;
+  availableRoles: AdminRole[];
+  onMutationStart: () =&gt; string;
+  onMutationEnd: (id: string) =&gt; void;
+}) {
+  const [selectedRoleId, setSelectedRoleId] = useState(&apos;&apos;);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState&lt;string | null&gt;(null);
+  const { getAccessToken } = useAuth();
+  const assignableRoles = availableRoles.filter(
+    (r) =&gt; !user.roles.some((ur) =&gt; ur.id === r.id),
+  );
+  async function adminFetch(path: string, method: string, body?: unknown): Promise&lt;Response&gt; {
+    const token = await getAccessToken();
+    return fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        &apos;Content-Type&apos;: &apos;application/json&apos;,
+      },
+      ...(body !== undefined &amp;&amp; { body: JSON.stringify(body) }),
+    });
+  }
+  async function handleAssign() {
+    if (!selectedRoleId) return;
+    setBusy(true);
+    setError(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(`/api/admin/users/${user.id}/roles`, &apos;POST&apos;, { role_id: selectedRoleId });
+      if (!res.ok) {
+        const text = await res.text().catch(() =&gt; &apos;&apos;);
+        setError(text || &apos;Failed to assign role&apos;);
+      } else {
+        setSelectedRoleId(&apos;&apos;);
+      }
+    } catch {
+      setError(&apos;Network error&apos;);
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+  async function handleRevoke(roleId: string, roleName: string) {
+    if (!window.confirm(`Remove role &quot;${roleName}&quot; from this user?`)) return;
+    setBusy(true);
+    setError(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, &apos;DELETE&apos;);
+      if (!res.ok) {
+        const text = await res.text().catch(() =&gt; &apos;&apos;);
+        setError(text || &apos;Failed to revoke role&apos;);
+      }
+    } catch {
+      setError(&apos;Network error&apos;);
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+  return (
+    &lt;tr className=&quot;border-b&quot;&gt;
+      &lt;td className=&quot;cell-pad text-left&quot;&gt;
+        &lt;span className=&quot;mono-sm&quot;&gt;{user.email ?? &lt;span className=&quot;text-muted&quot;&gt;(no email)&lt;/span&gt;}&lt;/span&gt;
+      &lt;/td&gt;
+      &lt;td className=&quot;cell-pad text-left&quot;&gt;
+        &lt;div className=&quot;chip-list&quot;&gt;
+          {user.roles.length === 0 &amp;&amp; &lt;span className=&quot;text-muted text-xs&quot;&gt;No roles&lt;/span&gt;}
+          {user.roles.map((r) =&gt; (
+            &lt;RoleChip key={r.id} role={r} onRevoke={handleRevoke} revoking={busy} /&gt;
+          ))}
+        &lt;/div&gt;
+        {error &amp;&amp; &lt;div className=&quot;text-xs text-error mt-1&quot;&gt;{error}&lt;/div&gt;}
+      &lt;/td&gt;
+      &lt;td className=&quot;cell-pad text-left&quot;&gt;
+        &lt;div className=&quot;inline-flex-center gap-4&quot;&gt;
+          &lt;select
+            className=&quot;select-sm&quot;
+            value={selectedRoleId}
+            onChange={(e) =&gt; setSelectedRoleId(e.target.value)}
+            disabled={busy || assignableRoles.length === 0}
+            aria-label={`Assign role to ${user.email ?? user.id}`}
+          &gt;
+            &lt;option value=&quot;&quot;&gt;Select role...&lt;/option&gt;
+            {assignableRoles.map((r) =&gt; (
+              &lt;option key={r.id} value={r.id}&gt;{r.name}&lt;/option&gt;
+            ))}
+          &lt;/select&gt;
+          &lt;button
+            className=&quot;btn-sm&quot;
+            onClick={handleAssign}
+            disabled={busy || !selectedRoleId}
+          &gt;
+            Assign
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/td&gt;
+      &lt;td className=&quot;cell-pad text-right text-muted text-xs nowrap&quot;&gt;
+        {user.created_at ? format(new Date(user.created_at), &apos;PP&apos;) : &apos;—&apos;}
+      &lt;/td&gt;
+    &lt;/tr&gt;
+  );
+}
+export function AdminPage() {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const pendingMutationsRef = useRef&lt;Set&lt;string&gt;&gt;(new Set());
+  const mutationIdRef = useRef(0);
+  const onMutationStart = useCallback((): string =&gt; {
+    const id = String(++mutationIdRef.current);
+    pendingMutationsRef.current.add(id);
+    return id;
+  }, []);
+  const onMutationEnd = useCallback((id: string) =&gt; {
+    pendingMutationsRef.current.delete(id);
+    if (pendingMutationsRef.current.size === 0) {
+      setRefreshKey((k) =&gt; k + 1);
+    }
+  }, []);
+  const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery&lt;AdminUser[]&gt;(
+    [&apos;admin&apos;, &apos;users&apos;, refreshKey],
+    () =&gt; `${API_BASE}/api/admin/users`,
+  );
+  const { data: roles, isLoading: rolesLoading, error: rolesError } = useApiQuery&lt;AdminRole[]&gt;(
+    [&apos;admin&apos;, &apos;roles&apos;],
+    () =&gt; `${API_BASE}/api/admin/roles`,
+  );
+  const isLoading = usersLoading || rolesLoading;
+  const error = usersError ?? rolesError;
+  return (
+    &lt;PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}&gt;
+      &lt;DetailPageHeader title=&quot;User Management&quot; /&gt;
+      &lt;div className=&quot;card&quot;&gt;
+        {!users || users.length === 0 ? (
+          &lt;div className=&quot;empty-state text-secondary&quot;&gt;No users found.&lt;/div&gt;
+        ) : (
+          &lt;div className=&quot;table-scroll&quot;&gt;
+            &lt;table className=&quot;mono-table&quot;&gt;
+              &lt;MonoTableHead columns={ADMIN_TABLE_COLUMNS} /&gt;
+              &lt;tbody&gt;
+                {users.map((user) =&gt; (
+                  &lt;UserRow
+                    key={user.id}
+                    user={user}
+                    availableRoles={roles ?? []}
+                    onMutationStart={onMutationStart}
+                    onMutationEnd={onMutationEnd}
+                  /&gt;
+                ))}
+              &lt;/tbody&gt;
+            &lt;/table&gt;
+          &lt;/div&gt;
+        )}
+      &lt;/div&gt;
+    &lt;/PageShell&gt;
+  );
+}</file><file path="src/pages/RoutingTelemetryPage.tsx">import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from &apos;../hooks/useRoutingTelemetry.js&apos;;
+import { PageShell } from &apos;../components/PageShell.js&apos;;
+import { SKELETON_HEIGHT_MD } from &apos;../lib/constants.js&apos;;
+import { formatPercent, byValueDesc } from &apos;../lib/quality-utils.js&apos;;
+import type { Period } from &apos;../types.js&apos;;
+const PERCENT_MULTIPLIER = 100;
+function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
+  return &apos;strategy&apos; in g &amp;&amp; &apos;fallbackRate&apos; in g;
+}
+export function RoutingTelemetryPage({ period }: { period: Period }) {
+  const { data, isLoading, error } = useRoutingTelemetry(period);
+  return (
+    &lt;PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}&gt;
+      {data &amp;&amp; data.summary.routedSpans === 0 ? (
+        &lt;div className=&quot;empty-state&quot;&gt;
+          &lt;h2&gt;No Routing Telemetry&lt;/h2&gt;
+          &lt;p&gt;No routed spans found for this period. Routing telemetry is recorded when the request model differs from the actual response model.&lt;/p&gt;
+        &lt;/div&gt;
+      ) : data ? (
+        &lt;&gt;
+          &lt;h2 className=&quot;text-lg mb-3&quot;&gt;Routing Telemetry&lt;/h2&gt;
+          &lt;div className=&quot;card mb-3&quot;&gt;
+            &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.summary.routedSpans}&lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Routed Spans&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;
+                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
+                &lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Fallback Rate&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;${data.costSavings.toFixed(4)}&lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Cost Savings&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.totalSpansScanned}&lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Spans Scanned&lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          {Object.keys(data.providerDistribution).length &gt; 0 &amp;&amp; (
+            &lt;div className=&quot;card mb-3&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Provider Distribution&lt;/h3&gt;
+              &lt;table className=&quot;data-table&quot;&gt;
+                &lt;thead&gt;
+                  &lt;tr&gt;
+                    &lt;th&gt;Provider&lt;/th&gt;
+                    &lt;th&gt;Count&lt;/th&gt;
+                    &lt;th&gt;Share&lt;/th&gt;
+                  &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                  {Object.entries(data.providerDistribution)
+                    .sort(byValueDesc)
+                    .map(([provider, count]) =&gt; (
+                      &lt;tr key={provider}&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{provider}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                        &lt;/td&gt;
+                      &lt;/tr&gt;
+                    ))}
+                &lt;/tbody&gt;
+              &lt;/table&gt;
+            &lt;/div&gt;
+          )}
+          {Object.keys(data.modelDistribution).length &gt; 0 &amp;&amp; (
+            &lt;div className=&quot;card mb-3&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Model Distribution&lt;/h3&gt;
+              &lt;table className=&quot;data-table&quot;&gt;
+                &lt;thead&gt;
+                  &lt;tr&gt;
+                    &lt;th&gt;Model&lt;/th&gt;
+                    &lt;th&gt;Count&lt;/th&gt;
+                    &lt;th&gt;Share&lt;/th&gt;
+                  &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                  {Object.entries(data.modelDistribution)
+                    .sort(byValueDesc)
+                    .map(([model, count]) =&gt; (
+                      &lt;tr key={model}&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{model}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                        &lt;/td&gt;
+                      &lt;/tr&gt;
+                    ))}
+                &lt;/tbody&gt;
+              &lt;/table&gt;
+            &lt;/div&gt;
+          )}
+          {data.groups.length &gt; 0 &amp;&amp; data.groups.some(isStrategyGroup) &amp;&amp; (
+            &lt;div className=&quot;card mb-3&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Strategy Breakdown&lt;/h3&gt;
+              &lt;table className=&quot;data-table&quot;&gt;
+                &lt;thead&gt;
+                  &lt;tr&gt;
+                    &lt;th&gt;Strategy&lt;/th&gt;
+                    &lt;th&gt;Count&lt;/th&gt;
+                    &lt;th&gt;Fallbacks&lt;/th&gt;
+                    &lt;th&gt;Fallback Rate&lt;/th&gt;
+                  &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                  {data.groups
+                    .filter(isStrategyGroup)
+                    .sort((a, b) =&gt; b.count - a.count)
+                    .map((g) =&gt; (
+                      &lt;tr key={g.strategy}&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{g.strategy}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{g.count}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{g.fallbackCount}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{formatPercent(g.fallbackRate * PERCENT_MULTIPLIER)}&lt;/td&gt;
+                      &lt;/tr&gt;
+                    ))}
+                &lt;/tbody&gt;
+              &lt;/table&gt;
+            &lt;/div&gt;
+          )}
+          {data.routingLatency &amp;&amp; (
+            &lt;div className=&quot;card&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;
+                Routing Latency
+                &lt;span className=&quot;text-secondary text-xs font-normal ml-2&quot;&gt;
+                  ({data.routingLatency.source === &apos;classification_time&apos; ? &apos;classification time&apos; : &apos;span duration&apos;})
+                &lt;/span&gt;
+              &lt;/h3&gt;
+              &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
+                &lt;div className=&quot;text-center&quot;&gt;
+                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p50.toFixed(0)}ms&lt;/div&gt;
+                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p50&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div className=&quot;text-center&quot;&gt;
+                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p99.toFixed(0)}ms&lt;/div&gt;
+                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p99&lt;/div&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          )}
+        &lt;/&gt;
+      ) : null}
+    &lt;/PageShell&gt;
+  );
+}</file><file path="src/stubs/auth0-e2e.ts">import { type ReactNode, createElement } from &apos;react&apos;;
+const TEST_TOKEN = &apos;test-token&apos;;
+export function Auth0Provider({ children }: { children: ReactNode }) {
+  return createElement(&apos;div&apos;, { &apos;data-testid&apos;: &apos;auth0-stub&apos; }, children);
+}
+export function useAuth0() {
+  return {
+    isLoading: false,
+    isAuthenticated: true,
+    user: { email: &apos;test@example.com&apos;, sub: &apos;test-user-id&apos; },
+    getAccessTokenSilently: () =&gt; Promise.resolve(TEST_TOKEN),
+    logout: () =&gt; Promise.resolve(),
+    loginWithRedirect: () =&gt; Promise.resolve(),
+  };
+}</file><file path="src/types/workflow-graph.ts">export type WorkflowShape = &apos;single_agent&apos; | &apos;linear&apos; | &apos;branching&apos; | &apos;cyclic&apos;;
+export interface WorkflowNode {
+  id: string;
+  label: string;
+  evaluationScore: number | null;
+  toolCallCount: number;
+  totalTokens: number | null;
+  durationMs: number;
+  turnCount: number;
+  hasError: boolean;
+}
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  handoffScore: number | null;
+  contextPreserved: boolean;
+  label?: string;
+}
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  rootNodeId: string | null;
+  workflowShape: WorkflowShape;
+  droppedTurns: number;
+}</file><file path="src/components/WorkflowTimeline.tsx">import React from &apos;react&apos;;
 import { scoreColor, agentColor } from &apos;../lib/quality-utils.js&apos;;
 import { EmptyState } from &apos;./EmptyState.js&apos;;
 import type { TurnLevelResult, HandoffEvaluation } from &apos;../types.js&apos;;
@@ -15036,179 +15790,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
       &lt;/div&gt;
     &lt;/div&gt;
   );
-}</file><file path="src/lib/activity-logger.ts">import { API_BASE } from &apos;./constants.js&apos;;
-import type { FrontendActivityEvent } from &apos;../types/activity.js&apos;;
-const ACTIVITY_TIMEOUT_MS = 3000;
-export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise&lt;void&gt; {
-  const controller = new AbortController();
-  const timeout = setTimeout(() =&gt; controller.abort(), ACTIVITY_TIMEOUT_MS);
-  try {
-    await fetch(`${API_BASE}/api/activity`, {
-      method: &apos;POST&apos;,
-      headers: {
-        &apos;Authorization&apos;: `Bearer ${jwt}`,
-        &apos;Content-Type&apos;: &apos;application/json&apos;,
-      },
-      body: JSON.stringify({ activity_type: activityType }),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (import.meta.env?.DEV) {
-      console.warn(&apos;[activity-logger] Failed to post activity event:&apos;, activityType, err);
-    }
-  } finally {
-    clearTimeout(timeout);
-  }
-}</file><file path="src/lib/constants.ts">import { z } from &apos;zod&apos;;
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = &apos;Invalid response shape&apos;,
-  MissingPeriodOrAgents = &apos;Invalid response: missing period or agents&apos;,
-  InvalidPeriod = &apos;Invalid period. Must be 24h, 7d, or 30d.&apos;,
-  InvalidRole = &apos;Invalid role. Must be executive, operator, or auditor.&apos;,
-  InvalidMetricNameFormat = &apos;Invalid metric name format&apos;,
-  InvalidTopN = &apos;Invalid topN parameter. Must be integer 1-50.&apos;,
-  InvalidBucketCount = &apos;Invalid bucketCount parameter. Must be integer 2-20.&apos;,
-  InvalidLimit = &apos;Invalid limit. Must be integer 1-200.&apos;,
-  InvalidOffset = &apos;Invalid offset. Must be non-negative integer.&apos;,
-  InvalidSortBy = &apos;Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.&apos;,
-  InvalidScoreLabel = &apos;Invalid scoreLabel. Max 100 characters.&apos;,
-  InvalidBuckets = &apos;Invalid buckets. Must be integer 3-30.&apos;,
-  InvalidInputKey = &apos;Invalid inputKey. Must be traceId or sessionId.&apos;,
-  InvalidSessionIdFormat = &apos;Invalid sessionId format&apos;,
-  InvalidTraceId = &apos;Invalid traceId&apos;,
-}
-export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? &apos;http://127.0.0.1:3001&apos; : &apos;&apos;);
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-export const InputKeySchema = z.enum([&apos;traceId&apos;, &apos;sessionId&apos;]).default(&apos;traceId&apos;);
-export type InputKey = z.infer&lt;typeof InputKeySchema&gt;;
-export const DEFAULT_INPUT_KEY: InputKey = &apos;traceId&apos;;
-export const SortBySchema = z.enum([&apos;score_asc&apos;, &apos;score_desc&apos;, &apos;timestamp_desc&apos;]).default(&apos;timestamp_desc&apos;);
-export type SortBy = z.infer&lt;typeof SortBySchema&gt;;
-export const DEFAULT_SORT_BY: SortBy = &apos;timestamp_desc&apos;;
-export const RoleSchema = z.enum([&apos;executive&apos;, &apos;operator&apos;, &apos;auditor&apos;]);
-export type Role = z.infer&lt;typeof RoleSchema&gt;;
-export const ROLES = RoleSchema.options;
-export const DEFAULT_ROLE: Role = &apos;executive&apos;;
-export const KNOWN_SOURCE_TYPES = new Set([&apos;active&apos;, &apos;lazy&apos;, &apos;builtin&apos;, &apos;skill&apos;, &apos;settings&apos;, &apos;unknown&apos;]);
-export const TIME_MS = {
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-} as const;
-export const VALID_PERIODS: Record&lt;string, number&gt; = { &apos;24h&apos;: 1, &apos;7d&apos;: 7, &apos;30d&apos;: 30 };
-export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
-export const PeriodEnum = z.enum(PERIOD_KEYS);
-export const DEFAULT_PERIOD = PeriodEnum.parse(&apos;7d&apos;) as &apos;7d&apos;;
-export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse(&apos;30d&apos;) as &apos;30d&apos;;
-export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
-export const PERIOD_MS: Record&lt;string, number&gt; = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) =&gt; [k, days * TIME_MS.DAY]),
-);
-export function computePeriodDates(period: string): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS[&apos;7d&apos;]));
-  return { start: start.toISOString(), end: now.toISOString() };
-}
-export const LLM_SAMPLE_RATE = 10;
-export const SCORE_THRESHOLD_GREEN = 0.8;
-export const SCORE_THRESHOLD_YELLOW = 0.5;
-export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-export const MAX_ERROR_ROWS = 10;
-export const MAX_HALLUCINATION_ROWS = 8;
-export const MAX_FAILED_EVAL_ROWS = 6;
-export const LIVE_WINDOW_MS = TIME_MS.DAY;
-export const QUERY_RETRY_COUNT = 2;
-export const POLL_INTERVAL_MS = 30_000;
-export const RETRY_DELAY_BASE = 1_000;
-export const RETRY_DELAY_CAP = 30_000;
-export const MAX_IDS = 50;
-export const EVAL_LIMIT = 100;
-export const SCORE_DISPLAY_PRECISION = 3;
-export const SCORE_CHIP_PRECISION = 2;
-export const SCORE_FORMAT_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const STALE_TIME = {
-  DEFAULT: 25_000,
-  DETAIL: 30_000,
-  AGGREGATE: 60_000,
-} as const;
-export const DEFAULT_TOP_N = 5;
-export const DEFAULT_BUCKET_COUNT = 10;
-export const SKELETON_HEIGHT_SM = 200;
-export const SKELETON_HEIGHT_MD = 300;
-export const SKELETON_HEIGHT_LG = 400;
-export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
-export const DEFAULT_PAGE_LIMIT = 50;
-export const HEATMAP_ROW_HEADER_WIDTH = 80;
-export const HEATMAP_COL_HEADER_HEIGHT = 32;
-export const COVERAGE_GRID_HEADER_WIDTH = 120;
-export const COVERAGE_GRID_CELL_SIZE = 28;
-export const COVERAGE_GRID_MAX_INPUTS = 30;
-export const FUNNEL_DROPOFF_WARN_PCT = 20;
-export const WORKFLOW_FILTER_MIN_AGENTS = 2;
-export const SPAN_TREE_INDENT = 20;
-export const SPAN_TREE_BASE_PADDING = 8;
-export const SPARKLINE_WIDTH = 160;
-export const SPARKLINE_HEIGHT = 28;
-export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
-export const VARIANCE_LOW_PCT = 20;
-export const VARIANCE_MEDIUM_PCT = 50;
-export const CHART_HEIGHT = 200;
-export const CHART_STROKE_WIDTH = 2;
-export const CHART_DOT_RADIUS = 4;
-export const CHART_DOT_RADIUS_ACTIVE = 6;
-export const CHART_DOT_RADIUS_PROJECTED = 3;
-export const CHART_DASH_THRESHOLD = &apos;6 3&apos;;
-export const CHART_DASH_PROJECTED = &apos;6 4&apos;;
-export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-export const CHART_COLORS = {
-  line: &apos;#58a6ff&apos;,
-  grid: &apos;#30363d&apos;,
-  text: &apos;#8b949e&apos;,
-  surface: &apos;#1f2937&apos;,
-  tooltip: &apos;#161b22&apos;,
-  warning: &apos;#d29922&apos;,
-  critical: &apos;#f85149&apos;,
-} as const;
-export const AGENT_PALETTE = [
-  &apos;#6366f1&apos;, &apos;#ec4899&apos;, &apos;#14b8a6&apos;, &apos;#f59e0b&apos;,
-  &apos;#8b5cf6&apos;, &apos;#06b6d4&apos;, &apos;#f97316&apos;, &apos;#84cc16&apos;,
-] as const;
-export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
-export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: &apos;3 3&apos; };
-export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
-export const CHART_TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: CHART_COLORS.tooltip,
-  border: `1px solid ${CHART_COLORS.grid}`,
-  borderRadius: &apos;var(--radius)&apos;,
-  color: CHART_COLORS.text,
-  fontSize: 12,
-};
-export const CHART_TOOLTIP_LABEL_STYLE = { color: &apos;#e6edf3&apos; };
-export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string =&gt; v.toFixed(2);</file><file path="src/lib/supabase-rest.ts">export function supabasePost(
-  url: string,
-  body: unknown,
-  key: string,
-): void {
-  const controller = new AbortController();
-  const timeout = setTimeout(() =&gt; controller.abort(), 3000);
-  void fetch(url, {
-    method: &apos;POST&apos;,
-    headers: {
-      &apos;apikey&apos;: key,
-      &apos;Authorization&apos;: `Bearer ${key}`,
-      &apos;Content-Type&apos;: &apos;application/json&apos;,
-      &apos;Prefer&apos;: &apos;return=minimal&apos;,
-    },
-    body: JSON.stringify(body),
-    signal: controller.signal,
-  }).catch(() =&gt; undefined).finally(() =&gt; clearTimeout(timeout));
 }</file><file path="src/lib/workflow-graph.ts">import type { MultiAgentEvaluation, TraceSpan } from &apos;../types.js&apos;;
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from &apos;../types/workflow-graph.js&apos;;
 import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from &apos;./constants.js&apos;;
@@ -15394,184 +15975,249 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
     if (count &gt; 1) return &apos;branching&apos;;
   }
   return &apos;linear&apos;;
-}</file><file path="src/pages/RoutingTelemetryPage.tsx">import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from &apos;../hooks/useRoutingTelemetry.js&apos;;
-import { PageShell } from &apos;../components/PageShell.js&apos;;
-import { SKELETON_HEIGHT_MD } from &apos;../lib/constants.js&apos;;
-import { formatPercent, byValueDesc } from &apos;../lib/quality-utils.js&apos;;
-import type { Period } from &apos;../types.js&apos;;
-const PERCENT_MULTIPLIER = 100;
-function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
-  return &apos;strategy&apos; in g &amp;&amp; &apos;fallbackRate&apos; in g;
+}</file><file path="src/components/AgentWorkflowView.tsx">import React, { useState, useCallback, useMemo, useRef } from &apos;react&apos;;
+import { WorkflowGraphView } from &apos;./WorkflowGraph.js&apos;;
+import { WorkflowTimeline } from &apos;./WorkflowTimeline.js&apos;;
+import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
+import type { MultiAgentEvaluation } from &apos;../types.js&apos;;
+import { agentColor, fmtDuration } from &apos;../lib/quality-utils.js&apos;;
+import { WORKFLOW_FILTER_MIN_AGENTS } from &apos;../lib/constants.js&apos;;
+type WorkflowTab = &apos;dag&apos; | &apos;timeline&apos;;
+interface AgentWorkflowViewProps {
+  graph: WorkflowGraph;
+  evaluation?: MultiAgentEvaluation;
+  onNodeClick?: (nodeId: string) =&gt; void;
+  height?: number;
 }
-export function RoutingTelemetryPage({ period }: { period: Period }) {
-  const { data, isLoading, error } = useRoutingTelemetry(period);
-  return (
-    &lt;PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}&gt;
-      {data &amp;&amp; data.summary.routedSpans === 0 ? (
-        &lt;div className=&quot;empty-state&quot;&gt;
-          &lt;h2&gt;No Routing Telemetry&lt;/h2&gt;
-          &lt;p&gt;No routed spans found for this period. Routing telemetry is recorded when the request model differs from the actual response model.&lt;/p&gt;
-        &lt;/div&gt;
-      ) : data ? (
-        &lt;&gt;
-          &lt;h2 className=&quot;text-lg mb-3&quot;&gt;Routing Telemetry&lt;/h2&gt;
-          &lt;div className=&quot;card mb-3&quot;&gt;
-            &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.summary.routedSpans}&lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Routed Spans&lt;/div&gt;
-              &lt;/div&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;
-                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
-                &lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Fallback Rate&lt;/div&gt;
-              &lt;/div&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;${data.costSavings.toFixed(4)}&lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Cost Savings&lt;/div&gt;
-              &lt;/div&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.totalSpansScanned}&lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Spans Scanned&lt;/div&gt;
-              &lt;/div&gt;
-            &lt;/div&gt;
-          &lt;/div&gt;
-          {Object.keys(data.providerDistribution).length &gt; 0 &amp;&amp; (
-            &lt;div className=&quot;card mb-3&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Provider Distribution&lt;/h3&gt;
-              &lt;table className=&quot;data-table&quot;&gt;
-                &lt;thead&gt;
-                  &lt;tr&gt;
-                    &lt;th&gt;Provider&lt;/th&gt;
-                    &lt;th&gt;Count&lt;/th&gt;
-                    &lt;th&gt;Share&lt;/th&gt;
-                  &lt;/tr&gt;
-                &lt;/thead&gt;
-                &lt;tbody&gt;
-                  {Object.entries(data.providerDistribution)
-                    .sort(byValueDesc)
-                    .map(([provider, count]) =&gt; (
-                      &lt;tr key={provider}&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{provider}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
-                        &lt;/td&gt;
-                      &lt;/tr&gt;
-                    ))}
-                &lt;/tbody&gt;
-              &lt;/table&gt;
-            &lt;/div&gt;
-          )}
-          {Object.keys(data.modelDistribution).length &gt; 0 &amp;&amp; (
-            &lt;div className=&quot;card mb-3&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Model Distribution&lt;/h3&gt;
-              &lt;table className=&quot;data-table&quot;&gt;
-                &lt;thead&gt;
-                  &lt;tr&gt;
-                    &lt;th&gt;Model&lt;/th&gt;
-                    &lt;th&gt;Count&lt;/th&gt;
-                    &lt;th&gt;Share&lt;/th&gt;
-                  &lt;/tr&gt;
-                &lt;/thead&gt;
-                &lt;tbody&gt;
-                  {Object.entries(data.modelDistribution)
-                    .sort(byValueDesc)
-                    .map(([model, count]) =&gt; (
-                      &lt;tr key={model}&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{model}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
-                        &lt;/td&gt;
-                      &lt;/tr&gt;
-                    ))}
-                &lt;/tbody&gt;
-              &lt;/table&gt;
-            &lt;/div&gt;
-          )}
-          {data.groups.length &gt; 0 &amp;&amp; data.groups.some(isStrategyGroup) &amp;&amp; (
-            &lt;div className=&quot;card mb-3&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Strategy Breakdown&lt;/h3&gt;
-              &lt;table className=&quot;data-table&quot;&gt;
-                &lt;thead&gt;
-                  &lt;tr&gt;
-                    &lt;th&gt;Strategy&lt;/th&gt;
-                    &lt;th&gt;Count&lt;/th&gt;
-                    &lt;th&gt;Fallbacks&lt;/th&gt;
-                    &lt;th&gt;Fallback Rate&lt;/th&gt;
-                  &lt;/tr&gt;
-                &lt;/thead&gt;
-                &lt;tbody&gt;
-                  {data.groups
-                    .filter(isStrategyGroup)
-                    .sort((a, b) =&gt; b.count - a.count)
-                    .map((g) =&gt; (
-                      &lt;tr key={g.strategy}&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{g.strategy}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{g.count}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{g.fallbackCount}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{formatPercent(g.fallbackRate * PERCENT_MULTIPLIER)}&lt;/td&gt;
-                      &lt;/tr&gt;
-                    ))}
-                &lt;/tbody&gt;
-              &lt;/table&gt;
-            &lt;/div&gt;
-          )}
-          {data.routingLatency &amp;&amp; (
-            &lt;div className=&quot;card&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;
-                Routing Latency
-                &lt;span className=&quot;text-secondary text-xs font-normal ml-2&quot;&gt;
-                  ({data.routingLatency.source === &apos;classification_time&apos; ? &apos;classification time&apos; : &apos;span duration&apos;})
-                &lt;/span&gt;
-              &lt;/h3&gt;
-              &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
-                &lt;div className=&quot;text-center&quot;&gt;
-                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p50.toFixed(0)}ms&lt;/div&gt;
-                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p50&lt;/div&gt;
-                &lt;/div&gt;
-                &lt;div className=&quot;text-center&quot;&gt;
-                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p99.toFixed(0)}ms&lt;/div&gt;
-                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p99&lt;/div&gt;
-                &lt;/div&gt;
-              &lt;/div&gt;
-            &lt;/div&gt;
-          )}
-        &lt;/&gt;
-      ) : null}
-    &lt;/PageShell&gt;
+const TAB_LABELS: Record&lt;WorkflowTab, string&gt; = {
+  dag: &apos;DAG&apos;,
+  timeline: &apos;Timeline&apos;,
+};
+const TABS: WorkflowTab[] = [&apos;dag&apos;, &apos;timeline&apos;];
+export function AgentWorkflowView({
+  graph,
+  evaluation,
+  onNodeClick,
+  height = 600,
+}: AgentWorkflowViewProps) {
+  const [activeTab, setActiveTab] = useState&lt;WorkflowTab&gt;(&apos;dag&apos;);
+  const agentNames = useMemo(
+    () =&gt; [...new Set((evaluation?.turns ?? []).map(t =&gt; t.agentName ?? &apos;unknown&apos;))],
+    [evaluation?.turns],
   );
-}</file><file path="src/stubs/auth0-e2e.ts">import { type ReactNode, createElement } from &apos;react&apos;;
-const TEST_TOKEN = &apos;test-token&apos;;
-export function Auth0Provider({ children }: { children: ReactNode }) {
-  return createElement(&apos;div&apos;, { &apos;data-testid&apos;: &apos;auth0-stub&apos; }, children);
-}
-export function useAuth0() {
-  return {
-    isLoading: false,
-    isAuthenticated: true,
-    user: { email: &apos;test@example.com&apos;, sub: &apos;test-user-id&apos; },
-    getAccessTokenSilently: () =&gt; Promise.resolve(TEST_TOKEN),
-    logout: () =&gt; Promise.resolve(),
-    loginWithRedirect: () =&gt; Promise.resolve(),
-  };
-}</file><file path="scripts/deploy-secrets.sh">set -euo pipefail
-WORKERS=(&quot;obs-toolkit-quality-metrics-api&quot; &quot;quality-metrics-api&quot;)
-SECRETS=(&quot;SUPABASE_URL&quot; &quot;SUPABASE_SERVICE_ROLE_KEY&quot;)
-for worker in &quot;${WORKERS[@]}&quot;; do
-  echo &quot;==&gt; Syncing secrets to ${worker}&quot;
-  for secret in &quot;${SECRETS[@]}&quot;; do
-    value=&quot;${!secret:-}&quot;
-    if [ -z &quot;$value&quot; ]; then
-      echo &quot;  SKIP ${secret} (not set in environment)&quot;
-      continue
-    fi
-    echo &quot;$value&quot; | npx wrangler secret put &quot;$secret&quot; --name &quot;$worker&quot; 2&gt;&amp;1 | tail -1
-  done
-done
-echo &quot;Done.&quot;</file><file path="src/components/WorkflowGraph.tsx">import React, { memo, useCallback, useEffect, useState } from &apos;react&apos;;
+  const [selectedAgents, setSelectedAgents] = useState&lt;ReadonlySet&lt;string&gt; | null&gt;(null);
+  const [minDurationMs, setMinDurationMs] = useState(0);
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [showCriticalPath, setShowCriticalPath] = useState(false);
+  const graphContainerRef = useRef&lt;HTMLDivElement&gt;(null);
+  const effectiveSelected: ReadonlySet&lt;string&gt; = useMemo(
+    () =&gt; selectedAgents ?? new Set(agentNames),
+    [selectedAgents, agentNames.join(&apos;,&apos;)],
+  );
+  const maxDurationMs = useMemo(
+    () =&gt; Math.max(0, ...graph.nodes.map(n =&gt; n.durationMs)),
+    [graph.nodes],
+  );
+  const criticalPathSet = useMemo((): ReadonlySet&lt;string&gt; | undefined =&gt; {
+    if (!showCriticalPath || graph.nodes.length === 0 || graph.rootNodeId === null) return undefined;
+    const adj = new Map&lt;string, string[]&gt;(graph.nodes.map(n =&gt; [n.id, []]));
+    for (const edge of graph.edges) {
+      adj.get(edge.source)?.push(edge.target);
+    }
+    const dur = new Map(graph.nodes.map(n =&gt; [n.id, n.durationMs]));
+    function dfs(nodeId: string, visiting: Set&lt;string&gt;): [string[], number] {
+      if (visiting.has(nodeId)) return [[], 0];
+      visiting.add(nodeId);
+      let bestPath: string[] = [];
+      let bestCost = 0;
+      for (const child of adj.get(nodeId) ?? []) {
+        const [childPath, childCost] = dfs(child, visiting);
+        if (childCost &gt; bestCost) {
+          bestCost = childCost;
+          bestPath = childPath;
+        }
+      }
+      visiting.delete(nodeId);
+      return [[nodeId, ...bestPath], (dur.get(nodeId) ?? 0) + bestCost];
+    }
+    const [path] = dfs(graph.rootNodeId, new Set());
+    return new Set(path);
+  }, [showCriticalPath, graph.nodes, graph.edges, graph.rootNodeId]);
+  const filteredNodeIds = useMemo((): ReadonlySet&lt;string&gt; | undefined =&gt; {
+    const hasAgentFilter = selectedAgents !== null;
+    const hasDurFilter = minDurationMs &gt; 0;
+    const hasErrFilter = errorsOnly;
+    if (!hasAgentFilter &amp;&amp; !hasDurFilter &amp;&amp; !hasErrFilter) return undefined;
+    let result = new Set(graph.nodes.map(n =&gt; n.id));
+    if (hasAgentFilter) {
+      result = new Set([...result].filter(id =&gt; selectedAgents!.has(id)));
+    }
+    if (hasDurFilter) {
+      const durPass = new Set(graph.nodes.filter(n =&gt; n.durationMs &gt;= minDurationMs).map(n =&gt; n.id));
+      result = new Set([...result].filter(id =&gt; durPass.has(id)));
+    }
+    if (hasErrFilter) {
+      const errPass = new Set(graph.nodes.filter(n =&gt; n.hasError).map(n =&gt; n.id));
+      result = new Set([...result].filter(id =&gt; errPass.has(id)));
+    }
+    return result;
+  }, [selectedAgents, minDurationMs, errorsOnly, graph.nodes]);
+  const toggleAgent = useCallback((name: string) =&gt; {
+    setSelectedAgents(prev =&gt; {
+      const base = prev ?? new Set(agentNames);
+      const next = new Set(base);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      if (next.size === agentNames.length) return null;
+      return next;
+    });
+  }, [agentNames]);
+  const selectAll = useCallback(() =&gt; setSelectedAgents(null), []);
+  const handleExport = useCallback(async () =&gt; {
+    const el = graphContainerRef.current;
+    if (!el) return;
+    const { toPng } = await import(&apos;html-to-image&apos;);
+    const dataUrl = await toPng(el, { cacheBust: true });
+    const link = document.createElement(&apos;a&apos;);
+    link.href = dataUrl;
+    link.download = &apos;workflow-graph.png&apos;;
+    link.click();
+  }, []);
+  const showFilter = agentNames.length &gt;= WORKFLOW_FILTER_MIN_AGENTS;
+  const showControls = graph.nodes.length &gt; 0;
+  const sliderStep = Math.max(1, Math.round(maxDurationMs / 200));
+  return (
+    &lt;div&gt;
+      &lt;div
+        role=&quot;tablist&quot;
+        aria-label=&quot;Workflow view&quot;
+        className=&quot;flex-center gap-0 workflow-tabs&quot;
+      &gt;
+        {TABS.map(tab =&gt; (
+          &lt;button
+            key={tab}
+            type=&quot;button&quot;
+            role=&quot;tab&quot;
+            id={`workflow-tab-${tab}`}
+            aria-selected={activeTab === tab}
+            aria-controls={`workflow-panel-${tab}`}
+            onClick={() =&gt; setActiveTab(tab)}
+            className=&quot;btn-reset workflow-tab&quot;
+          &gt;
+            {TAB_LABELS[tab]}
+          &lt;/button&gt;
+        ))}
+      &lt;/div&gt;
+      {showFilter &amp;&amp; (
+        &lt;div className=&quot;workflow-filter&quot; role=&quot;group&quot; aria-label=&quot;Filter agents&quot;&gt;
+          {agentNames.map(name =&gt; {
+            const color = agentColor(name, agentNames);
+            const active = effectiveSelected.has(name);
+            return (
+              &lt;button
+                key={name}
+                type=&quot;button&quot;
+                className=&quot;btn-reset eval-filter-chip workflow-filter__chip mono-xs&quot;
+                style={{ &apos;--chip-color&apos;: color } as React.CSSProperties}
+                data-active={active || undefined}
+                aria-pressed={active}
+                onClick={() =&gt; toggleAgent(name)}
+              &gt;
+                {name}
+              &lt;/button&gt;
+            );
+          })}
+          {selectedAgents !== null &amp;&amp; (
+            &lt;button
+              type=&quot;button&quot;
+              className=&quot;btn-reset workflow-filter__reset text-xs text-muted&quot;
+              onClick={selectAll}
+            &gt;
+              All
+            &lt;/button&gt;
+          )}
+        &lt;/div&gt;
+      )}
+      {showControls &amp;&amp; (
+        &lt;div className=&quot;workflow-filter__controls&quot; role=&quot;group&quot; aria-label=&quot;Graph controls&quot;&gt;
+          &lt;label className=&quot;workflow-filter__label&quot;&gt;
+            Min duration
+            &lt;input
+              type=&quot;range&quot;
+              min={0}
+              max={maxDurationMs}
+              step={sliderStep}
+              value={minDurationMs}
+              onChange={e =&gt; setMinDurationMs(Number(e.target.value))}
+              className=&quot;workflow-filter__slider&quot;
+              aria-label={`Minimum agent duration: ${fmtDuration(minDurationMs)}`}
+            /&gt;
+            &lt;span className=&quot;workflow-filter__slider-value mono-xs&quot;&gt;
+              {minDurationMs &gt; 0 ? `≥ ${fmtDuration(minDurationMs)}` : &apos;any&apos;}
+            &lt;/span&gt;
+          &lt;/label&gt;
+          &lt;button
+            type=&quot;button&quot;
+            className=&quot;btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--error&quot;
+            data-active={errorsOnly || undefined}
+            aria-pressed={errorsOnly}
+            onClick={() =&gt; setErrorsOnly(v =&gt; !v)}
+          &gt;
+            Errors only
+          &lt;/button&gt;
+          &lt;button
+            type=&quot;button&quot;
+            className=&quot;btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--accent&quot;
+            data-active={showCriticalPath || undefined}
+            aria-pressed={showCriticalPath}
+            onClick={() =&gt; setShowCriticalPath(v =&gt; !v)}
+          &gt;
+            Critical path
+          &lt;/button&gt;
+          &lt;button
+            type=&quot;button&quot;
+            className=&quot;btn-reset workflow-filter__export mono-xs&quot;
+            onClick={handleExport}
+            aria-label=&quot;Export graph as PNG&quot;
+          &gt;
+            Export PNG
+          &lt;/button&gt;
+        &lt;/div&gt;
+      )}
+      &lt;div
+        role=&quot;tabpanel&quot;
+        id=&quot;workflow-panel-dag&quot;
+        aria-labelledby=&quot;workflow-tab-dag&quot;
+        hidden={activeTab !== &apos;dag&apos;}
+      &gt;
+        &lt;WorkflowGraphView
+          graph={graph}
+          onNodeClick={onNodeClick}
+          height={height}
+          selectedAgents={filteredNodeIds}
+          criticalPath={criticalPathSet}
+          containerRef={graphContainerRef}
+        /&gt;
+      &lt;/div&gt;
+      &lt;div
+        role=&quot;tabpanel&quot;
+        id=&quot;workflow-panel-timeline&quot;
+        aria-labelledby=&quot;workflow-tab-timeline&quot;
+        hidden={activeTab !== &apos;timeline&apos;}
+      &gt;
+        &lt;WorkflowTimeline
+          turns={evaluation?.turns ?? []}
+          handoffs={evaluation?.handoffs ?? []}
+          agentNames={agentNames}
+          selectedAgents={showFilter ? effectiveSelected : undefined}
+        /&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}</file><file path="src/components/WorkflowGraph.tsx">import React, { memo, useCallback, useEffect, useState } from &apos;react&apos;;
 import {
   ReactFlow,
   MiniMap,
@@ -15716,6 +16362,7 @@ interface WorkflowGraphProps {
   containerRef?: React.RefObject&lt;HTMLDivElement | null&gt;;
 }
 export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
+  const containerStyle = { &apos;--workflow-graph-height&apos;: `${height}px` } as React.CSSProperties;
   const [nodes, setNodes, onNodesChange] = useNodesState&lt;Node&gt;([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState&lt;Edge&gt;([]);
   const [layoutError, setLayoutError] = useState&lt;string | null&gt;(null);
@@ -15742,7 +16389,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   }, [onNodeClick]);
   if (graph.nodes.length &gt; MAX_ELK_NODES) {
     return (
-      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={{ height: `${height}px` }} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
         &lt;div className=&quot;workflow-oversize text-secondary text-xs&quot;&gt;
           &lt;div className=&quot;workflow-oversize__heading&quot;&gt;
             Graph too large to render ({graph.nodes.length} agents)
@@ -15765,7 +16412,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   if (graph.workflowShape === &apos;single_agent&apos; &amp;&amp; graph.nodes.length &lt;= 1) {
     const node = graph.nodes[0];
     return (
-      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={{ height: `${height}px` }} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
         &lt;div className=&quot;workflow-fallback&quot;&gt;
           {node ? (
             &lt;&gt;
@@ -15783,7 +16430,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   }
   if (layoutError) {
     return (
-      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={{ height: `${height}px` }} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
         &lt;div className=&quot;error-state workflow-fallback&quot;&gt;
           Failed to compute workflow layout: {layoutError}
         &lt;/div&gt;
@@ -15792,7 +16439,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   }
   const showMiniMap = graph.nodes.length &gt;= MINIMAP_THRESHOLD;
   return (
-    &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={{ height: `${height}px` }} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+    &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
       &lt;ReactFlow
         nodes={nodes}
         edges={edges}
@@ -15808,100 +16455,6 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
       &lt;/ReactFlow&gt;
     &lt;/div&gt;
   );
-}</file><file path="src/contexts/AuthContext.tsx">import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from &apos;react&apos;;
-import { useAuth0, AUTH0_AUDIENCE } from &apos;../lib/auth0.js&apos;;
-import { API_BASE } from &apos;../lib/constants.js&apos;;
-import type { AppSession } from &apos;../types/auth.js&apos;;
-import { MeResponseSchema } from &apos;../lib/validation/auth-schemas.js&apos;;
-interface AuthContextValue {
-  session: AppSession | null;
-  isLoading: boolean;
-  signOut: () =&gt; Promise&lt;void&gt;;
-  getAccessToken: () =&gt; Promise&lt;string&gt;;
-}
-const AuthContext = createContext&lt;AuthContextValue | null&gt;(null);
-async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise&lt;AppSession | null&gt; {
-  try {
-    const res = await fetch(`${API_BASE}/api/me`, {
-      method: &apos;GET&apos;,
-      headers: { &apos;Authorization&apos;: `Bearer ${jwt}` },
-      signal,
-    });
-    if (!res.ok) return null;
-    const data: unknown = await res.json();
-    const meResult = MeResponseSchema.safeParse(data);
-    if (!meResult.success) return null;
-    const me = meResult.data;
-    return {
-      email: me.email,
-      roles: me.roles,
-      permissions: me.permissions,
-      allowedViews: me.allowedViews,
-    };
-  } catch {
-    return null;
-  }
-}
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
-  const [session, setSession] = useState&lt;AppSession | null&gt;(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const getAccessToken = useCallback(
-    () =&gt; getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
-    [getAccessTokenSilently],
-  );
-  useEffect(() =&gt; {
-    if (auth0Loading) return;
-    const controller = new AbortController();
-    let cancelled = false;
-    if (!isAuthenticated) {
-      Promise.resolve().then(() =&gt; {
-        if (!cancelled) {
-          setSession(null);
-          setIsLoading(false);
-        }
-      });
-      return () =&gt; {
-        cancelled = true;
-      };
-    }
-    getAccessToken()
-      .then((jwt) =&gt; (cancelled ? null : fetchAppSession(jwt, controller.signal)))
-      .then((appSession) =&gt; {
-        if (!cancelled) {
-          setSession(appSession);
-          setIsLoading(false);
-        }
-      })
-      .catch(() =&gt; {
-        if (!cancelled) {
-          setSession(null);
-          setIsLoading(false);
-        }
-      });
-    return () =&gt; {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [auth0Loading, isAuthenticated, getAccessToken]);
-  const handleSignOut = useCallback(async () =&gt; {
-    if (session) {
-      const jwt = await getAccessToken().catch(() =&gt; null);
-      if (jwt) void fetch(`${API_BASE}/api/logout`, { method: &apos;POST&apos;, headers: { &apos;Authorization&apos;: `Bearer ${jwt}` } }).catch(() =&gt; undefined);
-    }
-    logout({ logoutParams: { returnTo: window.location.origin } });
-    setSession(null);
-  }, [session, logout, getAccessToken]);
-  return (
-    &lt;AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}&gt;
-      {children}
-    &lt;/AuthContext.Provider&gt;
-  );
-}
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error(&apos;useAuth must be used within an AuthProvider&apos;);
-  return ctx;
 }</file><file path="src/theme.css">@font-face {
   font-family: &apos;JetBrains Mono&apos;;
   font-style: normal;
@@ -17065,6 +17618,7 @@ summary.section-rail {
   color: var(--section-rail-color, var(--border-accent));
   transition: transform var(--transition-medium);
 }
+.workflow-graph-container { height: var(--workflow-graph-height, 600px); }
 .workflow-node {
   width: 220px;
   height: 120px;
@@ -17290,558 +17844,6 @@ summary.section-rail {
 }
 .metric-grid .skeleton {
   height: 180px;
-}</file><file path="src/api/routes/sessions.ts">import { Hono } from &apos;hono&apos;;
-import { subMilliseconds, formatISO } from &apos;date-fns&apos;;
-import { computeMultiAgentEvaluation } from &apos;../../../../dist/lib/quality/quality-multi-agent.js&apos;;
-import { sanitizeErrorForResponse } from &apos;../../../../dist/lib/errors/error-sanitizer.js&apos;;
-import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from &apos;../../lib/constants.js&apos;;
-import {
-  COMMIT_BODY_START_LINE_INDEX,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
-  FILE_ACCESS_TOP_N,
-  HOOK_NAME,
-  incrementCount,
-  LATENCY_P50,
-  LATENCY_P95,
-  LOG_SUMMARY_FIELDS,
-  LOG_SUMMARY_MAX_ENTRIES,
-  type SafeLogEntry,
-  OTEL_STATUS_ERROR_CODE,
-  PARAM_ID_RE,
-  isValidParam,
-  PERCENT_BASE,
-  LATENCY_DISPLAY_PRECISION,
-  spanAttr,
-} from &apos;../api-constants.js&apos;;
-import {
-  loadEvaluationsBySessionId,
-  loadLogsBySessionId,
-} from &apos;../data-loader.js&apos;;
-import { queryTraces } from &apos;../../../../dist/tools/query-traces.js&apos;;
-import type { StepScore } from &apos;../../../../dist/backends/index.js&apos;;
-export const sessionRoutes = new Hono();
-const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
-function parseTimestamp(value: string | undefined | null): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  if (isNaN(ms) || ms &lt; -DATE_ISO_SAFE_MAX_MS || ms &gt; DATE_ISO_SAFE_MAX_MS) return null;
-  return ms;
-}
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
-  return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
-}
-type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
-function computeLatencyStats(durations: number[]): LatencyStats {
-  if (durations.length === 0) return { count: 0, avg: 0, p50: 0, p95: 0, max: 0 };
-  const sorted = [...durations].sort((a, b) =&gt; a - b);
-  return {
-    count: sorted.length,
-    avg: +(sorted.reduce((a, b) =&gt; a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
-    p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
-    p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
-  };
-}
-type ScoreStats = { avg: number | null; min: number | null; max: number | null };
-function computeScoreStats(scores: number[]): ScoreStats {
-  if (scores.length === 0) return { avg: null, min: null, max: null };
-  const sorted = [...scores].sort((a, b) =&gt; a - b);
-  return {
-    avg: +(sorted.reduce((a, b) =&gt; a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
-  };
-}
-const LIMIT_SESSION_SPANS = 1000;
-async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
-  const now = new Date();
-  const end = endDate ?? formatISO(now, { representation: &apos;date&apos; });
-  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS[&apos;30d&apos;]), { representation: &apos;date&apos; });
-  const result = await queryTraces({
-    attributeFilter: { &apos;session.id&apos;: sessionId },
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_SESSION_SPANS,
-  });
-  return result.traces;
-}
-sessionRoutes.get(&apos;/sessions/:sessionId&apos;, async (c) =&gt; {
-  const sessionId = c.req.param(&apos;sessionId&apos;);
-  if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
-  }
-  const startDate = c.req.query(&apos;startDate&apos;);
-  const endDate = c.req.query(&apos;endDate&apos;);
-  try {
-    const [spans, logs, evaluations] = await Promise.all([
-      loadSessionSpans(sessionId, startDate, endDate),
-      loadLogsBySessionId(sessionId, startDate, endDate),
-      loadEvaluationsBySessionId(sessionId, startDate, endDate),
-    ]);
-    const traceIds = new Set&lt;string&gt;();
-    let firstSessionStart: (typeof spans)[0] | undefined;
-    let lastSessionStart: (typeof spans)[0] | undefined;
-    let sessionStartCount = 0;
-    const tokenProgressionRaw: Array&lt;{ messages: number; inputTokens: number; outputTokens: number; cacheRead: number; cacheCreation: number; model: string }&gt; = [];
-    const toolUsage: Record&lt;string, number&gt; = {};
-    const mcpUsage: Record&lt;string, number&gt; = {};
-    const spanBreakdown: Record&lt;string, number&gt; = {};
-    const hookDurations: Record&lt;string, number[]&gt; = {};
-    const errorsByCategory: Record&lt;string, number&gt; = {};
-    const errorDetails: Array&lt;{ spanName: string; tool?: string; errorType?: string; filePath?: string }&gt; = [];
-    const agentAcc = Object.create(null) as Record&lt;string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }&gt;;
-    const fileCount: Record&lt;string, number&gt; = {};
-    const gitCommits: Array&lt;{ subject: string; body: string; files: string }&gt; = [];
-    let alertTotalFired = 0;
-    let alertStopEvents = 0;
-    const codeStructure: Array&lt;{ file: string; lines: number; exports: number; functions: number; hasTypes: boolean; score: number; tool: string }&gt; = [];
-    const agentMapForEval = new Map&lt;number, string&gt;();
-    const stepScores: StepScore[] = [];
-    for (let i = 0; i &lt; spans.length; i++) {
-      const s = spans[i];
-      const hookName = spanAttr&lt;string&gt;(s, &apos;hook.name&apos;);
-      const hookType = spanAttr&lt;string&gt;(s, &apos;hook.type&apos;);
-      const hookTrigger = spanAttr&lt;string&gt;(s, &apos;hook.trigger&apos;);
-      if (s.traceId) traceIds.add(s.traceId);
-      if (hookName === HOOK_NAME.SESSION_START) {
-        if (!firstSessionStart) firstSessionStart = s;
-        lastSessionStart = s;
-        sessionStartCount++;
-      }
-      if (hookName === HOOK_NAME.TOKEN_METRICS) {
-        tokenProgressionRaw.push({
-          messages: spanAttr&lt;number&gt;(s, &apos;tokens.messages&apos;) ?? 0,
-          inputTokens: spanAttr&lt;number&gt;(s, &apos;tokens.input&apos;) ?? 0,
-          outputTokens: spanAttr&lt;number&gt;(s, &apos;tokens.output&apos;) ?? 0,
-          cacheRead: spanAttr&lt;number&gt;(s, &apos;tokens.cache_read&apos;) ?? 0,
-          cacheCreation: spanAttr&lt;number&gt;(s, &apos;tokens.cache_creation&apos;) ?? 0,
-          model: spanAttr&lt;string&gt;(s, &apos;tokens.model&apos;) ?? &apos;&apos;,
-        });
-      }
-      if (hookTrigger === &apos;PostToolUse&apos;) {
-        if (hookType === &apos;builtin&apos;) incrementCount(toolUsage, spanAttr&lt;string&gt;(s, &apos;builtin.tool&apos;) ?? &apos;unknown&apos;);
-        else if (hookType === &apos;mcp&apos;) incrementCount(mcpUsage, spanAttr&lt;string&gt;(s, &apos;mcp.tool&apos;) ?? &apos;unknown&apos;);
-      }
-      incrementCount(spanBreakdown, s.name);
-      const ms = s.durationMs ?? 0;
-      if (ms &gt; 0) {
-        (hookDurations[s.name] ??= []).push(ms);
-      }
-      const hasError = spanAttr&lt;boolean&gt;(s, &apos;builtin.has_error&apos;) === true
-        || spanAttr&lt;boolean&gt;(s, &apos;agent.has_error&apos;) === true
-        || s.status?.code === OTEL_STATUS_ERROR_CODE;
-      if (hasError) {
-        const tool = spanAttr&lt;string&gt;(s, &apos;builtin.tool&apos;) ?? spanAttr&lt;string&gt;(s, &apos;agent.type&apos;) ?? &apos;unknown&apos;;
-        const errType = spanAttr&lt;string&gt;(s, &apos;builtin.error_type&apos;) ?? &apos;unknown&apos;;
-        incrementCount(errorsByCategory, `${tool} -&gt; ${errType}`);
-        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr&lt;string&gt;(s, &apos;builtin.file_path&apos;) });
-      }
-      if (hookName === HOOK_NAME.AGENT_POST_TOOL) {
-        const name = spanAttr&lt;string&gt;(s, &apos;gen_ai.agent.name&apos;) ?? &apos;unknown&apos;;
-        const agentEntry = (agentAcc[name] ??= { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 });
-        agentEntry.invocations++;
-        if (spanAttr&lt;boolean&gt;(s, &apos;agent.has_error&apos;)) agentEntry.errors++;
-        if (spanAttr&lt;boolean&gt;(s, &apos;agent.has_rate_limit&apos;)) agentEntry.hasRateLimit = true;
-        agentEntry.totalOutputSize += spanAttr&lt;number&gt;(s, &apos;agent.output_size&apos;) ?? 0;
-      }
-      const fp = spanAttr&lt;string&gt;(s, &apos;builtin.file_path&apos;);
-      if (fp) incrementCount(fileCount, fp);
-      if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
-        const raw = spanAttr&lt;string&gt;(s, &apos;git.command&apos;) ?? &apos;&apos;;
-        const filesMatch = raw.match(/git add (.+?)(?:\s+&amp;&amp;)/s);
-        const files = filesMatch ? filesMatch[1].trim() : &apos;&apos;;
-        const msgMatch = raw.match(/&lt;&lt;&apos;?EOF&apos;?\n([\s\S]+?)\nCo-Authored/);
-        const fullMessage = msgMatch ? msgMatch[1] : &apos;&apos;;
-        gitCommits.push({
-          subject: fullMessage ? fullMessage.split(&apos;\n&apos;)[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS),
-          body: fullMessage ? fullMessage.split(&apos;\n&apos;).slice(COMMIT_BODY_START_LINE_INDEX).join(&apos;\n&apos;).trim() : &apos;&apos;,
-          files,
-        });
-      }
-      if (hookName === HOOK_NAME.ALERT_EVALUATION) {
-        alertTotalFired += spanAttr&lt;number&gt;(s, &apos;alerts.triggered_count&apos;) ?? 0;
-        alertStopEvents++;
-      }
-      if (hookName === HOOK_NAME.CODE_STRUCTURE) {
-        codeStructure.push({
-          file: spanAttr&lt;string&gt;(s, &apos;code.structure.file&apos;) ?? &apos;&apos;,
-          lines: spanAttr&lt;number&gt;(s, &apos;code.structure.lines&apos;) ?? 0,
-          exports: spanAttr&lt;number&gt;(s, &apos;code.structure.exports&apos;) ?? 0,
-          functions: spanAttr&lt;number&gt;(s, &apos;code.structure.functions&apos;) ?? 0,
-          hasTypes: spanAttr&lt;boolean&gt;(s, &apos;code.structure.has_types&apos;) ?? false,
-          score: spanAttr&lt;number&gt;(s, &apos;code.structure.score&apos;) ?? 0,
-          tool: spanAttr&lt;string&gt;(s, &apos;code.structure.tool&apos;) ?? &apos;&apos;,
-        });
-      }
-      const agent = spanAttr&lt;string&gt;(s, &apos;agent.name&apos;) ?? spanAttr&lt;string&gt;(s, &apos;gen_ai.agent.name&apos;);
-      if (agent) agentMapForEval.set(i, agent);
-      stepScores.push({
-        step: i,
-        score: spanAttr&lt;number&gt;(s, &apos;evaluation.score&apos;) ?? (s.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
-        explanation: s.name,
-      });
-    }
-    const dataSources = {
-      traces: { count: spans.length, traceIds: traceIds.size },
-      logs: { count: logs.length },
-      evaluations: { count: evaluations.length },
-      total: spans.length + logs.length + evaluations.length,
-    };
-    let tsMin = Infinity;
-    let tsMax = -Infinity;
-    const evalByName = Object.create(null) as Record&lt;string, { count: number; scores: number[] }&gt;;
-    for (const ev of evaluations) {
-      const t = parseTimestamp(ev.timestamp);
-      if (t !== null) {
-        if (t &lt; tsMin) tsMin = t;
-        if (t &gt; tsMax) tsMax = t;
-      }
-      const entry = (evalByName[ev.evaluationName] ??= { count: 0, scores: [] });
-      entry.count++;
-      if (ev.scoreValue != null &amp;&amp; Number.isFinite(ev.scoreValue)) {
-        entry.scores.push(ev.scoreValue);
-      }
-    }
-    const logBySeverity: Record&lt;string, number&gt; = Object.create(null);
-    for (const l of logs) {
-      const t = parseTimestamp(l.timestamp);
-      if (t !== null) {
-        if (t &lt; tsMin) tsMin = t;
-        if (t &gt; tsMax) tsMax = t;
-      }
-      incrementCount(logBySeverity, l.severity);
-    }
-    const timespan = tsMin &lt; Infinity ? {
-      start: new Date(tsMin).toISOString(),
-      end: new Date(tsMax).toISOString(),
-      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
-    } : null;
-    const sessionInfo = firstSessionStart ? {
-      projectName: spanAttr&lt;string&gt;(firstSessionStart, &apos;project.name&apos;) ?? &apos;unknown&apos;,
-      workingDirectory: spanAttr&lt;string&gt;(firstSessionStart, &apos;working.directory&apos;) ?? &apos;&apos;,
-      gitRepository: spanAttr&lt;string&gt;(firstSessionStart, &apos;git.repository&apos;) ?? &apos;&apos;,
-      gitBranch: spanAttr&lt;string&gt;(firstSessionStart, &apos;git.branch&apos;) ?? &apos;&apos;,
-      nodeVersion: spanAttr&lt;string&gt;(firstSessionStart, &apos;node.version&apos;) ?? &apos;&apos;,
-      resumeCount: sessionStartCount,
-      initialMessageCount: spanAttr&lt;number&gt;(firstSessionStart, &apos;context.message_count&apos;) ?? 0,
-      initialContextTokens: spanAttr&lt;number&gt;(firstSessionStart, &apos;context.estimated_tokens&apos;) ?? 0,
-      finalMessageCount: spanAttr&lt;number&gt;(lastSessionStart ?? firstSessionStart, &apos;context.message_count&apos;) ?? 0,
-      taskCount: spanAttr&lt;number&gt;(firstSessionStart, &apos;tasks.active&apos;) ?? 0,
-      uncommittedAtStart: spanAttr&lt;number&gt;(firstSessionStart, &apos;git.uncommitted&apos;) ?? 0,
-    } : null;
-    const tokenProgression = tokenProgressionRaw.slice().sort((a, b) =&gt; a.messages - b.messages);
-    const tokenTotals = {
-      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
-      models: {} as Record&lt;string, number&gt;,
-    };
-    for (const t of tokenProgression) {
-      tokenTotals.input += t.inputTokens;
-      tokenTotals.output += t.outputTokens;
-      tokenTotals.cacheRead += t.cacheRead;
-      tokenTotals.cacheCreation += t.cacheCreation;
-      tokenTotals.messages += t.messages;
-      if (t.model) incrementCount(tokenTotals.models, t.model);
-    }
-    const hookLatency: Record&lt;string, { count: number; avg: number; p50: number; p95: number; max: number }&gt; = {};
-    for (const [name, durations] of Object.entries(hookDurations)) {
-      hookLatency[name] = computeLatencyStats(durations);
-    }
-    const agentActivity = Object.entries(agentAcc).map(([agentName, d]) =&gt; ({
-      agentName,
-      invocations: d.invocations,
-      errors: d.errors,
-      hasRateLimit: d.hasRateLimit,
-      avgOutputSize: d.invocations &gt; 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-    }));
-    const fileAccess = Object.entries(fileCount)
-      .map(([path, count]) =&gt; ({ path, count }))
-      .sort((a, b) =&gt; b.count - a.count)
-      .slice(0, FILE_ACCESS_TOP_N);
-    const alertSummary = { totalFired: alertTotalFired, stopEvents: alertStopEvents };
-    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) =&gt; {
-      const { avg, min, max } = computeScoreStats(d.scores);
-      return { name, count: d.count, avg, min, max };
-    });
-    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
-    return c.json({
-      sessionId,
-      dataSources,
-      timespan,
-      sessionInfo,
-      tokenTotals,
-      tokenProgression,
-      toolUsage,
-      mcpUsage,
-      spanBreakdown,
-      hookLatency,
-      errors: { byCategory: errorsByCategory, details: errorDetails },
-      agentActivity,
-      fileAccess,
-      gitCommits,
-      alertSummary,
-      codeStructure,
-      evaluationBreakdown,
-      logSummary: {
-        bySeverity: logBySeverity,
-        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l =&gt; {
-          const entry: SafeLogEntry = {};
-          for (const key of LOG_SUMMARY_FIELDS) {
-            const val = l[key];
-            if (val !== undefined) (entry as Record&lt;string, unknown&gt;)[key] = val;
-          }
-          return entry;
-        }),
-      },
-      multiAgentEvaluation,
-      evaluations,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});</file><file path="src/components/AgentWorkflowView.tsx">import React, { useState, useCallback, useMemo, useRef } from &apos;react&apos;;
-import { WorkflowGraphView } from &apos;./WorkflowGraph.js&apos;;
-import { WorkflowTimeline } from &apos;./WorkflowTimeline.js&apos;;
-import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
-import type { MultiAgentEvaluation } from &apos;../types.js&apos;;
-import { agentColor, fmtDuration } from &apos;../lib/quality-utils.js&apos;;
-import { WORKFLOW_FILTER_MIN_AGENTS } from &apos;../lib/constants.js&apos;;
-type WorkflowTab = &apos;dag&apos; | &apos;timeline&apos;;
-interface AgentWorkflowViewProps {
-  graph: WorkflowGraph;
-  evaluation?: MultiAgentEvaluation;
-  onNodeClick?: (nodeId: string) =&gt; void;
-  height?: number;
-}
-const TAB_LABELS: Record&lt;WorkflowTab, string&gt; = {
-  dag: &apos;DAG&apos;,
-  timeline: &apos;Timeline&apos;,
-};
-const TABS: WorkflowTab[] = [&apos;dag&apos;, &apos;timeline&apos;];
-export function AgentWorkflowView({
-  graph,
-  evaluation,
-  onNodeClick,
-  height = 600,
-}: AgentWorkflowViewProps) {
-  const [activeTab, setActiveTab] = useState&lt;WorkflowTab&gt;(&apos;dag&apos;);
-  const agentNames = useMemo(
-    () =&gt; [...new Set((evaluation?.turns ?? []).map(t =&gt; t.agentName ?? &apos;unknown&apos;))],
-    [evaluation?.turns],
-  );
-  const [selectedAgents, setSelectedAgents] = useState&lt;ReadonlySet&lt;string&gt; | null&gt;(null);
-  const [minDurationMs, setMinDurationMs] = useState(0);
-  const [errorsOnly, setErrorsOnly] = useState(false);
-  const [showCriticalPath, setShowCriticalPath] = useState(false);
-  const graphContainerRef = useRef&lt;HTMLDivElement&gt;(null);
-  const effectiveSelected: ReadonlySet&lt;string&gt; = useMemo(
-    () =&gt; selectedAgents ?? new Set(agentNames),
-    [selectedAgents, agentNames.join(&apos;,&apos;)],
-  );
-  const maxDurationMs = useMemo(
-    () =&gt; Math.max(0, ...graph.nodes.map(n =&gt; n.durationMs)),
-    [graph.nodes],
-  );
-  const criticalPathSet = useMemo((): ReadonlySet&lt;string&gt; | undefined =&gt; {
-    if (!showCriticalPath || graph.nodes.length === 0 || graph.rootNodeId === null) return undefined;
-    const adj = new Map&lt;string, string[]&gt;(graph.nodes.map(n =&gt; [n.id, []]));
-    for (const edge of graph.edges) {
-      adj.get(edge.source)?.push(edge.target);
-    }
-    const dur = new Map(graph.nodes.map(n =&gt; [n.id, n.durationMs]));
-    function dfs(nodeId: string, visiting: Set&lt;string&gt;): [string[], number] {
-      if (visiting.has(nodeId)) return [[], 0];
-      visiting.add(nodeId);
-      let bestPath: string[] = [];
-      let bestCost = 0;
-      for (const child of adj.get(nodeId) ?? []) {
-        const [childPath, childCost] = dfs(child, visiting);
-        if (childCost &gt; bestCost) {
-          bestCost = childCost;
-          bestPath = childPath;
-        }
-      }
-      visiting.delete(nodeId);
-      return [[nodeId, ...bestPath], (dur.get(nodeId) ?? 0) + bestCost];
-    }
-    const [path] = dfs(graph.rootNodeId, new Set());
-    return new Set(path);
-  }, [showCriticalPath, graph.nodes, graph.edges, graph.rootNodeId]);
-  const filteredNodeIds = useMemo((): ReadonlySet&lt;string&gt; | undefined =&gt; {
-    const hasAgentFilter = selectedAgents !== null;
-    const hasDurFilter = minDurationMs &gt; 0;
-    const hasErrFilter = errorsOnly;
-    if (!hasAgentFilter &amp;&amp; !hasDurFilter &amp;&amp; !hasErrFilter) return undefined;
-    let result = new Set(graph.nodes.map(n =&gt; n.id));
-    if (hasAgentFilter) {
-      result = new Set([...result].filter(id =&gt; selectedAgents!.has(id)));
-    }
-    if (hasDurFilter) {
-      const durPass = new Set(graph.nodes.filter(n =&gt; n.durationMs &gt;= minDurationMs).map(n =&gt; n.id));
-      result = new Set([...result].filter(id =&gt; durPass.has(id)));
-    }
-    if (hasErrFilter) {
-      const errPass = new Set(graph.nodes.filter(n =&gt; n.hasError).map(n =&gt; n.id));
-      result = new Set([...result].filter(id =&gt; errPass.has(id)));
-    }
-    return result;
-  }, [selectedAgents, minDurationMs, errorsOnly, graph.nodes]);
-  const toggleAgent = useCallback((name: string) =&gt; {
-    setSelectedAgents(prev =&gt; {
-      const base = prev ?? new Set(agentNames);
-      const next = new Set(base);
-      if (next.has(name)) {
-        next.delete(name);
-      } else {
-        next.add(name);
-      }
-      if (next.size === agentNames.length) return null;
-      return next;
-    });
-  }, [agentNames]);
-  const selectAll = useCallback(() =&gt; setSelectedAgents(null), []);
-  const handleExport = useCallback(async () =&gt; {
-    const el = graphContainerRef.current;
-    if (!el) return;
-    const { toPng } = await import(&apos;html-to-image&apos;);
-    const dataUrl = await toPng(el, { cacheBust: true });
-    const link = document.createElement(&apos;a&apos;);
-    link.href = dataUrl;
-    link.download = &apos;workflow-graph.png&apos;;
-    link.click();
-  }, []);
-  const showFilter = agentNames.length &gt;= WORKFLOW_FILTER_MIN_AGENTS;
-  const showControls = graph.nodes.length &gt; 0;
-  const sliderStep = Math.max(1, Math.round(maxDurationMs / 200));
-  return (
-    &lt;div&gt;
-      &lt;div
-        role=&quot;tablist&quot;
-        aria-label=&quot;Workflow view&quot;
-        className=&quot;flex-center gap-0 workflow-tabs&quot;
-      &gt;
-        {TABS.map(tab =&gt; (
-          &lt;button
-            key={tab}
-            type=&quot;button&quot;
-            role=&quot;tab&quot;
-            id={`workflow-tab-${tab}`}
-            aria-selected={activeTab === tab}
-            aria-controls={`workflow-panel-${tab}`}
-            onClick={() =&gt; setActiveTab(tab)}
-            className=&quot;btn-reset workflow-tab&quot;
-          &gt;
-            {TAB_LABELS[tab]}
-          &lt;/button&gt;
-        ))}
-      &lt;/div&gt;
-      {showFilter &amp;&amp; (
-        &lt;div className=&quot;workflow-filter&quot; role=&quot;group&quot; aria-label=&quot;Filter agents&quot;&gt;
-          {agentNames.map(name =&gt; {
-            const color = agentColor(name, agentNames);
-            const active = effectiveSelected.has(name);
-            return (
-              &lt;button
-                key={name}
-                type=&quot;button&quot;
-                className=&quot;btn-reset eval-filter-chip workflow-filter__chip mono-xs&quot;
-                style={{ &apos;--chip-color&apos;: color } as React.CSSProperties}
-                data-active={active || undefined}
-                aria-pressed={active}
-                onClick={() =&gt; toggleAgent(name)}
-              &gt;
-                {name}
-              &lt;/button&gt;
-            );
-          })}
-          {selectedAgents !== null &amp;&amp; (
-            &lt;button
-              type=&quot;button&quot;
-              className=&quot;btn-reset workflow-filter__reset text-xs text-muted&quot;
-              onClick={selectAll}
-            &gt;
-              All
-            &lt;/button&gt;
-          )}
-        &lt;/div&gt;
-      )}
-      {showControls &amp;&amp; (
-        &lt;div className=&quot;workflow-filter__controls&quot; role=&quot;group&quot; aria-label=&quot;Graph controls&quot;&gt;
-          &lt;label className=&quot;workflow-filter__label&quot;&gt;
-            Min duration
-            &lt;input
-              type=&quot;range&quot;
-              min={0}
-              max={maxDurationMs}
-              step={sliderStep}
-              value={minDurationMs}
-              onChange={e =&gt; setMinDurationMs(Number(e.target.value))}
-              className=&quot;workflow-filter__slider&quot;
-              aria-label={`Minimum agent duration: ${fmtDuration(minDurationMs)}`}
-            /&gt;
-            &lt;span className=&quot;workflow-filter__slider-value mono-xs&quot;&gt;
-              {minDurationMs &gt; 0 ? `≥ ${fmtDuration(minDurationMs)}` : &apos;any&apos;}
-            &lt;/span&gt;
-          &lt;/label&gt;
-          &lt;button
-            type=&quot;button&quot;
-            className=&quot;btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--error&quot;
-            data-active={errorsOnly || undefined}
-            aria-pressed={errorsOnly}
-            onClick={() =&gt; setErrorsOnly(v =&gt; !v)}
-          &gt;
-            Errors only
-          &lt;/button&gt;
-          &lt;button
-            type=&quot;button&quot;
-            className=&quot;btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--accent&quot;
-            data-active={showCriticalPath || undefined}
-            aria-pressed={showCriticalPath}
-            onClick={() =&gt; setShowCriticalPath(v =&gt; !v)}
-          &gt;
-            Critical path
-          &lt;/button&gt;
-          &lt;button
-            type=&quot;button&quot;
-            className=&quot;btn-reset workflow-filter__export mono-xs&quot;
-            onClick={handleExport}
-            aria-label=&quot;Export graph as PNG&quot;
-          &gt;
-            Export PNG
-          &lt;/button&gt;
-        &lt;/div&gt;
-      )}
-      &lt;div
-        role=&quot;tabpanel&quot;
-        id=&quot;workflow-panel-dag&quot;
-        aria-labelledby=&quot;workflow-tab-dag&quot;
-        hidden={activeTab !== &apos;dag&apos;}
-      &gt;
-        &lt;WorkflowGraphView
-          graph={graph}
-          onNodeClick={onNodeClick}
-          height={height}
-          selectedAgents={filteredNodeIds}
-          criticalPath={criticalPathSet}
-          containerRef={graphContainerRef}
-        /&gt;
-      &lt;/div&gt;
-      &lt;div
-        role=&quot;tabpanel&quot;
-        id=&quot;workflow-panel-timeline&quot;
-        aria-labelledby=&quot;workflow-tab-timeline&quot;
-        hidden={activeTab !== &apos;timeline&apos;}
-      &gt;
-        &lt;WorkflowTimeline
-          turns={evaluation?.turns ?? []}
-          handoffs={evaluation?.handoffs ?? []}
-          agentNames={agentNames}
-          selectedAgents={showFilter ? effectiveSelected : undefined}
-        /&gt;
-      &lt;/div&gt;
-    &lt;/div&gt;
-  );
 }</file><file path="scripts/sync-to-kv.ts">#!/usr/bin/env tsx
 import { execFileSync } from &apos;child_process&apos;;
 import { createHash, randomBytes } from &apos;crypto&apos;;
@@ -20135,7 +20137,7 @@ if (isDirectRun) {
     console.error(&apos;Fatal error:&apos;, err);
     safeExit(1);
   });
-}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:39:00 -0500</date><message>perf(sync-to-kv): parallelize metric detail queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:38:56 -0500</date><message>style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:31:03 -0500</date><message>refactor(sync-to-kv): use activePeriods in remaining period loops</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:28:00 -0500</date><message>perf(sync-to-kv): parallelize period batch queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:25:03 -0500</date><message>style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:22:33 -0500</date><message>fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:21:25 -0500</date><message>refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:20:58 -0500</date><message>refactor(judge-evaluations): extract JUDGE_MAX_TOKENS and JUDGE_DEFAULT_TEMPERATURE constants</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:17:17 -0500</date><message>perf(workflow): memoize agentNames derivation in AgentWorkflowView</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 02:14:28 -0500</date><message>style(judge-evaluations): remove task-tracker prefixes and WHAT comments from seedEvaluations/evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:06:27 -0500</date><message>feat(workflow): add graph controls, critical path, and PNG export</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>package-lock.json</files><files>package.json</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 01:58:00 -0500</date><message>refactor(derive-evaluations): extract TASK_COMPLETION_EVAL_NAME; use TOOL_CORRECTNESS_CRITERIA.name</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:57:08 -0500</date><message>refactor(judge-evaluations): use TOOL_CORRECTNESS_CRITERIA.name; simplify subCriteria to drop redundant name field</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:56:18 -0500</date><message>refactor(judge-evaluations): extract RELEVANCE/COHERENCE/FAITHFULNESS/HALLUCINATION_EVAL_NAME constants; replace 20 raw strings</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:45:19 -0500</date><message>refactor(judge-evaluations): replace raw evaluator type strings at evalType filter and dataset run record</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:35:04 -0500</date><message>perf(derive-evaluations): store distinctAgentCount instead of full Set in handoff loop</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:57 -0500</date><message>refactor(judge-evaluations): extract TRACE_BACKFILL_EVALUATOR_TYPE; replace raw strings at backfill override</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:50 -0500</date><message>refactor(sync-to-kv): remove unnecessary Record&lt;string,unknown&gt; cast in filterCanary</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:57 -0500</date><message>refactor(sync-to-kv): replace raw &apos;canary&apos; string with CANARY_EVALUATOR_TYPE constant</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:40 -0500</date><message>refactor(derive-evaluations): hoist sessionPreview in agent/handoff completion loops</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:27:16 -0500</date><message>refactor(scripts): extract RULE_EVALUATOR_TYPE constant; replace 6 raw &apos;rule&apos; literals</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:37:49 -0500</date><message>refactor(scripts): add CANARY/SEED_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:21:51 -0500</date><message>fix(judge-evaluations): correct self-referential sessionPreview; add declaration to evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:20:41 -0500</date><message>refactor(scripts): apply RULE_EVALUATOR/LLM_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:51:22 -0500</date><message>refactor(scripts): extract LLM_JUDGE_EVALUATOR constant; remove blank line</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:47:09 -0500</date><message>perf(workflow): memoize effectiveSelected Set and document style exemption</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 23:32:05 -0500</date><message>refactor(derive-evaluations): remove write-only vars; hoist RULE_EVALUATOR to module level</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:30:08 -0500</date><message>refactor(derive-evaluations): remove redundant existsSync guard before readJsonlWithValidationSync</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:13:24 -0500</date><message>style(derive-evaluations): split multi-declaration into separate let statements</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:02:30 -0500</date><message>feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)</message><files>docs/BACKLOG.md</files><files>docs/CHANGELOG.md</files><files>docs/changelog/3.0.5/CHANGELOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files><files>src/lib/constants.ts</files><files>src/pages/RoutingTelemetryPage.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 22:59:51 -0500</date><message>perf(derive-evaluations): eliminate handoffScores array; compute in single pass</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:58:15 -0500</date><message>fix(derive-evaluations): remove stray double semicolon</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:52:11 -0500</date><message>refactor(derive-evaluations): use STATUS_SCORES constants instead of magic score literals</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:40:29 -0500</date><message>refactor(derive-evaluations): use shared constants and toDateOnly utility</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:37:18 -0500</date><message>refactor(judge-evaluations): remove redundant streaming WHAT comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:28:55 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:25:13 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comment</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:12:55 -0500</date><message>refactor(scripts): use HOOK_NAME constant and remove WHAT comments</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:02:16 -0500</date><message>docs(backlog): mark CR-WK-4, CR-WK-5, CR-WK-7, CR-WK-8 as done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-26 22:01:43 -0500</date><message>refactor(sessions): strip ticket IDs from parseTimestamp JSDoc</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:59:57 -0500</date><message>fix(sessions): remove unsafe LogRecord casts; access typed fields directly (CR-WK-5)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:58:53 -0500</date><message>fix(sessions): guard parseTimestamp against extreme values causing toISOString RangeError (CR-WK-4)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:47:39 -0500</date><message>fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>playwright.config.ts</files><files>scripts/deploy-secrets.sh</files><files>src/__tests__/supabase-refresh.test.ts</files><files>src/lib/supabase.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 20:08:47 -0500</date><message>refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 19:44:33 -0500</date><message>docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup</message><files>.claude/ralph-loop.local.md</files><files>CLAUDE.md</files><files>docs/auth/user-authentication.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>docs/roadmap/users.md</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:16:05 -0500</date><message>fix(CoverageGrid): add CSSProperties cast for CSS custom property</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:12:42 -0500</date><message>refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable</message><files>src/components/CoverageGrid.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 19:04:39 -0500</date><message>refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables</message><files>src/components/CorrelationHeatmap.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 18:58:18 -0500</date><message>refactor(data-loader): remove WHAT first line from loadEvaluationsByTraceIds JSDoc</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:53:10 -0500</date><message>refactor(sessions): remove WHAT JSDoc comment from sessionRoutes handler</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:46:20 -0500</date><message>refactor(trends): remove WHAT JSDoc comment from trendRoutes handler</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:40:24 -0500</date><message>fix(trends): add missing isValidParam check for metric name param</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:33:45 -0500</date><message>style(sessions): remove extra blank line between percentile and LatencyStats</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:19:54 -0500</date><message>fix(sessions): guard computeLatencyStats against empty durations array</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:12:04 -0500</date><message>refactor(routes): align traceId validation to isValidParam; use ErrorMessage in traces</message><files>src/api/routes/evaluations.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:03:45 -0500</date><message>refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds</message><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:02:12 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 18:01:43 -0500</date><message>refactor(worker): extract remaining inline error strings to ERR_ constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:55 -0500</date><message>refactor(constants): extract inline error strings into ErrorMessage enum</message><files>src/api/routes/coverage.ts</files><files>src/api/routes/sessions.ts</files><files>src/lib/constants.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:32 -0500</date><message>refactor(routes): use ErrorMessage enum for evaluations and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:55:04 -0500</date><message>refactor(worker): split userId/roleId validation for precise error messages</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:53:04 -0500</date><message>refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:47:44 -0500</date><message>refactor(worker): extract safeArray helper for Array.isArray KV guard pattern</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:40:46 -0500</date><message>refactor(derive-evaluations): import TELEMETRY_DIR and SESSION_ID_PREVIEW_LEN from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:22 -0500</date><message>refactor(derive-evaluations): import EVAL_SCORE_PRECISION from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:07 -0500</date><message>fix(worker): replace unsafe KV payload casts with Array.isArray guards</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:38:29 -0500</date><message>chore: regenerate repomix docs</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:52 -0500</date><message>refactor(derive-evaluations): use normalizeScore instead of inline parseFloat/toFixed</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:23 -0500</date><message>fix(worker): guard logActivity against undefined appUserId instead of passing empty string</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:42 -0500</date><message>refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:05 -0500</date><message>refactor(derive-evaluations): remove WHAT JSDoc comments from constants and serializer</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:31:23 -0500</date><message>refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants</message><files>scripts/sync-to-kv.ts</files><files>src/components/BarIndicator.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:29:57 -0500</date><message>refactor(components,worker): remove WHAT JSDoc prop comments and route comment</message><files>src/components/BarIndicator.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:28:36 -0500</date><message>refactor(worker): remove WHAT comments from admin route handlers</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:59 -0500</date><message>refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:44 -0500</date><message>docs(constants): restore non-obvious comments for LLM_SAMPLE_RATE and SCORE_*_PRECISION</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:01 -0500</date><message>refactor(derive-evaluations): remove WHAT comments in task scoring</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:25:03 -0500</date><message>refactor(keyboard-nav): remove WHAT comment before two-key combo handler</message><files>src/contexts/KeyboardNavContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:24:12 -0500</date><message>refactor(components,api): remove WHAT JSDoc comments from TruncatedIdLink and config</message><files>src/api/config.ts</files><files>src/components/TruncatedIdLink.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:59 -0500</date><message>refactor(quality-utils): remove WHAT JSDoc comments from utility functions</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:04 -0500</date><message>refactor(constants): remove WHAT JSDoc comments from self-documenting constants</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:21:40 -0500</date><message>refactor(trends): use ErrorMessage.InvalidBuckets constant</message><files>src/api/routes/trends.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:20:38 -0500</date><message>refactor(api-constants): remove WHAT JSDoc comments from constants and helpers</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:19:02 -0500</date><message>refactor(data-loader): remove section header WHAT comments</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:30 -0500</date><message>refactor(metrics): remove WHAT JSDoc comment on period constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:02 -0500</date><message>refactor(routes): remove WHAT JSDoc comments on internal helper functions</message><files>src/api/routes/dashboard.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:17:14 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in task tracking</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:16:29 -0500</date><message>refactor(quality): remove WHAT comment before sort</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:14:28 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in trackTaskCompletion and trackAgentActivity</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:13:42 -0500</date><message>refactor(sync-to-kv): eliminate double Map.get() in degradationBuckets</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:10:52 -0500</date><message>refactor(metrics): move error constants into shared ErrorMessage enum</message><files>src/api/routes/metrics.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:10:42 -0500</date><message>refactor(scripts): eliminate double Map.get() in pushToGroup and byDate grouping</message><files>scripts/derive-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:08:21 -0500</date><message>refactor(data-loader): eliminate double Map.get() in loadEvaluationsByMetric grouping</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:07:47 -0500</date><message>refactor(metrics): extract inline error strings to named constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:06:39 -0500</date><message>refactor(judge): remove two more what-comments in turn extraction and sub-criteria</message><files>scripts/judge-evaluations.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
+}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-27 04:00:25 -0500</date><message>refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)</message><files>scripts/judge-evaluations.ts</files><files>src/lib/workflow-graph.ts</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:52:53 -0500</date><message>style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:47:59 -0500</date><message>refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css</message><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:37 -0500</date><message>refactor(workflow-graph): replace inline height style with CSS variable</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:31 -0500</date><message>style(workflow): strip CR-PERF/CR-TS task-tracker prefixes from comments</message><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:20:34 -0500</date><message>style(admin): strip CR-AUTH-2 task-tracker prefix from comment</message><files>src/pages/AdminPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:18:15 -0500</date><message>chore: regenerate repomix compressed XML</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:39:00 -0500</date><message>perf(sync-to-kv): parallelize metric detail queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:38:56 -0500</date><message>style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:31:03 -0500</date><message>refactor(sync-to-kv): use activePeriods in remaining period loops</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:28:00 -0500</date><message>perf(sync-to-kv): parallelize period batch queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:25:03 -0500</date><message>style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:22:33 -0500</date><message>fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:21:25 -0500</date><message>refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:20:58 -0500</date><message>refactor(judge-evaluations): extract JUDGE_MAX_TOKENS and JUDGE_DEFAULT_TEMPERATURE constants</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:17:17 -0500</date><message>perf(workflow): memoize agentNames derivation in AgentWorkflowView</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 02:14:28 -0500</date><message>style(judge-evaluations): remove task-tracker prefixes and WHAT comments from seedEvaluations/evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:06:27 -0500</date><message>feat(workflow): add graph controls, critical path, and PNG export</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>package-lock.json</files><files>package.json</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 01:58:00 -0500</date><message>refactor(derive-evaluations): extract TASK_COMPLETION_EVAL_NAME; use TOOL_CORRECTNESS_CRITERIA.name</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:57:08 -0500</date><message>refactor(judge-evaluations): use TOOL_CORRECTNESS_CRITERIA.name; simplify subCriteria to drop redundant name field</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:56:18 -0500</date><message>refactor(judge-evaluations): extract RELEVANCE/COHERENCE/FAITHFULNESS/HALLUCINATION_EVAL_NAME constants; replace 20 raw strings</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:45:19 -0500</date><message>refactor(judge-evaluations): replace raw evaluator type strings at evalType filter and dataset run record</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:35:04 -0500</date><message>perf(derive-evaluations): store distinctAgentCount instead of full Set in handoff loop</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:57 -0500</date><message>refactor(judge-evaluations): extract TRACE_BACKFILL_EVALUATOR_TYPE; replace raw strings at backfill override</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:50 -0500</date><message>refactor(sync-to-kv): remove unnecessary Record&lt;string,unknown&gt; cast in filterCanary</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:57 -0500</date><message>refactor(sync-to-kv): replace raw &apos;canary&apos; string with CANARY_EVALUATOR_TYPE constant</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:40 -0500</date><message>refactor(derive-evaluations): hoist sessionPreview in agent/handoff completion loops</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:27:16 -0500</date><message>refactor(scripts): extract RULE_EVALUATOR_TYPE constant; replace 6 raw &apos;rule&apos; literals</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:37:49 -0500</date><message>refactor(scripts): add CANARY/SEED_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:21:51 -0500</date><message>fix(judge-evaluations): correct self-referential sessionPreview; add declaration to evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:20:41 -0500</date><message>refactor(scripts): apply RULE_EVALUATOR/LLM_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:51:22 -0500</date><message>refactor(scripts): extract LLM_JUDGE_EVALUATOR constant; remove blank line</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:47:09 -0500</date><message>perf(workflow): memoize effectiveSelected Set and document style exemption</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 23:32:05 -0500</date><message>refactor(derive-evaluations): remove write-only vars; hoist RULE_EVALUATOR to module level</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:30:08 -0500</date><message>refactor(derive-evaluations): remove redundant existsSync guard before readJsonlWithValidationSync</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:13:24 -0500</date><message>style(derive-evaluations): split multi-declaration into separate let statements</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:02:30 -0500</date><message>feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)</message><files>docs/BACKLOG.md</files><files>docs/CHANGELOG.md</files><files>docs/changelog/3.0.5/CHANGELOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files><files>src/lib/constants.ts</files><files>src/pages/RoutingTelemetryPage.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 22:59:51 -0500</date><message>perf(derive-evaluations): eliminate handoffScores array; compute in single pass</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:58:15 -0500</date><message>fix(derive-evaluations): remove stray double semicolon</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:52:11 -0500</date><message>refactor(derive-evaluations): use STATUS_SCORES constants instead of magic score literals</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:40:29 -0500</date><message>refactor(derive-evaluations): use shared constants and toDateOnly utility</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:37:18 -0500</date><message>refactor(judge-evaluations): remove redundant streaming WHAT comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:28:55 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:25:13 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comment</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:12:55 -0500</date><message>refactor(scripts): use HOOK_NAME constant and remove WHAT comments</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:02:16 -0500</date><message>docs(backlog): mark CR-WK-4, CR-WK-5, CR-WK-7, CR-WK-8 as done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-26 22:01:43 -0500</date><message>refactor(sessions): strip ticket IDs from parseTimestamp JSDoc</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:59:57 -0500</date><message>fix(sessions): remove unsafe LogRecord casts; access typed fields directly (CR-WK-5)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:58:53 -0500</date><message>fix(sessions): guard parseTimestamp against extreme values causing toISOString RangeError (CR-WK-4)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:47:39 -0500</date><message>fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>playwright.config.ts</files><files>scripts/deploy-secrets.sh</files><files>src/__tests__/supabase-refresh.test.ts</files><files>src/lib/supabase.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 20:08:47 -0500</date><message>refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 19:44:33 -0500</date><message>docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup</message><files>.claude/ralph-loop.local.md</files><files>CLAUDE.md</files><files>docs/auth/user-authentication.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>docs/roadmap/users.md</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:16:05 -0500</date><message>fix(CoverageGrid): add CSSProperties cast for CSS custom property</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:12:42 -0500</date><message>refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable</message><files>src/components/CoverageGrid.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 19:04:39 -0500</date><message>refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables</message><files>src/components/CorrelationHeatmap.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 18:58:18 -0500</date><message>refactor(data-loader): remove WHAT first line from loadEvaluationsByTraceIds JSDoc</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:53:10 -0500</date><message>refactor(sessions): remove WHAT JSDoc comment from sessionRoutes handler</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:46:20 -0500</date><message>refactor(trends): remove WHAT JSDoc comment from trendRoutes handler</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:40:24 -0500</date><message>fix(trends): add missing isValidParam check for metric name param</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:33:45 -0500</date><message>style(sessions): remove extra blank line between percentile and LatencyStats</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:19:54 -0500</date><message>fix(sessions): guard computeLatencyStats against empty durations array</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:12:04 -0500</date><message>refactor(routes): align traceId validation to isValidParam; use ErrorMessage in traces</message><files>src/api/routes/evaluations.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:03:45 -0500</date><message>refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds</message><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:02:12 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 18:01:43 -0500</date><message>refactor(worker): extract remaining inline error strings to ERR_ constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:55 -0500</date><message>refactor(constants): extract inline error strings into ErrorMessage enum</message><files>src/api/routes/coverage.ts</files><files>src/api/routes/sessions.ts</files><files>src/lib/constants.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:32 -0500</date><message>refactor(routes): use ErrorMessage enum for evaluations and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:55:04 -0500</date><message>refactor(worker): split userId/roleId validation for precise error messages</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:53:04 -0500</date><message>refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:47:44 -0500</date><message>refactor(worker): extract safeArray helper for Array.isArray KV guard pattern</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:40:46 -0500</date><message>refactor(derive-evaluations): import TELEMETRY_DIR and SESSION_ID_PREVIEW_LEN from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:22 -0500</date><message>refactor(derive-evaluations): import EVAL_SCORE_PRECISION from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:07 -0500</date><message>fix(worker): replace unsafe KV payload casts with Array.isArray guards</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:38:29 -0500</date><message>chore: regenerate repomix docs</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:52 -0500</date><message>refactor(derive-evaluations): use normalizeScore instead of inline parseFloat/toFixed</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:23 -0500</date><message>fix(worker): guard logActivity against undefined appUserId instead of passing empty string</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:42 -0500</date><message>refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:05 -0500</date><message>refactor(derive-evaluations): remove WHAT JSDoc comments from constants and serializer</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:31:23 -0500</date><message>refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants</message><files>scripts/sync-to-kv.ts</files><files>src/components/BarIndicator.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:29:57 -0500</date><message>refactor(components,worker): remove WHAT JSDoc prop comments and route comment</message><files>src/components/BarIndicator.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:28:36 -0500</date><message>refactor(worker): remove WHAT comments from admin route handlers</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:59 -0500</date><message>refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:44 -0500</date><message>docs(constants): restore non-obvious comments for LLM_SAMPLE_RATE and SCORE_*_PRECISION</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:01 -0500</date><message>refactor(derive-evaluations): remove WHAT comments in task scoring</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:25:03 -0500</date><message>refactor(keyboard-nav): remove WHAT comment before two-key combo handler</message><files>src/contexts/KeyboardNavContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:24:12 -0500</date><message>refactor(components,api): remove WHAT JSDoc comments from TruncatedIdLink and config</message><files>src/api/config.ts</files><files>src/components/TruncatedIdLink.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:59 -0500</date><message>refactor(quality-utils): remove WHAT JSDoc comments from utility functions</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:04 -0500</date><message>refactor(constants): remove WHAT JSDoc comments from self-documenting constants</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:21:40 -0500</date><message>refactor(trends): use ErrorMessage.InvalidBuckets constant</message><files>src/api/routes/trends.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:20:38 -0500</date><message>refactor(api-constants): remove WHAT JSDoc comments from constants and helpers</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:19:02 -0500</date><message>refactor(data-loader): remove section header WHAT comments</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:30 -0500</date><message>refactor(metrics): remove WHAT JSDoc comment on period constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:02 -0500</date><message>refactor(routes): remove WHAT JSDoc comments on internal helper functions</message><files>src/api/routes/dashboard.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:17:14 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in task tracking</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:16:29 -0500</date><message>refactor(quality): remove WHAT comment before sort</message><files>src/api/routes/quality.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.
 

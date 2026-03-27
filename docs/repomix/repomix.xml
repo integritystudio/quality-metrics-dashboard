@@ -3520,6 +3520,169 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
 });
 
 ================
+File: src/__tests__/WorkflowTimeline.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+vi.mock('../components/WorkflowGraph.js', () => ({
+  WorkflowGraphView: () => <div data-testid="workflow-graph-view" />,
+}));
+import { WorkflowTimeline } from '../components/WorkflowTimeline.js';
+import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
+import { makeNode, makeGraph, makeTurn, makeHandoff } from './workflow-fixtures.js';
+describe('WorkflowTimeline', () => {
+  it('renders empty state when no turns', () => {
+    render(<WorkflowTimeline turns={[]} agentNames={[]} />);
+    expect(screen.getByText(/no turns to display/i)).toBeInTheDocument();
+  });
+  it('renders an SVG when turns are present', () => {
+    const turns = [
+      makeTurn({ turnIndex: 0, agentName: 'planner' }),
+      makeTurn({ turnIndex: 1, agentName: 'executor' }),
+    ];
+    render(<WorkflowTimeline turns={turns} agentNames={['planner', 'executor']} />);
+    expect(document.querySelector('svg')).toBeInTheDocument();
+  });
+  it('renders a lane per agent name in the SVG', () => {
+    const turns = [
+      makeTurn({ turnIndex: 0, agentName: 'planner' }),
+      makeTurn({ turnIndex: 1, agentName: 'executor' }),
+    ];
+    const { container } = render(<WorkflowTimeline turns={turns} agentNames={['planner', 'executor']} />);
+    const svg = container.querySelector('svg');
+    expect(svg).toBeInTheDocument();
+    const textContent = svg?.textContent ?? '';
+    expect(textContent).toContain('planner');
+    expect(textContent).toContain('executor');
+  });
+  it('renders aria-label with agent and turn count', () => {
+    const turns = [
+      makeTurn({ turnIndex: 0, agentName: 'planner' }),
+      makeTurn({ turnIndex: 1, agentName: 'executor' }),
+    ];
+    render(
+      <WorkflowTimeline
+        turns={turns}
+        agentNames={['planner', 'executor']}
+      />,
+    );
+    const container = document.querySelector('[aria-label*="Workflow timeline"]');
+    expect(container).not.toBeNull();
+    expect(container?.getAttribute('aria-label')).toContain('2 agents');
+    expect(container?.getAttribute('aria-label')).toContain('2 turns');
+  });
+  it('renders handoff connector when handoffs provided', () => {
+    const turns = [
+      makeTurn({ turnIndex: 0, agentName: 'planner' }),
+      makeTurn({ turnIndex: 1, agentName: 'executor' }),
+    ];
+    const handoffs = [makeHandoff()];
+    render(
+      <WorkflowTimeline
+        turns={turns}
+        handoffs={handoffs}
+        agentNames={['planner', 'executor']}
+      />,
+    );
+    expect(document.querySelector('[aria-label*="Handoff from planner"]')).not.toBeNull();
+  });
+  it('shows handoff legend text when handoffs are provided', () => {
+    const turns = [makeTurn()];
+    const handoffs = [makeHandoff()];
+    render(
+      <WorkflowTimeline
+        turns={turns}
+        handoffs={handoffs}
+        agentNames={['planner']}
+      />,
+    );
+    expect(screen.getByText(/dashed lines.*handoffs/i)).toBeInTheDocument();
+  });
+  it('does not show handoff legend when no handoffs', () => {
+    render(
+      <WorkflowTimeline
+        turns={[makeTurn()]}
+        agentNames={['planner']}
+      />,
+    );
+    expect(screen.queryByText(/dashed lines/i)).not.toBeInTheDocument();
+  });
+});
+describe('AgentWorkflowView', () => {
+  const graph = makeGraph({ nodes: [makeNode()] });
+  it('renders DAG tab panel by default', () => {
+    render(<AgentWorkflowView graph={graph} />);
+    expect(screen.getByTestId('workflow-graph-view')).toBeInTheDocument();
+  });
+  it('renders a tablist with DAG and Timeline tabs', () => {
+    render(<AgentWorkflowView graph={graph} />);
+    expect(screen.getByRole('tablist')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /dag/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /timeline/i })).toBeInTheDocument();
+  });
+  it('DAG tab is selected by default', () => {
+    render(<AgentWorkflowView graph={graph} />);
+    const dagTab = screen.getByRole('tab', { name: /dag/i });
+    expect(dagTab).toHaveAttribute('aria-selected', 'true');
+  });
+  it('switches to Timeline tab on click', () => {
+    const turns = [makeTurn()];
+    const evaluation = {
+      turns,
+      handoffs: [],
+      handoffScore: null,
+      avgTurnRelevance: null,
+      conversationCompleteness: null,
+      totalTurns: 1,
+      errorPropagationTurns: 0,
+    };
+    render(<AgentWorkflowView graph={graph} evaluation={evaluation} />);
+    const timelineTab = screen.getByRole('tab', { name: /timeline/i });
+    fireEvent.click(timelineTab);
+    expect(timelineTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /dag/i })).toHaveAttribute('aria-selected', 'false');
+  });
+  it('hides DAG panel when Timeline tab is active', () => {
+    render(<AgentWorkflowView graph={graph} />);
+    fireEvent.click(screen.getByRole('tab', { name: /timeline/i }));
+    const dagPanel = document.getElementById('workflow-panel-dag');
+    expect(dagPanel).toHaveAttribute('hidden');
+  });
+  it('shows Timeline panel when Timeline tab is active', () => {
+    const turns = [makeTurn()];
+    const evaluation = {
+      turns,
+      handoffs: [],
+      handoffScore: null,
+      avgTurnRelevance: null,
+      conversationCompleteness: null,
+      totalTurns: 1,
+      errorPropagationTurns: 0,
+    };
+    render(<AgentWorkflowView graph={graph} evaluation={evaluation} />);
+    fireEvent.click(screen.getByRole('tab', { name: /timeline/i }));
+    const timelinePanel = document.getElementById('workflow-panel-timeline');
+    expect(timelinePanel).not.toHaveAttribute('hidden');
+  });
+  it('renders Timeline empty state when no evaluation provided', () => {
+    render(<AgentWorkflowView graph={graph} />);
+    fireEvent.click(screen.getByRole('tab', { name: /timeline/i }));
+    expect(screen.getByText(/no turns to display/i)).toBeInTheDocument();
+  });
+  it('tab panels have correct aria-labelledby attributes', () => {
+    render(<AgentWorkflowView graph={graph} />);
+    expect(document.getElementById('workflow-panel-dag'))
+      .toHaveAttribute('aria-labelledby', 'workflow-tab-dag');
+    expect(document.getElementById('workflow-panel-timeline'))
+      .toHaveAttribute('aria-labelledby', 'workflow-tab-timeline');
+  });
+});
+
+================
 File: src/api/routes/compliance.ts
 ================
 import { Hono } from 'hono';
@@ -5476,6 +5639,123 @@ export function SLATable({ slas }: { slas: SLAComplianceResult[] }) {
 }
 
 ================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[] {
+  const nodeMap = new Map<string, SpanNode>();
+  const roots: SpanNode[] = [];
+  for (const s of spans) {
+    nodeMap.set(s.spanId, {
+      spanId: s.spanId,
+      name: s.name,
+      durationMs: s.durationMs,
+      status: s.status,
+      attributes: s.attributes,
+      children: [],
+      evalCount: evalsBySpan.get(s.spanId) ?? 0,
+    });
+  }
+  for (const s of spans) {
+    const node = nodeMap.get(s.spanId)!;
+    const parentId = (s as { parentSpanId?: string }).parentSpanId;
+    if (parentId && nodeMap.has(parentId)) {
+      nodeMap.get(parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
+}
+const STATUS_ICONS: Record<number, string> = {
+  0: '',      // UNSET
+  1: '\u2713',
+  2: '\u2717',
+};
+function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
+  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
+  const statusCode = node.status?.code ?? 0;
+  const isError = statusCode === OTEL_STATUS_ERROR_CODE;
+  const barStyle: CSSProperties = {
+    '--span-bar-width': `${barPct}%`,
+    '--span-bar-min-width': barPct > 0 ? 'var(--space-0-5)' : '0',
+  } as CSSProperties;
+  return (
+    <>
+      <div
+        className="flex-center gap-2 border-b span-row"
+        style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
+      >
+        <span className="text-base span-status-icon" data-error={isError || undefined}>
+          {STATUS_ICONS[statusCode]}
+        </span>
+        <div className="flex-1">
+          <div className="text-xs font-medium">{node.name}</div>
+          <div className="flex-center gap-2">
+            <div className="flex-1 bar-track">
+              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
+            </div>
+            {node.durationMs != null && (
+              <span className="mono-xs text-secondary nowrap">
+                {fmtDuration(node.durationMs, 2)}
+              </span>
+            )}
+          </div>
+        </div>
+        {node.evalCount > 0 && (
+          <span className="text-2xs chip font-semibold chip-accent">
+            {plural(node.evalCount, 'eval')}
+          </span>
+        )}
+      </div>
+      {node.children.map(child => (
+        <SpanRow key={child.spanId} node={child} depth={depth + 1} maxDuration={maxDuration} />
+      ))}
+    </>
+  );
+}
+export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
+  const roots = buildTree(spans, evalsBySpan);
+  if (roots.length === 0) {
+    return <EmptyState message="No spans found for this trace." />;
+  }
+  return (
+    <div>
+      {roots.map(node => (
+        <SpanRow key={node.spanId} node={node} depth={0} maxDuration={maxDuration} />
+      ))}
+    </div>
+  );
+}
+
+================
 File: src/components/Sparkline.tsx
 ================
 import { memo } from 'react';
@@ -6802,211 +7082,6 @@ export const CONFIDENCE_SYMBOLS: Record<string, string> = {
 };
 
 ================
-File: src/pages/AdminPage.tsx
-================
-import { useState, useRef, useCallback } from 'react';
-import { format } from 'date-fns';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { useAuth } from '../contexts/AuthContext.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
-const ADMIN_TABLE_COLUMNS = [
-  { label: 'Email', align: 'left' as const },
-  { label: 'Roles', align: 'left' as const },
-  { label: 'Assign Role', align: 'left' as const },
-  { label: 'Joined', align: 'right' as const },
-];
-function RoleChip({
-  role,
-  onRevoke,
-  revoking,
-}: {
-  role: { id: string; name: string };
-  onRevoke: (roleId: string, roleName: string) => void;
-  revoking: boolean;
-}) {
-  return (
-    <span className="chip">
-      {role.name}
-      <button
-        className="chip-remove"
-        onClick={() => onRevoke(role.id, role.name)}
-        disabled={revoking}
-        aria-label={`Remove role ${role.name}`}
-      >
-        &times;
-      </button>
-    </span>
-  );
-}
-function UserRow({
-  user,
-  availableRoles,
-  onMutationStart,
-  onMutationEnd,
-}: {
-  user: AdminUser;
-  availableRoles: AdminRole[];
-  onMutationStart: () => string;
-  onMutationEnd: (id: string) => void;
-}) {
-  const [selectedRoleId, setSelectedRoleId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { getAccessToken } = useAuth();
-  const assignableRoles = availableRoles.filter(
-    (r) => !user.roles.some((ur) => ur.id === r.id),
-  );
-  async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
-    const token = await getAccessToken();
-    return fetch(`${API_BASE}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
-  }
-  async function handleAssign() {
-    if (!selectedRoleId) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles`, 'POST', { role_id: selectedRoleId });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to assign role');
-      } else {
-        setSelectedRoleId('');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
-  }
-  async function handleRevoke(roleId: string, roleName: string) {
-    if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, 'DELETE');
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to revoke role');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
-  }
-  return (
-    <tr className="border-b">
-      <td className="cell-pad text-left">
-        <span className="mono-sm">{user.email ?? <span className="text-muted">(no email)</span>}</span>
-      </td>
-      <td className="cell-pad text-left">
-        <div className="chip-list">
-          {user.roles.length === 0 && <span className="text-muted text-xs">No roles</span>}
-          {user.roles.map((r) => (
-            <RoleChip key={r.id} role={r} onRevoke={handleRevoke} revoking={busy} />
-          ))}
-        </div>
-        {error && <div className="text-xs text-error mt-1">{error}</div>}
-      </td>
-      <td className="cell-pad text-left">
-        <div className="inline-flex-center gap-4">
-          <select
-            className="select-sm"
-            value={selectedRoleId}
-            onChange={(e) => setSelectedRoleId(e.target.value)}
-            disabled={busy || assignableRoles.length === 0}
-            aria-label={`Assign role to ${user.email ?? user.id}`}
-          >
-            <option value="">Select role...</option>
-            {assignableRoles.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <button
-            className="btn-sm"
-            onClick={handleAssign}
-            disabled={busy || !selectedRoleId}
-          >
-            Assign
-          </button>
-        </div>
-      </td>
-      <td className="cell-pad text-right text-muted text-xs nowrap">
-        {user.created_at ? format(new Date(user.created_at), 'PP') : '—'}
-      </td>
-    </tr>
-  );
-}
-export function AdminPage() {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const pendingMutationsRef = useRef<Set<string>>(new Set());
-  const mutationIdRef = useRef(0);
-  const onMutationStart = useCallback((): string => {
-    const id = String(++mutationIdRef.current);
-    pendingMutationsRef.current.add(id);
-    return id;
-  }, []);
-  const onMutationEnd = useCallback((id: string) => {
-    pendingMutationsRef.current.delete(id);
-    if (pendingMutationsRef.current.size === 0) {
-      setRefreshKey((k) => k + 1);
-    }
-  }, []);
-  const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
-    ['admin', 'users', refreshKey],
-    () => `${API_BASE}/api/admin/users`,
-  );
-  const { data: roles, isLoading: rolesLoading, error: rolesError } = useApiQuery<AdminRole[]>(
-    ['admin', 'roles'],
-    () => `${API_BASE}/api/admin/roles`,
-  );
-  const isLoading = usersLoading || rolesLoading;
-  const error = usersError ?? rolesError;
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      <DetailPageHeader title="User Management" />
-      <div className="card">
-        {!users || users.length === 0 ? (
-          <div className="empty-state text-secondary">No users found.</div>
-        ) : (
-          <div className="table-scroll">
-            <table className="mono-table">
-              <MonoTableHead columns={ADMIN_TABLE_COLUMNS} />
-              <tbody>
-                {users.map((user) => (
-                  <UserRow
-                    key={user.id}
-                    user={user}
-                    availableRoles={roles ?? []}
-                    onMutationStart={onMutationStart}
-                    onMutationEnd={onMutationEnd}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </PageShell>
-  );
-}
-
-================
 File: src/pages/AgentSessionPage.tsx
 ================
 import { Link } from 'wouter';
@@ -7527,36 +7602,6 @@ export interface AppSession {
   roles: string[];
   permissions: DashboardPermission[];
   allowedViews: DashboardView[];
-}
-
-================
-File: src/types/workflow-graph.ts
-================
-export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
-export interface WorkflowNode {
-  id: string;
-  label: string;
-  evaluationScore: number | null;
-  toolCallCount: number;
-  totalTokens: number | null;
-  durationMs: number;
-  turnCount: number;
-  hasError: boolean;
-}
-export interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-  handoffScore: number | null;
-  contextPreserved: boolean;
-  label?: string;
-}
-export interface WorkflowGraph {
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  rootNodeId: string | null;
-  workflowShape: WorkflowShape;
-  droppedTurns: number;
 }
 
 ================
@@ -11202,6 +11247,136 @@ describe('truncateText', () => {
 });
 
 ================
+File: src/__tests__/score-badge-calibration.test.tsx
+================
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, within, cleanup } from '@testing-library/react';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import type { PercentileDistribution } from '../lib/quality-utils.js';
+afterEach(cleanup);
+function makeDistribution(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
+  return {
+    p10: 0.30,
+    p25: 0.48,
+    p50: 0.60,
+    p75: 0.72,
+    p90: 0.83,
+    ...overrides,
+  };
+}
+function getBadgeLabel(container: HTMLElement): string {
+  return container.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
+}
+describe('ScoreBadge without calibration prop', () => {
+  it('renders excellent band for score 0.95 without calibration', () => {
+    const { container } = render(<ScoreBadge score={0.95} metricName="relevance" />);
+    expect(getBadgeLabel(container)).toMatch(/excellent/i);
+  });
+  it('renders failing band for score 0.3 without calibration', () => {
+    const { container } = render(<ScoreBadge score={0.3} metricName="relevance" />);
+    expect(getBadgeLabel(container)).toMatch(/failing/i);
+  });
+  it('renders adequate band for score 0.75 without calibration (uniform baseline)', () => {
+    const { container } = render(<ScoreBadge score={0.75} metricName="relevance" />);
+    expect(getBadgeLabel(container)).toMatch(/adequate/i);
+  });
+});
+describe('ScoreBadge with calibration prop', () => {
+  it('accepts calibration prop as part of the component interface', () => {
+    const calibration = { distribution: makeDistribution(), sampleSize: 250 };
+    expect(() =>
+      render(
+        <ScoreBadge
+          score={0.75}
+          metricName="relevance"
+          calibration={calibration}
+        />
+      )
+    ).not.toThrow();
+  });
+  it('uses excellent/good band for score 0.75 when calibration shows it is above p75', () => {
+    const distribution = makeDistribution({ p75: 0.72, p90: 0.83 });
+    const calibration = { distribution, sampleSize: 200 };
+    const { container } = render(
+      <ScoreBadge
+        score={0.75}
+        metricName="relevance"
+        calibration={calibration}
+      />
+    );
+    const label = getBadgeLabel(container);
+    expect(label).toMatch(/excellent|good/i);
+    expect(label).not.toMatch(/adequate/i);
+  });
+  it('aria-label differs from uniform when calibration shifts the band', () => {
+    const distribution = makeDistribution({ p50: 0.6, p75: 0.72, p90: 0.83 });
+    const { container: noCalContainer } = render(
+      <ScoreBadge score={0.75} metricName="relevance" />
+    );
+    const uniformLabel = getBadgeLabel(noCalContainer);
+    cleanup();
+    const { container: withCalContainer } = render(
+      <ScoreBadge
+        score={0.75}
+        metricName="relevance"
+        calibration={{ distribution, sampleSize: 200 }}
+      />
+    );
+    const adaptiveLabel = getBadgeLabel(withCalContainer);
+    expect(adaptiveLabel).not.toBe(uniformLabel);
+  });
+  it('behaves same as no-calibration when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE', () => {
+    const calibration = { distribution: makeDistribution(), sampleSize: 50 };
+    const { container: withCalContainer } = render(
+      <ScoreBadge
+        score={0.95}
+        metricName="relevance"
+        calibration={calibration}
+      />
+    );
+    const withCalLabel = getBadgeLabel(withCalContainer);
+    cleanup();
+    const { container: noCalContainer } = render(
+      <ScoreBadge score={0.95} metricName="relevance" />
+    );
+    const noCalLabel = getBadgeLabel(noCalContainer);
+    expect(withCalLabel).toBe(noCalLabel);
+  });
+  it('renders same band with and without calibration when no calibration is provided', () => {
+    const { container: noCalContainer } = render(
+      <ScoreBadge score={0.85} metricName="relevance" />
+    );
+    const noCalLabel = getBadgeLabel(noCalContainer);
+    cleanup();
+    const { container: undefinedCalContainer } = render(
+      <ScoreBadge
+        score={0.85}
+        metricName="relevance"
+        calibration={undefined}
+      />
+    );
+    const undefinedCalLabel = getBadgeLabel(undefinedCalContainer);
+    expect(undefinedCalLabel).toBe(noCalLabel);
+  });
+  it('uses within() to scope queries to the rendered container', () => {
+    const calibration = { distribution: makeDistribution(), sampleSize: 150 };
+    const { container } = render(
+      <ScoreBadge
+        score={0.75}
+        metricName="relevance"
+        calibration={calibration}
+      />
+    );
+    const scope = within(container as HTMLElement);
+    const allLabeled = scope.getAllByRole('generic', { hidden: true });
+    const labeled = allLabeled.filter(el => el.hasAttribute('aria-label'));
+    expect(labeled.length).toBeGreaterThan(0);
+    const ariaLabel = labeled[0].getAttribute('aria-label') ?? '';
+    expect(ariaLabel).toMatch(/excellent|good/i);
+  });
+});
+
+================
 File: src/__tests__/test-types.ts
 ================
 import { z } from 'zod';
@@ -11253,6 +11428,81 @@ export type PageShellProps = {
   error: { message: string } | null;
   children: ReactNode;
 };
+
+================
+File: src/__tests__/useQualityLive.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { useQualityLive } from '../hooks/useQualityLive.js';
+import { POLL_INTERVAL_MS } from '../lib/constants.js';
+const mockUseApiQuery = vi.fn();
+vi.mock('../hooks/useApiQuery.js', () => ({
+  useApiQuery: (...args: unknown[]) => mockUseApiQuery(...args),
+}));
+function makeQualityResponse(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    metrics: [
+      { name: 'relevance', score: 0.85, evaluatorType: 'seed', timestamp: '2026-01-15T12:00:00.000Z' },
+      { name: 'coherence', score: 0.9, evaluatorType: 'seed', timestamp: '2026-01-15T12:00:00.000Z' },
+    ],
+    sessionCount: 3,
+    lastUpdated: '2026-01-15T12:00:00.000Z',
+    ...overrides,
+  };
+}
+describe('useQualityLive', () => {
+  beforeEach(() => {
+    mockUseApiQuery.mockReset();
+  });
+  it('passes correct query key, URL builder, and refetchInterval to useApiQuery', () => {
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: true, error: null });
+    renderHook(() => useQualityLive());
+    expect(mockUseApiQuery).toHaveBeenCalledTimes(1);
+    const [queryKey, buildUrl, options] = mockUseApiQuery.mock.calls[0];
+    expect(queryKey).toEqual(['quality', 'live']);
+    expect(buildUrl()).toContain('/api/quality/live');
+    expect(options).toEqual({ refetchInterval: POLL_INTERVAL_MS });
+  });
+  it('returns isLoading=true, data=null, error=null while loading', () => {
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: true, error: null });
+    const { result } = renderHook(() => useQualityLive());
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBeNull();
+  });
+  it('returns data and clears isLoading after successful fetch', () => {
+    const payload = makeQualityResponse();
+    mockUseApiQuery.mockReturnValue({ data: payload, isLoading: false, error: null });
+    const { result } = renderHook(() => useQualityLive());
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data).toEqual(payload);
+    expect(result.current.error).toBeNull();
+  });
+  it('coerces undefined data to null', () => {
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    const { result } = renderHook(() => useQualityLive());
+    expect(result.current.data).toBeNull();
+  });
+  it('returns error from useApiQuery', () => {
+    const err = new Error('API error: 500');
+    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: false, error: err });
+    const { result } = renderHook(() => useQualityLive());
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toBe(err);
+    expect(result.current.data).toBeNull();
+  });
+  it('returns updated data when useApiQuery provides new results', () => {
+    const first = makeQualityResponse({ sessionCount: 1 });
+    mockUseApiQuery.mockReturnValue({ data: first, isLoading: false, error: null });
+    const { result, rerender } = renderHook(() => useQualityLive());
+    expect(result.current.data?.sessionCount).toBe(1);
+    const second = makeQualityResponse({ sessionCount: 5 });
+    mockUseApiQuery.mockReturnValue({ data: second, isLoading: false, error: null });
+    rerender();
+    expect(result.current.data?.sessionCount).toBe(5);
+  });
+});
 
 ================
 File: src/__tests__/WorkflowGraph.test.tsx
@@ -11512,165 +11762,232 @@ describe('WorkflowGraphView stress (ST-G5)', () => {
 });
 
 ================
-File: src/__tests__/WorkflowTimeline.test.tsx
+File: src/__tests__/WorkflowPage.test.tsx
 ================
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
+const mockUseAgentSession = vi.fn();
+vi.mock('../hooks/useAgentSession.js', () => ({
+  useAgentSession: (...args: unknown[]) => mockUseAgentSession(...args),
+}));
+const mockNavigate = vi.fn();
+vi.mock('wouter', () => ({
+  useLocation: () => ['/', mockNavigate],
+  Link: ({ href, children, ...rest }: LinkProps) => (
+    <a href={href} {...rest}>{children}</a>
+  ),
+}));
+vi.mock('../components/WorkflowGraph.js', () => ({
+  WorkflowGraphView: ({ graph, onNodeClick }: WorkflowGraphViewProps) => (
+    <div data-testid="workflow-graph-view">
+      {(graph.nodes ?? []).map(n => (
+        <button
+          key={n.id}
+          data-testid={`graph-node-${n.id}`}
+          onClick={() => onNodeClick?.(n.id)}
+        >
+          {n.label}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+vi.mock('../components/DetailPageHeader.js', () => ({
+  DetailPageHeader: ({ title, id, children }: DetailPageHeaderProps) => (
+    <div data-testid="detail-page-header">
+      <h2>{title}</h2>
+      {id && <span data-testid="header-id">{id}</span>}
+      {children}
+    </div>
+  ),
+}));
+vi.mock('../components/PageShell.js', () => ({
+  PageShell: ({ isLoading, error, children }: PageShellProps) => {
+    if (isLoading) return <div data-testid="page-shell-loading" />;
+    if (error) return <div data-testid="page-shell-error">{error.message}</div>;
+    return <div data-testid="page-shell">{children}</div>;
+  },
+}));
+import { WorkflowPage } from '../pages/WorkflowPage.js';
+import { AgentSessionPage } from '../pages/AgentSessionPage.js';
+import { makeNode, makeGraph } from './workflow-fixtures.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-vi.mock('../components/WorkflowGraph.js', () => ({
-  WorkflowGraphView: () => <div data-testid="workflow-graph-view" />,
-}));
-import { WorkflowTimeline } from '../components/WorkflowTimeline.js';
-import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
-import { makeNode, makeGraph, makeTurn, makeHandoff } from './workflow-fixtures.js';
-describe('WorkflowTimeline', () => {
-  it('renders empty state when no turns', () => {
-    render(<WorkflowTimeline turns={[]} agentNames={[]} />);
-    expect(screen.getByText(/no turns to display/i)).toBeInTheDocument();
+function makeAgentSessionData(graph: WorkflowGraph | null | undefined = makeGraph()) {
+  return {
+    sessionId: 'session-abc',
+    spans: [],
+    evaluation: {
+      totalTurns: 3,
+      handoffs: [],
+      turns: [],
+      handoffScore: 0.9,
+      avgTurnRelevance: 0.8,
+      conversationCompleteness: 0.75,
+      errorPropagationTurns: 0,
+    },
+    evaluations: [],
+    agentMap: {},
+    graph,
+  };
+}
+describe('WorkflowPage', () => {
+  describe('when data has a valid graph', () => {
+    beforeEach(() => {
+      mockUseAgentSession.mockReturnValue({
+        data: makeAgentSessionData(makeGraph()),
+        isLoading: false,
+        error: null,
+      });
+    });
+    it('renders WorkflowGraphView when graph is present', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.getByTestId('workflow-graph-view')).toBeInTheDocument();
+    });
+    it('renders DetailPageHeader with title "Workflow"', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.getByRole('heading', { name: 'Workflow' })).toBeInTheDocument();
+    });
+    it('displays the workflow shape in the header', () => {
+      const graph = makeGraph({ workflowShape: 'branching' });
+      mockUseAgentSession.mockReturnValue({
+        data: makeAgentSessionData(graph),
+        isLoading: false,
+        error: null,
+      });
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.getByText(/branching/)).toBeInTheDocument();
+    });
+    it('displays agent count in the header', () => {
+      const graph = makeGraph({
+        nodes: [
+          makeNode({ id: 'n1' }),
+          makeNode({ id: 'n2' }),
+          makeNode({ id: 'n3' }),
+        ],
+      });
+      mockUseAgentSession.mockReturnValue({
+        data: makeAgentSessionData(graph),
+        isLoading: false,
+        error: null,
+      });
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.getByText(/3 agents/)).toBeInTheDocument();
+    });
+    it('calls useAgentSession with the provided sessionId', () => {
+      render(<WorkflowPage sessionId="my-session-id" />);
+      expect(mockUseAgentSession).toHaveBeenCalledWith('my-session-id');
+    });
   });
-  it('renders an SVG when turns are present', () => {
-    const turns = [
-      makeTurn({ turnIndex: 0, agentName: 'planner' }),
-      makeTurn({ turnIndex: 1, agentName: 'executor' }),
-    ];
-    render(<WorkflowTimeline turns={turns} agentNames={['planner', 'executor']} />);
-    expect(document.querySelector('svg')).toBeInTheDocument();
+  describe('when graph is null (data loaded but no graph)', () => {
+    beforeEach(() => {
+      mockUseAgentSession.mockReturnValue({
+        data: makeAgentSessionData(null),
+        isLoading: false,
+        error: null,
+      });
+    });
+    it('does not render WorkflowGraphView', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
+    });
+    it('shows empty state message', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(
+        screen.getByText(/No workflow graph available for this session/i)
+      ).toBeInTheDocument();
+    });
   });
-  it('renders a lane per agent name in the SVG', () => {
-    const turns = [
-      makeTurn({ turnIndex: 0, agentName: 'planner' }),
-      makeTurn({ turnIndex: 1, agentName: 'executor' }),
-    ];
-    const { container } = render(<WorkflowTimeline turns={turns} agentNames={['planner', 'executor']} />);
-    const svg = container.querySelector('svg');
-    expect(svg).toBeInTheDocument();
-    const textContent = svg?.textContent ?? '';
-    expect(textContent).toContain('planner');
-    expect(textContent).toContain('executor');
+  describe('when data is undefined (initial/loading state)', () => {
+    beforeEach(() => {
+      mockUseAgentSession.mockReturnValue({
+        data: undefined,
+        isLoading: true,
+        error: null,
+      });
+    });
+    it('does not render WorkflowGraphView while loading', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
+    });
+    it('renders loading state via PageShell', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.getByTestId('page-shell-loading')).toBeInTheDocument();
+    });
   });
-  it('renders aria-label with agent and turn count', () => {
-    const turns = [
-      makeTurn({ turnIndex: 0, agentName: 'planner' }),
-      makeTurn({ turnIndex: 1, agentName: 'executor' }),
-    ];
-    render(
-      <WorkflowTimeline
-        turns={turns}
-        agentNames={['planner', 'executor']}
-      />,
-    );
-    const container = document.querySelector('[aria-label*="Workflow timeline"]');
-    expect(container).not.toBeNull();
-    expect(container?.getAttribute('aria-label')).toContain('2 agents');
-    expect(container?.getAttribute('aria-label')).toContain('2 turns');
-  });
-  it('renders handoff connector when handoffs provided', () => {
-    const turns = [
-      makeTurn({ turnIndex: 0, agentName: 'planner' }),
-      makeTurn({ turnIndex: 1, agentName: 'executor' }),
-    ];
-    const handoffs = [makeHandoff()];
-    render(
-      <WorkflowTimeline
-        turns={turns}
-        handoffs={handoffs}
-        agentNames={['planner', 'executor']}
-      />,
-    );
-    expect(document.querySelector('[aria-label*="Handoff from planner"]')).not.toBeNull();
-  });
-  it('shows handoff legend text when handoffs are provided', () => {
-    const turns = [makeTurn()];
-    const handoffs = [makeHandoff()];
-    render(
-      <WorkflowTimeline
-        turns={turns}
-        handoffs={handoffs}
-        agentNames={['planner']}
-      />,
-    );
-    expect(screen.getByText(/dashed lines.*handoffs/i)).toBeInTheDocument();
-  });
-  it('does not show handoff legend when no handoffs', () => {
-    render(
-      <WorkflowTimeline
-        turns={[makeTurn()]}
-        agentNames={['planner']}
-      />,
-    );
-    expect(screen.queryByText(/dashed lines/i)).not.toBeInTheDocument();
+  describe('onNodeClick navigation', () => {
+    beforeEach(() => {
+      mockUseAgentSession.mockReturnValue({
+        data: makeAgentSessionData(
+          makeGraph({ nodes: [makeNode({ id: 'agent-node-42', label: 'executor' })] })
+        ),
+        isLoading: false,
+        error: null,
+      });
+    });
+    it('navigates to /agents/{sessionId}?agent={nodeId} when a node is clicked', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      fireEvent.click(screen.getByTestId('graph-node-agent-node-42'));
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/agents/session-abc?agent=agent-node-42'
+      );
+    });
+    it('URL-encodes sessionId and nodeId in the navigation path', () => {
+      mockUseAgentSession.mockReturnValue({
+        data: makeAgentSessionData(
+          makeGraph({ nodes: [makeNode({ id: 'node with spaces', label: 'test' })] })
+        ),
+        isLoading: false,
+        error: null,
+      });
+      render(<WorkflowPage sessionId="session/with/slashes" />);
+      fireEvent.click(screen.getByTestId('graph-node-node with spaces'));
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/agents/session%2Fwith%2Fslashes?agent=node%20with%20spaces'
+      );
+    });
   });
 });
-describe('AgentWorkflowView', () => {
-  const graph = makeGraph({ nodes: [makeNode()] });
-  it('renders DAG tab panel by default', () => {
-    render(<AgentWorkflowView graph={graph} />);
-    expect(screen.getByTestId('workflow-graph-view')).toBeInTheDocument();
-  });
-  it('renders a tablist with DAG and Timeline tabs', () => {
-    render(<AgentWorkflowView graph={graph} />);
-    expect(screen.getByRole('tablist')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /dag/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /timeline/i })).toBeInTheDocument();
-  });
-  it('DAG tab is selected by default', () => {
-    render(<AgentWorkflowView graph={graph} />);
-    const dagTab = screen.getByRole('tab', { name: /dag/i });
-    expect(dagTab).toHaveAttribute('aria-selected', 'true');
-  });
-  it('switches to Timeline tab on click', () => {
-    const turns = [makeTurn()];
-    const evaluation = {
-      turns,
+describe('AgentSessionPage', () => {
+  const SESSION_ID = 'session-xyz';
+  function makeEvaluation(overrides: Record<string, unknown> = {}) {
+    return {
+      totalTurns: 2,
       handoffs: [],
-      handoffScore: null,
-      avgTurnRelevance: null,
-      conversationCompleteness: null,
-      totalTurns: 1,
+      turns: [{ agentName: 'agent-1', turnIndex: 0 }],
+      handoffScore: 0.8,
+      avgTurnRelevance: 0.7,
+      conversationCompleteness: 0.9,
       errorPropagationTurns: 0,
+      ...overrides,
     };
-    render(<AgentWorkflowView graph={graph} evaluation={evaluation} />);
-    const timelineTab = screen.getByRole('tab', { name: /timeline/i });
-    fireEvent.click(timelineTab);
-    expect(timelineTab).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /dag/i })).toHaveAttribute('aria-selected', 'false');
+  }
+  beforeEach(() => {
+    mockUseAgentSession.mockReturnValue({
+      data: {
+        sessionId: SESSION_ID,
+        spans: [],
+        evaluation: makeEvaluation(),
+        evaluations: [],
+        agentMap: {},
+        graph: makeGraph(),
+      },
+      isLoading: false,
+      error: null,
+    });
   });
-  it('hides DAG panel when Timeline tab is active', () => {
-    render(<AgentWorkflowView graph={graph} />);
-    fireEvent.click(screen.getByRole('tab', { name: /timeline/i }));
-    const dagPanel = document.getElementById('workflow-panel-dag');
-    expect(dagPanel).toHaveAttribute('hidden');
+  it('renders a "View Workflow" link', () => {
+    render(<AgentSessionPage sessionId={SESSION_ID} />);
+    expect(screen.getByRole('link', { name: /view workflow/i })).toBeInTheDocument();
   });
-  it('shows Timeline panel when Timeline tab is active', () => {
-    const turns = [makeTurn()];
-    const evaluation = {
-      turns,
-      handoffs: [],
-      handoffScore: null,
-      avgTurnRelevance: null,
-      conversationCompleteness: null,
-      totalTurns: 1,
-      errorPropagationTurns: 0,
-    };
-    render(<AgentWorkflowView graph={graph} evaluation={evaluation} />);
-    fireEvent.click(screen.getByRole('tab', { name: /timeline/i }));
-    const timelinePanel = document.getElementById('workflow-panel-timeline');
-    expect(timelinePanel).not.toHaveAttribute('hidden');
-  });
-  it('renders Timeline empty state when no evaluation provided', () => {
-    render(<AgentWorkflowView graph={graph} />);
-    fireEvent.click(screen.getByRole('tab', { name: /timeline/i }));
-    expect(screen.getByText(/no turns to display/i)).toBeInTheDocument();
-  });
-  it('tab panels have correct aria-labelledby attributes', () => {
-    render(<AgentWorkflowView graph={graph} />);
-    expect(document.getElementById('workflow-panel-dag'))
-      .toHaveAttribute('aria-labelledby', 'workflow-tab-dag');
-    expect(document.getElementById('workflow-panel-timeline'))
-      .toHaveAttribute('aria-labelledby', 'workflow-tab-timeline');
+  it('"View Workflow" link points to /workflows/{sessionId}', () => {
+    render(<AgentSessionPage sessionId={SESSION_ID} />);
+    const link = screen.getByRole('link', { name: /view workflow/i });
+    expect(link).toHaveAttribute('href', `/workflows/${SESSION_ID}`);
   });
 });
 
@@ -11714,6 +12031,140 @@ coverageRoutes.get('/coverage', async (c) => {
       inputKey: inputKeyResult.data,
     });
     return c.json({ period, ...heatmap });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/routes/dashboard.ts
+================
+import { Hono } from 'hono';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  type RoleViewType,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
+import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+const SPARKLINE_BUCKET_COUNT = 24;
+function computeSparklineData(
+  evaluations: EvaluationResult[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): (number | null)[] {
+  const range = endMs - startMs;
+  if (range <= 0 || evaluations.length === 0) return [];
+  const bucketWidth = range / buckets;
+  const sums = new Array(buckets).fill(0);
+  const counts = new Array(buckets).fill(0);
+  for (const ev of evaluations) {
+    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
+    const ts = new Date(ev.timestamp).getTime();
+    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
+    if (idx >= 0) {
+      sums[idx] += ev.scoreValue;
+      counts[idx]++;
+    }
+  }
+  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
+}
+export const dashboardRoutes = new Hono();
+dashboardRoutes.get('/dashboard', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
+  if (!roleResult.success) {
+    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const role = roleResult.data;
+    const dates = computePeriodDates(period);
+    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
+    const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
+    const cqi = computeCQI(dashboard.metrics);
+    const startMs = new Date(dates.start).getTime();
+    const endMs = new Date(dates.end).getTime();
+    const sparklines: Record<string, (number | null)[]> = {};
+    for (const [metricName, evals] of evaluationsByMetric) {
+      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
+    }
+    if (role) {
+      const view = computeRoleView(dashboard, role as RoleViewType);
+      if (role === 'executive') {
+        return c.json({ ...view, cqi, sparklines });
+      }
+      return c.json({ ...view, sparklines });
+    }
+    return c.json({ ...dashboard, cqi, sparklines });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+dashboardRoutes.get('/health', async (c) => {
+  try {
+    const result = await checkHealth();
+    return c.json(result);
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/routes/quality.ts
+================
+import { Hono } from 'hono';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
+import type { LiveMetric, QualityLiveData } from '../../types.js';
+export const qualityRoutes = new Hono();
+qualityRoutes.get('/quality/live', async (c) => {
+  try {
+    const now = new Date();
+    const start = new Date(now.getTime() - LIVE_WINDOW_MS);
+    const evaluationsByMetric = await loadEvaluationsByMetric(
+      start.toISOString(),
+      now.toISOString(),
+    );
+    const metrics: LiveMetric[] = [];
+    const sessionIds = new Set<string>();
+    let latestTimestamp = '';
+    for (const [name, evals] of evaluationsByMetric) {
+      const sorted = evals
+        .slice()
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+        .slice(0, EVAL_LIMIT);
+      for (const ev of sorted) {
+        if (ev.traceId) sessionIds.add(ev.traceId);
+      }
+      const latest = sorted[0];
+      if (latest && latest.scoreValue != null) {
+        metrics.push({
+          name,
+          score: latest.scoreValue,
+          evaluatorType: latest.evaluatorType ?? 'unknown',
+          timestamp: latest.timestamp,
+        });
+        if (latest.timestamp > latestTimestamp) {
+          latestTimestamp = latest.timestamp;
+        }
+      }
+    }
+    metrics.sort((a, b) => a.name.localeCompare(b.name));
+    const response: QualityLiveData = {
+      metrics,
+      sessionCount: sessionIds.size,
+      lastUpdated: latestTimestamp || now.toISOString(),
+    };
+    return c.json(response);
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
@@ -12144,123 +12595,6 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
 }
 
 ================
-File: src/components/SpanTree.tsx
-================
-import type { CSSProperties } from 'react';
-import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[] {
-  const nodeMap = new Map<string, SpanNode>();
-  const roots: SpanNode[] = [];
-  for (const s of spans) {
-    nodeMap.set(s.spanId, {
-      spanId: s.spanId,
-      name: s.name,
-      durationMs: s.durationMs,
-      status: s.status,
-      attributes: s.attributes,
-      children: [],
-      evalCount: evalsBySpan.get(s.spanId) ?? 0,
-    });
-  }
-  for (const s of spans) {
-    const node = nodeMap.get(s.spanId)!;
-    const parentId = (s as { parentSpanId?: string }).parentSpanId;
-    if (parentId && nodeMap.has(parentId)) {
-      nodeMap.get(parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-  return roots;
-}
-const STATUS_ICONS: Record<number, string> = {
-  0: '',      // UNSET
-  1: '\u2713',
-  2: '\u2717',
-};
-function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
-  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
-  const statusCode = node.status?.code ?? 0;
-  const isError = statusCode === OTEL_STATUS_ERROR_CODE;
-  const barStyle: CSSProperties = {
-    '--span-bar-width': `${barPct}%`,
-    '--span-bar-min-width': barPct > 0 ? 'var(--space-0-5)' : '0',
-  } as CSSProperties;
-  return (
-    <>
-      <div
-        className="flex-center gap-2 border-b span-row"
-        style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
-      >
-        <span className="text-base span-status-icon" data-error={isError || undefined}>
-          {STATUS_ICONS[statusCode]}
-        </span>
-        <div className="flex-1">
-          <div className="text-xs font-medium">{node.name}</div>
-          <div className="flex-center gap-2">
-            <div className="flex-1 bar-track">
-              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
-            </div>
-            {node.durationMs != null && (
-              <span className="mono-xs text-secondary nowrap">
-                {fmtDuration(node.durationMs, 2)}
-              </span>
-            )}
-          </div>
-        </div>
-        {node.evalCount > 0 && (
-          <span className="text-2xs chip font-semibold chip-accent">
-            {plural(node.evalCount, 'eval')}
-          </span>
-        )}
-      </div>
-      {node.children.map(child => (
-        <SpanRow key={child.spanId} node={child} depth={depth + 1} maxDuration={maxDuration} />
-      ))}
-    </>
-  );
-}
-export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
-  const roots = buildTree(spans, evalsBySpan);
-  if (roots.length === 0) {
-    return <EmptyState message="No spans found for this trace." />;
-  }
-  return (
-    <div>
-      {roots.map(node => (
-        <SpanRow key={node.spanId} node={node} depth={0} maxDuration={maxDuration} />
-      ))}
-    </div>
-  );
-}
-
-================
 File: src/components/TruncatedIdLink.tsx
 ================
 import type { MouseEvent } from 'react';
@@ -12563,6 +12897,211 @@ export function supabasePost(
 }
 
 ================
+File: src/pages/AdminPage.tsx
+================
+import { useState, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useAuth } from '../contexts/AuthContext.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import type { AdminUser, AdminRole } from '../lib/validation/auth-schemas.js';
+const ADMIN_TABLE_COLUMNS = [
+  { label: 'Email', align: 'left' as const },
+  { label: 'Roles', align: 'left' as const },
+  { label: 'Assign Role', align: 'left' as const },
+  { label: 'Joined', align: 'right' as const },
+];
+function RoleChip({
+  role,
+  onRevoke,
+  revoking,
+}: {
+  role: { id: string; name: string };
+  onRevoke: (roleId: string, roleName: string) => void;
+  revoking: boolean;
+}) {
+  return (
+    <span className="chip">
+      {role.name}
+      <button
+        className="chip-remove"
+        onClick={() => onRevoke(role.id, role.name)}
+        disabled={revoking}
+        aria-label={`Remove role ${role.name}`}
+      >
+        &times;
+      </button>
+    </span>
+  );
+}
+function UserRow({
+  user,
+  availableRoles,
+  onMutationStart,
+  onMutationEnd,
+}: {
+  user: AdminUser;
+  availableRoles: AdminRole[];
+  onMutationStart: () => string;
+  onMutationEnd: (id: string) => void;
+}) {
+  const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { getAccessToken } = useAuth();
+  const assignableRoles = availableRoles.filter(
+    (r) => !user.roles.some((ur) => ur.id === r.id),
+  );
+  async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
+    const token = await getAccessToken();
+    return fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+  }
+  async function handleAssign() {
+    if (!selectedRoleId) return;
+    setBusy(true);
+    setError(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(`/api/admin/users/${user.id}/roles`, 'POST', { role_id: selectedRoleId });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || 'Failed to assign role');
+      } else {
+        setSelectedRoleId('');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+  async function handleRevoke(roleId: string, roleName: string) {
+    if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
+    setBusy(true);
+    setError(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, 'DELETE');
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || 'Failed to revoke role');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+  return (
+    <tr className="border-b">
+      <td className="cell-pad text-left">
+        <span className="mono-sm">{user.email ?? <span className="text-muted">(no email)</span>}</span>
+      </td>
+      <td className="cell-pad text-left">
+        <div className="chip-list">
+          {user.roles.length === 0 && <span className="text-muted text-xs">No roles</span>}
+          {user.roles.map((r) => (
+            <RoleChip key={r.id} role={r} onRevoke={handleRevoke} revoking={busy} />
+          ))}
+        </div>
+        {error && <div className="text-xs text-error mt-1">{error}</div>}
+      </td>
+      <td className="cell-pad text-left">
+        <div className="inline-flex-center gap-4">
+          <select
+            className="select-sm"
+            value={selectedRoleId}
+            onChange={(e) => setSelectedRoleId(e.target.value)}
+            disabled={busy || assignableRoles.length === 0}
+            aria-label={`Assign role to ${user.email ?? user.id}`}
+          >
+            <option value="">Select role...</option>
+            {assignableRoles.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+          <button
+            className="btn-sm"
+            onClick={handleAssign}
+            disabled={busy || !selectedRoleId}
+          >
+            Assign
+          </button>
+        </div>
+      </td>
+      <td className="cell-pad text-right text-muted text-xs nowrap">
+        {user.created_at ? format(new Date(user.created_at), 'PP') : '—'}
+      </td>
+    </tr>
+  );
+}
+export function AdminPage() {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const pendingMutationsRef = useRef<Set<string>>(new Set());
+  const mutationIdRef = useRef(0);
+  const onMutationStart = useCallback((): string => {
+    const id = String(++mutationIdRef.current);
+    pendingMutationsRef.current.add(id);
+    return id;
+  }, []);
+  const onMutationEnd = useCallback((id: string) => {
+    pendingMutationsRef.current.delete(id);
+    if (pendingMutationsRef.current.size === 0) {
+      setRefreshKey((k) => k + 1);
+    }
+  }, []);
+  const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
+    ['admin', 'users', refreshKey],
+    () => `${API_BASE}/api/admin/users`,
+  );
+  const { data: roles, isLoading: rolesLoading, error: rolesError } = useApiQuery<AdminRole[]>(
+    ['admin', 'roles'],
+    () => `${API_BASE}/api/admin/roles`,
+  );
+  const isLoading = usersLoading || rolesLoading;
+  const error = usersError ?? rolesError;
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
+      <DetailPageHeader title="User Management" />
+      <div className="card">
+        {!users || users.length === 0 ? (
+          <div className="empty-state text-secondary">No users found.</div>
+        ) : (
+          <div className="table-scroll">
+            <table className="mono-table">
+              <MonoTableHead columns={ADMIN_TABLE_COLUMNS} />
+              <tbody>
+                {users.map((user) => (
+                  <UserRow
+                    key={user.id}
+                    user={user}
+                    availableRoles={roles ?? []}
+                    onMutationStart={onMutationStart}
+                    onMutationEnd={onMutationEnd}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </PageShell>
+  );
+}
+
+================
 File: src/pages/CorrelationsPage.tsx
 ================
 import { useState, useCallback } from 'react';
@@ -12806,6 +13345,36 @@ export function useAuth0() {
 }
 
 ================
+File: src/types/workflow-graph.ts
+================
+export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
+export interface WorkflowNode {
+  id: string;
+  label: string;
+  evaluationScore: number | null;
+  toolCallCount: number;
+  totalTokens: number | null;
+  durationMs: number;
+  turnCount: number;
+  hasError: boolean;
+}
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  handoffScore: number | null;
+  contextPreserved: boolean;
+  label?: string;
+}
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  rootNodeId: string | null;
+  workflowShape: WorkflowShape;
+  droppedTurns: number;
+}
+
+================
 File: scripts/deploy-secrets.sh
 ================
 set -euo pipefail
@@ -13028,441 +13597,6 @@ describe('GET /agents/:sessionId', () => {
 });
 
 ================
-File: src/__tests__/score-badge-calibration.test.tsx
-================
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, within, cleanup } from '@testing-library/react';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import type { PercentileDistribution } from '../lib/quality-utils.js';
-afterEach(cleanup);
-function makeDistribution(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
-  return {
-    p10: 0.30,
-    p25: 0.48,
-    p50: 0.60,
-    p75: 0.72,
-    p90: 0.83,
-    ...overrides,
-  };
-}
-function getBadgeLabel(container: HTMLElement): string {
-  return container.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
-}
-describe('ScoreBadge without calibration prop', () => {
-  it('renders excellent band for score 0.95 without calibration', () => {
-    const { container } = render(<ScoreBadge score={0.95} metricName="relevance" />);
-    expect(getBadgeLabel(container)).toMatch(/excellent/i);
-  });
-  it('renders failing band for score 0.3 without calibration', () => {
-    const { container } = render(<ScoreBadge score={0.3} metricName="relevance" />);
-    expect(getBadgeLabel(container)).toMatch(/failing/i);
-  });
-  it('renders adequate band for score 0.75 without calibration (uniform baseline)', () => {
-    const { container } = render(<ScoreBadge score={0.75} metricName="relevance" />);
-    expect(getBadgeLabel(container)).toMatch(/adequate/i);
-  });
-});
-describe('ScoreBadge with calibration prop', () => {
-  it('accepts calibration prop as part of the component interface', () => {
-    const calibration = { distribution: makeDistribution(), sampleSize: 250 };
-    expect(() =>
-      render(
-        <ScoreBadge
-          score={0.75}
-          metricName="relevance"
-          calibration={calibration}
-        />
-      )
-    ).not.toThrow();
-  });
-  it('uses excellent/good band for score 0.75 when calibration shows it is above p75', () => {
-    const distribution = makeDistribution({ p75: 0.72, p90: 0.83 });
-    const calibration = { distribution, sampleSize: 200 };
-    const { container } = render(
-      <ScoreBadge
-        score={0.75}
-        metricName="relevance"
-        calibration={calibration}
-      />
-    );
-    const label = getBadgeLabel(container);
-    expect(label).toMatch(/excellent|good/i);
-    expect(label).not.toMatch(/adequate/i);
-  });
-  it('aria-label differs from uniform when calibration shifts the band', () => {
-    const distribution = makeDistribution({ p50: 0.6, p75: 0.72, p90: 0.83 });
-    const { container: noCalContainer } = render(
-      <ScoreBadge score={0.75} metricName="relevance" />
-    );
-    const uniformLabel = getBadgeLabel(noCalContainer);
-    cleanup();
-    const { container: withCalContainer } = render(
-      <ScoreBadge
-        score={0.75}
-        metricName="relevance"
-        calibration={{ distribution, sampleSize: 200 }}
-      />
-    );
-    const adaptiveLabel = getBadgeLabel(withCalContainer);
-    expect(adaptiveLabel).not.toBe(uniformLabel);
-  });
-  it('behaves same as no-calibration when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE', () => {
-    const calibration = { distribution: makeDistribution(), sampleSize: 50 };
-    const { container: withCalContainer } = render(
-      <ScoreBadge
-        score={0.95}
-        metricName="relevance"
-        calibration={calibration}
-      />
-    );
-    const withCalLabel = getBadgeLabel(withCalContainer);
-    cleanup();
-    const { container: noCalContainer } = render(
-      <ScoreBadge score={0.95} metricName="relevance" />
-    );
-    const noCalLabel = getBadgeLabel(noCalContainer);
-    expect(withCalLabel).toBe(noCalLabel);
-  });
-  it('renders same band with and without calibration when no calibration is provided', () => {
-    const { container: noCalContainer } = render(
-      <ScoreBadge score={0.85} metricName="relevance" />
-    );
-    const noCalLabel = getBadgeLabel(noCalContainer);
-    cleanup();
-    const { container: undefinedCalContainer } = render(
-      <ScoreBadge
-        score={0.85}
-        metricName="relevance"
-        calibration={undefined}
-      />
-    );
-    const undefinedCalLabel = getBadgeLabel(undefinedCalContainer);
-    expect(undefinedCalLabel).toBe(noCalLabel);
-  });
-  it('uses within() to scope queries to the rendered container', () => {
-    const calibration = { distribution: makeDistribution(), sampleSize: 150 };
-    const { container } = render(
-      <ScoreBadge
-        score={0.75}
-        metricName="relevance"
-        calibration={calibration}
-      />
-    );
-    const scope = within(container as HTMLElement);
-    const allLabeled = scope.getAllByRole('generic', { hidden: true });
-    const labeled = allLabeled.filter(el => el.hasAttribute('aria-label'));
-    expect(labeled.length).toBeGreaterThan(0);
-    const ariaLabel = labeled[0].getAttribute('aria-label') ?? '';
-    expect(ariaLabel).toMatch(/excellent|good/i);
-  });
-});
-
-================
-File: src/__tests__/useQualityLive.test.tsx
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
-import { useQualityLive } from '../hooks/useQualityLive.js';
-import { POLL_INTERVAL_MS } from '../lib/constants.js';
-const mockUseApiQuery = vi.fn();
-vi.mock('../hooks/useApiQuery.js', () => ({
-  useApiQuery: (...args: unknown[]) => mockUseApiQuery(...args),
-}));
-function makeQualityResponse(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    metrics: [
-      { name: 'relevance', score: 0.85, evaluatorType: 'seed', timestamp: '2026-01-15T12:00:00.000Z' },
-      { name: 'coherence', score: 0.9, evaluatorType: 'seed', timestamp: '2026-01-15T12:00:00.000Z' },
-    ],
-    sessionCount: 3,
-    lastUpdated: '2026-01-15T12:00:00.000Z',
-    ...overrides,
-  };
-}
-describe('useQualityLive', () => {
-  beforeEach(() => {
-    mockUseApiQuery.mockReset();
-  });
-  it('passes correct query key, URL builder, and refetchInterval to useApiQuery', () => {
-    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: true, error: null });
-    renderHook(() => useQualityLive());
-    expect(mockUseApiQuery).toHaveBeenCalledTimes(1);
-    const [queryKey, buildUrl, options] = mockUseApiQuery.mock.calls[0];
-    expect(queryKey).toEqual(['quality', 'live']);
-    expect(buildUrl()).toContain('/api/quality/live');
-    expect(options).toEqual({ refetchInterval: POLL_INTERVAL_MS });
-  });
-  it('returns isLoading=true, data=null, error=null while loading', () => {
-    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: true, error: null });
-    const { result } = renderHook(() => useQualityLive());
-    expect(result.current.isLoading).toBe(true);
-    expect(result.current.data).toBeNull();
-    expect(result.current.error).toBeNull();
-  });
-  it('returns data and clears isLoading after successful fetch', () => {
-    const payload = makeQualityResponse();
-    mockUseApiQuery.mockReturnValue({ data: payload, isLoading: false, error: null });
-    const { result } = renderHook(() => useQualityLive());
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.data).toEqual(payload);
-    expect(result.current.error).toBeNull();
-  });
-  it('coerces undefined data to null', () => {
-    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: false, error: null });
-    const { result } = renderHook(() => useQualityLive());
-    expect(result.current.data).toBeNull();
-  });
-  it('returns error from useApiQuery', () => {
-    const err = new Error('API error: 500');
-    mockUseApiQuery.mockReturnValue({ data: undefined, isLoading: false, error: err });
-    const { result } = renderHook(() => useQualityLive());
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.error).toBe(err);
-    expect(result.current.data).toBeNull();
-  });
-  it('returns updated data when useApiQuery provides new results', () => {
-    const first = makeQualityResponse({ sessionCount: 1 });
-    mockUseApiQuery.mockReturnValue({ data: first, isLoading: false, error: null });
-    const { result, rerender } = renderHook(() => useQualityLive());
-    expect(result.current.data?.sessionCount).toBe(1);
-    const second = makeQualityResponse({ sessionCount: 5 });
-    mockUseApiQuery.mockReturnValue({ data: second, isLoading: false, error: null });
-    rerender();
-    expect(result.current.data?.sessionCount).toBe(5);
-  });
-});
-
-================
-File: src/__tests__/WorkflowPage.test.tsx
-================
-import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
-const mockUseAgentSession = vi.fn();
-vi.mock('../hooks/useAgentSession.js', () => ({
-  useAgentSession: (...args: unknown[]) => mockUseAgentSession(...args),
-}));
-const mockNavigate = vi.fn();
-vi.mock('wouter', () => ({
-  useLocation: () => ['/', mockNavigate],
-  Link: ({ href, children, ...rest }: LinkProps) => (
-    <a href={href} {...rest}>{children}</a>
-  ),
-}));
-vi.mock('../components/WorkflowGraph.js', () => ({
-  WorkflowGraphView: ({ graph, onNodeClick }: WorkflowGraphViewProps) => (
-    <div data-testid="workflow-graph-view">
-      {(graph.nodes ?? []).map(n => (
-        <button
-          key={n.id}
-          data-testid={`graph-node-${n.id}`}
-          onClick={() => onNodeClick?.(n.id)}
-        >
-          {n.label}
-        </button>
-      ))}
-    </div>
-  ),
-}));
-vi.mock('../components/DetailPageHeader.js', () => ({
-  DetailPageHeader: ({ title, id, children }: DetailPageHeaderProps) => (
-    <div data-testid="detail-page-header">
-      <h2>{title}</h2>
-      {id && <span data-testid="header-id">{id}</span>}
-      {children}
-    </div>
-  ),
-}));
-vi.mock('../components/PageShell.js', () => ({
-  PageShell: ({ isLoading, error, children }: PageShellProps) => {
-    if (isLoading) return <div data-testid="page-shell-loading" />;
-    if (error) return <div data-testid="page-shell-error">{error.message}</div>;
-    return <div data-testid="page-shell">{children}</div>;
-  },
-}));
-import { WorkflowPage } from '../pages/WorkflowPage.js';
-import { AgentSessionPage } from '../pages/AgentSessionPage.js';
-import { makeNode, makeGraph } from './workflow-fixtures.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
-function makeAgentSessionData(graph: WorkflowGraph | null | undefined = makeGraph()) {
-  return {
-    sessionId: 'session-abc',
-    spans: [],
-    evaluation: {
-      totalTurns: 3,
-      handoffs: [],
-      turns: [],
-      handoffScore: 0.9,
-      avgTurnRelevance: 0.8,
-      conversationCompleteness: 0.75,
-      errorPropagationTurns: 0,
-    },
-    evaluations: [],
-    agentMap: {},
-    graph,
-  };
-}
-describe('WorkflowPage', () => {
-  describe('when data has a valid graph', () => {
-    beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(makeGraph()),
-        isLoading: false,
-        error: null,
-      });
-    });
-    it('renders WorkflowGraphView when graph is present', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByTestId('workflow-graph-view')).toBeInTheDocument();
-    });
-    it('renders DetailPageHeader with title "Workflow"', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByRole('heading', { name: 'Workflow' })).toBeInTheDocument();
-    });
-    it('displays the workflow shape in the header', () => {
-      const graph = makeGraph({ workflowShape: 'branching' });
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(graph),
-        isLoading: false,
-        error: null,
-      });
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByText(/branching/)).toBeInTheDocument();
-    });
-    it('displays agent count in the header', () => {
-      const graph = makeGraph({
-        nodes: [
-          makeNode({ id: 'n1' }),
-          makeNode({ id: 'n2' }),
-          makeNode({ id: 'n3' }),
-        ],
-      });
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(graph),
-        isLoading: false,
-        error: null,
-      });
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByText(/3 agents/)).toBeInTheDocument();
-    });
-    it('calls useAgentSession with the provided sessionId', () => {
-      render(<WorkflowPage sessionId="my-session-id" />);
-      expect(mockUseAgentSession).toHaveBeenCalledWith('my-session-id');
-    });
-  });
-  describe('when graph is null (data loaded but no graph)', () => {
-    beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(null),
-        isLoading: false,
-        error: null,
-      });
-    });
-    it('does not render WorkflowGraphView', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
-    });
-    it('shows empty state message', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(
-        screen.getByText(/No workflow graph available for this session/i)
-      ).toBeInTheDocument();
-    });
-  });
-  describe('when data is undefined (initial/loading state)', () => {
-    beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
-        data: undefined,
-        isLoading: true,
-        error: null,
-      });
-    });
-    it('does not render WorkflowGraphView while loading', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
-    });
-    it('renders loading state via PageShell', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByTestId('page-shell-loading')).toBeInTheDocument();
-    });
-  });
-  describe('onNodeClick navigation', () => {
-    beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(
-          makeGraph({ nodes: [makeNode({ id: 'agent-node-42', label: 'executor' })] })
-        ),
-        isLoading: false,
-        error: null,
-      });
-    });
-    it('navigates to /agents/{sessionId}?agent={nodeId} when a node is clicked', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      fireEvent.click(screen.getByTestId('graph-node-agent-node-42'));
-      expect(mockNavigate).toHaveBeenCalledWith(
-        '/agents/session-abc?agent=agent-node-42'
-      );
-    });
-    it('URL-encodes sessionId and nodeId in the navigation path', () => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(
-          makeGraph({ nodes: [makeNode({ id: 'node with spaces', label: 'test' })] })
-        ),
-        isLoading: false,
-        error: null,
-      });
-      render(<WorkflowPage sessionId="session/with/slashes" />);
-      fireEvent.click(screen.getByTestId('graph-node-node with spaces'));
-      expect(mockNavigate).toHaveBeenCalledWith(
-        '/agents/session%2Fwith%2Fslashes?agent=node%20with%20spaces'
-      );
-    });
-  });
-});
-describe('AgentSessionPage', () => {
-  const SESSION_ID = 'session-xyz';
-  function makeEvaluation(overrides: Record<string, unknown> = {}) {
-    return {
-      totalTurns: 2,
-      handoffs: [],
-      turns: [{ agentName: 'agent-1', turnIndex: 0 }],
-      handoffScore: 0.8,
-      avgTurnRelevance: 0.7,
-      conversationCompleteness: 0.9,
-      errorPropagationTurns: 0,
-      ...overrides,
-    };
-  }
-  beforeEach(() => {
-    mockUseAgentSession.mockReturnValue({
-      data: {
-        sessionId: SESSION_ID,
-        spans: [],
-        evaluation: makeEvaluation(),
-        evaluations: [],
-        agentMap: {},
-        graph: makeGraph(),
-      },
-      isLoading: false,
-      error: null,
-    });
-  });
-  it('renders a "View Workflow" link', () => {
-    render(<AgentSessionPage sessionId={SESSION_ID} />);
-    expect(screen.getByRole('link', { name: /view workflow/i })).toBeInTheDocument();
-  });
-  it('"View Workflow" link points to /workflows/{sessionId}', () => {
-    render(<AgentSessionPage sessionId={SESSION_ID} />);
-    const link = screen.getByRole('link', { name: /view workflow/i });
-    expect(link).toHaveAttribute('href', `/workflows/${SESSION_ID}`);
-  });
-});
-
-================
 File: src/api/routes/correlations.ts
 ================
 import { Hono } from 'hono';
@@ -13494,87 +13628,6 @@ correlationRoutes.get('/correlations', async (c) => {
 });
 
 ================
-File: src/api/routes/dashboard.ts
-================
-import { Hono } from 'hono';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-  type RoleViewType,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
-const SPARKLINE_BUCKET_COUNT = 24;
-function computeSparklineData(
-  evaluations: EvaluationResult[],
-  startMs: number,
-  endMs: number,
-  buckets: number,
-): (number | null)[] {
-  const range = endMs - startMs;
-  if (range <= 0 || evaluations.length === 0) return [];
-  const bucketWidth = range / buckets;
-  const sums = new Array(buckets).fill(0);
-  const counts = new Array(buckets).fill(0);
-  for (const ev of evaluations) {
-    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
-    const ts = new Date(ev.timestamp).getTime();
-    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
-    if (idx >= 0) {
-      sums[idx] += ev.scoreValue;
-      counts[idx]++;
-    }
-  }
-  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
-}
-export const dashboardRoutes = new Hono();
-dashboardRoutes.get('/dashboard', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
-  if (!roleResult.success) {
-    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const role = roleResult.data;
-    const dates = computePeriodDates(period);
-    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
-    const cqi = computeCQI(dashboard.metrics);
-    const startMs = new Date(dates.start).getTime();
-    const endMs = new Date(dates.end).getTime();
-    const sparklines: Record<string, (number | null)[]> = {};
-    for (const [metricName, evals] of evaluationsByMetric) {
-      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
-    }
-    if (role) {
-      const view = computeRoleView(dashboard, role as RoleViewType);
-      if (role === 'executive') {
-        return c.json({ ...view, cqi, sparklines });
-      }
-      return c.json({ ...view, sparklines });
-    }
-    return c.json({ ...dashboard, cqi, sparklines });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-dashboardRoutes.get('/health', async (c) => {
-  try {
-    const result = await checkHealth();
-    return c.json(result);
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
 File: src/api/routes/evaluations.ts
 ================
 import { Hono } from 'hono';
@@ -13591,59 +13644,6 @@ evaluationRoutes.get('/evaluations/trace/:traceId', async (c) => {
   try {
     const evaluations = await loadEvaluationsByTraceId(traceId);
     return c.json({ evaluations });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/api/routes/quality.ts
-================
-import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
-import type { LiveMetric, QualityLiveData } from '../../types.js';
-export const qualityRoutes = new Hono();
-qualityRoutes.get('/quality/live', async (c) => {
-  try {
-    const now = new Date();
-    const start = new Date(now.getTime() - LIVE_WINDOW_MS);
-    const evaluationsByMetric = await loadEvaluationsByMetric(
-      start.toISOString(),
-      now.toISOString(),
-    );
-    const metrics: LiveMetric[] = [];
-    const sessionIds = new Set<string>();
-    let latestTimestamp = '';
-    for (const [name, evals] of evaluationsByMetric) {
-      const sorted = evals
-        .slice()
-        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-        .slice(0, EVAL_LIMIT);
-      for (const ev of sorted) {
-        if (ev.traceId) sessionIds.add(ev.traceId);
-      }
-      const latest = sorted[0];
-      if (latest && latest.scoreValue != null) {
-        metrics.push({
-          name,
-          score: latest.scoreValue,
-          evaluatorType: latest.evaluatorType ?? 'unknown',
-          timestamp: latest.timestamp,
-        });
-        if (latest.timestamp > latestTimestamp) {
-          latestTimestamp = latest.timestamp;
-        }
-      }
-    }
-    metrics.sort((a, b) => a.name.localeCompare(b.name));
-    const response: QualityLiveData = {
-      metrics,
-      sessionCount: sessionIds.size,
-      lastUpdated: latestTimestamp || now.toISOString(),
-    };
-    return c.json(response);
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
@@ -14249,6 +14249,122 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
 }
 
 ================
+File: src/components/CorrelationHeatmap.tsx
+================
+import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
+import { scaleSequential } from 'd3-scale';
+import { interpolateRdYlGn } from 'd3-scale-chromatic';
+import { formatScore } from '../lib/quality-utils.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { CorrelationFeature } from '../types.js';
+interface CorrelationHeatmapProps {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) => void;
+}
+const CONTRAST_DARK = '#111';
+const CONTRAST_LIGHT = '#fff';
+const SHORT_NAMES: Record<string, string> = {
+  faithfulness: 'Faith',
+  relevance: 'Relev',
+  coherence: 'Coher',
+  safety: 'Safety',
+  instruction_adherence: 'Instr',
+  tool_accuracy: 'Tool',
+  latency: 'Latency',
+};
+function shortName(metric: string): string {
+  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
+}
+function contrastText(pearsonR: number): string {
+  const bg = colorScale(pearsonR);
+  const m = bg.match(/(\d+)/g);
+  if (!m || m.length < 3) return CONTRAST_DARK;
+  const [r, g, b] = m.map(Number);
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
+}
+const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
+function corrKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
+  const n = metrics.length;
+  const cols = n + 1;
+  const corrMap = useMemo(
+    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
+    [correlations],
+  );
+  return (
+    <div
+      role="table"
+      aria-label="Metric correlation matrix"
+      className="gap-half w-full heatmap-grid"
+      style={{
+        '--heatmap-aspect': `${cols} / ${cols}`,
+        '--heatmap-grid-cols': `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
+        '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
+      } as CSSProperties}
+    >
+      <div role="cell" />
+      {metrics.map((m) => (
+        <div
+          key={`col-${m}`}
+          role="columnheader"
+          className="text-secondary text-xs font-semibold truncate flex-center"
+        >
+          {shortName(m)}
+        </div>
+      ))}
+      {metrics.map((rowMetric, ri) => (
+        <div key={`row-${rowMetric}`} role="presentation" className="contents">
+          <div
+            role="rowheader"
+            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
+          >
+            {shortName(rowMetric)}
+          </div>
+          {metrics.map((colMetric, ci) => {
+            const isDiag = ri === ci;
+            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
+            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
+            const isToxic = corr?.isKnownToxicCombo ?? false;
+            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
+            const tooltip = isDiag
+              ? `${rowMetric}: diagonal (1.00)`
+              : corr
+                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
+                : `${rowMetric} vs ${colMetric}: no data`;
+            return (
+              <div
+                key={`${ri}-${ci}`}
+                role="cell"
+                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
+                data-toxic={isToxic ? 'true' : undefined}
+                title={tooltip}
+                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
+                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
+                style={{
+                  '--heatmap-cell-bg': bg,
+                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
+                } as CSSProperties}
+              >
+                {value.toFixed(SCORE_CHIP_PRECISION)}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+================
 File: src/components/CoverageGrid.tsx
 ================
 import { memo, useState, useMemo, type CSSProperties } from 'react';
@@ -14386,6 +14502,296 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
   );
 }
 export const CoverageGrid = memo(CoverageGridInner);
+
+================
+File: src/lib/quality-utils.ts
+================
+export type ScoreDirection = 'maximize' | 'minimize';
+export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
+export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
+export interface LabelOrdinal {
+  ordinal: number;
+  category: LabelFilterCategory;
+  mapped: boolean;
+}
+import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
+export type FeatureRoleType = Role;
+export function agentColor(agentName: string, agentNames: string[]): string {
+  const idx = agentNames.indexOf(agentName);
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+}
+export interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;
+  maxWorstEvaluations: number;
+}
+export function truncateText(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+export function truncateId(id: string, max = 10): string {
+  if (id.length <= max) return id;
+  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+}
+export function formatScore(val: number | null | undefined): string {
+  if (val === null || val === undefined) return 'N/A';
+  return val.toFixed(SCORE_FORMAT_PRECISION);
+}
+export function formatPercent(value: number, decimals = 1): string {
+  if (!Number.isFinite(value)) return '\u2014';
+  return `${value.toFixed(decimals)}%`;
+}
+export function plural(count: number, singular: string, suffix = 's'): string {
+  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
+}
+export const byValueDesc =([, a]: [string, number], [, b]: [string, number]): number => b - a;
+export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
+  excellent: '#26d97f',
+  good: '#34d399',
+  adequate: '#e5a00d',
+  poor: '#f97316',
+  failing: '#f04438',
+  no_data: '#6b7280',
+};
+export function scoreColor(value: number, direction?: ScoreDirection): string {
+  return SCORE_COLORS[scoreColorBand(value, direction)];
+}
+export function scoreColorBand(
+  value: number,
+  direction: ScoreDirection = 'maximize',
+): ScoreColorBand {
+  const v = direction === 'minimize' ? 1 - value : value;
+  if (v >= 0.9) return 'excellent';
+  if (v >= 0.8) return 'good';
+  if (v >= 0.6) return 'adequate';
+  if (v >= 0.4) return 'poor';
+  return 'failing';
+}
+type ThresholdDirection = 'above' | 'below';
+export function inferScoreDirection(
+  alertDirection: ThresholdDirection | undefined,
+): ScoreDirection {
+  return alertDirection === 'above' ? 'minimize' : 'maximize';
+}
+const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
+  excellent: { ordinal: 4, category: 'Pass' },
+  highly_relevant: { ordinal: 4, category: 'Pass' },
+  fully_faithful: { ordinal: 4, category: 'Pass' },
+  perfect: { ordinal: 4, category: 'Pass' },
+  relevant: { ordinal: 3, category: 'Pass' },
+  good: { ordinal: 3, category: 'Pass' },
+  faithful: { ordinal: 3, category: 'Pass' },
+  pass: { ordinal: 3, category: 'Pass' },
+  correct: { ordinal: 3, category: 'Pass' },
+  coherent: { ordinal: 3, category: 'Pass' },
+  partial: { ordinal: 2, category: 'Review' },
+  borderline: { ordinal: 2, category: 'Review' },
+  adequate: { ordinal: 2, category: 'Review' },
+  mixed: { ordinal: 2, category: 'Review' },
+  off_topic: { ordinal: 1, category: 'Fail' },
+  irrelevant: { ordinal: 1, category: 'Fail' },
+  unfaithful: { ordinal: 1, category: 'Fail' },
+  fail: { ordinal: 1, category: 'Fail' },
+  incorrect: { ordinal: 1, category: 'Fail' },
+  incoherent: { ordinal: 1, category: 'Fail' },
+  hallucinated: { ordinal: 0, category: 'Fail' },
+  fabricated: { ordinal: 0, category: 'Fail' },
+  toxic: { ordinal: 0, category: 'Fail' },
+  dangerous: { ordinal: 0, category: 'Fail' },
+};
+function normalizeLabel(label: string): string {
+  return label.toLowerCase().replace(/-/g, '_').trim();
+}
+export function labelToOrdinal(label: string): LabelOrdinal {
+  const normalized = normalizeLabel(label);
+  const entry = LABEL_ORDINAL_MAP[normalized];
+  if (entry) {
+    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
+  }
+  return { ordinal: 2, category: 'Review', mapped: false };
+}
+export function ordinalToCategory(ordinal: number): LabelFilterCategory {
+  if (ordinal >= 3) return 'Pass';
+  if (ordinal === 2) return 'Review';
+  return 'Fail';
+}
+const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
+const OPERATOR_EXPLANATION_TRUNCATION = 500;
+const AUDITOR_EXPLANATION_TRUNCATION = 2000;
+const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
+const OPERATOR_MAX_WORST_EVALUATIONS = 5;
+const AUDITOR_MAX_WORST_EVALUATIONS = 10;
+export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
+  executive: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: false,
+    showAcceleration: false,
+    showProjectedBreach: true,
+    showCorrelationRemediation: false,
+    showCoverageHeatmap: false,
+    showPipelineFunnel: false,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
+  },
+  operator: {
+    showCQI: false,
+    showCQIBreakdown: false,
+    showVariance: true,
+    showAcceleration: true,
+    showProjectedBreach: true,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
+  },
+  auditor: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: true,
+    showAcceleration: false,
+    showProjectedBreach: false,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: true,
+    showRawExport: true,
+    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
+  },
+};
+export function shortPath(fullPath: string): string {
+  const parts = fullPath.replace(/\\/g, '/').split('/');
+  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
+}
+export function fmtDuration(ms: number, secDecimals = 1): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
+}
+export function groupBy<T, K extends PropertyKey = string>(
+  items: T[],
+  keyFn: (item: T) => K | undefined,
+): Map<K, T[]> {
+  const map = new Map<K, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (key == null) continue;
+    const group = map.get(key);
+    if (group) group.push(item);
+    else map.set(key, [item]);
+  }
+  return map;
+}
+export function fmtBytes(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+export interface PercentileDistribution {
+  p10: number; p25: number; p50: number; p75: number; p90: number;
+}
+export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
+export const MIN_QUANTILE_SAMPLE_SIZE = 100;
+const NUMERICAL_MIN_DENOMINATOR = 0.001;
+const LOG_SCALE_DIVISOR = 3;
+const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
+const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
+const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
+const QUANTILE_P10 = 0.1;
+const QUANTILE_P25 = 0.25;
+const QUANTILE_P50 = 0.5;
+const QUANTILE_P75 = 0.75;
+const QUANTILE_P90 = 0.9;
+export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
+  relevance: 'quantile',
+  faithfulness: 'binary',
+  coherence: 'uniform',
+  hallucination: 'log',
+  task_completion: 'step',
+  tool_correctness: 'categorical',
+  evaluation_latency: 'percentile_rank',
+};
+export function empiricalCDF(value: number, dist: PercentileDistribution): number {
+  if (!Number.isFinite(value)) return QUANTILE_P50;
+  const points: [number, number][] = [
+    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
+    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
+  ];
+  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
+  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
+  for (let i = 0; i < points.length - 1; i++) {
+    const [v0, p0] = points[i];
+    const [v1, p1] = points[i + 1];
+    if (value >= v0 && value <= v1) {
+      const range = v1 - v0;
+      if (range === 0) return p0;
+      return p0 + (p1 - p0) * ((value - v0) / range);
+    }
+  }
+  return QUANTILE_P50;
+}
+export function adaptiveScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection = 'maximize',
+  distribution?: PercentileDistribution,
+  sampleSize?: number,
+): ScoreColorBand {
+  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
+  switch (strategy) {
+    case 'quantile': {
+      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
+        return scoreColorBand(value, direction);
+      }
+      const rank = empiricalCDF(value, distribution);
+      if (rank >= QUANTILE_P90) return 'excellent';
+      if (rank >= QUANTILE_P75) return 'good';
+      if (rank >= QUANTILE_P50) return 'adequate';
+      if (rank >= QUANTILE_P25) return 'poor';
+      return 'failing';
+    }
+    case 'log': {
+      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
+      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
+      return scoreColorBand(logNorm, 'maximize');
+    }
+    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
+    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
+    case 'categorical': return scoreColorBand(value, direction);
+    case 'percentile_rank': {
+      if (!distribution) return scoreColorBand(value, direction);
+      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
+    }
+    case 'uniform':
+    default: return scoreColorBand(value, direction);
+  }
+}
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+export function formatTimestamp(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts || '-';
+  const now = new Date();
+  const diffMin = differenceInMinutes(now, d);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = differenceInHours(now, d);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = differenceInDays(now, d);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return format(d, 'PP');
+}
 
 ================
 File: src/pages/SessionDetailPage.tsx
@@ -15078,119 +15484,323 @@ export function AgentWorkflowView({
 }
 
 ================
-File: src/components/CorrelationHeatmap.tsx
+File: src/api/routes/metrics.ts
 ================
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
-import { scaleSequential } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import { formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { CorrelationFeature } from '../types.js';
-interface CorrelationHeatmapProps {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-  onCellClick?: (rowMetric: string, colMetric: string) => void;
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { subMilliseconds } from 'date-fns';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+const DYNAMICS_PERIOD_HOURS_24H = 1;
+const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
+const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
+const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
+const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
+const OffsetSchema = z.coerce.number().int().min(0).default(0);
+const ScoreLabelSchema = z.string().max(100).optional();
+export const metricsRoutes = new Hono();
+metricsRoutes.get('/metrics/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const topNResult = TopNSchema.safeParse(c.req.query('topN'));
+  if (!topNResult.success) {
+    return c.json({ error: ErrorMessage.InvalidTopN }, HttpStatus.BadRequest);
+  }
+  const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
+  if (!bucketResult.success) {
+    return c.json({ error: ErrorMessage.InvalidBucketCount }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
+    const start = subMilliseconds(now, periodMs);
+    const prevStart = subMilliseconds(start, periodMs);
+    const [evaluations, prevEvaluations] = await Promise.all([
+      loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
+      loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
+    ]);
+    const previousValues = prevEvaluations.length > 0
+      ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
+      : undefined;
+    const detail = computeMetricDetail(evaluations, config, {
+      topN: topNResult.data,
+      bucketCount: bucketResult.data,
+      previousValues,
+    });
+    const dynamics = detail.trend
+      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_PERIOD_HOURS_24H : DYNAMICS_PERIOD_HOURS_MULTI_DAY)
+      : undefined;
+    return c.json({ ...detail, dynamics });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const limitResult = LimitSchema.safeParse(c.req.query('limit'));
+  if (!limitResult.success) {
+    return c.json({ error: ErrorMessage.InvalidLimit }, HttpStatus.BadRequest);
+  }
+  const offsetResult = OffsetSchema.safeParse(c.req.query('offset'));
+  if (!offsetResult.success) {
+    return c.json({ error: ErrorMessage.InvalidOffset }, HttpStatus.BadRequest);
+  }
+  const sortByResult = SortBySchema.safeParse(c.req.query('sortBy'));
+  if (!sortByResult.success) {
+    return c.json({ error: ErrorMessage.InvalidSortBy }, HttpStatus.BadRequest);
+  }
+  const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
+  if (!scoreLabelResult.success) {
+    return c.json({ error: ErrorMessage.InvalidScoreLabel }, HttpStatus.BadRequest);
+  }
+  const scoreLabel = scoreLabelResult.data;
+  try {
+    const now = new Date();
+    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
+    const start = subMilliseconds(now, periodMs);
+    const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
+    const sortBy = sortByResult.data;
+    const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
+      .slice().sort((a, b) => {
+      if (sortBy === 'score_asc' || sortBy === 'score_desc') {
+        const aVal = a.scoreValue ?? null;
+        const bVal = b.scoreValue ?? null;
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
+      }
+      return b.timestamp.localeCompare(a.timestamp);
+    });
+    const total = evaluations.length;
+    const limit = limitResult.data;
+    const offset = offsetResult.data;
+    const page = evaluations.slice(offset, offset + limit);
+    const rows = page.map(e => ({
+      score: e.scoreValue ?? 0,
+      explanation: e.explanation,
+      traceId: e.traceId,
+      timestamp: e.timestamp,
+      evaluator: e.evaluator,
+      label: e.scoreLabel,
+      evaluatorType: e.evaluatorType,
+      spanId: e.spanId,
+      sessionId: e.sessionId,
+      agentName: e.agentName,
+      trajectoryLength: e.trajectoryLength,
+      stepScores: e.stepScores,
+      toolVerifications: e.toolVerifications,
+    }));
+    return c.json({ rows, total, limit, offset, hasMore: offset + limit < total });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/data-loader.ts
+================
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+import { queryLogs } from '../../../dist/tools/query-logs.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { toDateOnly } from './api-constants.js';
+const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
+const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
+const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
+const LIMIT_EVALS_BULK = 100_000;
+const LIMIT_EVALS_METRIC = 10_000;
+const LIMIT_EVALS_PER_TRACE = 1_000;
+const LIMIT_EVALS_SESSION = 10_000;
+const LIMIT_TRACES = 500;
+const LIMIT_LOGS = 1_000;
+const LIMIT_HEALTH_PROBE = 1;
+let backend: MultiDirectoryBackend | undefined;
+function getBackend(): MultiDirectoryBackend {
+  if (!backend) {
+    backend = new MultiDirectoryBackend(undefined, true);
+  }
+  return backend;
 }
-const CONTRAST_DARK = '#111';
-const CONTRAST_LIGHT = '#fff';
-const SHORT_NAMES: Record<string, string> = {
-  faithfulness: 'Faith',
-  relevance: 'Relev',
-  coherence: 'Coher',
-  safety: 'Safety',
-  instruction_adherence: 'Instr',
-  tool_accuracy: 'Tool',
-  latency: 'Latency',
-};
-function shortName(metric: string): string {
-  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
-}
-function contrastText(pearsonR: number): string {
-  const bg = colorScale(pearsonR);
-  const m = bg.match(/(\d+)/g);
-  if (!m || m.length < 3) return CONTRAST_DARK;
-  const [r, g, b] = m.map(Number);
-  const toLinear = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+function defaultRange(lookbackMs: number): { start: string; end: string } {
+  const now = new Date();
+  return {
+    start: new Date(now.getTime() - lookbackMs).toISOString(),
+    end: now.toISOString(),
   };
-  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
 }
-const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
-function corrKey(a: string, b: string): string {
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>> {
+  const be = getBackend();
+  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
+  const grouped = new Map<string, EvaluationResult[]>();
+  for (const ev of evals) {
+    const name = ev.evaluationName;
+    let group = grouped.get(name);
+    if (!group) grouped.set(name, group = []);
+    group.push(ev);
+  }
+  return grouped;
 }
-export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
-  const n = metrics.length;
-  const cols = n + 1;
-  const corrMap = useMemo(
-    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
-    [correlations],
-  );
-  return (
-    <div
-      role="table"
-      aria-label="Metric correlation matrix"
-      className="gap-half w-full heatmap-grid"
-      style={{
-        '--heatmap-aspect': `${cols} / ${cols}`,
-        '--heatmap-grid-cols': `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
-        '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
-      } as CSSProperties}
-    >
-      <div role="cell" />
-      {metrics.map((m) => (
-        <div
-          key={`col-${m}`}
-          role="columnheader"
-          className="text-secondary text-xs font-semibold truncate flex-center"
-        >
-          {shortName(m)}
-        </div>
-      ))}
-      {metrics.map((rowMetric, ri) => (
-        <div key={`row-${rowMetric}`} role="presentation" className="contents">
-          <div
-            role="rowheader"
-            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
-          >
-            {shortName(rowMetric)}
-          </div>
-          {metrics.map((colMetric, ci) => {
-            const isDiag = ri === ci;
-            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
-            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
-            const isToxic = corr?.isKnownToxicCombo ?? false;
-            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
-            const tooltip = isDiag
-              ? `${rowMetric}: diagonal (1.00)`
-              : corr
-                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
-                : `${rowMetric} vs ${colMetric}: no data`;
-            return (
-              <div
-                key={`${ri}-${ci}`}
-                role="cell"
-                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
-                data-toxic={isToxic ? 'true' : undefined}
-                title={tooltip}
-                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
-                style={{
-                  '--heatmap-cell-bg': bg,
-                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
-                } as CSSProperties}
-              >
-                {value.toFixed(SCORE_CHIP_PRECISION)}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  return be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    evaluationName: metricName,
+    limit: LIMIT_EVALS_METRIC,
+  });
+}
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return be.queryEvaluations({
+    traceId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_PER_TRACE,
+  });
+}
+const TRACE_QUERY_CONCURRENCY = 10;
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]> {
+  const uniqueIds = [...new Set(traceIds)];
+  if (uniqueIds.length === 0) return [];
+  const be = getBackend();
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
+  const start = startDate ?? defStart;
+  const end = endDate ?? defEnd;
+  const all: EvaluationResult[] = [];
+  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
+    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
+    );
+    for (const result of settled) {
+      if (result.status === 'fulfilled') all.push(...result.value);
+    }
+  }
+  return all;
+}
+function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
+}
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+async function queryLogsWithDefaultRange(
+  filter: { traceId?: string; sessionId?: string },
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const start = toDateOnly(startDate ?? defStart);
+  const end = toDateOnly(endDate ?? defEnd);
+  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
+  return result.logs;
+}
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
+}
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]> {
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return queryVerificationsLib({
+    startDate: opts.startDate ?? start,
+    endDate: opts.endDate ?? end,
+    sessionId: opts.sessionId,
+    limit: opts.limit ?? LIMIT_LOGS,
+  });
+}
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
+}
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return be.queryEvaluations({
+    sessionId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_SESSION,
+  });
+}
+export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
+  const be = getBackend();
+  const health = await be.healthCheck();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
+  const evals = await be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_HEALTH_PROBE,
+  });
+  return { status: health.status, hasData: evals.length > 0 };
 }
 
 ================
@@ -15341,6 +15951,7 @@ interface WorkflowGraphProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
+  const containerStyle = { '--workflow-graph-height': `${height}px` } as React.CSSProperties;
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -15367,7 +15978,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   }, [onNodeClick]);
   if (graph.nodes.length > MAX_ELK_NODES) {
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
         <div className="workflow-oversize text-secondary text-xs">
           <div className="workflow-oversize__heading">
             Graph too large to render ({graph.nodes.length} agents)
@@ -15390,7 +16001,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
     const node = graph.nodes[0];
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
         <div className="workflow-fallback">
           {node ? (
             <>
@@ -15408,7 +16019,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   }
   if (layoutError) {
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
         <div className="error-state workflow-fallback">
           Failed to compute workflow layout: {layoutError}
         </div>
@@ -15417,7 +16028,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   }
   const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
   return (
-    <div ref={containerRef} className="workflow-graph-container" style={{ height: `${height}px` }} role="img" aria-label="Agent workflow graph">
+    <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -15710,470 +16321,388 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
 }
 
 ================
-File: src/lib/quality-utils.ts
+File: src/lib/constants.ts
 ================
-export type ScoreDirection = 'maximize' | 'minimize';
-export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
-export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
-export interface LabelOrdinal {
-  ordinal: number;
-  category: LabelFilterCategory;
-  mapped: boolean;
+import { z } from 'zod';
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
 }
-import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
-export type FeatureRoleType = Role;
-export function agentColor(agentName: string, agentNames: string[]): string {
-  const idx = agentNames.indexOf(agentName);
-  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+  InvalidMetricNameFormat = 'Invalid metric name format',
+  InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
+  InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
+  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
+  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
+  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
+  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
+  InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
+  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
+  InvalidSessionIdFormat = 'Invalid sessionId format',
+  InvalidTraceId = 'Invalid traceId',
 }
-export interface RoleFeatureConfig {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
-}
-export function truncateText(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + '...' : text;
-}
-export function truncateId(id: string, max = 10): string {
-  if (id.length <= max) return id;
-  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
-}
-export function formatScore(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  return val.toFixed(SCORE_FORMAT_PRECISION);
-}
-export function formatPercent(value: number, decimals = 1): string {
-  if (!Number.isFinite(value)) return '\u2014';
-  return `${value.toFixed(decimals)}%`;
-}
-export function plural(count: number, singular: string, suffix = 's'): string {
-  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
-}
-export const byValueDesc =([, a]: [string, number], [, b]: [string, number]): number => b - a;
-export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-  no_data: '#6b7280',
-};
-export function scoreColor(value: number, direction?: ScoreDirection): string {
-  return SCORE_COLORS[scoreColorBand(value, direction)];
-}
-export function scoreColorBand(
-  value: number,
-  direction: ScoreDirection = 'maximize',
-): ScoreColorBand {
-  const v = direction === 'minimize' ? 1 - value : value;
-  if (v >= 0.9) return 'excellent';
-  if (v >= 0.8) return 'good';
-  if (v >= 0.6) return 'adequate';
-  if (v >= 0.4) return 'poor';
-  return 'failing';
-}
-type ThresholdDirection = 'above' | 'below';
-export function inferScoreDirection(
-  alertDirection: ThresholdDirection | undefined,
-): ScoreDirection {
-  return alertDirection === 'above' ? 'minimize' : 'maximize';
-}
-const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
-  excellent: { ordinal: 4, category: 'Pass' },
-  highly_relevant: { ordinal: 4, category: 'Pass' },
-  fully_faithful: { ordinal: 4, category: 'Pass' },
-  perfect: { ordinal: 4, category: 'Pass' },
-  relevant: { ordinal: 3, category: 'Pass' },
-  good: { ordinal: 3, category: 'Pass' },
-  faithful: { ordinal: 3, category: 'Pass' },
-  pass: { ordinal: 3, category: 'Pass' },
-  correct: { ordinal: 3, category: 'Pass' },
-  coherent: { ordinal: 3, category: 'Pass' },
-  partial: { ordinal: 2, category: 'Review' },
-  borderline: { ordinal: 2, category: 'Review' },
-  adequate: { ordinal: 2, category: 'Review' },
-  mixed: { ordinal: 2, category: 'Review' },
-  off_topic: { ordinal: 1, category: 'Fail' },
-  irrelevant: { ordinal: 1, category: 'Fail' },
-  unfaithful: { ordinal: 1, category: 'Fail' },
-  fail: { ordinal: 1, category: 'Fail' },
-  incorrect: { ordinal: 1, category: 'Fail' },
-  incoherent: { ordinal: 1, category: 'Fail' },
-  hallucinated: { ordinal: 0, category: 'Fail' },
-  fabricated: { ordinal: 0, category: 'Fail' },
-  toxic: { ordinal: 0, category: 'Fail' },
-  dangerous: { ordinal: 0, category: 'Fail' },
-};
-function normalizeLabel(label: string): string {
-  return label.toLowerCase().replace(/-/g, '_').trim();
-}
-export function labelToOrdinal(label: string): LabelOrdinal {
-  const normalized = normalizeLabel(label);
-  const entry = LABEL_ORDINAL_MAP[normalized];
-  if (entry) {
-    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
-  }
-  return { ordinal: 2, category: 'Review', mapped: false };
-}
-export function ordinalToCategory(ordinal: number): LabelFilterCategory {
-  if (ordinal >= 3) return 'Pass';
-  if (ordinal === 2) return 'Review';
-  return 'Fail';
-}
-const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
-const OPERATOR_EXPLANATION_TRUNCATION = 500;
-const AUDITOR_EXPLANATION_TRUNCATION = 2000;
-const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
-const OPERATOR_MAX_WORST_EVALUATIONS = 5;
-const AUDITOR_MAX_WORST_EVALUATIONS = 10;
-export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
-  executive: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: false,
-    showAcceleration: false,
-    showProjectedBreach: true,
-    showCorrelationRemediation: false,
-    showCoverageHeatmap: false,
-    showPipelineFunnel: false,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
-  },
-  operator: {
-    showCQI: false,
-    showCQIBreakdown: false,
-    showVariance: true,
-    showAcceleration: true,
-    showProjectedBreach: true,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
-  },
-  auditor: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: true,
-    showAcceleration: false,
-    showProjectedBreach: false,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: true,
-    showRawExport: true,
-    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
-  },
-};
-export function shortPath(fullPath: string): string {
-  const parts = fullPath.replace(/\\/g, '/').split('/');
-  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
-}
-export function fmtDuration(ms: number, secDecimals = 1): string {
-  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
-}
-export function groupBy<T, K extends PropertyKey = string>(
-  items: T[],
-  keyFn: (item: T) => K | undefined,
-): Map<K, T[]> {
-  const map = new Map<K, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (key == null) continue;
-    const group = map.get(key);
-    if (group) group.push(item);
-    else map.set(key, [item]);
-  }
-  return map;
-}
-export function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-export interface PercentileDistribution {
-  p10: number; p25: number; p50: number; p75: number; p90: number;
-}
-export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
-export const MIN_QUANTILE_SAMPLE_SIZE = 100;
-const NUMERICAL_MIN_DENOMINATOR = 0.001;
-const LOG_SCALE_DIVISOR = 3;
-const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
-const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
-const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
-const QUANTILE_P10 = 0.1;
-const QUANTILE_P25 = 0.25;
-const QUANTILE_P50 = 0.5;
-const QUANTILE_P75 = 0.75;
-const QUANTILE_P90 = 0.9;
-export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
-  relevance: 'quantile',
-  faithfulness: 'binary',
-  coherence: 'uniform',
-  hallucination: 'log',
-  task_completion: 'step',
-  tool_correctness: 'categorical',
-  evaluation_latency: 'percentile_rank',
-};
-export function empiricalCDF(value: number, dist: PercentileDistribution): number {
-  if (!Number.isFinite(value)) return QUANTILE_P50;
-  const points: [number, number][] = [
-    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
-    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
-  ];
-  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
-  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
-  for (let i = 0; i < points.length - 1; i++) {
-    const [v0, p0] = points[i];
-    const [v1, p1] = points[i + 1];
-    if (value >= v0 && value <= v1) {
-      const range = v1 - v0;
-      if (range === 0) return p0;
-      return p0 + (p1 - p0) * ((value - v0) / range);
-    }
-  }
-  return QUANTILE_P50;
-}
-export function adaptiveScoreColorBand(
-  value: number,
-  metric: string,
-  direction: ScoreDirection = 'maximize',
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
-): ScoreColorBand {
-  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
-  switch (strategy) {
-    case 'quantile': {
-      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
-        return scoreColorBand(value, direction);
-      }
-      const rank = empiricalCDF(value, distribution);
-      if (rank >= QUANTILE_P90) return 'excellent';
-      if (rank >= QUANTILE_P75) return 'good';
-      if (rank >= QUANTILE_P50) return 'adequate';
-      if (rank >= QUANTILE_P25) return 'poor';
-      return 'failing';
-    }
-    case 'log': {
-      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
-      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
-      return scoreColorBand(logNorm, 'maximize');
-    }
-    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
-    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
-    case 'categorical': return scoreColorBand(value, direction);
-    case 'percentile_rank': {
-      if (!distribution) return scoreColorBand(value, direction);
-      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
-    }
-    case 'uniform':
-    default: return scoreColorBand(value, direction);
-  }
-}
-import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
-export function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return ts || '-';
+export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+export type InputKey = z.infer<typeof InputKeySchema>;
+export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
+export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
+export type SortBy = z.infer<typeof SortBySchema>;
+export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
+export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
+export type Role = z.infer<typeof RoleSchema>;
+export const ROLES = RoleSchema.options;
+export const DEFAULT_ROLE: Role = 'executive';
+export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
+export const TIME_MS = {
+  HOUR: 60 * 60 * 1000,
+  DAY: 24 * 60 * 60 * 1000,
+} as const;
+export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
+export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
+export const PeriodEnum = z.enum(PERIOD_KEYS);
+export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
+export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
+export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
+export const PERIOD_MS: Record<string, number> = Object.fromEntries(
+  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
+);
+export function computePeriodDates(period: string): { start: string; end: string } {
   const now = new Date();
-  const diffMin = differenceInMinutes(now, d);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = differenceInHours(now, d);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = differenceInDays(now, d);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return format(d, 'PP');
+  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
+export const LLM_SAMPLE_RATE = 10;
+export const SCORE_THRESHOLD_GREEN = 0.8;
+export const SCORE_THRESHOLD_YELLOW = 0.5;
+export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
+export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+export const MAX_ERROR_ROWS = 10;
+export const MAX_HALLUCINATION_ROWS = 8;
+export const MAX_FAILED_EVAL_ROWS = 6;
+export const LIVE_WINDOW_MS = TIME_MS.DAY;
+export const QUERY_RETRY_COUNT = 2;
+export const POLL_INTERVAL_MS = 30_000;
+export const RETRY_DELAY_BASE = 1_000;
+export const RETRY_DELAY_CAP = 30_000;
+export const MAX_IDS = 50;
+export const EVAL_LIMIT = 100;
+export const SCORE_DISPLAY_PRECISION = 3;
+export const SCORE_CHIP_PRECISION = 2;
+export const SCORE_FORMAT_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const STALE_TIME = {
+  DEFAULT: 25_000,
+  DETAIL: 30_000,
+  AGGREGATE: 60_000,
+} as const;
+export const DEFAULT_TOP_N = 5;
+export const DEFAULT_BUCKET_COUNT = 10;
+export const SKELETON_HEIGHT_SM = 200;
+export const SKELETON_HEIGHT_MD = 300;
+export const SKELETON_HEIGHT_LG = 400;
+export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
+export const DEFAULT_PAGE_LIMIT = 50;
+export const HEATMAP_ROW_HEADER_WIDTH = 80;
+export const HEATMAP_COL_HEADER_HEIGHT = 32;
+export const COVERAGE_GRID_HEADER_WIDTH = 120;
+export const COVERAGE_GRID_CELL_SIZE = 28;
+export const COVERAGE_GRID_MAX_INPUTS = 30;
+export const FUNNEL_DROPOFF_WARN_PCT = 20;
+export const WORKFLOW_FILTER_MIN_AGENTS = 2;
+export const SPAN_TREE_INDENT = 20;
+export const SPAN_TREE_BASE_PADDING = 8;
+export const SPARKLINE_WIDTH = 160;
+export const SPARKLINE_HEIGHT = 28;
+export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
+export const VARIANCE_LOW_PCT = 20;
+export const VARIANCE_MEDIUM_PCT = 50;
+export const CHART_HEIGHT = 200;
+export const CHART_STROKE_WIDTH = 2;
+export const CHART_DOT_RADIUS = 4;
+export const CHART_DOT_RADIUS_ACTIVE = 6;
+export const CHART_DOT_RADIUS_PROJECTED = 3;
+export const CHART_DASH_THRESHOLD = '6 3';
+export const CHART_DASH_PROJECTED = '6 4';
+export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
+export const CHART_COLORS = {
+  line: '#58a6ff',
+  grid: '#30363d',
+  text: '#8b949e',
+  surface: '#1f2937',
+  tooltip: '#161b22',
+  warning: '#d29922',
+  critical: '#f85149',
+} as const;
+export const AGENT_PALETTE = [
+  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
+  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
+] as const;
+export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
+export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
+export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
+export const CHART_TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: CHART_COLORS.tooltip,
+  border: `1px solid ${CHART_COLORS.grid}`,
+  borderRadius: 'var(--radius)',
+  color: CHART_COLORS.text,
+  fontSize: 12,
+};
+export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
+export const CHART_YAXIS_WIDTH = 48;
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
+
+================
+File: src/api/api-constants.ts
+================
+export const PERCENT_BASE = 100;
+export const LATENCY_P50 = 50;
+export const LATENCY_P95 = 95;
+export const LATENCY_DISPLAY_PRECISION = 1;
+export const RATE_DISPLAY_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const FILE_ACCESS_TOP_N = 30;
+export const CONCENTRATION_THRESHOLD = 0.2;
+export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
+export const COMMIT_BODY_START_LINE_INDEX = 2;
+export const MAX_TRACE_ID_LEN = 128;
+export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
+export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
+export const SCORE_ROUND_FACTOR = 10_000;
+export const LOG_SUMMARY_MAX_ENTRIES = 200;
+export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+export const NANOS_TO_MS = 1_000_000;
+export function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+export const HOOK_NAME = {
+  SESSION_START: 'session-start',
+  TOKEN_METRICS: 'token-metrics-extraction',
+  AGENT_POST_TOOL: 'agent-post-tool',
+  POST_COMMIT_REVIEW: 'post-commit-review',
+  ALERT_EVALUATION: 'telemetry-alert-evaluation',
+  CODE_STRUCTURE: 'code-structure',
+} as const;
+export function isValidParam(value: string | undefined, re: RegExp): boolean {
+  return !!value && re.test(value);
+}
+export function toDateOnly(d: Date): string;
+export function toDateOnly(d: string): string;
+export function toDateOnly(d: Date | string): string {
+  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0];
+}
+export type SpanLike = { attributes?: Record<string, unknown> };
+export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
+  const v = span.attributes?.[key];
+  return typeof v === 'string' ? v : fallback;
+}
+export function attrNum(span: SpanLike, key: string, fallback = 0): number {
+  const v = span.attributes?.[key];
+  return typeof v === 'number' ? v : fallback;
+}
+export function spanAttr<T>(span: SpanLike, key: string): T | undefined {
+  return span.attributes?.[key] as T | undefined;
+}
+export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals
+    .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
+    .map(e => e.scoreValue as number);
 }
 
 ================
-File: src/api/data-loader.ts
+File: src/lib/workflow-graph.ts
 ================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-import { queryLogs } from '../../../dist/tools/query-logs.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { toDateOnly } from './api-constants.js';
-const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
-const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
-const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
-const LIMIT_EVALS_BULK = 100_000;
-const LIMIT_EVALS_METRIC = 10_000;
-const LIMIT_EVALS_PER_TRACE = 1_000;
-const LIMIT_EVALS_SESSION = 10_000;
-const LIMIT_TRACES = 500;
-const LIMIT_LOGS = 1_000;
-const LIMIT_HEALTH_PROBE = 1;
-let backend: MultiDirectoryBackend | undefined;
-function getBackend(): MultiDirectoryBackend {
-  if (!backend) {
-    backend = new MultiDirectoryBackend(undefined, true);
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
+const ATTR_AGENT_NAME = 'gen_ai.agent.name';
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
+const SPAN_NAME_TOOL_CALL = 'tool_call';
+const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph {
+  if (evaluation !== null && Array.isArray(evaluation.turns)) {
+    return buildFromEvaluation(evaluation, spans);
   }
-  return backend;
+  return inferFromSpans(spans);
 }
-function defaultRange(lookbackMs: number): { start: string; end: string } {
-  const now = new Date();
-  return {
-    start: new Date(now.getTime() - lookbackMs).toISOString(),
-    end: now.toISOString(),
-  };
-}
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>> {
-  const be = getBackend();
-  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
-  const grouped = new Map<string, EvaluationResult[]>();
-  for (const ev of evals) {
-    const name = ev.evaluationName;
-    let group = grouped.get(name);
-    if (!group) grouped.set(name, group = []);
-    group.push(ev);
-  }
-  return grouped;
-}
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  return be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    evaluationName: metricName,
-    limit: LIMIT_EVALS_METRIC,
-  });
-}
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return be.queryEvaluations({
-    traceId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_PER_TRACE,
-  });
-}
-const TRACE_QUERY_CONCURRENCY = 10;
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]> {
-  const uniqueIds = [...new Set(traceIds)];
-  if (uniqueIds.length === 0) return [];
-  const be = getBackend();
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
-  const start = startDate ?? defStart;
-  const end = endDate ?? defEnd;
-  const all: EvaluationResult[] = [];
-  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
-    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
-    const settled = await Promise.allSettled(
-      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
-    );
-    for (const result of settled) {
-      if (result.status === 'fulfilled') all.push(...result.value);
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
+  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  let droppedTurns = 0;
+  let rootAgentName: string | null = null;
+  let minTurnIndex = Infinity;
+  for (const turn of evaluation.turns) {
+    if (turn.agentName == null) {
+      droppedTurns++;
+      continue;
+    }
+    const existing = agentTurns.get(turn.agentName);
+    if (existing) existing.push(turn);
+    else agentTurns.set(turn.agentName, [turn]);
+    if (
+      turn.turnIndex < minTurnIndex ||
+      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
+    ) {
+      minTurnIndex = turn.turnIndex;
+      rootAgentName = turn.agentName;
     }
   }
-  return all;
+  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
+  const nodes: WorkflowNode[] = [];
+  for (const [agentName, turns] of agentTurns) {
+    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
+    const evaluationScore = relevances.length > 0
+      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
+      : null;
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    for (const s of spansByAgent.get(agentName) ?? []) {
+      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
+      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof v === 'number' && isFinite(v)) {
+        tokenSum += v;
+        tokenCount++;
+      }
+      durationMs += s.durationMs ?? 0;
+    }
+    const totalTokens = tokenCount > 0 ? tokenSum : null;
+    nodes.push({
+      id: agentName,
+      label: agentName,
+      evaluationScore,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: turns.length,
+      hasError: turns.some(t => t.hasError),
+    });
+  }
+  const seenEdges = new Set<string>();
+  const edges: WorkflowEdge[] = [];
+  for (const h of evaluation.handoffs) {
+    const key = `${h.sourceAgent}->${h.targetAgent}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    const score = isFinite(h.score) ? h.score : 0;
+    edges.push({
+      id: key,
+      source: h.sourceAgent,
+      target: h.targetAgent,
+      handoffScore: score,
+      contextPreserved: h.contextPreserved,
+      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
+    });
+  }
+  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
 }
-function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
+  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
+  if (agentSpans.size === 0) {
+    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
+  }
+  const nodes: WorkflowNode[] = [];
+  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
+  for (const [agentId, group] of agentSpans) {
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    let hasError = false;
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.name.startsWith('tool:')) toolCallCount++;
+      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
+      durationMs += s.durationMs ?? 0;
+      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
+    nodes.push({
+      id: agentId,
+      label: agentId,
+      evaluationScore: null,
+      toolCallCount,
+      totalTokens: tokenCount > 0 ? tokenSum : null,
+      durationMs,
+      turnCount: group.length,
+      hasError,
+    });
+    agentTimings.push({ id: agentId, minStart, maxEnd });
+  }
+  agentTimings.sort((a, b) => a.minStart - b.minStart);
+  const edges: WorkflowEdge[] = [];
+  for (let i = 0; i < agentTimings.length - 1; i++) {
+    const curr = agentTimings[i];
+    const next = agentTimings[i + 1];
+    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
+      const key = `${curr.id}->${next.id}`;
+      edges.push({
+        id: key,
+        source: curr.id,
+        target: next.id,
+        handoffScore: null,
+        contextPreserved: false,
+        label: 'inferred',
+      });
+    }
+  }
+  const rootNodeId = agentTimings[0]?.id ?? null;
+  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
 }
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
-  const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
+  const adjacency = new Map<string, string[]>();
+  for (const n of nodes) adjacency.set(n.id, []);
+  for (const e of edges) {
+    if (e.source !== e.target) {
+      adjacency.get(e.source)?.push(e.target);
+    }
+  }
+  const UNVISITED = 0;
+  const IN_STACK = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
+  function dfs(nodeId: string): boolean {
+    state.set(nodeId, IN_STACK);
+    for (const neighbor of adjacency.get(nodeId) ?? []) {
+      const neighborState = state.get(neighbor) ?? UNVISITED;
+      if (neighborState === IN_STACK) return true;
+      if (neighborState === UNVISITED && dfs(neighbor)) return true;
+    }
+    state.set(nodeId, DONE);
+    return false;
+  }
+  for (const n of nodes) {
+    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  }
+  return false;
 }
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
-  const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
-}
-async function queryLogsWithDefaultRange(
-  filter: { traceId?: string; sessionId?: string },
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
-  return result.logs;
-}
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
-}
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]> {
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return queryVerificationsLib({
-    startDate: opts.startDate ?? start,
-    endDate: opts.endDate ?? end,
-    sessionId: opts.sessionId,
-    limit: opts.limit ?? LIMIT_LOGS,
-  });
-}
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
-}
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return be.queryEvaluations({
-    sessionId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_SESSION,
-  });
-}
-export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
-  const be = getBackend();
-  const health = await be.healthCheck();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
-  const evals = await be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_HEALTH_PROBE,
-  });
-  return { status: health.status, hasData: evals.length > 0 };
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
+  if (nodes.length <= 1) return 'single_agent';
+  if (edges.length === 0) return 'single_agent';
+  if (hasCycle(nodes, edges)) return 'cyclic';
+  const outDegree = new Map<string, number>();
+  for (const e of edges) {
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+  }
+  for (const count of outDegree.values()) {
+    if (count > 1) return 'branching';
+  }
+  return 'linear';
 }
 
 ================
@@ -17342,6 +17871,7 @@ summary.section-rail {
   color: var(--section-rail-color, var(--border-accent));
   transition: transform var(--transition-medium);
 }
+.workflow-graph-container { height: var(--workflow-graph-height, 600px); }
 .workflow-node {
   width: 220px;
   height: 120px;
@@ -17567,534 +18097,6 @@ summary.section-rail {
 }
 .metric-grid .skeleton {
   height: 180px;
-}
-
-================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-  InvalidMetricNameFormat = 'Invalid metric name format',
-  InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
-  InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
-  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
-  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
-  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
-  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
-  InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
-  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
-  InvalidSessionIdFormat = 'Invalid sessionId format',
-  InvalidTraceId = 'Invalid traceId',
-}
-export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
-export type InputKey = z.infer<typeof InputKeySchema>;
-export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
-export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
-export type SortBy = z.infer<typeof SortBySchema>;
-export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
-export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
-export type Role = z.infer<typeof RoleSchema>;
-export const ROLES = RoleSchema.options;
-export const DEFAULT_ROLE: Role = 'executive';
-export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
-export const TIME_MS = {
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-} as const;
-export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
-export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
-export const PeriodEnum = z.enum(PERIOD_KEYS);
-export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
-export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
-export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
-export const PERIOD_MS: Record<string, number> = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
-);
-export function computePeriodDates(period: string): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
-  return { start: start.toISOString(), end: now.toISOString() };
-}
-export const LLM_SAMPLE_RATE = 10;
-export const SCORE_THRESHOLD_GREEN = 0.8;
-export const SCORE_THRESHOLD_YELLOW = 0.5;
-export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-export const MAX_ERROR_ROWS = 10;
-export const MAX_HALLUCINATION_ROWS = 8;
-export const MAX_FAILED_EVAL_ROWS = 6;
-export const LIVE_WINDOW_MS = TIME_MS.DAY;
-export const QUERY_RETRY_COUNT = 2;
-export const POLL_INTERVAL_MS = 30_000;
-export const RETRY_DELAY_BASE = 1_000;
-export const RETRY_DELAY_CAP = 30_000;
-export const MAX_IDS = 50;
-export const EVAL_LIMIT = 100;
-export const SCORE_DISPLAY_PRECISION = 3;
-export const SCORE_CHIP_PRECISION = 2;
-export const SCORE_FORMAT_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const STALE_TIME = {
-  DEFAULT: 25_000,
-  DETAIL: 30_000,
-  AGGREGATE: 60_000,
-} as const;
-export const DEFAULT_TOP_N = 5;
-export const DEFAULT_BUCKET_COUNT = 10;
-export const SKELETON_HEIGHT_SM = 200;
-export const SKELETON_HEIGHT_MD = 300;
-export const SKELETON_HEIGHT_LG = 400;
-export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
-export const DEFAULT_PAGE_LIMIT = 50;
-export const HEATMAP_ROW_HEADER_WIDTH = 80;
-export const HEATMAP_COL_HEADER_HEIGHT = 32;
-export const COVERAGE_GRID_HEADER_WIDTH = 120;
-export const COVERAGE_GRID_CELL_SIZE = 28;
-export const COVERAGE_GRID_MAX_INPUTS = 30;
-export const FUNNEL_DROPOFF_WARN_PCT = 20;
-export const WORKFLOW_FILTER_MIN_AGENTS = 2;
-export const SPAN_TREE_INDENT = 20;
-export const SPAN_TREE_BASE_PADDING = 8;
-export const SPARKLINE_WIDTH = 160;
-export const SPARKLINE_HEIGHT = 28;
-export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
-export const VARIANCE_LOW_PCT = 20;
-export const VARIANCE_MEDIUM_PCT = 50;
-export const CHART_HEIGHT = 200;
-export const CHART_STROKE_WIDTH = 2;
-export const CHART_DOT_RADIUS = 4;
-export const CHART_DOT_RADIUS_ACTIVE = 6;
-export const CHART_DOT_RADIUS_PROJECTED = 3;
-export const CHART_DASH_THRESHOLD = '6 3';
-export const CHART_DASH_PROJECTED = '6 4';
-export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-export const CHART_COLORS = {
-  line: '#58a6ff',
-  grid: '#30363d',
-  text: '#8b949e',
-  surface: '#1f2937',
-  tooltip: '#161b22',
-  warning: '#d29922',
-  critical: '#f85149',
-} as const;
-export const AGENT_PALETTE = [
-  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
-  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
-] as const;
-export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
-export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
-export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
-export const CHART_TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: CHART_COLORS.tooltip,
-  border: `1px solid ${CHART_COLORS.grid}`,
-  borderRadius: 'var(--radius)',
-  color: CHART_COLORS.text,
-  fontSize: 12,
-};
-export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
-export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
-
-================
-File: src/api/routes/metrics.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { subMilliseconds } from 'date-fns';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-const DYNAMICS_PERIOD_HOURS_24H = 1;
-const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
-const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
-const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
-const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
-const OffsetSchema = z.coerce.number().int().min(0).default(0);
-const ScoreLabelSchema = z.string().max(100).optional();
-export const metricsRoutes = new Hono();
-metricsRoutes.get('/metrics/:name', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const topNResult = TopNSchema.safeParse(c.req.query('topN'));
-  if (!topNResult.success) {
-    return c.json({ error: ErrorMessage.InvalidTopN }, HttpStatus.BadRequest);
-  }
-  const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
-  if (!bucketResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBucketCount }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
-    const start = subMilliseconds(now, periodMs);
-    const prevStart = subMilliseconds(start, periodMs);
-    const [evaluations, prevEvaluations] = await Promise.all([
-      loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
-      loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
-    ]);
-    const previousValues = prevEvaluations.length > 0
-      ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
-      : undefined;
-    const detail = computeMetricDetail(evaluations, config, {
-      topN: topNResult.data,
-      bucketCount: bucketResult.data,
-      previousValues,
-    });
-    const dynamics = detail.trend
-      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_PERIOD_HOURS_24H : DYNAMICS_PERIOD_HOURS_MULTI_DAY)
-      : undefined;
-    return c.json({ ...detail, dynamics });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const limitResult = LimitSchema.safeParse(c.req.query('limit'));
-  if (!limitResult.success) {
-    return c.json({ error: ErrorMessage.InvalidLimit }, HttpStatus.BadRequest);
-  }
-  const offsetResult = OffsetSchema.safeParse(c.req.query('offset'));
-  if (!offsetResult.success) {
-    return c.json({ error: ErrorMessage.InvalidOffset }, HttpStatus.BadRequest);
-  }
-  const sortByResult = SortBySchema.safeParse(c.req.query('sortBy'));
-  if (!sortByResult.success) {
-    return c.json({ error: ErrorMessage.InvalidSortBy }, HttpStatus.BadRequest);
-  }
-  const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
-  if (!scoreLabelResult.success) {
-    return c.json({ error: ErrorMessage.InvalidScoreLabel }, HttpStatus.BadRequest);
-  }
-  const scoreLabel = scoreLabelResult.data;
-  try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
-    const start = subMilliseconds(now, periodMs);
-    const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
-    const sortBy = sortByResult.data;
-    const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
-      .slice().sort((a, b) => {
-      if (sortBy === 'score_asc' || sortBy === 'score_desc') {
-        const aVal = a.scoreValue ?? null;
-        const bVal = b.scoreValue ?? null;
-        if (aVal === null && bVal === null) return 0;
-        if (aVal === null) return 1;
-        if (bVal === null) return -1;
-        return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
-      }
-      return b.timestamp.localeCompare(a.timestamp);
-    });
-    const total = evaluations.length;
-    const limit = limitResult.data;
-    const offset = offsetResult.data;
-    const page = evaluations.slice(offset, offset + limit);
-    const rows = page.map(e => ({
-      score: e.scoreValue ?? 0,
-      explanation: e.explanation,
-      traceId: e.traceId,
-      timestamp: e.timestamp,
-      evaluator: e.evaluator,
-      label: e.scoreLabel,
-      evaluatorType: e.evaluatorType,
-      spanId: e.spanId,
-      sessionId: e.sessionId,
-      agentName: e.agentName,
-      trajectoryLength: e.trajectoryLength,
-      stepScores: e.stepScores,
-      toolVerifications: e.toolVerifications,
-    }));
-    return c.json({ rows, total, limit, offset, hasMore: offset + limit < total });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/api/api-constants.ts
-================
-export const PERCENT_BASE = 100;
-export const LATENCY_P50 = 50;
-export const LATENCY_P95 = 95;
-export const LATENCY_DISPLAY_PRECISION = 1;
-export const RATE_DISPLAY_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const FILE_ACCESS_TOP_N = 30;
-export const CONCENTRATION_THRESHOLD = 0.2;
-export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
-export const COMMIT_BODY_START_LINE_INDEX = 2;
-export const MAX_TRACE_ID_LEN = 128;
-export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
-export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
-export const SCORE_ROUND_FACTOR = 10_000;
-export const LOG_SUMMARY_MAX_ENTRIES = 200;
-export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-export const NANOS_TO_MS = 1_000_000;
-export function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
-}
-export const HOOK_NAME = {
-  SESSION_START: 'session-start',
-  TOKEN_METRICS: 'token-metrics-extraction',
-  AGENT_POST_TOOL: 'agent-post-tool',
-  POST_COMMIT_REVIEW: 'post-commit-review',
-  ALERT_EVALUATION: 'telemetry-alert-evaluation',
-  CODE_STRUCTURE: 'code-structure',
-} as const;
-export function isValidParam(value: string | undefined, re: RegExp): boolean {
-  return !!value && re.test(value);
-}
-export function toDateOnly(d: Date): string;
-export function toDateOnly(d: string): string;
-export function toDateOnly(d: Date | string): string {
-  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0];
-}
-export type SpanLike = { attributes?: Record<string, unknown> };
-export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
-  const v = span.attributes?.[key];
-  return typeof v === 'string' ? v : fallback;
-}
-export function attrNum(span: SpanLike, key: string, fallback = 0): number {
-  const v = span.attributes?.[key];
-  return typeof v === 'number' ? v : fallback;
-}
-export function spanAttr<T>(span: SpanLike, key: string): T | undefined {
-  return span.attributes?.[key] as T | undefined;
-}
-export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals
-    .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
-    .map(e => e.scoreValue as number);
-}
-
-================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-import { groupBy } from './quality-utils.js';
-const ATTR_AGENT_NAME = 'gen_ai.agent.name';
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
-const SPAN_NAME_TOOL_CALL = 'tool_call';
-const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph {
-  if (evaluation !== null && Array.isArray(evaluation.turns)) {
-    return buildFromEvaluation(evaluation, spans);
-  }
-  return inferFromSpans(spans);
-}
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
-  let droppedTurns = 0;
-  let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
-  for (const turn of evaluation.turns) {
-    if (turn.agentName == null) {
-      droppedTurns++;
-      continue;
-    }
-    const existing = agentTurns.get(turn.agentName);
-    if (existing) existing.push(turn);
-    else agentTurns.set(turn.agentName, [turn]);
-    if (
-      turn.turnIndex < minTurnIndex ||
-      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
-    ) {
-      minTurnIndex = turn.turnIndex;
-      rootAgentName = turn.agentName;
-    }
-  }
-  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
-  const nodes: WorkflowNode[] = [];
-  for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
-    const evaluationScore = relevances.length > 0
-      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
-      : null;
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    for (const s of spansByAgent.get(agentName) ?? []) {
-      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
-      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && isFinite(v)) {
-        tokenSum += v;
-        tokenCount++;
-      }
-      durationMs += s.durationMs ?? 0;
-    }
-    const totalTokens = tokenCount > 0 ? tokenSum : null;
-    nodes.push({
-      id: agentName,
-      label: agentName,
-      evaluationScore,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: turns.length,
-      hasError: turns.some(t => t.hasError),
-    });
-  }
-  const seenEdges = new Set<string>();
-  const edges: WorkflowEdge[] = [];
-  for (const h of evaluation.handoffs) {
-    const key = `${h.sourceAgent}->${h.targetAgent}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
-    const score = isFinite(h.score) ? h.score : 0;
-    edges.push({
-      id: key,
-      source: h.sourceAgent,
-      target: h.targetAgent,
-      handoffScore: score,
-      contextPreserved: h.contextPreserved,
-      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
-    });
-  }
-  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
-}
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
-  if (agentSpans.size === 0) {
-    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
-  }
-  const nodes: WorkflowNode[] = [];
-  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
-  for (const [agentId, group] of agentSpans) {
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    let hasError = false;
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of group) {
-      if (s.name.startsWith('tool:')) toolCallCount++;
-      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
-      durationMs += s.durationMs ?? 0;
-      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
-      if (end > maxEnd) maxEnd = end;
-    }
-    nodes.push({
-      id: agentId,
-      label: agentId,
-      evaluationScore: null,
-      toolCallCount,
-      totalTokens: tokenCount > 0 ? tokenSum : null,
-      durationMs,
-      turnCount: group.length,
-      hasError,
-    });
-    agentTimings.push({ id: agentId, minStart, maxEnd });
-  }
-  agentTimings.sort((a, b) => a.minStart - b.minStart);
-  const edges: WorkflowEdge[] = [];
-  for (let i = 0; i < agentTimings.length - 1; i++) {
-    const curr = agentTimings[i];
-    const next = agentTimings[i + 1];
-    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
-      const key = `${curr.id}->${next.id}`;
-      edges.push({
-        id: key,
-        source: curr.id,
-        target: next.id,
-        handoffScore: null,
-        contextPreserved: false,
-        label: 'inferred',
-      });
-    }
-  }
-  const rootNodeId = agentTimings[0]?.id ?? null;
-  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
-}
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
-  const adjacency = new Map<string, string[]>();
-  for (const n of nodes) adjacency.set(n.id, []);
-  for (const e of edges) {
-    if (e.source !== e.target) {
-      adjacency.get(e.source)?.push(e.target);
-    }
-  }
-  const UNVISITED = 0;
-  const IN_STACK = 1;
-  const DONE = 2;
-  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
-  function dfs(nodeId: string): boolean {
-    state.set(nodeId, IN_STACK);
-    for (const neighbor of adjacency.get(nodeId) ?? []) {
-      const neighborState = state.get(neighbor) ?? UNVISITED;
-      if (neighborState === IN_STACK) return true;
-      if (neighborState === UNVISITED && dfs(neighbor)) return true;
-    }
-    state.set(nodeId, DONE);
-    return false;
-  }
-  for (const n of nodes) {
-    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
-  }
-  return false;
-}
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
-  if (nodes.length <= 1) return 'single_agent';
-  if (edges.length === 0) return 'single_agent';
-  if (hasCycle(nodes, edges)) return 'cyclic';
-  const outDegree = new Map<string, number>();
-  for (const e of edges) {
-    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
-  }
-  for (const count of outDegree.values()) {
-    if (count > 1) return 'branching';
-  }
-  return 'linear';
 }
 
 ================

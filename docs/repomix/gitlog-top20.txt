@@ -1,3 +1,22 @@
+a592dd5 2026-03-27 refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)
+  scripts/judge-evaluations.ts
+  src/theme.css
+  worker/index.ts
+
+7a254df 2026-03-27 style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment
+  src/theme.css
+
+a0165c1 2026-03-27 refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css
+  src/theme.css
+
+360e735 2026-03-27 refactor(workflow-graph): replace inline height style with CSS variable
+  src/theme.css
+
+153d4d4 2026-03-27 chore: regenerate repomix compressed XML
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 835dd30 2026-03-27 style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments
   scripts/judge-evaluations.ts
 
@@ -324,19 +343,4 @@ e7a1b5d 2026-03-26 refactor(workflow-graph): replace 4x height inline style with
   src/theme.css
 
 f504585 2026-03-26 refactor(score-histogram): replace bar height inline style with CSS custom property
-  src/theme.css
-
-e12de1e 2026-03-26 refactor(correlation-heatmap): replace cell backgroundColor+color inline with CSS custom properties
-  src/theme.css
-
-03239f7 2026-03-26 refactor(cqi-hero): replace segment flex+backgroundColor inline with CSS custom properties
-  src/theme.css
-
-4d2f859 2026-03-26 refactor(chip): replace hex-alpha inline color+bg with CSS custom property --chip-color
-  src/theme.css
-
-c89a59e 2026-03-26 refactor(alert-list): replace threshold-bar background ternary with data-violating CSS
-  src/theme.css
-
-34be70d 2026-03-26 refactor(correlation-heatmap): move toxic border/animation to CSS data-toxic selector
   src/theme.css
