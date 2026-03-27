@@ -736,7 +736,7 @@ function _loadExistingKeys(): Set<string> {
       const attrs = record.attributes;
       if (!attrs) continue;
       const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-      if (evalType !== 'llm' && evalType !== 'seed' && evalType !== 'trace-backfill') continue;
+      if (evalType !== LLM_EVALUATOR_TYPE && evalType !== SEED_EVALUATOR_TYPE && evalType !== TRACE_BACKFILL_EVALUATOR_TYPE) continue;
 
       const sessionId = attrs['session.id'] as string || '';
       const metricName = attrs['gen_ai.evaluation.name'] as string || '';
@@ -1024,7 +1024,7 @@ async function main() {
         runAt: new Date().toISOString(),
         evaluationNames: evalNames,
         resultCount: flatEvals.length,
-        evaluator: seed ? 'seed' : LLM_JUDGE_EVALUATOR,
+        evaluator: seed ? SEED_EVALUATOR_TYPE : LLM_JUDGE_EVALUATOR,
       };
       await backend.appendDatasetRun(runRecord);
     }
