@@ -844,7 +844,7 @@ async function main(): Promise<void> {
     } catch { /* skip malformed */ }
   }
 
-  // R5: Collect time buckets per period×metric for degradation signal computation
+  // Collect time buckets per period×metric for degradation signal computation
   const degradationBuckets = new Map<string, Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>>>();
   for (const period of PERIODS) {
     const ms = PERIOD_MS[period];
@@ -874,7 +874,7 @@ async function main(): Promise<void> {
         }
       }
 
-      // R5: Save buckets for degradation signal computation
+      // Save buckets for degradation signal computation
       let degradBucket = degradationBuckets.get(period);
       if (!degradBucket) degradationBuckets.set(period, degradBucket = {});
       degradBucket[name] = timeBuckets.map(b => ({
@@ -929,7 +929,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // R5: Compute degradation signals for all periods
+  // Compute degradation signals for all periods
   const stateDir = backend.getDirectories().find(d => d.source === 'global')?.path ?? '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
@@ -1145,7 +1145,7 @@ async function main(): Promise<void> {
       prevState[META_LAST_SYNC_KEY] = hashValue(metaEntry.value);
       saveSyncState(prevState);
     }
-    // L1: Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
+    // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
     // KV consumers can use meta:lastSync (written above) to see when sync last ran; updating
     // meta:syncCoverage in KV here would burn 1 write per no-op run without changing stable data.
     const prevCoverage = loadLastCoverage();
@@ -1215,7 +1215,7 @@ async function main(): Promise<void> {
     // lastChecked: when sync last ran regardless of whether data changed (refreshed even on no-op runs)
     lastChecked: now.toISOString(),
   };
-  // N3: Exclude lastChecked (and timestamp) from the change-detection hash so a new timestamp alone
+  // Exclude lastChecked (and timestamp) from the change-detection hash so a new timestamp alone
   // does not burn a KV write every run. Only the stable numeric fields gate whether we write.
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
@@ -1227,7 +1227,7 @@ async function main(): Promise<void> {
       saveSyncState(newState);
     }
   }
-  // L1: Persist coverage data so the early-return path can refresh lastChecked without recomputing.
+  // Persist coverage data so the early-return path can refresh lastChecked without recomputing.
   saveLastCoverage(coverage);
 
   const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
