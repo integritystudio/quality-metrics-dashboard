@@ -423,7 +423,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
 
   for (const turn of turns) {
     const turnKey = turn.timestamp.slice(0, 19);
-    const sessionPreview = sessionPreview;
+    const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
     const canary = isCanaryTurn(turn.sessionId, turnKey);
     if (canary) canaryCount++;
 
@@ -543,6 +543,7 @@ export async function evaluateTurn(
 ): Promise<EvalRecord[]> {
   const evals: EvalRecord[] = [];
   const turnKey = turn.timestamp.slice(0, 19);
+  const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
 
   const relKey = `${turn.sessionId}:relevance:${turnKey}`;
