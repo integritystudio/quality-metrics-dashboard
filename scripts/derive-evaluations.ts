@@ -18,6 +18,7 @@ import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constan
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN } from './judge-evaluations.js';
+import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 
 export interface EvalRecord {
   timestamp: string;
@@ -91,7 +92,6 @@ function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
 }
 
 function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
-  // Only measure tool execution hooks (the meaningful ones)
   const measurable = [
     'hook:builtin-post-tool',
     'hook:mcp-post-tool',
@@ -249,7 +249,7 @@ function trackAgentActivity(span: TraceSpan): void {
   if (isPost) {
     entry.post++;
     const agentName = String(span.attributes['gen_ai.agent.name'] ?? 'unknown');
-    const score = span.status?.code === 2 ? 0 : 1; // status 2 = ERROR in OTel
+    const score = span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1;
     entry.agentSequence.push({ agentName, score, span });
   }
   entry.spans.push(span);
@@ -355,7 +355,7 @@ function main(): void {
 
   const byDate = new Map<string, EvalRecord[]>();
   for (const ev of allEvals) {
-    const date = ev.timestamp.slice(0, 10); // YYYY-MM-DD
+    const date = toDateOnly(ev.timestamp);
     let group = byDate.get(date);
     if (!group) byDate.set(date, group = []);
     group.push(ev);
