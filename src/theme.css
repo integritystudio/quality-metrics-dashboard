@@ -1401,6 +1401,9 @@ summary.section-rail {
 
 /* ─── Workflow components (CR-STYLE-1) ────────────────────────────────────── */
 
+/* WorkflowGraph: outer container — height set via --workflow-graph-height CSS variable */
+.workflow-graph-container { height: var(--workflow-graph-height, 600px); }
+
 /* WorkflowGraph: agent node card */
 .workflow-node {
   width: 220px;
