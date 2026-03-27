@@ -1,7 +1,18 @@
 import { Hono } from 'hono';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import {
+  computeRollingDegradationSignals,
+  type DegradationState,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import {
+  DEFAULT_BIN_COUNT,
+} from '../../../../dist/lib/quality/quality-constants.js';
+import {
+  buildEvenBucketBoundaries,
+  getEvenBucketIndex,
+} from '../../../../dist/lib/quality/bucket-utils.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus } from '../../lib/constants.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
 import type { LiveMetric, QualityLiveData } from '../../types.js';
 
 export const qualityRoutes = new Hono();
@@ -58,6 +69,58 @@ qualityRoutes.get('/quality/live', async (c) => {
     };
 
     return c.json(response);
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+/**
+ * GET /api/degradation-signals
+ * Returns per-metric EWMA degradation signals computed from local evaluation data.
+ * Mirrors the KV-backed worker route for use in local dev.
+ *
+ * Query params:
+ *   period: '24h' | '7d' | '30d' (default: '7d')
+ */
+qualityRoutes.get('/degradation-signals', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+
+  try {
+    const period = periodResult.data;
+    const { start: startDate, end: endDate } = computePeriodDates(period);
+    const startMs = new Date(startDate).getTime();
+    const endMs = new Date(endDate).getTime();
+    const bucketCount = DEFAULT_BIN_COUNT;
+    const bucketMs = (endMs - startMs) / bucketCount;
+    const boundaries = buildEvenBucketBoundaries(startMs, endMs, bucketCount);
+
+    const evaluationsByMetric = await loadEvaluationsByMetric(startDate, endDate);
+    const metricNames = [...evaluationsByMetric.keys()];
+    const timeBuckets: Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>> = {};
+
+    for (const [name, evals] of evaluationsByMetric) {
+      const buckets = boundaries.map(b => ({
+        startTime: new Date(b.start).toISOString(),
+        endTime: new Date(b.end).toISOString(),
+        scores: [] as number[],
+      }));
+      for (const ev of evals) {
+        if (ev.scoreValue == null) continue;
+        const ts = new Date(ev.timestamp).getTime();
+        const idx = getEvenBucketIndex(ts, startMs, bucketMs, bucketCount);
+        if (idx !== null) buckets[idx].scores.push(ev.scoreValue);
+      }
+      timeBuckets[name] = buckets;
+    }
+
+    const noBreachState: DegradationState = { lastRun: '', breaches: {} };
+    const window = { startDate, endDate };
+    const reports = computeRollingDegradationSignals(timeBuckets, metricNames, noBreachState, window);
+
+    return c.json({ period, reports, computedAt: new Date().toISOString() });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
