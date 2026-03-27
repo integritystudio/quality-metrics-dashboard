@@ -244,7 +244,7 @@ function trackAgentActivity(span: TraceSpan): void {
 
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
   let entry = sessionAgents.get(sessionId);
-  if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });;
+  if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });
   if (isPre) entry.pre++;
   if (isPost) {
     entry.post++;
