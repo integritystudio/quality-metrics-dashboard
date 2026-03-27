@@ -105,7 +105,7 @@ const MAX_RECENT_SESSIONS = 20;
 type KVEntry = { key: string; value: string };
 
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
-  return evals.filter(ev => (ev as Record<string, unknown>).evaluatorType !== CANARY_EVALUATOR_TYPE);
+  return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
 }
 
 const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
