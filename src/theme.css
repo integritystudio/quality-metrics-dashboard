@@ -1399,7 +1399,7 @@ summary.section-rail {
   transition: transform var(--transition-medium);
 }
 
-/* ─── Workflow components (CR-STYLE-1) ────────────────────────────────────── */
+/* ─── Workflow components ──────────────────────────────────────────────────── */
 
 /* WorkflowGraph: outer container — height set via --workflow-graph-height CSS variable */
 .workflow-graph-container { height: var(--workflow-graph-height, 600px); }

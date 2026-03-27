@@ -181,6 +181,7 @@ interface WorkflowGraphProps {
 }
 
 export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
+  const containerStyle = { '--workflow-graph-height': `${height}px` } as React.CSSProperties;
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -215,7 +216,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   // Large-graph fallback: skip ELK layout to avoid blocking the main thread
   if (graph.nodes.length > MAX_ELK_NODES) {
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
         <div className="workflow-oversize text-secondary text-xs">
           <div className="workflow-oversize__heading">
             Graph too large to render ({graph.nodes.length} agents)
@@ -239,7 +240,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
     const node = graph.nodes[0];
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
         <div className="workflow-fallback">
           {node ? (
             <>
@@ -258,7 +259,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
 
   if (layoutError) {
     return (
-      <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
         <div className="error-state workflow-fallback">
           Failed to compute workflow layout: {layoutError}
         </div>
@@ -269,7 +270,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
 
   return (
-    <div ref={containerRef} className="workflow-graph-container" style={{ '--workflow-graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+    <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
       <ReactFlow
         nodes={nodes}
         edges={edges}
