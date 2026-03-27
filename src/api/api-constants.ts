@@ -80,10 +80,8 @@ export function attrNum(span: SpanLike, key: string, fallback = 0): number {
   return typeof v === 'number' ? v : fallback;
 }
 
-/** Primitive type tags accepted by spanAttr for validated attribute extraction. */
 export type SpanAttrType = 'string' | 'number' | 'boolean';
 
-/** Type-level mapping from SpanAttrType tag to the corresponding primitive. */
 type SpanAttrValue<K extends SpanAttrType> =
   K extends 'string' ? string :
   K extends 'number' ? number :

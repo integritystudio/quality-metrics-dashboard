@@ -13,17 +13,6 @@ Open items from code reviews and deferred work.
 
 | # | Item | Priority | Source |
 
-### FU-G5-LAYOUT + R5: Code Review Findings (Open Items)
-
-| # | Item | Priority | Source |
-|---|------|----------|--------|
-| R5-CR-1 | **`DegradationSignal` fields not rendered** — `coverageDropoutRate` and `latencySkewRatio` are present in the API response and typed in the hook interface but not shown in `DegradationSignalsPage`. Add columns or a detail panel so operators can act on these signals. | P3 | code-review 2026-03-27 |
-
-**Notes — no critical or important issues found across 7 commits (6a402c8..b4e8358)**:
-- `latencyMs` computation: uses globally earliest `startTimeUnixNano` per agent vs. globally latest `endTimeUnixNano` per source agent. For single-turn workflows this is exact; for multi-turn it approximates total agent lifespan gap. Intentional; documented in JSDoc.
-- `inferFromSpans` epsilon tolerance `<= next.minStart + SPAN_SEQUENCE_EPSILON_NS`: negative-latency guard preserves existing behaviour; `latencyMs` will be null for those edges.
-- `DegradationSignalsPage` keyboard-only navigation (`g d`) matches the established pattern for `RoutingTelemetryPage` (`g r`) — not a regression.
-- Pre-existing TS errors in `sessions.ts` / `agents.ts` (unstaged local changes, not introduced by this session).
 
 ## Completed
 
@@ -67,6 +56,7 @@ Open items from code reviews and deferred work.
 
 | # | Item | Priority | Status |
 |---|------|----------|--------|
+| R5-CR-1 | `coverageDropoutRate` and `latencySkewRatio` fields added to `DegradationSignalsPage` — Coverage Dropout (%) and Latency Skew columns now rendered in table | P3 | Done |
 | R5-HOOK | `useDegradationSignals` hook + `DegradationSignalsResponse` types | P3 | Done (ce7ec1d) |
 | R5-PAGE | `DegradationSignalsPage` table: metric, status, EWMA drift, variance trend, variance ratio, breaches, confirmed | P3 | Done (dbeb1c3..b4e8358) |
 | R5-ROUTE | `/degradation-signals` route + `g d` keyboard shortcut wired in `App.tsx` | P3 | Done (013bba0) |

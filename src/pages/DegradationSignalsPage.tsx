@@ -5,6 +5,8 @@ import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
 const VARIANCE_RATIO_PRECISION = 3;
+const COVERAGE_DROPOUT_PRECISION = 1;
+const LATENCY_SKEW_PRECISION = 3;
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -23,6 +25,8 @@ function ReportRow({ report }: { report: DegradationReport }) {
       <td className="mono">{signal.varianceRatio.toFixed(VARIANCE_RATIO_PRECISION)}</td>
       <td className="mono">{signal.consecutiveBreaches}</td>
       <td className="mono">{signal.confirmed ? 'Yes' : 'No'}</td>
+      <td className="mono">{(signal.coverageDropoutRate * 100).toFixed(COVERAGE_DROPOUT_PRECISION)}%</td>
+      <td className="mono">{signal.latencySkewRatio.toFixed(LATENCY_SKEW_PRECISION)}</td>
     </tr>
   );
 }
@@ -58,6 +62,8 @@ export function DegradationSignalsPage({ period }: { period: Period }) {
                   <th>Variance Ratio</th>
                   <th>Consecutive Breaches</th>
                   <th>Confirmed</th>
+                  <th>Coverage Dropout</th>
+                  <th>Latency Skew</th>
                 </tr>
               </thead>
               <tbody>
