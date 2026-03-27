@@ -52,14 +52,14 @@ Open items from code reviews and deferred work.
 | ~~CR-WK-1~~ | ~~**KV reads cast without Zod validation**~~ — replaced unsafe casts with `Array.isArray` guards; `safeArray` helper extracted | ~~P1~~ | Done (488b543, d98d147) |
 | ~~CR-WK-2~~ | ~~**Logout audit event drops user ID on unauthenticated-path sessions**~~ — `logActivity` now guards against `undefined` appUserId | ~~P1~~ | Done (af4a3a0) |
 | ~~CR-WK-3~~ | ~~**Pagination params use `parseInt` instead of Zod coerce**~~ — `PaginationSchema` (Zod coerce) replaces `parseInt`; rejects invalid values with 400. | ~~P2~~ | Done |
-| CR-WK-4 | **`tsMin`/`tsMax` extreme-value edge case** — `sessions.ts:238-265`: `parseTimestamp` guards `NaN` but not values outside `Date.toISOString()` safe range (±100 million days from epoch); a malformed far-future timestamp would pass the `tsMin < Infinity` guard at line 262 and cause `new Date(tsMax).toISOString()` to throw a `RangeError` | P2 | code-review 2026-03-26 |
-| CR-WK-5 | **Log severity cast should use `typeof` check** — `sessions.ts:260`: `(l as { severity?: string }).severity` casts without verifying shape; replace with explicit check `typeof (l as Record<string, unknown>).severity === 'string'` or a Zod schema | P3 | code-review 2026-03-26 |
+| ~~CR-WK-4~~ | ~~**`tsMin`/`tsMax` extreme-value edge case**~~ — `parseTimestamp` now rejects values outside `±8_640_000_000_000_000 ms` (ECMAScript safe range for `Date.toISOString()`). | ~~P2~~ | Done (9f4040e) |
+| ~~CR-WK-5~~ | ~~**Log severity cast should use `typeof` check**~~ — `LogRecord.severity` and `.timestamp` are typed as `string`; removed unnecessary casts, access fields directly. | ~~P3~~ | Done (80c4633) |
 | CR-WK-6 | **KV data lacks schema versioning** — no version field in KV payloads; schema changes during deploy can cause old cached data to be read with the new schema without detection | P3 | code-review 2026-03-26 |
-| CR-WK-7 | **Admin user spread via `...(raw as object)` is a weak pattern** — `worker/index.ts:548`: spreading `raw as object` before Zod parse allows prototype pollution if `raw` contains inherited properties; prefer explicit field selection before passing to `AdminUserSchema.safeParse` | P3 | code-review 2026-03-26 |
-| CR-WK-8 | **Inconsistent error response shapes across routes** — some routes return `{ error: string }`, others return plain status codes; standardise on a single error envelope | P4 | code-review 2026-03-26 |
+| ~~CR-WK-7~~ | ~~**Admin user spread via `...(raw as object)`**~~ — already uses explicit field selection (`r['id']`, `r['email']`, `r['created_at']`); no action needed. | ~~P3~~ | Done (pre-existing) |
+| ~~CR-WK-8~~ | ~~**Inconsistent error response shapes**~~ — all worker routes already return `{ error: string }` consistently; no divergence found. | ~~P4~~ | Done (pre-existing) |
 | CR-WK-9 | **Fire-and-forget audit logging can lose events** — `logActivity` is not awaited (intentionally, for latency); network or Supabase failures are silently swallowed — consider a best-effort retry or dead-letter queue for compliance-critical events | P4 | code-review 2026-03-26 |
 
-**Status**: CR-WK-1 (488b543, d98d147), CR-WK-2 (af4a3a0), CR-WK-3 — Done.
+**Status**: CR-WK-1 (488b543, d98d147), CR-WK-2 (af4a3a0), CR-WK-3, CR-WK-4 (9f4040e), CR-WK-5 (80c4633), CR-WK-7 (pre-existing), CR-WK-8 (pre-existing) — Done.
 
 ### CR: Security — Critical
 
