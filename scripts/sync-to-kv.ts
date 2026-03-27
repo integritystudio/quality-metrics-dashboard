@@ -66,6 +66,7 @@ import {
   LATENCY_P95,
   LATENCY_DISPLAY_PRECISION,
   RATE_DISPLAY_PRECISION,
+  HOOK_NAME,
   spanAttr,
 } from '../src/api/api-constants.js';
 
@@ -100,14 +101,6 @@ const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
 const MAX_RECENT_SESSIONS = 20;
 
-const HOOK_NAMES = {
-  SESSION_START: 'session-start',
-  TOKEN_METRICS: 'token-metrics-extraction',
-  AGENT_POST_TOOL: 'agent-post-tool',
-  POST_COMMIT_REVIEW: 'post-commit-review',
-  ALERT_EVALUATION: 'telemetry-alert-evaluation',
-  CODE_STRUCTURE: 'code-structure',
-} as const;
 
 type KVEntry = { key: string; value: string };
 
@@ -388,7 +381,7 @@ function computeTimespan(evaluations: EvaluationResult[]) {
 }
 
 function computeSessionInfo(spans: SessionSpan[]) {
-  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.SESSION_START);
+  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.SESSION_START);
   const first = sessionStarts[0];
   const last = sessionStarts[sessionStarts.length - 1] ?? first;
   return first ? {
@@ -408,7 +401,7 @@ function computeSessionInfo(spans: SessionSpan[]) {
 
 function computeTokenMetrics(spans: SessionSpan[]) {
   const tokenProgression = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.TOKEN_METRICS)
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.TOKEN_METRICS)
     .map(s => ({
       messages: spanAttr<number>(s, 'tokens.messages') ?? 0,
       inputTokens: spanAttr<number>(s, 'tokens.input') ?? 0,
@@ -542,7 +535,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
     truncatedCount: number; emptyCount: number;
   }> = {};
   for (const s of spans) {
-    if (spanAttr<string>(s, 'hook.name') === HOOK_NAMES.AGENT_POST_TOOL) {
+    if (spanAttr<string>(s, 'hook.name') === HOOK_NAME.AGENT_POST_TOOL) {
       const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
       if (!acc[name]) acc[name] = {
         invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
@@ -626,7 +619,7 @@ function computeSessionDetail(
     .slice(0, FILE_ACCESS_TOP_N);
 
   const gitCommits = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.POST_COMMIT_REVIEW)
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.POST_COMMIT_REVIEW)
     .map(s => {
       const raw = spanAttr<string>(s, 'git.command') ?? '';
       const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
@@ -638,14 +631,14 @@ function computeSessionDetail(
       return { subject, body, files };
     });
 
-  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.ALERT_EVALUATION);
+  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.ALERT_EVALUATION);
   const alertSummary = {
     totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr<number>(s, 'alerts.triggered_count') ?? 0), 0),
     stopEvents: alertSpans.length,
   };
 
   const codeStructure = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAMES.CODE_STRUCTURE)
+    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.CODE_STRUCTURE)
     .map(s => ({
       file: spanAttr<string>(s, 'code.structure.file') ?? '',
       lines: spanAttr<number>(s, 'code.structure.lines') ?? 0,
