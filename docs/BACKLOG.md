@@ -9,7 +9,6 @@ Open items from code reviews and deferred work.
 | # | Item | Priority | Source |
 |---|------|----------|--------|
 | CR-WK-6 | **KV data lacks schema versioning** — no version field in KV payloads; schema changes during deploy can cause old cached data to be read with the new schema without detection | P3 | code-review 2026-03-26 |
-| CR-WK-9 | **Fire-and-forget audit logging can lose events** — `logActivity` is not awaited (intentionally, for latency); network or Supabase failures are silently swallowed — consider a best-effort retry or dead-letter queue for compliance-critical events | P4 | code-review 2026-03-26 |
 
 
 ### CR: Type Safety — Critical / High (Open Items)
@@ -21,6 +20,12 @@ Open items from code reviews and deferred work.
 **Status**: CR-TS-1 open: `attr<T>` has 60+ call sites in sessions.ts; requires a type-guard parameter or Zod schema-per-attribute refactor — deferred as a larger refactor.
 
 ## Completed
+
+### Worker API — Resolved
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| CR-WK-9 | `supabasePost` returns `Promise<void>`; all `logActivity` call sites use `ctx.waitUntil` — events no longer dropped after response | P4 | Done (2026-03-27) |
 
 ### Phase 3 Auth: Code Review Deferred Items
 

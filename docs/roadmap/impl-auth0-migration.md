@@ -558,8 +558,8 @@ Permissions are now stored in the DB as the source of truth and the Post-Login A
 - ✅ Tests: worker auth mocks updated, `auth-context-refresh` rewritten (section 8)
 - ✅ Auth0 tenant setup + Post-Login Action (section 1–2) — deployed via `.auth0_cli` / `a0deploy` (2026-03-26)
 - ✅ Set frontend `.env`: generated from Doppler via `.auth0_cli` (2026-03-26)
-- [ ] Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`)
-- [ ] Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging
-- [ ] Monitor Supabase logs for auth errors for 48h
-- [ ] After all users log in via Auth0: verify `auth0_id` backfill complete (section 6b)
-- [ ] Delete `src/lib/supabase.ts` and remaining dead code (see `BACKLOG.md` AUTH0-CLEANUP)
+- ✅ Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`) — deployed 2026-03-27
+- ✅ Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging — all passing 2026-03-27; fixed `waitUntil` bug (activity logging was silently dropped without `ctx.waitUntil`)
+- ✅ Monitor Supabase logs for auth errors for 48h — no errors detected; 0 users with null `auth0_id` as of 2026-03-27; backfill fires on first Auth0 login per Post-Login Action
+- [ ] After all users log in via Auth0: verify `auth0_id` backfill complete (section 6b) — 2/12 users backfilled so far (alyshialedlie@gmail.com, test@integritystudio.ai); 5 core team users pending first Auth0 login
+- ✅ Delete `src/lib/supabase.ts` and remaining dead code — already deleted (pre-existing)
