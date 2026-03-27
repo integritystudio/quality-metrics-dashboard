@@ -401,7 +401,7 @@ async function createAnthropicProvider(): Promise<LLMProvider> {
         .map((b: { type: string; text?: string }) => b.text)
         .join('');
 
-      // B15: Anthropic Messages API doesn't support logprobs, so G-Eval
+      // Anthropic Messages API doesn't support logprobs, so G-Eval
       // falls back to text-parsed scores. This may cause score clustering
       // around round numbers (0.7, 0.8) due to lack of logprob calibration.
       return { text };
@@ -435,7 +435,6 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
     const canary = isCanaryTurn(turn.sessionId, turnKey);
     if (canary) canaryCount++;
 
-    // Relevance: realistic range for code assistant turns (0.70-1.0)
     const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(relKey)) {
       evals.push({
@@ -454,7 +453,6 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
       });
     }
 
-    // Coherence: realistic range (0.75-1.0)
     const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(cohKey)) {
       evals.push({
@@ -512,7 +510,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
       }
     }
 
-    // B9: Tool correctness (only meaningful when tool results exist)
+    // Only evaluate tool correctness when tool results exist
     if (turn.toolResults.length > 0) {
       const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
       if (!existingKeys.has(tcKey)) {
@@ -604,7 +602,7 @@ export async function evaluateTurn(
     const needsFaith = !existingKeys.has(faithKey);
     const needsHal = !existingKeys.has(halKey);
 
-    // M2: Use judge.qagEvaluate() for retry support; M5: evaluate independently
+    // qagEvaluate() for retry support; faithfulness and hallucination evaluated independently
     if (needsFaith) {
       try {
         const faithResult = await judge.qagEvaluate(
