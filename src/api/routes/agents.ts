@@ -163,7 +163,7 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
   try {
     const spans = await loadTracesBySessionId(sessionId);
 
-    // WG-C1: Real spans may carry the agent name under either 'agent.name' (hooks
+    // Real spans may carry the agent name under either 'agent.name' (hooks
     // context) or 'gen_ai.agent.name' (OTel GenAI semantic conventions). Both are
     // checked here so the agentMap is populated regardless of which attribute the
     // instrumentation emits. workflow-graph.ts uses 'gen_ai.agent.name' for node

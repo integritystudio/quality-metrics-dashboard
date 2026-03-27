@@ -124,7 +124,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     let alertTotalFired = 0;
     let alertStopEvents = 0;
     const codeStructure: Array<{ file: string; lines: number; exports: number; functions: number; hasTypes: boolean; score: number; tool: string }> = [];
-    // WG-C1: check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
+    // Check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
     const agentMapForEval = new Map<number, string>();
     const stepScores: StepScore[] = [];
 

@@ -142,7 +142,6 @@ app.use('/api/*', async (c, next) => {
 
 const AUTH_TIMEOUT_MS = 5000;
 
-// exempts /api/health and test mode
 app.use('/api/*', async (c, next) => {
   if (c.req.path === '/api/health') return next();
 
@@ -170,7 +169,6 @@ app.use('/api/*', async (c, next) => {
   const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
 
   try {
-    // Verify JWT via Auth0 JWKS (validates signature, expiry, issuer, audience)
     const JWKS = createRemoteJWKSet(
       new URL(`https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`),
     );
@@ -236,7 +234,6 @@ app.use('/api/*', async (c, next) => {
   }
 });
 
-// Admins bypass all permission checks via 'dashboard.admin'.
 function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
   return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
 }
