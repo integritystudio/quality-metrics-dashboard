@@ -292,8 +292,8 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   for (const [sessionId, data] of sessionAgents) {
     if (data.agentSequence.length < MIN_HANDOFF_AGENTS) continue;
 
-    const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
-    if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
+    const distinctAgentCount = new Set(data.agentSequence.map(a => a.agentName)).size;
+    if (distinctAgentCount < MIN_HANDOFF_AGENTS) continue;
 
     let sum = 0;
     let count = 0;
@@ -321,7 +321,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       evaluationName: 'handoff_correctness',
       scoreValue: normalizeScore(avgScore),
       scoreUnit: 'ratio_0_1',
-      explanation: `Session ${sessionPreview}: ${count} handoffs across ${distinctAgents.size} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
+      explanation: `Session ${sessionPreview}: ${count} handoffs across ${distinctAgentCount} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
       evaluator: RULE_EVALUATOR,
       evaluatorType: RULE_EVALUATOR_TYPE,
       traceId: lastSpan.traceId,
