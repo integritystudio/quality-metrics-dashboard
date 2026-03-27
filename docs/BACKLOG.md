@@ -12,10 +12,6 @@ Open items from code reviews and deferred work.
 ### CR: Type Safety — Critical / High (Open Items)
 
 | # | Item | Priority | Source |
-|---|------|----------|--------|
-| CR-TS-1 | **Unsafe `attr<T>` cast in sessions.ts** — `attr<T>()` helper (line 29-31) casts `unknown` to `T` without validation. Used 60+ times. Add type-guard parameter or Zod validation at span parse time. | P1 | code-review 2026-03-26 |
-
-**Status**: CR-TS-1 open: `attr<T>` has 60+ call sites in sessions.ts; requires a type-guard parameter or Zod schema-per-attribute refactor — deferred as a larger refactor.
 
 ### FU-G5-LAYOUT + R5: Code Review Findings (Open Items)
 
@@ -30,6 +26,12 @@ Open items from code reviews and deferred work.
 - Pre-existing TS errors in `sessions.ts` / `agents.ts` (unstaged local changes, not introduced by this session).
 
 ## Completed
+
+### Type Safety — Resolved
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| CR-TS-1 | `spanAttr<T>` replaced with validated type-discriminant overload — requires `'string' \| 'number' \| 'boolean'` tag; 44 call sites updated in `sessions.ts` + `agents.ts`; no silent casts | P1 | Done (ddfadde) |
 
 ### Worker API — Resolved
 
