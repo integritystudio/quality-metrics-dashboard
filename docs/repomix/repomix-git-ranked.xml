@@ -6901,258 +6901,6 @@ describe(&apos;buildWorkflowGraph — span-inference fallback&apos;, () =&gt; {
     const node = graph.nodes.find(n =&gt; n.id === &apos;agentA&apos;);
     expect(node?.toolCallCount).toBe(2);
   });
-});</file><file path="src/__tests__/WorkflowGraph.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
-import { render, screen, fireEvent, waitFor, cleanup } from &apos;@testing-library/react&apos;;
-import type { ReactNode } from &apos;react&apos;;
-interface MockNode {
-  id: string;
-  type: string;
-  data: Record&lt;string, unknown&gt;;
-}
-interface MockEdge {
-  id: string;
-  label?: string;
-}
-interface ReactFlowProps {
-  nodes?: MockNode[];
-  edges?: MockEdge[];
-  onNodeClick?: (event: unknown, node: MockNode) =&gt; void;
-  nodeTypes?: Record&lt;string, (props: { data: Record&lt;string, unknown&gt; }) =&gt; ReactNode&gt;;
-  children?: ReactNode;
-  [key: string]: unknown;
-}
-vi.mock(&apos;@xyflow/react&apos;, async () =&gt; {
-  const React = await vi.importActual&lt;typeof import(&apos;react&apos;)&gt;(&apos;react&apos;);
-  return {
-    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) =&gt; (
-      &lt;div data-testid=&quot;reactflow&quot; {...rest}&gt;
-        {(nodes ?? []).map((n) =&gt; {
-          const NodeComp = nodeTypes?.[n.type];
-          return (
-            &lt;div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() =&gt; onNodeClick?.({}, n)}&gt;
-              {NodeComp ? &lt;NodeComp data={n.data} /&gt; : n.id}
-            &lt;/div&gt;
-          );
-        })}
-        {(edges ?? []).map((e) =&gt; (
-          &lt;div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} /&gt;
-        ))}
-        {children}
-      &lt;/div&gt;
-    ),
-    MiniMap: (_props: unknown) =&gt; &lt;div data-testid=&quot;minimap&quot; /&gt;,
-    Controls: () =&gt; &lt;div data-testid=&quot;controls&quot; /&gt;,
-    Background: () =&gt; null,
-    Handle: () =&gt; null,
-    Position: { Top: &apos;top&apos;, Bottom: &apos;bottom&apos; },
-    BaseEdge: () =&gt; null,
-    getStraightPath: () =&gt; [&apos;M 0 0&apos;, 0, 0],
-    useNodesState: (initial: MockNode[]) =&gt; {
-      const [nodes, setNodes] = React.useState(initial);
-      return [nodes, setNodes, vi.fn()];
-    },
-    useEdgesState: (initial: MockEdge[]) =&gt; {
-      const [edges, setEdges] = React.useState(initial);
-      return [edges, setEdges, vi.fn()];
-    },
-    useReactFlow: () =&gt; ({ fitView: vi.fn() }),
-  };
-});
-interface ELKGraph {
-  children?: Array&lt;{ x?: number; y?: number; [key: string]: unknown }&gt;;
-  [key: string]: unknown;
-}
-vi.mock(&apos;elkjs/lib/elk.bundled.js&apos;, () =&gt; ({
-  default: class ELK {
-    layout(graph: ELKGraph) {
-      return Promise.resolve({
-        ...graph,
-        children: (graph.children ?? []).map((c, i: number) =&gt; ({
-          ...c,
-          x: i * 300,
-          y: i * 200,
-        })),
-      });
-    }
-  },
-}));
-import { WorkflowGraphView } from &apos;../components/WorkflowGraph.js&apos;;
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from &apos;./workflow-fixtures.js&apos;;
-afterEach(cleanup);
-describe(&apos;WorkflowGraphView&apos;, () =&gt; {
-  const twoNodeGraph = makeGraph({
-    nodes: [
-      makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; }),
-      makeNode({ id: &apos;node-2&apos;, label: &apos;executor&apos; }),
-    ],
-    edges: [makeEdge({ id: &apos;edge-1&apos;, source: &apos;node-1&apos;, target: &apos;node-2&apos; })],
-    rootNodeId: &apos;node-1&apos;,
-    workflowShape: &apos;linear&apos;,
-  });
-  const threeNodeGraph = makeGraph({
-    nodes: [
-      makeNode({ id: &apos;node-1&apos; }),
-      makeNode({ id: &apos;node-2&apos; }),
-      makeNode({ id: &apos;node-3&apos; }),
-    ],
-    rootNodeId: &apos;node-1&apos;,
-    workflowShape: &apos;linear&apos;,
-  });
-  const fiveNodeGraph = makeGraph({
-    nodes: Array.from({ length: 5 }, (_, i) =&gt;
-      makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
-    ),
-    rootNodeId: &apos;node-1&apos;,
-    workflowShape: &apos;branching&apos;,
-  });
-  it(&apos;renders container with role=img and aria-label&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
-    const container = await waitFor(() =&gt;
-      screen.getByRole(&apos;img&apos;, { name: &apos;Agent workflow graph&apos; })
-    );
-    expect(container).toBeInTheDocument();
-  });
-  it(&apos;renders correct number of nodes&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(&apos;rf-node-node-2&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(&apos;rf-node-node-3&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;node displays agent label&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; })],
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByText(&apos;planner&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;node displays Good score badge text for score &gt;= 0.7&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, evaluationScore: 0.85 })],
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByText(&apos;Good&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;node displays tool count&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, toolCallCount: 5 })],
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByText(&apos;5 tools&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;shows Controls always&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;controls&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;shows MiniMap for 5+ nodes&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={fiveNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;minimap&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;hides MiniMap for fewer than 5 nodes&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId(&apos;minimap&apos;)).not.toBeInTheDocument();
-  });
-  it(&apos;shows simplified fallback for single_agent shape with 1 node and no ReactFlow&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;solo-agent&apos; })],
-      workflowShape: &apos;single_agent&apos;,
-      rootNodeId: &apos;node-1&apos;,
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.queryByTestId(&apos;reactflow&apos;)).not.toBeInTheDocument();
-      expect(screen.getByText(/solo-agent/)).toBeInTheDocument();
-    });
-  });
-  it(&apos;fires onNodeClick with the correct nodeId when a node is clicked&apos;, async () =&gt; {
-    const onNodeClick = vi.fn();
-    render(&lt;WorkflowGraphView graph={twoNodeGraph} onNodeClick={onNodeClick} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId(&apos;rf-node-node-1&apos;));
-    expect(onNodeClick).toHaveBeenCalledWith(&apos;node-1&apos;);
-  });
-  it(&apos;renders without error when graph has 0 nodes and 0 edges&apos;, async () =&gt; {
-    const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
-    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
-  });
-});
-const ST_G5_LARGE_GRAPH_SIZE = 100;
-const ST_G5_DEEP_CHAIN_SIZE = 20;
-const ST_G5_DISCONNECTED_SIZE = 10;
-describe(&apos;WorkflowGraphView stress (ST-G5)&apos;, () =&gt; {
-  it(&apos;renders 100+ node graph without error using degraded list fallback&apos;, () =&gt; {
-    const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, &apos;agent&apos;, &apos;branching&apos;);
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    expect(screen.getByText(`Graph too large to render (${ST_G5_LARGE_GRAPH_SIZE} agents)`)).toBeInTheDocument();
-    expect(screen.getByText(/agent-0 —/)).toBeInTheDocument();
-    expect(screen.getByText(/agent-99 —/)).toBeInTheDocument();
-  });
-  it(&apos;renders deeply nested delegation chain without error&apos;, async () =&gt; {
-    const graph = makeChainGraph(ST_G5_DEEP_CHAIN_SIZE, &apos;delegate&apos;, &apos;linear&apos;);
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-delegate-0&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
-      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
-    });
-  });
-  it(&apos;renders without crash when rootNodeId is null (missing parent span inference fallback)&apos;, async () =&gt; {
-    const nodes = Array.from({ length: 5 }, (_, i) =&gt;
-      makeNode({ id: `node-${i}`, label: `orphan-${i}` })
-    );
-    const graph = makeGraph({ nodes, rootNodeId: null, workflowShape: &apos;branching&apos; });
-    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;renders disconnected nodes (no edges) without crash&apos;, async () =&gt; {
-    const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =&gt;
-      makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
-    );
-    const graph = makeGraph({ nodes, rootNodeId: &apos;orphan-0&apos;, workflowShape: &apos;branching&apos; });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
-    });
-  });
-  it(&apos;renders two graphs in the same DOM without node state leakage between instances&apos;, async () =&gt; {
-    const graphA = makeGraph({
-      nodes: [makeNode({ id: &apos;a-1&apos;, label: &apos;alpha&apos; }), makeNode({ id: &apos;a-2&apos;, label: &apos;beta&apos; })],
-      edges: [makeEdge({ id: &apos;ea-1&apos;, source: &apos;a-1&apos;, target: &apos;a-2&apos; })],
-      rootNodeId: &apos;a-1&apos;,
-    });
-    const graphB = makeGraph({
-      nodes: [makeNode({ id: &apos;b-1&apos;, label: &apos;gamma&apos; }), makeNode({ id: &apos;b-2&apos;, label: &apos;delta&apos; })],
-      edges: [makeEdge({ id: &apos;eb-1&apos;, source: &apos;b-1&apos;, target: &apos;b-2&apos; })],
-      rootNodeId: &apos;b-1&apos;,
-    });
-    const { unmount: unmountA } = render(&lt;WorkflowGraphView graph={graphA} /&gt;);
-    render(&lt;WorkflowGraphView graph={graphB} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-a-1&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
-    });
-    unmountA();
-    expect(screen.queryByTestId(&apos;rf-node-a-1&apos;)).not.toBeInTheDocument();
-    expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
-  });
 });</file><file path="src/__tests__/WorkflowPage.test.tsx">import { describe, it, expect, afterEach, vi, beforeEach } from &apos;vitest&apos;;
 import { render, screen, fireEvent, cleanup } from &apos;@testing-library/react&apos;;
 import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from &apos;./test-types.js&apos;;
@@ -7942,7 +7690,8 @@ export function extractFiniteScores(evals: Array&lt;{ scoreValue?: number | null
   return evals
     .filter(e =&gt; e.scoreValue != null &amp;&amp; Number.isFinite(e.scoreValue))
     .map(e =&gt; e.scoreValue as number);
-}</file><file path="src/api/server.ts">import { Hono } from &apos;hono&apos;;
+}</file><file path="src/api/config.ts">export const API_HOST = &apos;127.0.0.1&apos;;
+export const API_PORT = Number(process.env.API_PORT) || 3001;</file><file path="src/api/server.ts">import { Hono } from &apos;hono&apos;;
 import { cors } from &apos;hono/cors&apos;;
 import { serve } from &apos;@hono/node-server&apos;;
 import { dashboardRoutes } from &apos;./routes/dashboard.js&apos;;
@@ -8425,132 +8174,6 @@ export function AgentScoreSummary({ handoffScore, avgRelevance, completeness }: 
           &lt;ScoreBadge score={values[metricName]} metricName={metricName} /&gt;
         &lt;/div&gt;
       ))}
-    &lt;/div&gt;
-  );
-}</file><file path="src/components/AgentWorkflowView.tsx">import React, { useState, useCallback } from &apos;react&apos;;
-import { WorkflowGraphView } from &apos;./WorkflowGraph.js&apos;;
-import { WorkflowTimeline } from &apos;./WorkflowTimeline.js&apos;;
-import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
-import type { MultiAgentEvaluation } from &apos;../types.js&apos;;
-import { agentColor } from &apos;../lib/quality-utils.js&apos;;
-import { WORKFLOW_FILTER_MIN_AGENTS } from &apos;../lib/constants.js&apos;;
-type WorkflowTab = &apos;dag&apos; | &apos;timeline&apos;;
-interface AgentWorkflowViewProps {
-  graph: WorkflowGraph;
-  evaluation?: MultiAgentEvaluation;
-  onNodeClick?: (nodeId: string) =&gt; void;
-  height?: number;
-}
-const TAB_LABELS: Record&lt;WorkflowTab, string&gt; = {
-  dag: &apos;DAG&apos;,
-  timeline: &apos;Timeline&apos;,
-};
-const TABS: WorkflowTab[] = [&apos;dag&apos;, &apos;timeline&apos;];
-export function AgentWorkflowView({
-  graph,
-  evaluation,
-  onNodeClick,
-  height = 600,
-}: AgentWorkflowViewProps) {
-  const [activeTab, setActiveTab] = useState&lt;WorkflowTab&gt;(&apos;dag&apos;);
-  const agentNames = [...new Set(
-    (evaluation?.turns ?? []).map(t =&gt; t.agentName ?? &apos;unknown&apos;),
-  )];
-  const [selectedAgents, setSelectedAgents] = useState&lt;ReadonlySet&lt;string&gt; | null&gt;(null);
-  const effectiveSelected: ReadonlySet&lt;string&gt; = selectedAgents ?? new Set(agentNames);
-  const toggleAgent = useCallback((name: string) =&gt; {
-    setSelectedAgents(prev =&gt; {
-      const base = prev ?? new Set(agentNames);
-      const next = new Set(base);
-      if (next.has(name)) {
-        next.delete(name);
-      } else {
-        next.add(name);
-      }
-      if (next.size === agentNames.length) return null;
-      return next;
-    });
-  }, [agentNames]);
-  const selectAll = useCallback(() =&gt; setSelectedAgents(null), []);
-  const showFilter = agentNames.length &gt;= WORKFLOW_FILTER_MIN_AGENTS;
-  return (
-    &lt;div&gt;
-      &lt;div
-        role=&quot;tablist&quot;
-        aria-label=&quot;Workflow view&quot;
-        className=&quot;flex-center gap-0 workflow-tabs&quot;
-      &gt;
-        {TABS.map(tab =&gt; (
-          &lt;button
-            key={tab}
-            type=&quot;button&quot;
-            role=&quot;tab&quot;
-            id={`workflow-tab-${tab}`}
-            aria-selected={activeTab === tab}
-            aria-controls={`workflow-panel-${tab}`}
-            onClick={() =&gt; setActiveTab(tab)}
-            className=&quot;btn-reset workflow-tab&quot;
-          &gt;
-            {TAB_LABELS[tab]}
-          &lt;/button&gt;
-        ))}
-      &lt;/div&gt;
-      {showFilter &amp;&amp; (
-        &lt;div className=&quot;workflow-filter&quot; role=&quot;group&quot; aria-label=&quot;Filter agents&quot;&gt;
-          {agentNames.map(name =&gt; {
-            const color = agentColor(name, agentNames);
-            const active = effectiveSelected.has(name);
-            return (
-              &lt;button
-                key={name}
-                type=&quot;button&quot;
-                className=&quot;btn-reset eval-filter-chip workflow-filter__chip mono-xs&quot;
-                style={{ &apos;--chip-color&apos;: color } as React.CSSProperties}
-                data-active={active || undefined}
-                aria-pressed={active}
-                onClick={() =&gt; toggleAgent(name)}
-              &gt;
-                {name}
-              &lt;/button&gt;
-            );
-          })}
-          {selectedAgents !== null &amp;&amp; (
-            &lt;button
-              type=&quot;button&quot;
-              className=&quot;btn-reset workflow-filter__reset text-xs text-muted&quot;
-              onClick={selectAll}
-            &gt;
-              All
-            &lt;/button&gt;
-          )}
-        &lt;/div&gt;
-      )}
-      &lt;div
-        role=&quot;tabpanel&quot;
-        id=&quot;workflow-panel-dag&quot;
-        aria-labelledby=&quot;workflow-tab-dag&quot;
-        hidden={activeTab !== &apos;dag&apos;}
-      &gt;
-        &lt;WorkflowGraphView
-          graph={graph}
-          onNodeClick={onNodeClick}
-          height={height}
-          selectedAgents={showFilter ? effectiveSelected : undefined}
-        /&gt;
-      &lt;/div&gt;
-      &lt;div
-        role=&quot;tabpanel&quot;
-        id=&quot;workflow-panel-timeline&quot;
-        aria-labelledby=&quot;workflow-tab-timeline&quot;
-        hidden={activeTab !== &apos;timeline&apos;}
-      &gt;
-        &lt;WorkflowTimeline
-          turns={evaluation?.turns ?? []}
-          handoffs={evaluation?.handoffs ?? []}
-          agentNames={agentNames}
-          selectedAgents={showFilter ? effectiveSelected : undefined}
-        /&gt;
-      &lt;/div&gt;
     &lt;/div&gt;
   );
 }</file><file path="src/components/AlertList.tsx">import { Link } from &apos;wouter&apos;;
@@ -10965,6 +10588,21 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
       &lt;/div&gt;
     &lt;/div&gt;
   );
+}</file><file path="src/components/TruncatedIdLink.tsx">import type { MouseEvent } from &apos;react&apos;;
+import { Link } from &apos;wouter&apos;;
+import { truncateId } from &apos;../lib/quality-utils.js&apos;;
+export function TruncatedIdLink({ id, href, maxLen = 8, className = &apos;mono-xs link-accent&apos;, onClick }: {
+  id: string;
+  href: string;
+  maxLen?: number;
+  className?: string;
+  onClick?: (e: MouseEvent) =&gt; void;
+}) {
+  return (
+    &lt;Link href={href} className={className} title={id} onClick={onClick}&gt;
+      {truncateId(id, maxLen)}
+    &lt;/Link&gt;
+  );
 }</file><file path="src/components/TruncatedList.tsx">import type { ReactNode } from &apos;react&apos;;
 export function TruncatedList&lt;T&gt;({ items, max, renderItem, total }: {
   items: T[];
@@ -11030,506 +10668,6 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
       })}
     &lt;/div&gt;
   );
-}</file><file path="src/components/WorkflowGraph.tsx">import React, { memo, useCallback, useEffect, useState } from &apos;react&apos;;
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from &apos;@xyflow/react&apos;;
-import &apos;@xyflow/react/dist/style.css&apos;;
-import ELK from &apos;elkjs/lib/elk.bundled.js&apos;;
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from &apos;../types/workflow-graph.js&apos;;
-import { fmtDuration } from &apos;../lib/quality-utils.js&apos;;
-import { SCORE_CHIP_PRECISION } from &apos;../lib/constants.js&apos;;
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 120;
-const MINIMAP_THRESHOLD = 5;
-const MAX_ELK_NODES = 50;
-const WORKFLOW_SCORE_HIGH_MIN = 0.7;
-const WORKFLOW_SCORE_MID_MIN = 0.4;
-const SCORE_BANDS = {
-  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: &apos;Good&apos;, bg: &apos;#dcfce7&apos;, border: &apos;#16a34a&apos;, text: &apos;#15803d&apos; },
-  MID: { min: WORKFLOW_SCORE_MID_MIN, label: &apos;Fair&apos;, bg: &apos;#fef9c3&apos;, border: &apos;#ca8a04&apos;, text: &apos;#a16207&apos; },
-  LOW: { min: 0, label: &apos;Poor&apos;, bg: &apos;#fee2e2&apos;, border: &apos;#dc2626&apos;, text: &apos;#b91c1c&apos; },
-} as const;
-const ELK_OPTIONS = {
-  &apos;elk.algorithm&apos;: &apos;layered&apos;,
-  &apos;elk.direction&apos;: &apos;DOWN&apos;,
-  &apos;elk.layered.cycleBreaking.strategy&apos;: &apos;GREEDY&apos;,
-  &apos;elk.edgeRouting&apos;: &apos;ORTHOGONAL&apos;,
-  &apos;elk.layered.spacing.nodeNodeBetweenLayers&apos;: &apos;80&apos;,
-  &apos;elk.spacing.nodeNode&apos;: &apos;60&apos;,
-  &apos;elk.layered.feedbackEdges&apos;: &apos;true&apos;,
-} as const;
-function getScoreBand(score: number | null) {
-  if (score === null) return null;
-  if (score &gt;= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
-  if (score &gt;= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
-  return SCORE_BANDS.LOW;
-}
-const elk = new ELK();
-interface WorkflowNodeWithMeta extends WorkflowNode {
-  dimmed?: boolean;
-}
-function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
-  if (!value || typeof value !== &apos;object&apos;) return false;
-  const v = value as Record&lt;string, unknown&gt;;
-  return (
-    typeof v[&apos;id&apos;] === &apos;string&apos; &amp;&amp;
-    typeof v[&apos;label&apos;] === &apos;string&apos; &amp;&amp;
-    typeof v[&apos;toolCallCount&apos;] === &apos;number&apos; &amp;&amp;
-    typeof v[&apos;turnCount&apos;] === &apos;number&apos; &amp;&amp;
-    typeof v[&apos;durationMs&apos;] === &apos;number&apos; &amp;&amp;
-    typeof v[&apos;hasError&apos;] === &apos;boolean&apos;
-  );
-}
-function buildNodeDataMap(nodes: WorkflowNode[]): Map&lt;string, WorkflowNode&gt; {
-  return new Map(nodes.map(n =&gt; [n.id, n]));
-}
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  selectedAgents?: ReadonlySet&lt;string&gt;,
-): Promise&lt;{ nodes: Node[]; edges: Edge[] }&gt; {
-  const nodeDataMap = buildNodeDataMap(nodes);
-  const elkGraph = {
-    id: &apos;root&apos;,
-    layoutOptions: ELK_OPTIONS,
-    children: nodes.map(n =&gt; ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT })),
-    edges: edges.map(e =&gt; ({ id: e.id, sources: [e.source], targets: [e.target] })),
-  };
-  const layout = await elk.layout(elkGraph);
-  const rfNodes: Node[] = (layout.children ?? [])
-    .filter(elkNode =&gt; nodeDataMap.has(elkNode.id))
-    .map(elkNode =&gt; {
-      const workflowNode = nodeDataMap.get(elkNode.id)!;
-      const dimmed = selectedAgents != null &amp;&amp; !selectedAgents.has(elkNode.id);
-      return {
-        id: elkNode.id,
-        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-        data: { ...workflowNode, dimmed } as unknown as Record&lt;string, unknown&gt;,
-        type: &apos;agentNode&apos;,
-      };
-    });
-  const rfEdges: Edge[] = edges.map(e =&gt; ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    label: e.label,
-  }));
-  return { nodes: rfNodes, edges: rfEdges };
-}
-const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
-  if (!isWorkflowNode(data)) return null;
-  const d = data;
-  const band = getScoreBand(d.evaluationScore);
-  return (
-    &lt;div
-      className={d.dimmed ? &apos;workflow-node workflow-node--dimmed&apos; : &apos;workflow-node&apos;}
-      style={{
-        &apos;--workflow-node-border&apos;: band?.border ?? &apos;#d1d5db&apos;,
-        &apos;--workflow-node-bg&apos;: band?.bg ?? &apos;#f9fafb&apos;,
-        &apos;--workflow-node-score-color&apos;: band?.text ?? &apos;inherit&apos;,
-      } as React.CSSProperties}
-      role=&quot;group&quot;
-      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? &apos;N/A&apos;}`}
-    &gt;
-      &lt;div className=&quot;workflow-node__label&quot;&gt;{d.label}&lt;/div&gt;
-      {band &amp;&amp; (
-        &lt;div className=&quot;workflow-node__score&quot;&gt;
-          &lt;span&gt;{band.label}&lt;/span&gt;: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
-        &lt;/div&gt;
-      )}
-      &lt;div className=&quot;workflow-node__meta&quot;&gt;
-        &lt;span&gt;{d.toolCallCount} tools&lt;/span&gt; | &lt;span&gt;{d.turnCount} turns&lt;/span&gt;
-        {d.totalTokens != null &amp;&amp; &lt;span&gt; | {(d.totalTokens / 1000).toFixed(1)}K tok&lt;/span&gt;}
-      &lt;/div&gt;
-      &lt;div className=&quot;workflow-node__duration&quot;&gt;
-        {fmtDuration(d.durationMs)}
-      &lt;/div&gt;
-      {d.hasError &amp;&amp; &lt;div className=&quot;workflow-node__error&quot;&gt;Error&lt;/div&gt;}
-      &lt;Handle type=&quot;target&quot; position={Position.Top} /&gt;
-      &lt;Handle type=&quot;source&quot; position={Position.Bottom} /&gt;
-    &lt;/div&gt;
-  );
-});
-const NODE_TYPES = { agentNode: AgentNodeComponent };
-interface WorkflowGraphProps {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) =&gt; void;
-  height?: number;
-  selectedAgents?: ReadonlySet&lt;string&gt;;
-}
-export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents }: WorkflowGraphProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState&lt;Node&gt;([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState&lt;Edge&gt;([]);
-  const [layoutError, setLayoutError] = useState&lt;string | null&gt;(null);
-  useEffect(() =&gt; {
-    if (graph.nodes.length === 0) return;
-    let cancelled = false;
-    computeLayout(graph.nodes, graph.edges, selectedAgents)
-      .then(({ nodes: rfNodes, edges: rfEdges }) =&gt; {
-        if (!cancelled) {
-          setLayoutError(null);
-          setNodes(rfNodes);
-          setEdges(rfEdges);
-        }
-      })
-      .catch(err =&gt; {
-        if (!cancelled) {
-          setLayoutError(err instanceof Error ? err.message : &apos;Layout computation failed&apos;);
-        }
-      });
-    return () =&gt; { cancelled = true; };
-  }, [graph.nodes, graph.edges, selectedAgents]);
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) =&gt; {
-    onNodeClick?.(node.id);
-  }, [onNodeClick]);
-  if (graph.nodes.length &gt; MAX_ELK_NODES) {
-    return (
-      &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-        &lt;div className=&quot;workflow-oversize text-secondary text-xs&quot;&gt;
-          &lt;div className=&quot;workflow-oversize__heading&quot;&gt;
-            Graph too large to render ({graph.nodes.length} agents)
-          &lt;/div&gt;
-          &lt;div className=&quot;workflow-oversize__note text-muted&quot;&gt;
-            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
-          &lt;/div&gt;
-          &lt;ul className=&quot;workflow-oversize__list&quot;&gt;
-            {graph.nodes.map(n =&gt; (
-              &lt;li key={n.id} className=&quot;mono-xs mb-1&quot;&gt;
-                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
-                {n.hasError &amp;&amp; &lt;span className=&quot;text-warning&quot;&gt; (error)&lt;/span&gt;}
-              &lt;/li&gt;
-            ))}
-          &lt;/ul&gt;
-        &lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-  if (graph.workflowShape === &apos;single_agent&apos; &amp;&amp; graph.nodes.length &lt;= 1) {
-    const node = graph.nodes[0];
-    return (
-      &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-        &lt;div className=&quot;workflow-fallback&quot;&gt;
-          {node ? (
-            &lt;&gt;
-              &lt;div className=&quot;workflow-fallback__title&quot;&gt;{node.label}&lt;/div&gt;
-              &lt;div className=&quot;workflow-fallback__subtitle&quot;&gt;
-                {node.turnCount} turns | {node.toolCallCount} tools
-              &lt;/div&gt;
-            &lt;/&gt;
-          ) : (
-            &lt;div className=&quot;workflow-fallback__empty&quot;&gt;No agent data&lt;/div&gt;
-          )}
-        &lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-  if (layoutError) {
-    return (
-      &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-        &lt;div className=&quot;error-state workflow-fallback&quot;&gt;
-          Failed to compute workflow layout: {layoutError}
-        &lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-  const showMiniMap = graph.nodes.length &gt;= MINIMAP_THRESHOLD;
-  return (
-    &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-      &lt;ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        nodeTypes={NODE_TYPES}
-        fitView
-      &gt;
-        &lt;Controls /&gt;
-        &lt;Background /&gt;
-        {showMiniMap &amp;&amp; &lt;MiniMap pannable zoomable /&gt;}
-      &lt;/ReactFlow&gt;
-    &lt;/div&gt;
-  );
-}</file><file path="src/components/WorkflowTimeline.tsx">import React from &apos;react&apos;;
-import { scoreColor, agentColor } from &apos;../lib/quality-utils.js&apos;;
-import { EmptyState } from &apos;./EmptyState.js&apos;;
-import type { TurnLevelResult, HandoffEvaluation } from &apos;../types.js&apos;;
-import { SCORE_CHIP_PRECISION } from &apos;../lib/constants.js&apos;;
-const LANE_HEIGHT = 64;
-const LANE_PADDING_TOP = 12;
-const TURN_BLOCK_HEIGHT = 32;
-const TURN_BLOCK_MIN_WIDTH = 40;
-const TURN_BLOCK_GAP = 6;
-const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
-const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
-const LABEL_WIDTH = 120;
-const HANDOFF_MARKER_RADIUS = 7;
-const HEADER_HEIGHT = 28;
-const MAX_VISIBLE_TURNS = 200;
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[] {
-  return agentNames.map((name, laneIndex) =&gt; ({
-    agentName: name,
-    turns: turns.filter(t =&gt; (t.agentName ?? &apos;unknown&apos;) === name),
-    laneIndex,
-  }));
-}
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null {
-  let sawSource = false;
-  for (const t of turns) {
-    const agent = t.agentName ?? &apos;unknown&apos;;
-    if (agent === handoff.sourceAgent) sawSource = true;
-    if (sawSource &amp;&amp; agent === handoff.targetAgent) return t.turnIndex;
-  }
-  return null;
-}
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
-  const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? &apos;, error&apos; : &apos;&apos;}`;
-  return (
-    &lt;g transform={`translate(${x},${y})`} role=&quot;img&quot; aria-label={label}&gt;
-      &lt;rect
-        width={width}
-        height={TURN_BLOCK_HEIGHT}
-        rx={4}
-        fill={color}
-        fillOpacity={0.15}
-        stroke={color}
-        strokeWidth={1.5}
-      /&gt;
-      &lt;rect
-        width={Math.max(2, width * turn.relevance)}
-        height={4}
-        rx={2}
-        fill={barColor}
-        fillOpacity={0.85}
-      /&gt;
-      {turn.hasError &amp;&amp; (
-        &lt;rect
-          x={width - 6}
-          width={4}
-          height={TURN_BLOCK_HEIGHT}
-          rx={2}
-          fill=&quot;var(--status-critical)&quot;
-          fillOpacity={0.85}
-        /&gt;
-      )}
-      &lt;text
-        x={width / 2}
-        y={TURN_BLOCK_HEIGHT / 2 + 5}
-        textAnchor=&quot;middle&quot;
-        fontSize={10}
-        fill={color}
-        fontFamily=&quot;var(--font-mono)&quot;
-      &gt;
-        {turn.turnIndex}
-      &lt;/text&gt;
-    &lt;/g&gt;
-  );
-}
-export interface WorkflowTimelineProps {
-  turns: TurnLevelResult[];
-  handoffs?: HandoffEvaluation[];
-  agentNames: string[];
-  selectedAgents?: ReadonlySet&lt;string&gt;;
-}
-export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
-  if (turns.length === 0) {
-    return &lt;EmptyState message=&quot;No turns to display.&quot; /&gt;;
-  }
-  const visibleTurns = turns.length &gt; MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
-  const truncated = turns.length &gt; MAX_VISIBLE_TURNS;
-  const visibleAgentNames = selectedAgents != null
-    ? agentNames.filter(n =&gt; selectedAgents.has(n))
-    : agentNames;
-  const lanes = buildLanes(visibleTurns, visibleAgentNames);
-  const totalTurns = visibleTurns.length;
-  const visibleHandoffs = selectedAgents != null
-    ? handoffs.filter(h =&gt; selectedAgents.has(h.sourceAgent) &amp;&amp; selectedAgents.has(h.targetAgent))
-    : handoffs;
-  const agentLaneIndex = new Map(visibleAgentNames.map((name, i) =&gt; [name, i]));
-  const agentColorMap = new Map(visibleAgentNames.map(name =&gt; [name, agentColor(name, agentNames)]));
-  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
-  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
-  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
-  const turnX = (turnIndex: number): number =&gt;
-    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
-  const laneY = (laneIndex: number): number =&gt;
-    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
-  return (
-    &lt;div
-      className=&quot;overflow-x-auto&quot;
-      role=&quot;img&quot;
-      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
-    &gt;
-      &lt;svg
-        width={svgWidth}
-        height={svgHeight}
-        className=&quot;d-block timeline-svg&quot;
-        style={{ &apos;--timeline-min-width&apos;: `${svgWidth}px` } as React.CSSProperties}
-      &gt;
-        &lt;g&gt;
-          {turns.map(t =&gt; (
-            &lt;text
-              key={t.turnIndex}
-              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
-              y={HEADER_HEIGHT - 8}
-              textAnchor=&quot;middle&quot;
-              fontSize={9}
-              fill=&quot;var(--text-muted)&quot;
-              fontFamily=&quot;var(--font-mono)&quot;
-            &gt;
-              {t.turnIndex}
-            &lt;/text&gt;
-          ))}
-        &lt;/g&gt;
-        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) =&gt; {
-          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
-          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
-          return (
-            &lt;g key={agentName}&gt;
-              &lt;rect
-                x={0}
-                y={laneTop}
-                width={svgWidth}
-                height={LANE_HEIGHT}
-                fill={laneIndex % 2 === 0 ? &apos;var(--bg-elevated)&apos; : &apos;var(--bg-card)&apos;}
-                fillOpacity={0.5}
-              /&gt;
-              &lt;line
-                x1={0}
-                y1={laneTop}
-                x2={svgWidth}
-                y2={laneTop}
-                stroke=&quot;var(--border-subtle)&quot;
-                strokeWidth={1}
-              /&gt;
-              &lt;text
-                x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_CENTER_OFFSET + 4}
-                textAnchor=&quot;end&quot;
-                fontSize={11}
-                fontWeight={600}
-                fill={color}
-                fontFamily=&quot;var(--font-mono)&quot;
-              &gt;
-                {agentName.length &gt; 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
-              &lt;/text&gt;
-              {laneTurns.map(turn =&gt; (
-                &lt;TurnBlock
-                  key={turn.turnIndex}
-                  turn={turn}
-                  color={color}
-                  width={TURN_BLOCK_MIN_WIDTH}
-                  x={turnX(turn.turnIndex)}
-                  y={laneTop + LANE_PADDING_TOP}
-                /&gt;
-              ))}
-            &lt;/g&gt;
-          );
-        })}
-        &lt;line
-          x1={0}
-          y1={svgHeight}
-          x2={svgWidth}
-          y2={svgHeight}
-          stroke=&quot;var(--border-subtle)&quot;
-          strokeWidth={1}
-        /&gt;
-        {}
-        {visibleHandoffs.map((h, i) =&gt; {
-          const turnIndex = findHandoffTurnIndex(h, turns);
-          if (turnIndex == null) return null;
-          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
-          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
-          if (sourceLaneIdx &lt; 0 || targetLaneIdx &lt; 0) return null;
-          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
-          const y1 = laneY(sourceLaneIdx);
-          const y2 = laneY(targetLaneIdx);
-          const midY = (y1 + y2) / 2;
-          const handoffColor = h.correctTarget
-            ? &apos;var(--status-healthy)&apos;
-            : &apos;var(--status-warning)&apos;;
-          return (
-            &lt;g
-              key={`handoff-${i}`}
-              role=&quot;img&quot;
-              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
-            &gt;
-              &lt;line
-                x1={x}
-                y1={y1}
-                x2={x}
-                y2={y2}
-                stroke={handoffColor}
-                strokeWidth={2}
-                strokeDasharray=&quot;4 2&quot;
-                opacity={0.7}
-              /&gt;
-              &lt;circle
-                cx={x}
-                cy={midY}
-                r={HANDOFF_MARKER_RADIUS}
-                fill=&quot;var(--bg-card)&quot;
-                stroke={handoffColor}
-                strokeWidth={1.5}
-              /&gt;
-              &lt;text
-                x={x}
-                y={midY + 4}
-                textAnchor=&quot;middle&quot;
-                fontSize={8}
-                fill={handoffColor}
-                fontFamily=&quot;var(--font-mono)&quot;
-                fontWeight={600}
-              &gt;
-                {h.score.toFixed(1)}
-              &lt;/text&gt;
-            &lt;/g&gt;
-          );
-        })}
-      &lt;/svg&gt;
-      &lt;div className=&quot;flex-wrap gap-4 mt-2 workflow-legend&quot;&gt;
-        &lt;span className=&quot;text-2xs text-muted&quot;&gt;Turn relevance bar at top of each block&lt;/span&gt;
-        {visibleHandoffs.length &gt; 0 &amp;&amp; (
-          &lt;span className=&quot;text-2xs text-muted&quot;&gt;Dashed lines = handoffs with score&lt;/span&gt;
-        )}
-        {truncated &amp;&amp; (
-          &lt;span className=&quot;text-2xs text-warning&quot;&gt;
-            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
-          &lt;/span&gt;
-        )}
-      &lt;/div&gt;
-    &lt;/div&gt;
-  );
 }</file><file path="src/context/CalibrationContext.tsx">import { createContext, useContext, useMemo, type ReactNode } from &apos;react&apos;;
 import { useCalibration, getMetricCalibration, type CalibrationResponse, type MetricCalibration } from &apos;../hooks/useCalibration.js&apos;;
 interface CalibrationContextValue {
@@ -11557,6 +10695,138 @@ export function useMetricCalibration(metricName: string): MetricCalibration | un
   const ctx = useContext(CalibrationContext);
   if (!ctx) return undefined;
   return getMetricCalibration(ctx.data, metricName);
+}</file><file path="src/contexts/KeyboardNavContext.tsx">import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from &apos;react&apos;;
+type ShortcutKey = string;
+type ComboKey = `${string} ${string}`;
+interface Shortcut {
+  key: ShortcutKey;
+  description: string;
+  scope: string;
+  action: () =&gt; void;
+}
+function isComboKey(key: string): key is ComboKey {
+  return key.includes(&apos; &apos;);
+}
+function comboPrefix(key: ComboKey): string {
+  return key.split(&apos; &apos;)[0];
+}
+interface KeyboardNavContextValue {
+  shortcuts: Shortcut[];
+  register: (key: ShortcutKey, description: string, scope: string, action: () =&gt; void) =&gt; () =&gt; void;
+  overlayOpen: boolean;
+  toggleOverlay: () =&gt; void;
+}
+const KeyboardNavContext = createContext&lt;KeyboardNavContextValue | null&gt;(null);
+export function useShortcut(key: ShortcutKey, description: string, scope: string, action: () =&gt; void) {
+  const ctx = useContext(KeyboardNavContext);
+  if (!ctx) throw new Error(&apos;useShortcut must be used within KeyboardNavProvider&apos;);
+  const { register } = ctx;
+  const actionRef = useRef(action);
+  useEffect(() =&gt; { actionRef.current = action; });
+  const stableAction = useCallback(() =&gt; actionRef.current(), []);
+  useEffect(() =&gt; register(key, description, scope, stableAction), [register, key, description, scope, stableAction]);
+}
+export function useKeyboardNav() {
+  const ctx = useContext(KeyboardNavContext);
+  if (!ctx) throw new Error(&apos;useKeyboardNav must be used within KeyboardNavProvider&apos;);
+  return ctx;
+}
+const IGNORED_TAGS = new Set([&apos;INPUT&apos;, &apos;TEXTAREA&apos;, &apos;SELECT&apos;]);
+export function KeyboardNavProvider({ children }: { children: ReactNode }) {
+  const shortcutsRef = useRef&lt;Shortcut[]&gt;([]);
+  const [shortcuts, setShortcuts] = useState&lt;Shortcut[]&gt;([]);
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const overlayOpenRef = useRef(false);
+  const pendingRef = useRef&lt;string | null&gt;(null);
+  const pendingTimerRef = useRef&lt;ReturnType&lt;typeof setTimeout&gt; | null&gt;(null);
+  const register = useCallback((key: ShortcutKey, description: string, scope: string, action: () =&gt; void) =&gt; {
+    const existing = shortcutsRef.current;
+    const duplicate = existing.find(s =&gt; s.key === key);
+    if (duplicate) throw new Error(`Shortcut conflict: &quot;${key}&quot; is already registered (${duplicate.description})`);
+    if (isComboKey(key)) {
+      const prefix = comboPrefix(key);
+      const conflict = existing.find(s =&gt; s.key === prefix);
+      if (conflict) throw new Error(`Shortcut conflict: combo &quot;${key}&quot; clashes with single-key &quot;${prefix}&quot; (${conflict.description})`);
+    } else {
+      const conflict = existing.find(s =&gt; isComboKey(s.key) &amp;&amp; comboPrefix(s.key) === key);
+      if (conflict) throw new Error(`Shortcut conflict: single-key &quot;${key}&quot; clashes with combo &quot;${conflict.key}&quot; (${conflict.description})`);
+    }
+    const shortcut: Shortcut = { key, description, scope, action };
+    const next = [...existing, shortcut];
+    shortcutsRef.current = next;
+    setShortcuts(next);
+    return () =&gt; {
+      const filtered = shortcutsRef.current.filter(s =&gt; s !== shortcut);
+      shortcutsRef.current = filtered;
+      setShortcuts(filtered);
+    };
+  }, []);
+  const toggleOverlay = useCallback(() =&gt; {
+    setOverlayOpen(o =&gt; {
+      overlayOpenRef.current = !o;
+      return !o;
+    });
+  }, []);
+  useEffect(() =&gt; {
+    function handleKeydown(e: KeyboardEvent) {
+      if (IGNORED_TAGS.has((e.target as HTMLElement)?.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const key = e.key;
+      if (key === &apos;?&apos;) {
+        e.preventDefault();
+        setOverlayOpen(o =&gt; {
+          overlayOpenRef.current = !o;
+          return !o;
+        });
+        return;
+      }
+      if (key === &apos;Escape&apos; &amp;&amp; overlayOpenRef.current) {
+        e.preventDefault();
+        overlayOpenRef.current = false;
+        setOverlayOpen(false);
+        return;
+      }
+      if (pendingRef.current) {
+        const combo = `${pendingRef.current} ${key}`;
+        pendingRef.current = null;
+        if (pendingTimerRef.current) {
+          clearTimeout(pendingTimerRef.current);
+          pendingTimerRef.current = null;
+        }
+        const match = shortcutsRef.current.find(s =&gt; s.key === combo);
+        if (match) {
+          e.preventDefault();
+          match.action();
+          return;
+        }
+      }
+      const single = shortcutsRef.current.find(s =&gt; s.key === key);
+      if (single) {
+        e.preventDefault();
+        single.action();
+        return;
+      }
+      const hasCombo = shortcutsRef.current.some(s =&gt; s.key.startsWith(`${key} `));
+      if (hasCombo) {
+        pendingRef.current = key;
+        pendingTimerRef.current = setTimeout(() =&gt; { pendingRef.current = null; }, 500);
+      }
+    }
+    document.addEventListener(&apos;keydown&apos;, handleKeydown);
+    return () =&gt; {
+      document.removeEventListener(&apos;keydown&apos;, handleKeydown);
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    };
+  }, []);
+  const value = useMemo&lt;KeyboardNavContextValue&gt;(
+    () =&gt; ({ shortcuts, register, overlayOpen, toggleOverlay }),
+    [shortcuts, register, overlayOpen, toggleOverlay],
+  );
+  return (
+    &lt;KeyboardNavContext.Provider value={value}&gt;
+      {children}
+    &lt;/KeyboardNavContext.Provider&gt;
+  );
 }</file><file path="src/contexts/RoleContext.tsx">import { createContext, useContext, useEffect, useMemo, type ReactNode } from &apos;react&apos;;
 import { useRoute } from &apos;wouter&apos;;
 import {
@@ -12445,6 +11715,291 @@ export function loadJsonWithValidationSafe&lt;T&gt;(
   } catch {
     return fallback;
   }
+}</file><file path="src/lib/quality-utils.ts">export type ScoreDirection = &apos;maximize&apos; | &apos;minimize&apos;;
+export type ScoreColorBand = &apos;excellent&apos; | &apos;good&apos; | &apos;adequate&apos; | &apos;poor&apos; | &apos;failing&apos;;
+export type LabelFilterCategory = &apos;Pass&apos; | &apos;Review&apos; | &apos;Fail&apos;;
+export interface LabelOrdinal {
+  ordinal: number;
+  category: LabelFilterCategory;
+  mapped: boolean;
+}
+import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from &apos;./constants.js&apos;;
+export type FeatureRoleType = Role;
+export function agentColor(agentName: string, agentNames: string[]): string {
+  const idx = agentNames.indexOf(agentName);
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+}
+export interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;
+  maxWorstEvaluations: number;
+}
+export function truncateText(text: string, max: number): string {
+  return text.length &gt; max ? text.slice(0, max) + &apos;...&apos; : text;
+}
+export function truncateId(id: string, max = 10): string {
+  if (id.length &lt;= max) return id;
+  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+}
+export function formatScore(val: number | null | undefined): string {
+  if (val === null || val === undefined) return &apos;N/A&apos;;
+  return val.toFixed(SCORE_FORMAT_PRECISION);
+}
+export function formatPercent(value: number, decimals = 1): string {
+  if (!Number.isFinite(value)) return &apos;\u2014&apos;;
+  return `${value.toFixed(decimals)}%`;
+}
+export function plural(count: number, singular: string, suffix = &apos;s&apos;): string {
+  return `${count} ${singular}${count !== 1 ? suffix : &apos;&apos;}`;
+}
+export const byValueDesc =([, a]: [string, number], [, b]: [string, number]): number =&gt; b - a;
+export const SCORE_COLORS: Record&lt;ScoreColorBand | &apos;no_data&apos;, string&gt; = {
+  excellent: &apos;#26d97f&apos;,
+  good: &apos;#34d399&apos;,
+  adequate: &apos;#e5a00d&apos;,
+  poor: &apos;#f97316&apos;,
+  failing: &apos;#f04438&apos;,
+  no_data: &apos;#6b7280&apos;,
+};
+export function scoreColor(value: number, direction?: ScoreDirection): string {
+  return SCORE_COLORS[scoreColorBand(value, direction)];
+}
+export function scoreColorBand(
+  value: number,
+  direction: ScoreDirection = &apos;maximize&apos;,
+): ScoreColorBand {
+  const v = direction === &apos;minimize&apos; ? 1 - value : value;
+  if (v &gt;= 0.9) return &apos;excellent&apos;;
+  if (v &gt;= 0.8) return &apos;good&apos;;
+  if (v &gt;= 0.6) return &apos;adequate&apos;;
+  if (v &gt;= 0.4) return &apos;poor&apos;;
+  return &apos;failing&apos;;
+}
+type ThresholdDirection = &apos;above&apos; | &apos;below&apos;;
+export function inferScoreDirection(
+  alertDirection: ThresholdDirection | undefined,
+): ScoreDirection {
+  return alertDirection === &apos;above&apos; ? &apos;minimize&apos; : &apos;maximize&apos;;
+}
+const LABEL_ORDINAL_MAP: Record&lt;string, { ordinal: number; category: LabelFilterCategory }&gt; = {
+  excellent: { ordinal: 4, category: &apos;Pass&apos; },
+  highly_relevant: { ordinal: 4, category: &apos;Pass&apos; },
+  fully_faithful: { ordinal: 4, category: &apos;Pass&apos; },
+  perfect: { ordinal: 4, category: &apos;Pass&apos; },
+  relevant: { ordinal: 3, category: &apos;Pass&apos; },
+  good: { ordinal: 3, category: &apos;Pass&apos; },
+  faithful: { ordinal: 3, category: &apos;Pass&apos; },
+  pass: { ordinal: 3, category: &apos;Pass&apos; },
+  correct: { ordinal: 3, category: &apos;Pass&apos; },
+  coherent: { ordinal: 3, category: &apos;Pass&apos; },
+  partial: { ordinal: 2, category: &apos;Review&apos; },
+  borderline: { ordinal: 2, category: &apos;Review&apos; },
+  adequate: { ordinal: 2, category: &apos;Review&apos; },
+  mixed: { ordinal: 2, category: &apos;Review&apos; },
+  off_topic: { ordinal: 1, category: &apos;Fail&apos; },
+  irrelevant: { ordinal: 1, category: &apos;Fail&apos; },
+  unfaithful: { ordinal: 1, category: &apos;Fail&apos; },
+  fail: { ordinal: 1, category: &apos;Fail&apos; },
+  incorrect: { ordinal: 1, category: &apos;Fail&apos; },
+  incoherent: { ordinal: 1, category: &apos;Fail&apos; },
+  hallucinated: { ordinal: 0, category: &apos;Fail&apos; },
+  fabricated: { ordinal: 0, category: &apos;Fail&apos; },
+  toxic: { ordinal: 0, category: &apos;Fail&apos; },
+  dangerous: { ordinal: 0, category: &apos;Fail&apos; },
+};
+function normalizeLabel(label: string): string {
+  return label.toLowerCase().replace(/-/g, &apos;_&apos;).trim();
+}
+export function labelToOrdinal(label: string): LabelOrdinal {
+  const normalized = normalizeLabel(label);
+  const entry = LABEL_ORDINAL_MAP[normalized];
+  if (entry) {
+    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
+  }
+  return { ordinal: 2, category: &apos;Review&apos;, mapped: false };
+}
+export function ordinalToCategory(ordinal: number): LabelFilterCategory {
+  if (ordinal &gt;= 3) return &apos;Pass&apos;;
+  if (ordinal === 2) return &apos;Review&apos;;
+  return &apos;Fail&apos;;
+}
+const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
+const OPERATOR_EXPLANATION_TRUNCATION = 500;
+const AUDITOR_EXPLANATION_TRUNCATION = 2000;
+const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
+const OPERATOR_MAX_WORST_EVALUATIONS = 5;
+const AUDITOR_MAX_WORST_EVALUATIONS = 10;
+export const ROLE_FEATURE_CONFIG: Record&lt;FeatureRoleType, RoleFeatureConfig&gt; = {
+  executive: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: false,
+    showAcceleration: false,
+    showProjectedBreach: true,
+    showCorrelationRemediation: false,
+    showCoverageHeatmap: false,
+    showPipelineFunnel: false,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
+  },
+  operator: {
+    showCQI: false,
+    showCQIBreakdown: false,
+    showVariance: true,
+    showAcceleration: true,
+    showProjectedBreach: true,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
+  },
+  auditor: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: true,
+    showAcceleration: false,
+    showProjectedBreach: false,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: true,
+    showRawExport: true,
+    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
+  },
+};
+export function shortPath(fullPath: string): string {
+  const parts = fullPath.replace(/\\/g, &apos;/&apos;).split(&apos;/&apos;);
+  return parts.length &gt; 3 ? `\u2026/${parts.slice(-3).join(&apos;/&apos;)}` : fullPath;
+}
+export function fmtDuration(ms: number, secDecimals = 1): string {
+  return ms &lt; 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
+}
+export function groupBy&lt;T, K extends PropertyKey = string&gt;(
+  items: T[],
+  keyFn: (item: T) =&gt; K | undefined,
+): Map&lt;K, T[]&gt; {
+  const map = new Map&lt;K, T[]&gt;();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (key == null) continue;
+    const group = map.get(key);
+    if (group) group.push(item);
+    else map.set(key, [item]);
+  }
+  return map;
+}
+export function fmtBytes(n: number): string {
+  if (n &gt;= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n &gt;= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+export interface PercentileDistribution {
+  p10: number; p25: number; p50: number; p75: number; p90: number;
+}
+export type ScaleStrategy = &apos;quantile&apos; | &apos;binary&apos; | &apos;log&apos; | &apos;step&apos; | &apos;categorical&apos; | &apos;percentile_rank&apos; | &apos;uniform&apos;;
+export const MIN_QUANTILE_SAMPLE_SIZE = 100;
+const NUMERICAL_MIN_DENOMINATOR = 0.001;
+const LOG_SCALE_DIVISOR = 3;
+const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
+const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
+const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
+const QUANTILE_P10 = 0.1;
+const QUANTILE_P25 = 0.25;
+const QUANTILE_P50 = 0.5;
+const QUANTILE_P75 = 0.75;
+const QUANTILE_P90 = 0.9;
+export const METRIC_SCALE_STRATEGY: Record&lt;string, ScaleStrategy&gt; = {
+  relevance: &apos;quantile&apos;,
+  faithfulness: &apos;binary&apos;,
+  coherence: &apos;uniform&apos;,
+  hallucination: &apos;log&apos;,
+  task_completion: &apos;step&apos;,
+  tool_correctness: &apos;categorical&apos;,
+  evaluation_latency: &apos;percentile_rank&apos;,
+};
+export function empiricalCDF(value: number, dist: PercentileDistribution): number {
+  if (!Number.isFinite(value)) return QUANTILE_P50;
+  const points: [number, number][] = [
+    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
+    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
+  ];
+  if (value &lt;= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
+  if (value &gt;= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
+  for (let i = 0; i &lt; points.length - 1; i++) {
+    const [v0, p0] = points[i];
+    const [v1, p1] = points[i + 1];
+    if (value &gt;= v0 &amp;&amp; value &lt;= v1) {
+      const range = v1 - v0;
+      if (range === 0) return p0;
+      return p0 + (p1 - p0) * ((value - v0) / range);
+    }
+  }
+  return QUANTILE_P50;
+}
+export function adaptiveScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection = &apos;maximize&apos;,
+  distribution?: PercentileDistribution,
+  sampleSize?: number,
+): ScoreColorBand {
+  const strategy = METRIC_SCALE_STRATEGY[metric] ?? &apos;uniform&apos;;
+  switch (strategy) {
+    case &apos;quantile&apos;: {
+      if (!distribution || (sampleSize !== undefined &amp;&amp; sampleSize &lt; MIN_QUANTILE_SAMPLE_SIZE)) {
+        return scoreColorBand(value, direction);
+      }
+      const rank = empiricalCDF(value, distribution);
+      if (rank &gt;= QUANTILE_P90) return &apos;excellent&apos;;
+      if (rank &gt;= QUANTILE_P75) return &apos;good&apos;;
+      if (rank &gt;= QUANTILE_P50) return &apos;adequate&apos;;
+      if (rank &gt;= QUANTILE_P25) return &apos;poor&apos;;
+      return &apos;failing&apos;;
+    }
+    case &apos;log&apos;: {
+      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
+      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
+      return scoreColorBand(logNorm, &apos;maximize&apos;);
+    }
+    case &apos;binary&apos;: return value &gt;= BINARY_SCALE_EXCELLENT_THRESHOLD ? &apos;excellent&apos; : &apos;failing&apos;;
+    case &apos;step&apos;: return value &gt;= STEP_SCALE_EXCELLENT_THRESHOLD ? &apos;excellent&apos; : value &gt;= STEP_SCALE_ADEQUATE_THRESHOLD ? &apos;adequate&apos; : &apos;failing&apos;;
+    case &apos;categorical&apos;: return scoreColorBand(value, direction);
+    case &apos;percentile_rank&apos;: {
+      if (!distribution) return scoreColorBand(value, direction);
+      return scoreColorBand(empiricalCDF(value, distribution), &apos;maximize&apos;);
+    }
+    case &apos;uniform&apos;:
+    default: return scoreColorBand(value, direction);
+  }
+}
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from &apos;date-fns&apos;;
+export function formatTimestamp(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts || &apos;-&apos;;
+  const now = new Date();
+  const diffMin = differenceInMinutes(now, d);
+  if (diffMin &lt; 1) return &apos;just now&apos;;
+  if (diffMin &lt; 60) return `${diffMin}m ago`;
+  const diffHr = differenceInHours(now, d);
+  if (diffHr &lt; 24) return `${diffHr}h ago`;
+  const diffDay = differenceInDays(now, d);
+  if (diffDay &lt; 7) return `${diffDay}d ago`;
+  return format(d, &apos;PP&apos;);
 }</file><file path="src/lib/routes.ts">export const routes = {
   evaluationDetail: (traceId: string, metric?: string) =&gt;
     metric
@@ -13276,155 +12831,6 @@ export function PipelinePage({ period }: { period: Period }) {
           &lt;/div&gt;
         &lt;/&gt;
       )}
-    &lt;/PageShell&gt;
-  );
-}</file><file path="src/pages/RoutingTelemetryPage.tsx">import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from &apos;../hooks/useRoutingTelemetry.js&apos;;
-import { PageShell } from &apos;../components/PageShell.js&apos;;
-import { SKELETON_HEIGHT_MD } from &apos;../lib/constants.js&apos;;
-import { formatPercent, byValueDesc } from &apos;../lib/quality-utils.js&apos;;
-import type { Period } from &apos;../types.js&apos;;
-const PERCENT_MULTIPLIER = 100;
-function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
-  return &apos;strategy&apos; in g &amp;&amp; &apos;fallbackRate&apos; in g;
-}
-export function RoutingTelemetryPage({ period }: { period: Period }) {
-  const { data, isLoading, error } = useRoutingTelemetry(period);
-  return (
-    &lt;PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}&gt;
-      {data &amp;&amp; data.summary.routedSpans === 0 ? (
-        &lt;div className=&quot;empty-state&quot;&gt;
-          &lt;h2&gt;No Routing Telemetry&lt;/h2&gt;
-          &lt;p&gt;No routed spans found for this period. Routing telemetry is recorded when the request model differs from the actual response model.&lt;/p&gt;
-        &lt;/div&gt;
-      ) : data ? (
-        &lt;&gt;
-          &lt;h2 className=&quot;text-lg mb-3&quot;&gt;Routing Telemetry&lt;/h2&gt;
-          &lt;div className=&quot;card mb-3&quot;&gt;
-            &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.summary.routedSpans}&lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Routed Spans&lt;/div&gt;
-              &lt;/div&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;
-                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
-                &lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Fallback Rate&lt;/div&gt;
-              &lt;/div&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;${data.costSavings.toFixed(4)}&lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Cost Savings&lt;/div&gt;
-              &lt;/div&gt;
-              &lt;div className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.totalSpansScanned}&lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Spans Scanned&lt;/div&gt;
-              &lt;/div&gt;
-            &lt;/div&gt;
-          &lt;/div&gt;
-          {Object.keys(data.providerDistribution).length &gt; 0 &amp;&amp; (
-            &lt;div className=&quot;card mb-3&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Provider Distribution&lt;/h3&gt;
-              &lt;table className=&quot;data-table&quot;&gt;
-                &lt;thead&gt;
-                  &lt;tr&gt;
-                    &lt;th&gt;Provider&lt;/th&gt;
-                    &lt;th&gt;Count&lt;/th&gt;
-                    &lt;th&gt;Share&lt;/th&gt;
-                  &lt;/tr&gt;
-                &lt;/thead&gt;
-                &lt;tbody&gt;
-                  {Object.entries(data.providerDistribution)
-                    .sort(byValueDesc)
-                    .map(([provider, count]) =&gt; (
-                      &lt;tr key={provider}&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{provider}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
-                        &lt;/td&gt;
-                      &lt;/tr&gt;
-                    ))}
-                &lt;/tbody&gt;
-              &lt;/table&gt;
-            &lt;/div&gt;
-          )}
-          {Object.keys(data.modelDistribution).length &gt; 0 &amp;&amp; (
-            &lt;div className=&quot;card mb-3&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Model Distribution&lt;/h3&gt;
-              &lt;table className=&quot;data-table&quot;&gt;
-                &lt;thead&gt;
-                  &lt;tr&gt;
-                    &lt;th&gt;Model&lt;/th&gt;
-                    &lt;th&gt;Count&lt;/th&gt;
-                    &lt;th&gt;Share&lt;/th&gt;
-                  &lt;/tr&gt;
-                &lt;/thead&gt;
-                &lt;tbody&gt;
-                  {Object.entries(data.modelDistribution)
-                    .sort(byValueDesc)
-                    .map(([model, count]) =&gt; (
-                      &lt;tr key={model}&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{model}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
-                        &lt;/td&gt;
-                      &lt;/tr&gt;
-                    ))}
-                &lt;/tbody&gt;
-              &lt;/table&gt;
-            &lt;/div&gt;
-          )}
-          {data.groups.length &gt; 0 &amp;&amp; data.groups.some(isStrategyGroup) &amp;&amp; (
-            &lt;div className=&quot;card mb-3&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Strategy Breakdown&lt;/h3&gt;
-              &lt;table className=&quot;data-table&quot;&gt;
-                &lt;thead&gt;
-                  &lt;tr&gt;
-                    &lt;th&gt;Strategy&lt;/th&gt;
-                    &lt;th&gt;Count&lt;/th&gt;
-                    &lt;th&gt;Fallbacks&lt;/th&gt;
-                    &lt;th&gt;Fallback Rate&lt;/th&gt;
-                  &lt;/tr&gt;
-                &lt;/thead&gt;
-                &lt;tbody&gt;
-                  {data.groups
-                    .filter(isStrategyGroup)
-                    .sort((a, b) =&gt; b.count - a.count)
-                    .map((g) =&gt; (
-                      &lt;tr key={g.strategy}&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{g.strategy}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{g.count}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{g.fallbackCount}&lt;/td&gt;
-                        &lt;td className=&quot;mono&quot;&gt;{formatPercent(g.fallbackRate * PERCENT_MULTIPLIER)}&lt;/td&gt;
-                      &lt;/tr&gt;
-                    ))}
-                &lt;/tbody&gt;
-              &lt;/table&gt;
-            &lt;/div&gt;
-          )}
-          {data.routingLatency &amp;&amp; (
-            &lt;div className=&quot;card&quot;&gt;
-              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;
-                Routing Latency
-                &lt;span className=&quot;text-secondary text-xs font-normal ml-2&quot;&gt;
-                  ({data.routingLatency.source === &apos;classification_time&apos; ? &apos;classification time&apos; : &apos;span duration&apos;})
-                &lt;/span&gt;
-              &lt;/h3&gt;
-              &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
-                &lt;div className=&quot;text-center&quot;&gt;
-                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p50.toFixed(0)}ms&lt;/div&gt;
-                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p50&lt;/div&gt;
-                &lt;/div&gt;
-                &lt;div className=&quot;text-center&quot;&gt;
-                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p99.toFixed(0)}ms&lt;/div&gt;
-                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p99&lt;/div&gt;
-                &lt;/div&gt;
-              &lt;/div&gt;
-            &lt;/div&gt;
-          )}
-        &lt;/&gt;
-      ) : null}
     &lt;/PageShell&gt;
   );
 }</file><file path="src/pages/SessionDetailPage.tsx">import { Link } from &apos;wouter&apos;;
@@ -14500,7 +13906,259 @@ for worker in &quot;${WORKERS[@]}&quot;; do
     echo &quot;$value&quot; | npx wrangler secret put &quot;$secret&quot; --name &quot;$worker&quot; 2&gt;&amp;1 | tail -1
   done
 done
-echo &quot;Done.&quot;</file><file path="src/api/routes/agents.ts">import { Hono } from &apos;hono&apos;;
+echo &quot;Done.&quot;</file><file path="src/__tests__/WorkflowGraph.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
+import { render, screen, fireEvent, waitFor, cleanup } from &apos;@testing-library/react&apos;;
+import type { ReactNode } from &apos;react&apos;;
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record&lt;string, unknown&gt;;
+}
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) =&gt; void;
+  nodeTypes?: Record&lt;string, (props: { data: Record&lt;string, unknown&gt; }) =&gt; ReactNode&gt;;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
+vi.mock(&apos;@xyflow/react&apos;, async () =&gt; {
+  const React = await vi.importActual&lt;typeof import(&apos;react&apos;)&gt;(&apos;react&apos;);
+  return {
+    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) =&gt; (
+      &lt;div data-testid=&quot;reactflow&quot; {...rest}&gt;
+        {(nodes ?? []).map((n) =&gt; {
+          const NodeComp = nodeTypes?.[n.type];
+          return (
+            &lt;div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() =&gt; onNodeClick?.({}, n)}&gt;
+              {NodeComp ? &lt;NodeComp data={n.data} /&gt; : n.id}
+            &lt;/div&gt;
+          );
+        })}
+        {(edges ?? []).map((e) =&gt; (
+          &lt;div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} /&gt;
+        ))}
+        {children}
+      &lt;/div&gt;
+    ),
+    MiniMap: (_props: unknown) =&gt; &lt;div data-testid=&quot;minimap&quot; /&gt;,
+    Controls: () =&gt; &lt;div data-testid=&quot;controls&quot; /&gt;,
+    Background: () =&gt; null,
+    Handle: () =&gt; null,
+    Position: { Top: &apos;top&apos;, Bottom: &apos;bottom&apos; },
+    BaseEdge: () =&gt; null,
+    getStraightPath: () =&gt; [&apos;M 0 0&apos;, 0, 0],
+    useNodesState: (initial: MockNode[]) =&gt; {
+      const [nodes, setNodes] = React.useState(initial);
+      return [nodes, setNodes, vi.fn()];
+    },
+    useEdgesState: (initial: MockEdge[]) =&gt; {
+      const [edges, setEdges] = React.useState(initial);
+      return [edges, setEdges, vi.fn()];
+    },
+    useReactFlow: () =&gt; ({ fitView: vi.fn() }),
+  };
+});
+interface ELKGraph {
+  children?: Array&lt;{ x?: number; y?: number; [key: string]: unknown }&gt;;
+  [key: string]: unknown;
+}
+vi.mock(&apos;elkjs/lib/elk.bundled.js&apos;, () =&gt; ({
+  default: class ELK {
+    layout(graph: ELKGraph) {
+      return Promise.resolve({
+        ...graph,
+        children: (graph.children ?? []).map((c, i: number) =&gt; ({
+          ...c,
+          x: i * 300,
+          y: i * 200,
+        })),
+      });
+    }
+  },
+}));
+import { WorkflowGraphView } from &apos;../components/WorkflowGraph.js&apos;;
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from &apos;./workflow-fixtures.js&apos;;
+afterEach(cleanup);
+describe(&apos;WorkflowGraphView&apos;, () =&gt; {
+  const twoNodeGraph = makeGraph({
+    nodes: [
+      makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; }),
+      makeNode({ id: &apos;node-2&apos;, label: &apos;executor&apos; }),
+    ],
+    edges: [makeEdge({ id: &apos;edge-1&apos;, source: &apos;node-1&apos;, target: &apos;node-2&apos; })],
+    rootNodeId: &apos;node-1&apos;,
+    workflowShape: &apos;linear&apos;,
+  });
+  const threeNodeGraph = makeGraph({
+    nodes: [
+      makeNode({ id: &apos;node-1&apos; }),
+      makeNode({ id: &apos;node-2&apos; }),
+      makeNode({ id: &apos;node-3&apos; }),
+    ],
+    rootNodeId: &apos;node-1&apos;,
+    workflowShape: &apos;linear&apos;,
+  });
+  const fiveNodeGraph = makeGraph({
+    nodes: Array.from({ length: 5 }, (_, i) =&gt;
+      makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
+    ),
+    rootNodeId: &apos;node-1&apos;,
+    workflowShape: &apos;branching&apos;,
+  });
+  it(&apos;renders container with role=img and aria-label&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
+    const container = await waitFor(() =&gt;
+      screen.getByRole(&apos;img&apos;, { name: &apos;Agent workflow graph&apos; })
+    );
+    expect(container).toBeInTheDocument();
+  });
+  it(&apos;renders correct number of nodes&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(&apos;rf-node-node-2&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(&apos;rf-node-node-3&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;node displays agent label&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; })],
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByText(&apos;planner&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;node displays Good score badge text for score &gt;= 0.7&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, evaluationScore: 0.85 })],
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByText(&apos;Good&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;node displays tool count&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, toolCallCount: 5 })],
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByText(&apos;5 tools&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;shows Controls always&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;controls&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;shows MiniMap for 5+ nodes&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={fiveNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;minimap&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;hides MiniMap for fewer than 5 nodes&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId(&apos;minimap&apos;)).not.toBeInTheDocument();
+  });
+  it(&apos;shows simplified fallback for single_agent shape with 1 node and no ReactFlow&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;solo-agent&apos; })],
+      workflowShape: &apos;single_agent&apos;,
+      rootNodeId: &apos;node-1&apos;,
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.queryByTestId(&apos;reactflow&apos;)).not.toBeInTheDocument();
+      expect(screen.getByText(/solo-agent/)).toBeInTheDocument();
+    });
+  });
+  it(&apos;fires onNodeClick with the correct nodeId when a node is clicked&apos;, async () =&gt; {
+    const onNodeClick = vi.fn();
+    render(&lt;WorkflowGraphView graph={twoNodeGraph} onNodeClick={onNodeClick} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId(&apos;rf-node-node-1&apos;));
+    expect(onNodeClick).toHaveBeenCalledWith(&apos;node-1&apos;);
+  });
+  it(&apos;renders without error when graph has 0 nodes and 0 edges&apos;, async () =&gt; {
+    const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
+    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
+  });
+});
+const ST_G5_LARGE_GRAPH_SIZE = 100;
+const ST_G5_DEEP_CHAIN_SIZE = 20;
+const ST_G5_DISCONNECTED_SIZE = 10;
+describe(&apos;WorkflowGraphView stress (ST-G5)&apos;, () =&gt; {
+  it(&apos;renders 100+ node graph without error using degraded list fallback&apos;, () =&gt; {
+    const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, &apos;agent&apos;, &apos;branching&apos;);
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    expect(screen.getByText(`Graph too large to render (${ST_G5_LARGE_GRAPH_SIZE} agents)`)).toBeInTheDocument();
+    expect(screen.getByText(/agent-0 —/)).toBeInTheDocument();
+    expect(screen.getByText(/agent-99 —/)).toBeInTheDocument();
+  });
+  it(&apos;renders deeply nested delegation chain without error&apos;, async () =&gt; {
+    const graph = makeChainGraph(ST_G5_DEEP_CHAIN_SIZE, &apos;delegate&apos;, &apos;linear&apos;);
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-delegate-0&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
+    });
+  });
+  it(&apos;renders without crash when rootNodeId is null (missing parent span inference fallback)&apos;, async () =&gt; {
+    const nodes = Array.from({ length: 5 }, (_, i) =&gt;
+      makeNode({ id: `node-${i}`, label: `orphan-${i}` })
+    );
+    const graph = makeGraph({ nodes, rootNodeId: null, workflowShape: &apos;branching&apos; });
+    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;renders disconnected nodes (no edges) without crash&apos;, async () =&gt; {
+    const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =&gt;
+      makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
+    );
+    const graph = makeGraph({ nodes, rootNodeId: &apos;orphan-0&apos;, workflowShape: &apos;branching&apos; });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
+    });
+  });
+  it(&apos;renders two graphs in the same DOM without node state leakage between instances&apos;, async () =&gt; {
+    const graphA = makeGraph({
+      nodes: [makeNode({ id: &apos;a-1&apos;, label: &apos;alpha&apos; }), makeNode({ id: &apos;a-2&apos;, label: &apos;beta&apos; })],
+      edges: [makeEdge({ id: &apos;ea-1&apos;, source: &apos;a-1&apos;, target: &apos;a-2&apos; })],
+      rootNodeId: &apos;a-1&apos;,
+    });
+    const graphB = makeGraph({
+      nodes: [makeNode({ id: &apos;b-1&apos;, label: &apos;gamma&apos; }), makeNode({ id: &apos;b-2&apos;, label: &apos;delta&apos; })],
+      edges: [makeEdge({ id: &apos;eb-1&apos;, source: &apos;b-1&apos;, target: &apos;b-2&apos; })],
+      rootNodeId: &apos;b-1&apos;,
+    });
+    const { unmount: unmountA } = render(&lt;WorkflowGraphView graph={graphA} /&gt;);
+    render(&lt;WorkflowGraphView graph={graphB} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-a-1&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
+    });
+    unmountA();
+    expect(screen.queryByTestId(&apos;rf-node-a-1&apos;)).not.toBeInTheDocument();
+    expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
+  });
+});</file><file path="src/api/routes/agents.ts">import { Hono } from &apos;hono&apos;;
 import { computeMultiAgentEvaluation } from &apos;../../../../dist/lib/quality/quality-multi-agent.js&apos;;
 import { sanitizeErrorForResponse } from &apos;../../../../dist/lib/errors/error-sanitizer.js&apos;;
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from &apos;../data-loader.js&apos;;
@@ -14728,8 +14386,7 @@ traceRoutes.get(&apos;/traces/:traceId&apos;, async (c) =&gt; {
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
-});</file><file path="src/api/config.ts">export const API_HOST = &apos;127.0.0.1&apos;;
-export const API_PORT = Number(process.env.API_PORT) || 3001;</file><file path="src/api/data-loader.ts">import { MultiDirectoryBackend } from &apos;../../../dist/backends/local-jsonl.js&apos;;
+});</file><file path="src/api/data-loader.ts">import { MultiDirectoryBackend } from &apos;../../../dist/backends/local-jsonl.js&apos;;
 import type { EvaluationResult } from &apos;../../../dist/backends/index.js&apos;;
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from &apos;../../../dist/lib/audit/verification-events.js&apos;;
 import { queryTraces as queryTracesTool } from &apos;../../../dist/tools/query-traces.js&apos;;
@@ -14901,6 +14558,135 @@ export async function checkHealth(): Promise&lt;{ status: string; hasData: boole
     limit: LIMIT_HEALTH_PROBE,
   });
   return { status: health.status, hasData: evals.length &gt; 0 };
+}</file><file path="src/components/AgentWorkflowView.tsx">import React, { useState, useCallback, useMemo } from &apos;react&apos;;
+import { WorkflowGraphView } from &apos;./WorkflowGraph.js&apos;;
+import { WorkflowTimeline } from &apos;./WorkflowTimeline.js&apos;;
+import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
+import type { MultiAgentEvaluation } from &apos;../types.js&apos;;
+import { agentColor } from &apos;../lib/quality-utils.js&apos;;
+import { WORKFLOW_FILTER_MIN_AGENTS } from &apos;../lib/constants.js&apos;;
+type WorkflowTab = &apos;dag&apos; | &apos;timeline&apos;;
+interface AgentWorkflowViewProps {
+  graph: WorkflowGraph;
+  evaluation?: MultiAgentEvaluation;
+  onNodeClick?: (nodeId: string) =&gt; void;
+  height?: number;
+}
+const TAB_LABELS: Record&lt;WorkflowTab, string&gt; = {
+  dag: &apos;DAG&apos;,
+  timeline: &apos;Timeline&apos;,
+};
+const TABS: WorkflowTab[] = [&apos;dag&apos;, &apos;timeline&apos;];
+export function AgentWorkflowView({
+  graph,
+  evaluation,
+  onNodeClick,
+  height = 600,
+}: AgentWorkflowViewProps) {
+  const [activeTab, setActiveTab] = useState&lt;WorkflowTab&gt;(&apos;dag&apos;);
+  const agentNames = [...new Set(
+    (evaluation?.turns ?? []).map(t =&gt; t.agentName ?? &apos;unknown&apos;),
+  )];
+  const [selectedAgents, setSelectedAgents] = useState&lt;ReadonlySet&lt;string&gt; | null&gt;(null);
+  const effectiveSelected: ReadonlySet&lt;string&gt; = useMemo(
+    () =&gt; selectedAgents ?? new Set(agentNames),
+    [selectedAgents, agentNames],
+  );
+  const toggleAgent = useCallback((name: string) =&gt; {
+    setSelectedAgents(prev =&gt; {
+      const base = prev ?? new Set(agentNames);
+      const next = new Set(base);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      if (next.size === agentNames.length) return null;
+      return next;
+    });
+  }, [agentNames]);
+  const selectAll = useCallback(() =&gt; setSelectedAgents(null), []);
+  const showFilter = agentNames.length &gt;= WORKFLOW_FILTER_MIN_AGENTS;
+  return (
+    &lt;div&gt;
+      &lt;div
+        role=&quot;tablist&quot;
+        aria-label=&quot;Workflow view&quot;
+        className=&quot;flex-center gap-0 workflow-tabs&quot;
+      &gt;
+        {TABS.map(tab =&gt; (
+          &lt;button
+            key={tab}
+            type=&quot;button&quot;
+            role=&quot;tab&quot;
+            id={`workflow-tab-${tab}`}
+            aria-selected={activeTab === tab}
+            aria-controls={`workflow-panel-${tab}`}
+            onClick={() =&gt; setActiveTab(tab)}
+            className=&quot;btn-reset workflow-tab&quot;
+          &gt;
+            {TAB_LABELS[tab]}
+          &lt;/button&gt;
+        ))}
+      &lt;/div&gt;
+      {showFilter &amp;&amp; (
+        &lt;div className=&quot;workflow-filter&quot; role=&quot;group&quot; aria-label=&quot;Filter agents&quot;&gt;
+          {agentNames.map(name =&gt; {
+            const color = agentColor(name, agentNames);
+            const active = effectiveSelected.has(name);
+            return (
+              &lt;button
+                key={name}
+                type=&quot;button&quot;
+                className=&quot;btn-reset eval-filter-chip workflow-filter__chip mono-xs&quot;
+                style={{ &apos;--chip-color&apos;: color } as React.CSSProperties}
+                data-active={active || undefined}
+                aria-pressed={active}
+                onClick={() =&gt; toggleAgent(name)}
+              &gt;
+                {name}
+              &lt;/button&gt;
+            );
+          })}
+          {selectedAgents !== null &amp;&amp; (
+            &lt;button
+              type=&quot;button&quot;
+              className=&quot;btn-reset workflow-filter__reset text-xs text-muted&quot;
+              onClick={selectAll}
+            &gt;
+              All
+            &lt;/button&gt;
+          )}
+        &lt;/div&gt;
+      )}
+      &lt;div
+        role=&quot;tabpanel&quot;
+        id=&quot;workflow-panel-dag&quot;
+        aria-labelledby=&quot;workflow-tab-dag&quot;
+        hidden={activeTab !== &apos;dag&apos;}
+      &gt;
+        &lt;WorkflowGraphView
+          graph={graph}
+          onNodeClick={onNodeClick}
+          height={height}
+          selectedAgents={showFilter ? effectiveSelected : undefined}
+        /&gt;
+      &lt;/div&gt;
+      &lt;div
+        role=&quot;tabpanel&quot;
+        id=&quot;workflow-panel-timeline&quot;
+        aria-labelledby=&quot;workflow-tab-timeline&quot;
+        hidden={activeTab !== &apos;timeline&apos;}
+      &gt;
+        &lt;WorkflowTimeline
+          turns={evaluation?.turns ?? []}
+          handoffs={evaluation?.handoffs ?? []}
+          agentNames={agentNames}
+          selectedAgents={showFilter ? effectiveSelected : undefined}
+        /&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
 }</file><file path="src/components/CorrelationHeatmap.tsx">import { useMemo } from &apos;react&apos;;
 import type { CSSProperties } from &apos;react&apos;;
 import { scaleSequential } from &apos;d3-scale&apos;;
@@ -15012,20 +14798,505 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
       ))}
     &lt;/div&gt;
   );
-}</file><file path="src/components/TruncatedIdLink.tsx">import type { MouseEvent } from &apos;react&apos;;
-import { Link } from &apos;wouter&apos;;
-import { truncateId } from &apos;../lib/quality-utils.js&apos;;
-export function TruncatedIdLink({ id, href, maxLen = 8, className = &apos;mono-xs link-accent&apos;, onClick }: {
-  id: string;
-  href: string;
-  maxLen?: number;
-  className?: string;
-  onClick?: (e: MouseEvent) =&gt; void;
-}) {
+}</file><file path="src/components/WorkflowGraph.tsx">import React, { memo, useCallback, useEffect, useState } from &apos;react&apos;;
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from &apos;@xyflow/react&apos;;
+import &apos;@xyflow/react/dist/style.css&apos;;
+import ELK from &apos;elkjs/lib/elk.bundled.js&apos;;
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from &apos;../types/workflow-graph.js&apos;;
+import { fmtDuration } from &apos;../lib/quality-utils.js&apos;;
+import { SCORE_CHIP_PRECISION } from &apos;../lib/constants.js&apos;;
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
+const MINIMAP_THRESHOLD = 5;
+const MAX_ELK_NODES = 50;
+const WORKFLOW_SCORE_HIGH_MIN = 0.7;
+const WORKFLOW_SCORE_MID_MIN = 0.4;
+const SCORE_BANDS = {
+  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: &apos;Good&apos;, bg: &apos;#dcfce7&apos;, border: &apos;#16a34a&apos;, text: &apos;#15803d&apos; },
+  MID: { min: WORKFLOW_SCORE_MID_MIN, label: &apos;Fair&apos;, bg: &apos;#fef9c3&apos;, border: &apos;#ca8a04&apos;, text: &apos;#a16207&apos; },
+  LOW: { min: 0, label: &apos;Poor&apos;, bg: &apos;#fee2e2&apos;, border: &apos;#dc2626&apos;, text: &apos;#b91c1c&apos; },
+} as const;
+const ELK_OPTIONS = {
+  &apos;elk.algorithm&apos;: &apos;layered&apos;,
+  &apos;elk.direction&apos;: &apos;DOWN&apos;,
+  &apos;elk.layered.cycleBreaking.strategy&apos;: &apos;GREEDY&apos;,
+  &apos;elk.edgeRouting&apos;: &apos;ORTHOGONAL&apos;,
+  &apos;elk.layered.spacing.nodeNodeBetweenLayers&apos;: &apos;80&apos;,
+  &apos;elk.spacing.nodeNode&apos;: &apos;60&apos;,
+  &apos;elk.layered.feedbackEdges&apos;: &apos;true&apos;,
+} as const;
+function getScoreBand(score: number | null) {
+  if (score === null) return null;
+  if (score &gt;= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
+  if (score &gt;= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
+  return SCORE_BANDS.LOW;
+}
+const elk = new ELK();
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  dimmed?: boolean;
+}
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
+  if (!value || typeof value !== &apos;object&apos;) return false;
+  const v = value as Record&lt;string, unknown&gt;;
   return (
-    &lt;Link href={href} className={className} title={id} onClick={onClick}&gt;
-      {truncateId(id, maxLen)}
-    &lt;/Link&gt;
+    typeof v[&apos;id&apos;] === &apos;string&apos; &amp;&amp;
+    typeof v[&apos;label&apos;] === &apos;string&apos; &amp;&amp;
+    typeof v[&apos;toolCallCount&apos;] === &apos;number&apos; &amp;&amp;
+    typeof v[&apos;turnCount&apos;] === &apos;number&apos; &amp;&amp;
+    typeof v[&apos;durationMs&apos;] === &apos;number&apos; &amp;&amp;
+    typeof v[&apos;hasError&apos;] === &apos;boolean&apos;
+  );
+}
+function buildNodeDataMap(nodes: WorkflowNode[]): Map&lt;string, WorkflowNode&gt; {
+  return new Map(nodes.map(n =&gt; [n.id, n]));
+}
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet&lt;string&gt;,
+): Promise&lt;{ nodes: Node[]; edges: Edge[] }&gt; {
+  const nodeDataMap = buildNodeDataMap(nodes);
+  const elkGraph = {
+    id: &apos;root&apos;,
+    layoutOptions: ELK_OPTIONS,
+    children: nodes.map(n =&gt; ({ id: n.id, width: NODE_WIDTH, height: NODE_HEIGHT })),
+    edges: edges.map(e =&gt; ({ id: e.id, sources: [e.source], targets: [e.target] })),
+  };
+  const layout = await elk.layout(elkGraph);
+  const rfNodes: Node[] = (layout.children ?? [])
+    .filter(elkNode =&gt; nodeDataMap.has(elkNode.id))
+    .map(elkNode =&gt; {
+      const workflowNode = nodeDataMap.get(elkNode.id)!;
+      const dimmed = selectedAgents != null &amp;&amp; !selectedAgents.has(elkNode.id);
+      return {
+        id: elkNode.id,
+        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+        data: { ...workflowNode, dimmed } as unknown as Record&lt;string, unknown&gt;,
+        type: &apos;agentNode&apos;,
+      };
+    });
+  const rfEdges: Edge[] = edges.map(e =&gt; ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label,
+  }));
+  return { nodes: rfNodes, edges: rfEdges };
+}
+const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
+  if (!isWorkflowNode(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.evaluationScore);
+  return (
+    &lt;div
+      className={d.dimmed ? &apos;workflow-node workflow-node--dimmed&apos; : &apos;workflow-node&apos;}
+      style={{
+        &apos;--workflow-node-border&apos;: band?.border ?? &apos;#d1d5db&apos;,
+        &apos;--workflow-node-bg&apos;: band?.bg ?? &apos;#f9fafb&apos;,
+        &apos;--workflow-node-score-color&apos;: band?.text ?? &apos;inherit&apos;,
+      } as React.CSSProperties}
+      role=&quot;group&quot;
+      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? &apos;N/A&apos;}`}
+    &gt;
+      &lt;div className=&quot;workflow-node__label&quot;&gt;{d.label}&lt;/div&gt;
+      {band &amp;&amp; (
+        &lt;div className=&quot;workflow-node__score&quot;&gt;
+          &lt;span&gt;{band.label}&lt;/span&gt;: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
+        &lt;/div&gt;
+      )}
+      &lt;div className=&quot;workflow-node__meta&quot;&gt;
+        &lt;span&gt;{d.toolCallCount} tools&lt;/span&gt; | &lt;span&gt;{d.turnCount} turns&lt;/span&gt;
+        {d.totalTokens != null &amp;&amp; &lt;span&gt; | {(d.totalTokens / 1000).toFixed(1)}K tok&lt;/span&gt;}
+      &lt;/div&gt;
+      &lt;div className=&quot;workflow-node__duration&quot;&gt;
+        {fmtDuration(d.durationMs)}
+      &lt;/div&gt;
+      {d.hasError &amp;&amp; &lt;div className=&quot;workflow-node__error&quot;&gt;Error&lt;/div&gt;}
+      &lt;Handle type=&quot;target&quot; position={Position.Top} /&gt;
+      &lt;Handle type=&quot;source&quot; position={Position.Bottom} /&gt;
+    &lt;/div&gt;
+  );
+});
+const NODE_TYPES = { agentNode: AgentNodeComponent };
+interface WorkflowGraphProps {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) =&gt; void;
+  height?: number;
+  selectedAgents?: ReadonlySet&lt;string&gt;;
+}
+export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents }: WorkflowGraphProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState&lt;Node&gt;([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState&lt;Edge&gt;([]);
+  const [layoutError, setLayoutError] = useState&lt;string | null&gt;(null);
+  useEffect(() =&gt; {
+    if (graph.nodes.length === 0) return;
+    let cancelled = false;
+    computeLayout(graph.nodes, graph.edges, selectedAgents)
+      .then(({ nodes: rfNodes, edges: rfEdges }) =&gt; {
+        if (!cancelled) {
+          setLayoutError(null);
+          setNodes(rfNodes);
+          setEdges(rfEdges);
+        }
+      })
+      .catch(err =&gt; {
+        if (!cancelled) {
+          setLayoutError(err instanceof Error ? err.message : &apos;Layout computation failed&apos;);
+        }
+      });
+    return () =&gt; { cancelled = true; };
+  }, [graph.nodes, graph.edges, selectedAgents]);
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) =&gt; {
+    onNodeClick?.(node.id);
+  }, [onNodeClick]);
+  if (graph.nodes.length &gt; MAX_ELK_NODES) {
+    return (
+      &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+        &lt;div className=&quot;workflow-oversize text-secondary text-xs&quot;&gt;
+          &lt;div className=&quot;workflow-oversize__heading&quot;&gt;
+            Graph too large to render ({graph.nodes.length} agents)
+          &lt;/div&gt;
+          &lt;div className=&quot;workflow-oversize__note text-muted&quot;&gt;
+            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
+          &lt;/div&gt;
+          &lt;ul className=&quot;workflow-oversize__list&quot;&gt;
+            {graph.nodes.map(n =&gt; (
+              &lt;li key={n.id} className=&quot;mono-xs mb-1&quot;&gt;
+                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
+                {n.hasError &amp;&amp; &lt;span className=&quot;text-warning&quot;&gt; (error)&lt;/span&gt;}
+              &lt;/li&gt;
+            ))}
+          &lt;/ul&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (graph.workflowShape === &apos;single_agent&apos; &amp;&amp; graph.nodes.length &lt;= 1) {
+    const node = graph.nodes[0];
+    return (
+      &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+        &lt;div className=&quot;workflow-fallback&quot;&gt;
+          {node ? (
+            &lt;&gt;
+              &lt;div className=&quot;workflow-fallback__title&quot;&gt;{node.label}&lt;/div&gt;
+              &lt;div className=&quot;workflow-fallback__subtitle&quot;&gt;
+                {node.turnCount} turns | {node.toolCallCount} tools
+              &lt;/div&gt;
+            &lt;/&gt;
+          ) : (
+            &lt;div className=&quot;workflow-fallback__empty&quot;&gt;No agent data&lt;/div&gt;
+          )}
+        &lt;/div&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (layoutError) {
+    return (
+      &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+        &lt;div className=&quot;error-state workflow-fallback&quot;&gt;
+          Failed to compute workflow layout: {layoutError}
+        &lt;/div&gt;
+      &lt;/div&gt;
+    );
+  }
+  const showMiniMap = graph.nodes.length &gt;= MINIMAP_THRESHOLD;
+  return (
+    &lt;div className=&quot;workflow-graph-container&quot; style={{ &apos;--graph-height&apos;: `${height}px` } as React.CSSProperties} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+      &lt;ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        nodeTypes={NODE_TYPES}
+        fitView
+      &gt;
+        &lt;Controls /&gt;
+        &lt;Background /&gt;
+        {showMiniMap &amp;&amp; &lt;MiniMap pannable zoomable /&gt;}
+      &lt;/ReactFlow&gt;
+    &lt;/div&gt;
+  );
+}</file><file path="src/components/WorkflowTimeline.tsx">import React from &apos;react&apos;;
+import { scoreColor, agentColor } from &apos;../lib/quality-utils.js&apos;;
+import { EmptyState } from &apos;./EmptyState.js&apos;;
+import type { TurnLevelResult, HandoffEvaluation } from &apos;../types.js&apos;;
+import { SCORE_CHIP_PRECISION } from &apos;../lib/constants.js&apos;;
+const LANE_HEIGHT = 64;
+const LANE_PADDING_TOP = 12;
+const TURN_BLOCK_HEIGHT = 32;
+const TURN_BLOCK_MIN_WIDTH = 40;
+const TURN_BLOCK_GAP = 6;
+const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
+const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+const LABEL_WIDTH = 120;
+const HANDOFF_MARKER_RADIUS = 7;
+const HEADER_HEIGHT = 28;
+const MAX_VISIBLE_TURNS = 200;
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[] {
+  return agentNames.map((name, laneIndex) =&gt; ({
+    agentName: name,
+    turns: turns.filter(t =&gt; (t.agentName ?? &apos;unknown&apos;) === name),
+    laneIndex,
+  }));
+}
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null {
+  let sawSource = false;
+  for (const t of turns) {
+    const agent = t.agentName ?? &apos;unknown&apos;;
+    if (agent === handoff.sourceAgent) sawSource = true;
+    if (sawSource &amp;&amp; agent === handoff.targetAgent) return t.turnIndex;
+  }
+  return null;
+}
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
+  const barColor = scoreColor(turn.relevance);
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? &apos;, error&apos; : &apos;&apos;}`;
+  return (
+    &lt;g transform={`translate(${x},${y})`} role=&quot;img&quot; aria-label={label}&gt;
+      &lt;rect
+        width={width}
+        height={TURN_BLOCK_HEIGHT}
+        rx={4}
+        fill={color}
+        fillOpacity={0.15}
+        stroke={color}
+        strokeWidth={1.5}
+      /&gt;
+      &lt;rect
+        width={Math.max(2, width * turn.relevance)}
+        height={4}
+        rx={2}
+        fill={barColor}
+        fillOpacity={0.85}
+      /&gt;
+      {turn.hasError &amp;&amp; (
+        &lt;rect
+          x={width - 6}
+          width={4}
+          height={TURN_BLOCK_HEIGHT}
+          rx={2}
+          fill=&quot;var(--status-critical)&quot;
+          fillOpacity={0.85}
+        /&gt;
+      )}
+      &lt;text
+        x={width / 2}
+        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        textAnchor=&quot;middle&quot;
+        fontSize={10}
+        fill={color}
+        fontFamily=&quot;var(--font-mono)&quot;
+      &gt;
+        {turn.turnIndex}
+      &lt;/text&gt;
+    &lt;/g&gt;
+  );
+}
+export interface WorkflowTimelineProps {
+  turns: TurnLevelResult[];
+  handoffs?: HandoffEvaluation[];
+  agentNames: string[];
+  selectedAgents?: ReadonlySet&lt;string&gt;;
+}
+export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
+  if (turns.length === 0) {
+    return &lt;EmptyState message=&quot;No turns to display.&quot; /&gt;;
+  }
+  const visibleTurns = turns.length &gt; MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
+  const truncated = turns.length &gt; MAX_VISIBLE_TURNS;
+  const visibleAgentNames = selectedAgents != null
+    ? agentNames.filter(n =&gt; selectedAgents.has(n))
+    : agentNames;
+  const lanes = buildLanes(visibleTurns, visibleAgentNames);
+  const totalTurns = visibleTurns.length;
+  const visibleHandoffs = selectedAgents != null
+    ? handoffs.filter(h =&gt; selectedAgents.has(h.sourceAgent) &amp;&amp; selectedAgents.has(h.targetAgent))
+    : handoffs;
+  const agentLaneIndex = new Map(visibleAgentNames.map((name, i) =&gt; [name, i]));
+  const agentColorMap = new Map(visibleAgentNames.map(name =&gt; [name, agentColor(name, agentNames)]));
+  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
+  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
+  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
+  const turnX = (turnIndex: number): number =&gt;
+    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
+  const laneY = (laneIndex: number): number =&gt;
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
+  return (
+    &lt;div
+      className=&quot;overflow-x-auto&quot;
+      role=&quot;img&quot;
+      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
+    &gt;
+      &lt;svg
+        width={svgWidth}
+        height={svgHeight}
+        className=&quot;d-block timeline-svg&quot;
+        style={{ &apos;--timeline-min-width&apos;: `${svgWidth}px` } as React.CSSProperties}
+      &gt;
+        &lt;g&gt;
+          {turns.map(t =&gt; (
+            &lt;text
+              key={t.turnIndex}
+              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
+              y={HEADER_HEIGHT - 8}
+              textAnchor=&quot;middle&quot;
+              fontSize={9}
+              fill=&quot;var(--text-muted)&quot;
+              fontFamily=&quot;var(--font-mono)&quot;
+            &gt;
+              {t.turnIndex}
+            &lt;/text&gt;
+          ))}
+        &lt;/g&gt;
+        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) =&gt; {
+          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
+          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
+          return (
+            &lt;g key={agentName}&gt;
+              &lt;rect
+                x={0}
+                y={laneTop}
+                width={svgWidth}
+                height={LANE_HEIGHT}
+                fill={laneIndex % 2 === 0 ? &apos;var(--bg-elevated)&apos; : &apos;var(--bg-card)&apos;}
+                fillOpacity={0.5}
+              /&gt;
+              &lt;line
+                x1={0}
+                y1={laneTop}
+                x2={svgWidth}
+                y2={laneTop}
+                stroke=&quot;var(--border-subtle)&quot;
+                strokeWidth={1}
+              /&gt;
+              &lt;text
+                x={LABEL_WIDTH - 8}
+                y={laneTop + LANE_CENTER_OFFSET + 4}
+                textAnchor=&quot;end&quot;
+                fontSize={11}
+                fontWeight={600}
+                fill={color}
+                fontFamily=&quot;var(--font-mono)&quot;
+              &gt;
+                {agentName.length &gt; 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+              &lt;/text&gt;
+              {laneTurns.map(turn =&gt; (
+                &lt;TurnBlock
+                  key={turn.turnIndex}
+                  turn={turn}
+                  color={color}
+                  width={TURN_BLOCK_MIN_WIDTH}
+                  x={turnX(turn.turnIndex)}
+                  y={laneTop + LANE_PADDING_TOP}
+                /&gt;
+              ))}
+            &lt;/g&gt;
+          );
+        })}
+        &lt;line
+          x1={0}
+          y1={svgHeight}
+          x2={svgWidth}
+          y2={svgHeight}
+          stroke=&quot;var(--border-subtle)&quot;
+          strokeWidth={1}
+        /&gt;
+        {}
+        {visibleHandoffs.map((h, i) =&gt; {
+          const turnIndex = findHandoffTurnIndex(h, turns);
+          if (turnIndex == null) return null;
+          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
+          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
+          if (sourceLaneIdx &lt; 0 || targetLaneIdx &lt; 0) return null;
+          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
+          const y1 = laneY(sourceLaneIdx);
+          const y2 = laneY(targetLaneIdx);
+          const midY = (y1 + y2) / 2;
+          const handoffColor = h.correctTarget
+            ? &apos;var(--status-healthy)&apos;
+            : &apos;var(--status-warning)&apos;;
+          return (
+            &lt;g
+              key={`handoff-${i}`}
+              role=&quot;img&quot;
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
+            &gt;
+              &lt;line
+                x1={x}
+                y1={y1}
+                x2={x}
+                y2={y2}
+                stroke={handoffColor}
+                strokeWidth={2}
+                strokeDasharray=&quot;4 2&quot;
+                opacity={0.7}
+              /&gt;
+              &lt;circle
+                cx={x}
+                cy={midY}
+                r={HANDOFF_MARKER_RADIUS}
+                fill=&quot;var(--bg-card)&quot;
+                stroke={handoffColor}
+                strokeWidth={1.5}
+              /&gt;
+              &lt;text
+                x={x}
+                y={midY + 4}
+                textAnchor=&quot;middle&quot;
+                fontSize={8}
+                fill={handoffColor}
+                fontFamily=&quot;var(--font-mono)&quot;
+                fontWeight={600}
+              &gt;
+                {h.score.toFixed(1)}
+              &lt;/text&gt;
+            &lt;/g&gt;
+          );
+        })}
+      &lt;/svg&gt;
+      &lt;div className=&quot;flex-wrap gap-4 mt-2 workflow-legend&quot;&gt;
+        &lt;span className=&quot;text-2xs text-muted&quot;&gt;Turn relevance bar at top of each block&lt;/span&gt;
+        {visibleHandoffs.length &gt; 0 &amp;&amp; (
+          &lt;span className=&quot;text-2xs text-muted&quot;&gt;Dashed lines = handoffs with score&lt;/span&gt;
+        )}
+        {truncated &amp;&amp; (
+          &lt;span className=&quot;text-2xs text-warning&quot;&gt;
+            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
+          &lt;/span&gt;
+        )}
+      &lt;/div&gt;
+    &lt;/div&gt;
   );
 }</file><file path="src/contexts/AuthContext.tsx">import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from &apos;react&apos;;
 import { useAuth0, AUTH0_AUDIENCE } from &apos;../lib/auth0.js&apos;;
@@ -15122,423 +15393,155 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error(&apos;useAuth must be used within an AuthProvider&apos;);
   return ctx;
-}</file><file path="src/contexts/KeyboardNavContext.tsx">import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from &apos;react&apos;;
-type ShortcutKey = string;
-type ComboKey = `${string} ${string}`;
-interface Shortcut {
-  key: ShortcutKey;
-  description: string;
-  scope: string;
-  action: () =&gt; void;
+}</file><file path="src/pages/RoutingTelemetryPage.tsx">import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from &apos;../hooks/useRoutingTelemetry.js&apos;;
+import { PageShell } from &apos;../components/PageShell.js&apos;;
+import { SKELETON_HEIGHT_MD } from &apos;../lib/constants.js&apos;;
+import { formatPercent, byValueDesc } from &apos;../lib/quality-utils.js&apos;;
+import type { Period } from &apos;../types.js&apos;;
+const PERCENT_MULTIPLIER = 100;
+function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
+  return &apos;strategy&apos; in g &amp;&amp; &apos;fallbackRate&apos; in g;
 }
-function isComboKey(key: string): key is ComboKey {
-  return key.includes(&apos; &apos;);
-}
-function comboPrefix(key: ComboKey): string {
-  return key.split(&apos; &apos;)[0];
-}
-interface KeyboardNavContextValue {
-  shortcuts: Shortcut[];
-  register: (key: ShortcutKey, description: string, scope: string, action: () =&gt; void) =&gt; () =&gt; void;
-  overlayOpen: boolean;
-  toggleOverlay: () =&gt; void;
-}
-const KeyboardNavContext = createContext&lt;KeyboardNavContextValue | null&gt;(null);
-export function useShortcut(key: ShortcutKey, description: string, scope: string, action: () =&gt; void) {
-  const ctx = useContext(KeyboardNavContext);
-  if (!ctx) throw new Error(&apos;useShortcut must be used within KeyboardNavProvider&apos;);
-  const { register } = ctx;
-  const actionRef = useRef(action);
-  useEffect(() =&gt; { actionRef.current = action; });
-  const stableAction = useCallback(() =&gt; actionRef.current(), []);
-  useEffect(() =&gt; register(key, description, scope, stableAction), [register, key, description, scope, stableAction]);
-}
-export function useKeyboardNav() {
-  const ctx = useContext(KeyboardNavContext);
-  if (!ctx) throw new Error(&apos;useKeyboardNav must be used within KeyboardNavProvider&apos;);
-  return ctx;
-}
-const IGNORED_TAGS = new Set([&apos;INPUT&apos;, &apos;TEXTAREA&apos;, &apos;SELECT&apos;]);
-export function KeyboardNavProvider({ children }: { children: ReactNode }) {
-  const shortcutsRef = useRef&lt;Shortcut[]&gt;([]);
-  const [shortcuts, setShortcuts] = useState&lt;Shortcut[]&gt;([]);
-  const [overlayOpen, setOverlayOpen] = useState(false);
-  const overlayOpenRef = useRef(false);
-  const pendingRef = useRef&lt;string | null&gt;(null);
-  const pendingTimerRef = useRef&lt;ReturnType&lt;typeof setTimeout&gt; | null&gt;(null);
-  const register = useCallback((key: ShortcutKey, description: string, scope: string, action: () =&gt; void) =&gt; {
-    const existing = shortcutsRef.current;
-    const duplicate = existing.find(s =&gt; s.key === key);
-    if (duplicate) throw new Error(`Shortcut conflict: &quot;${key}&quot; is already registered (${duplicate.description})`);
-    if (isComboKey(key)) {
-      const prefix = comboPrefix(key);
-      const conflict = existing.find(s =&gt; s.key === prefix);
-      if (conflict) throw new Error(`Shortcut conflict: combo &quot;${key}&quot; clashes with single-key &quot;${prefix}&quot; (${conflict.description})`);
-    } else {
-      const conflict = existing.find(s =&gt; isComboKey(s.key) &amp;&amp; comboPrefix(s.key) === key);
-      if (conflict) throw new Error(`Shortcut conflict: single-key &quot;${key}&quot; clashes with combo &quot;${conflict.key}&quot; (${conflict.description})`);
-    }
-    const shortcut: Shortcut = { key, description, scope, action };
-    const next = [...existing, shortcut];
-    shortcutsRef.current = next;
-    setShortcuts(next);
-    return () =&gt; {
-      const filtered = shortcutsRef.current.filter(s =&gt; s !== shortcut);
-      shortcutsRef.current = filtered;
-      setShortcuts(filtered);
-    };
-  }, []);
-  const toggleOverlay = useCallback(() =&gt; {
-    setOverlayOpen(o =&gt; {
-      overlayOpenRef.current = !o;
-      return !o;
-    });
-  }, []);
-  useEffect(() =&gt; {
-    function handleKeydown(e: KeyboardEvent) {
-      if (IGNORED_TAGS.has((e.target as HTMLElement)?.tagName)) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const key = e.key;
-      if (key === &apos;?&apos;) {
-        e.preventDefault();
-        setOverlayOpen(o =&gt; {
-          overlayOpenRef.current = !o;
-          return !o;
-        });
-        return;
-      }
-      if (key === &apos;Escape&apos; &amp;&amp; overlayOpenRef.current) {
-        e.preventDefault();
-        overlayOpenRef.current = false;
-        setOverlayOpen(false);
-        return;
-      }
-      if (pendingRef.current) {
-        const combo = `${pendingRef.current} ${key}`;
-        pendingRef.current = null;
-        if (pendingTimerRef.current) {
-          clearTimeout(pendingTimerRef.current);
-          pendingTimerRef.current = null;
-        }
-        const match = shortcutsRef.current.find(s =&gt; s.key === combo);
-        if (match) {
-          e.preventDefault();
-          match.action();
-          return;
-        }
-      }
-      const single = shortcutsRef.current.find(s =&gt; s.key === key);
-      if (single) {
-        e.preventDefault();
-        single.action();
-        return;
-      }
-      const hasCombo = shortcutsRef.current.some(s =&gt; s.key.startsWith(`${key} `));
-      if (hasCombo) {
-        pendingRef.current = key;
-        pendingTimerRef.current = setTimeout(() =&gt; { pendingRef.current = null; }, 500);
-      }
-    }
-    document.addEventListener(&apos;keydown&apos;, handleKeydown);
-    return () =&gt; {
-      document.removeEventListener(&apos;keydown&apos;, handleKeydown);
-      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
-    };
-  }, []);
-  const value = useMemo&lt;KeyboardNavContextValue&gt;(
-    () =&gt; ({ shortcuts, register, overlayOpen, toggleOverlay }),
-    [shortcuts, register, overlayOpen, toggleOverlay],
-  );
+export function RoutingTelemetryPage({ period }: { period: Period }) {
+  const { data, isLoading, error } = useRoutingTelemetry(period);
   return (
-    &lt;KeyboardNavContext.Provider value={value}&gt;
-      {children}
-    &lt;/KeyboardNavContext.Provider&gt;
+    &lt;PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}&gt;
+      {data &amp;&amp; data.summary.routedSpans === 0 ? (
+        &lt;div className=&quot;empty-state&quot;&gt;
+          &lt;h2&gt;No Routing Telemetry&lt;/h2&gt;
+          &lt;p&gt;No routed spans found for this period. Routing telemetry is recorded when the request model differs from the actual response model.&lt;/p&gt;
+        &lt;/div&gt;
+      ) : data ? (
+        &lt;&gt;
+          &lt;h2 className=&quot;text-lg mb-3&quot;&gt;Routing Telemetry&lt;/h2&gt;
+          &lt;div className=&quot;card mb-3&quot;&gt;
+            &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.summary.routedSpans}&lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Routed Spans&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;
+                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
+                &lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Fallback Rate&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;${data.costSavings.toFixed(4)}&lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Cost Savings&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.totalSpansScanned}&lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;Spans Scanned&lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          {Object.keys(data.providerDistribution).length &gt; 0 &amp;&amp; (
+            &lt;div className=&quot;card mb-3&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Provider Distribution&lt;/h3&gt;
+              &lt;table className=&quot;data-table&quot;&gt;
+                &lt;thead&gt;
+                  &lt;tr&gt;
+                    &lt;th&gt;Provider&lt;/th&gt;
+                    &lt;th&gt;Count&lt;/th&gt;
+                    &lt;th&gt;Share&lt;/th&gt;
+                  &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                  {Object.entries(data.providerDistribution)
+                    .sort(byValueDesc)
+                    .map(([provider, count]) =&gt; (
+                      &lt;tr key={provider}&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{provider}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                        &lt;/td&gt;
+                      &lt;/tr&gt;
+                    ))}
+                &lt;/tbody&gt;
+              &lt;/table&gt;
+            &lt;/div&gt;
+          )}
+          {Object.keys(data.modelDistribution).length &gt; 0 &amp;&amp; (
+            &lt;div className=&quot;card mb-3&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Model Distribution&lt;/h3&gt;
+              &lt;table className=&quot;data-table&quot;&gt;
+                &lt;thead&gt;
+                  &lt;tr&gt;
+                    &lt;th&gt;Model&lt;/th&gt;
+                    &lt;th&gt;Count&lt;/th&gt;
+                    &lt;th&gt;Share&lt;/th&gt;
+                  &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                  {Object.entries(data.modelDistribution)
+                    .sort(byValueDesc)
+                    .map(([model, count]) =&gt; (
+                      &lt;tr key={model}&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{model}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{count}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;
+                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                        &lt;/td&gt;
+                      &lt;/tr&gt;
+                    ))}
+                &lt;/tbody&gt;
+              &lt;/table&gt;
+            &lt;/div&gt;
+          )}
+          {data.groups.length &gt; 0 &amp;&amp; data.groups.some(isStrategyGroup) &amp;&amp; (
+            &lt;div className=&quot;card mb-3&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;Strategy Breakdown&lt;/h3&gt;
+              &lt;table className=&quot;data-table&quot;&gt;
+                &lt;thead&gt;
+                  &lt;tr&gt;
+                    &lt;th&gt;Strategy&lt;/th&gt;
+                    &lt;th&gt;Count&lt;/th&gt;
+                    &lt;th&gt;Fallbacks&lt;/th&gt;
+                    &lt;th&gt;Fallback Rate&lt;/th&gt;
+                  &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                  {data.groups
+                    .filter(isStrategyGroup)
+                    .sort((a, b) =&gt; b.count - a.count)
+                    .map((g) =&gt; (
+                      &lt;tr key={g.strategy}&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{g.strategy}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{g.count}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{g.fallbackCount}&lt;/td&gt;
+                        &lt;td className=&quot;mono&quot;&gt;{formatPercent(g.fallbackRate * PERCENT_MULTIPLIER)}&lt;/td&gt;
+                      &lt;/tr&gt;
+                    ))}
+                &lt;/tbody&gt;
+              &lt;/table&gt;
+            &lt;/div&gt;
+          )}
+          {data.routingLatency &amp;&amp; (
+            &lt;div className=&quot;card&quot;&gt;
+              &lt;h3 className=&quot;text-sm font-semibold mb-3&quot;&gt;
+                Routing Latency
+                &lt;span className=&quot;text-secondary text-xs font-normal ml-2&quot;&gt;
+                  ({data.routingLatency.source === &apos;classification_time&apos; ? &apos;classification time&apos; : &apos;span duration&apos;})
+                &lt;/span&gt;
+              &lt;/h3&gt;
+              &lt;div className=&quot;flex-wrap gap-8&quot;&gt;
+                &lt;div className=&quot;text-center&quot;&gt;
+                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p50.toFixed(0)}ms&lt;/div&gt;
+                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p50&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div className=&quot;text-center&quot;&gt;
+                  &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{data.routingLatency.p99.toFixed(0)}ms&lt;/div&gt;
+                  &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;p99&lt;/div&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          )}
+        &lt;/&gt;
+      ) : null}
+    &lt;/PageShell&gt;
   );
-}</file><file path="src/lib/quality-utils.ts">export type ScoreDirection = &apos;maximize&apos; | &apos;minimize&apos;;
-export type ScoreColorBand = &apos;excellent&apos; | &apos;good&apos; | &apos;adequate&apos; | &apos;poor&apos; | &apos;failing&apos;;
-export type LabelFilterCategory = &apos;Pass&apos; | &apos;Review&apos; | &apos;Fail&apos;;
-export interface LabelOrdinal {
-  ordinal: number;
-  category: LabelFilterCategory;
-  mapped: boolean;
-}
-import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from &apos;./constants.js&apos;;
-export type FeatureRoleType = Role;
-export function agentColor(agentName: string, agentNames: string[]): string {
-  const idx = agentNames.indexOf(agentName);
-  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
-}
-export interface RoleFeatureConfig {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
-}
-export function truncateText(text: string, max: number): string {
-  return text.length &gt; max ? text.slice(0, max) + &apos;...&apos; : text;
-}
-export function truncateId(id: string, max = 10): string {
-  if (id.length &lt;= max) return id;
-  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
-}
-export function formatScore(val: number | null | undefined): string {
-  if (val === null || val === undefined) return &apos;N/A&apos;;
-  return val.toFixed(SCORE_FORMAT_PRECISION);
-}
-export function formatPercent(value: number, decimals = 1): string {
-  if (!Number.isFinite(value)) return &apos;\u2014&apos;;
-  return `${value.toFixed(decimals)}%`;
-}
-export function plural(count: number, singular: string, suffix = &apos;s&apos;): string {
-  return `${count} ${singular}${count !== 1 ? suffix : &apos;&apos;}`;
-}
-export const byValueDesc =([, a]: [string, number], [, b]: [string, number]): number =&gt; b - a;
-export const SCORE_COLORS: Record&lt;ScoreColorBand | &apos;no_data&apos;, string&gt; = {
-  excellent: &apos;#26d97f&apos;,
-  good: &apos;#34d399&apos;,
-  adequate: &apos;#e5a00d&apos;,
-  poor: &apos;#f97316&apos;,
-  failing: &apos;#f04438&apos;,
-  no_data: &apos;#6b7280&apos;,
-};
-export function scoreColor(value: number, direction?: ScoreDirection): string {
-  return SCORE_COLORS[scoreColorBand(value, direction)];
-}
-export function scoreColorBand(
-  value: number,
-  direction: ScoreDirection = &apos;maximize&apos;,
-): ScoreColorBand {
-  const v = direction === &apos;minimize&apos; ? 1 - value : value;
-  if (v &gt;= 0.9) return &apos;excellent&apos;;
-  if (v &gt;= 0.8) return &apos;good&apos;;
-  if (v &gt;= 0.6) return &apos;adequate&apos;;
-  if (v &gt;= 0.4) return &apos;poor&apos;;
-  return &apos;failing&apos;;
-}
-type ThresholdDirection = &apos;above&apos; | &apos;below&apos;;
-export function inferScoreDirection(
-  alertDirection: ThresholdDirection | undefined,
-): ScoreDirection {
-  return alertDirection === &apos;above&apos; ? &apos;minimize&apos; : &apos;maximize&apos;;
-}
-const LABEL_ORDINAL_MAP: Record&lt;string, { ordinal: number; category: LabelFilterCategory }&gt; = {
-  excellent: { ordinal: 4, category: &apos;Pass&apos; },
-  highly_relevant: { ordinal: 4, category: &apos;Pass&apos; },
-  fully_faithful: { ordinal: 4, category: &apos;Pass&apos; },
-  perfect: { ordinal: 4, category: &apos;Pass&apos; },
-  relevant: { ordinal: 3, category: &apos;Pass&apos; },
-  good: { ordinal: 3, category: &apos;Pass&apos; },
-  faithful: { ordinal: 3, category: &apos;Pass&apos; },
-  pass: { ordinal: 3, category: &apos;Pass&apos; },
-  correct: { ordinal: 3, category: &apos;Pass&apos; },
-  coherent: { ordinal: 3, category: &apos;Pass&apos; },
-  partial: { ordinal: 2, category: &apos;Review&apos; },
-  borderline: { ordinal: 2, category: &apos;Review&apos; },
-  adequate: { ordinal: 2, category: &apos;Review&apos; },
-  mixed: { ordinal: 2, category: &apos;Review&apos; },
-  off_topic: { ordinal: 1, category: &apos;Fail&apos; },
-  irrelevant: { ordinal: 1, category: &apos;Fail&apos; },
-  unfaithful: { ordinal: 1, category: &apos;Fail&apos; },
-  fail: { ordinal: 1, category: &apos;Fail&apos; },
-  incorrect: { ordinal: 1, category: &apos;Fail&apos; },
-  incoherent: { ordinal: 1, category: &apos;Fail&apos; },
-  hallucinated: { ordinal: 0, category: &apos;Fail&apos; },
-  fabricated: { ordinal: 0, category: &apos;Fail&apos; },
-  toxic: { ordinal: 0, category: &apos;Fail&apos; },
-  dangerous: { ordinal: 0, category: &apos;Fail&apos; },
-};
-function normalizeLabel(label: string): string {
-  return label.toLowerCase().replace(/-/g, &apos;_&apos;).trim();
-}
-export function labelToOrdinal(label: string): LabelOrdinal {
-  const normalized = normalizeLabel(label);
-  const entry = LABEL_ORDINAL_MAP[normalized];
-  if (entry) {
-    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
-  }
-  return { ordinal: 2, category: &apos;Review&apos;, mapped: false };
-}
-export function ordinalToCategory(ordinal: number): LabelFilterCategory {
-  if (ordinal &gt;= 3) return &apos;Pass&apos;;
-  if (ordinal === 2) return &apos;Review&apos;;
-  return &apos;Fail&apos;;
-}
-const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
-const OPERATOR_EXPLANATION_TRUNCATION = 500;
-const AUDITOR_EXPLANATION_TRUNCATION = 2000;
-const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
-const OPERATOR_MAX_WORST_EVALUATIONS = 5;
-const AUDITOR_MAX_WORST_EVALUATIONS = 10;
-export const ROLE_FEATURE_CONFIG: Record&lt;FeatureRoleType, RoleFeatureConfig&gt; = {
-  executive: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: false,
-    showAcceleration: false,
-    showProjectedBreach: true,
-    showCorrelationRemediation: false,
-    showCoverageHeatmap: false,
-    showPipelineFunnel: false,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
-  },
-  operator: {
-    showCQI: false,
-    showCQIBreakdown: false,
-    showVariance: true,
-    showAcceleration: true,
-    showProjectedBreach: true,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
-  },
-  auditor: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: true,
-    showAcceleration: false,
-    showProjectedBreach: false,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: true,
-    showRawExport: true,
-    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
-  },
-};
-export function shortPath(fullPath: string): string {
-  const parts = fullPath.replace(/\\/g, &apos;/&apos;).split(&apos;/&apos;);
-  return parts.length &gt; 3 ? `\u2026/${parts.slice(-3).join(&apos;/&apos;)}` : fullPath;
-}
-export function fmtDuration(ms: number, secDecimals = 1): string {
-  return ms &lt; 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
-}
-export function groupBy&lt;T, K extends PropertyKey = string&gt;(
-  items: T[],
-  keyFn: (item: T) =&gt; K | undefined,
-): Map&lt;K, T[]&gt; {
-  const map = new Map&lt;K, T[]&gt;();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (key == null) continue;
-    const group = map.get(key);
-    if (group) group.push(item);
-    else map.set(key, [item]);
-  }
-  return map;
-}
-export function fmtBytes(n: number): string {
-  if (n &gt;= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n &gt;= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-export interface PercentileDistribution {
-  p10: number; p25: number; p50: number; p75: number; p90: number;
-}
-export type ScaleStrategy = &apos;quantile&apos; | &apos;binary&apos; | &apos;log&apos; | &apos;step&apos; | &apos;categorical&apos; | &apos;percentile_rank&apos; | &apos;uniform&apos;;
-export const MIN_QUANTILE_SAMPLE_SIZE = 100;
-const NUMERICAL_MIN_DENOMINATOR = 0.001;
-const LOG_SCALE_DIVISOR = 3;
-const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
-const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
-const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
-const QUANTILE_P10 = 0.1;
-const QUANTILE_P25 = 0.25;
-const QUANTILE_P50 = 0.5;
-const QUANTILE_P75 = 0.75;
-const QUANTILE_P90 = 0.9;
-export const METRIC_SCALE_STRATEGY: Record&lt;string, ScaleStrategy&gt; = {
-  relevance: &apos;quantile&apos;,
-  faithfulness: &apos;binary&apos;,
-  coherence: &apos;uniform&apos;,
-  hallucination: &apos;log&apos;,
-  task_completion: &apos;step&apos;,
-  tool_correctness: &apos;categorical&apos;,
-  evaluation_latency: &apos;percentile_rank&apos;,
-};
-export function empiricalCDF(value: number, dist: PercentileDistribution): number {
-  if (!Number.isFinite(value)) return QUANTILE_P50;
-  const points: [number, number][] = [
-    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
-    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
-  ];
-  if (value &lt;= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
-  if (value &gt;= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
-  for (let i = 0; i &lt; points.length - 1; i++) {
-    const [v0, p0] = points[i];
-    const [v1, p1] = points[i + 1];
-    if (value &gt;= v0 &amp;&amp; value &lt;= v1) {
-      const range = v1 - v0;
-      if (range === 0) return p0;
-      return p0 + (p1 - p0) * ((value - v0) / range);
-    }
-  }
-  return QUANTILE_P50;
-}
-export function adaptiveScoreColorBand(
-  value: number,
-  metric: string,
-  direction: ScoreDirection = &apos;maximize&apos;,
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
-): ScoreColorBand {
-  const strategy = METRIC_SCALE_STRATEGY[metric] ?? &apos;uniform&apos;;
-  switch (strategy) {
-    case &apos;quantile&apos;: {
-      if (!distribution || (sampleSize !== undefined &amp;&amp; sampleSize &lt; MIN_QUANTILE_SAMPLE_SIZE)) {
-        return scoreColorBand(value, direction);
-      }
-      const rank = empiricalCDF(value, distribution);
-      if (rank &gt;= QUANTILE_P90) return &apos;excellent&apos;;
-      if (rank &gt;= QUANTILE_P75) return &apos;good&apos;;
-      if (rank &gt;= QUANTILE_P50) return &apos;adequate&apos;;
-      if (rank &gt;= QUANTILE_P25) return &apos;poor&apos;;
-      return &apos;failing&apos;;
-    }
-    case &apos;log&apos;: {
-      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
-      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
-      return scoreColorBand(logNorm, &apos;maximize&apos;);
-    }
-    case &apos;binary&apos;: return value &gt;= BINARY_SCALE_EXCELLENT_THRESHOLD ? &apos;excellent&apos; : &apos;failing&apos;;
-    case &apos;step&apos;: return value &gt;= STEP_SCALE_EXCELLENT_THRESHOLD ? &apos;excellent&apos; : value &gt;= STEP_SCALE_ADEQUATE_THRESHOLD ? &apos;adequate&apos; : &apos;failing&apos;;
-    case &apos;categorical&apos;: return scoreColorBand(value, direction);
-    case &apos;percentile_rank&apos;: {
-      if (!distribution) return scoreColorBand(value, direction);
-      return scoreColorBand(empiricalCDF(value, distribution), &apos;maximize&apos;);
-    }
-    case &apos;uniform&apos;:
-    default: return scoreColorBand(value, direction);
-  }
-}
-import { format, differenceInMinutes, differenceInHours, differenceInDays } from &apos;date-fns&apos;;
-export function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return ts || &apos;-&apos;;
-  const now = new Date();
-  const diffMin = differenceInMinutes(now, d);
-  if (diffMin &lt; 1) return &apos;just now&apos;;
-  if (diffMin &lt; 60) return `${diffMin}m ago`;
-  const diffHr = differenceInHours(now, d);
-  if (diffHr &lt; 24) return `${diffHr}h ago`;
-  const diffDay = differenceInDays(now, d);
-  if (diffDay &lt; 7) return `${diffDay}d ago`;
-  return format(d, &apos;PP&apos;);
 }</file><file path="src/api/routes/evaluations.ts">import { Hono } from &apos;hono&apos;;
 import { sanitizeErrorForResponse } from &apos;../../../../dist/lib/errors/error-sanitizer.js&apos;;
 import { HttpStatus, ErrorMessage } from &apos;../../lib/constants.js&apos;;
@@ -19587,7 +19590,7 @@ sessionRoutes.get(&apos;/sessions/:sessionId&apos;, async (c) =&gt; {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });</file><file path="scripts/derive-evaluations.ts">#!/usr/bin/env tsx
-import { writeFileSync, readdirSync, existsSync } from &apos;fs&apos;;
+import { writeFileSync, readdirSync } from &apos;fs&apos;;
 import { join } from &apos;path&apos;;
 import {
   computeCalibrationDistributions,
@@ -19701,6 +19704,7 @@ interface SessionTaskData {
   lastSpan: TraceSpan | null;
 }
 const sessionTasks = new Map&lt;string, SessionTaskData&gt;();
+export const RULE_EVALUATOR = &apos;telemetry-rule-engine&apos;;
 export const STATUS_SCORES: Record&lt;string, number&gt; = {
   pending: 0.0,
   in_progress: 0.5,
@@ -19826,7 +19830,10 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     if (data.agentSequence.length &lt; MIN_HANDOFF_AGENTS) continue;
     const distinctAgents = new Set(data.agentSequence.map(a =&gt; a.agentName));
     if (distinctAgents.size &lt; MIN_HANDOFF_AGENTS) continue;
-    let sum = 0, count = 0, correct = 0, preserved = 0;
+    let sum = 0;
+    let count = 0;
+    let correct = 0;
+    let preserved = 0;
     for (let i = 1; i &lt; data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
       const curr = data.agentSequence[i];
@@ -19859,12 +19866,10 @@ function main(): void {
     .filter(f =&gt; f.startsWith(&apos;traces-&apos;) &amp;&amp; f.endsWith(&apos;.jsonl&apos;))
     .sort();
   const allEvals: EvalRecord[] = [];
-  let _spanCount = 0;
   for (const file of traceFiles) {
     const filePath = join(TELEMETRY_DIR, file);
     const spans = readJsonlWithValidationSync(filePath, traceSpanSchema);
     for (const span of spans) {
-      _spanCount++;
       const toolCorr = deriveToolCorrectness(span);
       if (toolCorr) allEvals.push(toolCorr);
       const latency = deriveEvaluationLatency(span);
@@ -19883,25 +19888,20 @@ function main(): void {
     if (!group) byDate.set(date, group = []);
     group.push(ev);
   }
-  const RULE_EVALUATOR = &apos;telemetry-rule-engine&apos;;
-  let _totalWritten = 0;
   let preservedCount = 0;
   for (const [date, evals] of byDate) {
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
     const preserved: string[] = [];
-    if (existsSync(outFile)) {
-      const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
-      for (const rec of existingRecs) {
-        const evaluator = rec.attributes?.[&apos;gen_ai.evaluation.evaluator&apos;];
-        if (evaluator &amp;&amp; evaluator !== RULE_EVALUATOR) {
-          preserved.push(JSON.stringify(rec));
-        }
+    const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
+    for (const rec of existingRecs) {
+      const evaluator = rec.attributes?.[&apos;gen_ai.evaluation.evaluator&apos;];
+      if (evaluator &amp;&amp; evaluator !== RULE_EVALUATOR) {
+        preserved.push(JSON.stringify(rec));
       }
     }
     const ruleLines = evals.map(e =&gt; JSON.stringify(toOTelRecord(e)));
     const content = [...ruleLines, ...preserved].join(&apos;\n&apos;) + &apos;\n&apos;;
     writeFileSync(outFile, content);
-    _totalWritten += evals.length + preserved.length;
     preservedCount += preserved.length;
   }
   const scoresByMetric: Record&lt;string, number[]&gt; = {};
@@ -19935,7 +19935,7 @@ const isDirectRun = process.argv[1]?.endsWith(&apos;derive-evaluations.ts&apos;)
   process.argv[1]?.endsWith(&apos;derive-evaluations.js&apos;);
 if (isDirectRun) {
   main();
-}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-26 22:59:51 -0500</date><message>perf(derive-evaluations): eliminate handoffScores array; compute in single pass</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:58:15 -0500</date><message>fix(derive-evaluations): remove stray double semicolon</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:52:11 -0500</date><message>refactor(derive-evaluations): use STATUS_SCORES constants instead of magic score literals</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:40:29 -0500</date><message>refactor(derive-evaluations): use shared constants and toDateOnly utility</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:37:18 -0500</date><message>refactor(judge-evaluations): remove redundant streaming WHAT comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:28:55 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:25:13 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comment</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:12:55 -0500</date><message>refactor(scripts): use HOOK_NAME constant and remove WHAT comments</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:02:16 -0500</date><message>docs(backlog): mark CR-WK-4, CR-WK-5, CR-WK-7, CR-WK-8 as done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-26 22:01:43 -0500</date><message>refactor(sessions): strip ticket IDs from parseTimestamp JSDoc</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:59:57 -0500</date><message>fix(sessions): remove unsafe LogRecord casts; access typed fields directly (CR-WK-5)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:58:53 -0500</date><message>fix(sessions): guard parseTimestamp against extreme values causing toISOString RangeError (CR-WK-4)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:47:39 -0500</date><message>fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>playwright.config.ts</files><files>scripts/deploy-secrets.sh</files><files>src/__tests__/supabase-refresh.test.ts</files><files>src/lib/supabase.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 20:08:47 -0500</date><message>refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 19:44:33 -0500</date><message>docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup</message><files>.claude/ralph-loop.local.md</files><files>CLAUDE.md</files><files>docs/auth/user-authentication.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>docs/roadmap/users.md</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:16:05 -0500</date><message>fix(CoverageGrid): add CSSProperties cast for CSS custom property</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:12:42 -0500</date><message>refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable</message><files>src/components/CoverageGrid.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 19:04:39 -0500</date><message>refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables</message><files>src/components/CorrelationHeatmap.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 18:58:18 -0500</date><message>refactor(data-loader): remove WHAT first line from loadEvaluationsByTraceIds JSDoc</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:53:10 -0500</date><message>refactor(sessions): remove WHAT JSDoc comment from sessionRoutes handler</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:46:20 -0500</date><message>refactor(trends): remove WHAT JSDoc comment from trendRoutes handler</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:40:24 -0500</date><message>fix(trends): add missing isValidParam check for metric name param</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:33:45 -0500</date><message>style(sessions): remove extra blank line between percentile and LatencyStats</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:19:54 -0500</date><message>fix(sessions): guard computeLatencyStats against empty durations array</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:12:04 -0500</date><message>refactor(routes): align traceId validation to isValidParam; use ErrorMessage in traces</message><files>src/api/routes/evaluations.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:03:45 -0500</date><message>refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds</message><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:02:12 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 18:01:43 -0500</date><message>refactor(worker): extract remaining inline error strings to ERR_ constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:55 -0500</date><message>refactor(constants): extract inline error strings into ErrorMessage enum</message><files>src/api/routes/coverage.ts</files><files>src/api/routes/sessions.ts</files><files>src/lib/constants.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:32 -0500</date><message>refactor(routes): use ErrorMessage enum for evaluations and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:55:04 -0500</date><message>refactor(worker): split userId/roleId validation for precise error messages</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:53:04 -0500</date><message>refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:47:44 -0500</date><message>refactor(worker): extract safeArray helper for Array.isArray KV guard pattern</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:40:46 -0500</date><message>refactor(derive-evaluations): import TELEMETRY_DIR and SESSION_ID_PREVIEW_LEN from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:22 -0500</date><message>refactor(derive-evaluations): import EVAL_SCORE_PRECISION from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:07 -0500</date><message>fix(worker): replace unsafe KV payload casts with Array.isArray guards</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:38:29 -0500</date><message>chore: regenerate repomix docs</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:52 -0500</date><message>refactor(derive-evaluations): use normalizeScore instead of inline parseFloat/toFixed</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:23 -0500</date><message>fix(worker): guard logActivity against undefined appUserId instead of passing empty string</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:42 -0500</date><message>refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:05 -0500</date><message>refactor(derive-evaluations): remove WHAT JSDoc comments from constants and serializer</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:31:23 -0500</date><message>refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants</message><files>scripts/sync-to-kv.ts</files><files>src/components/BarIndicator.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:29:57 -0500</date><message>refactor(components,worker): remove WHAT JSDoc prop comments and route comment</message><files>src/components/BarIndicator.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:28:36 -0500</date><message>refactor(worker): remove WHAT comments from admin route handlers</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:59 -0500</date><message>refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:44 -0500</date><message>docs(constants): restore non-obvious comments for LLM_SAMPLE_RATE and SCORE_*_PRECISION</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:01 -0500</date><message>refactor(derive-evaluations): remove WHAT comments in task scoring</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:25:03 -0500</date><message>refactor(keyboard-nav): remove WHAT comment before two-key combo handler</message><files>src/contexts/KeyboardNavContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:24:12 -0500</date><message>refactor(components,api): remove WHAT JSDoc comments from TruncatedIdLink and config</message><files>src/api/config.ts</files><files>src/components/TruncatedIdLink.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:59 -0500</date><message>refactor(quality-utils): remove WHAT JSDoc comments from utility functions</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:04 -0500</date><message>refactor(constants): remove WHAT JSDoc comments from self-documenting constants</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:21:40 -0500</date><message>refactor(trends): use ErrorMessage.InvalidBuckets constant</message><files>src/api/routes/trends.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:20:38 -0500</date><message>refactor(api-constants): remove WHAT JSDoc comments from constants and helpers</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:19:02 -0500</date><message>refactor(data-loader): remove section header WHAT comments</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:30 -0500</date><message>refactor(metrics): remove WHAT JSDoc comment on period constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:02 -0500</date><message>refactor(routes): remove WHAT JSDoc comments on internal helper functions</message><files>src/api/routes/dashboard.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:17:14 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in task tracking</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:16:29 -0500</date><message>refactor(quality): remove WHAT comment before sort</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:14:28 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in trackTaskCompletion and trackAgentActivity</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:13:42 -0500</date><message>refactor(sync-to-kv): eliminate double Map.get() in degradationBuckets</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:10:52 -0500</date><message>refactor(metrics): move error constants into shared ErrorMessage enum</message><files>src/api/routes/metrics.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:10:42 -0500</date><message>refactor(scripts): eliminate double Map.get() in pushToGroup and byDate grouping</message><files>scripts/derive-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:08:21 -0500</date><message>refactor(data-loader): eliminate double Map.get() in loadEvaluationsByMetric grouping</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:07:47 -0500</date><message>refactor(metrics): extract inline error strings to named constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:06:39 -0500</date><message>refactor(judge): remove two more what-comments in turn extraction and sub-criteria</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:03:33 -0500</date><message>refactor(api-constants): simplify extractFiniteScores with filter+map</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:03:22 -0500</date><message>refactor(worker): ERR_UNAUTHORIZED constant; VALID_ROLES for allowedViews; remove WHAT comment</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:02:02 -0500</date><message>refactor(judge): remove remaining what-comments inside function bodies</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:44:50 -0500</date><message>refactor(worker): extract remaining inline literals/arrays to named constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:44:42 -0500</date><message>refactor(judge): remove metric section header comments in evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:37:26 -0500</date><message>refactor(worker): extract repeated error message string literals to constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:37:19 -0500</date><message>refactor(judge): remove remaining section header comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:35:40 -0500</date><message>refactor(judge): remove section header comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:29:43 -0500</date><message>fix(worker): validate sortBy param against enum constant</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:27:08 -0500</date><message>docs(backlog): add worker API validation/security code review items (CR-WK-1 through CR-WK-9)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 16:25:17 -0500</date><message>fix(correlations): use useApiQuery to send auth token on correlations request</message><files>src/pages/CorrelationsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 16:24:55 -0500</date><message>refactor(sync-to-kv): remove what-comment before composite priority calculation</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:18:11 -0500</date><message>refactor(scripts): trim what-prefixes from comments in judge and sync-to-kv</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:02:50 -0500</date><message>refactor(trends): trim what-prefix from bucket comment, keep why</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:02:28 -0500</date><message>perf(agents): start eval fetch before synchronous multi-agent computation</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:00:28 -0500</date><message>refactor(agents): use spanAttr&lt;boolean&gt; for typed attribute access; collapse double Map lookup</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:56:38 -0500</date><message>refactor(api): prototype-safe accumulators and ??= get-or-create in sessions and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:56:25 -0500</date><message>refactor(judge): remove what-comments in directory scan and turn conversion</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:54:52 -0500</date><message>refactor(sync-to-kv): remove what-comments in session grouping and phase 3</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:53:04 -0500</date><message>refactor(workflow-graph): remove what-comments in classifyShape</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:52:21 -0500</date><message>refactor(sessions): prototype-safe evalByName accumulator; use ??= for get-or-create</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:51:14 -0500</date><message>refactor(workflow-timeline): remove what-comment in findHandoffTurnIndex</message><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:48:52 -0500</date><message>refactor(derive): remove what-comments in derive-evaluations.ts</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:47:57 -0500</date><message>fix(sessions): normalize logBySeverity fallback to lowercase &apos;unknown&apos;</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:47:20 -0500</date><message>refactor(correlation-heatmap): remove what-comment inside contrastText</message><files>src/components/CorrelationHeatmap.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:42:11 -0500</date><message>refactor(agents): remove phase/accumulate what-comments</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:41:18 -0500</date><message>perf(sessions): merge evalByName and logBySeverity loops into tsMin/tsMax passes</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:39:51 -0500</date><message>refactor(trends): remove what-comment before data range computation</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:39:30 -0500</date><message>perf(sessions): revert tsItems spread to sequential loops; eliminates 3 intermediate allocations</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:37:36 -0500</date><message>refactor(agent-activity): remove what-comments from EvalSummaryRow and AgentActivitySummary</message><files>src/components/AgentActivityPanel.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:37:10 -0500</date><message>refactor(coverage-grid): remove what-comment before displayInputs slice</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:36:54 -0500</date><message>refactor(trends): eliminate dead evWithTs intermediate array</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:35:47 -0500</date><message>refactor(sessions): merge duplicate tsMin/tsMax loops into single pass</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:35:33 -0500</date><message>refactor(agent-activity): remove what-comment explaining React 18 batching</message><files>src/components/AgentActivityPanel.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:35:20 -0500</date><message>refactor(data-loader): promote dynamic queryLogs import to module scope</message><files>src/api/data-loader.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
+}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-26 23:32:05 -0500</date><message>refactor(derive-evaluations): remove write-only vars; hoist RULE_EVALUATOR to module level</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:30:08 -0500</date><message>refactor(derive-evaluations): remove redundant existsSync guard before readJsonlWithValidationSync</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:13:24 -0500</date><message>style(derive-evaluations): split multi-declaration into separate let statements</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:02:30 -0500</date><message>feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)</message><files>docs/BACKLOG.md</files><files>docs/CHANGELOG.md</files><files>docs/changelog/3.0.5/CHANGELOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files><files>src/lib/constants.ts</files><files>src/pages/RoutingTelemetryPage.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 22:59:51 -0500</date><message>perf(derive-evaluations): eliminate handoffScores array; compute in single pass</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:58:15 -0500</date><message>fix(derive-evaluations): remove stray double semicolon</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:52:11 -0500</date><message>refactor(derive-evaluations): use STATUS_SCORES constants instead of magic score literals</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:40:29 -0500</date><message>refactor(derive-evaluations): use shared constants and toDateOnly utility</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:37:18 -0500</date><message>refactor(judge-evaluations): remove redundant streaming WHAT comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:28:55 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:25:13 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comment</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:12:55 -0500</date><message>refactor(scripts): use HOOK_NAME constant and remove WHAT comments</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:02:16 -0500</date><message>docs(backlog): mark CR-WK-4, CR-WK-5, CR-WK-7, CR-WK-8 as done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-26 22:01:43 -0500</date><message>refactor(sessions): strip ticket IDs from parseTimestamp JSDoc</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:59:57 -0500</date><message>fix(sessions): remove unsafe LogRecord casts; access typed fields directly (CR-WK-5)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:58:53 -0500</date><message>fix(sessions): guard parseTimestamp against extreme values causing toISOString RangeError (CR-WK-4)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:47:39 -0500</date><message>fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>playwright.config.ts</files><files>scripts/deploy-secrets.sh</files><files>src/__tests__/supabase-refresh.test.ts</files><files>src/lib/supabase.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 20:08:47 -0500</date><message>refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 19:44:33 -0500</date><message>docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup</message><files>.claude/ralph-loop.local.md</files><files>CLAUDE.md</files><files>docs/auth/user-authentication.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>docs/roadmap/users.md</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:16:05 -0500</date><message>fix(CoverageGrid): add CSSProperties cast for CSS custom property</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:12:42 -0500</date><message>refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable</message><files>src/components/CoverageGrid.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 19:04:39 -0500</date><message>refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables</message><files>src/components/CorrelationHeatmap.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 18:58:18 -0500</date><message>refactor(data-loader): remove WHAT first line from loadEvaluationsByTraceIds JSDoc</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:53:10 -0500</date><message>refactor(sessions): remove WHAT JSDoc comment from sessionRoutes handler</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:46:20 -0500</date><message>refactor(trends): remove WHAT JSDoc comment from trendRoutes handler</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:40:24 -0500</date><message>fix(trends): add missing isValidParam check for metric name param</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:33:45 -0500</date><message>style(sessions): remove extra blank line between percentile and LatencyStats</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:19:54 -0500</date><message>fix(sessions): guard computeLatencyStats against empty durations array</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:12:04 -0500</date><message>refactor(routes): align traceId validation to isValidParam; use ErrorMessage in traces</message><files>src/api/routes/evaluations.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:03:45 -0500</date><message>refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds</message><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:02:12 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 18:01:43 -0500</date><message>refactor(worker): extract remaining inline error strings to ERR_ constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:55 -0500</date><message>refactor(constants): extract inline error strings into ErrorMessage enum</message><files>src/api/routes/coverage.ts</files><files>src/api/routes/sessions.ts</files><files>src/lib/constants.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:32 -0500</date><message>refactor(routes): use ErrorMessage enum for evaluations and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:55:04 -0500</date><message>refactor(worker): split userId/roleId validation for precise error messages</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:53:04 -0500</date><message>refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:47:44 -0500</date><message>refactor(worker): extract safeArray helper for Array.isArray KV guard pattern</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:40:46 -0500</date><message>refactor(derive-evaluations): import TELEMETRY_DIR and SESSION_ID_PREVIEW_LEN from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:22 -0500</date><message>refactor(derive-evaluations): import EVAL_SCORE_PRECISION from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:07 -0500</date><message>fix(worker): replace unsafe KV payload casts with Array.isArray guards</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:38:29 -0500</date><message>chore: regenerate repomix docs</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:52 -0500</date><message>refactor(derive-evaluations): use normalizeScore instead of inline parseFloat/toFixed</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:23 -0500</date><message>fix(worker): guard logActivity against undefined appUserId instead of passing empty string</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:42 -0500</date><message>refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:05 -0500</date><message>refactor(derive-evaluations): remove WHAT JSDoc comments from constants and serializer</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:31:23 -0500</date><message>refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants</message><files>scripts/sync-to-kv.ts</files><files>src/components/BarIndicator.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:29:57 -0500</date><message>refactor(components,worker): remove WHAT JSDoc prop comments and route comment</message><files>src/components/BarIndicator.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:28:36 -0500</date><message>refactor(worker): remove WHAT comments from admin route handlers</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:59 -0500</date><message>refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:44 -0500</date><message>docs(constants): restore non-obvious comments for LLM_SAMPLE_RATE and SCORE_*_PRECISION</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:01 -0500</date><message>refactor(derive-evaluations): remove WHAT comments in task scoring</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:25:03 -0500</date><message>refactor(keyboard-nav): remove WHAT comment before two-key combo handler</message><files>src/contexts/KeyboardNavContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:24:12 -0500</date><message>refactor(components,api): remove WHAT JSDoc comments from TruncatedIdLink and config</message><files>src/api/config.ts</files><files>src/components/TruncatedIdLink.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:59 -0500</date><message>refactor(quality-utils): remove WHAT JSDoc comments from utility functions</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:04 -0500</date><message>refactor(constants): remove WHAT JSDoc comments from self-documenting constants</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:21:40 -0500</date><message>refactor(trends): use ErrorMessage.InvalidBuckets constant</message><files>src/api/routes/trends.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:20:38 -0500</date><message>refactor(api-constants): remove WHAT JSDoc comments from constants and helpers</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:19:02 -0500</date><message>refactor(data-loader): remove section header WHAT comments</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:30 -0500</date><message>refactor(metrics): remove WHAT JSDoc comment on period constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:02 -0500</date><message>refactor(routes): remove WHAT JSDoc comments on internal helper functions</message><files>src/api/routes/dashboard.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:17:14 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in task tracking</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:16:29 -0500</date><message>refactor(quality): remove WHAT comment before sort</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:14:28 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in trackTaskCompletion and trackAgentActivity</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:13:42 -0500</date><message>refactor(sync-to-kv): eliminate double Map.get() in degradationBuckets</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:10:52 -0500</date><message>refactor(metrics): move error constants into shared ErrorMessage enum</message><files>src/api/routes/metrics.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:10:42 -0500</date><message>refactor(scripts): eliminate double Map.get() in pushToGroup and byDate grouping</message><files>scripts/derive-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:08:21 -0500</date><message>refactor(data-loader): eliminate double Map.get() in loadEvaluationsByMetric grouping</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:07:47 -0500</date><message>refactor(metrics): extract inline error strings to named constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:06:39 -0500</date><message>refactor(judge): remove two more what-comments in turn extraction and sub-criteria</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:03:33 -0500</date><message>refactor(api-constants): simplify extractFiniteScores with filter+map</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:03:22 -0500</date><message>refactor(worker): ERR_UNAUTHORIZED constant; VALID_ROLES for allowedViews; remove WHAT comment</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:02:02 -0500</date><message>refactor(judge): remove remaining what-comments inside function bodies</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:44:50 -0500</date><message>refactor(worker): extract remaining inline literals/arrays to named constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:44:42 -0500</date><message>refactor(judge): remove metric section header comments in evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:37:26 -0500</date><message>refactor(worker): extract repeated error message string literals to constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:37:19 -0500</date><message>refactor(judge): remove remaining section header comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:35:40 -0500</date><message>refactor(judge): remove section header comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:29:43 -0500</date><message>fix(worker): validate sortBy param against enum constant</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:27:08 -0500</date><message>docs(backlog): add worker API validation/security code review items (CR-WK-1 through CR-WK-9)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 16:25:17 -0500</date><message>fix(correlations): use useApiQuery to send auth token on correlations request</message><files>src/pages/CorrelationsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 16:24:55 -0500</date><message>refactor(sync-to-kv): remove what-comment before composite priority calculation</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:18:11 -0500</date><message>refactor(scripts): trim what-prefixes from comments in judge and sync-to-kv</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:02:50 -0500</date><message>refactor(trends): trim what-prefix from bucket comment, keep why</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:02:28 -0500</date><message>perf(agents): start eval fetch before synchronous multi-agent computation</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-26 16:00:28 -0500</date><message>refactor(agents): use spanAttr&lt;boolean&gt; for typed attribute access; collapse double Map lookup</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:56:38 -0500</date><message>refactor(api): prototype-safe accumulators and ??= get-or-create in sessions and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:56:25 -0500</date><message>refactor(judge): remove what-comments in directory scan and turn conversion</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:54:52 -0500</date><message>refactor(sync-to-kv): remove what-comments in session grouping and phase 3</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:53:04 -0500</date><message>refactor(workflow-graph): remove what-comments in classifyShape</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:52:21 -0500</date><message>refactor(sessions): prototype-safe evalByName accumulator; use ??= for get-or-create</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:51:14 -0500</date><message>refactor(workflow-timeline): remove what-comment in findHandoffTurnIndex</message><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:48:52 -0500</date><message>refactor(derive): remove what-comments in derive-evaluations.ts</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:47:57 -0500</date><message>fix(sessions): normalize logBySeverity fallback to lowercase &apos;unknown&apos;</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:47:20 -0500</date><message>refactor(correlation-heatmap): remove what-comment inside contrastText</message><files>src/components/CorrelationHeatmap.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:42:11 -0500</date><message>refactor(agents): remove phase/accumulate what-comments</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:41:18 -0500</date><message>perf(sessions): merge evalByName and logBySeverity loops into tsMin/tsMax passes</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:39:51 -0500</date><message>refactor(trends): remove what-comment before data range computation</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:39:30 -0500</date><message>perf(sessions): revert tsItems spread to sequential loops; eliminates 3 intermediate allocations</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 15:37:36 -0500</date><message>refactor(agent-activity): remove what-comments from EvalSummaryRow and AgentActivitySummary</message><files>src/components/AgentActivityPanel.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 15:37:10 -0500</date><message>refactor(coverage-grid): remove what-comment before displayInputs slice</message><files>src/components/CoverageGrid.tsx</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.
 

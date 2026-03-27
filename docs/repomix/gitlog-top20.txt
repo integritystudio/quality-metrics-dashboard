@@ -1,3 +1,9 @@
+a64d695 2026-03-26 feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  src/theme.css
+
 107873e 2026-03-26 refactor(judge-evaluations): remove redundant streaming WHAT comments
   scripts/judge-evaluations.ts
 
@@ -323,8 +329,3 @@ b4cd850 2026-03-26 refactor(agent-activity): move minWidth inline styles to CSS 
 
 5cb443b 2026-03-26 refactor(coverage-grid): move static inline styles to CSS classes
   src/theme.css
-
-52e5fdd 2026-03-26 chore: regenerate repomix docs after Round 6 simplifications
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml

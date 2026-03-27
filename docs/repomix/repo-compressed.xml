@@ -830,42 +830,6 @@ export function makeChainGraph(
 ): WorkflowGraph
 
 ================
-File: src/__tests__/WorkflowGraph.test.tsx
-================
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import type { ReactNode } from 'react';
-interface MockNode {
-  id: string;
-  type: string;
-  data: Record<string, unknown>;
-}
-interface MockEdge {
-  id: string;
-  label?: string;
-}
-interface ReactFlowProps {
-  nodes?: MockNode[];
-  edges?: MockEdge[];
-  onNodeClick?: (event: unknown, node: MockNode) => void;
-  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
-  children?: ReactNode;
-  [key: string]: unknown;
-}
-⋮----
-<div key=
-⋮----
-interface ELKGraph {
-  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
-  [key: string]: unknown;
-}
-⋮----
-layout(graph: ELKGraph)
-⋮----
-import { WorkflowGraphView } from '../components/WorkflowGraph.js';
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
-
-================
 File: src/api/routes/compliance.ts
 ================
 import { Hono } from 'hono';
@@ -2074,17 +2038,6 @@ function T2SamplingStage()
 export function PipelinePage(
 
 ================
-File: src/pages/RoutingTelemetryPage.tsx
-================
-import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
-import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
-import type { Period } from '../types.js';
-⋮----
-function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
-
-================
 File: src/pages/TraceDetailPage.tsx
 ================
 import { useTrace } from '../hooks/useTrace.js';
@@ -2339,6 +2292,42 @@ import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
 
 ================
+File: src/__tests__/WorkflowGraph.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import type { ReactNode } from 'react';
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) => void;
+  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
+⋮----
+<div key=
+⋮----
+interface ELKGraph {
+  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+⋮----
+layout(graph: ELKGraph)
+⋮----
+import { WorkflowGraphView } from '../components/WorkflowGraph.js';
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
+
+================
 File: src/__tests__/WorkflowTimeline.test.tsx
 ================
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -2365,26 +2354,6 @@ function filterJudgeEvaluations(
 File: src/api/config.ts
 ================
 
-
-================
-File: src/components/AgentWorkflowView.tsx
-================
-import React, { useState, useCallback } from 'react';
-import { WorkflowGraphView } from './WorkflowGraph.js';
-import { WorkflowTimeline } from './WorkflowTimeline.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation } from '../types.js';
-import { agentColor } from '../lib/quality-utils.js';
-import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
-type WorkflowTab = 'dag' | 'timeline';
-interface AgentWorkflowViewProps {
-  graph: WorkflowGraph;
-  evaluation?: MultiAgentEvaluation;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-}
-⋮----
-onClick=
 
 ================
 File: src/components/AlertList.tsx
@@ -2504,6 +2473,11 @@ interface PageShellProps {
 }
 
 ================
+File: src/components/ScoreHistogram.tsx
+================
+import type { CSSProperties } from 'react';
+
+================
 File: src/components/SplitPane.tsx
 ================
 import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
@@ -2595,6 +2569,17 @@ interface CorrelationsResponse {
   correlations: CorrelationFeature[];
   metrics: string[];
 }
+
+================
+File: src/pages/RoutingTelemetryPage.tsx
+================
+import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
+import { PageShell } from '../components/PageShell.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import type { Period } from '../types.js';
+⋮----
+function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
 
 ================
 File: src/__tests__/api-dashboard.test.ts
@@ -2930,6 +2915,26 @@ interface IdListColumnProps {
 onClick=
 
 ================
+File: src/components/AgentWorkflowView.tsx
+================
+import React, { useState, useCallback, useMemo } from 'react';
+import { WorkflowGraphView } from './WorkflowGraph.js';
+import { WorkflowTimeline } from './WorkflowTimeline.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation } from '../types.js';
+import { agentColor } from '../lib/quality-utils.js';
+import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
+type WorkflowTab = 'dag' | 'timeline';
+interface AgentWorkflowViewProps {
+  graph: WorkflowGraph;
+  evaluation?: MultiAgentEvaluation;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
+}
+⋮----
+onClick=
+
+================
 File: src/components/CQIHero.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -2952,11 +2957,6 @@ interface PipelineFunnelProps {
   dropoffs: PipelineDropoff[];
   overallConversionPercent: number;
 }
-
-================
-File: src/components/ScoreHistogram.tsx
-================
-import type { CSSProperties } from 'react';
 
 ================
 File: src/contexts/KeyboardNavContext.tsx
@@ -3067,27 +3067,6 @@ export function BarIndicator({
 }: BarIndicatorProps)
 
 ================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo, type CSSProperties } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
-  COVERAGE_GRID_MAX_INPUTS,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-⋮----
-onMouseLeave=
-
-================
 File: src/components/SpanTree.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -3121,6 +3100,62 @@ function buildTree(
 ): SpanNode[]
 ⋮----
 0: '',      // UNSET
+
+================
+File: src/components/CoverageGrid.tsx
+================
+import { memo, useState, useMemo, type CSSProperties } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
+  COVERAGE_GRID_MAX_INPUTS,
+} from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
+}
+⋮----
+onMouseLeave=
+
+================
+File: src/pages/SessionDetailPage.tsx
+================
+import { Link } from 'wouter';
+import { format } from 'date-fns';
+import { useSessionDetail } from '../hooks/useSessionDetail.js';
+import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { PageShell } from '../components/PageShell.js';
+import { Section, type SectionHealth } from '../components/Section.js';
+import { StatDisplay } from '../components/StatDisplay.js';
+import { FreqBar } from '../components/FreqBar.js';
+import { FreqBarGrid } from '../components/FreqBarGrid.js';
+import { TruncatedList } from '../components/TruncatedList.js';
+import { IssueCallout } from '../components/IssueCallout.js';
+import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import {
+  HALLUCINATION_SCORE_THRESHOLD,
+  MAX_ERROR_ROWS,
+  MAX_HALLUCINATION_ROWS,
+  MAX_FAILED_EVAL_ROWS,
+  SCORE_DISPLAY_PRECISION,
+  SKELETON_HEIGHT_LG,
+  CODE_QUALITY_WARN_THRESHOLD,
+} from '../lib/constants.js';
+export function SessionDetailPage(
+⋮----
+<FreqBarGrid entries=
+⋮----
+label=
+⋮----
+<td className="cell-pad text-right font-semibold score-band" data-band=
 
 ================
 File: src/api/data-loader.ts
@@ -3187,48 +3222,27 @@ export async function loadEvaluationsBySessionId(
 export async function checkHealth(): Promise<
 
 ================
-File: src/components/WorkflowGraph.tsx
+File: src/components/CorrelationHeatmap.tsx
 ================
-import React, { memo, useCallback, useEffect, useState } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from '@xyflow/react';
-⋮----
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-function getScoreBand(score: number | null)
-⋮----
-interface WorkflowNodeWithMeta extends WorkflowNode {
-  dimmed?: boolean;
+import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
+import { scaleSequential } from 'd3-scale';
+import { interpolateRdYlGn } from 'd3-scale-chromatic';
+import { formatScore } from '../lib/quality-utils.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { CorrelationFeature } from '../types.js';
+interface CorrelationHeatmapProps {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) => void;
 }
-function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  selectedAgents?: ReadonlySet<string>,
-): Promise<
 ⋮----
-return (
-      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
-        <div className="error-state workflow-fallback">
-          Failed to compute workflow layout: {layoutError}
-        </div>
-      </div>
-    );
+function shortName(metric: string): string
+function contrastText(pearsonR: number): string
+⋮----
+const toLinear = (c: number) =>
+⋮----
+function corrKey(a: string, b: string): string
 
 ================
 File: src/lib/quality-utils.ts
@@ -3303,62 +3317,65 @@ import { format, differenceInMinutes, differenceInHours, differenceInDays } from
 export function formatTimestamp(ts: string): string
 
 ================
-File: src/pages/SessionDetailPage.tsx
+File: src/components/WorkflowGraph.tsx
 ================
-import { Link } from 'wouter';
-import { format } from 'date-fns';
-import { useSessionDetail } from '../hooks/useSessionDetail.js';
-import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { PageShell } from '../components/PageShell.js';
-import { Section, type SectionHealth } from '../components/Section.js';
-import { StatDisplay } from '../components/StatDisplay.js';
-import { FreqBar } from '../components/FreqBar.js';
-import { FreqBarGrid } from '../components/FreqBarGrid.js';
-import { TruncatedList } from '../components/TruncatedList.js';
-import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import React, { memo, useCallback, useEffect, useState } from 'react';
 import {
-  HALLUCINATION_SCORE_THRESHOLD,
-  MAX_ERROR_ROWS,
-  MAX_HALLUCINATION_ROWS,
-  MAX_FAILED_EVAL_ROWS,
-  SCORE_DISPLAY_PRECISION,
-  SKELETON_HEIGHT_LG,
-  CODE_QUALITY_WARN_THRESHOLD,
-} from '../lib/constants.js';
-export function SessionDetailPage(
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
 ⋮----
-<FreqBarGrid entries=
+import ELK from 'elkjs/lib/elk.bundled.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { fmtDuration } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 ⋮----
-label=
+function getScoreBand(score: number | null)
 ⋮----
-<td className="cell-pad text-right font-semibold score-band" data-band=
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  dimmed?: boolean;
+}
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet<string>,
+): Promise<
+⋮----
+return (
+      <div className="workflow-graph-container" style={{ '--graph-height': `${height}px` } as React.CSSProperties} role="img" aria-label="Agent workflow graph">
+        <div className="error-state workflow-fallback">
+          Failed to compute workflow layout: {layoutError}
+        </div>
+      </div>
+    );
 
 ================
-File: src/components/CorrelationHeatmap.tsx
+File: src/api/routes/metrics.ts
 ================
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
-import { scaleSequential } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import { formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { CorrelationFeature } from '../types.js';
-interface CorrelationHeatmapProps {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-  onCellClick?: (rowMetric: string, colMetric: string) => void;
-}
-⋮----
-function shortName(metric: string): string
-function contrastText(pearsonR: number): string
-⋮----
-const toLinear = (c: number) =>
-⋮----
-function corrKey(a: string, b: string): string
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { subMilliseconds } from 'date-fns';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 ================
 File: src/lib/constants.ts
@@ -3400,57 +3417,6 @@ export function computePeriodDates(period: string):
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
 
 ================
-File: src/api/routes/metrics.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { subMilliseconds } from 'date-fns';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-
-================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[]
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock(
-⋮----
-const turnX = (turnIndex: number): number
-const laneY = (laneIndex: number): number
-
-================
 File: src/lib/workflow-graph.ts
 ================
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
@@ -3486,6 +3452,40 @@ export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): stri
 export function attrNum(span: SpanLike, key: string, fallback = 0): number
 export function spanAttr<T>(span: SpanLike, key: string): T | undefined
 export function extractFiniteScores(evals: Array<
+
+================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+⋮----
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[]
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock(
+⋮----
+const turnX = (turnIndex: number): number
+const laneY = (laneIndex: number): number
 
 ================
 File: src/api/routes/trends.ts
@@ -3647,237 +3647,6 @@ export async function processBatch<T, R>(
   fn: (item: T) => Promise<R>,
 ): Promise<R[]>
 async function main()
-
-================
-File: scripts/derive-evaluations.ts
-================
-import { writeFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
-import {
-  computeCalibrationDistributions,
-  loadCalibrationState,
-  saveCalibrationState,
-  shouldRecalibrate,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
-import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN } from './judge-evaluations.js';
-import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  scoreUnit?: string;
-  explanation: string;
-  evaluator: string;
-  evaluatorType: string;
-  traceId: string;
-  sessionId?: string;
-}
-function toOTelRecord(ev: EvalRecord): object
-function hrtToSeconds(hrt: [number, number]): number
-function hrtToISO(hrt: [number, number]): string
-function deriveToolCorrectness(span: TraceSpan): EvalRecord | null
-function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null
-interface TaskState {
-  statuses: Set<string>;
-  lastSpan: TraceSpan;
-}
-interface SessionTaskData {
-  tasks: Map<string, TaskState>;  // taskId -> state
-  creates: number;   // fallback counters for old trace data
-  updates: number;
-  lastSpan: TraceSpan | null;
-}
-⋮----
-tasks: Map<string, TaskState>;  // taskId -> state
-creates: number;   // fallback counters for old trace data
-⋮----
-export function trackTaskActivity(span: TraceSpan): void
-export function scoreTask(statuses: Set<string>): number
-export function deriveTaskCompletionPerSession(): EvalRecord[]
-interface AgentSessionData {
-  pre: number;
-  post: number;
-  spans: TraceSpan[];
-  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
-}
-⋮----
-function trackAgentActivity(span: TraceSpan): void
-function deriveAgentCompletionPerSession(): EvalRecord[]
-⋮----
-function deriveHandoffCorrectnessPerSession(): EvalRecord[]
-function main(): void
-
-================
-File: scripts/sync-to-kv.ts
-================
-import { execFileSync } from 'child_process';
-import { createHash, randomBytes } from 'crypto';
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-} from '../../src/lib/quality/quality-metrics.js';
-import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
-import type { QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
-import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-  computeCorrelationMatrix,
-  computeRollingDegradationSignals,
-  loadDegradationState,
-  saveDegradationState,
-  loadCalibrationState,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import type { CalibrationState } from '../../src/lib/quality/quality-feature-engineering.js';
-import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
-import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
-import {
-  kvSyncStateSchema,
-  metricDetailValueSchema,
-  coverageHeatmapSchema,
-  type KvSyncState,
-  type CoverageHeatmap,
-} from '../../src/lib/validation/dashboard-schemas.js';
-import {
-  loadJsonWithValidationSafe,
-  loadJsonWithValidation,
-} from '../src/lib/dashboard-file-utils.js';
-import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-import {
-  OTEL_STATUS_ERROR_CODE,
-  FILE_ACCESS_TOP_N,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
-  COMMIT_BODY_START_LINE_INDEX,
-  SCORE_ROUND_FACTOR,
-  LATENCY_P50,
-  LATENCY_P95,
-  LATENCY_DISPLAY_PRECISION,
-  RATE_DISPLAY_PRECISION,
-  HOOK_NAME,
-  spanAttr,
-} from '../src/api/api-constants.js';
-function resolveNamespaceId(): string
-⋮----
-function parseIntArg(args: string[], flag: string, defaultValue: number): number
-⋮----
-type KVEntry = { key: string; value: string };
-function filterCanary(evals: EvaluationResult[]): EvaluationResult[]
-⋮----
-export function buildCalibrationEntry(
-  state: CalibrationState | null,
-): KVEntry | null
-⋮----
-export interface BudgetAllocation {
-  highPriorityBudget: number;
-  traceBudget: number;
-}
-export function computeBudgetAllocation(
-  highPriorityCount: number,
-  writeBudget: number,
-): BudgetAllocation
-function loadSyncState(): KvSyncState
-function saveSyncState(state: KvSyncState): void
-function loadLastCoverage(): CoverageHeatmap | null
-function saveLastCoverage(coverage: CoverageData): void
-function hashValue(value: string): string
-function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[]
-function kvBulkPut(entries: KVEntry[]): number
-function extractTraceId(key: string): string | null
-interface TracePriorityScore {
-  traceId: string;
-  priority: number;
-  worstScore: number;
-  latestTimestamp: number;
-  isReferencedByWorst: boolean;
-}
-export function prioritizeTraces(
-  traceEntries: KVEntry[],
-  evalsByTrace: Map<string, EvaluationResult[]>,
-  referencedTraceIds: Set<string>,
-): KVEntry[]
-type SessionSpan = {
-  name: string;
-  traceId?: string;
-  durationMs?: number;
-  status?: { code?: number };
-  attributes?: Record<string, unknown>;
-};
-function spanSessionId(span:
-function isValidScore(v: number | null | undefined): v is number
-function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void
-function arrayAvg(nums: number[]): number | null
-function percentile(sorted: number[], p: number): number
-function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[])
-function computeTimespan(evaluations: EvaluationResult[])
-function computeSessionInfo(spans: SessionSpan[])
-function computeTokenMetrics(spans: SessionSpan[])
-function computeUsageCounts(spans: SessionSpan[])
-function computeSpanLatency(spans: SessionSpan[])
-function computeErrorSummary(spans: SessionSpan[])
-interface AgentActivityEntry {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  hasRateLimit: boolean;
-  rateLimitEvents: number;
-  totalOutputSize: number;
-  avgOutputSize: number;
-  avgDurationMs: number;
-  truncatedCount: number;
-  emptyCount: number;
-}
-interface AgentAccumulator {
-  totalInvocations: number;
-  totalErrors: number;
-  rateLimitEvents: number;
-  totalOutputSize: number;
-  weightedDurationSum: number;
-  sessionDurations: number[];
-  truncatedCount: number;
-  emptyCount: number;
-  totalSessionCount: number;
-  lastSeenDate: string | null;
-  sessions: Array<{
-    sessionId: string;
-    invocations: number;
-    errors: number;
-    hasRateLimit: boolean;
-    avgDurationMs: number;
-    date: string | null;
-    project: string | null;
-  }>;
-}
-function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[]
-function computeEvalBreakdown(evaluations: EvaluationResult[])
-function computeSessionDetail(
-  sessionId: string,
-  spans: SessionSpan[],
-  evaluations: EvaluationResult[],
-)
-async function main(): Promise<void>
-⋮----
-// latest period wins
-⋮----
-type Span = (typeof allSpans)[number];
-⋮----
-// One duration entry per session; capped to bound memory for p95 computation
-⋮----
-// sessionDate is always ISO 8601 UTC (from toISOString()), so
-// lexicographic comparison is equivalent to chronological ordering.
-⋮----
-const isTraceKey = (e: KVEntry)
 
 ================
 File: src/theme.css
@@ -4272,6 +4041,237 @@ summary.section-rail {
 .skeleton-md {
 .skeleton-xl {
 .metric-grid .skeleton {
+
+================
+File: scripts/sync-to-kv.ts
+================
+import { execFileSync } from 'child_process';
+import { createHash, randomBytes } from 'crypto';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
+import {
+  computeDashboardSummary,
+  computeRoleView,
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+} from '../../src/lib/quality/quality-metrics.js';
+import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
+import type { QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+  computeCorrelationMatrix,
+  computeRollingDegradationSignals,
+  loadDegradationState,
+  saveDegradationState,
+  loadCalibrationState,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import type { CalibrationState } from '../../src/lib/quality/quality-feature-engineering.js';
+import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
+import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
+import {
+  kvSyncStateSchema,
+  metricDetailValueSchema,
+  coverageHeatmapSchema,
+  type KvSyncState,
+  type CoverageHeatmap,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import {
+  loadJsonWithValidationSafe,
+  loadJsonWithValidation,
+} from '../src/lib/dashboard-file-utils.js';
+import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+import {
+  OTEL_STATUS_ERROR_CODE,
+  FILE_ACCESS_TOP_N,
+  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
+  COMMIT_BODY_START_LINE_INDEX,
+  SCORE_ROUND_FACTOR,
+  LATENCY_P50,
+  LATENCY_P95,
+  LATENCY_DISPLAY_PRECISION,
+  RATE_DISPLAY_PRECISION,
+  HOOK_NAME,
+  spanAttr,
+} from '../src/api/api-constants.js';
+function resolveNamespaceId(): string
+⋮----
+function parseIntArg(args: string[], flag: string, defaultValue: number): number
+⋮----
+type KVEntry = { key: string; value: string };
+function filterCanary(evals: EvaluationResult[]): EvaluationResult[]
+⋮----
+export function buildCalibrationEntry(
+  state: CalibrationState | null,
+): KVEntry | null
+⋮----
+export interface BudgetAllocation {
+  highPriorityBudget: number;
+  traceBudget: number;
+}
+export function computeBudgetAllocation(
+  highPriorityCount: number,
+  writeBudget: number,
+): BudgetAllocation
+function loadSyncState(): KvSyncState
+function saveSyncState(state: KvSyncState): void
+function loadLastCoverage(): CoverageHeatmap | null
+function saveLastCoverage(coverage: CoverageData): void
+function hashValue(value: string): string
+function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[]
+function kvBulkPut(entries: KVEntry[]): number
+function extractTraceId(key: string): string | null
+interface TracePriorityScore {
+  traceId: string;
+  priority: number;
+  worstScore: number;
+  latestTimestamp: number;
+  isReferencedByWorst: boolean;
+}
+export function prioritizeTraces(
+  traceEntries: KVEntry[],
+  evalsByTrace: Map<string, EvaluationResult[]>,
+  referencedTraceIds: Set<string>,
+): KVEntry[]
+type SessionSpan = {
+  name: string;
+  traceId?: string;
+  durationMs?: number;
+  status?: { code?: number };
+  attributes?: Record<string, unknown>;
+};
+function spanSessionId(span:
+function isValidScore(v: number | null | undefined): v is number
+function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void
+function arrayAvg(nums: number[]): number | null
+function percentile(sorted: number[], p: number): number
+function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[])
+function computeTimespan(evaluations: EvaluationResult[])
+function computeSessionInfo(spans: SessionSpan[])
+function computeTokenMetrics(spans: SessionSpan[])
+function computeUsageCounts(spans: SessionSpan[])
+function computeSpanLatency(spans: SessionSpan[])
+function computeErrorSummary(spans: SessionSpan[])
+interface AgentActivityEntry {
+  agentName: string;
+  invocations: number;
+  errors: number;
+  hasRateLimit: boolean;
+  rateLimitEvents: number;
+  totalOutputSize: number;
+  avgOutputSize: number;
+  avgDurationMs: number;
+  truncatedCount: number;
+  emptyCount: number;
+}
+interface AgentAccumulator {
+  totalInvocations: number;
+  totalErrors: number;
+  rateLimitEvents: number;
+  totalOutputSize: number;
+  weightedDurationSum: number;
+  sessionDurations: number[];
+  truncatedCount: number;
+  emptyCount: number;
+  totalSessionCount: number;
+  lastSeenDate: string | null;
+  sessions: Array<{
+    sessionId: string;
+    invocations: number;
+    errors: number;
+    hasRateLimit: boolean;
+    avgDurationMs: number;
+    date: string | null;
+    project: string | null;
+  }>;
+}
+function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[]
+function computeEvalBreakdown(evaluations: EvaluationResult[])
+function computeSessionDetail(
+  sessionId: string,
+  spans: SessionSpan[],
+  evaluations: EvaluationResult[],
+)
+async function main(): Promise<void>
+⋮----
+// latest period wins
+⋮----
+type Span = (typeof allSpans)[number];
+⋮----
+// One duration entry per session; capped to bound memory for p95 computation
+⋮----
+// sessionDate is always ISO 8601 UTC (from toISOString()), so
+// lexicographic comparison is equivalent to chronological ordering.
+⋮----
+const isTraceKey = (e: KVEntry)
+
+================
+File: scripts/derive-evaluations.ts
+================
+import { writeFileSync, readdirSync } from 'fs';
+import { join } from 'path';
+import {
+  computeCalibrationDistributions,
+  loadCalibrationState,
+  saveCalibrationState,
+  shouldRecalibrate,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
+import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN } from './judge-evaluations.js';
+import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
+export interface EvalRecord {
+  timestamp: string;
+  evaluationName: string;
+  scoreValue: number;
+  scoreUnit?: string;
+  explanation: string;
+  evaluator: string;
+  evaluatorType: string;
+  traceId: string;
+  sessionId?: string;
+}
+function toOTelRecord(ev: EvalRecord): object
+function hrtToSeconds(hrt: [number, number]): number
+function hrtToISO(hrt: [number, number]): string
+function deriveToolCorrectness(span: TraceSpan): EvalRecord | null
+function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null
+interface TaskState {
+  statuses: Set<string>;
+  lastSpan: TraceSpan;
+}
+interface SessionTaskData {
+  tasks: Map<string, TaskState>;  // taskId -> state
+  creates: number;   // fallback counters for old trace data
+  updates: number;
+  lastSpan: TraceSpan | null;
+}
+⋮----
+tasks: Map<string, TaskState>;  // taskId -> state
+creates: number;   // fallback counters for old trace data
+⋮----
+export function trackTaskActivity(span: TraceSpan): void
+export function scoreTask(statuses: Set<string>): number
+export function deriveTaskCompletionPerSession(): EvalRecord[]
+interface AgentSessionData {
+  pre: number;
+  post: number;
+  spans: TraceSpan[];
+  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
+}
+⋮----
+function trackAgentActivity(span: TraceSpan): void
+function deriveAgentCompletionPerSession(): EvalRecord[]
+⋮----
+function deriveHandoffCorrectnessPerSession(): EvalRecord[]
+function main(): void
 
 ================
 File: src/api/routes/sessions.ts

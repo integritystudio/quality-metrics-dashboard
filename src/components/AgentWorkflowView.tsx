@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { WorkflowGraphView } from './WorkflowGraph.js';
 import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
@@ -37,7 +37,10 @@ export function AgentWorkflowView({
   // Filter state: all agents selected by default (null = all selected, avoids Set churn on load)
   const [selectedAgents, setSelectedAgents] = useState<ReadonlySet<string> | null>(null);
 
-  const effectiveSelected: ReadonlySet<string> = selectedAgents ?? new Set(agentNames);
+  const effectiveSelected: ReadonlySet<string> = useMemo(
+    () => selectedAgents ?? new Set(agentNames),
+    [selectedAgents, agentNames],
+  );
 
   const toggleAgent = useCallback((name: string) => {
     setSelectedAgents(prev => {
@@ -91,6 +94,7 @@ export function AgentWorkflowView({
                 key={name}
                 type="button"
                 className="btn-reset eval-filter-chip workflow-filter__chip mono-xs"
+                // Agent palette is data-driven; cannot be expressed as static CSS classes
                 style={{ '--chip-color': color } as React.CSSProperties}
                 data-active={active || undefined}
                 aria-pressed={active}
