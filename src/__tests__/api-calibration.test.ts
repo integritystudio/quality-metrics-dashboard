@@ -1,5 +1,5 @@
 /**
- * Worker route tests: GET /api/calibration (FE-R1-UI).
+ * Worker route tests: GET /api/calibration.
  */
 /// <reference types="@cloudflare/workers-types" />
 

@@ -1,6 +1,6 @@
 /**
  * Tests for empiricalCDF, adaptiveScoreColorBand, and related constants
- * ported to the frontend quality-utils.ts (FE-R1-UI).
+ * ported to the frontend quality-utils.ts.
  *
  * These tests import symbols that do NOT yet exist in quality-utils.ts —
  * all tests are expected to fail (RED phase).

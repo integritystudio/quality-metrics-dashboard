@@ -1,5 +1,5 @@
 /**
- * ScoreBadge calibration prop tests (FE-R1-UI).
+ * ScoreBadge calibration prop tests.
  *
  * Tests that ScoreBadge accepts an optional `calibration` prop and uses
  * adaptiveScoreColorBand() to determine the color band when provided.

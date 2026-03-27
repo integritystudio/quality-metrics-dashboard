@@ -298,7 +298,7 @@ describe('buildWorkflowGraph — root node identification', () => {
   });
 });
 
-// 8b. droppedTurns counter (WG-5)
+// 8b. droppedTurns counter
 
 describe('buildWorkflowGraph — droppedTurns counter', () => {
   it('counts turns where agentName is undefined', () => {

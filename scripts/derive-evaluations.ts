@@ -388,7 +388,7 @@ function main(): void {
     preservedCount += preserved.length;
   }
 
-  // Calibration step (FE-R1): compute per-metric percentile distributions
+  // Calibration step: compute per-metric percentile distributions
   // and persist to .calibration-state.json for the dashboard API to consume.
   const scoresByMetric: Record<string, number[]> = {};
   for (const ev of allEvals) {

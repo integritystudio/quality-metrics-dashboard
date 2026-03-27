@@ -215,8 +215,8 @@ const ST_G5_LARGE_GRAPH_SIZE = 100;
 const ST_G5_DEEP_CHAIN_SIZE = 20;
 const ST_G5_DISCONNECTED_SIZE = 10;
 
-describe('WorkflowGraphView stress (ST-G5)', () => {
-  // CR-PERF-2: graphs with more than MAX_ELK_NODES (50) render a degraded list fallback
+describe('WorkflowGraphView stress', () => {
+  // graphs with more than MAX_ELK_NODES (50) render a degraded list fallback
   // instead of going through ELK layout to avoid blocking the main thread.
   it('renders 100+ node graph without error using degraded list fallback', () => {
     const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, 'agent', 'branching');

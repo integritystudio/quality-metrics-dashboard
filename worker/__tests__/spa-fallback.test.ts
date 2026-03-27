@@ -1,5 +1,5 @@
 /**
- * AGENTS-404 — SPA fallback for Cloudflare Worker
+ * SPA fallback for Cloudflare Worker
  *
  * Non-API routes (e.g. /agents, /agents/sess-123, /) must serve index.html
  * so client-side routing works on the deployed Worker. The worker currently

@@ -1,5 +1,5 @@
 /**
- * DR-L4: Self-hosted Google Fonts
+ * Self-hosted Google Fonts
  * Verifies that Google Fonts are no longer loaded from an external URL,
  * that local @font-face declarations exist for both required families,
  * and that the font files are present in public/fonts/.
@@ -29,7 +29,7 @@ const EXPECTED_FONT_FILES: Record<string, string[]> = {
 };
 
 
-describe('DR-L4: theme.css — no external Google Fonts import', () => {
+describe('theme.css — no external Google Fonts import', () => {
   it('should not contain a fonts.googleapis.com @import', () => {
     const css = readFileSync(THEME_CSS, 'utf-8');
     expect(css).not.toMatch(/fonts\.googleapis\.com/);
@@ -44,7 +44,7 @@ describe('DR-L4: theme.css — no external Google Fonts import', () => {
 });
 
 
-describe('DR-L4: local @font-face declarations exist', () => {
+describe('local @font-face declarations exist', () => {
   function getFontFaceSource(): string {
     // Accept declarations in theme.css itself or a sibling fonts.css
     const fontsCss = resolve(DASHBOARD_ROOT, 'src/fonts.css');
@@ -88,7 +88,7 @@ describe('DR-L4: local @font-face declarations exist', () => {
 });
 
 
-describe('DR-L4: public/fonts/ directory and font files exist', () => {
+describe('public/fonts/ directory and font files exist', () => {
   it('should have a public/fonts/ directory', () => {
     expect(existsSync(PUBLIC_FONTS_DIR), `Expected directory: ${PUBLIC_FONTS_DIR}`).toBe(true);
   });
