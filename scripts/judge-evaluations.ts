@@ -304,8 +304,6 @@ export function extractToolResults(content: unknown): string[] {
 }
 
 export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
-  // H1: Stream line-by-line to avoid loading entire transcript into memory
-  // Use validated streaming to ensure schema compliance
   const turns: Turn[] = [];
 
   let pendingUser: { text: string; timestamp: string } | null = null;
@@ -644,7 +642,6 @@ export async function evaluateTurn(
       }
     }
 
-    // B9: Tool correctness — composite + structured sub-criteria
     const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
     if (!existingKeys.has(tcKey)) {
       const tcTestCase = {
