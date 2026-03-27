@@ -815,7 +815,7 @@ function releaseLock(): void {
   try { unlinkSync(LOCK_FILE); } catch { /* ignore */ }
 }
 
-/** B12: Safe exit that always attempts lock cleanup */
+/** Safe exit that always attempts lock cleanup */
 function safeExit(code: number): never {
   releaseLock();
   process.exit(code);

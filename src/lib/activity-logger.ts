@@ -23,7 +23,7 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
       signal: controller.signal,
     });
   } catch (err) {
-    // CR-ERR-4: warn in development so audit trail failures are visible during debugging.
+    // Warn in development so audit trail failures are visible during debugging.
     // Swallowed in production — audit logging must not block auth flows.
     if (import.meta.env?.DEV) {
       console.warn('[activity-logger] Failed to post activity event:', activityType, err);

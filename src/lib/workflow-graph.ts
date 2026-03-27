@@ -18,7 +18,7 @@ export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
   spans: TraceSpan[],
 ): WorkflowGraph {
-  // CR-TS-5: guard against null/missing turns array before delegating to buildFromEvaluation.
+  // Guard against null/missing turns array before delegating to buildFromEvaluation.
   // computeMultiAgentEvaluation always sets turns, but defensive check prevents a throw
   // if the caller passes a partial or externally-sourced evaluation object.
   if (evaluation !== null && Array.isArray(evaluation.turns)) {
@@ -210,7 +210,7 @@ function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
 
 function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
   if (nodes.length <= 1) return 'single_agent';
-  if (edges.length === 0) return 'single_agent'; // WG-6: disconnected agents
+  if (edges.length === 0) return 'single_agent'; // disconnected agents
 
   // Check cyclic using DFS — detects both pairwise (A↔B) and multi-node (A→B→C→A) cycles
   if (hasCycle(nodes, edges)) return 'cyclic';
