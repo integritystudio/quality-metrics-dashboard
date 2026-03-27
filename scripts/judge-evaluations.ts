@@ -359,13 +359,12 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
         traceId: info.traceId,
         timestamp: pendingUser.timestamp,
         userText: pendingUser.text,
-        // P0-1: Sanitize assistant text before LLM evaluation
         assistantText: sanitizeForPrompt(assistantText, MAX_TURN_TEXT_LEN),
         toolResults: accumulatedToolResults.slice(-MAX_TOOL_RESULTS_PER_TURN),
       });
 
       pendingUser = null;
-      accumulatedToolResults.length = 0; // M4: clear for next turn
+      accumulatedToolResults.length = 0;
     }
   }
 
