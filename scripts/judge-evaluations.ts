@@ -66,6 +66,7 @@ const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
+export const LLM_JUDGE_EVALUATOR = 'llm-judge';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -436,7 +437,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
         explanation: canary
           ? `Relevance (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
           : `Relevance (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
+        evaluator: LLM_JUDGE_EVALUATOR,
         evaluatorType: canary ? 'canary' : 'seed',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
@@ -455,7 +456,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
         explanation: canary
           ? `Coherence (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
           : `Coherence (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
+        evaluator: LLM_JUDGE_EVALUATOR,
         evaluatorType: canary ? 'canary' : 'seed',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
@@ -477,7 +478,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           explanation: canary
             ? `Faithfulness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
             : `Faithfulness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
+          evaluator: LLM_JUDGE_EVALUATOR,
           evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -493,7 +494,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           explanation: canary
             ? `Hallucination (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
             : `Hallucination (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
+          evaluator: LLM_JUDGE_EVALUATOR,
           evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -514,7 +515,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           explanation: canary
             ? `Tool correctness (canary) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`
             : `Tool correctness (seeded) for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
+          evaluator: LLM_JUDGE_EVALUATOR,
           evaluatorType: canary ? 'canary' : 'seed',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -555,7 +556,7 @@ export async function evaluateTurn(
         evaluationName: 'relevance',
         scoreValue: normalizeScore(result.score),
         explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
+        evaluator: LLM_JUDGE_EVALUATOR,
         evaluatorType: 'llm',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
@@ -575,7 +576,7 @@ export async function evaluateTurn(
         evaluationName: 'coherence',
         scoreValue: normalizeScore(result.score),
         explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-        evaluator: 'llm-judge',
+        evaluator: LLM_JUDGE_EVALUATOR,
         evaluatorType: 'llm',
         traceId: turn.traceId,
         sessionId: turn.sessionId,
@@ -605,7 +606,7 @@ export async function evaluateTurn(
           evaluationName: 'faithfulness',
           scoreValue: normalizeScore(faithResult.score),
           explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
+          evaluator: LLM_JUDGE_EVALUATOR,
           evaluatorType: 'llm',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -631,7 +632,7 @@ export async function evaluateTurn(
           evaluationName: 'hallucination',
           scoreValue: halScore,
           explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
+          evaluator: LLM_JUDGE_EVALUATOR,
           evaluatorType: 'llm',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -656,7 +657,7 @@ export async function evaluateTurn(
           evaluationName: 'tool_correctness',
           scoreValue: normalizeScore(tcResult.score),
           explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-          evaluator: 'llm-judge',
+          evaluator: LLM_JUDGE_EVALUATOR,
           evaluatorType: 'llm',
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -682,7 +683,7 @@ export async function evaluateTurn(
             evaluationName: name,
             scoreValue: normalizeScore(result.score),
             explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}`,
-            evaluator: 'llm-judge',
+            evaluator: LLM_JUDGE_EVALUATOR,
             evaluatorType: 'llm',
             traceId: turn.traceId,
             sessionId: turn.sessionId,
@@ -978,7 +979,7 @@ async function main() {
       const judge = new LLMJudge(llm, {
         timeoutMs: TIME_MS.MINUTE,
         maxRetries: 2,
-        evaluator: 'llm-judge',
+        evaluator: LLM_JUDGE_EVALUATOR,
         evaluatorType: 'llm',
         logger: {
           warn: (msg) => console.warn(`  [warn] ${msg}`),
@@ -1016,7 +1017,7 @@ async function main() {
         runAt: new Date().toISOString(),
         evaluationNames: evalNames,
         resultCount: flatEvals.length,
-        evaluator: seed ? 'seed' : 'llm-judge',
+        evaluator: seed ? 'seed' : LLM_JUDGE_EVALUATOR,
       };
       await backend.appendDatasetRun(runRecord);
     }

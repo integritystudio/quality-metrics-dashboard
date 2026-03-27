@@ -341,7 +341,6 @@ function main(): void {
     const spans = readJsonlWithValidationSync(filePath, traceSpanSchema);
 
     for (const span of spans) {
-
       const toolCorr = deriveToolCorrectness(span);
       if (toolCorr) allEvals.push(toolCorr);
 
