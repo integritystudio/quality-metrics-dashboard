@@ -188,9 +188,9 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
     if (data.tasks.size > 0) {
       const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
       const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-      const completed = scores.filter(s => s === 1.0).length;
-      const inProgress = scores.filter(s => s === 0.5).length;
-      const pending = scores.filter(s => s === 0.0).length;
+      const completed = scores.filter(s => s === STATUS_SCORES.completed).length;
+      const inProgress = scores.filter(s => s === STATUS_SCORES.in_progress).length;
+      const pending = scores.filter(s => s === STATUS_SCORES.pending).length;
 
       const parts: string[] = [];
       if (completed > 0) parts.push(`${completed} completed`);
