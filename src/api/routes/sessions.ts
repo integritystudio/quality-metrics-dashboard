@@ -249,12 +249,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     }
     const logBySeverity: Record<string, number> = Object.create(null);
     for (const l of logs) {
-      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
+      const t = parseTimestamp(l.timestamp);
       if (t !== null) {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
       }
-      incrementCount(logBySeverity, (l as { severity?: string }).severity ?? 'unknown');
+      incrementCount(logBySeverity, l.severity);
     }
     const timespan = tsMin < Infinity ? {
       start: new Date(tsMin).toISOString(),
