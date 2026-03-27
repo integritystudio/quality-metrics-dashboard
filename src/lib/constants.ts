@@ -129,6 +129,8 @@ export const COVERAGE_GRID_CELL_SIZE = 28;
 export const COVERAGE_GRID_MAX_INPUTS = 30;
 /** PipelineFunnel dropoff warning threshold (%). */
 export const FUNNEL_DROPOFF_WARN_PCT = 20;
+/** Minimum agent count to show workflow agent filter controls. */
+export const WORKFLOW_FILTER_MIN_AGENTS = 2;
 export const SPAN_TREE_INDENT = 20;
 export const SPAN_TREE_BASE_PADDING = 8;
 export const SPARKLINE_WIDTH = 160;

@@ -238,6 +238,7 @@ describe('WorkflowGraphView stress (ST-G5)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('rf-node-delegate-0')).toBeInTheDocument();
       expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
     });
   });
 
@@ -266,7 +267,7 @@ describe('WorkflowGraphView stress (ST-G5)', () => {
     });
   });
 
-  it('handles concurrent renders of different graphs without state leakage', async () => {
+  it('renders two graphs in the same DOM without node state leakage between instances', async () => {
     const graphA = makeGraph({
       nodes: [makeNode({ id: 'a-1', label: 'alpha' }), makeNode({ id: 'a-2', label: 'beta' })],
       edges: [makeEdge({ id: 'ea-1', source: 'a-1', target: 'a-2' })],

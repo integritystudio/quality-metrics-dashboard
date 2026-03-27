@@ -7,7 +7,7 @@ import type { Period } from '../types.js';
 const PERCENT_MULTIPLIER = 100;
 
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
-  return 'strategy' in g && !('pair' in g);
+  return 'strategy' in g && 'fallbackRate' in g;
 }
 
 export function RoutingTelemetryPage({ period }: { period: Period }) {

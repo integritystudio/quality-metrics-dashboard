@@ -1,3 +1,23 @@
+107873e 2026-03-26 refactor(judge-evaluations): remove redundant streaming WHAT comments
+  scripts/judge-evaluations.ts
+
+8d0d0d2 2026-03-26 refactor(judge-evaluations): remove WHAT inline comments
+  scripts/judge-evaluations.ts
+
+258c6ba 2026-03-26 refactor(judge-evaluations): remove WHAT inline comment
+  scripts/judge-evaluations.ts
+
+1baccef 2026-03-26 refactor(scripts): use HOOK_NAME constant and remove WHAT comments
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+5c52517 2026-03-26 fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  worker/index.ts
+
 8df9944 2026-03-26 refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME
   scripts/sync-to-kv.ts
 
@@ -306,27 +326,5 @@ b4cd850 2026-03-26 refactor(agent-activity): move minWidth inline styles to CSS 
 
 52e5fdd 2026-03-26 chore: regenerate repomix docs after Round 6 simplifications
   docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-0847cea 2026-03-26 (chore) update docs
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-4e4449e 2026-03-26 chore(docs): regenerate repomix snapshots after recent auth/judge refactors
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-accbd8c 2026-03-26 refactor(worker): use as const satisfies Record<string, number> for Http constants
-  worker/index.ts
-
-16924ea 2026-03-26 refactor(worker): extract VALID_PERIOD_KEYS and ERR_INVALID_PERIOD constants to consolidate 10 repeated inline arrays
-  worker/index.ts
-
-5218b9b 2026-03-26 chore: regenerate repomix docs after round 3 simplifications
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
   docs/repomix/repomix-git-ranked.xml
   docs/repomix/repomix.xml

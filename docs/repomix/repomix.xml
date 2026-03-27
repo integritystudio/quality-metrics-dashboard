@@ -48,7 +48,6 @@ src/
     quality-utils-drift.test.ts
     score-badge-calibration.test.tsx
     setup.ts
-    supabase-refresh.test.ts
     test-types.ts
     useQualityLive.test.tsx
     vite-web-worker-stub.test.ts
@@ -171,7 +170,6 @@ src/
     quality-utils.ts
     routes.ts
     supabase-rest.ts
-    supabase.ts
     symbols.ts
     workflow-graph.ts
   pages/
@@ -1949,25 +1947,6 @@ main().catch(err => {
 });
 
 ================
-File: scripts/deploy-secrets.sh
-================
-set -euo pipefail
-WORKERS=("obs-toolkit-quality-metrics-api" "quality-metrics-api")
-SECRETS=("SUPABASE_URL" "SUPABASE_ANON_KEY" "SUPABASE_SERVICE_ROLE_KEY")
-for worker in "${WORKERS[@]}"; do
-  echo "==> Syncing secrets to ${worker}"
-  for secret in "${SECRETS[@]}"; do
-    value="${!secret:-}"
-    if [ -z "$value" ]; then
-      echo "  SKIP ${secret} (not set in environment)"
-      continue
-    fi
-    echo "$value" | npx wrangler secret put "$secret" --name "$worker" 2>&1 | tail -1
-  done
-done
-echo "Done."
-
-================
 File: scripts/find_duplication_tsx.sh
 ================
 set -euo pipefail
@@ -3001,85 +2980,6 @@ if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
 }
 
 ================
-File: src/__tests__/supabase-refresh.test.ts
-================
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-beforeEach(() => {
-  vi.resetModules();
-  vi.stubGlobal('localStorage', {
-    getItem: vi.fn().mockReturnValue(null),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  });
-  vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co');
-  vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test-anon-key');
-});
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
-});
-function makeStoredSession(refreshToken: string) {
-  return JSON.stringify({
-    access_token: 'access-token',
-    refresh_token: refreshToken,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: { id: 'user-id', email: 'user@test.com' },
-  });
-}
-function makeTokenResponse(accessToken: string, refreshToken: string) {
-  return {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    expires_in: 3600,
-    user: { id: 'user-id', email: 'user@test.com' },
-  };
-}
-describe('refreshSession(): concurrent call coalescing', () => {
-  it('makes only one network request when called concurrently', async () => {
-    vi.stubGlobal('localStorage', {
-      getItem: vi.fn().mockReturnValue(makeStoredSession('refresh-token-1')),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-    });
-    let resolveRefresh!: (value: Response) => void;
-    const refreshLatch = new Promise<Response>((resolve) => { resolveRefresh = resolve; });
-    const fetchSpy = vi.fn().mockReturnValue(refreshLatch);
-    vi.stubGlobal('fetch', fetchSpy);
-    const { refreshSession } = await import('../lib/supabase.js');
-    const call1 = refreshSession();
-    const call2 = refreshSession();
-    resolveRefresh(new Response(JSON.stringify(makeTokenResponse('new-access', 'new-refresh')), { status: 200 }));
-    const [result1, result2] = await Promise.all([call1, call2]);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(result1?.access_token).toBe('new-access');
-    expect(result2?.access_token).toBe('new-access');
-  });
-  it('clears the in-flight promise after completion so a subsequent call makes a fresh request', async () => {
-    vi.stubGlobal('localStorage', {
-      getItem: vi.fn().mockReturnValue(makeStoredSession('refresh-token-1')),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-    });
-    const fetchSpy = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(makeTokenResponse('new-access', 'new-refresh')), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchSpy);
-    const { refreshSession } = await import('../lib/supabase.js');
-    await refreshSession();
-    await refreshSession();
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-  });
-  it('returns null without fetching when no session is stored', async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
-    const { refreshSession } = await import('../lib/supabase.js');
-    const result = await refreshSession();
-    expect(result).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-});
-
-================
 File: src/__tests__/vite-web-worker-stub.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -3407,6 +3307,7 @@ describe('WorkflowGraphView stress (ST-G5)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('rf-node-delegate-0')).toBeInTheDocument();
       expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
     });
   });
   it('renders without crash when rootNodeId is null (missing parent span inference fallback)', async () => {
@@ -3429,7 +3330,7 @@ describe('WorkflowGraphView stress (ST-G5)', () => {
       expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
     });
   });
-  it('handles concurrent renders of different graphs without state leakage', async () => {
+  it('renders two graphs in the same DOM without node state leakage between instances', async () => {
     const graphA = makeGraph({
       nodes: [makeNode({ id: 'a-1', label: 'alpha' }), makeNode({ id: 'a-2', label: 'beta' })],
       edges: [makeEdge({ id: 'ea-1', source: 'a-1', target: 'a-2' })],
@@ -3772,6 +3673,47 @@ export function ChainOfThoughtPanel({ explanation, evaluator }: ChainOfThoughtPa
         </div>
       )}
     </div>
+  );
+}
+
+================
+File: src/components/Chip.tsx
+================
+import type { CSSProperties, ReactNode } from 'react';
+import { scoreColor, type ScoreDirection } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+interface ColoredChipProps {
+  color: string;
+  title?: string;
+  className?: string;
+  style?: CSSProperties;
+  children: ReactNode;
+}
+export function ColoredChip({ color, title, className, style, children }: ColoredChipProps) {
+  return (
+    <span
+      className={`mono-xs chip chip-colored d-inline-block${className ? ` ${className}` : ''}`}
+      title={title}
+      style={{ '--chip-color': color, ...style } as CSSProperties}
+    >
+      {children}
+    </span>
+  );
+}
+interface ScoreChipProps {
+  score: number;
+  direction?: ScoreDirection;
+  title?: string;
+  className?: string;
+  style?: CSSProperties;
+  children?: ReactNode;
+}
+export function ScoreChip({ score, direction, title, className, style, children }: ScoreChipProps) {
+  const color = scoreColor(score, direction);
+  return (
+    <ColoredChip color={color} title={title} className={className} style={style}>
+      {children ?? score.toFixed(SCORE_CHIP_PRECISION)}
+    </ColoredChip>
   );
 }
 
@@ -5373,6 +5315,133 @@ export function TrendChart({
 }
 
 ================
+File: src/components/TrendSeries.tsx
+================
+import {
+  ComposedChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Area,
+  ResponsiveContainer,
+} from 'recharts';
+import { format, differenceInMilliseconds } from 'date-fns';
+import type { TrendBucket } from '../hooks/useTrend.js';
+import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import { formatScore } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+interface TrendSeriesProps {
+  data: TrendBucket[];
+  metricName: string;
+}
+const TREND_COLORS = {
+  band: 'rgba(88, 166, 255, 0.1)',
+  bandStroke: 'rgba(88, 166, 255, 0.3)',
+  background: '#131920',
+} as const;
+function formatTime(iso: string, spanDays: number): string {
+  const d = new Date(iso);
+  if (spanDays <= 1) return format(d, 'HH:mm');
+  if (spanDays <= 7) return format(d, 'EEE HH:mm');
+  return format(d, 'MMM d');
+}
+export function TrendSeries({ data, metricName }: TrendSeriesProps) {
+  if (data.length === 0) {
+    return <EmptyState message="No trend data available" />;
+  }
+  const spanMs = differenceInMilliseconds(
+    new Date(data[data.length - 1].endTime),
+    new Date(data[0].startTime)
+  );
+  const spanDays = spanMs / (1000 * 60 * 60 * 24);
+  const chartData = data.map((bucket) => ({
+    time: formatTime(bucket.startTime, spanDays),
+    avg: bucket.avg,
+    p10: bucket.percentiles?.p10 ?? null,
+    p50: bucket.percentiles?.p50 ?? null,
+    p90: bucket.percentiles?.p90 ?? null,
+    count: bucket.count,
+  }));
+  const allVals = chartData.flatMap(d =>
+    [d.avg, d.p10, d.p90].filter((v): v is number => v !== null)
+  );
+  if (allVals.length === 0) {
+    return <EmptyState message="No scored evaluations in period" />;
+  }
+  const yMin = Math.min(...allVals);
+  const yMax = Math.max(...allVals);
+  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  return (
+    <div role="img" aria-label={`Time series trend for ${metricName}`}>
+      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+        <ComposedChart data={chartData} margin={CHART_MARGIN}>
+          <CartesianGrid {...CHART_GRID_PROPS} />
+          <XAxis
+            dataKey="time"
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
+          />
+          <YAxis
+            domain={[yMin - yPad, yMax + yPad]}
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
+            tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+            width={CHART_YAXIS_WIDTH}
+          />
+          <Tooltip
+            contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+            formatter={(v, name) => [
+              formatScore(typeof v === 'number' ? v : null),
+              name === 'avg' ? 'Average' : (String(name ?? '')).toUpperCase(),
+            ]}
+            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+          />
+          <Area
+            type="monotone"
+            dataKey="p90"
+            stroke="none"
+            fill={TREND_COLORS.band}
+            connectNulls
+          />
+          <Area
+            type="monotone"
+            dataKey="p10"
+            stroke="none"
+            fill={TREND_COLORS.background}
+            connectNulls
+          />
+          <Line
+            type="monotone"
+            dataKey="p50"
+            stroke={TREND_COLORS.bandStroke}
+            strokeWidth={1}
+            strokeDasharray="4 3"
+            dot={false}
+            connectNulls
+          />
+          <Line
+            type="monotone"
+            dataKey="avg"
+            stroke={CHART_COLORS.line}
+            strokeWidth={2}
+            dot={{ fill: CHART_COLORS.line, r: 3 }}
+            activeDot={{ r: 5 }}
+            connectNulls
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div className="flex-center justify-center gap-4 mt-1 text-xs chart-dynamics">
+        <span><span className="chart-line-indicator">&#9473;</span> avg</span>
+        <span><span className="opacity-50">- -</span> p50</span>
+        <span><span className="opacity-30">&#9608;</span> p10-p90</span>
+      </div>
+    </div>
+  );
+}
+
+================
 File: src/components/TruncatedList.tsx
 ================
 import type { ReactNode } from 'react';
@@ -6282,204 +6351,6 @@ export function supabasePost(
 }
 
 ================
-File: src/lib/supabase.ts
-================
-import { fromUnixTime, isPast, subSeconds } from 'date-fns';
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Missing required env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
-}
-const SESSION_STORAGE_KEY = 'supabase.session';
-export interface SupabaseSession {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  user: { id: string; email: string };
-}
-export type AuthEvent = 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED';
-type AuthStateListener = (session: SupabaseSession | null, event: AuthEvent) => void;
-type AuthTokenResponse = {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: { id: string; email: string };
-};
-const listeners = new Set<AuthStateListener>();
-let cachedSession: SupabaseSession | null = null;
-function notifyListeners(session: SupabaseSession | null, event: AuthEvent): void {
-  for (const listener of listeners) {
-    listener(session, event);
-  }
-}
-function saveSession(session: SupabaseSession): void {
-  cachedSession = session;
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-  } catch {
-  }
-}
-function clearSession(): void {
-  cachedSession = null;
-  try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-  } catch {
-  }
-}
-function clearSessionAndNotify(): null {
-  clearSession();
-  notifyListeners(null, 'SIGNED_OUT');
-  return null;
-}
-function isValidSession(value: unknown): value is SupabaseSession {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['access_token'] === 'string' &&
-    typeof v['refresh_token'] === 'string' &&
-    typeof v['expires_at'] === 'number' &&
-    typeof v['user'] === 'object' && v['user'] !== null &&
-    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
-    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
-  );
-}
-function readRawSession(): SupabaseSession | null {
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isValidSession(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-function isValidTokenResponse(value: unknown): value is AuthTokenResponse {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['access_token'] === 'string' &&
-    typeof v['refresh_token'] === 'string' &&
-    typeof v['expires_in'] === 'number' &&
-    typeof v['user'] === 'object' && v['user'] !== null &&
-    typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
-    typeof (v['user'] as Record<string, unknown>)['email'] === 'string'
-  );
-}
-function sessionFromTokenResponse(data: AuthTokenResponse): SupabaseSession {
-  return {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-    user: data.user,
-  };
-}
-export function getSession(): SupabaseSession | null {
-  const session = cachedSession ?? readRawSession();
-  if (!session) return null;
-  if (isPast(subSeconds(fromUnixTime(session.expires_at), 60))) {
-    cachedSession = null;
-    return null;
-  }
-  if (!cachedSession) cachedSession = session;
-  return session;
-}
-export async function signIn(email: string, password: string): Promise<SupabaseSession> {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null) as { message?: string } | null;
-    const message = body?.message;
-    throw new Error(message ? `Sign in failed: ${message}` : `Sign in failed (${res.status})`);
-  }
-  const body: unknown = await res.json().catch(() => null);
-  if (!isValidTokenResponse(body)) throw new Error('Sign in failed: unexpected response shape');
-  const session = sessionFromTokenResponse(body);
-  saveSession(session);
-  notifyListeners(session, 'SIGNED_IN');
-  return session;
-}
-export async function signOut(): Promise<void> {
-  const session = getSession();
-  if (session) {
-    try {
-      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
-    } catch {
-    }
-  }
-  clearSession();
-  notifyListeners(null, 'SIGNED_OUT');
-}
-let refreshInFlight: Promise<SupabaseSession | null> | null = null;
-export function refreshSession(): Promise<SupabaseSession | null> {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    const stored = readRawSession();
-    if (!stored?.refresh_token) return null;
-    try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ refresh_token: stored.refresh_token }),
-      });
-      if (!res.ok) return clearSessionAndNotify();
-      const refreshBody: unknown = await res.json().catch(() => null);
-      if (!isValidTokenResponse(refreshBody)) return clearSessionAndNotify();
-      const refreshed = sessionFromTokenResponse(refreshBody);
-      saveSession(refreshed);
-      notifyListeners(refreshed, 'TOKEN_REFRESHED');
-      return refreshed;
-    } catch {
-      return clearSessionAndNotify();
-    } finally {
-      refreshInFlight = null;
-    }
-  })();
-  return refreshInFlight;
-}
-export function onAuthStateChange(listener: AuthStateListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-const AUTO_REFRESH_INTERVAL_MS = 30_000;
-const TOKEN_EXPIRY_BUFFER_S = 120;
-let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
-let autoRefreshRefCount = 0;
-export function startAutoRefresh(): void {
-  autoRefreshRefCount++;
-  if (autoRefreshTimer !== null) return;
-  autoRefreshTimer = setInterval(() => {
-    const session = cachedSession ?? readRawSession();
-    if (!session) return;
-    const secondsUntilExpiry = session.expires_at - Math.floor(Date.now() / 1000);
-    if (secondsUntilExpiry <= TOKEN_EXPIRY_BUFFER_S) {
-      void refreshSession();
-    }
-  }, AUTO_REFRESH_INTERVAL_MS);
-}
-export function stopAutoRefresh(): void {
-  autoRefreshRefCount = Math.max(0, autoRefreshRefCount - 1);
-  if (autoRefreshRefCount === 0 && autoRefreshTimer !== null) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-}
-
-================
 File: src/lib/symbols.ts
 ================
 import type { ScoreColorBand } from './quality-utils.js';
@@ -6705,6 +6576,67 @@ export function AdminPage() {
           </div>
         )}
       </div>
+    </PageShell>
+  );
+}
+
+================
+File: src/pages/AgentSessionPage.tsx
+================
+import { Link } from 'wouter';
+import { useAgentSession } from '../hooks/useAgentSession.js';
+import { TurnTimeline } from '../components/TurnTimeline.js';
+import { HandoffCard } from '../components/HandoffCard.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { DetailPageHeader } from '../components/DetailPageHeader.js';
+import { PageShell } from '../components/PageShell.js';
+import { ViewSection } from '../components/Section.js';
+import { plural } from '../lib/quality-utils.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+export function AgentSessionPage({ sessionId }: { sessionId: string }) {
+  const { data, isLoading, error } = useAgentSession(sessionId);
+  if (!isLoading && !error && !data) return null;
+  const evaluation = data?.evaluation;
+  const turns = evaluation?.turns ?? [];
+  const handoffs = evaluation?.handoffs ?? [];
+  const agentNames = [...new Set(turns.map(t => t.agentName ?? 'unknown'))];
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
+      {data && evaluation && (
+        <>
+          <DetailPageHeader title="Agent Session" id={sessionId}>
+            <span className="text-secondary text-xs">
+              {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
+            </span>
+            <Link href={`/workflows/${sessionId}`} className="text-xs text-link">View Workflow</Link>
+          </DetailPageHeader>
+          <div className="card flex-wrap gap-6 p-4 mb-4 align-start">
+            <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
+            {evaluation.errorPropagationTurns > 0 && (
+              <div className="text-center">
+                <div className="mono-xs text-muted mb-1 uppercase">Error Propagation</div>
+                <span className="mono text-md text-critical">
+                  {plural(evaluation.errorPropagationTurns, 'turn')}
+                </span>
+              </div>
+            )}
+          </div>
+          <ViewSection title="Turn Timeline">
+            <div className="card">
+              <TurnTimeline turns={turns} agentNames={agentNames} />
+            </div>
+          </ViewSection>
+          {handoffs.length > 0 && (
+            <ViewSection title="Handoffs">
+              <div className="flex-col gap-2">
+                {handoffs.map((h, i) => (
+                  <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${i}`} handoff={h} />
+                ))}
+              </div>
+            </ViewSection>
+          )}
+        </>
+      )}
     </PageShell>
   );
 }
@@ -7031,7 +6963,7 @@ import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
 const PERCENT_MULTIPLIER = 100;
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
-  return 'strategy' in g && !('pair' in g);
+  return 'strategy' in g && 'fallbackRate' in g;
 }
 export function RoutingTelemetryPage({ period }: { period: Period }) {
   const { data, isLoading, error } = useRoutingTelemetry(period);
@@ -7965,6 +7897,25 @@ describe('buildCalibrationEntry: graceful skip on missing or invalid state', () 
     expect(result).toBeNull();
   });
 });
+
+================
+File: scripts/deploy-secrets.sh
+================
+set -euo pipefail
+WORKERS=("obs-toolkit-quality-metrics-api" "quality-metrics-api")
+SECRETS=("SUPABASE_URL" "SUPABASE_SERVICE_ROLE_KEY")
+for worker in "${WORKERS[@]}"; do
+  echo "==> Syncing secrets to ${worker}"
+  for secret in "${SECRETS[@]}"; do
+    value="${!secret:-}"
+    if [ -z "$value" ]; then
+      echo "  SKIP ${secret} (not set in environment)"
+      continue
+    fi
+    echo "$value" | npx wrangler secret put "$secret" --name "$worker" 2>&1 | tail -1
+  done
+done
+echo "Done."
 
 ================
 File: scripts/populate-dashboard.ts
@@ -8926,43 +8877,229 @@ export const API_HOST = '127.0.0.1';
 export const API_PORT = Number(process.env.API_PORT) || 3001;
 
 ================
-File: src/components/Chip.tsx
+File: src/components/AgentWorkflowView.tsx
 ================
-import type { CSSProperties, ReactNode } from 'react';
-import { scoreColor, type ScoreDirection } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-interface ColoredChipProps {
-  color: string;
-  title?: string;
-  className?: string;
-  style?: CSSProperties;
-  children: ReactNode;
+import React, { useState, useCallback } from 'react';
+import { WorkflowGraphView } from './WorkflowGraph.js';
+import { WorkflowTimeline } from './WorkflowTimeline.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation } from '../types.js';
+import { agentColor } from '../lib/quality-utils.js';
+import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
+type WorkflowTab = 'dag' | 'timeline';
+interface AgentWorkflowViewProps {
+  graph: WorkflowGraph;
+  evaluation?: MultiAgentEvaluation;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
 }
-export function ColoredChip({ color, title, className, style, children }: ColoredChipProps) {
+const TAB_LABELS: Record<WorkflowTab, string> = {
+  dag: 'DAG',
+  timeline: 'Timeline',
+};
+const TABS: WorkflowTab[] = ['dag', 'timeline'];
+export function AgentWorkflowView({
+  graph,
+  evaluation,
+  onNodeClick,
+  height = 600,
+}: AgentWorkflowViewProps) {
+  const [activeTab, setActiveTab] = useState<WorkflowTab>('dag');
+  const agentNames = [...new Set(
+    (evaluation?.turns ?? []).map(t => t.agentName ?? 'unknown'),
+  )];
+  const [selectedAgents, setSelectedAgents] = useState<ReadonlySet<string> | null>(null);
+  const effectiveSelected: ReadonlySet<string> = selectedAgents ?? new Set(agentNames);
+  const toggleAgent = useCallback((name: string) => {
+    setSelectedAgents(prev => {
+      const base = prev ?? new Set(agentNames);
+      const next = new Set(base);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      if (next.size === agentNames.length) return null;
+      return next;
+    });
+  }, [agentNames]);
+  const selectAll = useCallback(() => setSelectedAgents(null), []);
+  const showFilter = agentNames.length >= WORKFLOW_FILTER_MIN_AGENTS;
   return (
-    <span
-      className={`mono-xs chip chip-colored d-inline-block${className ? ` ${className}` : ''}`}
-      title={title}
-      style={{ '--chip-color': color, ...style } as CSSProperties}
-    >
-      {children}
-    </span>
+    <div>
+      <div
+        role="tablist"
+        aria-label="Workflow view"
+        className="flex-center gap-0 workflow-tabs"
+      >
+        {TABS.map(tab => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            id={`workflow-tab-${tab}`}
+            aria-selected={activeTab === tab}
+            aria-controls={`workflow-panel-${tab}`}
+            onClick={() => setActiveTab(tab)}
+            className="btn-reset workflow-tab"
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        ))}
+      </div>
+      {showFilter && (
+        <div className="workflow-filter" role="group" aria-label="Filter agents">
+          {agentNames.map(name => {
+            const color = agentColor(name, agentNames);
+            const active = effectiveSelected.has(name);
+            return (
+              <button
+                key={name}
+                type="button"
+                className="btn-reset eval-filter-chip workflow-filter__chip mono-xs"
+                style={{ '--chip-color': color } as React.CSSProperties}
+                data-active={active || undefined}
+                aria-pressed={active}
+                onClick={() => toggleAgent(name)}
+              >
+                {name}
+              </button>
+            );
+          })}
+          {selectedAgents !== null && (
+            <button
+              type="button"
+              className="btn-reset workflow-filter__reset text-xs text-muted"
+              onClick={selectAll}
+            >
+              All
+            </button>
+          )}
+        </div>
+      )}
+      <div
+        role="tabpanel"
+        id="workflow-panel-dag"
+        aria-labelledby="workflow-tab-dag"
+        hidden={activeTab !== 'dag'}
+      >
+        <WorkflowGraphView
+          graph={graph}
+          onNodeClick={onNodeClick}
+          height={height}
+          selectedAgents={showFilter ? effectiveSelected : undefined}
+        />
+      </div>
+      <div
+        role="tabpanel"
+        id="workflow-panel-timeline"
+        aria-labelledby="workflow-tab-timeline"
+        hidden={activeTab !== 'timeline'}
+      >
+        <WorkflowTimeline
+          turns={evaluation?.turns ?? []}
+          handoffs={evaluation?.handoffs ?? []}
+          agentNames={agentNames}
+          selectedAgents={showFilter ? effectiveSelected : undefined}
+        />
+      </div>
+    </div>
   );
 }
-interface ScoreChipProps {
-  score: number;
-  direction?: ScoreDirection;
-  title?: string;
-  className?: string;
-  style?: CSSProperties;
-  children?: ReactNode;
-}
-export function ScoreChip({ score, direction, title, className, style, children }: ScoreChipProps) {
-  const color = scoreColor(score, direction);
+
+================
+File: src/components/AlertList.tsx
+================
+import { Link } from 'wouter';
+import type { CSSProperties } from 'react';
+import { formatScore } from '../lib/quality-utils.js';
+import type { TriggeredAlert } from '../types.js';
+type AlertWithMeta = TriggeredAlert & { metricName?: string };
+function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
   return (
-    <ColoredChip color={color} title={title} className={className} style={style}>
-      {children ?? score.toFixed(SCORE_CHIP_PRECISION)}
-    </ColoredChip>
+    <li className="alert-item" data-status={alert.severity}>
+      <div className="alert-message">{alert.message}</div>
+      <div className="alert-meta text-secondary text-xs">
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      </div>
+      {alert.remediationHints && alert.remediationHints.length > 0 && (
+        <div className="remediation text-xs">
+          Hint: {alert.remediationHints[0]}
+        </div>
+      )}
+    </li>
+  );
+}
+function ThresholdBar({ actual, threshold, direction }: {
+  actual: number;
+  threshold: number;
+  direction: 'above' | 'below';
+}) {
+  const max = Math.max(actual, threshold) * 1.2 || 1;
+  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
+  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
+  const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
+  return (
+    <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
+      <div
+        className="threshold-bar-fill"
+        data-violating={isViolating || undefined}
+        style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
+      />
+      <div
+        className="threshold-bar-marker"
+        style={{ '--bar-marker-left': `${thresholdPct}%` } as CSSProperties}
+        title={`Threshold: ${formatScore(threshold)}`}
+      />
+    </div>
+  );
+}
+function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
+  return (
+    <li className="alert-item alert-compound" data-status={alert.severity}>
+      <div className="alert-message">{alert.message}</div>
+      <div className="alert-meta text-secondary text-xs">
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      </div>
+      <ThresholdBar
+        actual={alert.actualValue}
+        threshold={alert.threshold}
+        direction={alert.direction}
+      />
+      {alert.remediationHints && alert.remediationHints.length > 0 && (
+        <ol className="remediation-list text-xs">
+          {alert.remediationHints.map((hint, i) => (
+            <li key={i}>{hint}</li>
+          ))}
+        </ol>
+      )}
+      {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
+        <div className="alert-related flex-center">
+          <span className="text-secondary text-xs">Related:</span>
+          {alert.relatedMetrics.map((m) => (
+            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
+              {m}
+            </Link>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
+  if (alerts.length === 0) return null;
+  const sorted = [...alerts].sort((a, b) => {
+    const order = { critical: 0, warning: 1, info: 2 };
+    return (order[a.severity as keyof typeof order] ?? 2) - (order[b.severity as keyof typeof order] ?? 2);
+  });
+  return (
+    <ul className="alert-list">
+      {sorted.map((alert, i) =>
+        alert.isCompound
+          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
+          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
+      )}
+    </ul>
   );
 }
 
@@ -9422,133 +9559,6 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
 }
 
 ================
-File: src/components/TrendSeries.tsx
-================
-import {
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Area,
-  ResponsiveContainer,
-} from 'recharts';
-import { format, differenceInMilliseconds } from 'date-fns';
-import type { TrendBucket } from '../hooks/useTrend.js';
-import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
-import { formatScore } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-interface TrendSeriesProps {
-  data: TrendBucket[];
-  metricName: string;
-}
-const TREND_COLORS = {
-  band: 'rgba(88, 166, 255, 0.1)',
-  bandStroke: 'rgba(88, 166, 255, 0.3)',
-  background: '#131920',
-} as const;
-function formatTime(iso: string, spanDays: number): string {
-  const d = new Date(iso);
-  if (spanDays <= 1) return format(d, 'HH:mm');
-  if (spanDays <= 7) return format(d, 'EEE HH:mm');
-  return format(d, 'MMM d');
-}
-export function TrendSeries({ data, metricName }: TrendSeriesProps) {
-  if (data.length === 0) {
-    return <EmptyState message="No trend data available" />;
-  }
-  const spanMs = differenceInMilliseconds(
-    new Date(data[data.length - 1].endTime),
-    new Date(data[0].startTime)
-  );
-  const spanDays = spanMs / (1000 * 60 * 60 * 24);
-  const chartData = data.map((bucket) => ({
-    time: formatTime(bucket.startTime, spanDays),
-    avg: bucket.avg,
-    p10: bucket.percentiles?.p10 ?? null,
-    p50: bucket.percentiles?.p50 ?? null,
-    p90: bucket.percentiles?.p90 ?? null,
-    count: bucket.count,
-  }));
-  const allVals = chartData.flatMap(d =>
-    [d.avg, d.p10, d.p90].filter((v): v is number => v !== null)
-  );
-  if (allVals.length === 0) {
-    return <EmptyState message="No scored evaluations in period" />;
-  }
-  const yMin = Math.min(...allVals);
-  const yMax = Math.max(...allVals);
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
-  return (
-    <div role="img" aria-label={`Time series trend for ${metricName}`}>
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-        <ComposedChart data={chartData} margin={CHART_MARGIN}>
-          <CartesianGrid {...CHART_GRID_PROPS} />
-          <XAxis
-            dataKey="time"
-            tick={CHART_AXIS_TICK}
-            stroke={CHART_COLORS.grid}
-          />
-          <YAxis
-            domain={[yMin - yPad, yMax + yPad]}
-            tick={CHART_AXIS_TICK}
-            stroke={CHART_COLORS.grid}
-            tickFormatter={CHART_YAXIS_TICK_FORMATTER}
-            width={CHART_YAXIS_WIDTH}
-          />
-          <Tooltip
-            contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-            formatter={(v, name) => [
-              formatScore(typeof v === 'number' ? v : null),
-              name === 'avg' ? 'Average' : (String(name ?? '')).toUpperCase(),
-            ]}
-            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
-          />
-          <Area
-            type="monotone"
-            dataKey="p90"
-            stroke="none"
-            fill={TREND_COLORS.band}
-            connectNulls
-          />
-          <Area
-            type="monotone"
-            dataKey="p10"
-            stroke="none"
-            fill={TREND_COLORS.background}
-            connectNulls
-          />
-          <Line
-            type="monotone"
-            dataKey="p50"
-            stroke={TREND_COLORS.bandStroke}
-            strokeWidth={1}
-            strokeDasharray="4 3"
-            dot={false}
-            connectNulls
-          />
-          <Line
-            type="monotone"
-            dataKey="avg"
-            stroke={CHART_COLORS.line}
-            strokeWidth={2}
-            dot={{ fill: CHART_COLORS.line, r: 3 }}
-            activeDot={{ r: 5 }}
-            connectNulls
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <div className="flex-center justify-center gap-4 mt-1 text-xs chart-dynamics">
-        <span><span className="chart-line-indicator">&#9473;</span> avg</span>
-        <span><span className="opacity-50">- -</span> p50</span>
-        <span><span className="opacity-30">&#9608;</span> p10-p90</span>
-      </div>
-    </div>
-  );
-}
-
-================
 File: src/components/TruncatedIdLink.tsx
 ================
 import type { MouseEvent } from 'react';
@@ -9565,6 +9575,59 @@ export function TruncatedIdLink({ id, href, maxLen = 8, className = 'mono-xs lin
     <Link href={href} className={className} title={id} onClick={onClick}>
       {truncateId(id, maxLen)}
     </Link>
+  );
+}
+
+================
+File: src/components/TurnTimeline.tsx
+================
+import type { CSSProperties } from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult } from '../types.js';
+interface TurnTimelineProps {
+  turns: TurnLevelResult[];
+  agentNames: string[];
+}
+export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+  const colorByAgent = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
+  return (
+    <div className="d-flex gap-2 overflow-x-auto py-2">
+      {turns.map((turn) => {
+        const agent = turn.agentName ?? 'unknown';
+        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
+        const bandColor = scoreColor(turn.relevance);
+        return (
+          <div
+            key={turn.turnIndex}
+            className="p-4 shrink-0 turn-card"
+            style={{ '--turn-color': color } as CSSProperties}
+          >
+            <div className="flex-center mb-1-5 justify-between">
+              <span className="text-2xs uppercase font-semibold turn-card-agent">{agent}</span>
+              <span className="text-muted text-2xs">#{turn.turnIndex}</span>
+            </div>
+            <div className="mb-1-5">
+              <div className="text-secondary text-2xs mb-1">Relevance</div>
+              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
+            </div>
+            <div className="mb-1-5">
+              <div className="text-secondary text-2xs mb-1">Progress</div>
+              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
+            </div>
+            {turn.hasError && (
+              <div className="text-2xs font-semibold text-critical mt-1">
+                Error
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -9719,67 +9782,6 @@ export function useApiQuery<TRaw, T = TRaw>(
     refetchInterval,
     retryDelay,
   });
-}
-
-================
-File: src/pages/AgentSessionPage.tsx
-================
-import { Link } from 'wouter';
-import { useAgentSession } from '../hooks/useAgentSession.js';
-import { TurnTimeline } from '../components/TurnTimeline.js';
-import { HandoffCard } from '../components/HandoffCard.js';
-import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { DetailPageHeader } from '../components/DetailPageHeader.js';
-import { PageShell } from '../components/PageShell.js';
-import { ViewSection } from '../components/Section.js';
-import { plural } from '../lib/quality-utils.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-export function AgentSessionPage({ sessionId }: { sessionId: string }) {
-  const { data, isLoading, error } = useAgentSession(sessionId);
-  if (!isLoading && !error && !data) return null;
-  const evaluation = data?.evaluation;
-  const turns = evaluation?.turns ?? [];
-  const handoffs = evaluation?.handoffs ?? [];
-  const agentNames = [...new Set(turns.map(t => t.agentName ?? 'unknown'))];
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && evaluation && (
-        <>
-          <DetailPageHeader title="Agent Session" id={sessionId}>
-            <span className="text-secondary text-xs">
-              {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
-            </span>
-            <Link href={`/workflows/${sessionId}`} className="text-xs text-link">View Workflow</Link>
-          </DetailPageHeader>
-          <div className="card flex-wrap gap-6 p-4 mb-4 align-start">
-            <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
-            {evaluation.errorPropagationTurns > 0 && (
-              <div className="text-center">
-                <div className="mono-xs text-muted mb-1 uppercase">Error Propagation</div>
-                <span className="mono text-md text-critical">
-                  {plural(evaluation.errorPropagationTurns, 'turn')}
-                </span>
-              </div>
-            )}
-          </div>
-          <ViewSection title="Turn Timeline">
-            <div className="card">
-              <TurnTimeline turns={turns} agentNames={agentNames} />
-            </div>
-          </ViewSection>
-          {handoffs.length > 0 && (
-            <ViewSection title="Handoffs">
-              <div className="flex-col gap-2">
-                {handoffs.map((h, i) => (
-                  <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${i}`} handoff={h} />
-                ))}
-              </div>
-            </ViewSection>
-          )}
-        </>
-      )}
-    </PageShell>
-  );
 }
 
 ================
@@ -13032,100 +13034,449 @@ traceRoutes.get('/traces/:traceId', async (c) => {
 });
 
 ================
-File: src/components/AlertList.tsx
+File: src/components/AgentActivityPanel.tsx
 ================
-import { Link } from 'wouter';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { formatScore } from '../lib/quality-utils.js';
-import type { TriggeredAlert } from '../types.js';
-type AlertWithMeta = TriggeredAlert & { metricName?: string };
-function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
-  return (
-    <li className="alert-item" data-status={alert.severity}>
-      <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
-      </div>
-      {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <div className="remediation text-xs">
-          Hint: {alert.remediationHints[0]}
-        </div>
-      )}
-    </li>
-  );
+import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
+import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import { TruncatedIdLink } from './TruncatedIdLink.js';
+import {
+  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
+  SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
+} from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { Sparkline } from './Sparkline.js';
+import { StatDisplay } from './StatDisplay.js';
+const COLUMN_COUNT = 7;
+type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
+interface IdListColumnProps {
+  label: string;
+  ids: string[];
+  totalCount: number;
+  isTruncated: boolean;
+  routeFn: (id: string) => string;
 }
-function ThresholdBar({ actual, threshold, direction }: {
-  actual: number;
-  threshold: number;
-  direction: 'above' | 'below';
-}) {
-  const max = Math.max(actual, threshold) * 1.2 || 1;
-  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
-  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
-  const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
+function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListColumnProps) {
   return (
-    <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
-      <div
-        className="threshold-bar-fill"
-        data-violating={isViolating || undefined}
-        style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
-      />
-      <div
-        className="threshold-bar-marker"
-        style={{ '--bar-marker-left': `${thresholdPct}%` } as CSSProperties}
-        title={`Threshold: ${formatScore(threshold)}`}
-      />
+    <div>
+      <div className="text-muted mb-1-5 text-xs uppercase">{label} ({totalCount})</div>
+      <div className="flex-col gap-1">
+        {ids.map(id => (
+          <TruncatedIdLink
+            key={id}
+            id={id}
+            href={routeFn(id)}
+            maxLen={12}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ))}
+        {ids.length === 0 && <span className="text-muted text-xs">none</span>}
+        {isTruncated && (
+          <span className="text-muted text-2xs italic">+{totalCount - ids.length} more</span>
+        )}
+      </div>
     </div>
   );
 }
-function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
+function errorRateColor(rate: number): string {
+  if (rate === 0) return 'var(--status-healthy)';
+  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
+  return 'var(--status-critical)';
+}
+interface AgentActivityPanelProps {
+  agents: AgentStat[];
+}
+export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
+  const [sort, setSort] = useState<SortKey>('invocations');
+  const [asc, setAsc] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const colorIndex = useMemo(
+    () => Array.isArray(agents)
+      ? new Map(agents.map((a, i) => [a.agentName, AGENT_PALETTE[i % AGENT_PALETTE.length]]))
+      : new Map<string, string>(),
+    [agents],
+  );
+  const toggleSort = useCallback((key: SortKey) => {
+    if (key === sort) {
+      setAsc(v => !v);
+    } else {
+      setSort(key);
+      setAsc(false);
+    }
+  }, [sort]);
+  if (agents.length === 0) {
+    return <EmptyState message="No agent activity recorded for this period." />;
+  }
+  const maxInvocations = Math.max(...agents.map(a => a.invocations), 1);
+  const sorted = [...agents].sort((a, b) => {
+    const diff = a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0;
+    return asc ? diff : -diff;
+  });
+  const sortIndicator = (key: SortKey) =>
+    sort === key ? (asc ? ' \u2191' : ' \u2193') : '';
   return (
-    <li className="alert-item alert-compound" data-status={alert.severity}>
-      <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+    <div className="overflow-x-auto">
+      <table className="data-table sla-table agent-activity-table">
+        <thead>
+          <tr>
+            <th className="col-agent">Agent</th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('invocations')}>
+              Invocations{sortIndicator('invocations')}
+            </th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('errorRate')}>
+              Error Rate{sortIndicator('errorRate')}
+            </th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('sessionCount')}>
+              Sessions{sortIndicator('sessionCount')}
+            </th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('avgOutputSize')}>
+              Avg Output{sortIndicator('avgOutputSize')}
+            </th>
+            <th>Rate Limits</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((agent) => {
+            const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
+            const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
+            const invPct = (agent.invocations / maxInvocations) * 100;
+            const topSource = Object.entries(agent.sourceTypes).sort(byValueDesc)[0]?.[0];
+            const isExpanded = expanded === agent.agentName;
+            const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
+            return (
+              <Fragment key={agent.agentName}>
+                <tr
+                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
+                  style={{ '--agent-color': color } as CSSProperties}
+                  onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
+                >
+                  <td>
+                    <div className="flex-center gap-2">
+                      {hasLinks && (
+                        <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
+                      )}
+                      <span className="dot-sm agent-dot" />
+                      <span className="mono-xs text-primary break-all">
+                        {agent.agentName}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="flex-center gap-2">
+                      <span className="mono-xs agent-inv-count">
+                        {agent.invocations}
+                      </span>
+                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
+                    </div>
+                  </td>
+                  <td>
+                    <div className="flex-center gap-1-5">
+                      <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
+                        {agent.errors > 0 ? formatPercent(agent.errorRate * 100) : '\u2014'}
+                      </span>
+                      {agent.errors > 0 && (
+                        <span className="text-muted text-xs">
+                          ({agent.errors})
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className="mono-xs">
+                      {agent.sessionCount}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="mono-xs text-secondary">
+                      {fmtBytes(agent.avgOutputSize)}
+                    </span>
+                  </td>
+                  <td>
+                    {agent.rateLimitCount > 0 ? (
+                      <span className="mono-xs badge-warning">
+                        {agent.rateLimitCount}x
+                      </span>
+                    ) : (
+                      <span className="text-muted text-xs">{'\u2014'}</span>
+                    )}
+                  </td>
+                  <td>
+                    {topSource ? (
+                      <span className="mono text-muted text-2xs uppercase">
+                        {topSource}
+                      </span>
+                    ) : <span className="text-muted">{'\u2014'}</span>}
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <tr className="eval-expanded-panel">
+                    <td colSpan={COLUMN_COUNT} className="border-b">
+                      <EvalSummaryRow evalSummary={agent.evalSummary} />
+                      {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
+                        <div className="border-b-subtle mb-1 pad-panel-section">
+                          <div className="flex-center gap-3">
+                            <div className="text-xs text-muted uppercase shrink-0">
+                              Daily Activity
+                            </div>
+                            <Sparkline
+                              data={agent.dailyCounts}
+                              width={SPARKLINE_WIDTH}
+                              height={SPARKLINE_HEIGHT}
+                              color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
+                              label={`Daily invocations for ${agent.agentName}`}
+                            />
+                            <span className="mono text-muted text-2xs shrink-0">
+                              peak {Math.max(...agent.dailyCounts)}/day
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="agent-expanded-grid">
+                        <IdListColumn
+                          label="Sessions"
+                          ids={agent.sessionIds}
+                          totalCount={agent.sessionCount}
+                          isTruncated={agent.sessionIdsTruncated}
+                          routeFn={routes.session}
+                        />
+                        <IdListColumn
+                          label="Traces"
+                          ids={agent.traceIds}
+                          totalCount={agent.traceIdsTotal ?? agent.traceIds.length}
+                          isTruncated={agent.traceIdsTruncated}
+                          routeFn={routes.trace}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetricSummary> }) {
+  const metrics = Object.entries(evalSummary);
+  if (metrics.length === 0) {
+    return (
+      <div className="text-xs text-muted border-b-subtle mb-1 pad-panel-sparse">
+        No evaluations linked to this agent.
       </div>
-      <ThresholdBar
-        actual={alert.actualValue}
-        threshold={alert.threshold}
-        direction={alert.direction}
-      />
-      {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <ol className="remediation-list text-xs">
-          {alert.remediationHints.map((hint, i) => (
-            <li key={i}>{hint}</li>
-          ))}
-        </ol>
-      )}
-      {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
-        <div className="alert-related flex-center">
-          <span className="text-secondary text-xs">Related:</span>
-          {alert.relatedMetrics.map((m) => (
-            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
-              {m}
-            </Link>
+    );
+  }
+  return (
+    <div className="border-b-subtle mb-1 pad-panel-section">
+      <div className="text-muted mb-1-5 text-xs uppercase">
+        Evaluation Metrics
+      </div>
+      <div className="flex-wrap gap-3">
+        {metrics.map(([name, m]) => {
+          const barColor = scoreColor(m.avg);
+          const band = scoreColorBand(m.avg);
+          return (
+            <div key={name} className="metric-card-compact">
+              <div className="text-secondary mb-1 text-xs truncate">
+                {name}
+              </div>
+              <div className="flex-center mb-1 gap-2">
+                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
+                <span className="mono-xs font-semibold text-right score-label-width score-band" data-band={band}>
+                  {m.avg.toFixed(SCORE_CHIP_PRECISION)}
+                </span>
+              </div>
+              <div className="mono text-muted flex-wrap justify-between text-2xs">
+                <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}\u2013{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
+                <span>n={m.count}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
+  const totalInvocations = agents.reduce((s, a) => s + a.invocations, 0);
+  const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
+  const totalRateLimits = agents.reduce((s, a) => s + a.rateLimitCount, 0);
+  const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
+  const overallErrorRate = rawErrorRate * 100;
+  return (
+    <div className="d-flex flex-wrap gap-8 surface-elevated mb-5 p-4-5">
+      {[
+        { label: 'Agents', value: agents.length },
+        { label: 'Invocations', value: totalInvocations.toLocaleString() },
+        {
+          label: 'Error Rate',
+          value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
+          color: errorRateColor(rawErrorRate),
+        },
+        {
+          label: 'Rate Limits',
+          value: totalRateLimits > 0 ? totalRateLimits : '\u2014',
+          color: totalRateLimits > 0 ? 'var(--status-warning)' : undefined,
+        },
+      ].map(({ label, value, color }) => (
+        <StatDisplay key={label} value={value} label={label} valueColor={color} />
+      ))}
+    </div>
+  );
+}
+
+================
+File: src/components/CQIHero.tsx
+================
+import type { CSSProperties } from 'react';
+import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
+import type { CompositeQualityIndex, CQIContribution } from '../types.js';
+import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+function segmentColor(contribution: CQIContribution): string {
+  return scoreColor(contribution.rawScore, 'maximize');
+}
+export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
+  const displayValue = (cqi.value * 100).toFixed(1);
+  const overallColor = scoreColor(cqi.value, 'maximize');
+  return (
+    <div
+      role="region"
+      aria-label={`Composite Quality Index: ${displayValue}`}
+      className="card text-center p-6"
+      style={{ '--cqi-color': overallColor } as CSSProperties}
+    >
+      <div className="field-label text-secondary text-xs mb-1">
+        Composite Quality Index
+      </div>
+      <div className="mono font-bold cqi-value">
+        {displayValue}
+      </div>
+      {cqi.contributions.length > 0 && (
+        <div className="d-flex mt-4 cqi-segment-bar">
+          {cqi.contributions.map((c) => (
+            <div
+              key={c.metric}
+              className="cqi-segment"
+              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * 100, 0)})`}
+              style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
+            />
           ))}
         </div>
       )}
-    </li>
+      <table className="sr-only">
+        <caption>CQI Metric Breakdown</caption>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Raw Score</th>
+            <th>Weight</th>
+            <th>Contribution</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cqi.contributions.map((c) => (
+            <tr key={c.metric}>
+              <td>{c.metric}</td>
+              <td>{formatScore(c.rawScore)}</td>
+              <td>{formatPercent(c.weight * 100, 0)}</td>
+              <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
-export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
-  if (alerts.length === 0) return null;
-  const sorted = [...alerts].sort((a, b) => {
-    const order = { critical: 0, warning: 1, info: 2 };
-    return (order[a.severity as keyof typeof order] ?? 2) - (order[b.severity as keyof typeof order] ?? 2);
-  });
+
+================
+File: src/components/PipelineFunnel.tsx
+================
+import { memo, type CSSProperties } from 'react';
+import type { PipelineStage, PipelineDropoff } from '../types.js';
+import { EmptyState } from './EmptyState.js';
+import { formatPercent } from '../lib/quality-utils.js';
+import { FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
+interface PipelineFunnelProps {
+  stages: PipelineStage[];
+  dropoffs: PipelineDropoff[];
+  overallConversionPercent: number;
+}
+function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
+  if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
+  const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
   return (
-    <ul className="alert-list">
-      {sorted.map((alert, i) =>
-        alert.isCompound
-          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
-          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
-      )}
-    </ul>
+    <div role="region" aria-label="Evaluation pipeline funnel">
+      <div className="flex-center mb-3 gap-2">
+        <span className="mono-xl font-semibold">
+          {formatPercent(overallConversionPercent)}
+        </span>
+        <span className="text-secondary text-base">overall conversion</span>
+      </div>
+      <div className="flex-col gap-1">
+        {stages.map((stage, idx) => {
+          const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
+          const dropoff = dropoffs[idx];
+          const showDropoff = dropoff && dropoff.dropped > 0;
+          return (
+            <div key={stage.name}>
+              <div className="flex-center gap-3">
+                <div
+                  className="d-flex funnel-bar"
+                  style={{
+                    '--funnel-width': `${widthPct}%`,
+                    '--funnel-bg': `var(--stage-${stage.name}, var(--accent))`,
+                  } as CSSProperties}
+                  role="meter"
+                  aria-label={`${stage.displayName}: ${stage.entryCount} evaluations`}
+                  aria-valuenow={stage.entryCount}
+                  aria-valuemin={0}
+                  aria-valuemax={maxCount}
+                >
+                  <span className="text-xs font-semibold text-on-accent nowrap">
+                    {stage.displayName}
+                  </span>
+                  <span className="mono-xs text-on-accent nowrap">
+                    {stage.entryCount.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              {showDropoff && (
+                <div
+                  className="text-xs funnel-dropoff"
+                  data-warn={dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT || undefined}
+                >
+                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <table className="sr-only" aria-label="Pipeline stage details">
+        <thead>
+          <tr><th>Stage</th><th>Entry</th><th>Exit</th><th>Drop-off</th></tr>
+        </thead>
+        <tbody>
+          {stages.map((stage, idx) => (
+            <tr key={stage.name}>
+              <td>{stage.displayName}</td>
+              <td>{stage.entryCount}</td>
+              <td>{stage.exitCount}</td>
+              <td>{dropoffs[idx] != null ? formatPercent(dropoffs[idx].dropoffPercent) : '\u2014'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
+export const PipelineFunnel = memo(PipelineFunnelInner);
 
 ================
 File: src/components/ScoreHistogram.tsx
@@ -13154,59 +13505,6 @@ export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket:
         <span>{distribution[0]?.bucket}</span>
         <span>{distribution[distribution.length - 1]?.bucket}</span>
       </div>
-    </div>
-  );
-}
-
-================
-File: src/components/TurnTimeline.tsx
-================
-import type { CSSProperties } from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult } from '../types.js';
-interface TurnTimelineProps {
-  turns: TurnLevelResult[];
-  agentNames: string[];
-}
-export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const colorByAgent = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
-  return (
-    <div className="d-flex gap-2 overflow-x-auto py-2">
-      {turns.map((turn) => {
-        const agent = turn.agentName ?? 'unknown';
-        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
-        const bandColor = scoreColor(turn.relevance);
-        return (
-          <div
-            key={turn.turnIndex}
-            className="p-4 shrink-0 turn-card"
-            style={{ '--turn-color': color } as CSSProperties}
-          >
-            <div className="flex-center mb-1-5 justify-between">
-              <span className="text-2xs uppercase font-semibold turn-card-agent">{agent}</span>
-              <span className="text-muted text-2xs">#{turn.turnIndex}</span>
-            </div>
-            <div className="mb-1-5">
-              <div className="text-secondary text-2xs mb-1">Relevance</div>
-              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
-            </div>
-            <div className="mb-1-5">
-              <div className="text-secondary text-2xs mb-1">Progress</div>
-              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
-            </div>
-            {turn.hasError && (
-              <div className="text-2xs font-semibold text-critical mt-1">
-                Error
-              </div>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -13906,86 +14204,6 @@ describe('SLATable', () => {
 });
 
 ================
-File: src/components/AgentWorkflowView.tsx
-================
-import { useState } from 'react';
-import { WorkflowGraphView } from './WorkflowGraph.js';
-import { WorkflowTimeline } from './WorkflowTimeline.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation } from '../types.js';
-type WorkflowTab = 'dag' | 'timeline';
-interface AgentWorkflowViewProps {
-  graph: WorkflowGraph;
-  evaluation?: MultiAgentEvaluation;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-}
-const TAB_LABELS: Record<WorkflowTab, string> = {
-  dag: 'DAG',
-  timeline: 'Timeline',
-};
-const TABS: WorkflowTab[] = ['dag', 'timeline'];
-export function AgentWorkflowView({
-  graph,
-  evaluation,
-  onNodeClick,
-  height = 600,
-}: AgentWorkflowViewProps) {
-  const [activeTab, setActiveTab] = useState<WorkflowTab>('dag');
-  const agentNames = [...new Set(
-    (evaluation?.turns ?? []).map(t => t.agentName ?? 'unknown'),
-  )];
-  return (
-    <div>
-      <div
-        role="tablist"
-        aria-label="Workflow view"
-        className="flex-center gap-0 workflow-tabs"
-      >
-        {TABS.map(tab => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            id={`workflow-tab-${tab}`}
-            aria-selected={activeTab === tab}
-            aria-controls={`workflow-panel-${tab}`}
-            onClick={() => setActiveTab(tab)}
-            className="btn-reset workflow-tab"
-          >
-            {TAB_LABELS[tab]}
-          </button>
-        ))}
-      </div>
-      <div
-        role="tabpanel"
-        id="workflow-panel-dag"
-        aria-labelledby="workflow-tab-dag"
-        hidden={activeTab !== 'dag'}
-      >
-        <WorkflowGraphView
-          graph={graph}
-          onNodeClick={onNodeClick}
-          height={height}
-        />
-      </div>
-      <div
-        role="tabpanel"
-        id="workflow-panel-timeline"
-        aria-labelledby="workflow-tab-timeline"
-        hidden={activeTab !== 'timeline'}
-      >
-        <WorkflowTimeline
-          turns={evaluation?.turns ?? []}
-          handoffs={evaluation?.handoffs ?? []}
-          agentNames={agentNames}
-        />
-      </div>
-    </div>
-  );
-}
-
-================
 File: src/components/BarIndicator.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -14026,449 +14244,143 @@ export function BarIndicator({
 }
 
 ================
-File: src/components/CQIHero.tsx
+File: src/components/CoverageGrid.tsx
 ================
-import type { CSSProperties } from 'react';
-import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
-import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-function segmentColor(contribution: CQIContribution): string {
-  return scoreColor(contribution.rawScore, 'maximize');
+import { memo, useState, useMemo, type CSSProperties } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
+  COVERAGE_GRID_MAX_INPUTS,
+} from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
 }
-export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
-  const displayValue = (cqi.value * 100).toFixed(1);
-  const overallColor = scoreColor(cqi.value, 'maximize');
+const STATUS_COLORS: Record<CoverageStatus, string> = {
+  covered: 'var(--score-good, #0072B2)',
+  partial: 'var(--score-fair, #E69F00)',
+  missing: 'var(--score-poor, #D55E00)',
+};
+const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
+function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
+  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
+  const cellMap = useMemo(() => {
+    const map = new Map<string, CoverageCell>();
+    if (!Array.isArray(cells)) return map;
+    for (const cell of cells) {
+      map.set(`${cell.metric}|${cell.input}`, cell);
+    }
+    return map;
+  }, [cells]);
+  if (metrics.length === 0 || inputs.length === 0) {
+    return <EmptyState message="No coverage data available." />;
+  }
+  const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
+  const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
   return (
-    <div
-      role="region"
-      aria-label={`Composite Quality Index: ${displayValue}`}
-      className="card text-center p-6"
-      style={{ '--cqi-color': overallColor } as CSSProperties}
-    >
-      <div className="field-label text-secondary text-xs mb-1">
-        Composite Quality Index
+    <div role="region" aria-label="Evaluation coverage heatmap">
+      <div className="flex-center mb-3 gap-3">
+        <span className="mono-xl font-semibold">
+          {formatPercent(overallCoveragePercent)}
+        </span>
+        <span className="text-secondary text-base">
+          coverage ({metrics.length} metrics x {inputs.length} inputs)
+        </span>
       </div>
-      <div className="mono font-bold cqi-value">
-        {displayValue}
-      </div>
-      {cqi.contributions.length > 0 && (
-        <div className="d-flex mt-4 cqi-segment-bar">
-          {cqi.contributions.map((c) => (
+      <div className="mb-3 text-xs flex-wrap gap-4">
+        {COVERAGE_STATUSES.map(status => (
+          <div key={status} className="flex-center gap-1">
             <div
-              key={c.metric}
-              className="cqi-segment"
-              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * 100, 0)})`}
-              style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
+              className="coverage-legend-swatch"
+              style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
             />
+            <span>{status}</span>
+          </div>
+        ))}
+      </div>
+      <div className="overflow-x-auto">
+        <div
+          role="table"
+          aria-label="Coverage matrix"
+          className="coverage-grid gap-half"
+          style={{
+            '--coverage-grid-cols': `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
+          } as CSSProperties}
+        >
+          <div role="row" className="contents">
+            <div role="columnheader" className="text-xs font-semibold" />
+            {displayInputs.map(input => (
+              <div
+                key={input}
+                role="columnheader"
+                title={input}
+                className="text-secondary text-2xs coverage-header-cell"
+              >
+                {truncateId(input, 8)}
+              </div>
+            ))}
+          </div>
+          {metrics.map(metric => (
+            <div key={metric} role="row" className="contents">
+              <div
+                role="rowheader"
+                className="text-xs flex-center truncate font-medium"
+                title={metric}
+              >
+                {metric}
+              </div>
+              {displayInputs.map(input => {
+                const cell = cellMap.get(`${metric}|${input}`);
+                const status = cell?.status ?? 'missing';
+                const count = cell?.count ?? 0;
+                const isHovered = hovered?.metric === metric && hovered?.input === input;
+                return (
+                  <div
+                    key={input}
+                    role="cell"
+                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
+                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
+                    onMouseEnter={() => setHovered({ metric, input })}
+                    onMouseLeave={() => setHovered(null)}
+                    className="mono text-2xs flex-center justify-center coverage-cell"
+                    data-hovered={isHovered || undefined}
+                    style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
+                  >
+                    {count > 0 ? count : ''}
+                  </div>
+                );
+              })}
+            </div>
           ))}
         </div>
+      </div>
+      {truncated && (
+        <p className="text-secondary text-xs mt-2">
+          Showing {COVERAGE_GRID_MAX_INPUTS} of {inputs.length} inputs.
+        </p>
       )}
-      <table className="sr-only">
-        <caption>CQI Metric Breakdown</caption>
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Raw Score</th>
-            <th>Weight</th>
-            <th>Contribution</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cqi.contributions.map((c) => (
-            <tr key={c.metric}>
-              <td>{c.metric}</td>
-              <td>{formatScore(c.rawScore)}</td>
-              <td>{formatPercent(c.weight * 100, 0)}</td>
-              <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {gaps.length > 0 && (
+        <div className="mt-4">
+          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
+          <ul className="m-0 text-xs coverage-gap-list">
+            {gaps.map(gap => (
+              <li key={gap.metric} className="mb-1">
+                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
+                ({plural(gap.missingInputs.length, 'input')} missing)
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
-
-================
-File: src/components/PipelineFunnel.tsx
-================
-import { memo, type CSSProperties } from 'react';
-import type { PipelineStage, PipelineDropoff } from '../types.js';
-import { EmptyState } from './EmptyState.js';
-import { formatPercent } from '../lib/quality-utils.js';
-import { FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
-interface PipelineFunnelProps {
-  stages: PipelineStage[];
-  dropoffs: PipelineDropoff[];
-  overallConversionPercent: number;
-}
-function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
-  if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
-  const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
-  return (
-    <div role="region" aria-label="Evaluation pipeline funnel">
-      <div className="flex-center mb-3 gap-2">
-        <span className="mono-xl font-semibold">
-          {formatPercent(overallConversionPercent)}
-        </span>
-        <span className="text-secondary text-base">overall conversion</span>
-      </div>
-      <div className="flex-col gap-1">
-        {stages.map((stage, idx) => {
-          const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
-          const dropoff = dropoffs[idx];
-          const showDropoff = dropoff && dropoff.dropped > 0;
-          return (
-            <div key={stage.name}>
-              <div className="flex-center gap-3">
-                <div
-                  className="d-flex funnel-bar"
-                  style={{
-                    '--funnel-width': `${widthPct}%`,
-                    '--funnel-bg': `var(--stage-${stage.name}, var(--accent))`,
-                  } as CSSProperties}
-                  role="meter"
-                  aria-label={`${stage.displayName}: ${stage.entryCount} evaluations`}
-                  aria-valuenow={stage.entryCount}
-                  aria-valuemin={0}
-                  aria-valuemax={maxCount}
-                >
-                  <span className="text-xs font-semibold text-on-accent nowrap">
-                    {stage.displayName}
-                  </span>
-                  <span className="mono-xs text-on-accent nowrap">
-                    {stage.entryCount.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              {showDropoff && (
-                <div
-                  className="text-xs funnel-dropoff"
-                  data-warn={dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT || undefined}
-                >
-                  {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <table className="sr-only" aria-label="Pipeline stage details">
-        <thead>
-          <tr><th>Stage</th><th>Entry</th><th>Exit</th><th>Drop-off</th></tr>
-        </thead>
-        <tbody>
-          {stages.map((stage, idx) => (
-            <tr key={stage.name}>
-              <td>{stage.displayName}</td>
-              <td>{stage.entryCount}</td>
-              <td>{stage.exitCount}</td>
-              <td>{dropoffs[idx] != null ? formatPercent(dropoffs[idx].dropoffPercent) : '\u2014'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-export const PipelineFunnel = memo(PipelineFunnelInner);
-
-================
-File: src/components/AgentActivityPanel.tsx
-================
-import { Fragment, useCallback, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
-import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
-import { TruncatedIdLink } from './TruncatedIdLink.js';
-import {
-  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
-  SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
-} from '../lib/constants.js';
-import { routes } from '../lib/routes.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { Sparkline } from './Sparkline.js';
-import { StatDisplay } from './StatDisplay.js';
-const COLUMN_COUNT = 7;
-type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
-interface IdListColumnProps {
-  label: string;
-  ids: string[];
-  totalCount: number;
-  isTruncated: boolean;
-  routeFn: (id: string) => string;
-}
-function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListColumnProps) {
-  return (
-    <div>
-      <div className="text-muted mb-1-5 text-xs uppercase">{label} ({totalCount})</div>
-      <div className="flex-col gap-1">
-        {ids.map(id => (
-          <TruncatedIdLink
-            key={id}
-            id={id}
-            href={routeFn(id)}
-            maxLen={12}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ))}
-        {ids.length === 0 && <span className="text-muted text-xs">none</span>}
-        {isTruncated && (
-          <span className="text-muted text-2xs italic">+{totalCount - ids.length} more</span>
-        )}
-      </div>
-    </div>
-  );
-}
-function errorRateColor(rate: number): string {
-  if (rate === 0) return 'var(--status-healthy)';
-  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
-  return 'var(--status-critical)';
-}
-interface AgentActivityPanelProps {
-  agents: AgentStat[];
-}
-export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
-  const [sort, setSort] = useState<SortKey>('invocations');
-  const [asc, setAsc] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const colorIndex = useMemo(
-    () => Array.isArray(agents)
-      ? new Map(agents.map((a, i) => [a.agentName, AGENT_PALETTE[i % AGENT_PALETTE.length]]))
-      : new Map<string, string>(),
-    [agents],
-  );
-  const toggleSort = useCallback((key: SortKey) => {
-    if (key === sort) {
-      setAsc(v => !v);
-    } else {
-      setSort(key);
-      setAsc(false);
-    }
-  }, [sort]);
-  if (agents.length === 0) {
-    return <EmptyState message="No agent activity recorded for this period." />;
-  }
-  const maxInvocations = Math.max(...agents.map(a => a.invocations), 1);
-  const sorted = [...agents].sort((a, b) => {
-    const diff = a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0;
-    return asc ? diff : -diff;
-  });
-  const sortIndicator = (key: SortKey) =>
-    sort === key ? (asc ? ' \u2191' : ' \u2193') : '';
-  return (
-    <div className="overflow-x-auto">
-      <table className="data-table sla-table agent-activity-table">
-        <thead>
-          <tr>
-            <th className="col-agent">Agent</th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('invocations')}>
-              Invocations{sortIndicator('invocations')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('errorRate')}>
-              Error Rate{sortIndicator('errorRate')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('sessionCount')}>
-              Sessions{sortIndicator('sessionCount')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('avgOutputSize')}>
-              Avg Output{sortIndicator('avgOutputSize')}
-            </th>
-            <th>Rate Limits</th>
-            <th>Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((agent) => {
-            const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
-            const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
-            const invPct = (agent.invocations / maxInvocations) * 100;
-            const topSource = Object.entries(agent.sourceTypes).sort(byValueDesc)[0]?.[0];
-            const isExpanded = expanded === agent.agentName;
-            const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
-            return (
-              <Fragment key={agent.agentName}>
-                <tr
-                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
-                  style={{ '--agent-color': color } as CSSProperties}
-                  onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
-                >
-                  <td>
-                    <div className="flex-center gap-2">
-                      {hasLinks && (
-                        <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
-                      )}
-                      <span className="dot-sm agent-dot" />
-                      <span className="mono-xs text-primary break-all">
-                        {agent.agentName}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex-center gap-2">
-                      <span className="mono-xs agent-inv-count">
-                        {agent.invocations}
-                      </span>
-                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex-center gap-1-5">
-                      <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
-                        {agent.errors > 0 ? formatPercent(agent.errorRate * 100) : '\u2014'}
-                      </span>
-                      {agent.errors > 0 && (
-                        <span className="text-muted text-xs">
-                          ({agent.errors})
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <span className="mono-xs">
-                      {agent.sessionCount}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="mono-xs text-secondary">
-                      {fmtBytes(agent.avgOutputSize)}
-                    </span>
-                  </td>
-                  <td>
-                    {agent.rateLimitCount > 0 ? (
-                      <span className="mono-xs badge-warning">
-                        {agent.rateLimitCount}x
-                      </span>
-                    ) : (
-                      <span className="text-muted text-xs">{'\u2014'}</span>
-                    )}
-                  </td>
-                  <td>
-                    {topSource ? (
-                      <span className="mono text-muted text-2xs uppercase">
-                        {topSource}
-                      </span>
-                    ) : <span className="text-muted">{'\u2014'}</span>}
-                  </td>
-                </tr>
-                {isExpanded && (
-                  <tr className="eval-expanded-panel">
-                    <td colSpan={COLUMN_COUNT} className="border-b">
-                      <EvalSummaryRow evalSummary={agent.evalSummary} />
-                      {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
-                        <div className="border-b-subtle mb-1 pad-panel-section">
-                          <div className="flex-center gap-3">
-                            <div className="text-xs text-muted uppercase shrink-0">
-                              Daily Activity
-                            </div>
-                            <Sparkline
-                              data={agent.dailyCounts}
-                              width={SPARKLINE_WIDTH}
-                              height={SPARKLINE_HEIGHT}
-                              color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
-                              label={`Daily invocations for ${agent.agentName}`}
-                            />
-                            <span className="mono text-muted text-2xs shrink-0">
-                              peak {Math.max(...agent.dailyCounts)}/day
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="agent-expanded-grid">
-                        <IdListColumn
-                          label="Sessions"
-                          ids={agent.sessionIds}
-                          totalCount={agent.sessionCount}
-                          isTruncated={agent.sessionIdsTruncated}
-                          routeFn={routes.session}
-                        />
-                        <IdListColumn
-                          label="Traces"
-                          ids={agent.traceIds}
-                          totalCount={agent.traceIdsTotal ?? agent.traceIds.length}
-                          isTruncated={agent.traceIdsTruncated}
-                          routeFn={routes.trace}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetricSummary> }) {
-  const metrics = Object.entries(evalSummary);
-  if (metrics.length === 0) {
-    return (
-      <div className="text-xs text-muted border-b-subtle mb-1 pad-panel-sparse">
-        No evaluations linked to this agent.
-      </div>
-    );
-  }
-  return (
-    <div className="border-b-subtle mb-1 pad-panel-section">
-      <div className="text-muted mb-1-5 text-xs uppercase">
-        Evaluation Metrics
-      </div>
-      <div className="flex-wrap gap-3">
-        {metrics.map(([name, m]) => {
-          const barColor = scoreColor(m.avg);
-          const band = scoreColorBand(m.avg);
-          return (
-            <div key={name} className="metric-card-compact">
-              <div className="text-secondary mb-1 text-xs truncate">
-                {name}
-              </div>
-              <div className="flex-center mb-1 gap-2">
-                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
-                <span className="mono-xs font-semibold text-right score-label-width score-band" data-band={band}>
-                  {m.avg.toFixed(SCORE_CHIP_PRECISION)}
-                </span>
-              </div>
-              <div className="mono text-muted flex-wrap justify-between text-2xs">
-                <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}\u2013{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
-                <span>n={m.count}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
-  const totalInvocations = agents.reduce((s, a) => s + a.invocations, 0);
-  const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
-  const totalRateLimits = agents.reduce((s, a) => s + a.rateLimitCount, 0);
-  const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
-  const overallErrorRate = rawErrorRate * 100;
-  return (
-    <div className="d-flex flex-wrap gap-8 surface-elevated mb-5 p-4-5">
-      {[
-        { label: 'Agents', value: agents.length },
-        { label: 'Invocations', value: totalInvocations.toLocaleString() },
-        {
-          label: 'Error Rate',
-          value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
-          color: errorRateColor(rawErrorRate),
-        },
-        {
-          label: 'Rate Limits',
-          value: totalRateLimits > 0 ? totalRateLimits : '\u2014',
-          color: totalRateLimits > 0 ? 'var(--status-warning)' : undefined,
-        },
-      ].map(({ label, value, color }) => (
-        <StatDisplay key={label} value={value} label={label} valueColor={color} />
-      ))}
-    </div>
-  );
-}
+export const CoverageGrid = memo(CoverageGridInner);
 
 ================
 File: src/components/SpanTree.tsx
@@ -14813,7 +14725,10 @@ function getScoreBand(score: number | null) {
   return SCORE_BANDS.LOW;
 }
 const elk = new ELK();
-function isWorkflowNode(value: unknown): value is WorkflowNode {
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  dimmed?: boolean;
+}
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (
@@ -14831,6 +14746,7 @@ function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
 async function computeLayout(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet<string>,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const nodeDataMap = buildNodeDataMap(nodes);
   const elkGraph = {
@@ -14842,12 +14758,16 @@ async function computeLayout(
   const layout = await elk.layout(elkGraph);
   const rfNodes: Node[] = (layout.children ?? [])
     .filter(elkNode => nodeDataMap.has(elkNode.id))
-    .map(elkNode => ({
-      id: elkNode.id,
-      position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-      data: nodeDataMap.get(elkNode.id) as unknown as Record<string, unknown>,
-      type: 'agentNode',
-    }));
+    .map(elkNode => {
+      const workflowNode = nodeDataMap.get(elkNode.id)!;
+      const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
+      return {
+        id: elkNode.id,
+        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+        data: { ...workflowNode, dimmed } as unknown as Record<string, unknown>,
+        type: 'agentNode',
+      };
+    });
   const rfEdges: Edge[] = edges.map(e => ({
     id: e.id,
     source: e.source,
@@ -14862,7 +14782,7 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
   const band = getScoreBand(d.evaluationScore);
   return (
     <div
-      className="workflow-node"
+      className={d.dimmed ? 'workflow-node workflow-node--dimmed' : 'workflow-node'}
       style={{
         '--workflow-node-border': band?.border ?? '#d1d5db',
         '--workflow-node-bg': band?.bg ?? '#f9fafb',
@@ -14895,15 +14815,16 @@ interface WorkflowGraphProps {
   graph: WorkflowGraph;
   onNodeClick?: (nodeId: string) => void;
   height?: number;
+  selectedAgents?: ReadonlySet<string>;
 }
-export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: WorkflowGraphProps) {
+export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents }: WorkflowGraphProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   useEffect(() => {
     if (graph.nodes.length === 0) return;
     let cancelled = false;
-    computeLayout(graph.nodes, graph.edges)
+    computeLayout(graph.nodes, graph.edges, selectedAgents)
       .then(({ nodes: rfNodes, edges: rfEdges }) => {
         if (!cancelled) {
           setLayoutError(null);
@@ -14917,7 +14838,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
         }
       });
     return () => { cancelled = true; };
-  }, [graph.nodes, graph.edges]);
+  }, [graph.nodes, graph.edges, selectedAgents]);
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onNodeClick?.(node.id);
   }, [onNodeClick]);
@@ -15280,145 +15201,6 @@ export function formatTimestamp(ts: string): string {
   if (diffDay < 7) return `${diffDay}d ago`;
   return format(d, 'PP');
 }
-
-================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo, type CSSProperties } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
-  COVERAGE_GRID_MAX_INPUTS,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-const STATUS_COLORS: Record<CoverageStatus, string> = {
-  covered: 'var(--score-good, #0072B2)',
-  partial: 'var(--score-fair, #E69F00)',
-  missing: 'var(--score-poor, #D55E00)',
-};
-const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
-function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
-  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
-  const cellMap = useMemo(() => {
-    const map = new Map<string, CoverageCell>();
-    if (!Array.isArray(cells)) return map;
-    for (const cell of cells) {
-      map.set(`${cell.metric}|${cell.input}`, cell);
-    }
-    return map;
-  }, [cells]);
-  if (metrics.length === 0 || inputs.length === 0) {
-    return <EmptyState message="No coverage data available." />;
-  }
-  const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
-  const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
-  return (
-    <div role="region" aria-label="Evaluation coverage heatmap">
-      <div className="flex-center mb-3 gap-3">
-        <span className="mono-xl font-semibold">
-          {formatPercent(overallCoveragePercent)}
-        </span>
-        <span className="text-secondary text-base">
-          coverage ({metrics.length} metrics x {inputs.length} inputs)
-        </span>
-      </div>
-      <div className="mb-3 text-xs flex-wrap gap-4">
-        {COVERAGE_STATUSES.map(status => (
-          <div key={status} className="flex-center gap-1">
-            <div
-              className="coverage-legend-swatch"
-              style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
-            />
-            <span>{status}</span>
-          </div>
-        ))}
-      </div>
-      <div className="overflow-x-auto">
-        <div
-          role="table"
-          aria-label="Coverage matrix"
-          className="coverage-grid gap-half"
-          style={{
-            '--coverage-grid-cols': `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
-          } as CSSProperties}
-        >
-          <div role="row" className="contents">
-            <div role="columnheader" className="text-xs font-semibold" />
-            {displayInputs.map(input => (
-              <div
-                key={input}
-                role="columnheader"
-                title={input}
-                className="text-secondary text-2xs coverage-header-cell"
-              >
-                {truncateId(input, 8)}
-              </div>
-            ))}
-          </div>
-          {metrics.map(metric => (
-            <div key={metric} role="row" className="contents">
-              <div
-                role="rowheader"
-                className="text-xs flex-center truncate font-medium"
-                title={metric}
-              >
-                {metric}
-              </div>
-              {displayInputs.map(input => {
-                const cell = cellMap.get(`${metric}|${input}`);
-                const status = cell?.status ?? 'missing';
-                const count = cell?.count ?? 0;
-                const isHovered = hovered?.metric === metric && hovered?.input === input;
-                return (
-                  <div
-                    key={input}
-                    role="cell"
-                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
-                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
-                    onMouseEnter={() => setHovered({ metric, input })}
-                    onMouseLeave={() => setHovered(null)}
-                    className="mono text-2xs flex-center justify-center coverage-cell"
-                    data-hovered={isHovered || undefined}
-                    style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
-                  >
-                    {count > 0 ? count : ''}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-      {truncated && (
-        <p className="text-secondary text-xs mt-2">
-          Showing {COVERAGE_GRID_MAX_INPUTS} of {inputs.length} inputs.
-        </p>
-      )}
-      {gaps.length > 0 && (
-        <div className="mt-4">
-          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
-          <ul className="m-0 text-xs coverage-gap-list">
-            {gaps.map(gap => (
-              <li key={gap.metric} className="mb-1">
-                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
-                ({plural(gap.missingInputs.length, 'input')} missing)
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-export const CoverageGrid = memo(CoverageGridInner);
 
 ================
 File: src/pages/SessionDetailPage.tsx
@@ -15864,149 +15646,6 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 }
 
 ================
-File: src/api/routes/metrics.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { subMilliseconds } from 'date-fns';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-const DYNAMICS_PERIOD_HOURS_24H = 1;
-const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
-const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
-const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
-const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
-const OffsetSchema = z.coerce.number().int().min(0).default(0);
-const ScoreLabelSchema = z.string().max(100).optional();
-export const metricsRoutes = new Hono();
-metricsRoutes.get('/metrics/:name', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const topNResult = TopNSchema.safeParse(c.req.query('topN'));
-  if (!topNResult.success) {
-    return c.json({ error: ErrorMessage.InvalidTopN }, HttpStatus.BadRequest);
-  }
-  const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
-  if (!bucketResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBucketCount }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
-    const start = subMilliseconds(now, periodMs);
-    const prevStart = subMilliseconds(start, periodMs);
-    const [evaluations, prevEvaluations] = await Promise.all([
-      loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
-      loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
-    ]);
-    const previousValues = prevEvaluations.length > 0
-      ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
-      : undefined;
-    const detail = computeMetricDetail(evaluations, config, {
-      topN: topNResult.data,
-      bucketCount: bucketResult.data,
-      previousValues,
-    });
-    const dynamics = detail.trend
-      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_PERIOD_HOURS_24H : DYNAMICS_PERIOD_HOURS_MULTI_DAY)
-      : undefined;
-    return c.json({ ...detail, dynamics });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const limitResult = LimitSchema.safeParse(c.req.query('limit'));
-  if (!limitResult.success) {
-    return c.json({ error: ErrorMessage.InvalidLimit }, HttpStatus.BadRequest);
-  }
-  const offsetResult = OffsetSchema.safeParse(c.req.query('offset'));
-  if (!offsetResult.success) {
-    return c.json({ error: ErrorMessage.InvalidOffset }, HttpStatus.BadRequest);
-  }
-  const sortByResult = SortBySchema.safeParse(c.req.query('sortBy'));
-  if (!sortByResult.success) {
-    return c.json({ error: ErrorMessage.InvalidSortBy }, HttpStatus.BadRequest);
-  }
-  const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
-  if (!scoreLabelResult.success) {
-    return c.json({ error: ErrorMessage.InvalidScoreLabel }, HttpStatus.BadRequest);
-  }
-  const scoreLabel = scoreLabelResult.data;
-  try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
-    const start = subMilliseconds(now, periodMs);
-    const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
-    const sortBy = sortByResult.data;
-    const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
-      .slice().sort((a, b) => {
-      if (sortBy === 'score_asc' || sortBy === 'score_desc') {
-        const aVal = a.scoreValue ?? null;
-        const bVal = b.scoreValue ?? null;
-        if (aVal === null && bVal === null) return 0;
-        if (aVal === null) return 1;
-        if (bVal === null) return -1;
-        return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
-      }
-      return b.timestamp.localeCompare(a.timestamp);
-    });
-    const total = evaluations.length;
-    const limit = limitResult.data;
-    const offset = offsetResult.data;
-    const page = evaluations.slice(offset, offset + limit);
-    const rows = page.map(e => ({
-      score: e.scoreValue ?? 0,
-      explanation: e.explanation,
-      traceId: e.traceId,
-      timestamp: e.timestamp,
-      evaluator: e.evaluator,
-      label: e.scoreLabel,
-      evaluatorType: e.evaluatorType,
-      spanId: e.spanId,
-      sessionId: e.sessionId,
-      agentName: e.agentName,
-      trajectoryLength: e.trajectoryLength,
-      stepScores: e.stepScores,
-      toolVerifications: e.toolVerifications,
-    }));
-    return c.json({ rows, total, limit, offset, hasMore: offset + limit < total });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
 File: src/components/CorrelationHeatmap.tsx
 ================
 import { useMemo } from 'react';
@@ -16216,6 +15855,7 @@ export const COVERAGE_GRID_HEADER_WIDTH = 120;
 export const COVERAGE_GRID_CELL_SIZE = 28;
 export const COVERAGE_GRID_MAX_INPUTS = 30;
 export const FUNNEL_DROPOFF_WARN_PCT = 20;
+export const WORKFLOW_FILTER_MIN_AGENTS = 2;
 export const SPAN_TREE_INDENT = 20;
 export const SPAN_TREE_BASE_PADDING = 8;
 export const SPARKLINE_WIDTH = 160;
@@ -16257,6 +15897,423 @@ export const CHART_TOOLTIP_CONTENT_STYLE = {
 export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
 export const CHART_YAXIS_WIDTH = 48;
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
+
+================
+File: src/api/routes/metrics.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { subMilliseconds } from 'date-fns';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+const DYNAMICS_PERIOD_HOURS_24H = 1;
+const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
+const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
+const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
+const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
+const OffsetSchema = z.coerce.number().int().min(0).default(0);
+const ScoreLabelSchema = z.string().max(100).optional();
+export const metricsRoutes = new Hono();
+metricsRoutes.get('/metrics/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const topNResult = TopNSchema.safeParse(c.req.query('topN'));
+  if (!topNResult.success) {
+    return c.json({ error: ErrorMessage.InvalidTopN }, HttpStatus.BadRequest);
+  }
+  const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
+  if (!bucketResult.success) {
+    return c.json({ error: ErrorMessage.InvalidBucketCount }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
+    const start = subMilliseconds(now, periodMs);
+    const prevStart = subMilliseconds(start, periodMs);
+    const [evaluations, prevEvaluations] = await Promise.all([
+      loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
+      loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
+    ]);
+    const previousValues = prevEvaluations.length > 0
+      ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
+      : undefined;
+    const detail = computeMetricDetail(evaluations, config, {
+      topN: topNResult.data,
+      bucketCount: bucketResult.data,
+      previousValues,
+    });
+    const dynamics = detail.trend
+      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_PERIOD_HOURS_24H : DYNAMICS_PERIOD_HOURS_MULTI_DAY)
+      : undefined;
+    return c.json({ ...detail, dynamics });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const limitResult = LimitSchema.safeParse(c.req.query('limit'));
+  if (!limitResult.success) {
+    return c.json({ error: ErrorMessage.InvalidLimit }, HttpStatus.BadRequest);
+  }
+  const offsetResult = OffsetSchema.safeParse(c.req.query('offset'));
+  if (!offsetResult.success) {
+    return c.json({ error: ErrorMessage.InvalidOffset }, HttpStatus.BadRequest);
+  }
+  const sortByResult = SortBySchema.safeParse(c.req.query('sortBy'));
+  if (!sortByResult.success) {
+    return c.json({ error: ErrorMessage.InvalidSortBy }, HttpStatus.BadRequest);
+  }
+  const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
+  if (!scoreLabelResult.success) {
+    return c.json({ error: ErrorMessage.InvalidScoreLabel }, HttpStatus.BadRequest);
+  }
+  const scoreLabel = scoreLabelResult.data;
+  try {
+    const now = new Date();
+    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
+    const start = subMilliseconds(now, periodMs);
+    const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
+    const sortBy = sortByResult.data;
+    const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
+      .slice().sort((a, b) => {
+      if (sortBy === 'score_asc' || sortBy === 'score_desc') {
+        const aVal = a.scoreValue ?? null;
+        const bVal = b.scoreValue ?? null;
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
+      }
+      return b.timestamp.localeCompare(a.timestamp);
+    });
+    const total = evaluations.length;
+    const limit = limitResult.data;
+    const offset = offsetResult.data;
+    const page = evaluations.slice(offset, offset + limit);
+    const rows = page.map(e => ({
+      score: e.scoreValue ?? 0,
+      explanation: e.explanation,
+      traceId: e.traceId,
+      timestamp: e.timestamp,
+      evaluator: e.evaluator,
+      label: e.scoreLabel,
+      evaluatorType: e.evaluatorType,
+      spanId: e.spanId,
+      sessionId: e.sessionId,
+      agentName: e.agentName,
+      trajectoryLength: e.trajectoryLength,
+      stepScores: e.stepScores,
+      toolVerifications: e.toolVerifications,
+    }));
+    return c.json({ rows, total, limit, offset, hasMore: offset + limit < total });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const LANE_HEIGHT = 64;
+const LANE_PADDING_TOP = 12;
+const TURN_BLOCK_HEIGHT = 32;
+const TURN_BLOCK_MIN_WIDTH = 40;
+const TURN_BLOCK_GAP = 6;
+const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
+const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+const LABEL_WIDTH = 120;
+const HANDOFF_MARKER_RADIUS = 7;
+const HEADER_HEIGHT = 28;
+const MAX_VISIBLE_TURNS = 200;
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[] {
+  return agentNames.map((name, laneIndex) => ({
+    agentName: name,
+    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
+    laneIndex,
+  }));
+}
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null {
+  let sawSource = false;
+  for (const t of turns) {
+    const agent = t.agentName ?? 'unknown';
+    if (agent === handoff.sourceAgent) sawSource = true;
+    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
+  }
+  return null;
+}
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
+  const barColor = scoreColor(turn.relevance);
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
+  return (
+    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
+      <rect
+        width={width}
+        height={TURN_BLOCK_HEIGHT}
+        rx={4}
+        fill={color}
+        fillOpacity={0.15}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      <rect
+        width={Math.max(2, width * turn.relevance)}
+        height={4}
+        rx={2}
+        fill={barColor}
+        fillOpacity={0.85}
+      />
+      {turn.hasError && (
+        <rect
+          x={width - 6}
+          width={4}
+          height={TURN_BLOCK_HEIGHT}
+          rx={2}
+          fill="var(--status-critical)"
+          fillOpacity={0.85}
+        />
+      )}
+      <text
+        x={width / 2}
+        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        textAnchor="middle"
+        fontSize={10}
+        fill={color}
+        fontFamily="var(--font-mono)"
+      >
+        {turn.turnIndex}
+      </text>
+    </g>
+  );
+}
+export interface WorkflowTimelineProps {
+  turns: TurnLevelResult[];
+  handoffs?: HandoffEvaluation[];
+  agentNames: string[];
+  selectedAgents?: ReadonlySet<string>;
+}
+export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
+  const truncated = turns.length > MAX_VISIBLE_TURNS;
+  const visibleAgentNames = selectedAgents != null
+    ? agentNames.filter(n => selectedAgents.has(n))
+    : agentNames;
+  const lanes = buildLanes(visibleTurns, visibleAgentNames);
+  const totalTurns = visibleTurns.length;
+  const visibleHandoffs = selectedAgents != null
+    ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
+    : handoffs;
+  const agentLaneIndex = new Map(visibleAgentNames.map((name, i) => [name, i]));
+  const agentColorMap = new Map(visibleAgentNames.map(name => [name, agentColor(name, agentNames)]));
+  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
+  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
+  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
+  const turnX = (turnIndex: number): number =>
+    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
+  const laneY = (laneIndex: number): number =>
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
+  return (
+    <div
+      className="overflow-x-auto"
+      role="img"
+      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
+    >
+      <svg
+        width={svgWidth}
+        height={svgHeight}
+        className="d-block timeline-svg"
+        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
+      >
+        <g>
+          {turns.map(t => (
+            <text
+              key={t.turnIndex}
+              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
+              y={HEADER_HEIGHT - 8}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--text-muted)"
+              fontFamily="var(--font-mono)"
+            >
+              {t.turnIndex}
+            </text>
+          ))}
+        </g>
+        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
+          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
+          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
+          return (
+            <g key={agentName}>
+              <rect
+                x={0}
+                y={laneTop}
+                width={svgWidth}
+                height={LANE_HEIGHT}
+                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
+                fillOpacity={0.5}
+              />
+              <line
+                x1={0}
+                y1={laneTop}
+                x2={svgWidth}
+                y2={laneTop}
+                stroke="var(--border-subtle)"
+                strokeWidth={1}
+              />
+              <text
+                x={LABEL_WIDTH - 8}
+                y={laneTop + LANE_CENTER_OFFSET + 4}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight={600}
+                fill={color}
+                fontFamily="var(--font-mono)"
+              >
+                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+              </text>
+              {laneTurns.map(turn => (
+                <TurnBlock
+                  key={turn.turnIndex}
+                  turn={turn}
+                  color={color}
+                  width={TURN_BLOCK_MIN_WIDTH}
+                  x={turnX(turn.turnIndex)}
+                  y={laneTop + LANE_PADDING_TOP}
+                />
+              ))}
+            </g>
+          );
+        })}
+        <line
+          x1={0}
+          y1={svgHeight}
+          x2={svgWidth}
+          y2={svgHeight}
+          stroke="var(--border-subtle)"
+          strokeWidth={1}
+        />
+        {}
+        {visibleHandoffs.map((h, i) => {
+          const turnIndex = findHandoffTurnIndex(h, turns);
+          if (turnIndex == null) return null;
+          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
+          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
+          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
+          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
+          const y1 = laneY(sourceLaneIdx);
+          const y2 = laneY(targetLaneIdx);
+          const midY = (y1 + y2) / 2;
+          const handoffColor = h.correctTarget
+            ? 'var(--status-healthy)'
+            : 'var(--status-warning)';
+          return (
+            <g
+              key={`handoff-${i}`}
+              role="img"
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
+            >
+              <line
+                x1={x}
+                y1={y1}
+                x2={x}
+                y2={y2}
+                stroke={handoffColor}
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                opacity={0.7}
+              />
+              <circle
+                cx={x}
+                cy={midY}
+                r={HANDOFF_MARKER_RADIUS}
+                fill="var(--bg-card)"
+                stroke={handoffColor}
+                strokeWidth={1.5}
+              />
+              <text
+                x={x}
+                y={midY + 4}
+                textAnchor="middle"
+                fontSize={8}
+                fill={handoffColor}
+                fontFamily="var(--font-mono)"
+                fontWeight={600}
+              >
+                {h.score.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex-wrap gap-4 mt-2 workflow-legend">
+        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
+        {visibleHandoffs.length > 0 && (
+          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
+        )}
+        {truncated && (
+          <span className="text-2xs text-warning">
+            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 ================
 File: src/lib/workflow-graph.ts
@@ -16507,6 +16564,335 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>
 }
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+const TREND_PADDING_RATIO = 0.1;
+const TREND_PADDING_MIN_MS = 60_000;
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const validTs = evaluations
+      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
+      .filter(({ ts }) => Number.isFinite(ts));
+    const { dataMin, dataMax } = validTs.length > 0
+      ? validTs.reduce(
+          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
+          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
+        )
+      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
+    const dataSpan = dataMax - dataMin;
+    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+        evals: [],
+      });
+    }
+    for (const { ev, ts } of validTs) {
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
+      }
+    }
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+        : undefined;
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = extractFiniteScores(evaluations);
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
+File: src/api/routes/agents.ts
+================
+import { Hono } from 'hono';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+const LIMIT_AGENT_SPANS = 1000;
+type AgentAcc = {
+  invocations: number;
+  errors: number;
+  rateLimitCount: number;
+  totalOutputSize: number;
+  sessions: Set<string>;
+  traceIds: Set<string>;
+  sourceTypes: Record<string, number>;
+  dailyCounts: number[];
+};
+function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+    count: sorted.length,
+  };
+}
+function createAgentAccumulator(periodDays: number): AgentAcc {
+  return {
+    invocations: 0,
+    errors: 0,
+    rateLimitCount: 0,
+    totalOutputSize: 0,
+    sessions: new Set(),
+    traceIds: new Set(),
+    sourceTypes: Object.create(null),
+    dailyCounts: new Array(periodDays).fill(0),
+  };
+}
+export const agentRoutes = new Hono();
+agentRoutes.get('/agents', async (c) => {
+  const periodParam = c.req.query('period') ?? '30d';
+  const periodDays = VALID_PERIODS[periodParam];
+  if (periodDays === undefined) {
+    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
+  }
+  const now = new Date();
+  const endDate = toDateOnly(now);
+  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
+  try {
+    const result = await queryTraces({
+      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
+      startDate,
+      endDate,
+      limit: LIMIT_AGENT_SPANS,
+    });
+    const dateBuckets: string[] = [];
+    for (let d = 0; d < periodDays; d++) {
+      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
+      dateBuckets.push(toDateOnly(day));
+    }
+    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
+    const acc: Record<string, AgentAcc> = Object.create(null);
+    const traceToAgents = new Map<string, Set<string>>();
+    for (const span of result.traces) {
+      const name = attrStr(span, 'gen_ai.agent.name');
+      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
+      entry.invocations++;
+      if (span.startTimeUnixNano) {
+        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
+        const idx = bucketIndex.get(dayKey);
+        if (idx !== undefined) entry.dailyCounts[idx]++;
+      }
+      if (spanAttr<boolean>(span, 'agent.has_error')) entry.errors++;
+      if (spanAttr<boolean>(span, 'agent.has_rate_limit')) entry.rateLimitCount++;
+      entry.totalOutputSize += attrNum(span, 'agent.output_size');
+      const sid = attrStr(span, 'session.id', '');
+      if (sid) entry.sessions.add(sid);
+      if (span.traceId) {
+        entry.traceIds.add(span.traceId);
+        let agentSet = traceToAgents.get(span.traceId);
+        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
+        agentSet.add(name);
+      }
+      const rawSrc = attrStr(span, 'agent.source_type');
+      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
+      incrementCount(entry.sourceTypes, src);
+    }
+    const allTraceIds = [...traceToAgents.keys()];
+    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
+    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
+    for (const ev of evaluations) {
+      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+      const agentNames = traceToAgents.get(ev.traceId);
+      if (!agentNames) continue;
+      for (const agent of agentNames) {
+        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
+        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
+      }
+    }
+    const agents = Object.entries(acc).map(([agentName, d]) => {
+      const evalMetrics = agentEvalAcc[agentName] ?? {};
+      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
+      for (const [metric, scores] of Object.entries(evalMetrics)) {
+        evalSummary[metric] = computeEvalMetricSummary(scores);
+      }
+      const sessionIdList = [...d.sessions];
+      const traceIdList = [...d.traceIds];
+      return {
+        agentName,
+        invocations: d.invocations,
+        errors: d.errors,
+        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
+        rateLimitCount: d.rateLimitCount,
+        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+        sessionCount: d.sessions.size,
+        sessionIds: sessionIdList.slice(0, MAX_IDS),
+        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
+        traceIdsTotal: traceIdList.length,
+        traceIds: traceIdList.slice(0, MAX_IDS),
+        traceIdsTruncated: traceIdList.length > MAX_IDS,
+        sourceTypes: d.sourceTypes,
+        dailyCounts: d.dailyCounts,
+        evalSummary,
+      };
+    }).sort((a, b) => b.invocations - a.invocations);
+    return c.json({ period: periodParam, startDate, endDate, agents });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+agentRoutes.get('/agents/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  if (!isValidParam(sessionId, PARAM_ID_RE)) {
+    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  }
+  try {
+    const spans = await loadTracesBySessionId(sessionId);
+    const agentMap = new Map<number, string>();
+    const traceIds = new Set<string>();
+    spans.forEach((span, i) => {
+      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
+      if (agent) agentMap.set(i, agent);
+      if (span.traceId) traceIds.add(span.traceId);
+    });
+    const stepScores: StepScore[] = spans.map((span, i) => ({
+      step: i,
+      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+      explanation: span.name,
+    }));
+    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
+    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
+    const evaluations = await evalPromise;
+    const serializedAgentMap = Object.fromEntries(agentMap);
+    const graph = buildWorkflowGraph(evaluation, spans);
+    return c.json({
+      sessionId,
+      spans,
+      evaluation,
+      evaluations,
+      agentMap: serializedAgentMap,
+      graph,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: scripts/judge-evaluations.ts
 ================
 #!/usr/bin/env tsx
@@ -16529,6 +16915,7 @@ import {
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
+import { HOOK_NAME } from '../../src/api/api-constants.js';
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',
   criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
@@ -16614,7 +17001,7 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
     const filepath = join(TELEMETRY_DIR, file);
     for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
       const attrs = entry.attributes as Record<string, unknown> | undefined;
-      if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
+      if (!attrs || attrs['hook.name'] !== HOOK_NAME.TOKEN_METRICS) continue;
       const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
       if (!tPath) continue;
       const sessionId = basename(tPath, '.jsonl');
@@ -17360,273 +17747,6 @@ if (isDirectRun) {
 }
 
 ================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const LANE_HEIGHT = 64;
-const LANE_PADDING_TOP = 12;
-const TURN_BLOCK_HEIGHT = 32;
-const TURN_BLOCK_MIN_WIDTH = 40;
-const TURN_BLOCK_GAP = 6;
-const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
-const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
-const LABEL_WIDTH = 120;
-const HANDOFF_MARKER_RADIUS = 7;
-const HEADER_HEIGHT = 28;
-const MAX_VISIBLE_TURNS = 200;
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[] {
-  return agentNames.map((name, laneIndex) => ({
-    agentName: name,
-    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
-    laneIndex,
-  }));
-}
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null {
-  let sawSource = false;
-  for (const t of turns) {
-    const agent = t.agentName ?? 'unknown';
-    if (agent === handoff.sourceAgent) sawSource = true;
-    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
-  }
-  return null;
-}
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
-  const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
-  return (
-    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
-      <rect
-        width={width}
-        height={TURN_BLOCK_HEIGHT}
-        rx={4}
-        fill={color}
-        fillOpacity={0.15}
-        stroke={color}
-        strokeWidth={1.5}
-      />
-      <rect
-        width={Math.max(2, width * turn.relevance)}
-        height={4}
-        rx={2}
-        fill={barColor}
-        fillOpacity={0.85}
-      />
-      {turn.hasError && (
-        <rect
-          x={width - 6}
-          width={4}
-          height={TURN_BLOCK_HEIGHT}
-          rx={2}
-          fill="var(--status-critical)"
-          fillOpacity={0.85}
-        />
-      )}
-      <text
-        x={width / 2}
-        y={TURN_BLOCK_HEIGHT / 2 + 5}
-        textAnchor="middle"
-        fontSize={10}
-        fill={color}
-        fontFamily="var(--font-mono)"
-      >
-        {turn.turnIndex}
-      </text>
-    </g>
-  );
-}
-export interface WorkflowTimelineProps {
-  turns: TurnLevelResult[];
-  handoffs?: HandoffEvaluation[];
-  agentNames: string[];
-}
-export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
-  const truncated = turns.length > MAX_VISIBLE_TURNS;
-  const lanes = buildLanes(visibleTurns, agentNames);
-  const totalTurns = visibleTurns.length;
-  const agentLaneIndex = new Map(agentNames.map((name, i) => [name, i]));
-  const agentColorMap = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
-  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
-  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
-  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
-  const turnX = (turnIndex: number): number =>
-    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
-  const laneY = (laneIndex: number): number =>
-    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
-  return (
-    <div
-      className="overflow-x-auto"
-      role="img"
-      aria-label={`Workflow timeline: ${agentNames.length} agents, ${totalTurns} turns`}
-    >
-      <svg
-        width={svgWidth}
-        height={svgHeight}
-        className="d-block timeline-svg"
-        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
-      >
-        <g>
-          {turns.map(t => (
-            <text
-              key={t.turnIndex}
-              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
-              y={HEADER_HEIGHT - 8}
-              textAnchor="middle"
-              fontSize={9}
-              fill="var(--text-muted)"
-              fontFamily="var(--font-mono)"
-            >
-              {t.turnIndex}
-            </text>
-          ))}
-        </g>
-        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
-          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
-          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
-          return (
-            <g key={agentName}>
-              <rect
-                x={0}
-                y={laneTop}
-                width={svgWidth}
-                height={LANE_HEIGHT}
-                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
-                fillOpacity={0.5}
-              />
-              <line
-                x1={0}
-                y1={laneTop}
-                x2={svgWidth}
-                y2={laneTop}
-                stroke="var(--border-subtle)"
-                strokeWidth={1}
-              />
-              <text
-                x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_CENTER_OFFSET + 4}
-                textAnchor="end"
-                fontSize={11}
-                fontWeight={600}
-                fill={color}
-                fontFamily="var(--font-mono)"
-              >
-                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
-              </text>
-              {laneTurns.map(turn => (
-                <TurnBlock
-                  key={turn.turnIndex}
-                  turn={turn}
-                  color={color}
-                  width={TURN_BLOCK_MIN_WIDTH}
-                  x={turnX(turn.turnIndex)}
-                  y={laneTop + LANE_PADDING_TOP}
-                />
-              ))}
-            </g>
-          );
-        })}
-        <line
-          x1={0}
-          y1={svgHeight}
-          x2={svgWidth}
-          y2={svgHeight}
-          stroke="var(--border-subtle)"
-          strokeWidth={1}
-        />
-        {}
-        {handoffs.map((h, i) => {
-          const turnIndex = findHandoffTurnIndex(h, turns);
-          if (turnIndex == null) return null;
-          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
-          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
-          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
-          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
-          const y1 = laneY(sourceLaneIdx);
-          const y2 = laneY(targetLaneIdx);
-          const midY = (y1 + y2) / 2;
-          const handoffColor = h.correctTarget
-            ? 'var(--status-healthy)'
-            : 'var(--status-warning)';
-          return (
-            <g
-              key={`handoff-${i}`}
-              role="img"
-              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
-            >
-              <line
-                x1={x}
-                y1={y1}
-                x2={x}
-                y2={y2}
-                stroke={handoffColor}
-                strokeWidth={2}
-                strokeDasharray="4 2"
-                opacity={0.7}
-              />
-              <circle
-                cx={x}
-                cy={midY}
-                r={HANDOFF_MARKER_RADIUS}
-                fill="var(--bg-card)"
-                stroke={handoffColor}
-                strokeWidth={1.5}
-              />
-              <text
-                x={x}
-                y={midY + 4}
-                textAnchor="middle"
-                fontSize={8}
-                fill={handoffColor}
-                fontFamily="var(--font-mono)"
-                fontWeight={600}
-              >
-                {h.score.toFixed(1)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="flex-wrap gap-4 mt-2 workflow-legend">
-        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
-        {handoffs.length > 0 && (
-          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
-        )}
-        {truncated && (
-          <span className="text-2xs text-warning">
-            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-================
 File: scripts/derive-evaluations.ts
 ================
 #!/usr/bin/env tsx
@@ -17642,6 +17762,7 @@ import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constan
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN } from './judge-evaluations.js';
+import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 export interface EvalRecord {
   timestamp: string;
   evaluationName: string;
@@ -17705,7 +17826,6 @@ function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
   };
 }
 function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
-  // Only measure tool execution hooks (the meaningful ones)
   const measurable = [
     'hook:builtin-post-tool',
     'hook:mcp-post-tool',
@@ -17784,9 +17904,9 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
     if (data.tasks.size > 0) {
       const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
       const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-      const completed = scores.filter(s => s === 1.0).length;
-      const inProgress = scores.filter(s => s === 0.5).length;
-      const pending = scores.filter(s => s === 0.0).length;
+      const completed = scores.filter(s => s === STATUS_SCORES.completed).length;
+      const inProgress = scores.filter(s => s === STATUS_SCORES.in_progress).length;
+      const pending = scores.filter(s => s === STATUS_SCORES.pending).length;
       const parts: string[] = [];
       if (completed > 0) parts.push(`${completed} completed`);
       if (inProgress > 0) parts.push(`${inProgress} in_progress`);
@@ -17831,12 +17951,12 @@ function trackAgentActivity(span: TraceSpan): void {
   if (!isPre && !isPost) return;
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
   let entry = sessionAgents.get(sessionId);
-  if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });;
+  if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });
   if (isPre) entry.pre++;
   if (isPost) {
     entry.post++;
     const agentName = String(span.attributes['gen_ai.agent.name'] ?? 'unknown');
-    const score = span.status?.code === 2 ? 0 : 1;
+    const score = span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1;
     entry.agentSequence.push({ agentName, score, span });
   }
   entry.spans.push(span);
@@ -17869,25 +17989,26 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     if (data.agentSequence.length < MIN_HANDOFF_AGENTS) continue;
     const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
     if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
-    const handoffScores: number[] = [];
+    let sum = 0, count = 0, correct = 0, preserved = 0;
     for (let i = 1; i < data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
       const curr = data.agentSequence[i];
       if (curr.agentName !== prev.agentName) {
-        handoffScores.push(curr.score);
+        sum += curr.score;
+        count++;
+        if (curr.score >= HANDOFF_CORRECT_THRESHOLD) correct++;
+        if (curr.score >= HANDOFF_CONTEXT_THRESHOLD) preserved++;
       }
     }
-    if (handoffScores.length === 0) continue;
-    const avgScore = handoffScores.reduce((a, b) => a + b, 0) / handoffScores.length;
-    const correct = handoffScores.filter(s => s >= HANDOFF_CORRECT_THRESHOLD).length;
-    const preserved = handoffScores.filter(s => s >= HANDOFF_CONTEXT_THRESHOLD).length;
+    if (count === 0) continue;
+    const avgScore = sum / count;
     const lastSpan = data.agentSequence[data.agentSequence.length - 1].span;
     evals.push({
       timestamp: hrtToISO(lastSpan.startTime),
       evaluationName: 'handoff_correctness',
       scoreValue: normalizeScore(avgScore),
       scoreUnit: 'ratio_0_1',
-      explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${handoffScores.length} handoffs across ${distinctAgents.size} agents (${correct}/${handoffScores.length} correct target, ${preserved}/${handoffScores.length} context preserved)`,
+      explanation: `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${count} handoffs across ${distinctAgents.size} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
       evaluator: 'telemetry-rule-engine',
       evaluatorType: 'rule',
       traceId: lastSpan.traceId,
@@ -17920,7 +18041,7 @@ function main(): void {
   allEvals.push(...deriveHandoffCorrectnessPerSession());
   const byDate = new Map<string, EvalRecord[]>();
   for (const ev of allEvals) {
-    const date = ev.timestamp.slice(0, 10);
+    const date = toDateOnly(ev.timestamp);
     let group = byDate.get(date);
     if (!group) byDate.set(date, group = []);
     group.push(ev);
@@ -17978,335 +18099,6 @@ const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
 if (isDirectRun) {
   main();
 }
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
-const TREND_PADDING_RATIO = 0.1;
-const TREND_PADDING_MIN_MS = 60_000;
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const validTs = evaluations
-      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
-      .filter(({ ts }) => Number.isFinite(ts));
-    const { dataMin, dataMax } = validTs.length > 0
-      ? validTs.reduce(
-          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
-          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
-        )
-      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
-    const dataSpan = dataMax - dataMin;
-    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-    for (const { ev, ts } of validTs) {
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
-        }
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/api/routes/agents.ts
-================
-import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-const LIMIT_AGENT_SPANS = 1000;
-type AgentAcc = {
-  invocations: number;
-  errors: number;
-  rateLimitCount: number;
-  totalOutputSize: number;
-  sessions: Set<string>;
-  traceIds: Set<string>;
-  sourceTypes: Record<string, number>;
-  dailyCounts: number[];
-};
-function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
-  const sorted = [...scores].sort((a, b) => a - b);
-  return {
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
-    count: sorted.length,
-  };
-}
-function createAgentAccumulator(periodDays: number): AgentAcc {
-  return {
-    invocations: 0,
-    errors: 0,
-    rateLimitCount: 0,
-    totalOutputSize: 0,
-    sessions: new Set(),
-    traceIds: new Set(),
-    sourceTypes: Object.create(null),
-    dailyCounts: new Array(periodDays).fill(0),
-  };
-}
-export const agentRoutes = new Hono();
-agentRoutes.get('/agents', async (c) => {
-  const periodParam = c.req.query('period') ?? '30d';
-  const periodDays = VALID_PERIODS[periodParam];
-  if (periodDays === undefined) {
-    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
-  }
-  const now = new Date();
-  const endDate = toDateOnly(now);
-  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
-  try {
-    const result = await queryTraces({
-      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
-      startDate,
-      endDate,
-      limit: LIMIT_AGENT_SPANS,
-    });
-    const dateBuckets: string[] = [];
-    for (let d = 0; d < periodDays; d++) {
-      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
-      dateBuckets.push(toDateOnly(day));
-    }
-    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
-    const acc: Record<string, AgentAcc> = Object.create(null);
-    const traceToAgents = new Map<string, Set<string>>();
-    for (const span of result.traces) {
-      const name = attrStr(span, 'gen_ai.agent.name');
-      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
-      entry.invocations++;
-      if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
-        const idx = bucketIndex.get(dayKey);
-        if (idx !== undefined) entry.dailyCounts[idx]++;
-      }
-      if (spanAttr<boolean>(span, 'agent.has_error')) entry.errors++;
-      if (spanAttr<boolean>(span, 'agent.has_rate_limit')) entry.rateLimitCount++;
-      entry.totalOutputSize += attrNum(span, 'agent.output_size');
-      const sid = attrStr(span, 'session.id', '');
-      if (sid) entry.sessions.add(sid);
-      if (span.traceId) {
-        entry.traceIds.add(span.traceId);
-        let agentSet = traceToAgents.get(span.traceId);
-        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
-        agentSet.add(name);
-      }
-      const rawSrc = attrStr(span, 'agent.source_type');
-      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
-      incrementCount(entry.sourceTypes, src);
-    }
-    const allTraceIds = [...traceToAgents.keys()];
-    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
-    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
-    for (const ev of evaluations) {
-      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
-      const agentNames = traceToAgents.get(ev.traceId);
-      if (!agentNames) continue;
-      for (const agent of agentNames) {
-        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
-        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
-      }
-    }
-    const agents = Object.entries(acc).map(([agentName, d]) => {
-      const evalMetrics = agentEvalAcc[agentName] ?? {};
-      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
-      for (const [metric, scores] of Object.entries(evalMetrics)) {
-        evalSummary[metric] = computeEvalMetricSummary(scores);
-      }
-      const sessionIdList = [...d.sessions];
-      const traceIdList = [...d.traceIds];
-      return {
-        agentName,
-        invocations: d.invocations,
-        errors: d.errors,
-        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
-        rateLimitCount: d.rateLimitCount,
-        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-        sessionCount: d.sessions.size,
-        sessionIds: sessionIdList.slice(0, MAX_IDS),
-        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
-        traceIdsTotal: traceIdList.length,
-        traceIds: traceIdList.slice(0, MAX_IDS),
-        traceIdsTruncated: traceIdList.length > MAX_IDS,
-        sourceTypes: d.sourceTypes,
-        dailyCounts: d.dailyCounts,
-        evalSummary,
-      };
-    }).sort((a, b) => b.invocations - a.invocations);
-    return c.json({ period: periodParam, startDate, endDate, agents });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-agentRoutes.get('/agents/:sessionId', async (c) => {
-  const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
-  }
-  try {
-    const spans = await loadTracesBySessionId(sessionId);
-    const agentMap = new Map<number, string>();
-    const traceIds = new Set<string>();
-    spans.forEach((span, i) => {
-      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
-      if (agent) agentMap.set(i, agent);
-      if (span.traceId) traceIds.add(span.traceId);
-    });
-    const stepScores: StepScore[] = spans.map((span, i) => ({
-      step: i,
-      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
-      explanation: span.name,
-    }));
-    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
-    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
-    const evaluations = await evalPromise;
-    const serializedAgentMap = Object.fromEntries(agentMap);
-    const graph = buildWorkflowGraph(evaluation, spans);
-    return c.json({
-      sessionId,
-      spans,
-      evaluation,
-      evaluations,
-      agentMap: serializedAgentMap,
-      graph,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
 
 ================
 File: scripts/sync-to-kv.ts
@@ -20580,6 +20372,10 @@ summary.section-rail {
   font-size: var(--font-size-xs);
   font-weight: var(--bold);
 }
+.workflow-node--dimmed {
+  opacity: 0.25;
+  pointer-events: none;
+}
 .workflow-fallback {
   padding: var(--space-6);
   text-align: center;
@@ -20609,6 +20405,24 @@ summary.section-rail {
 .workflow-oversize__list {
   list-style: disc;
   padding-left: var(--space-5);
+}
+.workflow-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-3);
+}
+.workflow-filter__chip {
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
+}
+.workflow-filter__reset {
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: var(--space-1);
 }
 .workflow-tabs {
   border-bottom: 1px solid var(--border-subtle);
@@ -20748,10 +20562,12 @@ import {
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 export const sessionRoutes = new Hono();
+const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
 function parseTimestamp(value: string | undefined | null): number | null {
   if (!value) return null;
   const ms = new Date(value).getTime();
-  return isNaN(ms) ? null : ms;
+  if (isNaN(ms) || ms < -DATE_ISO_SAFE_MAX_MS || ms > DATE_ISO_SAFE_MAX_MS) return null;
+  return ms;
 }
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
@@ -20932,12 +20748,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     }
     const logBySeverity: Record<string, number> = Object.create(null);
     for (const l of logs) {
-      const t = parseTimestamp((l as { timestamp?: string }).timestamp);
+      const t = parseTimestamp(l.timestamp);
       if (t !== null) {
         if (t < tsMin) tsMin = t;
         if (t > tsMax) tsMax = t;
       }
-      incrementCount(logBySeverity, (l as { severity?: string }).severity ?? 'unknown');
+      incrementCount(logBySeverity, l.severity);
     }
     const timespan = tsMin < Infinity ? {
       start: new Date(tsMin).toISOString(),

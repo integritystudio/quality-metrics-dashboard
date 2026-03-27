@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { WorkflowGraphView } from './WorkflowGraph.js';
 import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
+import { agentColor } from '../lib/quality-utils.js';
+import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
 
 type WorkflowTab = 'dag' | 'timeline';
 
@@ -32,6 +34,30 @@ export function AgentWorkflowView({
     (evaluation?.turns ?? []).map(t => t.agentName ?? 'unknown'),
   )];
 
+  // Filter state: all agents selected by default (null = all selected, avoids Set churn on load)
+  const [selectedAgents, setSelectedAgents] = useState<ReadonlySet<string> | null>(null);
+
+  const effectiveSelected: ReadonlySet<string> = selectedAgents ?? new Set(agentNames);
+
+  const toggleAgent = useCallback((name: string) => {
+    setSelectedAgents(prev => {
+      const base = prev ?? new Set(agentNames);
+      const next = new Set(base);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      // If all agents re-selected, reset to null (all-on)
+      if (next.size === agentNames.length) return null;
+      return next;
+    });
+  }, [agentNames]);
+
+  const selectAll = useCallback(() => setSelectedAgents(null), []);
+
+  const showFilter = agentNames.length >= WORKFLOW_FILTER_MIN_AGENTS;
+
   return (
     <div>
       <div
@@ -55,6 +81,37 @@ export function AgentWorkflowView({
         ))}
       </div>
 
+      {showFilter && (
+        <div className="workflow-filter" role="group" aria-label="Filter agents">
+          {agentNames.map(name => {
+            const color = agentColor(name, agentNames);
+            const active = effectiveSelected.has(name);
+            return (
+              <button
+                key={name}
+                type="button"
+                className="btn-reset eval-filter-chip workflow-filter__chip mono-xs"
+                style={{ '--chip-color': color } as React.CSSProperties}
+                data-active={active || undefined}
+                aria-pressed={active}
+                onClick={() => toggleAgent(name)}
+              >
+                {name}
+              </button>
+            );
+          })}
+          {selectedAgents !== null && (
+            <button
+              type="button"
+              className="btn-reset workflow-filter__reset text-xs text-muted"
+              onClick={selectAll}
+            >
+              All
+            </button>
+          )}
+        </div>
+      )}
+
       <div
         role="tabpanel"
         id="workflow-panel-dag"
@@ -65,6 +122,7 @@ export function AgentWorkflowView({
           graph={graph}
           onNodeClick={onNodeClick}
           height={height}
+          selectedAgents={showFilter ? effectiveSelected : undefined}
         />
       </div>
 
@@ -78,6 +136,7 @@ export function AgentWorkflowView({
           turns={evaluation?.turns ?? []}
           handoffs={evaluation?.handoffs ?? []}
           agentNames={agentNames}
+          selectedAgents={showFilter ? effectiveSelected : undefined}
         />
       </div>
     </div>

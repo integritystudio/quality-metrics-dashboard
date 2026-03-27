@@ -63,7 +63,12 @@ const elk = new ELK();
  * Validates the minimum fields needed for rendering; avoids silent mismatches if ReactFlow
  * passes unexpected data to a node component.
  */
-function isWorkflowNode(value: unknown): value is WorkflowNode {
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  /** True when this node is not in the active filter selection. */
+  dimmed?: boolean;
+}
+
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (
@@ -83,6 +88,7 @@ function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
 async function computeLayout(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet<string>,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const nodeDataMap = buildNodeDataMap(nodes);
 
@@ -97,12 +103,16 @@ async function computeLayout(
 
   const rfNodes: Node[] = (layout.children ?? [])
     .filter(elkNode => nodeDataMap.has(elkNode.id))
-    .map(elkNode => ({
-      id: elkNode.id,
-      position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-      data: nodeDataMap.get(elkNode.id) as unknown as Record<string, unknown>,
-      type: 'agentNode',
-    }));
+    .map(elkNode => {
+      const workflowNode = nodeDataMap.get(elkNode.id)!;
+      const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
+      return {
+        id: elkNode.id,
+        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+        data: { ...workflowNode, dimmed } as unknown as Record<string, unknown>,
+        type: 'agentNode',
+      };
+    });
 
   const rfEdges: Edge[] = edges.map(e => ({
     id: e.id,
@@ -121,7 +131,7 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
 
   return (
     <div
-      className="workflow-node"
+      className={d.dimmed ? 'workflow-node workflow-node--dimmed' : 'workflow-node'}
       style={{
         // Score-band colors are data-driven and cannot be expressed as static classes
         '--workflow-node-border': band?.border ?? '#d1d5db',
@@ -157,9 +167,11 @@ interface WorkflowGraphProps {
   graph: WorkflowGraph;
   onNodeClick?: (nodeId: string) => void;
   height?: number;
+  /** When provided, nodes not in this set are rendered dimmed (topology preserved). */
+  selectedAgents?: ReadonlySet<string>;
 }
 
-export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: WorkflowGraphProps) {
+export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents }: WorkflowGraphProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -167,7 +179,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
   useEffect(() => {
     if (graph.nodes.length === 0) return;
     let cancelled = false;
-    computeLayout(graph.nodes, graph.edges)
+    computeLayout(graph.nodes, graph.edges, selectedAgents)
       .then(({ nodes: rfNodes, edges: rfEdges }) => {
         if (!cancelled) {
           setLayoutError(null);
@@ -183,9 +195,9 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600 }: Workflow
     return () => { cancelled = true; };
     // CR-PERF-3: setNodes/setEdges are stable refs from useNodesState/useEdgesState but
     // were in the dep array, causing unnecessary ELK re-runs each render cycle.
-    // Omitted here — layout should only recompute when graph data actually changes.
+    // Omitted here — layout should only recompute when graph data or filter actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph.nodes, graph.edges]);
+  }, [graph.nodes, graph.edges, selectedAgents]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onNodeClick?.(node.id);

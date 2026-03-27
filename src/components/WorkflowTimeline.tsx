@@ -110,9 +110,11 @@ export interface WorkflowTimelineProps {
   turns: TurnLevelResult[];
   handoffs?: HandoffEvaluation[];
   agentNames: string[];
+  /** When provided, only lanes for agents in this set are rendered. */
+  selectedAgents?: ReadonlySet<string>;
 }
 
-export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowTimelineProps) {
+export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
   if (turns.length === 0) {
     return <EmptyState message="No turns to display." />;
   }
@@ -121,10 +123,18 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
   const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
   const truncated = turns.length > MAX_VISIBLE_TURNS;
 
-  const lanes = buildLanes(visibleTurns, agentNames);
+  const visibleAgentNames = selectedAgents != null
+    ? agentNames.filter(n => selectedAgents.has(n))
+    : agentNames;
+
+  const lanes = buildLanes(visibleTurns, visibleAgentNames);
   const totalTurns = visibleTurns.length;
-  const agentLaneIndex = new Map(agentNames.map((name, i) => [name, i]));
-  const agentColorMap = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
+  const visibleHandoffs = selectedAgents != null
+    ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
+    : handoffs;
+
+  const agentLaneIndex = new Map(visibleAgentNames.map((name, i) => [name, i]));
+  const agentColorMap = new Map(visibleAgentNames.map(name => [name, agentColor(name, agentNames)]));
 
   const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
   const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
@@ -140,7 +150,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
     <div
       className="overflow-x-auto"
       role="img"
-      aria-label={`Workflow timeline: ${agentNames.length} agents, ${totalTurns} turns`}
+      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
     >
       <svg
         width={svgWidth}
@@ -224,7 +234,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
         />
 
         {/* Handoff markers — drawn on top of lanes */}
-        {handoffs.map((h, i) => {
+        {visibleHandoffs.map((h, i) => {
           const turnIndex = findHandoffTurnIndex(h, turns);
           if (turnIndex == null) return null;
 
@@ -283,7 +293,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames }: WorkflowT
 
       <div className="flex-wrap gap-4 mt-2 workflow-legend">
         <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
-        {handoffs.length > 0 && (
+        {visibleHandoffs.length > 0 && (
           <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
         )}
         {truncated && (
