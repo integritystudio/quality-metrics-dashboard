@@ -514,11 +514,11 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
 
     // B9: Tool correctness (only meaningful when tool results exist)
     if (turn.toolResults.length > 0) {
-      const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+      const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
       if (!existingKeys.has(tcKey)) {
         evals.push({
           timestamp: turn.timestamp,
-          evaluationName: 'tool_correctness',
+          evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
           scoreValue: canary
             ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
             : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
@@ -654,7 +654,7 @@ export async function evaluateTurn(
       }
     }
 
-    const tcKey = `${turn.sessionId}:tool_correctness:${turnKey}`;
+    const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
     if (!existingKeys.has(tcKey)) {
       const tcTestCase = {
         input: turn.userText,
@@ -665,7 +665,7 @@ export async function evaluateTurn(
         const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
         evals.push({
           timestamp: turn.timestamp,
-          evaluationName: 'tool_correctness',
+          evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
           scoreValue: normalizeScore(tcResult.score),
           explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
           evaluator: LLM_JUDGE_EVALUATOR,
@@ -674,17 +674,18 @@ export async function evaluateTurn(
           sessionId: turn.sessionId,
         });
       } catch (err) {
-        trackFailure('tool_correctness');
-        console.warn(`  [tool_correctness] Error for ${sessionPreview}: ${(err as Error).message}`);
+        trackFailure(TOOL_CORRECTNESS_CRITERIA.name);
+        console.warn(`  [${TOOL_CORRECTNESS_CRITERIA.name}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
 
       const subCriteria = [
-        { config: TOOL_SELECTION_CRITERIA, name: 'tool_selection' },
-        { config: TOOL_ARGUMENTS_CRITERIA, name: 'tool_arguments' },
-        { config: TOOL_INTEGRATION_CRITERIA, name: 'tool_integration' },
+        TOOL_SELECTION_CRITERIA,
+        TOOL_ARGUMENTS_CRITERIA,
+        TOOL_INTEGRATION_CRITERIA,
       ] as const;
 
-      for (const { config, name } of subCriteria) {
+      for (const config of subCriteria) {
+        const { name } = config;
         const subKey = `${turn.sessionId}:${name}:${turnKey}`;
         if (existingKeys.has(subKey)) continue;
         try {
