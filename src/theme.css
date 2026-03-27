@@ -1401,25 +1401,28 @@ summary.section-rail {
 
 /* ─── Workflow components (CR-STYLE-1) ────────────────────────────────────── */
 
-.workflow-graph-container { height: var(--graph-height, 600px); }
-
 /* WorkflowGraph: agent node card */
 .workflow-node {
   width: 220px;
   height: 120px;
-  border: 2px solid var(--workflow-node-border, #d1d5db);
+  border: 2px solid #d1d5db;
   border-radius: var(--radius-lg);
-  background: var(--workflow-node-bg, #f9fafb);
+  background: #f9fafb;
   padding: var(--space-3);
   font-size: var(--font-size-xs);
 }
+.workflow-node--score-high { border-color: #16a34a; background: #dcfce7; }
+.workflow-node--score-mid  { border-color: #ca8a04; background: #fef9c3; }
+.workflow-node--score-low  { border-color: #dc2626; background: #fee2e2; }
+.workflow-node--score-high .workflow-node__score { color: #15803d; }
+.workflow-node--score-mid  .workflow-node__score { color: #a16207; }
+.workflow-node--score-low  .workflow-node__score { color: #b91c1c; }
 .workflow-node__label {
   font-weight: var(--bold);
   margin-bottom: var(--space-1);
 }
 .workflow-node__score {
   font-size: var(--font-size-xs);
-  color: var(--workflow-node-score-color, inherit);
 }
 .workflow-node__meta,
 .workflow-node__duration {
@@ -1437,6 +1440,12 @@ summary.section-rail {
 .workflow-node--dimmed {
   opacity: 0.25;
   pointer-events: none;
+}
+
+/* WorkflowGraph: highlighted node on the critical path */
+.workflow-node--critical {
+  box-shadow: 0 0 0 3px var(--accent);
+  z-index: 1;
 }
 
 /* WorkflowGraph: fallback containers */
@@ -1491,6 +1500,39 @@ summary.section-rail {
   cursor: pointer;
   text-decoration: underline;
   margin-left: var(--space-1);
+}
+
+/* AgentWorkflowView: secondary controls bar (duration, error, critical path, export) */
+.workflow-filter__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-3);
+}
+.workflow-filter__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+.workflow-filter__slider {
+  width: 100px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.workflow-filter__slider-value {
+  min-width: 48px;
+  color: var(--text-muted);
+}
+.workflow-filter__export {
+  cursor: pointer;
+  text-decoration: underline;
+  color: var(--text-muted);
+  margin-left: auto;
 }
 
 /* AgentWorkflowView: tab bar */
@@ -1568,6 +1610,8 @@ summary.section-rail {
   background-color: color-mix(in srgb, var(--chip-color) 19%, transparent);
   opacity: 1;
 }
+.eval-filter-chip--error { --chip-color: var(--status-critical); }
+.eval-filter-chip--accent { --chip-color: var(--accent); }
 .workflow-legend {
   padding-left: 120px;
 }

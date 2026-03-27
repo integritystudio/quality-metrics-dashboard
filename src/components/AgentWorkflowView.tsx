@@ -1,9 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { WorkflowGraphView } from './WorkflowGraph.js';
 import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
-import { agentColor } from '../lib/quality-utils.js';
+import { agentColor, fmtDuration } from '../lib/quality-utils.js';
 import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
 
 type WorkflowTab = 'dag' | 'timeline';
@@ -37,10 +37,76 @@ export function AgentWorkflowView({
   // Filter state: all agents selected by default (null = all selected, avoids Set churn on load)
   const [selectedAgents, setSelectedAgents] = useState<ReadonlySet<string> | null>(null);
 
+  // Secondary filter state
+  const [minDurationMs, setMinDurationMs] = useState(0);
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [showCriticalPath, setShowCriticalPath] = useState(false);
+
+  const graphContainerRef = useRef<HTMLDivElement>(null);
+
   const effectiveSelected: ReadonlySet<string> = useMemo(
     () => selectedAgents ?? new Set(agentNames),
-    [selectedAgents, agentNames],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedAgents, agentNames.join(',')],
   );
+
+  const maxDurationMs = useMemo(
+    () => Math.max(0, ...graph.nodes.map(n => n.durationMs)),
+    [graph.nodes],
+  );
+
+  // Critical path: longest chain from root to leaf by cumulative durationMs
+  const criticalPathSet = useMemo((): ReadonlySet<string> | undefined => {
+    if (!showCriticalPath || graph.nodes.length === 0 || graph.rootNodeId === null) return undefined;
+
+    const adj = new Map<string, string[]>(graph.nodes.map(n => [n.id, []]));
+    for (const edge of graph.edges) {
+      adj.get(edge.source)?.push(edge.target);
+    }
+    const dur = new Map(graph.nodes.map(n => [n.id, n.durationMs]));
+
+    function dfs(nodeId: string, visiting: Set<string>): [string[], number] {
+      if (visiting.has(nodeId)) return [[], 0]; // cycle guard
+      visiting.add(nodeId);
+      let bestPath: string[] = [];
+      let bestCost = 0;
+      for (const child of adj.get(nodeId) ?? []) {
+        const [childPath, childCost] = dfs(child, visiting);
+        if (childCost > bestCost) {
+          bestCost = childCost;
+          bestPath = childPath;
+        }
+      }
+      visiting.delete(nodeId);
+      return [[nodeId, ...bestPath], (dur.get(nodeId) ?? 0) + bestCost];
+    }
+
+    const [path] = dfs(graph.rootNodeId, new Set());
+    return new Set(path);
+  }, [showCriticalPath, graph.nodes, graph.edges, graph.rootNodeId]);
+
+  // Unified filter set passed to the graph: combines agent name, duration, and error filters.
+  // Returns undefined when no filters are active (no dimming).
+  const filteredNodeIds = useMemo((): ReadonlySet<string> | undefined => {
+    const hasAgentFilter = selectedAgents !== null;
+    const hasDurFilter = minDurationMs > 0;
+    const hasErrFilter = errorsOnly;
+    if (!hasAgentFilter && !hasDurFilter && !hasErrFilter) return undefined;
+
+    let result = new Set(graph.nodes.map(n => n.id));
+    if (hasAgentFilter) {
+      result = new Set([...result].filter(id => selectedAgents!.has(id)));
+    }
+    if (hasDurFilter) {
+      const durPass = new Set(graph.nodes.filter(n => n.durationMs >= minDurationMs).map(n => n.id));
+      result = new Set([...result].filter(id => durPass.has(id)));
+    }
+    if (hasErrFilter) {
+      const errPass = new Set(graph.nodes.filter(n => n.hasError).map(n => n.id));
+      result = new Set([...result].filter(id => errPass.has(id)));
+    }
+    return result;
+  }, [selectedAgents, minDurationMs, errorsOnly, graph.nodes]);
 
   const toggleAgent = useCallback((name: string) => {
     setSelectedAgents(prev => {
@@ -59,7 +125,21 @@ export function AgentWorkflowView({
 
   const selectAll = useCallback(() => setSelectedAgents(null), []);
 
+  const handleExport = useCallback(async () => {
+    const el = graphContainerRef.current;
+    if (!el) return;
+    const { toPng } = await import('html-to-image');
+    const dataUrl = await toPng(el, { cacheBust: true });
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = 'workflow-graph.png';
+    link.click();
+  }, []);
+
   const showFilter = agentNames.length >= WORKFLOW_FILTER_MIN_AGENTS;
+  const showControls = graph.nodes.length > 0;
+
+  const sliderStep = Math.max(1, Math.round(maxDurationMs / 200));
 
   return (
     <div>
@@ -116,6 +196,53 @@ export function AgentWorkflowView({
         </div>
       )}
 
+      {showControls && (
+        <div className="workflow-filter__controls" role="group" aria-label="Graph controls">
+          <label className="workflow-filter__label">
+            Min duration
+            <input
+              type="range"
+              min={0}
+              max={maxDurationMs}
+              step={sliderStep}
+              value={minDurationMs}
+              onChange={e => setMinDurationMs(Number(e.target.value))}
+              className="workflow-filter__slider"
+              aria-label={`Minimum agent duration: ${fmtDuration(minDurationMs)}`}
+            />
+            <span className="workflow-filter__slider-value mono-xs">
+              {minDurationMs > 0 ? `≥ ${fmtDuration(minDurationMs)}` : 'any'}
+            </span>
+          </label>
+          <button
+            type="button"
+            className="btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--error"
+            data-active={errorsOnly || undefined}
+            aria-pressed={errorsOnly}
+            onClick={() => setErrorsOnly(v => !v)}
+          >
+            Errors only
+          </button>
+          <button
+            type="button"
+            className="btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--accent"
+            data-active={showCriticalPath || undefined}
+            aria-pressed={showCriticalPath}
+            onClick={() => setShowCriticalPath(v => !v)}
+          >
+            Critical path
+          </button>
+          <button
+            type="button"
+            className="btn-reset workflow-filter__export mono-xs"
+            onClick={handleExport}
+            aria-label="Export graph as PNG"
+          >
+            Export PNG
+          </button>
+        </div>
+      )}
+
       <div
         role="tabpanel"
         id="workflow-panel-dag"
@@ -126,7 +253,9 @@ export function AgentWorkflowView({
           graph={graph}
           onNodeClick={onNodeClick}
           height={height}
-          selectedAgents={showFilter ? effectiveSelected : undefined}
+          selectedAgents={filteredNodeIds}
+          criticalPath={criticalPathSet}
+          containerRef={graphContainerRef}
         />
       </div>
 

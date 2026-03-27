@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import { API_BASE } from '../lib/constants.js';
-import { postActivityEvent } from '../lib/activity-logger.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
 
@@ -89,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleSignOut = useCallback(async () => {
     if (session) {
       const jwt = await getAccessToken().catch(() => null);
-      if (jwt) void postActivityEvent('logout', jwt);
+      if (jwt) void fetch(`${API_BASE}/api/logout`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}` } }).catch(() => undefined);
     }
     logout({ logoutParams: { returnTo: window.location.origin } });
     setSession(null);

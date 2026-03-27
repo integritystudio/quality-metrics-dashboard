@@ -1081,6 +1081,18 @@ interface HandoffCardProps {
 export function HandoffCard(
 
 ================
+File: src/components/HealthBanner.tsx
+================
+import type { ReactNode } from 'react';
+import { StatusBadge } from './Indicators.js';
+interface HealthBannerProps {
+  status: string;
+  message: ReactNode;
+  children?: ReactNode;
+}
+export function HealthBanner(
+
+================
 File: src/components/Indicators.tsx
 ================
 import type { MetricTrend, ConfidenceIndicator } from '../types.js';
@@ -1318,6 +1330,21 @@ interface SparklineProps {
   label?: string;
 }
 function SparklineInner(
+
+================
+File: src/components/SplitPane.tsx
+================
+import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
+interface SplitPaneProps {
+  left: ReactNode;
+  right: ReactNode;
+  initialSplit?: number;
+  minPct?: number;
+  maxPct?: number;
+}
+⋮----
+function onMouseMove(e: MouseEvent)
+function onMouseUp()
 
 ================
 File: src/components/StatDisplay.tsx
@@ -2431,18 +2458,6 @@ aria-sort=
 <td colSpan=
 
 ================
-File: src/components/HealthBanner.tsx
-================
-import type { ReactNode } from 'react';
-import { StatusBadge } from './Indicators.js';
-interface HealthBannerProps {
-  status: string;
-  message: ReactNode;
-  children?: ReactNode;
-}
-export function HealthBanner(
-
-================
 File: src/components/HealthOverview.tsx
 ================
 import type { QualityDashboardSummary } from '../types.js';
@@ -2478,21 +2493,6 @@ File: src/components/ScoreHistogram.tsx
 import type { CSSProperties } from 'react';
 
 ================
-File: src/components/SplitPane.tsx
-================
-import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
-interface SplitPaneProps {
-  left: ReactNode;
-  right: ReactNode;
-  initialSplit?: number;
-  minPct?: number;
-  maxPct?: number;
-}
-⋮----
-function onMouseMove(e: MouseEvent)
-function onMouseUp()
-
-================
 File: src/components/TruncatedIdLink.tsx
 ================
 import type { MouseEvent } from 'react';
@@ -2524,7 +2524,6 @@ File: src/contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import { API_BASE } from '../lib/constants.js';
-import { postActivityEvent } from '../lib/activity-logger.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
 interface AuthContextValue {
@@ -2959,6 +2958,41 @@ interface PipelineFunnelProps {
 }
 
 ================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[]
+⋮----
+0: '',      // UNSET
+
+================
 File: src/contexts/KeyboardNavContext.tsx
 ================
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -3065,41 +3099,6 @@ export function BarIndicator({
   className,
   style,
 }: BarIndicatorProps)
-
-================
-File: src/components/SpanTree.tsx
-================
-import type { CSSProperties } from 'react';
-import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[]
-⋮----
-0: '',      // UNSET
 
 ================
 File: src/components/CoverageGrid.tsx
@@ -3378,6 +3377,40 @@ import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 ================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+⋮----
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[]
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock(
+⋮----
+const turnX = (turnIndex: number): number
+const laneY = (laneIndex: number): number
+
+================
 File: src/lib/constants.ts
 ================
 import { z } from 'zod';
@@ -3454,40 +3487,6 @@ export function spanAttr<T>(span: SpanLike, key: string): T | undefined
 export function extractFiniteScores(evals: Array<
 
 ================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[]
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock(
-⋮----
-const turnX = (turnIndex: number): number
-const laneY = (laneIndex: number): number
-
-================
 File: src/api/routes/trends.ts
 ================
 import { Hono } from 'hono';
@@ -3535,118 +3534,6 @@ type AgentAcc = {
 };
 function computeEvalMetricSummary(scores: number[]):
 function createAgentAccumulator(periodDays: number): AgentAcc
-
-================
-File: scripts/judge-evaluations.ts
-================
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
-import { createHash } from 'crypto';
-import { join, basename } from 'path';
-import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
-import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import {
-  LLMJudge,
-} from '../../src/lib/judge/llm-judge-config.js';
-import type { DatasetRunRecord } from '../../src/backends/index.js';
-import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
-import {
-  traceSpanSchema,
-  otelLogEntrySchema,
-  transcriptEntrySchema,
-  otelEvaluationRecordSchema,
-} from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
-import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-import { HOOK_NAME } from '../../src/api/api-constants.js';
-⋮----
-export function normalizeScore(score: number): number
-export interface TranscriptInfo {
-  path: string;
-  sessionId: string;
-  traceId: string;
-}
-export interface Turn {
-  sessionId: string;
-  traceId: string;
-  timestamp: string;
-  userText: string;
-  assistantText: string;
-  toolResults: string[];
-}
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  explanation: string;
-  evaluator: string;
-  evaluatorType: string;
-  traceId: string;
-  sessionId: string;
-}
-⋮----
-function resolveTranscriptPath(originalPath: string): string | null
-async function _discoverTranscripts(): Promise<TranscriptInfo[]>
-interface TraceSession {
-  sessionId: string;
-  traceId: string;
-  earliestTime: number; // epoch seconds
-  spanCount: number;
-}
-⋮----
-earliestTime: number; // epoch seconds
-⋮----
-/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
-async function discoverSessionsFromTraces(): Promise<Turn[]>
-/** B8: Discriminated union for transcript content blocks */
-export interface TextBlock { type: 'text'; text: string }
-export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
-export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
-export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
-function isContentBlock(value: unknown): value is ContentBlock
-function asContentBlocks(content: unknown): ContentBlock[]
-export function isSystemPrompt(text: string): boolean
-export function isToolResultOnly(content: unknown): boolean
-export function extractTextFromContent(content: unknown): string
-export function extractToolResults(content: unknown): string[]
-export async function extractTurns(info: TranscriptInfo): Promise<Turn[]>
-async function createAnthropicProvider(): Promise<LLMProvider>
-⋮----
-async generate(
-      prompt: string,
-      options?: { temperature?: number; logprobs?: boolean }
-): Promise<
-⋮----
-// B15: Anthropic Messages API doesn't support logprobs, so G-Eval
-⋮----
-export function hashToScore(input: string, min: number, max: number): number
-export function isCanaryTurn(sessionId: string, turnKey: string): boolean
-export interface SeedResult {
-  evals: EvalRecord[];
-  canaryCount: number;
-}
-export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult
-⋮----
-function trackFailure(metric: string): void
-export async function evaluateTurn(
-  judge: LLMJudge,
-  turn: Turn,
-  existingKeys: Set<string>,
-): Promise<EvalRecord[]>
-export function toOTelRecord(ev: EvalRecord): object
-function _loadExistingKeys(): Set<string>
-⋮----
-function acquireLock(): boolean
-function releaseLock(): void
-function safeExit(code: number): never
-function writeEvaluations(evals: EvalRecord[]): void
-export async function processBatch<T, R>(
-  items: T[],
-  concurrency: number,
-  delayMs: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]>
-async function main()
 
 ================
 File: src/theme.css
@@ -4210,6 +4097,118 @@ type Span = (typeof allSpans)[number];
 // lexicographic comparison is equivalent to chronological ordering.
 ⋮----
 const isTraceKey = (e: KVEntry)
+
+================
+File: scripts/judge-evaluations.ts
+================
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
+import { createHash } from 'crypto';
+import { join, basename } from 'path';
+import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
+import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
+import {
+  LLMJudge,
+} from '../../src/lib/judge/llm-judge-config.js';
+import type { DatasetRunRecord } from '../../src/backends/index.js';
+import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
+import {
+  traceSpanSchema,
+  otelLogEntrySchema,
+  transcriptEntrySchema,
+  otelEvaluationRecordSchema,
+} from '../../src/lib/validation/dashboard-schemas.js';
+import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
+import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+import { HOOK_NAME } from '../../src/api/api-constants.js';
+⋮----
+export function normalizeScore(score: number): number
+export interface TranscriptInfo {
+  path: string;
+  sessionId: string;
+  traceId: string;
+}
+export interface Turn {
+  sessionId: string;
+  traceId: string;
+  timestamp: string;
+  userText: string;
+  assistantText: string;
+  toolResults: string[];
+}
+export interface EvalRecord {
+  timestamp: string;
+  evaluationName: string;
+  scoreValue: number;
+  explanation: string;
+  evaluator: string;
+  evaluatorType: string;
+  traceId: string;
+  sessionId: string;
+}
+⋮----
+function resolveTranscriptPath(originalPath: string): string | null
+async function _discoverTranscripts(): Promise<TranscriptInfo[]>
+interface TraceSession {
+  sessionId: string;
+  traceId: string;
+  earliestTime: number; // epoch seconds
+  spanCount: number;
+}
+⋮----
+earliestTime: number; // epoch seconds
+⋮----
+/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
+async function discoverSessionsFromTraces(): Promise<Turn[]>
+/** B8: Discriminated union for transcript content blocks */
+export interface TextBlock { type: 'text'; text: string }
+export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
+export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
+export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
+function isContentBlock(value: unknown): value is ContentBlock
+function asContentBlocks(content: unknown): ContentBlock[]
+export function isSystemPrompt(text: string): boolean
+export function isToolResultOnly(content: unknown): boolean
+export function extractTextFromContent(content: unknown): string
+export function extractToolResults(content: unknown): string[]
+export async function extractTurns(info: TranscriptInfo): Promise<Turn[]>
+async function createAnthropicProvider(): Promise<LLMProvider>
+⋮----
+async generate(
+      prompt: string,
+      options?: { temperature?: number; logprobs?: boolean }
+): Promise<
+⋮----
+// B15: Anthropic Messages API doesn't support logprobs, so G-Eval
+⋮----
+export function hashToScore(input: string, min: number, max: number): number
+export function isCanaryTurn(sessionId: string, turnKey: string): boolean
+export interface SeedResult {
+  evals: EvalRecord[];
+  canaryCount: number;
+}
+export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult
+⋮----
+function trackFailure(metric: string): void
+export async function evaluateTurn(
+  judge: LLMJudge,
+  turn: Turn,
+  existingKeys: Set<string>,
+): Promise<EvalRecord[]>
+export function toOTelRecord(ev: EvalRecord): object
+function _loadExistingKeys(): Set<string>
+⋮----
+function acquireLock(): boolean
+function releaseLock(): void
+function safeExit(code: number): never
+function writeEvaluations(evals: EvalRecord[]): void
+export async function processBatch<T, R>(
+  items: T[],
+  concurrency: number,
+  delayMs: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]>
+async function main()
 
 ================
 File: scripts/derive-evaluations.ts

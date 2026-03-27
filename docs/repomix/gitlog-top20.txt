@@ -1,3 +1,20 @@
+4c8321b 2026-03-27 refactor(scripts): add CANARY/SEED_EVALUATOR_TYPE constants; hoist sessionPreview
+  scripts/judge-evaluations.ts
+
+f652c5b 2026-03-27 fix(judge-evaluations): correct self-referential sessionPreview; add declaration to evaluateTurn
+  scripts/judge-evaluations.ts
+
+222fae8 2026-03-27 refactor(scripts): apply RULE_EVALUATOR/LLM_EVALUATOR_TYPE constants; hoist sessionPreview
+  scripts/judge-evaluations.ts
+
+1cc72fa 2026-03-26 refactor(scripts): extract LLM_JUDGE_EVALUATOR constant; remove blank line
+  scripts/judge-evaluations.ts
+
+5356e01 2026-03-26 perf(workflow): memoize effectiveSelected Set and document style exemption
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 a64d695 2026-03-26 feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -313,19 +330,4 @@ dfe75f3 2026-03-26 refactor: extract static inline styles to CSS in QualityLiveI
   src/theme.css
 
 a288b8d 2026-03-26 refactor: move constant-based dimension inline styles to CSS classes
-  src/theme.css
-
-63528bf 2026-03-26 refactor(workflow-timeline): move legend paddingLeft to CSS class
-  src/theme.css
-
-ed795a4 2026-03-26 refactor(eval-table): extract filter chip inline styles to CSS class
-  src/theme.css
-
-b4cd850 2026-03-26 refactor(agent-activity): move minWidth inline styles to CSS classes
-  src/theme.css
-
-20f19d0 2026-03-26 refactor(session-detail): move inline grid/column styles to CSS classes
-  src/theme.css
-
-5cb443b 2026-03-26 refactor(coverage-grid): move static inline styles to CSS classes
   src/theme.css
