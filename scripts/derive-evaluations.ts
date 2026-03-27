@@ -291,7 +291,10 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     const distinctAgents = new Set(data.agentSequence.map(a => a.agentName));
     if (distinctAgents.size < MIN_HANDOFF_AGENTS) continue;
 
-    let sum = 0, count = 0, correct = 0, preserved = 0;
+    let sum = 0;
+    let count = 0;
+    let correct = 0;
+    let preserved = 0;
     for (let i = 1; i < data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
       const curr = data.agentSequence[i];
