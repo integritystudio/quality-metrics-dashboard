@@ -157,7 +157,7 @@ function UserRow({
 
 export function AdminPage() {
   const [refreshKey, setRefreshKey] = useState(0);
-  // CR-AUTH-2: replaced numeric counter with a Set of in-flight request IDs.
+  // Replaced numeric counter with a Set of in-flight request IDs.
   // A numeric counter gets stuck if a mutation throws before onMutationEnd;
   // a Set is self-correcting — duplicate remove() calls are safe no-ops.
   const pendingMutationsRef = useRef<Set<string>>(new Set());
