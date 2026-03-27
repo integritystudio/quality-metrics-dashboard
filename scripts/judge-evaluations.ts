@@ -36,7 +36,6 @@ import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/li
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { HOOK_NAME } from '../../src/api/api-constants.js';
 
-/** B9: Tool correctness criteria — evaluates whether tool usage was appropriate */
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',
   criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
@@ -264,7 +263,6 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
   return turns;
 }
 
-/** B8: Discriminated union for transcript content blocks */
 export interface TextBlock { type: 'text'; text: string }
 export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
 export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
