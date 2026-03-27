@@ -30,9 +30,10 @@ export function AgentWorkflowView({
 }: AgentWorkflowViewProps) {
   const [activeTab, setActiveTab] = useState<WorkflowTab>('dag');
 
-  const agentNames = [...new Set(
-    (evaluation?.turns ?? []).map(t => t.agentName ?? 'unknown'),
-  )];
+  const agentNames = useMemo(
+    () => [...new Set((evaluation?.turns ?? []).map(t => t.agentName ?? 'unknown'))],
+    [evaluation?.turns],
+  );
 
   // Filter state: all agents selected by default (null = all selected, avoids Set churn on load)
   const [selectedAgents, setSelectedAgents] = useState<ReadonlySet<string> | null>(null);
