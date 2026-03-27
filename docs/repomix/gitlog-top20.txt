@@ -1,3 +1,12 @@
+835dd30 2026-03-27 style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments
+  scripts/judge-evaluations.ts
+
+f6e3825 2026-03-27 fix(ci): pin all Doppler secret fetches to prd config
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  scripts/judge-evaluations.ts
+
 48f38b5 2026-03-27 feat(e2e): replace localStorage session seeding with Auth0 stub
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -330,10 +339,4 @@ c89a59e 2026-03-26 refactor(alert-list): replace threshold-bar background ternar
   src/theme.css
 
 34be70d 2026-03-26 refactor(correlation-heatmap): move toxic border/animation to CSS data-toxic selector
-  src/theme.css
-
-c42cc05 2026-03-26 refactor(trend-series): replace chart legend color styles with CSS classes
-  src/theme.css
-
-fdb952c 2026-03-26 refactor(trend-chart): replace dynamics panel color styles with CSS classes
   src/theme.css
