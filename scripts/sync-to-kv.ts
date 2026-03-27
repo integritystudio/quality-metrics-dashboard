@@ -101,7 +101,6 @@ const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
 const MAX_RECENT_SESSIONS = 20;
 
-
 type KVEntry = { key: string; value: string };
 
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {

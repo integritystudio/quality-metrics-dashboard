@@ -34,6 +34,7 @@ import {
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
+import { HOOK_NAME } from '../../src/api/api-constants.js';
 
 /** B9: Tool correctness criteria — evaluates whether tool usage was appropriate */
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
@@ -144,12 +145,9 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
 
   for (const file of logFiles) {
     const filepath = join(TELEMETRY_DIR, file);
-    // P1-2: Stream line-by-line instead of loading entire file into memory
-    // Use validated streaming to ensure schema compliance
-
     for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
       const attrs = entry.attributes as Record<string, unknown> | undefined;
-      if (!attrs || attrs['hook.name'] !== 'token-metrics-extraction') continue;
+      if (!attrs || attrs['hook.name'] !== HOOK_NAME.TOKEN_METRICS) continue;
 
       const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
       if (!tPath) continue;
