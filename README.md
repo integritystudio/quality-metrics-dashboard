@@ -62,6 +62,12 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...   # all DB access — Auth0 JWTs not valid 
 
 > **Never set `ALLOW_TEST_BYPASS` in production.** This binding enables the `Bearer test-token` auth bypass used in worker unit tests (`makeEnv()` sets it to `'true'`). Leave the binding absent in wrangler.toml and production secrets.
 
+### Integration Tests
+
+`e2e/integration/` tests hit the deployed worker with real Auth0 JWTs. A permanent test account (`AUTH0_TEST_EMAIL` in Doppler) is used — Auth0 ROPC via the `integritystudio-dashboard` SPA client (`password` grant, `Username-Password-Authentication` connection). Test DB rows are upserted on setup and deleted on teardown; the Auth0 user is never touched.
+
+Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration/sentry-reporter.ts`.
+
 ## Populating Data
 
 `npm run populate` runs the full pipeline in one command:
@@ -95,8 +101,8 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run sync` | KV sync only (`--budget=450` default, `--budget=5000` for bulk) |
 | `npm test` | Vitest |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run test:e2e` | Playwright E2E tests (mocked auth) |
-| `npm run test:e2e:integration` | Integration tests against deployed worker (requires Doppler) |
+| `npm run test:e2e` | Playwright E2E tests (mocked auth, Chromium) |
+| `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration` | Auth0 integration tests against deployed worker |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
 | `npm run deploy:secrets` | Sync secrets from Doppler to both workers |
 
