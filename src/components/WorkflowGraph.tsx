@@ -160,6 +160,7 @@ export function applyClusterCollapse(
       turnCount: members.reduce((s, m) => s + m.turnCount, 0),
       hasError: members.some(m => m.hasError),
       clusterId: cId,
+      clusterMemberCount: members.length,
     });
   }
 
@@ -233,12 +234,11 @@ async function computeLayout(
       const isCluster = elkNode.id.startsWith('__cluster__');
 
       if (isCluster) {
-        const scores = [workflowNode.evaluationScore].filter((s): s is number => s !== null);
-        const avgScore = scores.length > 0 ? scores[0] : null;
+        const avgScore = workflowNode.evaluationScore;
         const data: ClusterNodeData = {
           clusterId: workflowNode.clusterId ?? elkNode.id,
           clusterLabel: workflowNode.clusterId ?? elkNode.id,
-          memberCount: workflowNode.turnCount, // re-used as member aggregate indicator
+          memberCount: workflowNode.clusterMemberCount ?? 0,
           hasError: workflowNode.hasError,
           avgScore,
         };

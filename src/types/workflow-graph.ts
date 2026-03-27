@@ -21,6 +21,11 @@ export interface WorkflowNode {
    * belongs to no cluster.
    */
   clusterId?: string;
+  /**
+   * Set only on synthetic cluster nodes produced by applyClusterCollapse.
+   * Holds the count of member nodes that were collapsed into this node.
+   */
+  clusterMemberCount?: number;
 }
 
 export interface WorkflowEdge {
