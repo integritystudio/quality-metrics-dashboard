@@ -102,8 +102,8 @@ const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
 const MAX_RECENT_SESSIONS = 20;
 
-const META_LAST_SYNC_KEY = META_LAST_SYNC_KEY;
-const META_SYNC_COVERAGE_KEY = META_SYNC_COVERAGE_KEY;
+const META_LAST_SYNC_KEY = 'meta:lastSync';
+const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
 
 type KVEntry = { key: string; value: string };
 
