@@ -1,3 +1,8 @@
+a894348 2026-03-27 chore: regenerate repomix docs after task-tracker prefix cleanup
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 a592dd5 2026-03-27 refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)
   scripts/judge-evaluations.ts
   src/theme.css
@@ -340,7 +345,4 @@ e7a1b5d 2026-03-26 refactor(workflow-graph): replace 4x height inline style with
   src/theme.css
 
 5ca96cb 2026-03-26 refactor(span-tree): replace paddingLeft inline calc with CSS custom property --span-row-indent
-  src/theme.css
-
-f504585 2026-03-26 refactor(score-histogram): replace bar height inline style with CSS custom property
   src/theme.css

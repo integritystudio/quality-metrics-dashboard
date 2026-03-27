@@ -2360,85 +2360,6 @@ describe(&apos;GET /agents/:sessionId&apos;, () =&gt; {
     expect(body).toHaveProperty(&apos;graph&apos;);
     expect(body.graph).toEqual(mockGraph);
   });
-});</file><file path="src/__tests__/api-calibration.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
-import app from &apos;../../worker/index.js&apos;;
-function makeKV(store: Record&lt;string, unknown&gt; = {}): KVNamespace {
-  return {
-    get: async (key: string, type?: string) =&gt; {
-      const value = store[key];
-      if (value === undefined) return null;
-      if (type === &apos;json&apos;) return value;
-      return JSON.stringify(value);
-    },
-    put: async () =&gt; {},
-    delete: async () =&gt; {},
-    list: async () =&gt; ({ keys: [], list_complete: true, cursor: &apos;&apos; }),
-    getWithMetadata: async () =&gt; ({ value: null, metadata: null }),
-  } as unknown as KVNamespace;
-}
-function makeCalibrationData() {
-  return {
-    lastCalibrated: &apos;2026-03-10T06:00:00.000Z&apos;,
-    distributions: {
-      relevance: { p10: 0.42, p25: 0.58, p50: 0.67, p75: 0.79, p90: 0.88 },
-      faithfulness: { p10: 0.5, p25: 0.65, p50: 0.75, p75: 0.85, p90: 0.93 },
-      coherence: { p10: 0.55, p25: 0.68, p50: 0.77, p75: 0.86, p90: 0.94 },
-    },
-    sampleCounts: {
-      relevance: 312,
-      faithfulness: 289,
-      coherence: 301,
-    },
-  };
-}
-describe(&apos;GET /api/calibration&apos;, () =&gt; {
-  it(&apos;returns 200 with calibration state from KV key meta:calibration&apos;, async () =&gt; {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
-    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
-    expect(res.status).toBe(200);
-  });
-  it(&apos;returns distributions field in response body&apos;, async () =&gt; {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
-    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
-    const body = await res.json() as Record&lt;string, unknown&gt;;
-    expect(body).toHaveProperty(&apos;distributions&apos;);
-  });
-  it(&apos;returns lastCalibrated field in response body&apos;, async () =&gt; {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
-    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
-    const body = await res.json() as Record&lt;string, unknown&gt;;
-    expect(body).toHaveProperty(&apos;lastCalibrated&apos;);
-  });
-  it(&apos;returns distributions with per-metric percentile data&apos;, async () =&gt; {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
-    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
-    const body = await res.json() as { distributions: Record&lt;string, unknown&gt; };
-    expect(body.distributions).toHaveProperty(&apos;relevance&apos;);
-    const relDist = body.distributions[&apos;relevance&apos;] as Record&lt;string, number&gt;;
-    expect(relDist).toHaveProperty(&apos;p10&apos;);
-    expect(relDist).toHaveProperty(&apos;p25&apos;);
-    expect(relDist).toHaveProperty(&apos;p50&apos;);
-    expect(relDist).toHaveProperty(&apos;p75&apos;);
-    expect(relDist).toHaveProperty(&apos;p90&apos;);
-  });
-  it(&apos;returns 404 with error field when no calibration data exists in KV&apos;, async () =&gt; {
-    const kv = makeKV({});
-    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
-    expect(res.status).toBe(404);
-    const body = await res.json() as Record&lt;string, unknown&gt;;
-    expect(body).toHaveProperty(&apos;error&apos;);
-  });
-  it(&apos;returns exact lastCalibrated value from KV&apos;, async () =&gt; {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
-    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
-    const body = await res.json() as { lastCalibrated: string };
-    expect(body.lastCalibrated).toBe(&apos;2026-03-10T06:00:00.000Z&apos;);
-  });
 });</file><file path="src/__tests__/api-compliance.test.ts">import { describe, it, expect, vi, beforeEach } from &apos;vitest&apos;;
 vi.mock(&apos;../../../dist/lib/quality/quality-metrics.js&apos;, () =&gt; ({
   computeDashboardSummary: vi.fn(),
@@ -3998,86 +3919,6 @@ describe(&apos;loadEvaluationsByTraceIds&apos;, () =&gt; {
     expect(result).toHaveLength(2);
     expect(result.map(e =&gt; e.traceId)).toEqual([&apos;trace-ok&apos;, &apos;trace-also-ok&apos;]);
   });
-});</file><file path="src/__tests__/dr-l4-self-hosted-fonts.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
-import { readFileSync, existsSync } from &apos;fs&apos;;
-import { resolve } from &apos;path&apos;;
-const DASHBOARD_ROOT = resolve(__dirname, &apos;../../&apos;);
-const THEME_CSS = resolve(DASHBOARD_ROOT, &apos;src/theme.css&apos;);
-const PUBLIC_FONTS_DIR = resolve(DASHBOARD_ROOT, &apos;public/fonts&apos;);
-const REQUIRED_FAMILIES = [&apos;JetBrains Mono&apos;, &apos;IBM Plex Sans&apos;] as const;
-const REQUIRED_WEIGHTS = [400, 500, 600] as const;
-const EXPECTED_FONT_FILES: Record&lt;string, string[]&gt; = {
-  &apos;JetBrains Mono&apos;: [
-    &apos;JetBrainsMono-Regular.woff2&apos;,
-    &apos;JetBrainsMono-Medium.woff2&apos;,
-    &apos;JetBrainsMono-SemiBold.woff2&apos;,
-  ],
-  &apos;IBM Plex Sans&apos;: [
-    &apos;IBMPlexSans-Regular.woff2&apos;,
-    &apos;IBMPlexSans-Medium.woff2&apos;,
-    &apos;IBMPlexSans-SemiBold.woff2&apos;,
-  ],
-};
-describe(&apos;DR-L4: theme.css — no external Google Fonts import&apos;, () =&gt; {
-  it(&apos;should not contain a fonts.googleapis.com @import&apos;, () =&gt; {
-    const css = readFileSync(THEME_CSS, &apos;utf-8&apos;);
-    expect(css).not.toMatch(/fonts\.googleapis\.com/);
-  });
-  it(&apos;should not contain any external @import url starting with https://&apos;, () =&gt; {
-    const css = readFileSync(THEME_CSS, &apos;utf-8&apos;);
-    const externalImport = /@import\s+url\([&apos;&quot;]?https?:\/\//;
-    expect(css).not.toMatch(externalImport);
-  });
-});
-describe(&apos;DR-L4: local @font-face declarations exist&apos;, () =&gt; {
-  function getFontFaceSource(): string {
-    const fontsCss = resolve(DASHBOARD_ROOT, &apos;src/fonts.css&apos;);
-    if (existsSync(fontsCss)) {
-      return readFileSync(fontsCss, &apos;utf-8&apos;);
-    }
-    return readFileSync(THEME_CSS, &apos;utf-8&apos;);
-  }
-  it(&apos;should declare @font-face for JetBrains Mono&apos;, () =&gt; {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/font-family:\s*[&apos;&quot;]?JetBrains Mono[&apos;&quot;]?/i);
-  });
-  it(&apos;should declare @font-face for IBM Plex Sans&apos;, () =&gt; {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/font-family:\s*[&apos;&quot;]?IBM Plex Sans[&apos;&quot;]?/i);
-  });
-  for (const family of REQUIRED_FAMILIES) {
-    for (const weight of REQUIRED_WEIGHTS) {
-      it(`should have a @font-face block for ${family} weight ${weight}`, () =&gt; {
-        const css = getFontFaceSource();
-        // Find all @font-face blocks that mention this family
-        const fontFaceBlocks = [...css.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m =&gt; m[0]);
-        const familyBlocks = fontFaceBlocks.filter(block =&gt;
-          new RegExp(`font-family:\\s*[&apos;&quot;]?${family}[&apos;&quot;]?`, &apos;i&apos;).test(block)
-        );
-        const hasWeight = familyBlocks.some(block =&gt;
-          new RegExp(`font-weight:\\s*${weight}`).test(block)
-        );
-        expect(hasWeight, `Expected @font-face for &quot;${family}&quot; with font-weight: ${weight}`).toBe(true);
-      });
-    }
-  }
-  it(&apos;should reference /fonts/ local path in @font-face src&apos;, () =&gt; {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/url\([&apos;&quot;]?\/fonts\//);
-  });
-});
-describe(&apos;DR-L4: public/fonts/ directory and font files exist&apos;, () =&gt; {
-  it(&apos;should have a public/fonts/ directory&apos;, () =&gt; {
-    expect(existsSync(PUBLIC_FONTS_DIR), `Expected directory: ${PUBLIC_FONTS_DIR}`).toBe(true);
-  });
-  for (const [family, files] of Object.entries(EXPECTED_FONT_FILES)) {
-    for (const file of files) {
-      it(`should have font file public/fonts/${file} for ${family}`, () =&gt; {
-        const filePath = resolve(PUBLIC_FONTS_DIR, file);
-        expect(existsSync(filePath), `Expected font file at: ${filePath}`).toBe(true);
-      });
-    }
-  }
 });</file><file path="src/__tests__/dr13-coverage.test.tsx">import { describe, it, expect, afterEach, beforeEach, vi } from &apos;vitest&apos;;
 import { render, screen, cleanup } from &apos;@testing-library/react&apos;;
 import { Sparkline } from &apos;../components/Sparkline.js&apos;;
@@ -5613,178 +5454,6 @@ describe(&apos;EvaluationDetailPage&apos;, () =&gt; {
     expect(container.textContent).toContain(&apos;No Evaluations Found&apos;);
     expect(container.textContent).toContain(&apos;may not have been synced yet&apos;);
   });
-});</file><file path="src/__tests__/quality-utils-adaptive.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
-import {
-  empiricalCDF,
-  adaptiveScoreColorBand,
-  MIN_QUANTILE_SAMPLE_SIZE,
-  METRIC_SCALE_STRATEGY,
-  type PercentileDistribution,
-} from &apos;../lib/quality-utils.js&apos;;
-function makeDist(overrides: Partial&lt;PercentileDistribution&gt; = {}): PercentileDistribution {
-  return {
-    p10: 0.4,
-    p25: 0.55,
-    p50: 0.65,
-    p75: 0.78,
-    p90: 0.88,
-    ...overrides,
-  };
-}
-describe(&apos;empiricalCDF&apos;, () =&gt; {
-  it(&apos;returns 0.5 for value at exact p50&apos;, () =&gt; {
-    const dist = makeDist({ p50: 0.65 });
-    expect(empiricalCDF(0.65, dist)).toBeCloseTo(0.5, 5);
-  });
-  it(&apos;returns a value near 0 for value below p10&apos;, () =&gt; {
-    const dist = makeDist({ p10: 0.4 });
-    const result = empiricalCDF(0.1, dist);
-    expect(result).toBeGreaterThanOrEqual(0);
-    expect(result).toBeLessThan(0.1);
-  });
-  it(&apos;returns a value near 1 for value above p90&apos;, () =&gt; {
-    const dist = makeDist({ p90: 0.88 });
-    const result = empiricalCDF(0.98, dist);
-    expect(result).toBeGreaterThan(0.9);
-    expect(result).toBeLessThanOrEqual(1);
-  });
-  it(&apos;returns interpolated value between 0.25 and 0.5 for value between p25 and p50&apos;, () =&gt; {
-    const dist = makeDist({ p25: 0.55, p50: 0.65 });
-    const midpoint = (0.55 + 0.65) / 2;
-    const result = empiricalCDF(midpoint, dist);
-    expect(result).toBeGreaterThan(0.25);
-    expect(result).toBeLessThan(0.5);
-  });
-  it(&apos;returns 0.5 for non-finite value (NaN)&apos;, () =&gt; {
-    expect(empiricalCDF(NaN, makeDist())).toBeCloseTo(0.5, 5);
-  });
-  it(&apos;returns 0.5 for non-finite value (Infinity)&apos;, () =&gt; {
-    expect(empiricalCDF(Infinity, makeDist())).toBeLessThanOrEqual(1);
-  });
-  it(&apos;returns 0.5 for non-finite value (-Infinity)&apos;, () =&gt; {
-    expect(empiricalCDF(-Infinity, makeDist())).toBeGreaterThanOrEqual(0);
-  });
-});
-describe(&apos;MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
-  it(&apos;equals 100&apos;, () =&gt; {
-    expect(MIN_QUANTILE_SAMPLE_SIZE).toBe(100);
-  });
-});
-describe(&apos;METRIC_SCALE_STRATEGY&apos;, () =&gt; {
-  it(&apos;maps relevance to quantile&apos;, () =&gt; {
-    expect(METRIC_SCALE_STRATEGY[&apos;relevance&apos;]).toBe(&apos;quantile&apos;);
-  });
-  it(&apos;maps faithfulness to binary&apos;, () =&gt; {
-    expect(METRIC_SCALE_STRATEGY[&apos;faithfulness&apos;]).toBe(&apos;binary&apos;);
-  });
-  it(&apos;maps coherence to uniform&apos;, () =&gt; {
-    expect(METRIC_SCALE_STRATEGY[&apos;coherence&apos;]).toBe(&apos;uniform&apos;);
-  });
-  it(&apos;maps hallucination to log&apos;, () =&gt; {
-    expect(METRIC_SCALE_STRATEGY[&apos;hallucination&apos;]).toBe(&apos;log&apos;);
-  });
-  it(&apos;maps task_completion to step&apos;, () =&gt; {
-    expect(METRIC_SCALE_STRATEGY[&apos;task_completion&apos;]).toBe(&apos;step&apos;);
-  });
-  it(&apos;maps tool_correctness to categorical&apos;, () =&gt; {
-    expect(METRIC_SCALE_STRATEGY[&apos;tool_correctness&apos;]).toBe(&apos;categorical&apos;);
-  });
-  it(&apos;maps evaluation_latency to percentile_rank&apos;, () =&gt; {
-    expect(METRIC_SCALE_STRATEGY[&apos;evaluation_latency&apos;]).toBe(&apos;percentile_rank&apos;);
-  });
-});
-describe(&apos;adaptiveScoreColorBand — quantile strategy&apos;, () =&gt; {
-  it(&apos;uses empiricalCDF when distribution and sufficient sampleSize are provided&apos;, () =&gt; {
-    const dist = makeDist({ p10: 0.3, p25: 0.5, p50: 0.6, p75: 0.72, p90: 0.82 });
-    const result = adaptiveScoreColorBand(0.75, &apos;relevance&apos;, &apos;maximize&apos;, dist, 200);
-    expect([&apos;excellent&apos;, &apos;good&apos;]).toContain(result);
-  });
-  it(&apos;falls back to uniform scoreColorBand when no distribution provided&apos;, () =&gt; {
-    const result = adaptiveScoreColorBand(0.95, &apos;relevance&apos;, &apos;maximize&apos;, undefined, 200);
-    expect(result).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;falls back to uniform scoreColorBand when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
-    const dist = makeDist();
-    const result = adaptiveScoreColorBand(0.95, &apos;relevance&apos;, &apos;maximize&apos;, dist, 50);
-    expect(result).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;falls back to uniform when sampleSize is exactly MIN_QUANTILE_SAMPLE_SIZE - 1&apos;, () =&gt; {
-    const dist = makeDist();
-    const result = adaptiveScoreColorBand(0.95, &apos;relevance&apos;, &apos;maximize&apos;, dist, 99);
-    expect(result).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;uses quantile when sampleSize equals MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
-    const dist = makeDist({ p10: 0.3, p25: 0.45, p50: 0.55, p75: 0.65, p90: 0.75 });
-    const result = adaptiveScoreColorBand(0.9, &apos;relevance&apos;, &apos;maximize&apos;, dist, 100);
-    expect([&apos;excellent&apos;, &apos;good&apos;]).toContain(result);
-  });
-});
-describe(&apos;adaptiveScoreColorBand — binary strategy&apos;, () =&gt; {
-  it(&apos;returns excellent for score &gt;= 0.7&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.7, &apos;faithfulness&apos;)).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;returns excellent for score &gt; 0.7&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.85, &apos;faithfulness&apos;)).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;returns failing for score &lt; 0.7&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.69, &apos;faithfulness&apos;)).toBe(&apos;failing&apos;);
-  });
-  it(&apos;returns failing for score = 0&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0, &apos;faithfulness&apos;)).toBe(&apos;failing&apos;);
-  });
-});
-describe(&apos;adaptiveScoreColorBand — log strategy&apos;, () =&gt; {
-  it(&apos;returns excellent for a low hallucination score (near 0)&apos;, () =&gt; {
-    const result = adaptiveScoreColorBand(0.001, &apos;hallucination&apos;, &apos;minimize&apos;);
-    expect([&apos;excellent&apos;, &apos;good&apos;]).toContain(result);
-  });
-  it(&apos;returns failing or poor for a high hallucination score (near 1)&apos;, () =&gt; {
-    const result = adaptiveScoreColorBand(0.99, &apos;hallucination&apos;, &apos;minimize&apos;);
-    expect([&apos;poor&apos;, &apos;failing&apos;]).toContain(result);
-  });
-});
-describe(&apos;adaptiveScoreColorBand — step strategy&apos;, () =&gt; {
-  it(&apos;returns excellent for score &gt;= 0.8&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.8, &apos;task_completion&apos;)).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;returns excellent for score = 1&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(1.0, &apos;task_completion&apos;)).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;returns adequate for score &gt;= 0.5 and &lt; 0.8&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.5, &apos;task_completion&apos;)).toBe(&apos;adequate&apos;);
-  });
-  it(&apos;returns adequate for score = 0.79&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.79, &apos;task_completion&apos;)).toBe(&apos;adequate&apos;);
-  });
-  it(&apos;returns failing for score &lt; 0.5&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.49, &apos;task_completion&apos;)).toBe(&apos;failing&apos;);
-  });
-  it(&apos;returns failing for score = 0&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0, &apos;task_completion&apos;)).toBe(&apos;failing&apos;);
-  });
-});
-describe(&apos;adaptiveScoreColorBand — uniform strategy&apos;, () =&gt; {
-  it(&apos;returns excellent for score &gt;= 0.9&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.95, &apos;coherence&apos;)).toBe(&apos;excellent&apos;);
-  });
-  it(&apos;returns good for score &gt;= 0.8 and &lt; 0.9&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.85, &apos;coherence&apos;)).toBe(&apos;good&apos;);
-  });
-  it(&apos;returns adequate for score &gt;= 0.6 and &lt; 0.8&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.7, &apos;coherence&apos;)).toBe(&apos;adequate&apos;);
-  });
-  it(&apos;returns poor for score &gt;= 0.4 and &lt; 0.6&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.5, &apos;coherence&apos;)).toBe(&apos;poor&apos;);
-  });
-  it(&apos;returns failing for score &lt; 0.4&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.3, &apos;coherence&apos;)).toBe(&apos;failing&apos;);
-  });
-});
-describe(&apos;adaptiveScoreColorBand — unknown metric&apos;, () =&gt; {
-  it(&apos;falls back to uniform scoreColorBand for unrecognized metric name&apos;, () =&gt; {
-    expect(adaptiveScoreColorBand(0.95, &apos;unknown_metric_xyz&apos;)).toBe(&apos;excellent&apos;);
-    expect(adaptiveScoreColorBand(0.3, &apos;unknown_metric_xyz&apos;)).toBe(&apos;failing&apos;);
-  });
 });</file><file path="src/__tests__/quality-utils-drift.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
 import {
   scoreColorBand,
@@ -5946,131 +5615,6 @@ describe(&apos;truncateText&apos;, () =&gt; {
   });
   it(&apos;returns original when exactly at limit&apos;, () =&gt; {
     expect(truncateText(&apos;hello&apos;, 5)).toBe(&apos;hello&apos;);
-  });
-});</file><file path="src/__tests__/score-badge-calibration.test.tsx">import { describe, it, expect, afterEach } from &apos;vitest&apos;;
-import { render, within, cleanup } from &apos;@testing-library/react&apos;;
-import { ScoreBadge } from &apos;../components/ScoreBadge.js&apos;;
-import type { PercentileDistribution } from &apos;../lib/quality-utils.js&apos;;
-afterEach(cleanup);
-function makeDistribution(overrides: Partial&lt;PercentileDistribution&gt; = {}): PercentileDistribution {
-  return {
-    p10: 0.30,
-    p25: 0.48,
-    p50: 0.60,
-    p75: 0.72,
-    p90: 0.83,
-    ...overrides,
-  };
-}
-function getBadgeLabel(container: HTMLElement): string {
-  return container.querySelector(&apos;[aria-label]&apos;)?.getAttribute(&apos;aria-label&apos;) ?? &apos;&apos;;
-}
-describe(&apos;ScoreBadge without calibration prop&apos;, () =&gt; {
-  it(&apos;renders excellent band for score 0.95 without calibration&apos;, () =&gt; {
-    const { container } = render(&lt;ScoreBadge score={0.95} metricName=&quot;relevance&quot; /&gt;);
-    expect(getBadgeLabel(container)).toMatch(/excellent/i);
-  });
-  it(&apos;renders failing band for score 0.3 without calibration&apos;, () =&gt; {
-    const { container } = render(&lt;ScoreBadge score={0.3} metricName=&quot;relevance&quot; /&gt;);
-    expect(getBadgeLabel(container)).toMatch(/failing/i);
-  });
-  it(&apos;renders adequate band for score 0.75 without calibration (uniform baseline)&apos;, () =&gt; {
-    const { container } = render(&lt;ScoreBadge score={0.75} metricName=&quot;relevance&quot; /&gt;);
-    expect(getBadgeLabel(container)).toMatch(/adequate/i);
-  });
-});
-describe(&apos;ScoreBadge with calibration prop&apos;, () =&gt; {
-  it(&apos;accepts calibration prop as part of the component interface&apos;, () =&gt; {
-    const calibration = { distribution: makeDistribution(), sampleSize: 250 };
-    expect(() =&gt;
-      render(
-        &lt;ScoreBadge
-          score={0.75}
-          metricName=&quot;relevance&quot;
-          calibration={calibration}
-        /&gt;
-      )
-    ).not.toThrow();
-  });
-  it(&apos;uses excellent/good band for score 0.75 when calibration shows it is above p75&apos;, () =&gt; {
-    const distribution = makeDistribution({ p75: 0.72, p90: 0.83 });
-    const calibration = { distribution, sampleSize: 200 };
-    const { container } = render(
-      &lt;ScoreBadge
-        score={0.75}
-        metricName=&quot;relevance&quot;
-        calibration={calibration}
-      /&gt;
-    );
-    const label = getBadgeLabel(container);
-    expect(label).toMatch(/excellent|good/i);
-    expect(label).not.toMatch(/adequate/i);
-  });
-  it(&apos;aria-label differs from uniform when calibration shifts the band&apos;, () =&gt; {
-    const distribution = makeDistribution({ p50: 0.6, p75: 0.72, p90: 0.83 });
-    const { container: noCalContainer } = render(
-      &lt;ScoreBadge score={0.75} metricName=&quot;relevance&quot; /&gt;
-    );
-    const uniformLabel = getBadgeLabel(noCalContainer);
-    cleanup();
-    const { container: withCalContainer } = render(
-      &lt;ScoreBadge
-        score={0.75}
-        metricName=&quot;relevance&quot;
-        calibration={{ distribution, sampleSize: 200 }}
-      /&gt;
-    );
-    const adaptiveLabel = getBadgeLabel(withCalContainer);
-    expect(adaptiveLabel).not.toBe(uniformLabel);
-  });
-  it(&apos;behaves same as no-calibration when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
-    const calibration = { distribution: makeDistribution(), sampleSize: 50 };
-    const { container: withCalContainer } = render(
-      &lt;ScoreBadge
-        score={0.95}
-        metricName=&quot;relevance&quot;
-        calibration={calibration}
-      /&gt;
-    );
-    const withCalLabel = getBadgeLabel(withCalContainer);
-    cleanup();
-    const { container: noCalContainer } = render(
-      &lt;ScoreBadge score={0.95} metricName=&quot;relevance&quot; /&gt;
-    );
-    const noCalLabel = getBadgeLabel(noCalContainer);
-    expect(withCalLabel).toBe(noCalLabel);
-  });
-  it(&apos;renders same band with and without calibration when no calibration is provided&apos;, () =&gt; {
-    const { container: noCalContainer } = render(
-      &lt;ScoreBadge score={0.85} metricName=&quot;relevance&quot; /&gt;
-    );
-    const noCalLabel = getBadgeLabel(noCalContainer);
-    cleanup();
-    const { container: undefinedCalContainer } = render(
-      &lt;ScoreBadge
-        score={0.85}
-        metricName=&quot;relevance&quot;
-        calibration={undefined}
-      /&gt;
-    );
-    const undefinedCalLabel = getBadgeLabel(undefinedCalContainer);
-    expect(undefinedCalLabel).toBe(noCalLabel);
-  });
-  it(&apos;uses within() to scope queries to the rendered container&apos;, () =&gt; {
-    const calibration = { distribution: makeDistribution(), sampleSize: 150 };
-    const { container } = render(
-      &lt;ScoreBadge
-        score={0.75}
-        metricName=&quot;relevance&quot;
-        calibration={calibration}
-      /&gt;
-    );
-    const scope = within(container as HTMLElement);
-    const allLabeled = scope.getAllByRole(&apos;generic&apos;, { hidden: true });
-    const labeled = allLabeled.filter(el =&gt; el.hasAttribute(&apos;aria-label&apos;));
-    expect(labeled.length).toBeGreaterThan(0);
-    const ariaLabel = labeled[0].getAttribute(&apos;aria-label&apos;) ?? &apos;&apos;;
-    expect(ariaLabel).toMatch(/excellent|good/i);
   });
 });</file><file path="src/__tests__/setup.ts">import &apos;@testing-library/jest-dom/vitest&apos;;
 if (typeof window !== &apos;undefined&apos; &amp;&amp; !(&apos;ResizeObserver&apos; in window)) {
@@ -6304,347 +5848,7 @@ export function makeChainGraph(
     })
   );
   return makeGraph({ nodes, edges, rootNodeId: `${labelPrefix}-0`, workflowShape });
-}</file><file path="src/__tests__/workflow-graph.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
-import { buildWorkflowGraph } from &apos;../lib/workflow-graph.js&apos;;
-import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
-import type { TraceSpan } from &apos;../types.js&apos;;
-import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from &apos;./workflow-fixtures.js&apos;;
-describe(&apos;buildWorkflowGraph — 3-agent linear workflow&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: &apos;planner&apos;, targetAgent: &apos;coder&apos;, score: 0.9, contextPreserved: true }),
-      makeHandoff({ sourceAgent: &apos;coder&apos;, targetAgent: &apos;reviewer&apos;, score: 0.7, contextPreserved: false }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: &apos;planner&apos; }),
-      makeTurn({ turnIndex: 1, agentName: &apos;coder&apos; }),
-      makeTurn({ turnIndex: 2, agentName: &apos;reviewer&apos; }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it(&apos;produces 3 nodes&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
-  });
-  it(&apos;produces 2 edges&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.edges).toHaveLength(2);
-  });
-  it(&apos;shape is linear&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe(&apos;linear&apos;);
-  });
-  it(&apos;rootNodeId is planner&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.rootNodeId).toBe(&apos;planner&apos;);
-  });
-});
-describe(&apos;buildWorkflowGraph — single-agent session&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [],
-    turns: [makeTurn({ turnIndex: 0, agentName: &apos;solo&apos; })],
-    totalTurns: 1,
-  });
-  const spans: TraceSpan[] = [];
-  it(&apos;produces 1 node&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(1);
-  });
-  it(&apos;produces 0 edges&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it(&apos;shape is single_agent&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe(&apos;single_agent&apos;);
-  });
-});
-describe(&apos;buildWorkflowGraph — cyclic workflow&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.85 }),
-      makeHandoff({ sourceAgent: &apos;agentB&apos;, targetAgent: &apos;agentA&apos;, score: 0.75 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
-      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
-      makeTurn({ turnIndex: 2, agentName: &apos;agentA&apos; }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it(&apos;shape is cyclic&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe(&apos;cyclic&apos;);
-  });
-  it(&apos;has an edge from agentA to agentB&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
-    expect(edge).toBeDefined();
-  });
-  it(&apos;has an edge from agentB back to agentA&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentB&apos; &amp;&amp; e.target === &apos;agentA&apos;);
-    expect(edge).toBeDefined();
-  });
-});
-describe(&apos;buildWorkflowGraph — 3-node cyclic workflow A→B→C→A&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.9 }),
-      makeHandoff({ sourceAgent: &apos;agentB&apos;, targetAgent: &apos;agentC&apos;, score: 0.8 }),
-      makeHandoff({ sourceAgent: &apos;agentC&apos;, targetAgent: &apos;agentA&apos;, score: 0.7 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
-      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
-      makeTurn({ turnIndex: 2, agentName: &apos;agentC&apos; }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it(&apos;shape is cyclic for 3-node cycle&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe(&apos;cyclic&apos;);
-  });
-  it(&apos;produces 3 nodes&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
-  });
-});
-describe(&apos;buildWorkflowGraph — branching workflow&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.9 }),
-      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentC&apos;, score: 0.8 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
-      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
-      makeTurn({ turnIndex: 2, agentName: &apos;agentC&apos; }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it(&apos;shape is branching&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe(&apos;branching&apos;);
-  });
-});
-describe(&apos;buildWorkflowGraph — node data binding&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: &apos;worker&apos;, relevance: 0.65, taskProgress: 0.7, hasError: true }),
-    ],
-    totalTurns: 1,
-  });
-  const spans: TraceSpan[] = [
-    makeSpan({ attributes: { &apos;gen_ai.agent.name&apos;: &apos;worker&apos;, &apos;llm.usage.total_tokens&apos;: 512 }, durationMs: 2500 }),
-    makeSpan({ spanId: &apos;span-2&apos;, name: &apos;tool_call&apos;, attributes: { &apos;gen_ai.agent.name&apos;: &apos;worker&apos; } }),
-  ];
-  it(&apos;node evaluationScore reflects turn relevance&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
-    expect(node?.evaluationScore).toBeCloseTo(0.65, 5);
-  });
-  it(&apos;node hasError is true when any turn has an error&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
-    expect(node?.hasError).toBe(true);
-  });
-  it(&apos;node turnCount matches turn count for that agent&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
-    expect(node?.turnCount).toBe(1);
-  });
-  it(&apos;node label matches agent name&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
-    expect(node?.label).toBe(&apos;worker&apos;);
-  });
-});
-describe(&apos;buildWorkflowGraph — edge data binding&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.72, contextPreserved: false }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
-      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
-    ],
-    totalTurns: 2,
-  });
-  const spans: TraceSpan[] = [];
-  it(&apos;edge handoffScore matches handoff score&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
-    expect(edge?.handoffScore).toBeCloseTo(0.72, 5);
-  });
-  it(&apos;edge contextPreserved is false when handoff contextPreserved is false&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
-    expect(edge?.contextPreserved).toBe(false);
-  });
-  it(&apos;edge label is formatted as &quot;score: X.XX&quot;&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
-    expect(edge?.label).toBe(&apos;score: 0.72&apos;);
-  });
-  it(&apos;edge id is non-empty string&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges[0];
-    expect(typeof edge?.id).toBe(&apos;string&apos;);
-    expect(edge?.id.length).toBeGreaterThan(0);
-  });
-});
-describe(&apos;buildWorkflowGraph — null evaluation&apos;, () =&gt; {
-  const spans: TraceSpan[] = [];
-  it(&apos;returns 0 nodes&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(0);
-  });
-  it(&apos;returns 0 edges&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it(&apos;rootNodeId is null&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.rootNodeId).toBeNull();
-  });
-  it(&apos;workflowShape is single_agent for empty/null input&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.workflowShape).toBe(&apos;single_agent&apos;);
-  });
-});
-describe(&apos;buildWorkflowGraph — root node identification&apos;, () =&gt; {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: &apos;orchestrator&apos;, targetAgent: &apos;executor&apos;, score: 0.88 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: &apos;orchestrator&apos; }),
-      makeTurn({ turnIndex: 1, agentName: &apos;executor&apos; }),
-    ],
-    totalTurns: 2,
-  });
-  const spans: TraceSpan[] = [];
-  it(&apos;rootNodeId is orchestrator (the first agent)&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.rootNodeId).toBe(&apos;orchestrator&apos;);
-  });
-  it(&apos;rootNodeId corresponds to an existing node id&apos;, () =&gt; {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const rootNode = graph.nodes.find(n =&gt; n.id === graph.rootNodeId);
-    expect(rootNode).toBeDefined();
-  });
-});
-describe(&apos;buildWorkflowGraph — droppedTurns counter&apos;, () =&gt; {
-  it(&apos;counts turns where agentName is undefined&apos;, () =&gt; {
-    const evaluation = makeEvaluation({
-      turns: [
-        makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
-        { turnIndex: 1, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
-        { turnIndex: 2, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
-      ],
-      totalTurns: 3,
-    });
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
-    expect(graph.droppedTurns).toBe(2);
-  });
-  it(&apos;returns droppedTurns 0 when all turns have agentName&apos;, () =&gt; {
-    const evaluation = makeEvaluation({
-      turns: [
-        makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
-        makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
-      ],
-      handoffs: [makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos; })],
-      totalTurns: 2,
-    });
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
-    expect(graph.droppedTurns).toBe(0);
-  });
-  it(&apos;returns droppedTurns 0 for span-inferred graphs (no evaluation)&apos;, () =&gt; {
-    const spans = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { &apos;gen_ai.agent.id&apos;: &apos;agentA&apos; } }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.droppedTurns).toBe(0);
-  });
-});
-const ATTR_AGENT_ID = &apos;gen_ai.agent.id&apos;;
-describe(&apos;buildWorkflowGraph — span-inference fallback&apos;, () =&gt; {
-  it(&apos;infers 2 nodes from spans when evaluation is null&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(2);
-  });
-  it(&apos;infers sequential edge when agent A spans end before agent B spans start&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
-    expect(edge).toBeDefined();
-  });
-  it(&apos;sets rootNodeId to the agent with the earliest span start time&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.rootNodeId).toBe(&apos;agentA&apos;);
-  });
-  it(&apos;sets node hasError to true when any span for that agent has status.code === 2&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const node = graph.nodes.find(n =&gt; n.id === &apos;agentA&apos;);
-    expect(node?.hasError).toBe(true);
-  });
-  it(&apos;returns empty graph when evaluation is null and no spans have gen_ai.agent.id&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { &apos;some.other.attr&apos;: &apos;value&apos; } }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(0);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it(&apos;infers edge between near-concurrent spans within epsilon tolerance (WG-M2)&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
-      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
-    expect(edge).toBeDefined();
-  });
-  it(&apos;does not infer edge when spans overlap by more than epsilon&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
-      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
-    expect(edge).toBeUndefined();
-  });
-  it(&apos;counts tool calls from span names starting with &quot;tool:&quot;&apos;, () =&gt; {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: &apos;s1&apos;, name: &apos;tool:search&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
-      makeSpan({ spanId: &apos;s2&apos;, name: &apos;tool:write&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
-      makeSpan({ spanId: &apos;s3&apos;, name: &apos;agent_turn&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const node = graph.nodes.find(n =&gt; n.id === &apos;agentA&apos;);
-    expect(node?.toolCallCount).toBe(2);
-  });
-});</file><file path="src/__tests__/WorkflowPage.test.tsx">import { describe, it, expect, afterEach, vi, beforeEach } from &apos;vitest&apos;;
+}</file><file path="src/__tests__/WorkflowPage.test.tsx">import { describe, it, expect, afterEach, vi, beforeEach } from &apos;vitest&apos;;
 import { render, screen, fireEvent, cleanup } from &apos;@testing-library/react&apos;;
 import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from &apos;./test-types.js&apos;;
 const mockUseAgentSession = vi.fn();
@@ -11823,81 +11027,7 @@ export function useTrend(metricName: string, period: Period, buckets = 7) {
     () =&gt; `${API_BASE}/api/trends/${encodeURIComponent(metricName)}?${new URLSearchParams({ period, buckets: String(buckets) })}`,
     { enabled: !!metricName },
   );
-}</file><file path="src/lib/validation/auth-schemas.ts">import { z } from &apos;zod&apos;;
-import { FRONTEND_ACTIVITY_EVENTS } from &apos;../../types/activity.js&apos;;
-export const Auth0JwtPayloadSchema = z.object({
-  sub: z.string(),
-  email: z.email().optional(),
-  email_verified: z.boolean().optional(),
-  name: z.string().optional(),
-  picture: z.string().optional(),
-  iss: z.string(),
-  aud: z.union([z.string(), z.array(z.string())]),
-  iat: z.number(),
-  exp: z.number(),
-});
-export type Auth0JwtPayload = z.infer&lt;typeof Auth0JwtPayloadSchema&gt;;
-export const PublicUserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.email(),
-  created_at: z.iso.datetime().optional(),
-  updated_at: z.iso.datetime().optional(),
-});
-export type PublicUser = z.infer&lt;typeof PublicUserSchema&gt;;
-export const UserRoleRowSchema = z.object({
-  roles: z.object({
-    name: z.string(),
-    permissions: z.array(z.string()),
-  }).nullable(),
-});
-export type UserRoleRow = z.infer&lt;typeof UserRoleRowSchema&gt;;
-export const ActivityRequestSchema = z.object({
-  activity_type: z.enum(FRONTEND_ACTIVITY_EVENTS),
-});
-export const AdminRoleSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  permissions: z.array(z.string()),
-});
-export type AdminRole = z.infer&lt;typeof AdminRoleSchema&gt;;
-export const AdminUserRoleRowSchema = z.object({
-  user_id: z.string().uuid(),
-  role_id: z.string().uuid(),
-  roles: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-  }).nullable(),
-});
-export type AdminUserRoleRow = z.infer&lt;typeof AdminUserRoleRowSchema&gt;;
-export const AdminUserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.email().optional(),
-  created_at: z.iso.datetime().optional(),
-  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
-});
-export type AdminUser = z.infer&lt;typeof AdminUserSchema&gt;;
-export const AssignRoleRequestSchema = z.object({
-  role_id: z.string().uuid(),
-});
-export type AssignRoleRequest = z.infer&lt;typeof AssignRoleRequestSchema&gt;;
-export const MeResponseSchema = z.object({
-  email: z.email(),
-  roles: z.array(z.string()),
-  permissions: z.array(z.enum([
-    &apos;dashboard.read&apos;,
-    &apos;dashboard.executive&apos;,
-    &apos;dashboard.operator&apos;,
-    &apos;dashboard.auditor&apos;,
-    &apos;dashboard.traces.read&apos;,
-    &apos;dashboard.sessions.read&apos;,
-    &apos;dashboard.agents.read&apos;,
-    &apos;dashboard.pipeline.read&apos;,
-    &apos;dashboard.compliance.read&apos;,
-    &apos;dashboard.admin&apos;,
-  ])),
-  allowedViews: z.array(z.enum([&apos;executive&apos;, &apos;operator&apos;, &apos;auditor&apos;])),
-});
-export type MeResponse = z.infer&lt;typeof MeResponseSchema&gt;;</file><file path="src/lib/validation/dashboard-schemas.ts">import { z } from &apos;zod&apos;;
+}</file><file path="src/lib/validation/dashboard-schemas.ts">import { z } from &apos;zod&apos;;
 export const hrtSchema = z.tuple([z.number(), z.number()]).describe(&apos;High-resolution time [seconds, nanoseconds]&apos;);
 export const traceSpanSchema = z.object({
   traceId: z.string().min(1).describe(&apos;OTel trace ID&apos;),
@@ -14136,257 +13266,801 @@ for worker in &quot;${WORKERS[@]}&quot;; do
     echo &quot;$value&quot; | npx wrangler secret put &quot;$secret&quot; --name &quot;$worker&quot; 2&gt;&amp;1 | tail -1
   done
 done
-echo &quot;Done.&quot;</file><file path="src/__tests__/WorkflowGraph.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
-import { render, screen, fireEvent, waitFor, cleanup } from &apos;@testing-library/react&apos;;
-import type { ReactNode } from &apos;react&apos;;
-interface MockNode {
-  id: string;
-  type: string;
-  data: Record&lt;string, unknown&gt;;
-}
-interface MockEdge {
-  id: string;
-  label?: string;
-}
-interface ReactFlowProps {
-  nodes?: MockNode[];
-  edges?: MockEdge[];
-  onNodeClick?: (event: unknown, node: MockNode) =&gt; void;
-  nodeTypes?: Record&lt;string, (props: { data: Record&lt;string, unknown&gt; }) =&gt; ReactNode&gt;;
-  children?: ReactNode;
-  [key: string]: unknown;
-}
-vi.mock(&apos;@xyflow/react&apos;, async () =&gt; {
-  const React = await vi.importActual&lt;typeof import(&apos;react&apos;)&gt;(&apos;react&apos;);
+echo &quot;Done.&quot;</file><file path="src/__tests__/api-calibration.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
+import app from &apos;../../worker/index.js&apos;;
+function makeKV(store: Record&lt;string, unknown&gt; = {}): KVNamespace {
   return {
-    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) =&gt; (
-      &lt;div data-testid=&quot;reactflow&quot; {...rest}&gt;
-        {(nodes ?? []).map((n) =&gt; {
-          const NodeComp = nodeTypes?.[n.type];
-          return (
-            &lt;div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() =&gt; onNodeClick?.({}, n)}&gt;
-              {NodeComp ? &lt;NodeComp data={n.data} /&gt; : n.id}
-            &lt;/div&gt;
-          );
-        })}
-        {(edges ?? []).map((e) =&gt; (
-          &lt;div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} /&gt;
-        ))}
-        {children}
-      &lt;/div&gt;
-    ),
-    MiniMap: (_props: unknown) =&gt; &lt;div data-testid=&quot;minimap&quot; /&gt;,
-    Controls: () =&gt; &lt;div data-testid=&quot;controls&quot; /&gt;,
-    Background: () =&gt; null,
-    Handle: () =&gt; null,
-    Position: { Top: &apos;top&apos;, Bottom: &apos;bottom&apos; },
-    BaseEdge: () =&gt; null,
-    getStraightPath: () =&gt; [&apos;M 0 0&apos;, 0, 0],
-    useNodesState: (initial: MockNode[]) =&gt; {
-      const [nodes, setNodes] = React.useState(initial);
-      return [nodes, setNodes, vi.fn()];
+    get: async (key: string, type?: string) =&gt; {
+      const value = store[key];
+      if (value === undefined) return null;
+      if (type === &apos;json&apos;) return value;
+      return JSON.stringify(value);
     },
-    useEdgesState: (initial: MockEdge[]) =&gt; {
-      const [edges, setEdges] = React.useState(initial);
-      return [edges, setEdges, vi.fn()];
-    },
-    useReactFlow: () =&gt; ({ fitView: vi.fn() }),
-  };
-});
-interface ELKGraph {
-  children?: Array&lt;{ x?: number; y?: number; [key: string]: unknown }&gt;;
-  [key: string]: unknown;
+    put: async () =&gt; {},
+    delete: async () =&gt; {},
+    list: async () =&gt; ({ keys: [], list_complete: true, cursor: &apos;&apos; }),
+    getWithMetadata: async () =&gt; ({ value: null, metadata: null }),
+  } as unknown as KVNamespace;
 }
-vi.mock(&apos;elkjs/lib/elk.bundled.js&apos;, () =&gt; ({
-  default: class ELK {
-    layout(graph: ELKGraph) {
-      return Promise.resolve({
-        ...graph,
-        children: (graph.children ?? []).map((c, i: number) =&gt; ({
-          ...c,
-          x: i * 300,
-          y: i * 200,
-        })),
+function makeCalibrationData() {
+  return {
+    lastCalibrated: &apos;2026-03-10T06:00:00.000Z&apos;,
+    distributions: {
+      relevance: { p10: 0.42, p25: 0.58, p50: 0.67, p75: 0.79, p90: 0.88 },
+      faithfulness: { p10: 0.5, p25: 0.65, p50: 0.75, p75: 0.85, p90: 0.93 },
+      coherence: { p10: 0.55, p25: 0.68, p50: 0.77, p75: 0.86, p90: 0.94 },
+    },
+    sampleCounts: {
+      relevance: 312,
+      faithfulness: 289,
+      coherence: 301,
+    },
+  };
+}
+describe(&apos;GET /api/calibration&apos;, () =&gt; {
+  it(&apos;returns 200 with calibration state from KV key meta:calibration&apos;, async () =&gt; {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
+    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
+    expect(res.status).toBe(200);
+  });
+  it(&apos;returns distributions field in response body&apos;, async () =&gt; {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
+    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
+    const body = await res.json() as Record&lt;string, unknown&gt;;
+    expect(body).toHaveProperty(&apos;distributions&apos;);
+  });
+  it(&apos;returns lastCalibrated field in response body&apos;, async () =&gt; {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
+    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
+    const body = await res.json() as Record&lt;string, unknown&gt;;
+    expect(body).toHaveProperty(&apos;lastCalibrated&apos;);
+  });
+  it(&apos;returns distributions with per-metric percentile data&apos;, async () =&gt; {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
+    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
+    const body = await res.json() as { distributions: Record&lt;string, unknown&gt; };
+    expect(body.distributions).toHaveProperty(&apos;relevance&apos;);
+    const relDist = body.distributions[&apos;relevance&apos;] as Record&lt;string, number&gt;;
+    expect(relDist).toHaveProperty(&apos;p10&apos;);
+    expect(relDist).toHaveProperty(&apos;p25&apos;);
+    expect(relDist).toHaveProperty(&apos;p50&apos;);
+    expect(relDist).toHaveProperty(&apos;p75&apos;);
+    expect(relDist).toHaveProperty(&apos;p90&apos;);
+  });
+  it(&apos;returns 404 with error field when no calibration data exists in KV&apos;, async () =&gt; {
+    const kv = makeKV({});
+    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
+    expect(res.status).toBe(404);
+    const body = await res.json() as Record&lt;string, unknown&gt;;
+    expect(body).toHaveProperty(&apos;error&apos;);
+  });
+  it(&apos;returns exact lastCalibrated value from KV&apos;, async () =&gt; {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ &apos;meta:calibration&apos;: calibrationData });
+    const res = await app.request(&apos;/api/calibration&apos;, { headers: { Authorization: &apos;Bearer test-token&apos; } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: &apos;true&apos; });
+    const body = await res.json() as { lastCalibrated: string };
+    expect(body.lastCalibrated).toBe(&apos;2026-03-10T06:00:00.000Z&apos;);
+  });
+});</file><file path="src/__tests__/dr-l4-self-hosted-fonts.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
+import { readFileSync, existsSync } from &apos;fs&apos;;
+import { resolve } from &apos;path&apos;;
+const DASHBOARD_ROOT = resolve(__dirname, &apos;../../&apos;);
+const THEME_CSS = resolve(DASHBOARD_ROOT, &apos;src/theme.css&apos;);
+const PUBLIC_FONTS_DIR = resolve(DASHBOARD_ROOT, &apos;public/fonts&apos;);
+const REQUIRED_FAMILIES = [&apos;JetBrains Mono&apos;, &apos;IBM Plex Sans&apos;] as const;
+const REQUIRED_WEIGHTS = [400, 500, 600] as const;
+const EXPECTED_FONT_FILES: Record&lt;string, string[]&gt; = {
+  &apos;JetBrains Mono&apos;: [
+    &apos;JetBrainsMono-Regular.woff2&apos;,
+    &apos;JetBrainsMono-Medium.woff2&apos;,
+    &apos;JetBrainsMono-SemiBold.woff2&apos;,
+  ],
+  &apos;IBM Plex Sans&apos;: [
+    &apos;IBMPlexSans-Regular.woff2&apos;,
+    &apos;IBMPlexSans-Medium.woff2&apos;,
+    &apos;IBMPlexSans-SemiBold.woff2&apos;,
+  ],
+};
+describe(&apos;theme.css — no external Google Fonts import&apos;, () =&gt; {
+  it(&apos;should not contain a fonts.googleapis.com @import&apos;, () =&gt; {
+    const css = readFileSync(THEME_CSS, &apos;utf-8&apos;);
+    expect(css).not.toMatch(/fonts\.googleapis\.com/);
+  });
+  it(&apos;should not contain any external @import url starting with https://&apos;, () =&gt; {
+    const css = readFileSync(THEME_CSS, &apos;utf-8&apos;);
+    const externalImport = /@import\s+url\([&apos;&quot;]?https?:\/\//;
+    expect(css).not.toMatch(externalImport);
+  });
+});
+describe(&apos;local @font-face declarations exist&apos;, () =&gt; {
+  function getFontFaceSource(): string {
+    const fontsCss = resolve(DASHBOARD_ROOT, &apos;src/fonts.css&apos;);
+    if (existsSync(fontsCss)) {
+      return readFileSync(fontsCss, &apos;utf-8&apos;);
+    }
+    return readFileSync(THEME_CSS, &apos;utf-8&apos;);
+  }
+  it(&apos;should declare @font-face for JetBrains Mono&apos;, () =&gt; {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/font-family:\s*[&apos;&quot;]?JetBrains Mono[&apos;&quot;]?/i);
+  });
+  it(&apos;should declare @font-face for IBM Plex Sans&apos;, () =&gt; {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/font-family:\s*[&apos;&quot;]?IBM Plex Sans[&apos;&quot;]?/i);
+  });
+  for (const family of REQUIRED_FAMILIES) {
+    for (const weight of REQUIRED_WEIGHTS) {
+      it(`should have a @font-face block for ${family} weight ${weight}`, () =&gt; {
+        const css = getFontFaceSource();
+        // Find all @font-face blocks that mention this family
+        const fontFaceBlocks = [...css.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m =&gt; m[0]);
+        const familyBlocks = fontFaceBlocks.filter(block =&gt;
+          new RegExp(`font-family:\\s*[&apos;&quot;]?${family}[&apos;&quot;]?`, &apos;i&apos;).test(block)
+        );
+        const hasWeight = familyBlocks.some(block =&gt;
+          new RegExp(`font-weight:\\s*${weight}`).test(block)
+        );
+        expect(hasWeight, `Expected @font-face for &quot;${family}&quot; with font-weight: ${weight}`).toBe(true);
       });
     }
-  },
-}));
-import { WorkflowGraphView } from &apos;../components/WorkflowGraph.js&apos;;
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from &apos;./workflow-fixtures.js&apos;;
-afterEach(cleanup);
-describe(&apos;WorkflowGraphView&apos;, () =&gt; {
-  const twoNodeGraph = makeGraph({
-    nodes: [
-      makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; }),
-      makeNode({ id: &apos;node-2&apos;, label: &apos;executor&apos; }),
-    ],
-    edges: [makeEdge({ id: &apos;edge-1&apos;, source: &apos;node-1&apos;, target: &apos;node-2&apos; })],
-    rootNodeId: &apos;node-1&apos;,
-    workflowShape: &apos;linear&apos;,
-  });
-  const threeNodeGraph = makeGraph({
-    nodes: [
-      makeNode({ id: &apos;node-1&apos; }),
-      makeNode({ id: &apos;node-2&apos; }),
-      makeNode({ id: &apos;node-3&apos; }),
-    ],
-    rootNodeId: &apos;node-1&apos;,
-    workflowShape: &apos;linear&apos;,
-  });
-  const fiveNodeGraph = makeGraph({
-    nodes: Array.from({ length: 5 }, (_, i) =&gt;
-      makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
-    ),
-    rootNodeId: &apos;node-1&apos;,
-    workflowShape: &apos;branching&apos;,
-  });
-  it(&apos;renders container with role=img and aria-label&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
-    const container = await waitFor(() =&gt;
-      screen.getByRole(&apos;img&apos;, { name: &apos;Agent workflow graph&apos; })
-    );
-    expect(container).toBeInTheDocument();
-  });
-  it(&apos;renders correct number of nodes&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(&apos;rf-node-node-2&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(&apos;rf-node-node-3&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;node displays agent label&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; })],
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByText(&apos;planner&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;node displays Good score badge text for score &gt;= 0.7&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, evaluationScore: 0.85 })],
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByText(&apos;Good&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;node displays tool count&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, toolCallCount: 5 })],
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByText(&apos;5 tools&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;shows Controls always&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;controls&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;shows MiniMap for 5+ nodes&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={fiveNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;minimap&apos;)).toBeInTheDocument();
-    });
-  });
-  it(&apos;hides MiniMap for fewer than 5 nodes&apos;, async () =&gt; {
-    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId(&apos;minimap&apos;)).not.toBeInTheDocument();
-  });
-  it(&apos;shows simplified fallback for single_agent shape with 1 node and no ReactFlow&apos;, async () =&gt; {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;solo-agent&apos; })],
-      workflowShape: &apos;single_agent&apos;,
-      rootNodeId: &apos;node-1&apos;,
-    });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.queryByTestId(&apos;reactflow&apos;)).not.toBeInTheDocument();
-      expect(screen.getByText(/solo-agent/)).toBeInTheDocument();
-    });
-  });
-  it(&apos;fires onNodeClick with the correct nodeId when a node is clicked&apos;, async () =&gt; {
-    const onNodeClick = vi.fn();
-    render(&lt;WorkflowGraphView graph={twoNodeGraph} onNodeClick={onNodeClick} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId(&apos;rf-node-node-1&apos;));
-    expect(onNodeClick).toHaveBeenCalledWith(&apos;node-1&apos;);
-  });
-  it(&apos;renders without error when graph has 0 nodes and 0 edges&apos;, async () =&gt; {
-    const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
-    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
+  }
+  it(&apos;should reference /fonts/ local path in @font-face src&apos;, () =&gt; {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/url\([&apos;&quot;]?\/fonts\//);
   });
 });
-const ST_G5_LARGE_GRAPH_SIZE = 100;
-const ST_G5_DEEP_CHAIN_SIZE = 20;
-const ST_G5_DISCONNECTED_SIZE = 10;
-describe(&apos;WorkflowGraphView stress (ST-G5)&apos;, () =&gt; {
-  it(&apos;renders 100+ node graph without error using degraded list fallback&apos;, () =&gt; {
-    const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, &apos;agent&apos;, &apos;branching&apos;);
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    expect(screen.getByText(`Graph too large to render (${ST_G5_LARGE_GRAPH_SIZE} agents)`)).toBeInTheDocument();
-    expect(screen.getByText(/agent-0 —/)).toBeInTheDocument();
-    expect(screen.getByText(/agent-99 —/)).toBeInTheDocument();
+describe(&apos;public/fonts/ directory and font files exist&apos;, () =&gt; {
+  it(&apos;should have a public/fonts/ directory&apos;, () =&gt; {
+    expect(existsSync(PUBLIC_FONTS_DIR), `Expected directory: ${PUBLIC_FONTS_DIR}`).toBe(true);
   });
-  it(&apos;renders deeply nested delegation chain without error&apos;, async () =&gt; {
-    const graph = makeChainGraph(ST_G5_DEEP_CHAIN_SIZE, &apos;delegate&apos;, &apos;linear&apos;);
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-delegate-0&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
-      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
-    });
+  for (const [family, files] of Object.entries(EXPECTED_FONT_FILES)) {
+    for (const file of files) {
+      it(`should have font file public/fonts/${file} for ${family}`, () =&gt; {
+        const filePath = resolve(PUBLIC_FONTS_DIR, file);
+        expect(existsSync(filePath), `Expected font file at: ${filePath}`).toBe(true);
+      });
+    }
+  }
+});</file><file path="src/__tests__/quality-utils-adaptive.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
+import {
+  empiricalCDF,
+  adaptiveScoreColorBand,
+  MIN_QUANTILE_SAMPLE_SIZE,
+  METRIC_SCALE_STRATEGY,
+  type PercentileDistribution,
+} from &apos;../lib/quality-utils.js&apos;;
+function makeDist(overrides: Partial&lt;PercentileDistribution&gt; = {}): PercentileDistribution {
+  return {
+    p10: 0.4,
+    p25: 0.55,
+    p50: 0.65,
+    p75: 0.78,
+    p90: 0.88,
+    ...overrides,
+  };
+}
+describe(&apos;empiricalCDF&apos;, () =&gt; {
+  it(&apos;returns 0.5 for value at exact p50&apos;, () =&gt; {
+    const dist = makeDist({ p50: 0.65 });
+    expect(empiricalCDF(0.65, dist)).toBeCloseTo(0.5, 5);
   });
-  it(&apos;renders without crash when rootNodeId is null (missing parent span inference fallback)&apos;, async () =&gt; {
-    const nodes = Array.from({ length: 5 }, (_, i) =&gt;
-      makeNode({ id: `node-${i}`, label: `orphan-${i}` })
+  it(&apos;returns a value near 0 for value below p10&apos;, () =&gt; {
+    const dist = makeDist({ p10: 0.4 });
+    const result = empiricalCDF(0.1, dist);
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThan(0.1);
+  });
+  it(&apos;returns a value near 1 for value above p90&apos;, () =&gt; {
+    const dist = makeDist({ p90: 0.88 });
+    const result = empiricalCDF(0.98, dist);
+    expect(result).toBeGreaterThan(0.9);
+    expect(result).toBeLessThanOrEqual(1);
+  });
+  it(&apos;returns interpolated value between 0.25 and 0.5 for value between p25 and p50&apos;, () =&gt; {
+    const dist = makeDist({ p25: 0.55, p50: 0.65 });
+    const midpoint = (0.55 + 0.65) / 2;
+    const result = empiricalCDF(midpoint, dist);
+    expect(result).toBeGreaterThan(0.25);
+    expect(result).toBeLessThan(0.5);
+  });
+  it(&apos;returns 0.5 for non-finite value (NaN)&apos;, () =&gt; {
+    expect(empiricalCDF(NaN, makeDist())).toBeCloseTo(0.5, 5);
+  });
+  it(&apos;returns 0.5 for non-finite value (Infinity)&apos;, () =&gt; {
+    expect(empiricalCDF(Infinity, makeDist())).toBeLessThanOrEqual(1);
+  });
+  it(&apos;returns 0.5 for non-finite value (-Infinity)&apos;, () =&gt; {
+    expect(empiricalCDF(-Infinity, makeDist())).toBeGreaterThanOrEqual(0);
+  });
+});
+describe(&apos;MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
+  it(&apos;equals 100&apos;, () =&gt; {
+    expect(MIN_QUANTILE_SAMPLE_SIZE).toBe(100);
+  });
+});
+describe(&apos;METRIC_SCALE_STRATEGY&apos;, () =&gt; {
+  it(&apos;maps relevance to quantile&apos;, () =&gt; {
+    expect(METRIC_SCALE_STRATEGY[&apos;relevance&apos;]).toBe(&apos;quantile&apos;);
+  });
+  it(&apos;maps faithfulness to binary&apos;, () =&gt; {
+    expect(METRIC_SCALE_STRATEGY[&apos;faithfulness&apos;]).toBe(&apos;binary&apos;);
+  });
+  it(&apos;maps coherence to uniform&apos;, () =&gt; {
+    expect(METRIC_SCALE_STRATEGY[&apos;coherence&apos;]).toBe(&apos;uniform&apos;);
+  });
+  it(&apos;maps hallucination to log&apos;, () =&gt; {
+    expect(METRIC_SCALE_STRATEGY[&apos;hallucination&apos;]).toBe(&apos;log&apos;);
+  });
+  it(&apos;maps task_completion to step&apos;, () =&gt; {
+    expect(METRIC_SCALE_STRATEGY[&apos;task_completion&apos;]).toBe(&apos;step&apos;);
+  });
+  it(&apos;maps tool_correctness to categorical&apos;, () =&gt; {
+    expect(METRIC_SCALE_STRATEGY[&apos;tool_correctness&apos;]).toBe(&apos;categorical&apos;);
+  });
+  it(&apos;maps evaluation_latency to percentile_rank&apos;, () =&gt; {
+    expect(METRIC_SCALE_STRATEGY[&apos;evaluation_latency&apos;]).toBe(&apos;percentile_rank&apos;);
+  });
+});
+describe(&apos;adaptiveScoreColorBand — quantile strategy&apos;, () =&gt; {
+  it(&apos;uses empiricalCDF when distribution and sufficient sampleSize are provided&apos;, () =&gt; {
+    const dist = makeDist({ p10: 0.3, p25: 0.5, p50: 0.6, p75: 0.72, p90: 0.82 });
+    const result = adaptiveScoreColorBand(0.75, &apos;relevance&apos;, &apos;maximize&apos;, dist, 200);
+    expect([&apos;excellent&apos;, &apos;good&apos;]).toContain(result);
+  });
+  it(&apos;falls back to uniform scoreColorBand when no distribution provided&apos;, () =&gt; {
+    const result = adaptiveScoreColorBand(0.95, &apos;relevance&apos;, &apos;maximize&apos;, undefined, 200);
+    expect(result).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;falls back to uniform scoreColorBand when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
+    const dist = makeDist();
+    const result = adaptiveScoreColorBand(0.95, &apos;relevance&apos;, &apos;maximize&apos;, dist, 50);
+    expect(result).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;falls back to uniform when sampleSize is exactly MIN_QUANTILE_SAMPLE_SIZE - 1&apos;, () =&gt; {
+    const dist = makeDist();
+    const result = adaptiveScoreColorBand(0.95, &apos;relevance&apos;, &apos;maximize&apos;, dist, 99);
+    expect(result).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;uses quantile when sampleSize equals MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
+    const dist = makeDist({ p10: 0.3, p25: 0.45, p50: 0.55, p75: 0.65, p90: 0.75 });
+    const result = adaptiveScoreColorBand(0.9, &apos;relevance&apos;, &apos;maximize&apos;, dist, 100);
+    expect([&apos;excellent&apos;, &apos;good&apos;]).toContain(result);
+  });
+});
+describe(&apos;adaptiveScoreColorBand — binary strategy&apos;, () =&gt; {
+  it(&apos;returns excellent for score &gt;= 0.7&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.7, &apos;faithfulness&apos;)).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;returns excellent for score &gt; 0.7&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.85, &apos;faithfulness&apos;)).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;returns failing for score &lt; 0.7&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.69, &apos;faithfulness&apos;)).toBe(&apos;failing&apos;);
+  });
+  it(&apos;returns failing for score = 0&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0, &apos;faithfulness&apos;)).toBe(&apos;failing&apos;);
+  });
+});
+describe(&apos;adaptiveScoreColorBand — log strategy&apos;, () =&gt; {
+  it(&apos;returns excellent for a low hallucination score (near 0)&apos;, () =&gt; {
+    const result = adaptiveScoreColorBand(0.001, &apos;hallucination&apos;, &apos;minimize&apos;);
+    expect([&apos;excellent&apos;, &apos;good&apos;]).toContain(result);
+  });
+  it(&apos;returns failing or poor for a high hallucination score (near 1)&apos;, () =&gt; {
+    const result = adaptiveScoreColorBand(0.99, &apos;hallucination&apos;, &apos;minimize&apos;);
+    expect([&apos;poor&apos;, &apos;failing&apos;]).toContain(result);
+  });
+});
+describe(&apos;adaptiveScoreColorBand — step strategy&apos;, () =&gt; {
+  it(&apos;returns excellent for score &gt;= 0.8&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.8, &apos;task_completion&apos;)).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;returns excellent for score = 1&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(1.0, &apos;task_completion&apos;)).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;returns adequate for score &gt;= 0.5 and &lt; 0.8&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.5, &apos;task_completion&apos;)).toBe(&apos;adequate&apos;);
+  });
+  it(&apos;returns adequate for score = 0.79&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.79, &apos;task_completion&apos;)).toBe(&apos;adequate&apos;);
+  });
+  it(&apos;returns failing for score &lt; 0.5&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.49, &apos;task_completion&apos;)).toBe(&apos;failing&apos;);
+  });
+  it(&apos;returns failing for score = 0&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0, &apos;task_completion&apos;)).toBe(&apos;failing&apos;);
+  });
+});
+describe(&apos;adaptiveScoreColorBand — uniform strategy&apos;, () =&gt; {
+  it(&apos;returns excellent for score &gt;= 0.9&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.95, &apos;coherence&apos;)).toBe(&apos;excellent&apos;);
+  });
+  it(&apos;returns good for score &gt;= 0.8 and &lt; 0.9&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.85, &apos;coherence&apos;)).toBe(&apos;good&apos;);
+  });
+  it(&apos;returns adequate for score &gt;= 0.6 and &lt; 0.8&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.7, &apos;coherence&apos;)).toBe(&apos;adequate&apos;);
+  });
+  it(&apos;returns poor for score &gt;= 0.4 and &lt; 0.6&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.5, &apos;coherence&apos;)).toBe(&apos;poor&apos;);
+  });
+  it(&apos;returns failing for score &lt; 0.4&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.3, &apos;coherence&apos;)).toBe(&apos;failing&apos;);
+  });
+});
+describe(&apos;adaptiveScoreColorBand — unknown metric&apos;, () =&gt; {
+  it(&apos;falls back to uniform scoreColorBand for unrecognized metric name&apos;, () =&gt; {
+    expect(adaptiveScoreColorBand(0.95, &apos;unknown_metric_xyz&apos;)).toBe(&apos;excellent&apos;);
+    expect(adaptiveScoreColorBand(0.3, &apos;unknown_metric_xyz&apos;)).toBe(&apos;failing&apos;);
+  });
+});</file><file path="src/__tests__/score-badge-calibration.test.tsx">import { describe, it, expect, afterEach } from &apos;vitest&apos;;
+import { render, within, cleanup } from &apos;@testing-library/react&apos;;
+import { ScoreBadge } from &apos;../components/ScoreBadge.js&apos;;
+import type { PercentileDistribution } from &apos;../lib/quality-utils.js&apos;;
+afterEach(cleanup);
+function makeDistribution(overrides: Partial&lt;PercentileDistribution&gt; = {}): PercentileDistribution {
+  return {
+    p10: 0.30,
+    p25: 0.48,
+    p50: 0.60,
+    p75: 0.72,
+    p90: 0.83,
+    ...overrides,
+  };
+}
+function getBadgeLabel(container: HTMLElement): string {
+  return container.querySelector(&apos;[aria-label]&apos;)?.getAttribute(&apos;aria-label&apos;) ?? &apos;&apos;;
+}
+describe(&apos;ScoreBadge without calibration prop&apos;, () =&gt; {
+  it(&apos;renders excellent band for score 0.95 without calibration&apos;, () =&gt; {
+    const { container } = render(&lt;ScoreBadge score={0.95} metricName=&quot;relevance&quot; /&gt;);
+    expect(getBadgeLabel(container)).toMatch(/excellent/i);
+  });
+  it(&apos;renders failing band for score 0.3 without calibration&apos;, () =&gt; {
+    const { container } = render(&lt;ScoreBadge score={0.3} metricName=&quot;relevance&quot; /&gt;);
+    expect(getBadgeLabel(container)).toMatch(/failing/i);
+  });
+  it(&apos;renders adequate band for score 0.75 without calibration (uniform baseline)&apos;, () =&gt; {
+    const { container } = render(&lt;ScoreBadge score={0.75} metricName=&quot;relevance&quot; /&gt;);
+    expect(getBadgeLabel(container)).toMatch(/adequate/i);
+  });
+});
+describe(&apos;ScoreBadge with calibration prop&apos;, () =&gt; {
+  it(&apos;accepts calibration prop as part of the component interface&apos;, () =&gt; {
+    const calibration = { distribution: makeDistribution(), sampleSize: 250 };
+    expect(() =&gt;
+      render(
+        &lt;ScoreBadge
+          score={0.75}
+          metricName=&quot;relevance&quot;
+          calibration={calibration}
+        /&gt;
+      )
+    ).not.toThrow();
+  });
+  it(&apos;uses excellent/good band for score 0.75 when calibration shows it is above p75&apos;, () =&gt; {
+    const distribution = makeDistribution({ p75: 0.72, p90: 0.83 });
+    const calibration = { distribution, sampleSize: 200 };
+    const { container } = render(
+      &lt;ScoreBadge
+        score={0.75}
+        metricName=&quot;relevance&quot;
+        calibration={calibration}
+      /&gt;
     );
-    const graph = makeGraph({ nodes, rootNodeId: null, workflowShape: &apos;branching&apos; });
-    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
-    });
+    const label = getBadgeLabel(container);
+    expect(label).toMatch(/excellent|good/i);
+    expect(label).not.toMatch(/adequate/i);
   });
-  it(&apos;renders disconnected nodes (no edges) without crash&apos;, async () =&gt; {
-    const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =&gt;
-      makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
+  it(&apos;aria-label differs from uniform when calibration shifts the band&apos;, () =&gt; {
+    const distribution = makeDistribution({ p50: 0.6, p75: 0.72, p90: 0.83 });
+    const { container: noCalContainer } = render(
+      &lt;ScoreBadge score={0.75} metricName=&quot;relevance&quot; /&gt;
     );
-    const graph = makeGraph({ nodes, rootNodeId: &apos;orphan-0&apos;, workflowShape: &apos;branching&apos; });
-    render(&lt;WorkflowGraphView graph={graph} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
-    });
+    const uniformLabel = getBadgeLabel(noCalContainer);
+    cleanup();
+    const { container: withCalContainer } = render(
+      &lt;ScoreBadge
+        score={0.75}
+        metricName=&quot;relevance&quot;
+        calibration={{ distribution, sampleSize: 200 }}
+      /&gt;
+    );
+    const adaptiveLabel = getBadgeLabel(withCalContainer);
+    expect(adaptiveLabel).not.toBe(uniformLabel);
   });
-  it(&apos;renders two graphs in the same DOM without node state leakage between instances&apos;, async () =&gt; {
-    const graphA = makeGraph({
-      nodes: [makeNode({ id: &apos;a-1&apos;, label: &apos;alpha&apos; }), makeNode({ id: &apos;a-2&apos;, label: &apos;beta&apos; })],
-      edges: [makeEdge({ id: &apos;ea-1&apos;, source: &apos;a-1&apos;, target: &apos;a-2&apos; })],
-      rootNodeId: &apos;a-1&apos;,
+  it(&apos;behaves same as no-calibration when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE&apos;, () =&gt; {
+    const calibration = { distribution: makeDistribution(), sampleSize: 50 };
+    const { container: withCalContainer } = render(
+      &lt;ScoreBadge
+        score={0.95}
+        metricName=&quot;relevance&quot;
+        calibration={calibration}
+      /&gt;
+    );
+    const withCalLabel = getBadgeLabel(withCalContainer);
+    cleanup();
+    const { container: noCalContainer } = render(
+      &lt;ScoreBadge score={0.95} metricName=&quot;relevance&quot; /&gt;
+    );
+    const noCalLabel = getBadgeLabel(noCalContainer);
+    expect(withCalLabel).toBe(noCalLabel);
+  });
+  it(&apos;renders same band with and without calibration when no calibration is provided&apos;, () =&gt; {
+    const { container: noCalContainer } = render(
+      &lt;ScoreBadge score={0.85} metricName=&quot;relevance&quot; /&gt;
+    );
+    const noCalLabel = getBadgeLabel(noCalContainer);
+    cleanup();
+    const { container: undefinedCalContainer } = render(
+      &lt;ScoreBadge
+        score={0.85}
+        metricName=&quot;relevance&quot;
+        calibration={undefined}
+      /&gt;
+    );
+    const undefinedCalLabel = getBadgeLabel(undefinedCalContainer);
+    expect(undefinedCalLabel).toBe(noCalLabel);
+  });
+  it(&apos;uses within() to scope queries to the rendered container&apos;, () =&gt; {
+    const calibration = { distribution: makeDistribution(), sampleSize: 150 };
+    const { container } = render(
+      &lt;ScoreBadge
+        score={0.75}
+        metricName=&quot;relevance&quot;
+        calibration={calibration}
+      /&gt;
+    );
+    const scope = within(container as HTMLElement);
+    const allLabeled = scope.getAllByRole(&apos;generic&apos;, { hidden: true });
+    const labeled = allLabeled.filter(el =&gt; el.hasAttribute(&apos;aria-label&apos;));
+    expect(labeled.length).toBeGreaterThan(0);
+    const ariaLabel = labeled[0].getAttribute(&apos;aria-label&apos;) ?? &apos;&apos;;
+    expect(ariaLabel).toMatch(/excellent|good/i);
+  });
+});</file><file path="src/__tests__/workflow-graph.test.ts">import { describe, it, expect } from &apos;vitest&apos;;
+import { buildWorkflowGraph } from &apos;../lib/workflow-graph.js&apos;;
+import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
+import type { TraceSpan } from &apos;../types.js&apos;;
+import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from &apos;./workflow-fixtures.js&apos;;
+describe(&apos;buildWorkflowGraph — 3-agent linear workflow&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: &apos;planner&apos;, targetAgent: &apos;coder&apos;, score: 0.9, contextPreserved: true }),
+      makeHandoff({ sourceAgent: &apos;coder&apos;, targetAgent: &apos;reviewer&apos;, score: 0.7, contextPreserved: false }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: &apos;planner&apos; }),
+      makeTurn({ turnIndex: 1, agentName: &apos;coder&apos; }),
+      makeTurn({ turnIndex: 2, agentName: &apos;reviewer&apos; }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it(&apos;produces 3 nodes&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(3);
+  });
+  it(&apos;produces 2 edges&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.edges).toHaveLength(2);
+  });
+  it(&apos;shape is linear&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe(&apos;linear&apos;);
+  });
+  it(&apos;rootNodeId is planner&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.rootNodeId).toBe(&apos;planner&apos;);
+  });
+});
+describe(&apos;buildWorkflowGraph — single-agent session&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [],
+    turns: [makeTurn({ turnIndex: 0, agentName: &apos;solo&apos; })],
+    totalTurns: 1,
+  });
+  const spans: TraceSpan[] = [];
+  it(&apos;produces 1 node&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(1);
+  });
+  it(&apos;produces 0 edges&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it(&apos;shape is single_agent&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe(&apos;single_agent&apos;);
+  });
+});
+describe(&apos;buildWorkflowGraph — cyclic workflow&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.85 }),
+      makeHandoff({ sourceAgent: &apos;agentB&apos;, targetAgent: &apos;agentA&apos;, score: 0.75 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
+      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
+      makeTurn({ turnIndex: 2, agentName: &apos;agentA&apos; }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it(&apos;shape is cyclic&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe(&apos;cyclic&apos;);
+  });
+  it(&apos;has an edge from agentA to agentB&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
+    expect(edge).toBeDefined();
+  });
+  it(&apos;has an edge from agentB back to agentA&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentB&apos; &amp;&amp; e.target === &apos;agentA&apos;);
+    expect(edge).toBeDefined();
+  });
+});
+describe(&apos;buildWorkflowGraph — 3-node cyclic workflow A→B→C→A&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.9 }),
+      makeHandoff({ sourceAgent: &apos;agentB&apos;, targetAgent: &apos;agentC&apos;, score: 0.8 }),
+      makeHandoff({ sourceAgent: &apos;agentC&apos;, targetAgent: &apos;agentA&apos;, score: 0.7 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
+      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
+      makeTurn({ turnIndex: 2, agentName: &apos;agentC&apos; }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it(&apos;shape is cyclic for 3-node cycle&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe(&apos;cyclic&apos;);
+  });
+  it(&apos;produces 3 nodes&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(3);
+  });
+});
+describe(&apos;buildWorkflowGraph — branching workflow&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.9 }),
+      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentC&apos;, score: 0.8 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
+      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
+      makeTurn({ turnIndex: 2, agentName: &apos;agentC&apos; }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it(&apos;shape is branching&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe(&apos;branching&apos;);
+  });
+});
+describe(&apos;buildWorkflowGraph — node data binding&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: &apos;worker&apos;, relevance: 0.65, taskProgress: 0.7, hasError: true }),
+    ],
+    totalTurns: 1,
+  });
+  const spans: TraceSpan[] = [
+    makeSpan({ attributes: { &apos;gen_ai.agent.name&apos;: &apos;worker&apos;, &apos;llm.usage.total_tokens&apos;: 512 }, durationMs: 2500 }),
+    makeSpan({ spanId: &apos;span-2&apos;, name: &apos;tool_call&apos;, attributes: { &apos;gen_ai.agent.name&apos;: &apos;worker&apos; } }),
+  ];
+  it(&apos;node evaluationScore reflects turn relevance&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
+    expect(node?.evaluationScore).toBeCloseTo(0.65, 5);
+  });
+  it(&apos;node hasError is true when any turn has an error&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
+    expect(node?.hasError).toBe(true);
+  });
+  it(&apos;node turnCount matches turn count for that agent&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
+    expect(node?.turnCount).toBe(1);
+  });
+  it(&apos;node label matches agent name&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n =&gt; n.id === &apos;worker&apos;);
+    expect(node?.label).toBe(&apos;worker&apos;);
+  });
+});
+describe(&apos;buildWorkflowGraph — edge data binding&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos;, score: 0.72, contextPreserved: false }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
+      makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
+    ],
+    totalTurns: 2,
+  });
+  const spans: TraceSpan[] = [];
+  it(&apos;edge handoffScore matches handoff score&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
+    expect(edge?.handoffScore).toBeCloseTo(0.72, 5);
+  });
+  it(&apos;edge contextPreserved is false when handoff contextPreserved is false&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
+    expect(edge?.contextPreserved).toBe(false);
+  });
+  it(&apos;edge label is formatted as &quot;score: X.XX&quot;&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
+    expect(edge?.label).toBe(&apos;score: 0.72&apos;);
+  });
+  it(&apos;edge id is non-empty string&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges[0];
+    expect(typeof edge?.id).toBe(&apos;string&apos;);
+    expect(edge?.id.length).toBeGreaterThan(0);
+  });
+});
+describe(&apos;buildWorkflowGraph — null evaluation&apos;, () =&gt; {
+  const spans: TraceSpan[] = [];
+  it(&apos;returns 0 nodes&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(0);
+  });
+  it(&apos;returns 0 edges&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it(&apos;rootNodeId is null&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.rootNodeId).toBeNull();
+  });
+  it(&apos;workflowShape is single_agent for empty/null input&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.workflowShape).toBe(&apos;single_agent&apos;);
+  });
+});
+describe(&apos;buildWorkflowGraph — root node identification&apos;, () =&gt; {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: &apos;orchestrator&apos;, targetAgent: &apos;executor&apos;, score: 0.88 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: &apos;orchestrator&apos; }),
+      makeTurn({ turnIndex: 1, agentName: &apos;executor&apos; }),
+    ],
+    totalTurns: 2,
+  });
+  const spans: TraceSpan[] = [];
+  it(&apos;rootNodeId is orchestrator (the first agent)&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.rootNodeId).toBe(&apos;orchestrator&apos;);
+  });
+  it(&apos;rootNodeId corresponds to an existing node id&apos;, () =&gt; {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const rootNode = graph.nodes.find(n =&gt; n.id === graph.rootNodeId);
+    expect(rootNode).toBeDefined();
+  });
+});
+describe(&apos;buildWorkflowGraph — droppedTurns counter&apos;, () =&gt; {
+  it(&apos;counts turns where agentName is undefined&apos;, () =&gt; {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
+        { turnIndex: 1, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+        { turnIndex: 2, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+      ],
+      totalTurns: 3,
     });
-    const graphB = makeGraph({
-      nodes: [makeNode({ id: &apos;b-1&apos;, label: &apos;gamma&apos; }), makeNode({ id: &apos;b-2&apos;, label: &apos;delta&apos; })],
-      edges: [makeEdge({ id: &apos;eb-1&apos;, source: &apos;b-1&apos;, target: &apos;b-2&apos; })],
-      rootNodeId: &apos;b-1&apos;,
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(2);
+  });
+  it(&apos;returns droppedTurns 0 when all turns have agentName&apos;, () =&gt; {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: &apos;agentA&apos; }),
+        makeTurn({ turnIndex: 1, agentName: &apos;agentB&apos; }),
+      ],
+      handoffs: [makeHandoff({ sourceAgent: &apos;agentA&apos;, targetAgent: &apos;agentB&apos; })],
+      totalTurns: 2,
     });
-    const { unmount: unmountA } = render(&lt;WorkflowGraphView graph={graphA} /&gt;);
-    render(&lt;WorkflowGraphView graph={graphB} /&gt;);
-    await waitFor(() =&gt; {
-      expect(screen.getByTestId(&apos;rf-node-a-1&apos;)).toBeInTheDocument();
-      expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
-    });
-    unmountA();
-    expect(screen.queryByTestId(&apos;rf-node-a-1&apos;)).not.toBeInTheDocument();
-    expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(0);
+  });
+  it(&apos;returns droppedTurns 0 for span-inferred graphs (no evaluation)&apos;, () =&gt; {
+    const spans = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { &apos;gen_ai.agent.id&apos;: &apos;agentA&apos; } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.droppedTurns).toBe(0);
+  });
+});
+const ATTR_AGENT_ID = &apos;gen_ai.agent.id&apos;;
+describe(&apos;buildWorkflowGraph — span-inference fallback&apos;, () =&gt; {
+  it(&apos;infers 2 nodes from spans when evaluation is null&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(2);
+  });
+  it(&apos;infers sequential edge when agent A spans end before agent B spans start&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
+    expect(edge).toBeDefined();
+  });
+  it(&apos;sets rootNodeId to the agent with the earliest span start time&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.rootNodeId).toBe(&apos;agentA&apos;);
+  });
+  it(&apos;sets node hasError to true when any span for that agent has status.code === 2&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const node = graph.nodes.find(n =&gt; n.id === &apos;agentA&apos;);
+    expect(node?.hasError).toBe(true);
+  });
+  it(&apos;returns empty graph when evaluation is null and no spans have gen_ai.agent.id&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { &apos;some.other.attr&apos;: &apos;value&apos; } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(0);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it(&apos;infers edge between near-concurrent spans within epsilon tolerance (WG-M2)&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
+      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
+    expect(edge).toBeDefined();
+  });
+  it(&apos;does not infer edge when spans overlap by more than epsilon&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
+      makeSpan({ spanId: &apos;s2&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentB&apos; }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e =&gt; e.source === &apos;agentA&apos; &amp;&amp; e.target === &apos;agentB&apos;);
+    expect(edge).toBeUndefined();
+  });
+  it(&apos;counts tool calls from span names starting with &quot;tool:&quot;&apos;, () =&gt; {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: &apos;s1&apos;, name: &apos;tool:search&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
+      makeSpan({ spanId: &apos;s2&apos;, name: &apos;tool:write&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
+      makeSpan({ spanId: &apos;s3&apos;, name: &apos;agent_turn&apos;, attributes: { [ATTR_AGENT_ID]: &apos;agentA&apos; }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const node = graph.nodes.find(n =&gt; n.id === &apos;agentA&apos;);
+    expect(node?.toolCallCount).toBe(2);
   });
 });</file><file path="src/api/routes/agents.ts">import { Hono } from &apos;hono&apos;;
 import { computeMultiAgentEvaluation } from &apos;../../../../dist/lib/quality/quality-multi-agent.js&apos;;
@@ -14960,7 +14634,82 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error(&apos;useAuth must be used within an AuthProvider&apos;);
   return ctx;
-}</file><file path="src/lib/activity-logger.ts">import { API_BASE } from &apos;./constants.js&apos;;
+}</file><file path="src/lib/validation/auth-schemas.ts">import { z } from &apos;zod&apos;;
+import { FRONTEND_ACTIVITY_EVENTS } from &apos;../../types/activity.js&apos;;
+import { RoleSchema } from &apos;../constants.js&apos;;
+export const Auth0JwtPayloadSchema = z.object({
+  sub: z.string(),
+  email: z.email().optional(),
+  email_verified: z.boolean().optional(),
+  name: z.string().optional(),
+  picture: z.string().optional(),
+  iss: z.string(),
+  aud: z.union([z.string(), z.array(z.string())]),
+  iat: z.number(),
+  exp: z.number(),
+});
+export type Auth0JwtPayload = z.infer&lt;typeof Auth0JwtPayloadSchema&gt;;
+export const PublicUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.email(),
+  created_at: z.iso.datetime().optional(),
+  updated_at: z.iso.datetime().optional(),
+});
+export type PublicUser = z.infer&lt;typeof PublicUserSchema&gt;;
+export const UserRoleRowSchema = z.object({
+  roles: z.object({
+    name: z.string(),
+    permissions: z.array(z.string()),
+  }).nullable(),
+});
+export type UserRoleRow = z.infer&lt;typeof UserRoleRowSchema&gt;;
+export const ActivityRequestSchema = z.object({
+  activity_type: z.enum(FRONTEND_ACTIVITY_EVENTS),
+});
+export const AdminRoleSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  permissions: z.array(z.string()),
+});
+export type AdminRole = z.infer&lt;typeof AdminRoleSchema&gt;;
+export const AdminUserRoleRowSchema = z.object({
+  user_id: z.string().uuid(),
+  role_id: z.string().uuid(),
+  roles: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+  }).nullable(),
+});
+export type AdminUserRoleRow = z.infer&lt;typeof AdminUserRoleRowSchema&gt;;
+export const AdminUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.email().optional(),
+  created_at: z.iso.datetime().optional(),
+  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+});
+export type AdminUser = z.infer&lt;typeof AdminUserSchema&gt;;
+export const AssignRoleRequestSchema = z.object({
+  role_id: z.string().uuid(),
+});
+export type AssignRoleRequest = z.infer&lt;typeof AssignRoleRequestSchema&gt;;
+export const MeResponseSchema = z.object({
+  email: z.email(),
+  roles: z.array(z.string()),
+  permissions: z.array(z.enum([
+    &apos;dashboard.read&apos;,
+    &apos;dashboard.executive&apos;,
+    &apos;dashboard.operator&apos;,
+    &apos;dashboard.auditor&apos;,
+    &apos;dashboard.traces.read&apos;,
+    &apos;dashboard.sessions.read&apos;,
+    &apos;dashboard.agents.read&apos;,
+    &apos;dashboard.pipeline.read&apos;,
+    &apos;dashboard.compliance.read&apos;,
+    &apos;dashboard.admin&apos;,
+  ])),
+  allowedViews: z.array(RoleSchema),
+});
+export type MeResponse = z.infer&lt;typeof MeResponseSchema&gt;;</file><file path="src/lib/activity-logger.ts">import { API_BASE } from &apos;./constants.js&apos;;
 import type { FrontendActivityEvent } from &apos;../types/activity.js&apos;;
 const ACTIVITY_TIMEOUT_MS = 3000;
 export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise&lt;void&gt; {
@@ -15521,7 +15270,259 @@ export interface WorkflowGraph {
   rootNodeId: string | null;
   workflowShape: WorkflowShape;
   droppedTurns: number;
-}</file><file path="src/components/WorkflowTimeline.tsx">import React from &apos;react&apos;;
+}</file><file path="src/__tests__/WorkflowGraph.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
+import { render, screen, fireEvent, waitFor, cleanup } from &apos;@testing-library/react&apos;;
+import type { ReactNode } from &apos;react&apos;;
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record&lt;string, unknown&gt;;
+}
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) =&gt; void;
+  nodeTypes?: Record&lt;string, (props: { data: Record&lt;string, unknown&gt; }) =&gt; ReactNode&gt;;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
+vi.mock(&apos;@xyflow/react&apos;, async () =&gt; {
+  const React = await vi.importActual&lt;typeof import(&apos;react&apos;)&gt;(&apos;react&apos;);
+  return {
+    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) =&gt; (
+      &lt;div data-testid=&quot;reactflow&quot; {...rest}&gt;
+        {(nodes ?? []).map((n) =&gt; {
+          const NodeComp = nodeTypes?.[n.type];
+          return (
+            &lt;div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() =&gt; onNodeClick?.({}, n)}&gt;
+              {NodeComp ? &lt;NodeComp data={n.data} /&gt; : n.id}
+            &lt;/div&gt;
+          );
+        })}
+        {(edges ?? []).map((e) =&gt; (
+          &lt;div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} /&gt;
+        ))}
+        {children}
+      &lt;/div&gt;
+    ),
+    MiniMap: (_props: unknown) =&gt; &lt;div data-testid=&quot;minimap&quot; /&gt;,
+    Controls: () =&gt; &lt;div data-testid=&quot;controls&quot; /&gt;,
+    Background: () =&gt; null,
+    Handle: () =&gt; null,
+    Position: { Top: &apos;top&apos;, Bottom: &apos;bottom&apos; },
+    BaseEdge: () =&gt; null,
+    getStraightPath: () =&gt; [&apos;M 0 0&apos;, 0, 0],
+    useNodesState: (initial: MockNode[]) =&gt; {
+      const [nodes, setNodes] = React.useState(initial);
+      return [nodes, setNodes, vi.fn()];
+    },
+    useEdgesState: (initial: MockEdge[]) =&gt; {
+      const [edges, setEdges] = React.useState(initial);
+      return [edges, setEdges, vi.fn()];
+    },
+    useReactFlow: () =&gt; ({ fitView: vi.fn() }),
+  };
+});
+interface ELKGraph {
+  children?: Array&lt;{ x?: number; y?: number; [key: string]: unknown }&gt;;
+  [key: string]: unknown;
+}
+vi.mock(&apos;elkjs/lib/elk.bundled.js&apos;, () =&gt; ({
+  default: class ELK {
+    layout(graph: ELKGraph) {
+      return Promise.resolve({
+        ...graph,
+        children: (graph.children ?? []).map((c, i: number) =&gt; ({
+          ...c,
+          x: i * 300,
+          y: i * 200,
+        })),
+      });
+    }
+  },
+}));
+import { WorkflowGraphView } from &apos;../components/WorkflowGraph.js&apos;;
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from &apos;./workflow-fixtures.js&apos;;
+afterEach(cleanup);
+describe(&apos;WorkflowGraphView&apos;, () =&gt; {
+  const twoNodeGraph = makeGraph({
+    nodes: [
+      makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; }),
+      makeNode({ id: &apos;node-2&apos;, label: &apos;executor&apos; }),
+    ],
+    edges: [makeEdge({ id: &apos;edge-1&apos;, source: &apos;node-1&apos;, target: &apos;node-2&apos; })],
+    rootNodeId: &apos;node-1&apos;,
+    workflowShape: &apos;linear&apos;,
+  });
+  const threeNodeGraph = makeGraph({
+    nodes: [
+      makeNode({ id: &apos;node-1&apos; }),
+      makeNode({ id: &apos;node-2&apos; }),
+      makeNode({ id: &apos;node-3&apos; }),
+    ],
+    rootNodeId: &apos;node-1&apos;,
+    workflowShape: &apos;linear&apos;,
+  });
+  const fiveNodeGraph = makeGraph({
+    nodes: Array.from({ length: 5 }, (_, i) =&gt;
+      makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
+    ),
+    rootNodeId: &apos;node-1&apos;,
+    workflowShape: &apos;branching&apos;,
+  });
+  it(&apos;renders container with role=img and aria-label&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
+    const container = await waitFor(() =&gt;
+      screen.getByRole(&apos;img&apos;, { name: &apos;Agent workflow graph&apos; })
+    );
+    expect(container).toBeInTheDocument();
+  });
+  it(&apos;renders correct number of nodes&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(&apos;rf-node-node-2&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(&apos;rf-node-node-3&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;node displays agent label&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;planner&apos; })],
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByText(&apos;planner&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;node displays Good score badge text for score &gt;= 0.7&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, evaluationScore: 0.85 })],
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByText(&apos;Good&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;node displays tool count&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, toolCallCount: 5 })],
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByText(&apos;5 tools&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;shows Controls always&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={twoNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;controls&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;shows MiniMap for 5+ nodes&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={fiveNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;minimap&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;hides MiniMap for fewer than 5 nodes&apos;, async () =&gt; {
+    render(&lt;WorkflowGraphView graph={threeNodeGraph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId(&apos;minimap&apos;)).not.toBeInTheDocument();
+  });
+  it(&apos;shows simplified fallback for single_agent shape with 1 node and no ReactFlow&apos;, async () =&gt; {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: &apos;node-1&apos;, label: &apos;solo-agent&apos; })],
+      workflowShape: &apos;single_agent&apos;,
+      rootNodeId: &apos;node-1&apos;,
+    });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.queryByTestId(&apos;reactflow&apos;)).not.toBeInTheDocument();
+      expect(screen.getByText(/solo-agent/)).toBeInTheDocument();
+    });
+  });
+  it(&apos;fires onNodeClick with the correct nodeId when a node is clicked&apos;, async () =&gt; {
+    const onNodeClick = vi.fn();
+    render(&lt;WorkflowGraphView graph={twoNodeGraph} onNodeClick={onNodeClick} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-node-1&apos;)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId(&apos;rf-node-node-1&apos;));
+    expect(onNodeClick).toHaveBeenCalledWith(&apos;node-1&apos;);
+  });
+  it(&apos;renders without error when graph has 0 nodes and 0 edges&apos;, async () =&gt; {
+    const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
+    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
+  });
+});
+const ST_G5_LARGE_GRAPH_SIZE = 100;
+const ST_G5_DEEP_CHAIN_SIZE = 20;
+const ST_G5_DISCONNECTED_SIZE = 10;
+describe(&apos;WorkflowGraphView stress&apos;, () =&gt; {
+  it(&apos;renders 100+ node graph without error using degraded list fallback&apos;, () =&gt; {
+    const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, &apos;agent&apos;, &apos;branching&apos;);
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    expect(screen.getByText(`Graph too large to render (${ST_G5_LARGE_GRAPH_SIZE} agents)`)).toBeInTheDocument();
+    expect(screen.getByText(/agent-0 —/)).toBeInTheDocument();
+    expect(screen.getByText(/agent-99 —/)).toBeInTheDocument();
+  });
+  it(&apos;renders deeply nested delegation chain without error&apos;, async () =&gt; {
+    const graph = makeChainGraph(ST_G5_DEEP_CHAIN_SIZE, &apos;delegate&apos;, &apos;linear&apos;);
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-delegate-0&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
+    });
+  });
+  it(&apos;renders without crash when rootNodeId is null (missing parent span inference fallback)&apos;, async () =&gt; {
+    const nodes = Array.from({ length: 5 }, (_, i) =&gt;
+      makeNode({ id: `node-${i}`, label: `orphan-${i}` })
+    );
+    const graph = makeGraph({ nodes, rootNodeId: null, workflowShape: &apos;branching&apos; });
+    expect(() =&gt; render(&lt;WorkflowGraphView graph={graph} /&gt;)).not.toThrow();
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;reactflow&apos;)).toBeInTheDocument();
+    });
+  });
+  it(&apos;renders disconnected nodes (no edges) without crash&apos;, async () =&gt; {
+    const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =&gt;
+      makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
+    );
+    const graph = makeGraph({ nodes, rootNodeId: &apos;orphan-0&apos;, workflowShape: &apos;branching&apos; });
+    render(&lt;WorkflowGraphView graph={graph} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
+    });
+  });
+  it(&apos;renders two graphs in the same DOM without node state leakage between instances&apos;, async () =&gt; {
+    const graphA = makeGraph({
+      nodes: [makeNode({ id: &apos;a-1&apos;, label: &apos;alpha&apos; }), makeNode({ id: &apos;a-2&apos;, label: &apos;beta&apos; })],
+      edges: [makeEdge({ id: &apos;ea-1&apos;, source: &apos;a-1&apos;, target: &apos;a-2&apos; })],
+      rootNodeId: &apos;a-1&apos;,
+    });
+    const graphB = makeGraph({
+      nodes: [makeNode({ id: &apos;b-1&apos;, label: &apos;gamma&apos; }), makeNode({ id: &apos;b-2&apos;, label: &apos;delta&apos; })],
+      edges: [makeEdge({ id: &apos;eb-1&apos;, source: &apos;b-1&apos;, target: &apos;b-2&apos; })],
+      rootNodeId: &apos;b-1&apos;,
+    });
+    const { unmount: unmountA } = render(&lt;WorkflowGraphView graph={graphA} /&gt;);
+    render(&lt;WorkflowGraphView graph={graphB} /&gt;);
+    await waitFor(() =&gt; {
+      expect(screen.getByTestId(&apos;rf-node-a-1&apos;)).toBeInTheDocument();
+      expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
+    });
+    unmountA();
+    expect(screen.queryByTestId(&apos;rf-node-a-1&apos;)).not.toBeInTheDocument();
+    expect(screen.getByTestId(&apos;rf-node-b-1&apos;)).toBeInTheDocument();
+  });
+});</file><file path="src/components/WorkflowTimeline.tsx">import React from &apos;react&apos;;
 import { scoreColor, agentColor } from &apos;../lib/quality-utils.js&apos;;
 import { EmptyState } from &apos;./EmptyState.js&apos;;
 import type { TurnLevelResult, HandoffEvaluation } from &apos;../types.js&apos;;
@@ -15798,6 +15799,7 @@ const ATTR_AGENT_NAME = &apos;gen_ai.agent.name&apos;;
 const ATTR_AGENT_ID = &apos;gen_ai.agent.id&apos;;
 const ATTR_TOTAL_TOKENS = &apos;llm.usage.total_tokens&apos;;
 const SPAN_NAME_TOOL_CALL = &apos;tool_call&apos;;
+const SPAN_NAME_TOOL_PREFIX = &apos;tool:&apos;;
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
 export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
@@ -15895,7 +15897,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     let minStart = Infinity;
     let maxEnd = -Infinity;
     for (const s of group) {
-      if (s.name.startsWith(&apos;tool:&apos;)) toolCallCount++;
+      if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
       const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
       if (typeof tv === &apos;number&apos; &amp;&amp; isFinite(tv)) { tokenSum += tv; tokenCount++; }
       durationMs += s.durationMs ?? 0;
@@ -20137,7 +20139,7 @@ if (isDirectRun) {
     console.error(&apos;Fatal error:&apos;, err);
     safeExit(1);
   });
-}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-27 04:00:25 -0500</date><message>refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)</message><files>scripts/judge-evaluations.ts</files><files>src/lib/workflow-graph.ts</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:52:53 -0500</date><message>style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:47:59 -0500</date><message>refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css</message><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:37 -0500</date><message>refactor(workflow-graph): replace inline height style with CSS variable</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:31 -0500</date><message>style(workflow): strip CR-PERF/CR-TS task-tracker prefixes from comments</message><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:20:34 -0500</date><message>style(admin): strip CR-AUTH-2 task-tracker prefix from comment</message><files>src/pages/AdminPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:18:15 -0500</date><message>chore: regenerate repomix compressed XML</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:39:00 -0500</date><message>perf(sync-to-kv): parallelize metric detail queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:38:56 -0500</date><message>style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:31:03 -0500</date><message>refactor(sync-to-kv): use activePeriods in remaining period loops</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:28:00 -0500</date><message>perf(sync-to-kv): parallelize period batch queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:25:03 -0500</date><message>style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:22:33 -0500</date><message>fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:21:25 -0500</date><message>refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:20:58 -0500</date><message>refactor(judge-evaluations): extract JUDGE_MAX_TOKENS and JUDGE_DEFAULT_TEMPERATURE constants</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:17:17 -0500</date><message>perf(workflow): memoize agentNames derivation in AgentWorkflowView</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 02:14:28 -0500</date><message>style(judge-evaluations): remove task-tracker prefixes and WHAT comments from seedEvaluations/evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:06:27 -0500</date><message>feat(workflow): add graph controls, critical path, and PNG export</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>package-lock.json</files><files>package.json</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 01:58:00 -0500</date><message>refactor(derive-evaluations): extract TASK_COMPLETION_EVAL_NAME; use TOOL_CORRECTNESS_CRITERIA.name</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:57:08 -0500</date><message>refactor(judge-evaluations): use TOOL_CORRECTNESS_CRITERIA.name; simplify subCriteria to drop redundant name field</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:56:18 -0500</date><message>refactor(judge-evaluations): extract RELEVANCE/COHERENCE/FAITHFULNESS/HALLUCINATION_EVAL_NAME constants; replace 20 raw strings</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:45:19 -0500</date><message>refactor(judge-evaluations): replace raw evaluator type strings at evalType filter and dataset run record</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:35:04 -0500</date><message>perf(derive-evaluations): store distinctAgentCount instead of full Set in handoff loop</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:57 -0500</date><message>refactor(judge-evaluations): extract TRACE_BACKFILL_EVALUATOR_TYPE; replace raw strings at backfill override</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:50 -0500</date><message>refactor(sync-to-kv): remove unnecessary Record&lt;string,unknown&gt; cast in filterCanary</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:57 -0500</date><message>refactor(sync-to-kv): replace raw &apos;canary&apos; string with CANARY_EVALUATOR_TYPE constant</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:40 -0500</date><message>refactor(derive-evaluations): hoist sessionPreview in agent/handoff completion loops</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:27:16 -0500</date><message>refactor(scripts): extract RULE_EVALUATOR_TYPE constant; replace 6 raw &apos;rule&apos; literals</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:37:49 -0500</date><message>refactor(scripts): add CANARY/SEED_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:21:51 -0500</date><message>fix(judge-evaluations): correct self-referential sessionPreview; add declaration to evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:20:41 -0500</date><message>refactor(scripts): apply RULE_EVALUATOR/LLM_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:51:22 -0500</date><message>refactor(scripts): extract LLM_JUDGE_EVALUATOR constant; remove blank line</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:47:09 -0500</date><message>perf(workflow): memoize effectiveSelected Set and document style exemption</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 23:32:05 -0500</date><message>refactor(derive-evaluations): remove write-only vars; hoist RULE_EVALUATOR to module level</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:30:08 -0500</date><message>refactor(derive-evaluations): remove redundant existsSync guard before readJsonlWithValidationSync</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:13:24 -0500</date><message>style(derive-evaluations): split multi-declaration into separate let statements</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:02:30 -0500</date><message>feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)</message><files>docs/BACKLOG.md</files><files>docs/CHANGELOG.md</files><files>docs/changelog/3.0.5/CHANGELOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files><files>src/lib/constants.ts</files><files>src/pages/RoutingTelemetryPage.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 22:59:51 -0500</date><message>perf(derive-evaluations): eliminate handoffScores array; compute in single pass</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:58:15 -0500</date><message>fix(derive-evaluations): remove stray double semicolon</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:52:11 -0500</date><message>refactor(derive-evaluations): use STATUS_SCORES constants instead of magic score literals</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:40:29 -0500</date><message>refactor(derive-evaluations): use shared constants and toDateOnly utility</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:37:18 -0500</date><message>refactor(judge-evaluations): remove redundant streaming WHAT comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:28:55 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:25:13 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comment</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:12:55 -0500</date><message>refactor(scripts): use HOOK_NAME constant and remove WHAT comments</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:02:16 -0500</date><message>docs(backlog): mark CR-WK-4, CR-WK-5, CR-WK-7, CR-WK-8 as done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-26 22:01:43 -0500</date><message>refactor(sessions): strip ticket IDs from parseTimestamp JSDoc</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:59:57 -0500</date><message>fix(sessions): remove unsafe LogRecord casts; access typed fields directly (CR-WK-5)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:58:53 -0500</date><message>fix(sessions): guard parseTimestamp against extreme values causing toISOString RangeError (CR-WK-4)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:47:39 -0500</date><message>fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>playwright.config.ts</files><files>scripts/deploy-secrets.sh</files><files>src/__tests__/supabase-refresh.test.ts</files><files>src/lib/supabase.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 20:08:47 -0500</date><message>refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 19:44:33 -0500</date><message>docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup</message><files>.claude/ralph-loop.local.md</files><files>CLAUDE.md</files><files>docs/auth/user-authentication.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>docs/roadmap/users.md</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:16:05 -0500</date><message>fix(CoverageGrid): add CSSProperties cast for CSS custom property</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:12:42 -0500</date><message>refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable</message><files>src/components/CoverageGrid.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 19:04:39 -0500</date><message>refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables</message><files>src/components/CorrelationHeatmap.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 18:58:18 -0500</date><message>refactor(data-loader): remove WHAT first line from loadEvaluationsByTraceIds JSDoc</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:53:10 -0500</date><message>refactor(sessions): remove WHAT JSDoc comment from sessionRoutes handler</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:46:20 -0500</date><message>refactor(trends): remove WHAT JSDoc comment from trendRoutes handler</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:40:24 -0500</date><message>fix(trends): add missing isValidParam check for metric name param</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:33:45 -0500</date><message>style(sessions): remove extra blank line between percentile and LatencyStats</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:19:54 -0500</date><message>fix(sessions): guard computeLatencyStats against empty durations array</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:12:04 -0500</date><message>refactor(routes): align traceId validation to isValidParam; use ErrorMessage in traces</message><files>src/api/routes/evaluations.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:03:45 -0500</date><message>refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds</message><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:02:12 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 18:01:43 -0500</date><message>refactor(worker): extract remaining inline error strings to ERR_ constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:55 -0500</date><message>refactor(constants): extract inline error strings into ErrorMessage enum</message><files>src/api/routes/coverage.ts</files><files>src/api/routes/sessions.ts</files><files>src/lib/constants.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:32 -0500</date><message>refactor(routes): use ErrorMessage enum for evaluations and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:55:04 -0500</date><message>refactor(worker): split userId/roleId validation for precise error messages</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:53:04 -0500</date><message>refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:47:44 -0500</date><message>refactor(worker): extract safeArray helper for Array.isArray KV guard pattern</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:40:46 -0500</date><message>refactor(derive-evaluations): import TELEMETRY_DIR and SESSION_ID_PREVIEW_LEN from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:22 -0500</date><message>refactor(derive-evaluations): import EVAL_SCORE_PRECISION from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:07 -0500</date><message>fix(worker): replace unsafe KV payload casts with Array.isArray guards</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:38:29 -0500</date><message>chore: regenerate repomix docs</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:52 -0500</date><message>refactor(derive-evaluations): use normalizeScore instead of inline parseFloat/toFixed</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:23 -0500</date><message>fix(worker): guard logActivity against undefined appUserId instead of passing empty string</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:42 -0500</date><message>refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:05 -0500</date><message>refactor(derive-evaluations): remove WHAT JSDoc comments from constants and serializer</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:31:23 -0500</date><message>refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants</message><files>scripts/sync-to-kv.ts</files><files>src/components/BarIndicator.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:29:57 -0500</date><message>refactor(components,worker): remove WHAT JSDoc prop comments and route comment</message><files>src/components/BarIndicator.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:28:36 -0500</date><message>refactor(worker): remove WHAT comments from admin route handlers</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:59 -0500</date><message>refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:44 -0500</date><message>docs(constants): restore non-obvious comments for LLM_SAMPLE_RATE and SCORE_*_PRECISION</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:01 -0500</date><message>refactor(derive-evaluations): remove WHAT comments in task scoring</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:25:03 -0500</date><message>refactor(keyboard-nav): remove WHAT comment before two-key combo handler</message><files>src/contexts/KeyboardNavContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:24:12 -0500</date><message>refactor(components,api): remove WHAT JSDoc comments from TruncatedIdLink and config</message><files>src/api/config.ts</files><files>src/components/TruncatedIdLink.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:59 -0500</date><message>refactor(quality-utils): remove WHAT JSDoc comments from utility functions</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:04 -0500</date><message>refactor(constants): remove WHAT JSDoc comments from self-documenting constants</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:21:40 -0500</date><message>refactor(trends): use ErrorMessage.InvalidBuckets constant</message><files>src/api/routes/trends.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:20:38 -0500</date><message>refactor(api-constants): remove WHAT JSDoc comments from constants and helpers</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:19:02 -0500</date><message>refactor(data-loader): remove section header WHAT comments</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:30 -0500</date><message>refactor(metrics): remove WHAT JSDoc comment on period constants</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:02 -0500</date><message>refactor(routes): remove WHAT JSDoc comments on internal helper functions</message><files>src/api/routes/dashboard.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:17:14 -0500</date><message>refactor(derive-evaluations): eliminate double Map.get() in task tracking</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:16:29 -0500</date><message>refactor(quality): remove WHAT comment before sort</message><files>src/api/routes/quality.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
+}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-27 04:04:30 -0500</date><message>refactor(tests): strip task-tracker prefixes from test files and derive script</message><files>scripts/derive-evaluations.ts</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/dr-l4-self-hosted-fonts.test.ts</files><files>src/__tests__/quality-utils-adaptive.test.ts</files><files>src/__tests__/score-badge-calibration.test.tsx</files><files>src/__tests__/workflow-graph.test.ts</files><files>worker/__tests__/spa-fallback.test.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:03:14 -0500</date><message>refactor: use RoleSchema for allowedViews; add SPAN_NAME_TOOL_PREFIX constant</message><files>src/lib/validation/auth-schemas.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:42 -0500</date><message>chore: regenerate repomix docs after task-tracker prefix cleanup</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:25 -0500</date><message>refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)</message><files>scripts/judge-evaluations.ts</files><files>src/lib/workflow-graph.ts</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:52:53 -0500</date><message>style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:47:59 -0500</date><message>refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css</message><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:37 -0500</date><message>refactor(workflow-graph): replace inline height style with CSS variable</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:31 -0500</date><message>style(workflow): strip CR-PERF/CR-TS task-tracker prefixes from comments</message><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:20:34 -0500</date><message>style(admin): strip CR-AUTH-2 task-tracker prefix from comment</message><files>src/pages/AdminPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:18:15 -0500</date><message>chore: regenerate repomix compressed XML</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:39:00 -0500</date><message>perf(sync-to-kv): parallelize metric detail queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:38:56 -0500</date><message>style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:31:03 -0500</date><message>refactor(sync-to-kv): use activePeriods in remaining period loops</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:28:00 -0500</date><message>perf(sync-to-kv): parallelize period batch queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:25:03 -0500</date><message>style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:22:33 -0500</date><message>fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:21:25 -0500</date><message>refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:20:58 -0500</date><message>refactor(judge-evaluations): extract JUDGE_MAX_TOKENS and JUDGE_DEFAULT_TEMPERATURE constants</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:17:17 -0500</date><message>perf(workflow): memoize agentNames derivation in AgentWorkflowView</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 02:14:28 -0500</date><message>style(judge-evaluations): remove task-tracker prefixes and WHAT comments from seedEvaluations/evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:06:27 -0500</date><message>feat(workflow): add graph controls, critical path, and PNG export</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>package-lock.json</files><files>package.json</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 01:58:00 -0500</date><message>refactor(derive-evaluations): extract TASK_COMPLETION_EVAL_NAME; use TOOL_CORRECTNESS_CRITERIA.name</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:57:08 -0500</date><message>refactor(judge-evaluations): use TOOL_CORRECTNESS_CRITERIA.name; simplify subCriteria to drop redundant name field</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:56:18 -0500</date><message>refactor(judge-evaluations): extract RELEVANCE/COHERENCE/FAITHFULNESS/HALLUCINATION_EVAL_NAME constants; replace 20 raw strings</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:45:19 -0500</date><message>refactor(judge-evaluations): replace raw evaluator type strings at evalType filter and dataset run record</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:35:04 -0500</date><message>perf(derive-evaluations): store distinctAgentCount instead of full Set in handoff loop</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:57 -0500</date><message>refactor(judge-evaluations): extract TRACE_BACKFILL_EVALUATOR_TYPE; replace raw strings at backfill override</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:34:50 -0500</date><message>refactor(sync-to-kv): remove unnecessary Record&lt;string,unknown&gt; cast in filterCanary</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:57 -0500</date><message>refactor(sync-to-kv): replace raw &apos;canary&apos; string with CANARY_EVALUATOR_TYPE constant</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:31:40 -0500</date><message>refactor(derive-evaluations): hoist sessionPreview in agent/handoff completion loops</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 01:27:16 -0500</date><message>refactor(scripts): extract RULE_EVALUATOR_TYPE constant; replace 6 raw &apos;rule&apos; literals</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:37:49 -0500</date><message>refactor(scripts): add CANARY/SEED_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:21:51 -0500</date><message>fix(judge-evaluations): correct self-referential sessionPreview; add declaration to evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 00:20:41 -0500</date><message>refactor(scripts): apply RULE_EVALUATOR/LLM_EVALUATOR_TYPE constants; hoist sessionPreview</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:51:22 -0500</date><message>refactor(scripts): extract LLM_JUDGE_EVALUATOR constant; remove blank line</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:47:09 -0500</date><message>perf(workflow): memoize effectiveSelected Set and document style exemption</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 23:32:05 -0500</date><message>refactor(derive-evaluations): remove write-only vars; hoist RULE_EVALUATOR to module level</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:30:08 -0500</date><message>refactor(derive-evaluations): remove redundant existsSync guard before readJsonlWithValidationSync</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:13:24 -0500</date><message>style(derive-evaluations): split multi-declaration into separate let statements</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 23:02:30 -0500</date><message>feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)</message><files>docs/BACKLOG.md</files><files>docs/CHANGELOG.md</files><files>docs/changelog/3.0.5/CHANGELOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files><files>src/lib/constants.ts</files><files>src/pages/RoutingTelemetryPage.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 22:59:51 -0500</date><message>perf(derive-evaluations): eliminate handoffScores array; compute in single pass</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:58:15 -0500</date><message>fix(derive-evaluations): remove stray double semicolon</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:52:11 -0500</date><message>refactor(derive-evaluations): use STATUS_SCORES constants instead of magic score literals</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:40:29 -0500</date><message>refactor(derive-evaluations): use shared constants and toDateOnly utility</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:37:18 -0500</date><message>refactor(judge-evaluations): remove redundant streaming WHAT comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:28:55 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:25:13 -0500</date><message>refactor(judge-evaluations): remove WHAT inline comment</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:12:55 -0500</date><message>refactor(scripts): use HOOK_NAME constant and remove WHAT comments</message><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 22:02:16 -0500</date><message>docs(backlog): mark CR-WK-4, CR-WK-5, CR-WK-7, CR-WK-8 as done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-26 22:01:43 -0500</date><message>refactor(sessions): strip ticket IDs from parseTimestamp JSDoc</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:59:57 -0500</date><message>fix(sessions): remove unsafe LogRecord casts; access typed fields directly (CR-WK-5)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:58:53 -0500</date><message>fix(sessions): guard parseTimestamp against extreme values causing toISOString RangeError (CR-WK-4)</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 21:47:39 -0500</date><message>fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)</message><files>docs/BACKLOG.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>playwright.config.ts</files><files>scripts/deploy-secrets.sh</files><files>src/__tests__/supabase-refresh.test.ts</files><files>src/lib/supabase.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 20:08:47 -0500</date><message>refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 19:44:33 -0500</date><message>docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup</message><files>.claude/ralph-loop.local.md</files><files>CLAUDE.md</files><files>docs/auth/user-authentication.md</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>docs/roadmap/users.md</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:16:05 -0500</date><message>fix(CoverageGrid): add CSSProperties cast for CSS custom property</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 19:12:42 -0500</date><message>refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable</message><files>src/components/CoverageGrid.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 19:04:39 -0500</date><message>refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables</message><files>src/components/CorrelationHeatmap.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-26 18:58:18 -0500</date><message>refactor(data-loader): remove WHAT first line from loadEvaluationsByTraceIds JSDoc</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:53:10 -0500</date><message>refactor(sessions): remove WHAT JSDoc comment from sessionRoutes handler</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:46:20 -0500</date><message>refactor(trends): remove WHAT JSDoc comment from trendRoutes handler</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:40:24 -0500</date><message>fix(trends): add missing isValidParam check for metric name param</message><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:33:45 -0500</date><message>style(sessions): remove extra blank line between percentile and LatencyStats</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:19:54 -0500</date><message>fix(sessions): guard computeLatencyStats against empty durations array</message><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:12:04 -0500</date><message>refactor(routes): align traceId validation to isValidParam; use ErrorMessage in traces</message><files>src/api/routes/evaluations.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:03:45 -0500</date><message>refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds</message><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 18:02:12 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 18:01:43 -0500</date><message>refactor(worker): extract remaining inline error strings to ERR_ constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:55 -0500</date><message>refactor(constants): extract inline error strings into ErrorMessage enum</message><files>src/api/routes/coverage.ts</files><files>src/api/routes/sessions.ts</files><files>src/lib/constants.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:59:32 -0500</date><message>refactor(routes): use ErrorMessage enum for evaluations and agents routes</message><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:55:04 -0500</date><message>refactor(worker): split userId/roleId validation for precise error messages</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:53:04 -0500</date><message>refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:47:44 -0500</date><message>refactor(worker): extract safeArray helper for Array.isArray KV guard pattern</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:40:46 -0500</date><message>refactor(derive-evaluations): import TELEMETRY_DIR and SESSION_ID_PREVIEW_LEN from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:22 -0500</date><message>refactor(derive-evaluations): import EVAL_SCORE_PRECISION from judge-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:39:07 -0500</date><message>fix(worker): replace unsafe KV payload casts with Array.isArray guards</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:38:29 -0500</date><message>chore: regenerate repomix docs</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:52 -0500</date><message>refactor(derive-evaluations): use normalizeScore instead of inline parseFloat/toFixed</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:37:23 -0500</date><message>fix(worker): guard logActivity against undefined appUserId instead of passing empty string</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:42 -0500</date><message>refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:32:05 -0500</date><message>refactor(derive-evaluations): remove WHAT JSDoc comments from constants and serializer</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:31:23 -0500</date><message>refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants</message><files>scripts/sync-to-kv.ts</files><files>src/components/BarIndicator.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:29:57 -0500</date><message>refactor(components,worker): remove WHAT JSDoc prop comments and route comment</message><files>src/components/BarIndicator.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:28:36 -0500</date><message>refactor(worker): remove WHAT comments from admin route handlers</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:59 -0500</date><message>refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:44 -0500</date><message>docs(constants): restore non-obvious comments for LLM_SAMPLE_RATE and SCORE_*_PRECISION</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:26:01 -0500</date><message>refactor(derive-evaluations): remove WHAT comments in task scoring</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:25:03 -0500</date><message>refactor(keyboard-nav): remove WHAT comment before two-key combo handler</message><files>src/contexts/KeyboardNavContext.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:24:12 -0500</date><message>refactor(components,api): remove WHAT JSDoc comments from TruncatedIdLink and config</message><files>src/api/config.ts</files><files>src/components/TruncatedIdLink.tsx</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:59 -0500</date><message>refactor(quality-utils): remove WHAT JSDoc comments from utility functions</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:22:04 -0500</date><message>refactor(constants): remove WHAT JSDoc comments from self-documenting constants</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:21:40 -0500</date><message>refactor(trends): use ErrorMessage.InvalidBuckets constant</message><files>src/api/routes/trends.ts</files><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:20:38 -0500</date><message>refactor(api-constants): remove WHAT JSDoc comments from constants and helpers</message><files>src/api/api-constants.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:19:02 -0500</date><message>refactor(data-loader): remove section header WHAT comments</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-26 17:18:30 -0500</date><message>refactor(metrics): remove WHAT JSDoc comment on period constants</message><files>src/api/routes/metrics.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.
 

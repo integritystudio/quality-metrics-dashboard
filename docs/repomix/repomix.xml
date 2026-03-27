@@ -2052,90 +2052,6 @@ fi
 mv "$README_PATH.tmp" "$README_PATH"
 
 ================
-File: src/__tests__/api-calibration.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import app from '../../worker/index.js';
-function makeKV(store: Record<string, unknown> = {}): KVNamespace {
-  return {
-    get: async (key: string, type?: string) => {
-      const value = store[key];
-      if (value === undefined) return null;
-      if (type === 'json') return value;
-      return JSON.stringify(value);
-    },
-    put: async () => {},
-    delete: async () => {},
-    list: async () => ({ keys: [], list_complete: true, cursor: '' }),
-    getWithMetadata: async () => ({ value: null, metadata: null }),
-  } as unknown as KVNamespace;
-}
-function makeCalibrationData() {
-  return {
-    lastCalibrated: '2026-03-10T06:00:00.000Z',
-    distributions: {
-      relevance: { p10: 0.42, p25: 0.58, p50: 0.67, p75: 0.79, p90: 0.88 },
-      faithfulness: { p10: 0.5, p25: 0.65, p50: 0.75, p75: 0.85, p90: 0.93 },
-      coherence: { p10: 0.55, p25: 0.68, p50: 0.77, p75: 0.86, p90: 0.94 },
-    },
-    sampleCounts: {
-      relevance: 312,
-      faithfulness: 289,
-      coherence: 301,
-    },
-  };
-}
-describe('GET /api/calibration', () => {
-  it('returns 200 with calibration state from KV key meta:calibration', async () => {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    expect(res.status).toBe(200);
-  });
-  it('returns distributions field in response body', async () => {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as Record<string, unknown>;
-    expect(body).toHaveProperty('distributions');
-  });
-  it('returns lastCalibrated field in response body', async () => {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as Record<string, unknown>;
-    expect(body).toHaveProperty('lastCalibrated');
-  });
-  it('returns distributions with per-metric percentile data', async () => {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as { distributions: Record<string, unknown> };
-    expect(body.distributions).toHaveProperty('relevance');
-    const relDist = body.distributions['relevance'] as Record<string, number>;
-    expect(relDist).toHaveProperty('p10');
-    expect(relDist).toHaveProperty('p25');
-    expect(relDist).toHaveProperty('p50');
-    expect(relDist).toHaveProperty('p75');
-    expect(relDist).toHaveProperty('p90');
-  });
-  it('returns 404 with error field when no calibration data exists in KV', async () => {
-    const kv = makeKV({});
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    expect(res.status).toBe(404);
-    const body = await res.json() as Record<string, unknown>;
-    expect(body).toHaveProperty('error');
-  });
-  it('returns exact lastCalibrated value from KV', async () => {
-    const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
-    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as { lastCalibrated: string };
-    expect(body.lastCalibrated).toBe('2026-03-10T06:00:00.000Z');
-  });
-});
-
-================
 File: src/__tests__/api-compliance.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -2869,183 +2785,6 @@ describe('loadEvaluationsByTraceIds', () => {
 });
 
 ================
-File: src/__tests__/quality-utils-adaptive.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import {
-  empiricalCDF,
-  adaptiveScoreColorBand,
-  MIN_QUANTILE_SAMPLE_SIZE,
-  METRIC_SCALE_STRATEGY,
-  type PercentileDistribution,
-} from '../lib/quality-utils.js';
-function makeDist(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
-  return {
-    p10: 0.4,
-    p25: 0.55,
-    p50: 0.65,
-    p75: 0.78,
-    p90: 0.88,
-    ...overrides,
-  };
-}
-describe('empiricalCDF', () => {
-  it('returns 0.5 for value at exact p50', () => {
-    const dist = makeDist({ p50: 0.65 });
-    expect(empiricalCDF(0.65, dist)).toBeCloseTo(0.5, 5);
-  });
-  it('returns a value near 0 for value below p10', () => {
-    const dist = makeDist({ p10: 0.4 });
-    const result = empiricalCDF(0.1, dist);
-    expect(result).toBeGreaterThanOrEqual(0);
-    expect(result).toBeLessThan(0.1);
-  });
-  it('returns a value near 1 for value above p90', () => {
-    const dist = makeDist({ p90: 0.88 });
-    const result = empiricalCDF(0.98, dist);
-    expect(result).toBeGreaterThan(0.9);
-    expect(result).toBeLessThanOrEqual(1);
-  });
-  it('returns interpolated value between 0.25 and 0.5 for value between p25 and p50', () => {
-    const dist = makeDist({ p25: 0.55, p50: 0.65 });
-    const midpoint = (0.55 + 0.65) / 2;
-    const result = empiricalCDF(midpoint, dist);
-    expect(result).toBeGreaterThan(0.25);
-    expect(result).toBeLessThan(0.5);
-  });
-  it('returns 0.5 for non-finite value (NaN)', () => {
-    expect(empiricalCDF(NaN, makeDist())).toBeCloseTo(0.5, 5);
-  });
-  it('returns 0.5 for non-finite value (Infinity)', () => {
-    expect(empiricalCDF(Infinity, makeDist())).toBeLessThanOrEqual(1);
-  });
-  it('returns 0.5 for non-finite value (-Infinity)', () => {
-    expect(empiricalCDF(-Infinity, makeDist())).toBeGreaterThanOrEqual(0);
-  });
-});
-describe('MIN_QUANTILE_SAMPLE_SIZE', () => {
-  it('equals 100', () => {
-    expect(MIN_QUANTILE_SAMPLE_SIZE).toBe(100);
-  });
-});
-describe('METRIC_SCALE_STRATEGY', () => {
-  it('maps relevance to quantile', () => {
-    expect(METRIC_SCALE_STRATEGY['relevance']).toBe('quantile');
-  });
-  it('maps faithfulness to binary', () => {
-    expect(METRIC_SCALE_STRATEGY['faithfulness']).toBe('binary');
-  });
-  it('maps coherence to uniform', () => {
-    expect(METRIC_SCALE_STRATEGY['coherence']).toBe('uniform');
-  });
-  it('maps hallucination to log', () => {
-    expect(METRIC_SCALE_STRATEGY['hallucination']).toBe('log');
-  });
-  it('maps task_completion to step', () => {
-    expect(METRIC_SCALE_STRATEGY['task_completion']).toBe('step');
-  });
-  it('maps tool_correctness to categorical', () => {
-    expect(METRIC_SCALE_STRATEGY['tool_correctness']).toBe('categorical');
-  });
-  it('maps evaluation_latency to percentile_rank', () => {
-    expect(METRIC_SCALE_STRATEGY['evaluation_latency']).toBe('percentile_rank');
-  });
-});
-describe('adaptiveScoreColorBand — quantile strategy', () => {
-  it('uses empiricalCDF when distribution and sufficient sampleSize are provided', () => {
-    const dist = makeDist({ p10: 0.3, p25: 0.5, p50: 0.6, p75: 0.72, p90: 0.82 });
-    const result = adaptiveScoreColorBand(0.75, 'relevance', 'maximize', dist, 200);
-    expect(['excellent', 'good']).toContain(result);
-  });
-  it('falls back to uniform scoreColorBand when no distribution provided', () => {
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', undefined, 200);
-    expect(result).toBe('excellent');
-  });
-  it('falls back to uniform scoreColorBand when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE', () => {
-    const dist = makeDist();
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', dist, 50);
-    expect(result).toBe('excellent');
-  });
-  it('falls back to uniform when sampleSize is exactly MIN_QUANTILE_SAMPLE_SIZE - 1', () => {
-    const dist = makeDist();
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', dist, 99);
-    expect(result).toBe('excellent');
-  });
-  it('uses quantile when sampleSize equals MIN_QUANTILE_SAMPLE_SIZE', () => {
-    const dist = makeDist({ p10: 0.3, p25: 0.45, p50: 0.55, p75: 0.65, p90: 0.75 });
-    const result = adaptiveScoreColorBand(0.9, 'relevance', 'maximize', dist, 100);
-    expect(['excellent', 'good']).toContain(result);
-  });
-});
-describe('adaptiveScoreColorBand — binary strategy', () => {
-  it('returns excellent for score >= 0.7', () => {
-    expect(adaptiveScoreColorBand(0.7, 'faithfulness')).toBe('excellent');
-  });
-  it('returns excellent for score > 0.7', () => {
-    expect(adaptiveScoreColorBand(0.85, 'faithfulness')).toBe('excellent');
-  });
-  it('returns failing for score < 0.7', () => {
-    expect(adaptiveScoreColorBand(0.69, 'faithfulness')).toBe('failing');
-  });
-  it('returns failing for score = 0', () => {
-    expect(adaptiveScoreColorBand(0, 'faithfulness')).toBe('failing');
-  });
-});
-describe('adaptiveScoreColorBand — log strategy', () => {
-  it('returns excellent for a low hallucination score (near 0)', () => {
-    const result = adaptiveScoreColorBand(0.001, 'hallucination', 'minimize');
-    expect(['excellent', 'good']).toContain(result);
-  });
-  it('returns failing or poor for a high hallucination score (near 1)', () => {
-    const result = adaptiveScoreColorBand(0.99, 'hallucination', 'minimize');
-    expect(['poor', 'failing']).toContain(result);
-  });
-});
-describe('adaptiveScoreColorBand — step strategy', () => {
-  it('returns excellent for score >= 0.8', () => {
-    expect(adaptiveScoreColorBand(0.8, 'task_completion')).toBe('excellent');
-  });
-  it('returns excellent for score = 1', () => {
-    expect(adaptiveScoreColorBand(1.0, 'task_completion')).toBe('excellent');
-  });
-  it('returns adequate for score >= 0.5 and < 0.8', () => {
-    expect(adaptiveScoreColorBand(0.5, 'task_completion')).toBe('adequate');
-  });
-  it('returns adequate for score = 0.79', () => {
-    expect(adaptiveScoreColorBand(0.79, 'task_completion')).toBe('adequate');
-  });
-  it('returns failing for score < 0.5', () => {
-    expect(adaptiveScoreColorBand(0.49, 'task_completion')).toBe('failing');
-  });
-  it('returns failing for score = 0', () => {
-    expect(adaptiveScoreColorBand(0, 'task_completion')).toBe('failing');
-  });
-});
-describe('adaptiveScoreColorBand — uniform strategy', () => {
-  it('returns excellent for score >= 0.9', () => {
-    expect(adaptiveScoreColorBand(0.95, 'coherence')).toBe('excellent');
-  });
-  it('returns good for score >= 0.8 and < 0.9', () => {
-    expect(adaptiveScoreColorBand(0.85, 'coherence')).toBe('good');
-  });
-  it('returns adequate for score >= 0.6 and < 0.8', () => {
-    expect(adaptiveScoreColorBand(0.7, 'coherence')).toBe('adequate');
-  });
-  it('returns poor for score >= 0.4 and < 0.6', () => {
-    expect(adaptiveScoreColorBand(0.5, 'coherence')).toBe('poor');
-  });
-  it('returns failing for score < 0.4', () => {
-    expect(adaptiveScoreColorBand(0.3, 'coherence')).toBe('failing');
-  });
-});
-describe('adaptiveScoreColorBand — unknown metric', () => {
-  it('falls back to uniform scoreColorBand for unrecognized metric name', () => {
-    expect(adaptiveScoreColorBand(0.95, 'unknown_metric_xyz')).toBe('excellent');
-    expect(adaptiveScoreColorBand(0.3, 'unknown_metric_xyz')).toBe('failing');
-  });
-});
-
-================
 File: src/__tests__/setup.ts
 ================
 import '@testing-library/jest-dom/vitest';
@@ -3173,351 +2912,6 @@ export function makeChainGraph(
   );
   return makeGraph({ nodes, edges, rootNodeId: `${labelPrefix}-0`, workflowShape });
 }
-
-================
-File: src/__tests__/workflow-graph.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { TraceSpan } from '../types.js';
-import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
-describe('buildWorkflowGraph — 3-agent linear workflow', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'planner', targetAgent: 'coder', score: 0.9, contextPreserved: true }),
-      makeHandoff({ sourceAgent: 'coder', targetAgent: 'reviewer', score: 0.7, contextPreserved: false }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'planner' }),
-      makeTurn({ turnIndex: 1, agentName: 'coder' }),
-      makeTurn({ turnIndex: 2, agentName: 'reviewer' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('produces 3 nodes', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
-  });
-  it('produces 2 edges', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.edges).toHaveLength(2);
-  });
-  it('shape is linear', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('linear');
-  });
-  it('rootNodeId is planner', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.rootNodeId).toBe('planner');
-  });
-});
-describe('buildWorkflowGraph — single-agent session', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [],
-    turns: [makeTurn({ turnIndex: 0, agentName: 'solo' })],
-    totalTurns: 1,
-  });
-  const spans: TraceSpan[] = [];
-  it('produces 1 node', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(1);
-  });
-  it('produces 0 edges', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it('shape is single_agent', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('single_agent');
-  });
-});
-describe('buildWorkflowGraph — cyclic workflow', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.85 }),
-      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentA', score: 0.75 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      makeTurn({ turnIndex: 2, agentName: 'agentA' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('shape is cyclic', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('cyclic');
-  });
-  it('has an edge from agentA to agentB', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeDefined();
-  });
-  it('has an edge from agentB back to agentA', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentB' && e.target === 'agentA');
-    expect(edge).toBeDefined();
-  });
-});
-describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
-      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentC', score: 0.8 }),
-      makeHandoff({ sourceAgent: 'agentC', targetAgent: 'agentA', score: 0.7 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('shape is cyclic for 3-node cycle', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('cyclic');
-  });
-  it('produces 3 nodes', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
-  });
-});
-describe('buildWorkflowGraph — branching workflow', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentC', score: 0.8 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
-    ],
-    totalTurns: 3,
-  });
-  const spans: TraceSpan[] = [];
-  it('shape is branching', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.workflowShape).toBe('branching');
-  });
-});
-describe('buildWorkflowGraph — node data binding', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'worker', relevance: 0.65, taskProgress: 0.7, hasError: true }),
-    ],
-    totalTurns: 1,
-  });
-  const spans: TraceSpan[] = [
-    makeSpan({ attributes: { 'gen_ai.agent.name': 'worker', 'llm.usage.total_tokens': 512 }, durationMs: 2500 }),
-    makeSpan({ spanId: 'span-2', name: 'tool_call', attributes: { 'gen_ai.agent.name': 'worker' } }),
-  ];
-  it('node evaluationScore reflects turn relevance', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.evaluationScore).toBeCloseTo(0.65, 5);
-  });
-  it('node hasError is true when any turn has an error', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.hasError).toBe(true);
-  });
-  it('node turnCount matches turn count for that agent', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.turnCount).toBe(1);
-  });
-  it('node label matches agent name', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.label).toBe('worker');
-  });
-});
-describe('buildWorkflowGraph — edge data binding', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.72, contextPreserved: false }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-    ],
-    totalTurns: 2,
-  });
-  const spans: TraceSpan[] = [];
-  it('edge handoffScore matches handoff score', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.handoffScore).toBeCloseTo(0.72, 5);
-  });
-  it('edge contextPreserved is false when handoff contextPreserved is false', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.contextPreserved).toBe(false);
-  });
-  it('edge label is formatted as "score: X.XX"', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.label).toBe('score: 0.72');
-  });
-  it('edge id is non-empty string', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const edge = graph.edges[0];
-    expect(typeof edge?.id).toBe('string');
-    expect(edge?.id.length).toBeGreaterThan(0);
-  });
-});
-describe('buildWorkflowGraph — null evaluation', () => {
-  const spans: TraceSpan[] = [];
-  it('returns 0 nodes', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(0);
-  });
-  it('returns 0 edges', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it('rootNodeId is null', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.rootNodeId).toBeNull();
-  });
-  it('workflowShape is single_agent for empty/null input', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.workflowShape).toBe('single_agent');
-  });
-});
-describe('buildWorkflowGraph — root node identification', () => {
-  const evaluation = makeEvaluation({
-    handoffs: [
-      makeHandoff({ sourceAgent: 'orchestrator', targetAgent: 'executor', score: 0.88 }),
-    ],
-    turns: [
-      makeTurn({ turnIndex: 0, agentName: 'orchestrator' }),
-      makeTurn({ turnIndex: 1, agentName: 'executor' }),
-    ],
-    totalTurns: 2,
-  });
-  const spans: TraceSpan[] = [];
-  it('rootNodeId is orchestrator (the first agent)', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.rootNodeId).toBe('orchestrator');
-  });
-  it('rootNodeId corresponds to an existing node id', () => {
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    const rootNode = graph.nodes.find(n => n.id === graph.rootNodeId);
-    expect(rootNode).toBeDefined();
-  });
-});
-describe('buildWorkflowGraph — droppedTurns counter', () => {
-  it('counts turns where agentName is undefined', () => {
-    const evaluation = makeEvaluation({
-      turns: [
-        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-        { turnIndex: 1, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
-        { turnIndex: 2, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
-      ],
-      totalTurns: 3,
-    });
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
-    expect(graph.droppedTurns).toBe(2);
-  });
-  it('returns droppedTurns 0 when all turns have agentName', () => {
-    const evaluation = makeEvaluation({
-      turns: [
-        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
-        makeTurn({ turnIndex: 1, agentName: 'agentB' }),
-      ],
-      handoffs: [makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB' })],
-      totalTurns: 2,
-    });
-    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
-    expect(graph.droppedTurns).toBe(0);
-  });
-  it('returns droppedTurns 0 for span-inferred graphs (no evaluation)', () => {
-    const spans = [
-      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.id': 'agentA' } }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.droppedTurns).toBe(0);
-  });
-});
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-describe('buildWorkflowGraph — span-inference fallback', () => {
-  it('infers 2 nodes from spans when evaluation is null', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(2);
-  });
-  it('infers sequential edge when agent A spans end before agent B spans start', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeDefined();
-  });
-  it('sets rootNodeId to the agent with the earliest span start time', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.rootNodeId).toBe('agentA');
-  });
-  it('sets node hasError to true when any span for that agent has status.code === 2', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const node = graph.nodes.find(n => n.id === 'agentA');
-    expect(node?.hasError).toBe(true);
-  });
-  it('returns empty graph when evaluation is null and no spans have gen_ai.agent.id', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { 'some.other.attr': 'value' } }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    expect(graph.nodes).toHaveLength(0);
-    expect(graph.edges).toHaveLength(0);
-  });
-  it('infers edge between near-concurrent spans within epsilon tolerance (WG-M2)', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeDefined();
-  });
-  it('does not infer edge when spans overlap by more than epsilon', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge).toBeUndefined();
-  });
-  it('counts tool calls from span names starting with "tool:"', () => {
-    const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
-      makeSpan({ spanId: 's2', name: 'tool:write', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
-      makeSpan({ spanId: 's3', name: 'agent_turn', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
-    ];
-    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
-    const node = graph.nodes.find(n => n.id === 'agentA');
-    expect(node?.toolCallCount).toBe(2);
-  });
-});
 
 ================
 File: src/__tests__/WorkflowTimeline.test.tsx
@@ -4689,6 +4083,78 @@ export function HealthBanner({ status, message, children }: HealthBannerProps) {
       </div>
       {children && <div className="d-flex gap-6">{children}</div>}
     </div>
+  );
+}
+
+================
+File: src/components/HealthOverview.tsx
+================
+import type { QualityDashboardSummary } from '../types.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { HealthBanner } from './HealthBanner.js';
+import { StatDisplay } from './StatDisplay.js';
+interface PipelineHealth {
+  evalVolume: number;
+  lastEvalAge: string | null;
+  evalRate: string;
+}
+function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth {
+  let totalSamples = 0;
+  let latestTs: string | null = null;
+  for (const m of dashboard.metrics) {
+    totalSamples += m.sampleCount;
+    const worst = (m as QualityDashboardSummary['metrics'][number] & { worstExplanation?: { timestamp?: string } }).worstExplanation;
+    if (worst?.timestamp && (!latestTs || worst.timestamp > latestTs)) latestTs = worst.timestamp;
+  }
+  const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
+  const period = dashboard.metrics[0]?.period;
+  let periodHours = PERIOD_MS['7d'] / TIME_MS.HOUR;
+  if (period) {
+    const diffMs = new Date(period.end).getTime() - new Date(period.start).getTime();
+    periodHours = Math.max(1, diffMs / TIME_MS.HOUR);
+  }
+  const perHour = totalSamples / periodHours;
+  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(1)}k/hr`
+    : perHour >= 1 ? `${perHour.toFixed(0)}/hr`
+    : `${(perHour * 24).toFixed(1)}/day`;
+  return { evalVolume: totalSamples, lastEvalAge, evalRate };
+}
+function formatVolume(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSummary }) {
+  const { overallStatus, summary } = dashboard;
+  const pipeline = computePipelineHealth(dashboard);
+  const statusMessage = <>
+    <span className="text-base">
+      {overallStatus === 'healthy' && 'All metrics within thresholds'}
+      {overallStatus === 'warning' && 'Some metrics need attention'}
+      {overallStatus === 'critical' && 'Critical issues detected'}
+      {overallStatus === 'no_data' && 'No evaluation data available'}
+    </span>
+    <div className="pipeline-stats d-flex gap-6">
+      <div className="pipeline-stat flex-center">
+        Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
+      </div>
+      <div className="pipeline-stat flex-center">
+        Rate: <span className="stat-value">{pipeline.evalRate}</span>
+      </div>
+      {pipeline.lastEvalAge && (
+        <div className="pipeline-stat flex-center">
+          Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
+        </div>
+      )}
+    </div>
+  </>;
+  return (
+    <HealthBanner status={overallStatus} message={statusMessage}>
+      <StatDisplay value={summary.totalMetrics} label="Total" />
+      <StatDisplay value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
+      <StatDisplay value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
+      <StatDisplay value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
+    </HealthBanner>
   );
 }
 
@@ -6858,85 +6324,6 @@ export function useTrend(metricName: string, period: Period, buckets = 7) {
 }
 
 ================
-File: src/lib/validation/auth-schemas.ts
-================
-import { z } from 'zod';
-import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
-export const Auth0JwtPayloadSchema = z.object({
-  sub: z.string(),
-  email: z.email().optional(),
-  email_verified: z.boolean().optional(),
-  name: z.string().optional(),
-  picture: z.string().optional(),
-  iss: z.string(),
-  aud: z.union([z.string(), z.array(z.string())]),
-  iat: z.number(),
-  exp: z.number(),
-});
-export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
-export const PublicUserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.email(),
-  created_at: z.iso.datetime().optional(),
-  updated_at: z.iso.datetime().optional(),
-});
-export type PublicUser = z.infer<typeof PublicUserSchema>;
-export const UserRoleRowSchema = z.object({
-  roles: z.object({
-    name: z.string(),
-    permissions: z.array(z.string()),
-  }).nullable(),
-});
-export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
-export const ActivityRequestSchema = z.object({
-  activity_type: z.enum(FRONTEND_ACTIVITY_EVENTS),
-});
-export const AdminRoleSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  permissions: z.array(z.string()),
-});
-export type AdminRole = z.infer<typeof AdminRoleSchema>;
-export const AdminUserRoleRowSchema = z.object({
-  user_id: z.string().uuid(),
-  role_id: z.string().uuid(),
-  roles: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-  }).nullable(),
-});
-export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
-export const AdminUserSchema = z.object({
-  id: z.string().uuid(),
-  email: z.email().optional(),
-  created_at: z.iso.datetime().optional(),
-  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
-});
-export type AdminUser = z.infer<typeof AdminUserSchema>;
-export const AssignRoleRequestSchema = z.object({
-  role_id: z.string().uuid(),
-});
-export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
-export const MeResponseSchema = z.object({
-  email: z.email(),
-  roles: z.array(z.string()),
-  permissions: z.array(z.enum([
-    'dashboard.read',
-    'dashboard.executive',
-    'dashboard.operator',
-    'dashboard.auditor',
-    'dashboard.traces.read',
-    'dashboard.sessions.read',
-    'dashboard.agents.read',
-    'dashboard.pipeline.read',
-    'dashboard.compliance.read',
-    'dashboard.admin',
-  ])),
-  allowedViews: z.array(z.enum(['executive', 'operator', 'auditor'])),
-});
-export type MeResponse = z.infer<typeof MeResponseSchema>;
-
-================
 File: src/lib/auth0.ts
 ================
 export { Auth0Provider, useAuth0 } from '@auth0/auth0-react';
@@ -8539,6 +7926,90 @@ for (const _r of results) {  }
 const _total = results.reduce((sum, r) => sum + r.ms, 0);
 
 ================
+File: src/__tests__/api-calibration.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import app from '../../worker/index.js';
+function makeKV(store: Record<string, unknown> = {}): KVNamespace {
+  return {
+    get: async (key: string, type?: string) => {
+      const value = store[key];
+      if (value === undefined) return null;
+      if (type === 'json') return value;
+      return JSON.stringify(value);
+    },
+    put: async () => {},
+    delete: async () => {},
+    list: async () => ({ keys: [], list_complete: true, cursor: '' }),
+    getWithMetadata: async () => ({ value: null, metadata: null }),
+  } as unknown as KVNamespace;
+}
+function makeCalibrationData() {
+  return {
+    lastCalibrated: '2026-03-10T06:00:00.000Z',
+    distributions: {
+      relevance: { p10: 0.42, p25: 0.58, p50: 0.67, p75: 0.79, p90: 0.88 },
+      faithfulness: { p10: 0.5, p25: 0.65, p50: 0.75, p75: 0.85, p90: 0.93 },
+      coherence: { p10: 0.55, p25: 0.68, p50: 0.77, p75: 0.86, p90: 0.94 },
+    },
+    sampleCounts: {
+      relevance: 312,
+      faithfulness: 289,
+      coherence: 301,
+    },
+  };
+}
+describe('GET /api/calibration', () => {
+  it('returns 200 with calibration state from KV key meta:calibration', async () => {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
+    expect(res.status).toBe(200);
+  });
+  it('returns distributions field in response body', async () => {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('distributions');
+  });
+  it('returns lastCalibrated field in response body', async () => {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('lastCalibrated');
+  });
+  it('returns distributions with per-metric percentile data', async () => {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
+    const body = await res.json() as { distributions: Record<string, unknown> };
+    expect(body.distributions).toHaveProperty('relevance');
+    const relDist = body.distributions['relevance'] as Record<string, number>;
+    expect(relDist).toHaveProperty('p10');
+    expect(relDist).toHaveProperty('p25');
+    expect(relDist).toHaveProperty('p50');
+    expect(relDist).toHaveProperty('p75');
+    expect(relDist).toHaveProperty('p90');
+  });
+  it('returns 404 with error field when no calibration data exists in KV', async () => {
+    const kv = makeKV({});
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
+    expect(res.status).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('error');
+  });
+  it('returns exact lastCalibrated value from KV', async () => {
+    const calibrationData = makeCalibrationData();
+    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
+    const body = await res.json() as { lastCalibrated: string };
+    expect(body.lastCalibrated).toBe('2026-03-10T06:00:00.000Z');
+  });
+});
+
+================
 File: src/__tests__/api-dashboard.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -9437,91 +8908,6 @@ describe('SLATable', () => {
     const gapCell = screen.getByText('-0.1000');
     expect(gapCell.closest('td')).toHaveAttribute('data-noncompliant');
   });
-});
-
-================
-File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-const DASHBOARD_ROOT = resolve(__dirname, '../../');
-const THEME_CSS = resolve(DASHBOARD_ROOT, 'src/theme.css');
-const PUBLIC_FONTS_DIR = resolve(DASHBOARD_ROOT, 'public/fonts');
-const REQUIRED_FAMILIES = ['JetBrains Mono', 'IBM Plex Sans'] as const;
-const REQUIRED_WEIGHTS = [400, 500, 600] as const;
-const EXPECTED_FONT_FILES: Record<string, string[]> = {
-  'JetBrains Mono': [
-    'JetBrainsMono-Regular.woff2',
-    'JetBrainsMono-Medium.woff2',
-    'JetBrainsMono-SemiBold.woff2',
-  ],
-  'IBM Plex Sans': [
-    'IBMPlexSans-Regular.woff2',
-    'IBMPlexSans-Medium.woff2',
-    'IBMPlexSans-SemiBold.woff2',
-  ],
-};
-describe('DR-L4: theme.css — no external Google Fonts import', () => {
-  it('should not contain a fonts.googleapis.com @import', () => {
-    const css = readFileSync(THEME_CSS, 'utf-8');
-    expect(css).not.toMatch(/fonts\.googleapis\.com/);
-  });
-  it('should not contain any external @import url starting with https://', () => {
-    const css = readFileSync(THEME_CSS, 'utf-8');
-    const externalImport = /@import\s+url\(['"]?https?:\/\//;
-    expect(css).not.toMatch(externalImport);
-  });
-});
-describe('DR-L4: local @font-face declarations exist', () => {
-  function getFontFaceSource(): string {
-    const fontsCss = resolve(DASHBOARD_ROOT, 'src/fonts.css');
-    if (existsSync(fontsCss)) {
-      return readFileSync(fontsCss, 'utf-8');
-    }
-    return readFileSync(THEME_CSS, 'utf-8');
-  }
-  it('should declare @font-face for JetBrains Mono', () => {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/font-family:\s*['"]?JetBrains Mono['"]?/i);
-  });
-  it('should declare @font-face for IBM Plex Sans', () => {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/font-family:\s*['"]?IBM Plex Sans['"]?/i);
-  });
-  for (const family of REQUIRED_FAMILIES) {
-    for (const weight of REQUIRED_WEIGHTS) {
-      it(`should have a @font-face block for ${family} weight ${weight}`, () => {
-        const css = getFontFaceSource();
-        // Find all @font-face blocks that mention this family
-        const fontFaceBlocks = [...css.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m => m[0]);
-        const familyBlocks = fontFaceBlocks.filter(block =>
-          new RegExp(`font-family:\\s*['"]?${family}['"]?`, 'i').test(block)
-        );
-        const hasWeight = familyBlocks.some(block =>
-          new RegExp(`font-weight:\\s*${weight}`).test(block)
-        );
-        expect(hasWeight, `Expected @font-face for "${family}" with font-weight: ${weight}`).toBe(true);
-      });
-    }
-  }
-  it('should reference /fonts/ local path in @font-face src', () => {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/url\(['"]?\/fonts\//);
-  });
-});
-describe('DR-L4: public/fonts/ directory and font files exist', () => {
-  it('should have a public/fonts/ directory', () => {
-    expect(existsSync(PUBLIC_FONTS_DIR), `Expected directory: ${PUBLIC_FONTS_DIR}`).toBe(true);
-  });
-  for (const [family, files] of Object.entries(EXPECTED_FONT_FILES)) {
-    for (const file of files) {
-      it(`should have font file public/fonts/${file} for ${family}`, () => {
-        const filePath = resolve(PUBLIC_FONTS_DIR, file);
-        expect(existsSync(filePath), `Expected font file at: ${filePath}`).toBe(true);
-      });
-    }
-  }
 });
 
 ================
@@ -11080,6 +10466,183 @@ describe('EvaluationDetailPage', () => {
 });
 
 ================
+File: src/__tests__/quality-utils-adaptive.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import {
+  empiricalCDF,
+  adaptiveScoreColorBand,
+  MIN_QUANTILE_SAMPLE_SIZE,
+  METRIC_SCALE_STRATEGY,
+  type PercentileDistribution,
+} from '../lib/quality-utils.js';
+function makeDist(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
+  return {
+    p10: 0.4,
+    p25: 0.55,
+    p50: 0.65,
+    p75: 0.78,
+    p90: 0.88,
+    ...overrides,
+  };
+}
+describe('empiricalCDF', () => {
+  it('returns 0.5 for value at exact p50', () => {
+    const dist = makeDist({ p50: 0.65 });
+    expect(empiricalCDF(0.65, dist)).toBeCloseTo(0.5, 5);
+  });
+  it('returns a value near 0 for value below p10', () => {
+    const dist = makeDist({ p10: 0.4 });
+    const result = empiricalCDF(0.1, dist);
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThan(0.1);
+  });
+  it('returns a value near 1 for value above p90', () => {
+    const dist = makeDist({ p90: 0.88 });
+    const result = empiricalCDF(0.98, dist);
+    expect(result).toBeGreaterThan(0.9);
+    expect(result).toBeLessThanOrEqual(1);
+  });
+  it('returns interpolated value between 0.25 and 0.5 for value between p25 and p50', () => {
+    const dist = makeDist({ p25: 0.55, p50: 0.65 });
+    const midpoint = (0.55 + 0.65) / 2;
+    const result = empiricalCDF(midpoint, dist);
+    expect(result).toBeGreaterThan(0.25);
+    expect(result).toBeLessThan(0.5);
+  });
+  it('returns 0.5 for non-finite value (NaN)', () => {
+    expect(empiricalCDF(NaN, makeDist())).toBeCloseTo(0.5, 5);
+  });
+  it('returns 0.5 for non-finite value (Infinity)', () => {
+    expect(empiricalCDF(Infinity, makeDist())).toBeLessThanOrEqual(1);
+  });
+  it('returns 0.5 for non-finite value (-Infinity)', () => {
+    expect(empiricalCDF(-Infinity, makeDist())).toBeGreaterThanOrEqual(0);
+  });
+});
+describe('MIN_QUANTILE_SAMPLE_SIZE', () => {
+  it('equals 100', () => {
+    expect(MIN_QUANTILE_SAMPLE_SIZE).toBe(100);
+  });
+});
+describe('METRIC_SCALE_STRATEGY', () => {
+  it('maps relevance to quantile', () => {
+    expect(METRIC_SCALE_STRATEGY['relevance']).toBe('quantile');
+  });
+  it('maps faithfulness to binary', () => {
+    expect(METRIC_SCALE_STRATEGY['faithfulness']).toBe('binary');
+  });
+  it('maps coherence to uniform', () => {
+    expect(METRIC_SCALE_STRATEGY['coherence']).toBe('uniform');
+  });
+  it('maps hallucination to log', () => {
+    expect(METRIC_SCALE_STRATEGY['hallucination']).toBe('log');
+  });
+  it('maps task_completion to step', () => {
+    expect(METRIC_SCALE_STRATEGY['task_completion']).toBe('step');
+  });
+  it('maps tool_correctness to categorical', () => {
+    expect(METRIC_SCALE_STRATEGY['tool_correctness']).toBe('categorical');
+  });
+  it('maps evaluation_latency to percentile_rank', () => {
+    expect(METRIC_SCALE_STRATEGY['evaluation_latency']).toBe('percentile_rank');
+  });
+});
+describe('adaptiveScoreColorBand — quantile strategy', () => {
+  it('uses empiricalCDF when distribution and sufficient sampleSize are provided', () => {
+    const dist = makeDist({ p10: 0.3, p25: 0.5, p50: 0.6, p75: 0.72, p90: 0.82 });
+    const result = adaptiveScoreColorBand(0.75, 'relevance', 'maximize', dist, 200);
+    expect(['excellent', 'good']).toContain(result);
+  });
+  it('falls back to uniform scoreColorBand when no distribution provided', () => {
+    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', undefined, 200);
+    expect(result).toBe('excellent');
+  });
+  it('falls back to uniform scoreColorBand when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE', () => {
+    const dist = makeDist();
+    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', dist, 50);
+    expect(result).toBe('excellent');
+  });
+  it('falls back to uniform when sampleSize is exactly MIN_QUANTILE_SAMPLE_SIZE - 1', () => {
+    const dist = makeDist();
+    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', dist, 99);
+    expect(result).toBe('excellent');
+  });
+  it('uses quantile when sampleSize equals MIN_QUANTILE_SAMPLE_SIZE', () => {
+    const dist = makeDist({ p10: 0.3, p25: 0.45, p50: 0.55, p75: 0.65, p90: 0.75 });
+    const result = adaptiveScoreColorBand(0.9, 'relevance', 'maximize', dist, 100);
+    expect(['excellent', 'good']).toContain(result);
+  });
+});
+describe('adaptiveScoreColorBand — binary strategy', () => {
+  it('returns excellent for score >= 0.7', () => {
+    expect(adaptiveScoreColorBand(0.7, 'faithfulness')).toBe('excellent');
+  });
+  it('returns excellent for score > 0.7', () => {
+    expect(adaptiveScoreColorBand(0.85, 'faithfulness')).toBe('excellent');
+  });
+  it('returns failing for score < 0.7', () => {
+    expect(adaptiveScoreColorBand(0.69, 'faithfulness')).toBe('failing');
+  });
+  it('returns failing for score = 0', () => {
+    expect(adaptiveScoreColorBand(0, 'faithfulness')).toBe('failing');
+  });
+});
+describe('adaptiveScoreColorBand — log strategy', () => {
+  it('returns excellent for a low hallucination score (near 0)', () => {
+    const result = adaptiveScoreColorBand(0.001, 'hallucination', 'minimize');
+    expect(['excellent', 'good']).toContain(result);
+  });
+  it('returns failing or poor for a high hallucination score (near 1)', () => {
+    const result = adaptiveScoreColorBand(0.99, 'hallucination', 'minimize');
+    expect(['poor', 'failing']).toContain(result);
+  });
+});
+describe('adaptiveScoreColorBand — step strategy', () => {
+  it('returns excellent for score >= 0.8', () => {
+    expect(adaptiveScoreColorBand(0.8, 'task_completion')).toBe('excellent');
+  });
+  it('returns excellent for score = 1', () => {
+    expect(adaptiveScoreColorBand(1.0, 'task_completion')).toBe('excellent');
+  });
+  it('returns adequate for score >= 0.5 and < 0.8', () => {
+    expect(adaptiveScoreColorBand(0.5, 'task_completion')).toBe('adequate');
+  });
+  it('returns adequate for score = 0.79', () => {
+    expect(adaptiveScoreColorBand(0.79, 'task_completion')).toBe('adequate');
+  });
+  it('returns failing for score < 0.5', () => {
+    expect(adaptiveScoreColorBand(0.49, 'task_completion')).toBe('failing');
+  });
+  it('returns failing for score = 0', () => {
+    expect(adaptiveScoreColorBand(0, 'task_completion')).toBe('failing');
+  });
+});
+describe('adaptiveScoreColorBand — uniform strategy', () => {
+  it('returns excellent for score >= 0.9', () => {
+    expect(adaptiveScoreColorBand(0.95, 'coherence')).toBe('excellent');
+  });
+  it('returns good for score >= 0.8 and < 0.9', () => {
+    expect(adaptiveScoreColorBand(0.85, 'coherence')).toBe('good');
+  });
+  it('returns adequate for score >= 0.6 and < 0.8', () => {
+    expect(adaptiveScoreColorBand(0.7, 'coherence')).toBe('adequate');
+  });
+  it('returns poor for score >= 0.4 and < 0.6', () => {
+    expect(adaptiveScoreColorBand(0.5, 'coherence')).toBe('poor');
+  });
+  it('returns failing for score < 0.4', () => {
+    expect(adaptiveScoreColorBand(0.3, 'coherence')).toBe('failing');
+  });
+});
+describe('adaptiveScoreColorBand — unknown metric', () => {
+  it('falls back to uniform scoreColorBand for unrecognized metric name', () => {
+    expect(adaptiveScoreColorBand(0.95, 'unknown_metric_xyz')).toBe('excellent');
+    expect(adaptiveScoreColorBand(0.3, 'unknown_metric_xyz')).toBe('failing');
+  });
+});
+
+================
 File: src/__tests__/quality-utils-drift.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -11247,136 +10810,6 @@ describe('truncateText', () => {
 });
 
 ================
-File: src/__tests__/score-badge-calibration.test.tsx
-================
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, within, cleanup } from '@testing-library/react';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import type { PercentileDistribution } from '../lib/quality-utils.js';
-afterEach(cleanup);
-function makeDistribution(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
-  return {
-    p10: 0.30,
-    p25: 0.48,
-    p50: 0.60,
-    p75: 0.72,
-    p90: 0.83,
-    ...overrides,
-  };
-}
-function getBadgeLabel(container: HTMLElement): string {
-  return container.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
-}
-describe('ScoreBadge without calibration prop', () => {
-  it('renders excellent band for score 0.95 without calibration', () => {
-    const { container } = render(<ScoreBadge score={0.95} metricName="relevance" />);
-    expect(getBadgeLabel(container)).toMatch(/excellent/i);
-  });
-  it('renders failing band for score 0.3 without calibration', () => {
-    const { container } = render(<ScoreBadge score={0.3} metricName="relevance" />);
-    expect(getBadgeLabel(container)).toMatch(/failing/i);
-  });
-  it('renders adequate band for score 0.75 without calibration (uniform baseline)', () => {
-    const { container } = render(<ScoreBadge score={0.75} metricName="relevance" />);
-    expect(getBadgeLabel(container)).toMatch(/adequate/i);
-  });
-});
-describe('ScoreBadge with calibration prop', () => {
-  it('accepts calibration prop as part of the component interface', () => {
-    const calibration = { distribution: makeDistribution(), sampleSize: 250 };
-    expect(() =>
-      render(
-        <ScoreBadge
-          score={0.75}
-          metricName="relevance"
-          calibration={calibration}
-        />
-      )
-    ).not.toThrow();
-  });
-  it('uses excellent/good band for score 0.75 when calibration shows it is above p75', () => {
-    const distribution = makeDistribution({ p75: 0.72, p90: 0.83 });
-    const calibration = { distribution, sampleSize: 200 };
-    const { container } = render(
-      <ScoreBadge
-        score={0.75}
-        metricName="relevance"
-        calibration={calibration}
-      />
-    );
-    const label = getBadgeLabel(container);
-    expect(label).toMatch(/excellent|good/i);
-    expect(label).not.toMatch(/adequate/i);
-  });
-  it('aria-label differs from uniform when calibration shifts the band', () => {
-    const distribution = makeDistribution({ p50: 0.6, p75: 0.72, p90: 0.83 });
-    const { container: noCalContainer } = render(
-      <ScoreBadge score={0.75} metricName="relevance" />
-    );
-    const uniformLabel = getBadgeLabel(noCalContainer);
-    cleanup();
-    const { container: withCalContainer } = render(
-      <ScoreBadge
-        score={0.75}
-        metricName="relevance"
-        calibration={{ distribution, sampleSize: 200 }}
-      />
-    );
-    const adaptiveLabel = getBadgeLabel(withCalContainer);
-    expect(adaptiveLabel).not.toBe(uniformLabel);
-  });
-  it('behaves same as no-calibration when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE', () => {
-    const calibration = { distribution: makeDistribution(), sampleSize: 50 };
-    const { container: withCalContainer } = render(
-      <ScoreBadge
-        score={0.95}
-        metricName="relevance"
-        calibration={calibration}
-      />
-    );
-    const withCalLabel = getBadgeLabel(withCalContainer);
-    cleanup();
-    const { container: noCalContainer } = render(
-      <ScoreBadge score={0.95} metricName="relevance" />
-    );
-    const noCalLabel = getBadgeLabel(noCalContainer);
-    expect(withCalLabel).toBe(noCalLabel);
-  });
-  it('renders same band with and without calibration when no calibration is provided', () => {
-    const { container: noCalContainer } = render(
-      <ScoreBadge score={0.85} metricName="relevance" />
-    );
-    const noCalLabel = getBadgeLabel(noCalContainer);
-    cleanup();
-    const { container: undefinedCalContainer } = render(
-      <ScoreBadge
-        score={0.85}
-        metricName="relevance"
-        calibration={undefined}
-      />
-    );
-    const undefinedCalLabel = getBadgeLabel(undefinedCalContainer);
-    expect(undefinedCalLabel).toBe(noCalLabel);
-  });
-  it('uses within() to scope queries to the rendered container', () => {
-    const calibration = { distribution: makeDistribution(), sampleSize: 150 };
-    const { container } = render(
-      <ScoreBadge
-        score={0.75}
-        metricName="relevance"
-        calibration={calibration}
-      />
-    );
-    const scope = within(container as HTMLElement);
-    const allLabeled = scope.getAllByRole('generic', { hidden: true });
-    const labeled = allLabeled.filter(el => el.hasAttribute('aria-label'));
-    expect(labeled.length).toBeGreaterThan(0);
-    const ariaLabel = labeled[0].getAttribute('aria-label') ?? '';
-    expect(ariaLabel).toMatch(/excellent|good/i);
-  });
-});
-
-================
 File: src/__tests__/test-types.ts
 ================
 import { z } from 'zod';
@@ -11505,259 +10938,347 @@ describe('useQualityLive', () => {
 });
 
 ================
-File: src/__tests__/WorkflowGraph.test.tsx
+File: src/__tests__/workflow-graph.test.ts
 ================
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import type { ReactNode } from 'react';
-interface MockNode {
-  id: string;
-  type: string;
-  data: Record<string, unknown>;
-}
-interface MockEdge {
-  id: string;
-  label?: string;
-}
-interface ReactFlowProps {
-  nodes?: MockNode[];
-  edges?: MockEdge[];
-  onNodeClick?: (event: unknown, node: MockNode) => void;
-  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
-  children?: ReactNode;
-  [key: string]: unknown;
-}
-vi.mock('@xyflow/react', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
-  return {
-    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) => (
-      <div data-testid="reactflow" {...rest}>
-        {(nodes ?? []).map((n) => {
-          const NodeComp = nodeTypes?.[n.type];
-          return (
-            <div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() => onNodeClick?.({}, n)}>
-              {NodeComp ? <NodeComp data={n.data} /> : n.id}
-            </div>
-          );
-        })}
-        {(edges ?? []).map((e) => (
-          <div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} />
-        ))}
-        {children}
-      </div>
-    ),
-    MiniMap: (_props: unknown) => <div data-testid="minimap" />,
-    Controls: () => <div data-testid="controls" />,
-    Background: () => null,
-    Handle: () => null,
-    Position: { Top: 'top', Bottom: 'bottom' },
-    BaseEdge: () => null,
-    getStraightPath: () => ['M 0 0', 0, 0],
-    useNodesState: (initial: MockNode[]) => {
-      const [nodes, setNodes] = React.useState(initial);
-      return [nodes, setNodes, vi.fn()];
-    },
-    useEdgesState: (initial: MockEdge[]) => {
-      const [edges, setEdges] = React.useState(initial);
-      return [edges, setEdges, vi.fn()];
-    },
-    useReactFlow: () => ({ fitView: vi.fn() }),
-  };
-});
-interface ELKGraph {
-  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
-  [key: string]: unknown;
-}
-vi.mock('elkjs/lib/elk.bundled.js', () => ({
-  default: class ELK {
-    layout(graph: ELKGraph) {
-      return Promise.resolve({
-        ...graph,
-        children: (graph.children ?? []).map((c, i: number) => ({
-          ...c,
-          x: i * 300,
-          y: i * 200,
-        })),
-      });
-    }
-  },
-}));
-import { WorkflowGraphView } from '../components/WorkflowGraph.js';
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
-afterEach(cleanup);
-describe('WorkflowGraphView', () => {
-  const twoNodeGraph = makeGraph({
-    nodes: [
-      makeNode({ id: 'node-1', label: 'planner' }),
-      makeNode({ id: 'node-2', label: 'executor' }),
+import { describe, it, expect } from 'vitest';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { TraceSpan } from '../types.js';
+import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
+describe('buildWorkflowGraph — 3-agent linear workflow', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'planner', targetAgent: 'coder', score: 0.9, contextPreserved: true }),
+      makeHandoff({ sourceAgent: 'coder', targetAgent: 'reviewer', score: 0.7, contextPreserved: false }),
     ],
-    edges: [makeEdge({ id: 'edge-1', source: 'node-1', target: 'node-2' })],
-    rootNodeId: 'node-1',
-    workflowShape: 'linear',
-  });
-  const threeNodeGraph = makeGraph({
-    nodes: [
-      makeNode({ id: 'node-1' }),
-      makeNode({ id: 'node-2' }),
-      makeNode({ id: 'node-3' }),
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'planner' }),
+      makeTurn({ turnIndex: 1, agentName: 'coder' }),
+      makeTurn({ turnIndex: 2, agentName: 'reviewer' }),
     ],
-    rootNodeId: 'node-1',
-    workflowShape: 'linear',
+    totalTurns: 3,
   });
-  const fiveNodeGraph = makeGraph({
-    nodes: Array.from({ length: 5 }, (_, i) =>
-      makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
-    ),
-    rootNodeId: 'node-1',
-    workflowShape: 'branching',
+  const spans: TraceSpan[] = [];
+  it('produces 3 nodes', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(3);
   });
-  it('renders container with role=img and aria-label', async () => {
-    render(<WorkflowGraphView graph={twoNodeGraph} />);
-    const container = await waitFor(() =>
-      screen.getByRole('img', { name: 'Agent workflow graph' })
-    );
-    expect(container).toBeInTheDocument();
+  it('produces 2 edges', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.edges).toHaveLength(2);
   });
-  it('renders correct number of nodes', async () => {
-    render(<WorkflowGraphView graph={threeNodeGraph} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('rf-node-node-1')).toBeInTheDocument();
-      expect(screen.getByTestId('rf-node-node-2')).toBeInTheDocument();
-      expect(screen.getByTestId('rf-node-node-3')).toBeInTheDocument();
-    });
+  it('shape is linear', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('linear');
   });
-  it('node displays agent label', async () => {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: 'node-1', label: 'planner' })],
-    });
-    render(<WorkflowGraphView graph={graph} />);
-    await waitFor(() => {
-      expect(screen.getByText('planner')).toBeInTheDocument();
-    });
-  });
-  it('node displays Good score badge text for score >= 0.7', async () => {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: 'node-1', evaluationScore: 0.85 })],
-    });
-    render(<WorkflowGraphView graph={graph} />);
-    await waitFor(() => {
-      expect(screen.getByText('Good')).toBeInTheDocument();
-    });
-  });
-  it('node displays tool count', async () => {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: 'node-1', toolCallCount: 5 })],
-    });
-    render(<WorkflowGraphView graph={graph} />);
-    await waitFor(() => {
-      expect(screen.getByText('5 tools')).toBeInTheDocument();
-    });
-  });
-  it('shows Controls always', async () => {
-    render(<WorkflowGraphView graph={twoNodeGraph} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('controls')).toBeInTheDocument();
-    });
-  });
-  it('shows MiniMap for 5+ nodes', async () => {
-    render(<WorkflowGraphView graph={fiveNodeGraph} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('minimap')).toBeInTheDocument();
-    });
-  });
-  it('hides MiniMap for fewer than 5 nodes', async () => {
-    render(<WorkflowGraphView graph={threeNodeGraph} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('reactflow')).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId('minimap')).not.toBeInTheDocument();
-  });
-  it('shows simplified fallback for single_agent shape with 1 node and no ReactFlow', async () => {
-    const graph = makeGraph({
-      nodes: [makeNode({ id: 'node-1', label: 'solo-agent' })],
-      workflowShape: 'single_agent',
-      rootNodeId: 'node-1',
-    });
-    render(<WorkflowGraphView graph={graph} />);
-    await waitFor(() => {
-      expect(screen.queryByTestId('reactflow')).not.toBeInTheDocument();
-      expect(screen.getByText(/solo-agent/)).toBeInTheDocument();
-    });
-  });
-  it('fires onNodeClick with the correct nodeId when a node is clicked', async () => {
-    const onNodeClick = vi.fn();
-    render(<WorkflowGraphView graph={twoNodeGraph} onNodeClick={onNodeClick} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('rf-node-node-1')).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByTestId('rf-node-node-1'));
-    expect(onNodeClick).toHaveBeenCalledWith('node-1');
-  });
-  it('renders without error when graph has 0 nodes and 0 edges', async () => {
-    const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
-    expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
+  it('rootNodeId is planner', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.rootNodeId).toBe('planner');
   });
 });
-const ST_G5_LARGE_GRAPH_SIZE = 100;
-const ST_G5_DEEP_CHAIN_SIZE = 20;
-const ST_G5_DISCONNECTED_SIZE = 10;
-describe('WorkflowGraphView stress (ST-G5)', () => {
-  it('renders 100+ node graph without error using degraded list fallback', () => {
-    const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, 'agent', 'branching');
-    render(<WorkflowGraphView graph={graph} />);
-    expect(screen.getByText(`Graph too large to render (${ST_G5_LARGE_GRAPH_SIZE} agents)`)).toBeInTheDocument();
-    expect(screen.getByText(/agent-0 —/)).toBeInTheDocument();
-    expect(screen.getByText(/agent-99 —/)).toBeInTheDocument();
+describe('buildWorkflowGraph — single-agent session', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [],
+    turns: [makeTurn({ turnIndex: 0, agentName: 'solo' })],
+    totalTurns: 1,
   });
-  it('renders deeply nested delegation chain without error', async () => {
-    const graph = makeChainGraph(ST_G5_DEEP_CHAIN_SIZE, 'delegate', 'linear');
-    render(<WorkflowGraphView graph={graph} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('rf-node-delegate-0')).toBeInTheDocument();
-      expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
-      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
-    });
+  const spans: TraceSpan[] = [];
+  it('produces 1 node', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(1);
   });
-  it('renders without crash when rootNodeId is null (missing parent span inference fallback)', async () => {
-    const nodes = Array.from({ length: 5 }, (_, i) =>
-      makeNode({ id: `node-${i}`, label: `orphan-${i}` })
-    );
-    const graph = makeGraph({ nodes, rootNodeId: null, workflowShape: 'branching' });
-    expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
-    await waitFor(() => {
-      expect(screen.getByTestId('reactflow')).toBeInTheDocument();
-    });
+  it('produces 0 edges', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.edges).toHaveLength(0);
   });
-  it('renders disconnected nodes (no edges) without crash', async () => {
-    const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =>
-      makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
-    );
-    const graph = makeGraph({ nodes, rootNodeId: 'orphan-0', workflowShape: 'branching' });
-    render(<WorkflowGraphView graph={graph} />);
-    await waitFor(() => {
-      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
-    });
+  it('shape is single_agent', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('single_agent');
   });
-  it('renders two graphs in the same DOM without node state leakage between instances', async () => {
-    const graphA = makeGraph({
-      nodes: [makeNode({ id: 'a-1', label: 'alpha' }), makeNode({ id: 'a-2', label: 'beta' })],
-      edges: [makeEdge({ id: 'ea-1', source: 'a-1', target: 'a-2' })],
-      rootNodeId: 'a-1',
+});
+describe('buildWorkflowGraph — cyclic workflow', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.85 }),
+      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentA', score: 0.75 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      makeTurn({ turnIndex: 2, agentName: 'agentA' }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it('shape is cyclic', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('cyclic');
+  });
+  it('has an edge from agentA to agentB', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+  it('has an edge from agentB back to agentA', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentB' && e.target === 'agentA');
+    expect(edge).toBeDefined();
+  });
+});
+describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
+      makeHandoff({ sourceAgent: 'agentB', targetAgent: 'agentC', score: 0.8 }),
+      makeHandoff({ sourceAgent: 'agentC', targetAgent: 'agentA', score: 0.7 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it('shape is cyclic for 3-node cycle', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('cyclic');
+  });
+  it('produces 3 nodes', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.nodes).toHaveLength(3);
+  });
+});
+describe('buildWorkflowGraph — branching workflow', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.9 }),
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentC', score: 0.8 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      makeTurn({ turnIndex: 2, agentName: 'agentC' }),
+    ],
+    totalTurns: 3,
+  });
+  const spans: TraceSpan[] = [];
+  it('shape is branching', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.workflowShape).toBe('branching');
+  });
+});
+describe('buildWorkflowGraph — node data binding', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'worker', relevance: 0.65, taskProgress: 0.7, hasError: true }),
+    ],
+    totalTurns: 1,
+  });
+  const spans: TraceSpan[] = [
+    makeSpan({ attributes: { 'gen_ai.agent.name': 'worker', 'llm.usage.total_tokens': 512 }, durationMs: 2500 }),
+    makeSpan({ spanId: 'span-2', name: 'tool_call', attributes: { 'gen_ai.agent.name': 'worker' } }),
+  ];
+  it('node evaluationScore reflects turn relevance', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.evaluationScore).toBeCloseTo(0.65, 5);
+  });
+  it('node hasError is true when any turn has an error', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.hasError).toBe(true);
+  });
+  it('node turnCount matches turn count for that agent', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.turnCount).toBe(1);
+  });
+  it('node label matches agent name', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const node = graph.nodes.find(n => n.id === 'worker');
+    expect(node?.label).toBe('worker');
+  });
+});
+describe('buildWorkflowGraph — edge data binding', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.72, contextPreserved: false }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+      makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+    ],
+    totalTurns: 2,
+  });
+  const spans: TraceSpan[] = [];
+  it('edge handoffScore matches handoff score', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.handoffScore).toBeCloseTo(0.72, 5);
+  });
+  it('edge contextPreserved is false when handoff contextPreserved is false', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.contextPreserved).toBe(false);
+  });
+  it('edge label is formatted as "score: X.XX"', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge?.label).toBe('score: 0.72');
+  });
+  it('edge id is non-empty string', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const edge = graph.edges[0];
+    expect(typeof edge?.id).toBe('string');
+    expect(edge?.id.length).toBeGreaterThan(0);
+  });
+});
+describe('buildWorkflowGraph — null evaluation', () => {
+  const spans: TraceSpan[] = [];
+  it('returns 0 nodes', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(0);
+  });
+  it('returns 0 edges', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it('rootNodeId is null', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.rootNodeId).toBeNull();
+  });
+  it('workflowShape is single_agent for empty/null input', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.workflowShape).toBe('single_agent');
+  });
+});
+describe('buildWorkflowGraph — root node identification', () => {
+  const evaluation = makeEvaluation({
+    handoffs: [
+      makeHandoff({ sourceAgent: 'orchestrator', targetAgent: 'executor', score: 0.88 }),
+    ],
+    turns: [
+      makeTurn({ turnIndex: 0, agentName: 'orchestrator' }),
+      makeTurn({ turnIndex: 1, agentName: 'executor' }),
+    ],
+    totalTurns: 2,
+  });
+  const spans: TraceSpan[] = [];
+  it('rootNodeId is orchestrator (the first agent)', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    expect(graph.rootNodeId).toBe('orchestrator');
+  });
+  it('rootNodeId corresponds to an existing node id', () => {
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
+    const rootNode = graph.nodes.find(n => n.id === graph.rootNodeId);
+    expect(rootNode).toBeDefined();
+  });
+});
+describe('buildWorkflowGraph — droppedTurns counter', () => {
+  it('counts turns where agentName is undefined', () => {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+        { turnIndex: 1, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+        { turnIndex: 2, agentName: undefined, relevance: 0, taskProgress: 0, hasError: false },
+      ],
+      totalTurns: 3,
     });
-    const graphB = makeGraph({
-      nodes: [makeNode({ id: 'b-1', label: 'gamma' }), makeNode({ id: 'b-2', label: 'delta' })],
-      edges: [makeEdge({ id: 'eb-1', source: 'b-1', target: 'b-2' })],
-      rootNodeId: 'b-1',
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(2);
+  });
+  it('returns droppedTurns 0 when all turns have agentName', () => {
+    const evaluation = makeEvaluation({
+      turns: [
+        makeTurn({ turnIndex: 0, agentName: 'agentA' }),
+        makeTurn({ turnIndex: 1, agentName: 'agentB' }),
+      ],
+      handoffs: [makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB' })],
+      totalTurns: 2,
     });
-    const { unmount: unmountA } = render(<WorkflowGraphView graph={graphA} />);
-    render(<WorkflowGraphView graph={graphB} />);
-    await waitFor(() => {
-      expect(screen.getByTestId('rf-node-a-1')).toBeInTheDocument();
-      expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
-    });
-    unmountA();
-    expect(screen.queryByTestId('rf-node-a-1')).not.toBeInTheDocument();
-    expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
+    const graph: WorkflowGraph = buildWorkflowGraph(evaluation, []);
+    expect(graph.droppedTurns).toBe(0);
+  });
+  it('returns droppedTurns 0 for span-inferred graphs (no evaluation)', () => {
+    const spans = [
+      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.id': 'agentA' } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.droppedTurns).toBe(0);
+  });
+});
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+describe('buildWorkflowGraph — span-inference fallback', () => {
+  it('infers 2 nodes from spans when evaluation is null', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(2);
+  });
+  it('infers sequential edge when agent A spans end before agent B spans start', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+  it('sets rootNodeId to the agent with the earliest span start time', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.rootNodeId).toBe('agentA');
+  });
+  it('sets node hasError to true when any span for that agent has status.code === 2', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const node = graph.nodes.find(n => n.id === 'agentA');
+    expect(node?.hasError).toBe(true);
+  });
+  it('returns empty graph when evaluation is null and no spans have gen_ai.agent.id', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { 'some.other.attr': 'value' } }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes).toHaveLength(0);
+    expect(graph.edges).toHaveLength(0);
+  });
+  it('infers edge between near-concurrent spans within epsilon tolerance (WG-M2)', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeDefined();
+  });
+  it('does not infer edge when spans overlap by more than epsilon', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
+    expect(edge).toBeUndefined();
+  });
+  it('counts tool calls from span names starting with "tool:"', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
+      makeSpan({ spanId: 's2', name: 'tool:write', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
+      makeSpan({ spanId: 's3', name: 'agent_turn', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    const node = graph.nodes.find(n => n.id === 'agentA');
+    expect(node?.toolCallCount).toBe(2);
   });
 });
 
@@ -12523,78 +12044,6 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
 }
 
 ================
-File: src/components/HealthOverview.tsx
-================
-import type { QualityDashboardSummary } from '../types.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { HealthBanner } from './HealthBanner.js';
-import { StatDisplay } from './StatDisplay.js';
-interface PipelineHealth {
-  evalVolume: number;
-  lastEvalAge: string | null;
-  evalRate: string;
-}
-function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth {
-  let totalSamples = 0;
-  let latestTs: string | null = null;
-  for (const m of dashboard.metrics) {
-    totalSamples += m.sampleCount;
-    const worst = (m as QualityDashboardSummary['metrics'][number] & { worstExplanation?: { timestamp?: string } }).worstExplanation;
-    if (worst?.timestamp && (!latestTs || worst.timestamp > latestTs)) latestTs = worst.timestamp;
-  }
-  const lastEvalAge = latestTs ? formatTimestamp(latestTs) : null;
-  const period = dashboard.metrics[0]?.period;
-  let periodHours = PERIOD_MS['7d'] / TIME_MS.HOUR;
-  if (period) {
-    const diffMs = new Date(period.end).getTime() - new Date(period.start).getTime();
-    periodHours = Math.max(1, diffMs / TIME_MS.HOUR);
-  }
-  const perHour = totalSamples / periodHours;
-  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(1)}k/hr`
-    : perHour >= 1 ? `${perHour.toFixed(0)}/hr`
-    : `${(perHour * 24).toFixed(1)}/day`;
-  return { evalVolume: totalSamples, lastEvalAge, evalRate };
-}
-function formatVolume(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
-export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSummary }) {
-  const { overallStatus, summary } = dashboard;
-  const pipeline = computePipelineHealth(dashboard);
-  const statusMessage = <>
-    <span className="text-base">
-      {overallStatus === 'healthy' && 'All metrics within thresholds'}
-      {overallStatus === 'warning' && 'Some metrics need attention'}
-      {overallStatus === 'critical' && 'Critical issues detected'}
-      {overallStatus === 'no_data' && 'No evaluation data available'}
-    </span>
-    <div className="pipeline-stats d-flex gap-6">
-      <div className="pipeline-stat flex-center">
-        Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
-      </div>
-      <div className="pipeline-stat flex-center">
-        Rate: <span className="stat-value">{pipeline.evalRate}</span>
-      </div>
-      {pipeline.lastEvalAge && (
-        <div className="pipeline-stat flex-center">
-          Last Eval: <span className="stat-value">{pipeline.lastEvalAge}</span>
-        </div>
-      )}
-    </div>
-  </>;
-  return (
-    <HealthBanner status={overallStatus} message={statusMessage}>
-      <StatDisplay value={summary.totalMetrics} label="Total" />
-      <StatDisplay value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
-      <StatDisplay value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
-      <StatDisplay value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
-    </HealthBanner>
-  );
-}
-
-================
 File: src/components/TruncatedIdLink.tsx
 ================
 import type { MouseEvent } from 'react';
@@ -12719,6 +12168,86 @@ export function useApiQuery<TRaw, T = TRaw>(
     retryDelay,
   });
 }
+
+================
+File: src/lib/validation/auth-schemas.ts
+================
+import { z } from 'zod';
+import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
+import { RoleSchema } from '../constants.js';
+export const Auth0JwtPayloadSchema = z.object({
+  sub: z.string(),
+  email: z.email().optional(),
+  email_verified: z.boolean().optional(),
+  name: z.string().optional(),
+  picture: z.string().optional(),
+  iss: z.string(),
+  aud: z.union([z.string(), z.array(z.string())]),
+  iat: z.number(),
+  exp: z.number(),
+});
+export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
+export const PublicUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.email(),
+  created_at: z.iso.datetime().optional(),
+  updated_at: z.iso.datetime().optional(),
+});
+export type PublicUser = z.infer<typeof PublicUserSchema>;
+export const UserRoleRowSchema = z.object({
+  roles: z.object({
+    name: z.string(),
+    permissions: z.array(z.string()),
+  }).nullable(),
+});
+export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
+export const ActivityRequestSchema = z.object({
+  activity_type: z.enum(FRONTEND_ACTIVITY_EVENTS),
+});
+export const AdminRoleSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  permissions: z.array(z.string()),
+});
+export type AdminRole = z.infer<typeof AdminRoleSchema>;
+export const AdminUserRoleRowSchema = z.object({
+  user_id: z.string().uuid(),
+  role_id: z.string().uuid(),
+  roles: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+  }).nullable(),
+});
+export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
+export const AdminUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.email().optional(),
+  created_at: z.iso.datetime().optional(),
+  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+});
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+export const AssignRoleRequestSchema = z.object({
+  role_id: z.string().uuid(),
+});
+export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
+export const MeResponseSchema = z.object({
+  email: z.email(),
+  roles: z.array(z.string()),
+  permissions: z.array(z.enum([
+    'dashboard.read',
+    'dashboard.executive',
+    'dashboard.operator',
+    'dashboard.auditor',
+    'dashboard.traces.read',
+    'dashboard.sessions.read',
+    'dashboard.agents.read',
+    'dashboard.pipeline.read',
+    'dashboard.compliance.read',
+    'dashboard.admin',
+  ])),
+  allowedViews: z.array(RoleSchema),
+});
+export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 ================
 File: src/lib/validation/dashboard-schemas.ts
@@ -13593,6 +13122,478 @@ describe('GET /agents/:sessionId', () => {
     const body = await res.json() as Record<string, unknown>;
     expect(body).toHaveProperty('graph');
     expect(body.graph).toEqual(mockGraph);
+  });
+});
+
+================
+File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'fs';
+import { resolve } from 'path';
+const DASHBOARD_ROOT = resolve(__dirname, '../../');
+const THEME_CSS = resolve(DASHBOARD_ROOT, 'src/theme.css');
+const PUBLIC_FONTS_DIR = resolve(DASHBOARD_ROOT, 'public/fonts');
+const REQUIRED_FAMILIES = ['JetBrains Mono', 'IBM Plex Sans'] as const;
+const REQUIRED_WEIGHTS = [400, 500, 600] as const;
+const EXPECTED_FONT_FILES: Record<string, string[]> = {
+  'JetBrains Mono': [
+    'JetBrainsMono-Regular.woff2',
+    'JetBrainsMono-Medium.woff2',
+    'JetBrainsMono-SemiBold.woff2',
+  ],
+  'IBM Plex Sans': [
+    'IBMPlexSans-Regular.woff2',
+    'IBMPlexSans-Medium.woff2',
+    'IBMPlexSans-SemiBold.woff2',
+  ],
+};
+describe('theme.css — no external Google Fonts import', () => {
+  it('should not contain a fonts.googleapis.com @import', () => {
+    const css = readFileSync(THEME_CSS, 'utf-8');
+    expect(css).not.toMatch(/fonts\.googleapis\.com/);
+  });
+  it('should not contain any external @import url starting with https://', () => {
+    const css = readFileSync(THEME_CSS, 'utf-8');
+    const externalImport = /@import\s+url\(['"]?https?:\/\//;
+    expect(css).not.toMatch(externalImport);
+  });
+});
+describe('local @font-face declarations exist', () => {
+  function getFontFaceSource(): string {
+    const fontsCss = resolve(DASHBOARD_ROOT, 'src/fonts.css');
+    if (existsSync(fontsCss)) {
+      return readFileSync(fontsCss, 'utf-8');
+    }
+    return readFileSync(THEME_CSS, 'utf-8');
+  }
+  it('should declare @font-face for JetBrains Mono', () => {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/font-family:\s*['"]?JetBrains Mono['"]?/i);
+  });
+  it('should declare @font-face for IBM Plex Sans', () => {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/font-family:\s*['"]?IBM Plex Sans['"]?/i);
+  });
+  for (const family of REQUIRED_FAMILIES) {
+    for (const weight of REQUIRED_WEIGHTS) {
+      it(`should have a @font-face block for ${family} weight ${weight}`, () => {
+        const css = getFontFaceSource();
+        // Find all @font-face blocks that mention this family
+        const fontFaceBlocks = [...css.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m => m[0]);
+        const familyBlocks = fontFaceBlocks.filter(block =>
+          new RegExp(`font-family:\\s*['"]?${family}['"]?`, 'i').test(block)
+        );
+        const hasWeight = familyBlocks.some(block =>
+          new RegExp(`font-weight:\\s*${weight}`).test(block)
+        );
+        expect(hasWeight, `Expected @font-face for "${family}" with font-weight: ${weight}`).toBe(true);
+      });
+    }
+  }
+  it('should reference /fonts/ local path in @font-face src', () => {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/url\(['"]?\/fonts\//);
+  });
+});
+describe('public/fonts/ directory and font files exist', () => {
+  it('should have a public/fonts/ directory', () => {
+    expect(existsSync(PUBLIC_FONTS_DIR), `Expected directory: ${PUBLIC_FONTS_DIR}`).toBe(true);
+  });
+  for (const [family, files] of Object.entries(EXPECTED_FONT_FILES)) {
+    for (const file of files) {
+      it(`should have font file public/fonts/${file} for ${family}`, () => {
+        const filePath = resolve(PUBLIC_FONTS_DIR, file);
+        expect(existsSync(filePath), `Expected font file at: ${filePath}`).toBe(true);
+      });
+    }
+  }
+});
+
+================
+File: src/__tests__/score-badge-calibration.test.tsx
+================
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, within, cleanup } from '@testing-library/react';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import type { PercentileDistribution } from '../lib/quality-utils.js';
+afterEach(cleanup);
+function makeDistribution(overrides: Partial<PercentileDistribution> = {}): PercentileDistribution {
+  return {
+    p10: 0.30,
+    p25: 0.48,
+    p50: 0.60,
+    p75: 0.72,
+    p90: 0.83,
+    ...overrides,
+  };
+}
+function getBadgeLabel(container: HTMLElement): string {
+  return container.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
+}
+describe('ScoreBadge without calibration prop', () => {
+  it('renders excellent band for score 0.95 without calibration', () => {
+    const { container } = render(<ScoreBadge score={0.95} metricName="relevance" />);
+    expect(getBadgeLabel(container)).toMatch(/excellent/i);
+  });
+  it('renders failing band for score 0.3 without calibration', () => {
+    const { container } = render(<ScoreBadge score={0.3} metricName="relevance" />);
+    expect(getBadgeLabel(container)).toMatch(/failing/i);
+  });
+  it('renders adequate band for score 0.75 without calibration (uniform baseline)', () => {
+    const { container } = render(<ScoreBadge score={0.75} metricName="relevance" />);
+    expect(getBadgeLabel(container)).toMatch(/adequate/i);
+  });
+});
+describe('ScoreBadge with calibration prop', () => {
+  it('accepts calibration prop as part of the component interface', () => {
+    const calibration = { distribution: makeDistribution(), sampleSize: 250 };
+    expect(() =>
+      render(
+        <ScoreBadge
+          score={0.75}
+          metricName="relevance"
+          calibration={calibration}
+        />
+      )
+    ).not.toThrow();
+  });
+  it('uses excellent/good band for score 0.75 when calibration shows it is above p75', () => {
+    const distribution = makeDistribution({ p75: 0.72, p90: 0.83 });
+    const calibration = { distribution, sampleSize: 200 };
+    const { container } = render(
+      <ScoreBadge
+        score={0.75}
+        metricName="relevance"
+        calibration={calibration}
+      />
+    );
+    const label = getBadgeLabel(container);
+    expect(label).toMatch(/excellent|good/i);
+    expect(label).not.toMatch(/adequate/i);
+  });
+  it('aria-label differs from uniform when calibration shifts the band', () => {
+    const distribution = makeDistribution({ p50: 0.6, p75: 0.72, p90: 0.83 });
+    const { container: noCalContainer } = render(
+      <ScoreBadge score={0.75} metricName="relevance" />
+    );
+    const uniformLabel = getBadgeLabel(noCalContainer);
+    cleanup();
+    const { container: withCalContainer } = render(
+      <ScoreBadge
+        score={0.75}
+        metricName="relevance"
+        calibration={{ distribution, sampleSize: 200 }}
+      />
+    );
+    const adaptiveLabel = getBadgeLabel(withCalContainer);
+    expect(adaptiveLabel).not.toBe(uniformLabel);
+  });
+  it('behaves same as no-calibration when sampleSize is below MIN_QUANTILE_SAMPLE_SIZE', () => {
+    const calibration = { distribution: makeDistribution(), sampleSize: 50 };
+    const { container: withCalContainer } = render(
+      <ScoreBadge
+        score={0.95}
+        metricName="relevance"
+        calibration={calibration}
+      />
+    );
+    const withCalLabel = getBadgeLabel(withCalContainer);
+    cleanup();
+    const { container: noCalContainer } = render(
+      <ScoreBadge score={0.95} metricName="relevance" />
+    );
+    const noCalLabel = getBadgeLabel(noCalContainer);
+    expect(withCalLabel).toBe(noCalLabel);
+  });
+  it('renders same band with and without calibration when no calibration is provided', () => {
+    const { container: noCalContainer } = render(
+      <ScoreBadge score={0.85} metricName="relevance" />
+    );
+    const noCalLabel = getBadgeLabel(noCalContainer);
+    cleanup();
+    const { container: undefinedCalContainer } = render(
+      <ScoreBadge
+        score={0.85}
+        metricName="relevance"
+        calibration={undefined}
+      />
+    );
+    const undefinedCalLabel = getBadgeLabel(undefinedCalContainer);
+    expect(undefinedCalLabel).toBe(noCalLabel);
+  });
+  it('uses within() to scope queries to the rendered container', () => {
+    const calibration = { distribution: makeDistribution(), sampleSize: 150 };
+    const { container } = render(
+      <ScoreBadge
+        score={0.75}
+        metricName="relevance"
+        calibration={calibration}
+      />
+    );
+    const scope = within(container as HTMLElement);
+    const allLabeled = scope.getAllByRole('generic', { hidden: true });
+    const labeled = allLabeled.filter(el => el.hasAttribute('aria-label'));
+    expect(labeled.length).toBeGreaterThan(0);
+    const ariaLabel = labeled[0].getAttribute('aria-label') ?? '';
+    expect(ariaLabel).toMatch(/excellent|good/i);
+  });
+});
+
+================
+File: src/__tests__/WorkflowGraph.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import type { ReactNode } from 'react';
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) => void;
+  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
+vi.mock('@xyflow/react', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
+  return {
+    ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) => (
+      <div data-testid="reactflow" {...rest}>
+        {(nodes ?? []).map((n) => {
+          const NodeComp = nodeTypes?.[n.type];
+          return (
+            <div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() => onNodeClick?.({}, n)}>
+              {NodeComp ? <NodeComp data={n.data} /> : n.id}
+            </div>
+          );
+        })}
+        {(edges ?? []).map((e) => (
+          <div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} />
+        ))}
+        {children}
+      </div>
+    ),
+    MiniMap: (_props: unknown) => <div data-testid="minimap" />,
+    Controls: () => <div data-testid="controls" />,
+    Background: () => null,
+    Handle: () => null,
+    Position: { Top: 'top', Bottom: 'bottom' },
+    BaseEdge: () => null,
+    getStraightPath: () => ['M 0 0', 0, 0],
+    useNodesState: (initial: MockNode[]) => {
+      const [nodes, setNodes] = React.useState(initial);
+      return [nodes, setNodes, vi.fn()];
+    },
+    useEdgesState: (initial: MockEdge[]) => {
+      const [edges, setEdges] = React.useState(initial);
+      return [edges, setEdges, vi.fn()];
+    },
+    useReactFlow: () => ({ fitView: vi.fn() }),
+  };
+});
+interface ELKGraph {
+  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+vi.mock('elkjs/lib/elk.bundled.js', () => ({
+  default: class ELK {
+    layout(graph: ELKGraph) {
+      return Promise.resolve({
+        ...graph,
+        children: (graph.children ?? []).map((c, i: number) => ({
+          ...c,
+          x: i * 300,
+          y: i * 200,
+        })),
+      });
+    }
+  },
+}));
+import { WorkflowGraphView } from '../components/WorkflowGraph.js';
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
+afterEach(cleanup);
+describe('WorkflowGraphView', () => {
+  const twoNodeGraph = makeGraph({
+    nodes: [
+      makeNode({ id: 'node-1', label: 'planner' }),
+      makeNode({ id: 'node-2', label: 'executor' }),
+    ],
+    edges: [makeEdge({ id: 'edge-1', source: 'node-1', target: 'node-2' })],
+    rootNodeId: 'node-1',
+    workflowShape: 'linear',
+  });
+  const threeNodeGraph = makeGraph({
+    nodes: [
+      makeNode({ id: 'node-1' }),
+      makeNode({ id: 'node-2' }),
+      makeNode({ id: 'node-3' }),
+    ],
+    rootNodeId: 'node-1',
+    workflowShape: 'linear',
+  });
+  const fiveNodeGraph = makeGraph({
+    nodes: Array.from({ length: 5 }, (_, i) =>
+      makeNode({ id: `node-${i + 1}`, label: `agent-${i + 1}` })
+    ),
+    rootNodeId: 'node-1',
+    workflowShape: 'branching',
+  });
+  it('renders container with role=img and aria-label', async () => {
+    render(<WorkflowGraphView graph={twoNodeGraph} />);
+    const container = await waitFor(() =>
+      screen.getByRole('img', { name: 'Agent workflow graph' })
+    );
+    expect(container).toBeInTheDocument();
+  });
+  it('renders correct number of nodes', async () => {
+    render(<WorkflowGraphView graph={threeNodeGraph} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-node-1')).toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-node-2')).toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-node-3')).toBeInTheDocument();
+    });
+  });
+  it('node displays agent label', async () => {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: 'node-1', label: 'planner' })],
+    });
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.getByText('planner')).toBeInTheDocument();
+    });
+  });
+  it('node displays Good score badge text for score >= 0.7', async () => {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: 'node-1', evaluationScore: 0.85 })],
+    });
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.getByText('Good')).toBeInTheDocument();
+    });
+  });
+  it('node displays tool count', async () => {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: 'node-1', toolCallCount: 5 })],
+    });
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.getByText('5 tools')).toBeInTheDocument();
+    });
+  });
+  it('shows Controls always', async () => {
+    render(<WorkflowGraphView graph={twoNodeGraph} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('controls')).toBeInTheDocument();
+    });
+  });
+  it('shows MiniMap for 5+ nodes', async () => {
+    render(<WorkflowGraphView graph={fiveNodeGraph} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('minimap')).toBeInTheDocument();
+    });
+  });
+  it('hides MiniMap for fewer than 5 nodes', async () => {
+    render(<WorkflowGraphView graph={threeNodeGraph} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('reactflow')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('minimap')).not.toBeInTheDocument();
+  });
+  it('shows simplified fallback for single_agent shape with 1 node and no ReactFlow', async () => {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: 'node-1', label: 'solo-agent' })],
+      workflowShape: 'single_agent',
+      rootNodeId: 'node-1',
+    });
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.queryByTestId('reactflow')).not.toBeInTheDocument();
+      expect(screen.getByText(/solo-agent/)).toBeInTheDocument();
+    });
+  });
+  it('fires onNodeClick with the correct nodeId when a node is clicked', async () => {
+    const onNodeClick = vi.fn();
+    render(<WorkflowGraphView graph={twoNodeGraph} onNodeClick={onNodeClick} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-node-1')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('rf-node-node-1'));
+    expect(onNodeClick).toHaveBeenCalledWith('node-1');
+  });
+  it('renders without error when graph has 0 nodes and 0 edges', async () => {
+    const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
+    expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
+  });
+});
+const ST_G5_LARGE_GRAPH_SIZE = 100;
+const ST_G5_DEEP_CHAIN_SIZE = 20;
+const ST_G5_DISCONNECTED_SIZE = 10;
+describe('WorkflowGraphView stress', () => {
+  it('renders 100+ node graph without error using degraded list fallback', () => {
+    const graph = makeChainGraph(ST_G5_LARGE_GRAPH_SIZE, 'agent', 'branching');
+    render(<WorkflowGraphView graph={graph} />);
+    expect(screen.getByText(`Graph too large to render (${ST_G5_LARGE_GRAPH_SIZE} agents)`)).toBeInTheDocument();
+    expect(screen.getByText(/agent-0 —/)).toBeInTheDocument();
+    expect(screen.getByText(/agent-99 —/)).toBeInTheDocument();
+  });
+  it('renders deeply nested delegation chain without error', async () => {
+    const graph = makeChainGraph(ST_G5_DEEP_CHAIN_SIZE, 'delegate', 'linear');
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-delegate-0')).toBeInTheDocument();
+      expect(screen.getByTestId(`rf-node-delegate-${ST_G5_DEEP_CHAIN_SIZE - 1}`)).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^rf-node-delegate-/).length).toBe(ST_G5_DEEP_CHAIN_SIZE);
+    });
+  });
+  it('renders without crash when rootNodeId is null (missing parent span inference fallback)', async () => {
+    const nodes = Array.from({ length: 5 }, (_, i) =>
+      makeNode({ id: `node-${i}`, label: `orphan-${i}` })
+    );
+    const graph = makeGraph({ nodes, rootNodeId: null, workflowShape: 'branching' });
+    expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
+    await waitFor(() => {
+      expect(screen.getByTestId('reactflow')).toBeInTheDocument();
+    });
+  });
+  it('renders disconnected nodes (no edges) without crash', async () => {
+    const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =>
+      makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
+    );
+    const graph = makeGraph({ nodes, rootNodeId: 'orphan-0', workflowShape: 'branching' });
+    render(<WorkflowGraphView graph={graph} />);
+    await waitFor(() => {
+      expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
+    });
+  });
+  it('renders two graphs in the same DOM without node state leakage between instances', async () => {
+    const graphA = makeGraph({
+      nodes: [makeNode({ id: 'a-1', label: 'alpha' }), makeNode({ id: 'a-2', label: 'beta' })],
+      edges: [makeEdge({ id: 'ea-1', source: 'a-1', target: 'a-2' })],
+      rootNodeId: 'a-1',
+    });
+    const graphB = makeGraph({
+      nodes: [makeNode({ id: 'b-1', label: 'gamma' }), makeNode({ id: 'b-2', label: 'delta' })],
+      edges: [makeEdge({ id: 'eb-1', source: 'b-1', target: 'b-2' })],
+      rootNodeId: 'b-1',
+    });
+    const { unmount: unmountA } = render(<WorkflowGraphView graph={graphA} />);
+    render(<WorkflowGraphView graph={graphB} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('rf-node-a-1')).toBeInTheDocument();
+      expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
+    });
+    unmountA();
+    expect(screen.queryByTestId('rf-node-a-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
   });
 });
 
@@ -16516,196 +16517,6 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>
 }
 
 ================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-import { groupBy } from './quality-utils.js';
-const ATTR_AGENT_NAME = 'gen_ai.agent.name';
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
-const SPAN_NAME_TOOL_CALL = 'tool_call';
-const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph {
-  if (evaluation !== null && Array.isArray(evaluation.turns)) {
-    return buildFromEvaluation(evaluation, spans);
-  }
-  return inferFromSpans(spans);
-}
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
-  let droppedTurns = 0;
-  let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
-  for (const turn of evaluation.turns) {
-    if (turn.agentName == null) {
-      droppedTurns++;
-      continue;
-    }
-    const existing = agentTurns.get(turn.agentName);
-    if (existing) existing.push(turn);
-    else agentTurns.set(turn.agentName, [turn]);
-    if (
-      turn.turnIndex < minTurnIndex ||
-      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
-    ) {
-      minTurnIndex = turn.turnIndex;
-      rootAgentName = turn.agentName;
-    }
-  }
-  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
-  const nodes: WorkflowNode[] = [];
-  for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
-    const evaluationScore = relevances.length > 0
-      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
-      : null;
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    for (const s of spansByAgent.get(agentName) ?? []) {
-      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
-      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && isFinite(v)) {
-        tokenSum += v;
-        tokenCount++;
-      }
-      durationMs += s.durationMs ?? 0;
-    }
-    const totalTokens = tokenCount > 0 ? tokenSum : null;
-    nodes.push({
-      id: agentName,
-      label: agentName,
-      evaluationScore,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: turns.length,
-      hasError: turns.some(t => t.hasError),
-    });
-  }
-  const seenEdges = new Set<string>();
-  const edges: WorkflowEdge[] = [];
-  for (const h of evaluation.handoffs) {
-    const key = `${h.sourceAgent}->${h.targetAgent}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
-    const score = isFinite(h.score) ? h.score : 0;
-    edges.push({
-      id: key,
-      source: h.sourceAgent,
-      target: h.targetAgent,
-      handoffScore: score,
-      contextPreserved: h.contextPreserved,
-      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
-    });
-  }
-  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
-}
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
-  if (agentSpans.size === 0) {
-    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
-  }
-  const nodes: WorkflowNode[] = [];
-  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
-  for (const [agentId, group] of agentSpans) {
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    let hasError = false;
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of group) {
-      if (s.name.startsWith('tool:')) toolCallCount++;
-      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
-      durationMs += s.durationMs ?? 0;
-      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
-      if (end > maxEnd) maxEnd = end;
-    }
-    nodes.push({
-      id: agentId,
-      label: agentId,
-      evaluationScore: null,
-      toolCallCount,
-      totalTokens: tokenCount > 0 ? tokenSum : null,
-      durationMs,
-      turnCount: group.length,
-      hasError,
-    });
-    agentTimings.push({ id: agentId, minStart, maxEnd });
-  }
-  agentTimings.sort((a, b) => a.minStart - b.minStart);
-  const edges: WorkflowEdge[] = [];
-  for (let i = 0; i < agentTimings.length - 1; i++) {
-    const curr = agentTimings[i];
-    const next = agentTimings[i + 1];
-    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
-      const key = `${curr.id}->${next.id}`;
-      edges.push({
-        id: key,
-        source: curr.id,
-        target: next.id,
-        handoffScore: null,
-        contextPreserved: false,
-        label: 'inferred',
-      });
-    }
-  }
-  const rootNodeId = agentTimings[0]?.id ?? null;
-  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
-}
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
-  const adjacency = new Map<string, string[]>();
-  for (const n of nodes) adjacency.set(n.id, []);
-  for (const e of edges) {
-    if (e.source !== e.target) {
-      adjacency.get(e.source)?.push(e.target);
-    }
-  }
-  const UNVISITED = 0;
-  const IN_STACK = 1;
-  const DONE = 2;
-  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
-  function dfs(nodeId: string): boolean {
-    state.set(nodeId, IN_STACK);
-    for (const neighbor of adjacency.get(nodeId) ?? []) {
-      const neighborState = state.get(neighbor) ?? UNVISITED;
-      if (neighborState === IN_STACK) return true;
-      if (neighborState === UNVISITED && dfs(neighbor)) return true;
-    }
-    state.set(nodeId, DONE);
-    return false;
-  }
-  for (const n of nodes) {
-    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
-  }
-  return false;
-}
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
-  if (nodes.length <= 1) return 'single_agent';
-  if (edges.length === 0) return 'single_agent';
-  if (hasCycle(nodes, edges)) return 'cyclic';
-  const outDegree = new Map<string, number>();
-  for (const e of edges) {
-    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
-  }
-  for (const count of outDegree.values()) {
-    if (count > 1) return 'branching';
-  }
-  return 'linear';
-}
-
-================
 File: src/theme.css
 ================
 @font-face {
@@ -18254,6 +18065,197 @@ trendRoutes.get('/trends', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
+
+================
+File: src/lib/workflow-graph.ts
+================
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
+const ATTR_AGENT_NAME = 'gen_ai.agent.name';
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
+const SPAN_NAME_TOOL_CALL = 'tool_call';
+const SPAN_NAME_TOOL_PREFIX = 'tool:';
+const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph {
+  if (evaluation !== null && Array.isArray(evaluation.turns)) {
+    return buildFromEvaluation(evaluation, spans);
+  }
+  return inferFromSpans(spans);
+}
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
+  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  let droppedTurns = 0;
+  let rootAgentName: string | null = null;
+  let minTurnIndex = Infinity;
+  for (const turn of evaluation.turns) {
+    if (turn.agentName == null) {
+      droppedTurns++;
+      continue;
+    }
+    const existing = agentTurns.get(turn.agentName);
+    if (existing) existing.push(turn);
+    else agentTurns.set(turn.agentName, [turn]);
+    if (
+      turn.turnIndex < minTurnIndex ||
+      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
+    ) {
+      minTurnIndex = turn.turnIndex;
+      rootAgentName = turn.agentName;
+    }
+  }
+  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
+  const nodes: WorkflowNode[] = [];
+  for (const [agentName, turns] of agentTurns) {
+    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
+    const evaluationScore = relevances.length > 0
+      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
+      : null;
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    for (const s of spansByAgent.get(agentName) ?? []) {
+      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
+      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof v === 'number' && isFinite(v)) {
+        tokenSum += v;
+        tokenCount++;
+      }
+      durationMs += s.durationMs ?? 0;
+    }
+    const totalTokens = tokenCount > 0 ? tokenSum : null;
+    nodes.push({
+      id: agentName,
+      label: agentName,
+      evaluationScore,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: turns.length,
+      hasError: turns.some(t => t.hasError),
+    });
+  }
+  const seenEdges = new Set<string>();
+  const edges: WorkflowEdge[] = [];
+  for (const h of evaluation.handoffs) {
+    const key = `${h.sourceAgent}->${h.targetAgent}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    const score = isFinite(h.score) ? h.score : 0;
+    edges.push({
+      id: key,
+      source: h.sourceAgent,
+      target: h.targetAgent,
+      handoffScore: score,
+      contextPreserved: h.contextPreserved,
+      label: `score: ${score.toFixed(SCORE_CHIP_PRECISION)}`,
+    });
+  }
+  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
+}
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
+  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
+  if (agentSpans.size === 0) {
+    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
+  }
+  const nodes: WorkflowNode[] = [];
+  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
+  for (const [agentId, group] of agentSpans) {
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    let hasError = false;
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
+      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
+      durationMs += s.durationMs ?? 0;
+      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
+    nodes.push({
+      id: agentId,
+      label: agentId,
+      evaluationScore: null,
+      toolCallCount,
+      totalTokens: tokenCount > 0 ? tokenSum : null,
+      durationMs,
+      turnCount: group.length,
+      hasError,
+    });
+    agentTimings.push({ id: agentId, minStart, maxEnd });
+  }
+  agentTimings.sort((a, b) => a.minStart - b.minStart);
+  const edges: WorkflowEdge[] = [];
+  for (let i = 0; i < agentTimings.length - 1; i++) {
+    const curr = agentTimings[i];
+    const next = agentTimings[i + 1];
+    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
+      const key = `${curr.id}->${next.id}`;
+      edges.push({
+        id: key,
+        source: curr.id,
+        target: next.id,
+        handoffScore: null,
+        contextPreserved: false,
+        label: 'inferred',
+      });
+    }
+  }
+  const rootNodeId = agentTimings[0]?.id ?? null;
+  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
+}
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
+  const adjacency = new Map<string, string[]>();
+  for (const n of nodes) adjacency.set(n.id, []);
+  for (const e of edges) {
+    if (e.source !== e.target) {
+      adjacency.get(e.source)?.push(e.target);
+    }
+  }
+  const UNVISITED = 0;
+  const IN_STACK = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
+  function dfs(nodeId: string): boolean {
+    state.set(nodeId, IN_STACK);
+    for (const neighbor of adjacency.get(nodeId) ?? []) {
+      const neighborState = state.get(neighbor) ?? UNVISITED;
+      if (neighborState === IN_STACK) return true;
+      if (neighborState === UNVISITED && dfs(neighbor)) return true;
+    }
+    state.set(nodeId, DONE);
+    return false;
+  }
+  for (const n of nodes) {
+    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  }
+  return false;
+}
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
+  if (nodes.length <= 1) return 'single_agent';
+  if (edges.length === 0) return 'single_agent';
+  if (hasCycle(nodes, edges)) return 'cyclic';
+  const outDegree = new Map<string, number>();
+  for (const e of edges) {
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+  }
+  for (const count of outDegree.values()) {
+    if (count > 1) return 'branching';
+  }
+  return 'linear';
+}
 
 ================
 File: src/api/routes/agents.ts

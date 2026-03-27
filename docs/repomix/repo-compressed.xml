@@ -675,14 +675,6 @@ fi
 mv "$README_PATH.tmp" "$README_PATH"
 
 ================
-File: src/__tests__/api-calibration.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import app from '../../worker/index.js';
-function makeKV(store: Record<string, unknown> =
-function makeCalibrationData()
-
-================
 File: src/__tests__/api-compliance.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -769,19 +761,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 class MockMultiDirectoryBackend
 
 ================
-File: src/__tests__/quality-utils-adaptive.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import {
-  empiricalCDF,
-  adaptiveScoreColorBand,
-  MIN_QUANTILE_SAMPLE_SIZE,
-  METRIC_SCALE_STRATEGY,
-  type PercentileDistribution,
-} from '../lib/quality-utils.js';
-function makeDist(overrides: Partial<PercentileDistribution> =
-
-================
 File: src/__tests__/setup.ts
 ================
 observe()
@@ -810,15 +789,6 @@ export function makeChainGraph(
   labelPrefix: string,
   workflowShape: WorkflowGraph['workflowShape'],
 ): WorkflowGraph
-
-================
-File: src/__tests__/workflow-graph.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { TraceSpan } from '../types.js';
-import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
 
 ================
 File: src/__tests__/WorkflowTimeline.test.tsx
@@ -1103,6 +1073,24 @@ interface HealthBannerProps {
   children?: ReactNode;
 }
 export function HealthBanner(
+
+================
+File: src/components/HealthOverview.tsx
+================
+import type { QualityDashboardSummary } from '../types.js';
+import { formatTimestamp } from '../lib/quality-utils.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { HealthBanner } from './HealthBanner.js';
+import { StatDisplay } from './StatDisplay.js';
+interface PipelineHealth {
+  evalVolume: number;
+  lastEvalAge: string | null;
+  evalRate: string;
+}
+function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth
+function formatVolume(n: number): string
+⋮----
+Eval Volume: <span className="stat-value">
 
 ================
 File: src/components/Indicators.tsx
@@ -1948,28 +1936,6 @@ export interface TrendResponse {
 export function useTrend(metricName: string, period: Period, buckets = 7)
 
 ================
-File: src/lib/validation/auth-schemas.ts
-================
-import { z } from 'zod';
-import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
-⋮----
-export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
-⋮----
-export type PublicUser = z.infer<typeof PublicUserSchema>;
-⋮----
-export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
-⋮----
-export type AdminRole = z.infer<typeof AdminRoleSchema>;
-⋮----
-export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
-⋮----
-export type AdminUser = z.infer<typeof AdminUserSchema>;
-⋮----
-export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
-⋮----
-export type MeResponse = z.infer<typeof MeResponseSchema>;
-
-================
 File: src/lib/auth0.ts
 ================
 
@@ -2317,6 +2283,14 @@ interface StepResult { name: string; ms: number }
 function runStep(name: string, script: string, extraArgs: string[] = []): void
 
 ================
+File: src/__tests__/api-calibration.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import app from '../../worker/index.js';
+function makeKV(store: Record<string, unknown> =
+function makeCalibrationData()
+
+================
 File: src/__tests__/api-dashboard.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -2386,17 +2360,6 @@ import type {
 function makeDashboard(overrides: Partial<QualityDashboardSummary> =
 function makeAlert(overrides: Partial<TriggeredAlert> =
 function makeSLA(overrides: Partial<SLAComplianceResult> =
-
-================
-File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-⋮----
-function getFontFaceSource(): string
-⋮----
-// Find all @font-face blocks that mention this family
 
 ================
 File: src/__tests__/dr13-coverage.test.tsx
@@ -2506,6 +2469,19 @@ function makeAlerts(): (TriggeredAlert &
 const
 
 ================
+File: src/__tests__/quality-utils-adaptive.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import {
+  empiricalCDF,
+  adaptiveScoreColorBand,
+  MIN_QUANTILE_SAMPLE_SIZE,
+  METRIC_SCALE_STRATEGY,
+  type PercentileDistribution,
+} from '../lib/quality-utils.js';
+function makeDist(overrides: Partial<PercentileDistribution> =
+
+================
 File: src/__tests__/quality-utils-drift.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -2518,17 +2494,6 @@ import {
   ROLE_FEATURE_CONFIG,
   SCORE_COLORS,
 } from '../lib/quality-utils.js';
-
-================
-File: src/__tests__/score-badge-calibration.test.tsx
-================
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, within, cleanup } from '@testing-library/react';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import type { PercentileDistribution } from '../lib/quality-utils.js';
-⋮----
-function makeDistribution(overrides: Partial<PercentileDistribution> =
-function getBadgeLabel(container: HTMLElement): string
 
 ================
 File: src/__tests__/test-types.ts
@@ -2570,40 +2535,13 @@ import { POLL_INTERVAL_MS } from '../lib/constants.js';
 function makeQualityResponse(overrides: Partial<Record<string, unknown>> =
 
 ================
-File: src/__tests__/WorkflowGraph.test.tsx
+File: src/__tests__/workflow-graph.test.ts
 ================
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import type { ReactNode } from 'react';
-interface MockNode {
-  id: string;
-  type: string;
-  data: Record<string, unknown>;
-}
-interface MockEdge {
-  id: string;
-  label?: string;
-}
-interface ReactFlowProps {
-  nodes?: MockNode[];
-  edges?: MockEdge[];
-  onNodeClick?: (event: unknown, node: MockNode) => void;
-  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
-  children?: ReactNode;
-  [key: string]: unknown;
-}
-⋮----
-<div key=
-⋮----
-interface ELKGraph {
-  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
-  [key: string]: unknown;
-}
-⋮----
-layout(graph: ELKGraph)
-⋮----
-import { WorkflowGraphView } from '../components/WorkflowGraph.js';
-import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
+import { describe, it, expect } from 'vitest';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { TraceSpan } from '../types.js';
+import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
 
 ================
 File: src/__tests__/WorkflowPage.test.tsx
@@ -2740,24 +2678,6 @@ aria-sort=
 <td colSpan=
 
 ================
-File: src/components/HealthOverview.tsx
-================
-import type { QualityDashboardSummary } from '../types.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { HealthBanner } from './HealthBanner.js';
-import { StatDisplay } from './StatDisplay.js';
-interface PipelineHealth {
-  evalVolume: number;
-  lastEvalAge: string | null;
-  evalRate: string;
-}
-function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHealth
-function formatVolume(n: number): string
-⋮----
-Eval Volume: <span className="stat-value">
-
-================
 File: src/components/TruncatedIdLink.tsx
 ================
 import type { MouseEvent } from 'react';
@@ -2797,6 +2717,29 @@ export function useApiQuery<TRaw, T = TRaw>(
     enabled?: boolean;
     staleTime?: number;
 retry?: number | ((failureCount: number, error: unknown)
+
+================
+File: src/lib/validation/auth-schemas.ts
+================
+import { z } from 'zod';
+import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
+import { RoleSchema } from '../constants.js';
+⋮----
+export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
+⋮----
+export type PublicUser = z.infer<typeof PublicUserSchema>;
+⋮----
+export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
+⋮----
+export type AdminRole = z.infer<typeof AdminRoleSchema>;
+⋮----
+export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
+⋮----
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+⋮----
+export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
+⋮----
+export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 ================
 File: src/lib/validation/dashboard-schemas.ts
@@ -2961,6 +2904,64 @@ import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> =
 function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
 function makeMockEval(traceId = 'trace-001')
+
+================
+File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'fs';
+import { resolve } from 'path';
+⋮----
+function getFontFaceSource(): string
+⋮----
+// Find all @font-face blocks that mention this family
+
+================
+File: src/__tests__/score-badge-calibration.test.tsx
+================
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, within, cleanup } from '@testing-library/react';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import type { PercentileDistribution } from '../lib/quality-utils.js';
+⋮----
+function makeDistribution(overrides: Partial<PercentileDistribution> =
+function getBadgeLabel(container: HTMLElement): string
+
+================
+File: src/__tests__/WorkflowGraph.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import type { ReactNode } from 'react';
+interface MockNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+interface MockEdge {
+  id: string;
+  label?: string;
+}
+interface ReactFlowProps {
+  nodes?: MockNode[];
+  edges?: MockEdge[];
+  onNodeClick?: (event: unknown, node: MockNode) => void;
+  nodeTypes?: Record<string, (props: { data: Record<string, unknown> }) => ReactNode>;
+  children?: ReactNode;
+  [key: string]: unknown;
+}
+⋮----
+<div key=
+⋮----
+interface ELKGraph {
+  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+⋮----
+layout(graph: ELKGraph)
+⋮----
+import { WorkflowGraphView } from '../components/WorkflowGraph.js';
+import { makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
 
 ================
 File: src/api/routes/correlations.ts
@@ -3473,26 +3474,6 @@ export function spanAttr<T>(span: SpanLike, key: string): T | undefined
 export function extractFiniteScores(evals: Array<
 
 ================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-import { groupBy } from './quality-utils.js';
-⋮----
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
-⋮----
-function dfs(nodeId: string): boolean
-⋮----
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
-
-================
 File: src/theme.css
 ================
 @font-face {
@@ -3922,6 +3903,26 @@ import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, 
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
 ⋮----
 type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
+File: src/lib/workflow-graph.ts
+================
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
+⋮----
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
+⋮----
+function dfs(nodeId: string): boolean
+⋮----
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
 
 ================
 File: src/api/routes/agents.ts
