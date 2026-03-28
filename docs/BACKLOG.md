@@ -11,7 +11,7 @@ Findings from repomix-compressed audit + claude-code-guide + web-research-analys
 
 | # | Item | Priority | Notes |
 |---|------|----------|-------|
-| LIB-3 | Replace `groupBy` call sites with non-nullable keyFns using `d3.group` from `d3-array` | P3 | `InternMap extends Map` — type-safe drop-in. Keep custom `groupBy` where null-key skipping is needed |
+| ~~LIB-3~~ | ~~Replace `groupBy` call sites with non-nullable keyFns using `d3.group` from `d3-array`~~ | P3 | Done — `data-loader.ts` migrated to `d3.group`; `workflow-graph.ts` retained custom `groupBy` (nullable keys) |
 | LIB-4 | Replace `empiricalCDF` piecewise interpolation (`quality-utils.ts:257`) with `scaleLinear().domain([p10,p25,p50,p75,p90]).range([0.1,0.25,0.5,0.75,0.9]).clamp(true)` | P3 | Add degenerate-domain guard (p25===p50 etc → NaN) before constructing scale |
 | LIB-5 | Replace `result.error.message` in `dashboard-file-utils.ts` and error boundaries with `z.prettifyError(result.error)` | P3 | Built into Zod v4 — zero dep. Use `zod-validation-error@^5` only if `instanceof ValidationError` discrimination is needed |
 

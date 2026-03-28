@@ -6163,47 +6163,6 @@ describe(&apos;AuthContext: signOut&apos;, () =&gt; {
     });
     expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
   });
-});</file><file path="src/__tests__/auth0-env-validation.test.ts">import { describe, it, expect, beforeEach, afterEach, vi } from &apos;vitest&apos;;
-beforeEach(() =&gt; {
-  vi.resetModules();
-});
-afterEach(() =&gt; {
-  vi.unstubAllEnvs();
-});
-describe(&apos;auth0.ts env var validation&apos;, () =&gt; {
-  it(&apos;throws when all three vars are missing&apos;, async () =&gt; {
-    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;&apos;);
-    await expect(import(&apos;../lib/auth0.js&apos;)).rejects.toThrow(
-      &apos;Missing required env vars: VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE&apos;,
-    );
-  });
-  it(&apos;throws when only VITE_AUTH0_DOMAIN is set&apos;, async () =&gt; {
-    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;test.auth0.com&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;&apos;);
-    await expect(import(&apos;../lib/auth0.js&apos;)).rejects.toThrow(
-      &apos;Missing required env vars&apos;,
-    );
-  });
-  it(&apos;throws when only VITE_AUTH0_CLIENT_ID is missing&apos;, async () =&gt; {
-    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;test.auth0.com&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;https://api.test.dev&apos;);
-    await expect(import(&apos;../lib/auth0.js&apos;)).rejects.toThrow(
-      &apos;Missing required env vars&apos;,
-    );
-  });
-  it(&apos;does not throw and exports correct values when all vars are set&apos;, async () =&gt; {
-    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;integritystudio.us.auth0.com&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;test-client-id&apos;);
-    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;https://api.integritystudio.dev&apos;);
-    const mod = await import(&apos;../lib/auth0.js&apos;);
-    expect(mod.AUTH0_DOMAIN).toBe(&apos;integritystudio.us.auth0.com&apos;);
-    expect(mod.AUTH0_CLIENT_ID).toBe(&apos;test-client-id&apos;);
-    expect(mod.AUTH0_AUDIENCE).toBe(&apos;https://api.integritystudio.dev&apos;);
-  });
 });</file><file path="src/__tests__/components.test.tsx">import { describe, it, expect } from &apos;vitest&apos;;
 import { render, screen, within } from &apos;@testing-library/react&apos;;
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from &apos;../components/Indicators.js&apos;;
@@ -14322,12 +14281,6 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
   } finally {
     clearTimeout(timeout);
   }
-}</file><file path="src/lib/auth0.ts">export { Auth0Provider, useAuth0 } from &apos;@auth0/auth0-react&apos;;
-export const AUTH0_DOMAIN = (import.meta.env.VITE_AUTH0_DOMAIN as string | undefined) ?? &apos;&apos;;
-export const AUTH0_CLIENT_ID = (import.meta.env.VITE_AUTH0_CLIENT_ID as string | undefined) ?? &apos;&apos;;
-export const AUTH0_AUDIENCE = (import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined) ?? &apos;&apos;;
-if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID || !AUTH0_AUDIENCE) {
-  throw new Error(&apos;Missing required env vars: VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE&apos;);
 }</file><file path="src/lib/dashboard-file-utils.ts">import { readFileSync, existsSync, createReadStream } from &apos;fs&apos;;
 import { createInterface } from &apos;readline&apos;;
 import type { z } from &apos;zod&apos;;
@@ -17311,7 +17264,53 @@ export interface QualityLiveData {
   metrics: LiveMetric[];
   sessionCount: number;
   lastUpdated: string;
-}</file><file path="src/vite-env.d.ts"></file><file path="src/__tests__/coverage-tab.test.tsx">import { describe, it } from &apos;vitest&apos;;
+}</file><file path="src/vite-env.d.ts"></file><file path="src/__tests__/auth0-env-validation.test.ts">import { describe, it, expect, beforeEach, afterEach, vi } from &apos;vitest&apos;;
+beforeEach(() =&gt; {
+  vi.resetModules();
+});
+afterEach(() =&gt; {
+  vi.unstubAllEnvs();
+});
+describe(&apos;auth0.ts env var validation&apos;, () =&gt; {
+  it(&apos;throws when all three vars are missing&apos;, async () =&gt; {
+    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;&apos;);
+    await expect(import(&apos;../lib/auth0.js&apos;)).rejects.toThrow(
+      &apos;Missing required env vars: VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE&apos;,
+    );
+  });
+  it(&apos;throws when only VITE_AUTH0_DOMAIN is set&apos;, async () =&gt; {
+    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;test.auth0.com&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;&apos;);
+    await expect(import(&apos;../lib/auth0.js&apos;)).rejects.toThrow(
+      &apos;Missing required env vars&apos;,
+    );
+  });
+  it(&apos;throws when only VITE_AUTH0_CLIENT_ID is missing&apos;, async () =&gt; {
+    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;test.auth0.com&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;https://api.test.dev&apos;);
+    await expect(import(&apos;../lib/auth0.js&apos;)).rejects.toThrow(
+      &apos;Missing required env vars&apos;,
+    );
+  });
+  it(&apos;does not throw and exports correct values when all vars are set&apos;, async () =&gt; {
+    vi.stubEnv(&apos;VITE_AUTH0_DOMAIN&apos;, &apos;integritystudio.us.auth0.com&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_CLIENT_ID&apos;, &apos;test-client-id&apos;);
+    vi.stubEnv(&apos;VITE_AUTH0_AUDIENCE&apos;, &apos;https://api.integritystudio.dev&apos;);
+    const mod = await import(&apos;../lib/auth0.js&apos;);
+    expect(mod.AUTH0_DOMAIN).toBe(&apos;integritystudio.us.auth0.com&apos;);
+    expect(mod.AUTH0_CLIENT_ID).toBe(&apos;test-client-id&apos;);
+    expect(mod.AUTH0_AUDIENCE).toBe(&apos;https://api.integritystudio.dev&apos;);
+    expect(mod.AUTH0_CALLBACK_URI).toBe(`${window.location.origin}/callback`);
+    expect(mod.AUTH0_LOGIN_PARAMS).toEqual({
+      audience: &apos;https://api.integritystudio.dev&apos;,
+      redirect_uri: `${window.location.origin}/callback`,
+    });
+  });
+});</file><file path="src/__tests__/coverage-tab.test.tsx">import { describe, it } from &apos;vitest&apos;;
 describe(&apos;Coverage tab&apos;, () =&gt; {
   it.todo(&apos;Coverage tab is visible in navigation when enabled&apos;);
   it.todo(&apos;navigating to /coverage renders CoveragePage&apos;);
@@ -19201,7 +19200,18 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
       &lt;/div&gt;
     &lt;/div&gt;
   );
-}</file><file path="src/lib/constants.ts">import { z } from &apos;zod&apos;;
+}</file><file path="src/lib/auth0.ts">export { Auth0Provider, useAuth0 } from &apos;@auth0/auth0-react&apos;;
+export const AUTH0_DOMAIN = (import.meta.env.VITE_AUTH0_DOMAIN as string | undefined) ?? &apos;&apos;;
+export const AUTH0_CLIENT_ID = (import.meta.env.VITE_AUTH0_CLIENT_ID as string | undefined) ?? &apos;&apos;;
+export const AUTH0_AUDIENCE = (import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined) ?? &apos;&apos;;
+if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID || !AUTH0_AUDIENCE) {
+  throw new Error(&apos;Missing required env vars: VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE&apos;);
+}
+export const AUTH0_CALLBACK_URI = `${window.location.origin}/callback`;
+export const AUTH0_LOGIN_PARAMS = {
+  audience: AUTH0_AUDIENCE,
+  redirect_uri: AUTH0_CALLBACK_URI,
+} as const;</file><file path="src/lib/constants.ts">import { z } from &apos;zod&apos;;
 export const enum HttpStatus {
   BadRequest = 400,
   NotFound = 404,
@@ -19404,441 +19414,6 @@ export function DegradationSignalsPage({ period }: { period: Period }) {
         &lt;/&gt;
       ) : null}
     &lt;/PageShell&gt;
-  );
-}</file><file path="src/pages/LoginPage.tsx">import { useEffect } from &apos;react&apos;;
-import { useAuth0, AUTH0_AUDIENCE } from &apos;../lib/auth0.js&apos;;
-export function LoginPage() {
-  const { loginWithRedirect } = useAuth0();
-  useEffect(() =&gt; {
-    loginWithRedirect({
-      authorizationParams: {
-        audience: AUTH0_AUDIENCE,
-        redirect_uri: `${window.location.origin}/callback`,
-      },
-    });
-  }, [loginWithRedirect]);
-  return &lt;div className=&quot;auth-loading&quot; role=&quot;status&quot; aria-label=&quot;Loading&quot; /&gt;;
-}</file><file path="src/App.tsx">import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from &apos;react&apos;;
-import { Route, Switch, Link, useLocation, Router } from &apos;wouter&apos;;
-import { ErrorBoundary, type FallbackProps } from &apos;react-error-boundary&apos;;
-import { Layout } from &apos;./components/Layout.js&apos;;
-import { RoleSelector } from &apos;./components/RoleSelector.js&apos;;
-import { KeyboardNavProvider, useShortcut } from &apos;./contexts/KeyboardNavContext.js&apos;;
-import { AuthProvider, useAuth } from &apos;./contexts/AuthContext.js&apos;;
-import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from &apos;./lib/auth0.js&apos;;
-import { RequireAuth } from &apos;./components/RequireAuth.js&apos;;
-import { LoginPage } from &apos;./pages/LoginPage.js&apos;;
-import { HealthOverview } from &apos;./components/HealthOverview.js&apos;;
-import { MetricGrid, MetricGridSkeleton } from &apos;./components/MetricGrid.js&apos;;
-import { AlertList } from &apos;./components/AlertList.js&apos;;
-import { SLATable } from &apos;./components/SLATable.js&apos;;
-import { ScoreHistogram } from &apos;./components/ScoreHistogram.js&apos;;
-import { EvaluationDetail } from &apos;./components/EvaluationDetail.js&apos;;
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from &apos;./components/Indicators.js&apos;;
-import { TrendChart } from &apos;./components/TrendChart.js&apos;;
-import { TrendSeries } from &apos;./components/TrendSeries.js&apos;;
-import { ConfidencePanel } from &apos;./components/ConfidencePanel.js&apos;;
-import { ViewSection } from &apos;./components/Section.js&apos;;
-import { CorrelationsPage } from &apos;./pages/CorrelationsPage.js&apos;;
-import { PipelinePage } from &apos;./pages/PipelinePage.js&apos;;
-import { EvaluationDetailPage } from &apos;./pages/EvaluationDetailPage.js&apos;;
-import { CompliancePage } from &apos;./pages/CompliancePage.js&apos;;
-import { TraceDetailPage } from &apos;./pages/TraceDetailPage.js&apos;;
-import { AgentSessionPage } from &apos;./pages/AgentSessionPage.js&apos;;
-import { AgentsPage } from &apos;./pages/AgentsPage.js&apos;;
-import { SessionDetailPage } from &apos;./pages/SessionDetailPage.js&apos;;
-import { AdminPage } from &apos;./pages/AdminPage.js&apos;;
-import { RoutingTelemetryPage } from &apos;./pages/RoutingTelemetryPage.js&apos;;
-import { DegradationSignalsPage } from &apos;./pages/DegradationSignalsPage.js&apos;;
-import { ExecutiveView } from &apos;./components/views/ExecutiveView.js&apos;;
-import { OperatorView } from &apos;./components/views/OperatorView.js&apos;;
-import { AuditorView } from &apos;./components/views/AuditorView.js&apos;;
-import { formatScore } from &apos;./lib/quality-utils.js&apos;;
-import { useDashboard } from &apos;./hooks/useDashboard.js&apos;;
-import { useMetricDetail } from &apos;./hooks/useMetricDetail.js&apos;;
-import { useTrend } from &apos;./hooks/useTrend.js&apos;;
-import { RoleProvider } from &apos;./contexts/RoleContext.js&apos;;
-import { CalibrationProvider } from &apos;./context/CalibrationContext.js&apos;;
-import { ROLES } from &apos;./lib/constants.js&apos;;
-import type {
-  Period,
-  QualityDashboardSummary,
-  RoleViewType,
-  MetricDetailResult,
-  MetricDynamics,
-} from &apos;./types.js&apos;;
-const WorkflowPage = lazy(() =&gt; import(&apos;./pages/WorkflowPage.js&apos;).then(m =&gt; ({ default: m.WorkflowPage })));
-const VALID_ROLES: readonly RoleViewType[] = ROLES;
-function DashboardPage({ period }: { period: Period }) {
-  const { data, isLoading, isFetching, error } = useDashboard(period);
-  if (isLoading &amp;&amp; !data) return &lt;MetricGridSkeleton /&gt;;
-  if (error &amp;&amp; !data) return &lt;div className=&quot;error-state&quot;&gt;&lt;h2&gt;Failed to load&lt;/h2&gt;&lt;p&gt;{error.message}&lt;/p&gt;&lt;/div&gt;;
-  if (!data || (&apos;role&apos; in data)) return &lt;MetricGridSkeleton /&gt;;
-  const dashboard = data;
-  const sparklines = (data as QualityDashboardSummary &amp; { sparklines?: Record&lt;string, (number | null)[]&gt; }).sparklines;
-  if (dashboard.overallStatus === &apos;no_data&apos;) {
-    return (
-      &lt;div className=&quot;empty-state&quot;&gt;
-        &lt;h2&gt;No Evaluation Data&lt;/h2&gt;
-        &lt;p&gt;No evaluations found for the selected period.&lt;/p&gt;
-        &lt;p className=&quot;mt-2&quot;&gt;
-          Run evaluations using the &lt;code&gt;obs_inject_evaluations&lt;/code&gt; tool to see metrics here.
-        &lt;/p&gt;
-      &lt;/div&gt;
-    );
-  }
-  return (
-    &lt;&gt;
-      {isFetching &amp;&amp; data &amp;&amp; &lt;div className=&quot;refetch-indicator surface-elevated&quot;&gt;Updating...&lt;/div&gt;}
-      &lt;HealthOverview dashboard={dashboard} /&gt;
-      &lt;MetricGrid metrics={dashboard.metrics} sparklines={sparklines} /&gt;
-      {dashboard.alerts.length &gt; 0 &amp;&amp; (
-        &lt;ViewSection title=&quot;Active Alerts&quot;&gt;
-          &lt;AlertList alerts={dashboard.alerts} /&gt;
-        &lt;/ViewSection&gt;
-      )}
-      {dashboard.slaCompliance &amp;&amp; dashboard.slaCompliance.length &gt; 0 &amp;&amp; (
-        &lt;ViewSection title=&quot;SLA Compliance&quot;&gt;
-          &lt;SLATable slas={dashboard.slaCompliance} /&gt;
-        &lt;/ViewSection&gt;
-      )}
-    &lt;/&gt;
-  );
-}
-function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
-  const { session, isLoading: authLoading } = useAuth();
-  const { data, isLoading, error } = useDashboard(period, role);
-  if (authLoading) return &lt;MetricGridSkeleton /&gt;;
-  if (!session || !session.allowedViews.includes(role)) {
-    return (
-      &lt;div className=&quot;empty-state&quot;&gt;
-        &lt;h2&gt;Access Denied&lt;/h2&gt;
-        &lt;p&gt;You do not have permission to view the {role} dashboard.&lt;/p&gt;
-        &lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;
-      &lt;/div&gt;
-    );
-  }
-  if (isLoading &amp;&amp; !data) return &lt;MetricGridSkeleton /&gt;;
-  if (error &amp;&amp; !data) return &lt;div className=&quot;error-state&quot;&gt;&lt;h2&gt;Failed to load&lt;/h2&gt;&lt;p&gt;{error.message}&lt;/p&gt;&lt;/div&gt;;
-  if (!data || !(&apos;role&apos; in data)) return &lt;MetricGridSkeleton /&gt;;
-  switch (data.role) {
-    case &apos;executive&apos;:
-      return &lt;ExecutiveView data={data} /&gt;;
-    case &apos;operator&apos;:
-      return &lt;OperatorView data={data} /&gt;;
-    case &apos;auditor&apos;:
-      return &lt;AuditorView data={data} /&gt;;
-    default:
-      return null;
-  }
-}
-function MetricDetailPage({ name, period }: { name: string; period: Period }) {
-  const { data, isLoading, error } = useMetricDetail(name, period);
-  const { data: trendData } = useTrend(name, period, 10);
-  if (isLoading) {
-    return (
-      &lt;div&gt;
-        &lt;Link href=&quot;/&quot; className=&quot;back-link inline-flex-center&quot;&gt;&amp;larr; Back to dashboard&lt;/Link&gt;
-        &lt;div className=&quot;card skeleton skeleton-md&quot; /&gt;
-      &lt;/div&gt;
-    );
-  }
-  if (error) {
-    return (
-      &lt;div&gt;
-        &lt;Link href=&quot;/&quot; className=&quot;back-link inline-flex-center&quot;&gt;&amp;larr; Back to dashboard&lt;/Link&gt;
-        &lt;div className=&quot;error-state&quot;&gt;&lt;h2&gt;Failed to load&lt;/h2&gt;&lt;p&gt;{error.message}&lt;/p&gt;&lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-  if (!data) return null;
-  const detail = data;
-  return (
-    &lt;div&gt;
-      &lt;Link href=&quot;/&quot; className=&quot;back-link inline-flex-center&quot;&gt;&amp;larr; Back to dashboard&lt;/Link&gt;
-      &lt;div className=&quot;card mb-6&quot;&gt;
-        &lt;div className=&quot;metric-card-header flex-center&quot;&gt;
-          &lt;h2 className=&quot;text-lg&quot;&gt;{detail.displayName}&lt;/h2&gt;
-          &lt;StatusBadge status={detail.status} /&gt;
-        &lt;/div&gt;
-        &lt;div className=&quot;flex-wrap gap-8 mt-3&quot;&gt;
-          {([&apos;avg&apos;, &apos;min&apos;, &apos;max&apos;, &apos;p50&apos;, &apos;p95&apos;, &apos;p99&apos;] as const)
-            .filter((key) =&gt; detail.values[key] != null)
-            .map((key) =&gt; (
-              &lt;div key={key} className=&quot;text-center&quot;&gt;
-                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;
-                  {formatScore(detail.values[key])}
-                &lt;/div&gt;
-                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;{key}&lt;/div&gt;
-              &lt;/div&gt;
-            ))}
-          &lt;div className=&quot;text-center&quot;&gt;
-            &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{detail.sampleCount}&lt;/div&gt;
-            &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;samples&lt;/div&gt;
-          &lt;/div&gt;
-        &lt;/div&gt;
-        &lt;div className=&quot;flex-center gap-4 mt-3&quot;&gt;
-          &lt;TrendIndicator trend={detail.trend} /&gt;
-          &lt;ConfidenceBadge confidence={detail.confidence} /&gt;
-        &lt;/div&gt;
-      &lt;/div&gt;
-      {detail.confidence &amp;&amp; (
-        &lt;ViewSection title=&quot;Confidence Analysis&quot;&gt;
-          &lt;div className=&quot;card&quot;&gt;
-            &lt;ConfidencePanel confidence={detail.confidence} /&gt;
-          &lt;/div&gt;
-        &lt;/ViewSection&gt;
-      )}
-      &lt;ViewSection title=&quot;Trend&quot;&gt;
-        &lt;div className=&quot;card&quot;&gt;
-          &lt;TrendChart
-            trend={detail.trend}
-            dynamics={(detail as MetricDetailResult &amp; { dynamics?: MetricDynamics }).dynamics}
-            warningThreshold={detail.alerts.find(a =&gt; a.severity === &apos;warning&apos;)?.threshold}
-            criticalThreshold={detail.alerts.find(a =&gt; a.severity === &apos;critical&apos;)?.threshold}
-            metricName={detail.displayName}
-          /&gt;
-        &lt;/div&gt;
-      &lt;/ViewSection&gt;
-      {trendData &amp;&amp; trendData.trendData.length &gt; 0 &amp;&amp; (
-        &lt;ViewSection title={&lt;&gt;
-          Time Series ({trendData.totalEvaluations} evaluations)
-          {trendData.narrowed &amp;&amp; (
-            &lt;span className=&quot;text-muted text-xs font-normal ml-2&quot;&gt;auto-narrowed to data range&lt;/span&gt;
-          )}
-        &lt;/&gt;}&gt;
-          &lt;div className=&quot;card&quot;&gt;
-            &lt;TrendSeries data={trendData.trendData} metricName={detail.displayName} /&gt;
-          &lt;/div&gt;
-        &lt;/ViewSection&gt;
-      )}
-      {detail.alerts.length &gt; 0 &amp;&amp; (
-        &lt;ViewSection title=&quot;Alerts&quot;&gt;
-          &lt;AlertList alerts={detail.alerts} /&gt;
-        &lt;/ViewSection&gt;
-      )}
-      &lt;ViewSection title=&quot;Score Distribution&quot;&gt;
-        &lt;div className=&quot;card&quot;&gt;
-          &lt;ScoreHistogram distribution={detail.scoreDistribution} /&gt;
-        &lt;/div&gt;
-      &lt;/ViewSection&gt;
-      &lt;ViewSection title=&quot;Evaluations&quot;&gt;
-        &lt;div className=&quot;card&quot;&gt;
-          &lt;EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} metricName={name} period={period} /&gt;
-        &lt;/div&gt;
-      &lt;/ViewSection&gt;
-    &lt;/div&gt;
-  );
-}
-function RouteErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  return (
-    &lt;div className=&quot;error-state&quot;&gt;
-      &lt;h2&gt;Something went wrong&lt;/h2&gt;
-      &lt;p&gt;{error instanceof Error ? error.message : String(error)}&lt;/p&gt;
-      &lt;div className=&quot;error-actions&quot;&gt;
-        &lt;button onClick={resetErrorBoundary}&gt;Try again&lt;/button&gt;
-        &lt;Link href=&quot;/&quot;&gt;Back to dashboard&lt;/Link&gt;
-      &lt;/div&gt;
-    &lt;/div&gt;
-  );
-}
-function AdminLink() {
-  const { session } = useAuth();
-  if (!session?.permissions.includes(&apos;dashboard.admin&apos;)) return null;
-  return &lt;Link href=&quot;/admin&quot; className=&quot;admin-link text-xs text-muted&quot;&gt;Admin&lt;/Link&gt;;
-}
-function AdminGuard({ children }: { children: ReactNode }) {
-  const { session, isLoading } = useAuth();
-  if (isLoading) return null;
-  if (!session?.permissions.includes(&apos;dashboard.admin&apos;)) {
-    return (
-      &lt;div className=&quot;empty-state&quot;&gt;
-        &lt;h2&gt;Access Denied&lt;/h2&gt;
-        &lt;p&gt;You do not have permission to access this page.&lt;/p&gt;
-        &lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;
-      &lt;/div&gt;
-    );
-  }
-  return &lt;&gt;{children}&lt;/&gt;;
-}
-function GlobalShortcuts({ setPeriod, navigate }: {
-  setPeriod: (p: Period) =&gt; void;
-  navigate: (path: string) =&gt; void;
-}) {
-  useShortcut(&apos;1&apos;, &apos;Switch to 24h&apos;, &apos;Period&apos;, useCallback(() =&gt; setPeriod(&apos;24h&apos;), [setPeriod]));
-  useShortcut(&apos;2&apos;, &apos;Switch to 7d&apos;, &apos;Period&apos;, useCallback(() =&gt; setPeriod(&apos;7d&apos;), [setPeriod]));
-  useShortcut(&apos;3&apos;, &apos;Switch to 30d&apos;, &apos;Period&apos;, useCallback(() =&gt; setPeriod(&apos;30d&apos;), [setPeriod]));
-  useShortcut(&apos;g h&apos;, &apos;Go to home&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/&apos;), [navigate]));
-  useShortcut(&apos;g c&apos;, &apos;Go to correlations&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/correlations&apos;), [navigate]));
-  useShortcut(&apos;g p&apos;, &apos;Go to pipeline&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/pipeline&apos;), [navigate]));
-  useShortcut(&apos;g a&apos;, &apos;Go to agents&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/agents&apos;), [navigate]));
-  useShortcut(&apos;g r&apos;, &apos;Go to routing telemetry&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/routing-telemetry&apos;), [navigate]));
-  useShortcut(&apos;g d&apos;, &apos;Go to degradation signals&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/degradation-signals&apos;), [navigate]));
-  return null;
-}
-function CallbackHandler() {
-  const { isLoading, isAuthenticated, loginWithRedirect } = useAuth0();
-  const [, navigate] = useLocation();
-  useEffect(() =&gt; {
-    if (isLoading) return;
-    if (isAuthenticated) {
-      navigate(&apos;/&apos;);
-    } else {
-      loginWithRedirect({
-        authorizationParams: {
-          audience: AUTH0_AUDIENCE,
-          redirect_uri: `${window.location.origin}/callback`,
-        },
-      });
-    }
-  }, [isLoading, isAuthenticated, loginWithRedirect, navigate]);
-  return &lt;div className=&quot;auth-loading&quot; role=&quot;status&quot; aria-label=&quot;Loading&quot; /&gt;;
-}
-const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, &apos;&apos;) || &apos;&apos;;
-export function App() {
-  const [period, setPeriod] = useState&lt;Period&gt;(&apos;30d&apos;);
-  const [location, navigate] = useLocation();
-  return (
-    &lt;Router base={BASE_PATH}&gt;
-      &lt;Auth0Provider
-        domain={AUTH0_DOMAIN}
-        clientId={AUTH0_CLIENT_ID}
-        authorizationParams={{
-          redirect_uri: window.location.origin,
-          audience: AUTH0_AUDIENCE,
-        }}
-      &gt;
-      &lt;AuthProvider&gt;
-        &lt;KeyboardNavProvider&gt;
-          &lt;RoleProvider&gt;
-            &lt;CalibrationProvider&gt;
-              &lt;GlobalShortcuts setPeriod={setPeriod} navigate={navigate} /&gt;
-              &lt;Switch&gt;
-                &lt;Route path=&quot;/login&quot;&gt;
-                  &lt;LoginPage /&gt;
-                &lt;/Route&gt;
-                &lt;Route path=&quot;/callback&quot;&gt;
-                  &lt;CallbackHandler /&gt;
-                &lt;/Route&gt;
-                &lt;RequireAuth&gt;
-                  &lt;Layout period={period} onPeriodChange={setPeriod}&gt;
-                    &lt;RoleSelector /&gt;
-                    &lt;AdminLink /&gt;
-                    &lt;Switch&gt;
-                      &lt;Route path=&quot;/&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;DashboardPage period={period} /&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/role/:roleName&quot;&gt;
-                        {(params) =&gt; {
-                          const role = VALID_ROLES.find(r =&gt; r === params.roleName);
-                          if (!role) return &lt;div className=&quot;empty-state&quot;&gt;&lt;h2&gt;Unknown Role&lt;/h2&gt;&lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;&lt;/div&gt;;
-                          return (
-                            &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                              &lt;RolePage role={role} period={period} /&gt;
-                            &lt;/ErrorBoundary&gt;
-                          );
-                        }}
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/metrics/:metricName&quot;&gt;
-                        {(params) =&gt; (
-                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                            &lt;MetricDetailPage name={params.metricName} period={period} /&gt;
-                          &lt;/ErrorBoundary&gt;
-                        )}
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/evaluations/trace/:traceId&quot;&gt;
-                        {(params) =&gt; (
-                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                            &lt;EvaluationDetailPage traceId={params.traceId} /&gt;
-                          &lt;/ErrorBoundary&gt;
-                        )}
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/correlations&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;CorrelationsPage period={period} /&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      {}
-                      &lt;Route path=&quot;/pipeline&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;PipelinePage period={period} /&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/compliance&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;CompliancePage period={period} /&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/agents&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;AgentsPage period={period} /&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/traces/:traceId&quot;&gt;
-                        {(params) =&gt; (
-                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                            &lt;TraceDetailPage traceId={params.traceId} /&gt;
-                          &lt;/ErrorBoundary&gt;
-                        )}
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/agents/:sessionId&quot;&gt;
-                        {(params) =&gt; (
-                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                            &lt;AgentSessionPage sessionId={params.sessionId} /&gt;
-                          &lt;/ErrorBoundary&gt;
-                        )}
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/sessions/:sessionId&quot;&gt;
-                        {(params) =&gt; (
-                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                            &lt;SessionDetailPage sessionId={params.sessionId} /&gt;
-                          &lt;/ErrorBoundary&gt;
-                        )}
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/workflows/:sessionId&quot;&gt;
-                        {(params) =&gt; (
-                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                            &lt;Suspense fallback={&lt;div className=&quot;card skeleton skeleton-xl&quot; /&gt;}&gt;
-                              &lt;WorkflowPage sessionId={params.sessionId} /&gt;
-                            &lt;/Suspense&gt;
-                          &lt;/ErrorBoundary&gt;
-                        )}
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/routing-telemetry&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;RoutingTelemetryPage period={period} /&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/degradation-signals&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;DegradationSignalsPage period={period} /&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      &lt;Route path=&quot;/admin&quot;&gt;
-                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
-                          &lt;AdminGuard&gt;
-                            &lt;AdminPage /&gt;
-                          &lt;/AdminGuard&gt;
-                        &lt;/ErrorBoundary&gt;
-                      &lt;/Route&gt;
-                      &lt;Route&gt;
-                        &lt;div className=&quot;empty-state&quot;&gt;
-                          &lt;h2&gt;Page Not Found&lt;/h2&gt;
-                          &lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;
-                        &lt;/div&gt;
-                      &lt;/Route&gt;
-                    &lt;/Switch&gt;
-                  &lt;/Layout&gt;
-                &lt;/RequireAuth&gt;
-              &lt;/Switch&gt;
-            &lt;/CalibrationProvider&gt;
-          &lt;/RoleProvider&gt;
-        &lt;/KeyboardNavProvider&gt;
-      &lt;/AuthProvider&gt;
-      &lt;/Auth0Provider&gt;
-    &lt;/Router&gt;
   );
 }</file><file path="src/api/routes/agents.ts">import { Hono } from &apos;hono&apos;;
 import { computeMultiAgentEvaluation } from &apos;../../../../dist/lib/quality/quality-multi-agent.js&apos;;
@@ -20589,6 +20164,431 @@ export function formatTimestamp(ts: string): string {
   const diffDay = differenceInDays(now, d);
   if (diffDay &lt; 7) return `${diffDay}d ago`;
   return format(d, &apos;PP&apos;);
+}</file><file path="src/pages/LoginPage.tsx">import { useEffect } from &apos;react&apos;;
+import { useAuth0, AUTH0_LOGIN_PARAMS } from &apos;../lib/auth0.js&apos;;
+export function LoginPage() {
+  const { loginWithRedirect } = useAuth0();
+  useEffect(() =&gt; {
+    loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
+  }, [loginWithRedirect]);
+  return &lt;div className=&quot;auth-loading&quot; role=&quot;status&quot; aria-label=&quot;Loading&quot; /&gt;;
+}</file><file path="src/App.tsx">import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from &apos;react&apos;;
+import { Route, Switch, Link, useLocation, Router } from &apos;wouter&apos;;
+import { ErrorBoundary, type FallbackProps } from &apos;react-error-boundary&apos;;
+import { Layout } from &apos;./components/Layout.js&apos;;
+import { RoleSelector } from &apos;./components/RoleSelector.js&apos;;
+import { KeyboardNavProvider, useShortcut } from &apos;./contexts/KeyboardNavContext.js&apos;;
+import { AuthProvider, useAuth } from &apos;./contexts/AuthContext.js&apos;;
+import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE, AUTH0_CALLBACK_URI, AUTH0_LOGIN_PARAMS } from &apos;./lib/auth0.js&apos;;
+import { RequireAuth } from &apos;./components/RequireAuth.js&apos;;
+import { LoginPage } from &apos;./pages/LoginPage.js&apos;;
+import { HealthOverview } from &apos;./components/HealthOverview.js&apos;;
+import { MetricGrid, MetricGridSkeleton } from &apos;./components/MetricGrid.js&apos;;
+import { AlertList } from &apos;./components/AlertList.js&apos;;
+import { SLATable } from &apos;./components/SLATable.js&apos;;
+import { ScoreHistogram } from &apos;./components/ScoreHistogram.js&apos;;
+import { EvaluationDetail } from &apos;./components/EvaluationDetail.js&apos;;
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from &apos;./components/Indicators.js&apos;;
+import { TrendChart } from &apos;./components/TrendChart.js&apos;;
+import { TrendSeries } from &apos;./components/TrendSeries.js&apos;;
+import { ConfidencePanel } from &apos;./components/ConfidencePanel.js&apos;;
+import { ViewSection } from &apos;./components/Section.js&apos;;
+import { CorrelationsPage } from &apos;./pages/CorrelationsPage.js&apos;;
+import { PipelinePage } from &apos;./pages/PipelinePage.js&apos;;
+import { EvaluationDetailPage } from &apos;./pages/EvaluationDetailPage.js&apos;;
+import { CompliancePage } from &apos;./pages/CompliancePage.js&apos;;
+import { TraceDetailPage } from &apos;./pages/TraceDetailPage.js&apos;;
+import { AgentSessionPage } from &apos;./pages/AgentSessionPage.js&apos;;
+import { AgentsPage } from &apos;./pages/AgentsPage.js&apos;;
+import { SessionDetailPage } from &apos;./pages/SessionDetailPage.js&apos;;
+import { AdminPage } from &apos;./pages/AdminPage.js&apos;;
+import { RoutingTelemetryPage } from &apos;./pages/RoutingTelemetryPage.js&apos;;
+import { DegradationSignalsPage } from &apos;./pages/DegradationSignalsPage.js&apos;;
+import { ExecutiveView } from &apos;./components/views/ExecutiveView.js&apos;;
+import { OperatorView } from &apos;./components/views/OperatorView.js&apos;;
+import { AuditorView } from &apos;./components/views/AuditorView.js&apos;;
+import { formatScore } from &apos;./lib/quality-utils.js&apos;;
+import { useDashboard } from &apos;./hooks/useDashboard.js&apos;;
+import { useMetricDetail } from &apos;./hooks/useMetricDetail.js&apos;;
+import { useTrend } from &apos;./hooks/useTrend.js&apos;;
+import { RoleProvider } from &apos;./contexts/RoleContext.js&apos;;
+import { CalibrationProvider } from &apos;./context/CalibrationContext.js&apos;;
+import { ROLES } from &apos;./lib/constants.js&apos;;
+import type {
+  Period,
+  QualityDashboardSummary,
+  RoleViewType,
+  MetricDetailResult,
+  MetricDynamics,
+} from &apos;./types.js&apos;;
+const WorkflowPage = lazy(() =&gt; import(&apos;./pages/WorkflowPage.js&apos;).then(m =&gt; ({ default: m.WorkflowPage })));
+const VALID_ROLES: readonly RoleViewType[] = ROLES;
+function DashboardPage({ period }: { period: Period }) {
+  const { data, isLoading, isFetching, error } = useDashboard(period);
+  if (isLoading &amp;&amp; !data) return &lt;MetricGridSkeleton /&gt;;
+  if (error &amp;&amp; !data) return &lt;div className=&quot;error-state&quot;&gt;&lt;h2&gt;Failed to load&lt;/h2&gt;&lt;p&gt;{error.message}&lt;/p&gt;&lt;/div&gt;;
+  if (!data || (&apos;role&apos; in data)) return &lt;MetricGridSkeleton /&gt;;
+  const dashboard = data;
+  const sparklines = (data as QualityDashboardSummary &amp; { sparklines?: Record&lt;string, (number | null)[]&gt; }).sparklines;
+  if (dashboard.overallStatus === &apos;no_data&apos;) {
+    return (
+      &lt;div className=&quot;empty-state&quot;&gt;
+        &lt;h2&gt;No Evaluation Data&lt;/h2&gt;
+        &lt;p&gt;No evaluations found for the selected period.&lt;/p&gt;
+        &lt;p className=&quot;mt-2&quot;&gt;
+          Run evaluations using the &lt;code&gt;obs_inject_evaluations&lt;/code&gt; tool to see metrics here.
+        &lt;/p&gt;
+      &lt;/div&gt;
+    );
+  }
+  return (
+    &lt;&gt;
+      {isFetching &amp;&amp; data &amp;&amp; &lt;div className=&quot;refetch-indicator surface-elevated&quot;&gt;Updating...&lt;/div&gt;}
+      &lt;HealthOverview dashboard={dashboard} /&gt;
+      &lt;MetricGrid metrics={dashboard.metrics} sparklines={sparklines} /&gt;
+      {dashboard.alerts.length &gt; 0 &amp;&amp; (
+        &lt;ViewSection title=&quot;Active Alerts&quot;&gt;
+          &lt;AlertList alerts={dashboard.alerts} /&gt;
+        &lt;/ViewSection&gt;
+      )}
+      {dashboard.slaCompliance &amp;&amp; dashboard.slaCompliance.length &gt; 0 &amp;&amp; (
+        &lt;ViewSection title=&quot;SLA Compliance&quot;&gt;
+          &lt;SLATable slas={dashboard.slaCompliance} /&gt;
+        &lt;/ViewSection&gt;
+      )}
+    &lt;/&gt;
+  );
+}
+function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
+  const { session, isLoading: authLoading } = useAuth();
+  const { data, isLoading, error } = useDashboard(period, role);
+  if (authLoading) return &lt;MetricGridSkeleton /&gt;;
+  if (!session || !session.allowedViews.includes(role)) {
+    return (
+      &lt;div className=&quot;empty-state&quot;&gt;
+        &lt;h2&gt;Access Denied&lt;/h2&gt;
+        &lt;p&gt;You do not have permission to view the {role} dashboard.&lt;/p&gt;
+        &lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (isLoading &amp;&amp; !data) return &lt;MetricGridSkeleton /&gt;;
+  if (error &amp;&amp; !data) return &lt;div className=&quot;error-state&quot;&gt;&lt;h2&gt;Failed to load&lt;/h2&gt;&lt;p&gt;{error.message}&lt;/p&gt;&lt;/div&gt;;
+  if (!data || !(&apos;role&apos; in data)) return &lt;MetricGridSkeleton /&gt;;
+  switch (data.role) {
+    case &apos;executive&apos;:
+      return &lt;ExecutiveView data={data} /&gt;;
+    case &apos;operator&apos;:
+      return &lt;OperatorView data={data} /&gt;;
+    case &apos;auditor&apos;:
+      return &lt;AuditorView data={data} /&gt;;
+    default:
+      return null;
+  }
+}
+function MetricDetailPage({ name, period }: { name: string; period: Period }) {
+  const { data, isLoading, error } = useMetricDetail(name, period);
+  const { data: trendData } = useTrend(name, period, 10);
+  if (isLoading) {
+    return (
+      &lt;div&gt;
+        &lt;Link href=&quot;/&quot; className=&quot;back-link inline-flex-center&quot;&gt;&amp;larr; Back to dashboard&lt;/Link&gt;
+        &lt;div className=&quot;card skeleton skeleton-md&quot; /&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (error) {
+    return (
+      &lt;div&gt;
+        &lt;Link href=&quot;/&quot; className=&quot;back-link inline-flex-center&quot;&gt;&amp;larr; Back to dashboard&lt;/Link&gt;
+        &lt;div className=&quot;error-state&quot;&gt;&lt;h2&gt;Failed to load&lt;/h2&gt;&lt;p&gt;{error.message}&lt;/p&gt;&lt;/div&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (!data) return null;
+  const detail = data;
+  return (
+    &lt;div&gt;
+      &lt;Link href=&quot;/&quot; className=&quot;back-link inline-flex-center&quot;&gt;&amp;larr; Back to dashboard&lt;/Link&gt;
+      &lt;div className=&quot;card mb-6&quot;&gt;
+        &lt;div className=&quot;metric-card-header flex-center&quot;&gt;
+          &lt;h2 className=&quot;text-lg&quot;&gt;{detail.displayName}&lt;/h2&gt;
+          &lt;StatusBadge status={detail.status} /&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;flex-wrap gap-8 mt-3&quot;&gt;
+          {([&apos;avg&apos;, &apos;min&apos;, &apos;max&apos;, &apos;p50&apos;, &apos;p95&apos;, &apos;p99&apos;] as const)
+            .filter((key) =&gt; detail.values[key] != null)
+            .map((key) =&gt; (
+              &lt;div key={key} className=&quot;text-center&quot;&gt;
+                &lt;div className=&quot;mono-xl font-semibold&quot;&gt;
+                  {formatScore(detail.values[key])}
+                &lt;/div&gt;
+                &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;{key}&lt;/div&gt;
+              &lt;/div&gt;
+            ))}
+          &lt;div className=&quot;text-center&quot;&gt;
+            &lt;div className=&quot;mono-xl font-semibold&quot;&gt;{detail.sampleCount}&lt;/div&gt;
+            &lt;div className=&quot;text-secondary text-xs uppercase&quot;&gt;samples&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;flex-center gap-4 mt-3&quot;&gt;
+          &lt;TrendIndicator trend={detail.trend} /&gt;
+          &lt;ConfidenceBadge confidence={detail.confidence} /&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      {detail.confidence &amp;&amp; (
+        &lt;ViewSection title=&quot;Confidence Analysis&quot;&gt;
+          &lt;div className=&quot;card&quot;&gt;
+            &lt;ConfidencePanel confidence={detail.confidence} /&gt;
+          &lt;/div&gt;
+        &lt;/ViewSection&gt;
+      )}
+      &lt;ViewSection title=&quot;Trend&quot;&gt;
+        &lt;div className=&quot;card&quot;&gt;
+          &lt;TrendChart
+            trend={detail.trend}
+            dynamics={(detail as MetricDetailResult &amp; { dynamics?: MetricDynamics }).dynamics}
+            warningThreshold={detail.alerts.find(a =&gt; a.severity === &apos;warning&apos;)?.threshold}
+            criticalThreshold={detail.alerts.find(a =&gt; a.severity === &apos;critical&apos;)?.threshold}
+            metricName={detail.displayName}
+          /&gt;
+        &lt;/div&gt;
+      &lt;/ViewSection&gt;
+      {trendData &amp;&amp; trendData.trendData.length &gt; 0 &amp;&amp; (
+        &lt;ViewSection title={&lt;&gt;
+          Time Series ({trendData.totalEvaluations} evaluations)
+          {trendData.narrowed &amp;&amp; (
+            &lt;span className=&quot;text-muted text-xs font-normal ml-2&quot;&gt;auto-narrowed to data range&lt;/span&gt;
+          )}
+        &lt;/&gt;}&gt;
+          &lt;div className=&quot;card&quot;&gt;
+            &lt;TrendSeries data={trendData.trendData} metricName={detail.displayName} /&gt;
+          &lt;/div&gt;
+        &lt;/ViewSection&gt;
+      )}
+      {detail.alerts.length &gt; 0 &amp;&amp; (
+        &lt;ViewSection title=&quot;Alerts&quot;&gt;
+          &lt;AlertList alerts={detail.alerts} /&gt;
+        &lt;/ViewSection&gt;
+      )}
+      &lt;ViewSection title=&quot;Score Distribution&quot;&gt;
+        &lt;div className=&quot;card&quot;&gt;
+          &lt;ScoreHistogram distribution={detail.scoreDistribution} /&gt;
+        &lt;/div&gt;
+      &lt;/ViewSection&gt;
+      &lt;ViewSection title=&quot;Evaluations&quot;&gt;
+        &lt;div className=&quot;card&quot;&gt;
+          &lt;EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} metricName={name} period={period} /&gt;
+        &lt;/div&gt;
+      &lt;/ViewSection&gt;
+    &lt;/div&gt;
+  );
+}
+function RouteErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+  return (
+    &lt;div className=&quot;error-state&quot;&gt;
+      &lt;h2&gt;Something went wrong&lt;/h2&gt;
+      &lt;p&gt;{error instanceof Error ? error.message : String(error)}&lt;/p&gt;
+      &lt;div className=&quot;error-actions&quot;&gt;
+        &lt;button onClick={resetErrorBoundary}&gt;Try again&lt;/button&gt;
+        &lt;Link href=&quot;/&quot;&gt;Back to dashboard&lt;/Link&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+function AdminLink() {
+  const { session } = useAuth();
+  if (!session?.permissions.includes(&apos;dashboard.admin&apos;)) return null;
+  return &lt;Link href=&quot;/admin&quot; className=&quot;admin-link text-xs text-muted&quot;&gt;Admin&lt;/Link&gt;;
+}
+function AdminGuard({ children }: { children: ReactNode }) {
+  const { session, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!session?.permissions.includes(&apos;dashboard.admin&apos;)) {
+    return (
+      &lt;div className=&quot;empty-state&quot;&gt;
+        &lt;h2&gt;Access Denied&lt;/h2&gt;
+        &lt;p&gt;You do not have permission to access this page.&lt;/p&gt;
+        &lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;
+      &lt;/div&gt;
+    );
+  }
+  return &lt;&gt;{children}&lt;/&gt;;
+}
+function GlobalShortcuts({ setPeriod, navigate }: {
+  setPeriod: (p: Period) =&gt; void;
+  navigate: (path: string) =&gt; void;
+}) {
+  useShortcut(&apos;1&apos;, &apos;Switch to 24h&apos;, &apos;Period&apos;, useCallback(() =&gt; setPeriod(&apos;24h&apos;), [setPeriod]));
+  useShortcut(&apos;2&apos;, &apos;Switch to 7d&apos;, &apos;Period&apos;, useCallback(() =&gt; setPeriod(&apos;7d&apos;), [setPeriod]));
+  useShortcut(&apos;3&apos;, &apos;Switch to 30d&apos;, &apos;Period&apos;, useCallback(() =&gt; setPeriod(&apos;30d&apos;), [setPeriod]));
+  useShortcut(&apos;g h&apos;, &apos;Go to home&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/&apos;), [navigate]));
+  useShortcut(&apos;g c&apos;, &apos;Go to correlations&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/correlations&apos;), [navigate]));
+  useShortcut(&apos;g p&apos;, &apos;Go to pipeline&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/pipeline&apos;), [navigate]));
+  useShortcut(&apos;g a&apos;, &apos;Go to agents&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/agents&apos;), [navigate]));
+  useShortcut(&apos;g r&apos;, &apos;Go to routing telemetry&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/routing-telemetry&apos;), [navigate]));
+  useShortcut(&apos;g d&apos;, &apos;Go to degradation signals&apos;, &apos;Navigation&apos;, useCallback(() =&gt; navigate(&apos;/degradation-signals&apos;), [navigate]));
+  return null;
+}
+function CallbackHandler() {
+  const { isLoading, isAuthenticated, loginWithRedirect } = useAuth0();
+  const [, navigate] = useLocation();
+  useEffect(() =&gt; {
+    if (isLoading) return;
+    if (isAuthenticated) {
+      navigate(&apos;/&apos;);
+    } else {
+      loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
+    }
+  }, [isLoading, isAuthenticated, loginWithRedirect, navigate]);
+  return &lt;div className=&quot;auth-loading&quot; role=&quot;status&quot; aria-label=&quot;Loading&quot; /&gt;;
+}
+const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, &apos;&apos;) || &apos;&apos;;
+export function App() {
+  const [period, setPeriod] = useState&lt;Period&gt;(&apos;30d&apos;);
+  const [location, navigate] = useLocation();
+  return (
+    &lt;Router base={BASE_PATH}&gt;
+      &lt;Auth0Provider
+        domain={AUTH0_DOMAIN}
+        clientId={AUTH0_CLIENT_ID}
+        authorizationParams={{
+          redirect_uri: AUTH0_CALLBACK_URI,
+          audience: AUTH0_AUDIENCE,
+        }}
+      &gt;
+      &lt;AuthProvider&gt;
+        &lt;KeyboardNavProvider&gt;
+          &lt;RoleProvider&gt;
+            &lt;CalibrationProvider&gt;
+              &lt;GlobalShortcuts setPeriod={setPeriod} navigate={navigate} /&gt;
+              &lt;Switch&gt;
+                &lt;Route path=&quot;/login&quot;&gt;
+                  &lt;LoginPage /&gt;
+                &lt;/Route&gt;
+                &lt;Route path=&quot;/callback&quot;&gt;
+                  &lt;CallbackHandler /&gt;
+                &lt;/Route&gt;
+                &lt;RequireAuth&gt;
+                  &lt;Layout period={period} onPeriodChange={setPeriod}&gt;
+                    &lt;RoleSelector /&gt;
+                    &lt;AdminLink /&gt;
+                    &lt;Switch&gt;
+                      &lt;Route path=&quot;/&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;DashboardPage period={period} /&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/role/:roleName&quot;&gt;
+                        {(params) =&gt; {
+                          const role = VALID_ROLES.find(r =&gt; r === params.roleName);
+                          if (!role) return &lt;div className=&quot;empty-state&quot;&gt;&lt;h2&gt;Unknown Role&lt;/h2&gt;&lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;&lt;/div&gt;;
+                          return (
+                            &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                              &lt;RolePage role={role} period={period} /&gt;
+                            &lt;/ErrorBoundary&gt;
+                          );
+                        }}
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/metrics/:metricName&quot;&gt;
+                        {(params) =&gt; (
+                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                            &lt;MetricDetailPage name={params.metricName} period={period} /&gt;
+                          &lt;/ErrorBoundary&gt;
+                        )}
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/evaluations/trace/:traceId&quot;&gt;
+                        {(params) =&gt; (
+                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                            &lt;EvaluationDetailPage traceId={params.traceId} /&gt;
+                          &lt;/ErrorBoundary&gt;
+                        )}
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/correlations&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;CorrelationsPage period={period} /&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      {}
+                      &lt;Route path=&quot;/pipeline&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;PipelinePage period={period} /&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/compliance&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;CompliancePage period={period} /&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/agents&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;AgentsPage period={period} /&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/traces/:traceId&quot;&gt;
+                        {(params) =&gt; (
+                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                            &lt;TraceDetailPage traceId={params.traceId} /&gt;
+                          &lt;/ErrorBoundary&gt;
+                        )}
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/agents/:sessionId&quot;&gt;
+                        {(params) =&gt; (
+                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                            &lt;AgentSessionPage sessionId={params.sessionId} /&gt;
+                          &lt;/ErrorBoundary&gt;
+                        )}
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/sessions/:sessionId&quot;&gt;
+                        {(params) =&gt; (
+                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                            &lt;SessionDetailPage sessionId={params.sessionId} /&gt;
+                          &lt;/ErrorBoundary&gt;
+                        )}
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/workflows/:sessionId&quot;&gt;
+                        {(params) =&gt; (
+                          &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                            &lt;Suspense fallback={&lt;div className=&quot;card skeleton skeleton-xl&quot; /&gt;}&gt;
+                              &lt;WorkflowPage sessionId={params.sessionId} /&gt;
+                            &lt;/Suspense&gt;
+                          &lt;/ErrorBoundary&gt;
+                        )}
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/routing-telemetry&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;RoutingTelemetryPage period={period} /&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/degradation-signals&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;DegradationSignalsPage period={period} /&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      &lt;Route path=&quot;/admin&quot;&gt;
+                        &lt;ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}&gt;
+                          &lt;AdminGuard&gt;
+                            &lt;AdminPage /&gt;
+                          &lt;/AdminGuard&gt;
+                        &lt;/ErrorBoundary&gt;
+                      &lt;/Route&gt;
+                      &lt;Route&gt;
+                        &lt;div className=&quot;empty-state&quot;&gt;
+                          &lt;h2&gt;Page Not Found&lt;/h2&gt;
+                          &lt;p&gt;&lt;Link href=&quot;/&quot;&gt;Go to dashboard&lt;/Link&gt;&lt;/p&gt;
+                        &lt;/div&gt;
+                      &lt;/Route&gt;
+                    &lt;/Switch&gt;
+                  &lt;/Layout&gt;
+                &lt;/RequireAuth&gt;
+              &lt;/Switch&gt;
+            &lt;/CalibrationProvider&gt;
+          &lt;/RoleProvider&gt;
+        &lt;/KeyboardNavProvider&gt;
+      &lt;/AuthProvider&gt;
+      &lt;/Auth0Provider&gt;
+    &lt;/Router&gt;
+  );
 }</file><file path="src/api/data-loader.ts">import pLimit from &apos;p-limit&apos;;
 import { MultiDirectoryBackend } from &apos;../../../dist/backends/local-jsonl.js&apos;;
 import type { EvaluationResult } from &apos;../../../dist/backends/index.js&apos;;
@@ -20973,7 +20973,7 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
     if (count &gt; 1) return &apos;branching&apos;;
   }
   return &apos;linear&apos;;
-}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-28 04:10:20 -0500</date><message>refactor(auth): auto-redirect on login and callback routes</message><files>src/App.tsx</files><files>src/pages/LoginPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 02:14:47 -0500</date><message>chore(deps): add d3-array and @types/d3-array as explicit deps (LIB-2)</message><files>docs/BACKLOG.md</files><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-03-28 02:02:37 -0500</date><message>refactor(data-loader): rename limit → limiter to avoid shadowing query param</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-28 02:02:10 -0500</date><message>chore(deps): add p-limit v7 and record lib-audit backlog items</message><files>docs/BACKLOG.md</files><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-03-28 02:01:51 -0500</date><message>perf(LIB-1): replace batch-slice loop with p-limit sliding-window concurrency</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:48 -0500</date><message>chore(repomix): regenerate compressed docs after Round 20 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:33 -0500</date><message>perf(TrendChart): replace flatMap+filter with for-loop for allValues</message><files>src/components/TrendChart.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:30 -0500</date><message>perf(TrendSeries): replace flatMap+filter with for-loop for allVals</message><files>src/components/TrendSeries.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:27 -0500</date><message>perf(AlertList): hoist SEVERITY_ORDER to module scope</message><files>src/components/AlertList.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:26:25 -0500</date><message>chore(repomix): regenerate compressed docs after Round 19 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-28 01:20:18 -0500</date><message>style(constants): collapse double blank lines</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-28 01:19:08 -0500</date><message>chore(repomix): regenerate compressed docs after Round 18 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:13:15 -0500</date><message>chore(.claude): remove stale ralph-loop state file after session completion</message><files>.claude/ralph-loop.local.md</files></git_log_commit><git_log_commit><date>2026-03-28 01:12:25 -0500</date><message>refactor(CoverageGrid): drop redundant Array.isArray guard in cellMap memo</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:11:28 -0500</date><message>chore(repomix): regenerate compressed docs after Round 17 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:07:48 -0500</date><message>perf: eliminate remaining intermediate arrays in Map constructors</message><files>src/api/routes/agents.ts</files><files>src/components/AgentActivityPanel.tsx</files><files>src/components/CorrelationHeatmap.tsx</files><files>src/components/TurnTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:06:54 -0500</date><message>chore(repomix): regenerate compressed docs after Round 16 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:53:06 -0500</date><message>perf(WorkflowTimeline): avoid intermediate arrays in agentLaneIndex/agentColorMap init</message><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:52:23 -0500</date><message>chore(repomix): regenerate compressed docs after Round 15 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:50 -0500</date><message>perf(AgentWorkflowView): avoid intermediate arrays in criticalPath map init</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:01 -0500</date><message>refactor(SpanTree): remove redundant type cast for parentSpanId</message><files>src/components/SpanTree.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:12:33 -0500</date><message>chore(repomix): regenerate compressed docs after Round 14 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:46:07 -0500</date><message>refactor(AgentActivityPanel): drop redundant Array.isArray guard in colorIndex memo</message><files>src/components/AgentActivityPanel.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:45:22 -0500</date><message>chore(repomix): regenerate compressed docs after Round 13 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:42:46 -0500</date><message>refactor(WorkflowGraph): use groupBy for cluster members, drop WHAT comments, avoid intermediate arrays</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:41:03 -0500</date><message>chore(repomix): regenerate compressed docs after Round 12 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:40:50 -0500</date><message>refactor(correlations): derive metric names from map keys, drop redundant array</message><files>src/api/routes/correlations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:38:10 -0500</date><message>chore(repomix): regenerate compressed docs after Round 11 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:37:57 -0500</date><message>perf(workflow-graph): avoid intermediate array in hasCycle state init</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:15 -0500</date><message>chore(repomix): regenerate compressed docs after Round 10 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:01 -0500</date><message>refactor(data-loader): use groupBy utility in loadEvaluationsByMetric</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:34:41 -0500</date><message>refactor(metrics): rename DYNAMICS_PERIOD_HOURS constants to BUCKET_HOURS for clarity</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:11 -0500</date><message>style(data-loader): collapse double blank line before defaultRange function</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:06 -0500</date><message>style(agents): collapse double blank line before type AgentAcc</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:54 -0500</date><message>chore: regenerate repomix docs after Round 9 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:48 -0500</date><message>chore(repomix): regenerate after simplify pass on llm-judge-code</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:27:18 -0500</date><message>style(quality-utils): collapse double blank lines to single throughout file</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:26:43 -0500</date><message>style(quality-utils): add missing space before ( in byValueDesc arrow function</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:13:10 -0500</date><message>chore: regenerate repomix docs after Round 8 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:12:57 -0500</date><message>style(workflow-graph): trim 3-line WHAT comment to single WHY line on null guard</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:11:25 -0500</date><message>chore(repomix): regenerate (no source changes — simplify confirmed clean)</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:39 -0500</date><message>chore(repomix): regenerate after simplify round 2</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:29 -0500</date><message>chore: regenerate repomix docs after Round 7 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:26 -0500</date><message>refactor(simplify): tighten VARIANCE_TREND_LABEL to as const; fix logAuditEvent comment</message><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:16 -0500</date><message>style(tests): strip CVG-1 task-tracker prefix from coverage-tab test file</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:17 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:04 -0500</date><message>refactor(workflow-graph): extract buildEdgeLabel helper to eliminate duplicate label construction</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:29 -0500</date><message>style(workflow-graph): remove redundant template literal wrapping toFixed() string</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:23 -0500</date><message>style(workflow-graph): trim over-verbose comment on agentLastEndNs/agentFirstStartNs</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:17 -0500</date><message>style(workflow-graph): remove WHAT comment from NS_TO_MS constant</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:39 -0500</date><message>chore(repomix): regenerate docs after simplify pass</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:25 -0500</date><message>refactor(simplify): replace capitalize with VARIANCE_TREND_LABEL map; fix mock types and logAuditEvent nullability</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:57 -0500</date><message>perf(degradation-signals): pre-compute bucket ISO strings once before metric loop</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:43 -0500</date><message>refactor(degradation-signals): remove bucketCount alias, use DEFAULT_BIN_COUNT directly</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:58:41 -0500</date><message>test(coverage): add CVG-1 todo stubs for Coverage tab re-enable</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:48 -0500</date><message>refactor(worker): extract SupabaseEnv and WaitUntilFn type aliases</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:27 -0500</date><message>style(worker): remove double blank line between logActivity and VIEW_PERMISSION_MAP</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:51 -0500</date><message>fix(test): correct TEST_TIMEOUT_MS comment — applies to one test, not the suite</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:42 -0500</date><message>refactor(degradation-signals): replace duplicate precision=3 constants with SCORE_DISPLAY_PRECISION</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:13:04 -0500</date><message>refactor(workflow-graph): remove redundant clusterLabel field from ClusterNodeData</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:33 -0500</date><message>refactor(workflow-graph): extract CLUSTER_NODE_PREFIX and isClusterNodeId helper</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:14 -0500</date><message>perf(workflow-graph): replace O(n²) nodes.find with buildNodeDataMap lookup</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 13:47:56 -0500</date><message>chore(vite): exclude .claude/worktrees from test runner</message><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 08:38:05 -0500</date><message>test(degradation): add comprehensive unit tests for DegradationSignalsPage</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 08:19:10 -0500</date><message>fix(workflow-graph): store actual cluster member count in clusterMemberCount field</message><files>src/components/WorkflowGraph.tsx</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:21:51 -0500</date><message>feat(workflow-graph): add collapsible sub-graphs for agent clusters (FU-G5-LAYOUT)</message><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/workflow-fixtures.ts</files><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:14:17 -0500</date><message>feat(degradation-signals): render coverageDropoutRate and latencySkewRatio columns</message><files>docs/BACKLOG.md</files><files>src/api/api-constants.ts</files><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:23 -0500</date><message>chore(backlog): mark CR-TS-1 Done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:00 -0500</date><message>docs(backlog): record code-review findings for FU-G5-LAYOUT and R5 session</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:09:54 -0500</date><message>fix(type-safety): replace unsafe spanAttr&lt;T&gt; cast with validated type-discriminant overload (CR-TS-1)</message><files>src/api/api-constants.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:07:00 -0500</date><message>refactor(degradation): simplify variance trend display with capitalize helper</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:03:54 -0500</date><message>feat(worker): add KV schema versioning envelope and audit log for admin mutations</message><files>.claude/ralph-loop.local.md</files><files>docs/BACKLOG.md</files><files>scripts/sync-to-kv.ts</files><files>src/api/api-constants.ts</files><files>worker/__tests__/admin-routes.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:02:41 -0500</date><message>feat(api): add /api/degradation-signals route to dev Hono server (R5)</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:00:29 -0500</date><message>feat(app): wire /degradation-signals route and g d shortcut (R5)</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:59:47 -0500</date><message>feat(pages): add DegradationSignalsPage for R5 regression detection UI</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:59 -0500</date><message>feat(hooks): add useDegradationSignals hook for R5 regression detection UI</message><files>src/hooks/useDegradationSignals.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:35 -0500</date><message>fix(workflow): harden latencyMs guards and add coverage for positive values (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:13:59 -0500</date><message>feat(workflow): add latencyMs to WorkflowEdge and compute from span timing (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:47:24 -0500</date><message>docs(auth0): mark post-deploy checklist items complete</message><files>docs/BACKLOG.md</files><files>docs/roadmap/impl-auth0-migration.md</files></git_log_commit><git_log_commit><date>2026-03-27 05:46:19 -0500</date><message>fix(worker): wire executionCtx.waitUntil to prevent cancelled activity logs</message><files>.github/workflows/ci.yml</files><files>src/lib/supabase-rest.ts</files><files>worker/__tests__/activity-logging.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:00:18 -0500</date><message>docs: document Auth0 integration test setup and Sentry reporter</message><files>CLAUDE.md</files><files>README.md</files></git_log_commit><git_log_commit><date>2026-03-27 04:48:39 -0500</date><message>feat(e2e): add Sentry reporter and migrate setup to Auth0 ROPC</message><files>e2e/integration/sentry-reporter.ts</files><files>e2e/integration/setup.ts</files><files>e2e/integration/teardown.ts</files><files>package-lock.json</files><files>package.json</files><files>playwright.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:33:31 -0500</date><message>test(e2e): purge orphaned test users before each integration run</message><files>e2e/integration/setup.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:51 -0500</date><message>chore: regenerate repomix docs after Round 4 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:30 -0500</date><message>refactor(tests): strip task-tracker prefixes from test files and derive script</message><files>scripts/derive-evaluations.ts</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/dr-l4-self-hosted-fonts.test.ts</files><files>src/__tests__/quality-utils-adaptive.test.ts</files><files>src/__tests__/score-badge-calibration.test.tsx</files><files>src/__tests__/workflow-graph.test.ts</files><files>worker/__tests__/spa-fallback.test.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:03:14 -0500</date><message>refactor: use RoleSchema for allowedViews; add SPAN_NAME_TOOL_PREFIX constant</message><files>src/lib/validation/auth-schemas.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:42 -0500</date><message>chore: regenerate repomix docs after task-tracker prefix cleanup</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:25 -0500</date><message>refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)</message><files>scripts/judge-evaluations.ts</files><files>src/lib/workflow-graph.ts</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:52:53 -0500</date><message>style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:47:59 -0500</date><message>refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css</message><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:37 -0500</date><message>refactor(workflow-graph): replace inline height style with CSS variable</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:31 -0500</date><message>style(workflow): strip CR-PERF/CR-TS task-tracker prefixes from comments</message><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:20:34 -0500</date><message>style(admin): strip CR-AUTH-2 task-tracker prefix from comment</message><files>src/pages/AdminPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:18:15 -0500</date><message>chore: regenerate repomix compressed XML</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:39:00 -0500</date><message>perf(sync-to-kv): parallelize metric detail queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
+}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-28 04:39:52 -0500</date><message>refactor(auth): extract AUTH0_CALLBACK_URI and AUTH0_LOGIN_PARAMS constants</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>src/App.tsx</files><files>src/__tests__/auth0-env-validation.test.ts</files><files>src/lib/auth0.ts</files><files>src/pages/LoginPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 04:10:20 -0500</date><message>refactor(auth): auto-redirect on login and callback routes</message><files>src/App.tsx</files><files>src/pages/LoginPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 02:14:47 -0500</date><message>chore(deps): add d3-array and @types/d3-array as explicit deps (LIB-2)</message><files>docs/BACKLOG.md</files><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-03-28 02:02:37 -0500</date><message>refactor(data-loader): rename limit → limiter to avoid shadowing query param</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-28 02:02:10 -0500</date><message>chore(deps): add p-limit v7 and record lib-audit backlog items</message><files>docs/BACKLOG.md</files><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-03-28 02:01:51 -0500</date><message>perf(LIB-1): replace batch-slice loop with p-limit sliding-window concurrency</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:48 -0500</date><message>chore(repomix): regenerate compressed docs after Round 20 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:33 -0500</date><message>perf(TrendChart): replace flatMap+filter with for-loop for allValues</message><files>src/components/TrendChart.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:30 -0500</date><message>perf(TrendSeries): replace flatMap+filter with for-loop for allVals</message><files>src/components/TrendSeries.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:27 -0500</date><message>perf(AlertList): hoist SEVERITY_ORDER to module scope</message><files>src/components/AlertList.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:26:25 -0500</date><message>chore(repomix): regenerate compressed docs after Round 19 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-28 01:20:18 -0500</date><message>style(constants): collapse double blank lines</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-28 01:19:08 -0500</date><message>chore(repomix): regenerate compressed docs after Round 18 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:13:15 -0500</date><message>chore(.claude): remove stale ralph-loop state file after session completion</message><files>.claude/ralph-loop.local.md</files></git_log_commit><git_log_commit><date>2026-03-28 01:12:25 -0500</date><message>refactor(CoverageGrid): drop redundant Array.isArray guard in cellMap memo</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:11:28 -0500</date><message>chore(repomix): regenerate compressed docs after Round 17 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:07:48 -0500</date><message>perf: eliminate remaining intermediate arrays in Map constructors</message><files>src/api/routes/agents.ts</files><files>src/components/AgentActivityPanel.tsx</files><files>src/components/CorrelationHeatmap.tsx</files><files>src/components/TurnTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:06:54 -0500</date><message>chore(repomix): regenerate compressed docs after Round 16 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:53:06 -0500</date><message>perf(WorkflowTimeline): avoid intermediate arrays in agentLaneIndex/agentColorMap init</message><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:52:23 -0500</date><message>chore(repomix): regenerate compressed docs after Round 15 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:50 -0500</date><message>perf(AgentWorkflowView): avoid intermediate arrays in criticalPath map init</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:01 -0500</date><message>refactor(SpanTree): remove redundant type cast for parentSpanId</message><files>src/components/SpanTree.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:12:33 -0500</date><message>chore(repomix): regenerate compressed docs after Round 14 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:46:07 -0500</date><message>refactor(AgentActivityPanel): drop redundant Array.isArray guard in colorIndex memo</message><files>src/components/AgentActivityPanel.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:45:22 -0500</date><message>chore(repomix): regenerate compressed docs after Round 13 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:42:46 -0500</date><message>refactor(WorkflowGraph): use groupBy for cluster members, drop WHAT comments, avoid intermediate arrays</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:41:03 -0500</date><message>chore(repomix): regenerate compressed docs after Round 12 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:40:50 -0500</date><message>refactor(correlations): derive metric names from map keys, drop redundant array</message><files>src/api/routes/correlations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:38:10 -0500</date><message>chore(repomix): regenerate compressed docs after Round 11 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:37:57 -0500</date><message>perf(workflow-graph): avoid intermediate array in hasCycle state init</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:15 -0500</date><message>chore(repomix): regenerate compressed docs after Round 10 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:01 -0500</date><message>refactor(data-loader): use groupBy utility in loadEvaluationsByMetric</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:34:41 -0500</date><message>refactor(metrics): rename DYNAMICS_PERIOD_HOURS constants to BUCKET_HOURS for clarity</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:11 -0500</date><message>style(data-loader): collapse double blank line before defaultRange function</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:06 -0500</date><message>style(agents): collapse double blank line before type AgentAcc</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:54 -0500</date><message>chore: regenerate repomix docs after Round 9 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:48 -0500</date><message>chore(repomix): regenerate after simplify pass on llm-judge-code</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:27:18 -0500</date><message>style(quality-utils): collapse double blank lines to single throughout file</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:26:43 -0500</date><message>style(quality-utils): add missing space before ( in byValueDesc arrow function</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:13:10 -0500</date><message>chore: regenerate repomix docs after Round 8 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:12:57 -0500</date><message>style(workflow-graph): trim 3-line WHAT comment to single WHY line on null guard</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:11:25 -0500</date><message>chore(repomix): regenerate (no source changes — simplify confirmed clean)</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:39 -0500</date><message>chore(repomix): regenerate after simplify round 2</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:29 -0500</date><message>chore: regenerate repomix docs after Round 7 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:26 -0500</date><message>refactor(simplify): tighten VARIANCE_TREND_LABEL to as const; fix logAuditEvent comment</message><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:16 -0500</date><message>style(tests): strip CVG-1 task-tracker prefix from coverage-tab test file</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:17 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:04 -0500</date><message>refactor(workflow-graph): extract buildEdgeLabel helper to eliminate duplicate label construction</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:29 -0500</date><message>style(workflow-graph): remove redundant template literal wrapping toFixed() string</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:23 -0500</date><message>style(workflow-graph): trim over-verbose comment on agentLastEndNs/agentFirstStartNs</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:17 -0500</date><message>style(workflow-graph): remove WHAT comment from NS_TO_MS constant</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:39 -0500</date><message>chore(repomix): regenerate docs after simplify pass</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:25 -0500</date><message>refactor(simplify): replace capitalize with VARIANCE_TREND_LABEL map; fix mock types and logAuditEvent nullability</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:57 -0500</date><message>perf(degradation-signals): pre-compute bucket ISO strings once before metric loop</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:43 -0500</date><message>refactor(degradation-signals): remove bucketCount alias, use DEFAULT_BIN_COUNT directly</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:58:41 -0500</date><message>test(coverage): add CVG-1 todo stubs for Coverage tab re-enable</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:48 -0500</date><message>refactor(worker): extract SupabaseEnv and WaitUntilFn type aliases</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:27 -0500</date><message>style(worker): remove double blank line between logActivity and VIEW_PERMISSION_MAP</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:51 -0500</date><message>fix(test): correct TEST_TIMEOUT_MS comment — applies to one test, not the suite</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:42 -0500</date><message>refactor(degradation-signals): replace duplicate precision=3 constants with SCORE_DISPLAY_PRECISION</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:13:04 -0500</date><message>refactor(workflow-graph): remove redundant clusterLabel field from ClusterNodeData</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:33 -0500</date><message>refactor(workflow-graph): extract CLUSTER_NODE_PREFIX and isClusterNodeId helper</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:14 -0500</date><message>perf(workflow-graph): replace O(n²) nodes.find with buildNodeDataMap lookup</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 13:47:56 -0500</date><message>chore(vite): exclude .claude/worktrees from test runner</message><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 08:38:05 -0500</date><message>test(degradation): add comprehensive unit tests for DegradationSignalsPage</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 08:19:10 -0500</date><message>fix(workflow-graph): store actual cluster member count in clusterMemberCount field</message><files>src/components/WorkflowGraph.tsx</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:21:51 -0500</date><message>feat(workflow-graph): add collapsible sub-graphs for agent clusters (FU-G5-LAYOUT)</message><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/workflow-fixtures.ts</files><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:14:17 -0500</date><message>feat(degradation-signals): render coverageDropoutRate and latencySkewRatio columns</message><files>docs/BACKLOG.md</files><files>src/api/api-constants.ts</files><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:23 -0500</date><message>chore(backlog): mark CR-TS-1 Done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:00 -0500</date><message>docs(backlog): record code-review findings for FU-G5-LAYOUT and R5 session</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:09:54 -0500</date><message>fix(type-safety): replace unsafe spanAttr&lt;T&gt; cast with validated type-discriminant overload (CR-TS-1)</message><files>src/api/api-constants.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:07:00 -0500</date><message>refactor(degradation): simplify variance trend display with capitalize helper</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:03:54 -0500</date><message>feat(worker): add KV schema versioning envelope and audit log for admin mutations</message><files>.claude/ralph-loop.local.md</files><files>docs/BACKLOG.md</files><files>scripts/sync-to-kv.ts</files><files>src/api/api-constants.ts</files><files>worker/__tests__/admin-routes.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:02:41 -0500</date><message>feat(api): add /api/degradation-signals route to dev Hono server (R5)</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:00:29 -0500</date><message>feat(app): wire /degradation-signals route and g d shortcut (R5)</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:59:47 -0500</date><message>feat(pages): add DegradationSignalsPage for R5 regression detection UI</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:59 -0500</date><message>feat(hooks): add useDegradationSignals hook for R5 regression detection UI</message><files>src/hooks/useDegradationSignals.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:35 -0500</date><message>fix(workflow): harden latencyMs guards and add coverage for positive values (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:13:59 -0500</date><message>feat(workflow): add latencyMs to WorkflowEdge and compute from span timing (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:47:24 -0500</date><message>docs(auth0): mark post-deploy checklist items complete</message><files>docs/BACKLOG.md</files><files>docs/roadmap/impl-auth0-migration.md</files></git_log_commit><git_log_commit><date>2026-03-27 05:46:19 -0500</date><message>fix(worker): wire executionCtx.waitUntil to prevent cancelled activity logs</message><files>.github/workflows/ci.yml</files><files>src/lib/supabase-rest.ts</files><files>worker/__tests__/activity-logging.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:00:18 -0500</date><message>docs: document Auth0 integration test setup and Sentry reporter</message><files>CLAUDE.md</files><files>README.md</files></git_log_commit><git_log_commit><date>2026-03-27 04:48:39 -0500</date><message>feat(e2e): add Sentry reporter and migrate setup to Auth0 ROPC</message><files>e2e/integration/sentry-reporter.ts</files><files>e2e/integration/setup.ts</files><files>e2e/integration/teardown.ts</files><files>package-lock.json</files><files>package.json</files><files>playwright.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:33:31 -0500</date><message>test(e2e): purge orphaned test users before each integration run</message><files>e2e/integration/setup.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:51 -0500</date><message>chore: regenerate repomix docs after Round 4 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:30 -0500</date><message>refactor(tests): strip task-tracker prefixes from test files and derive script</message><files>scripts/derive-evaluations.ts</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/dr-l4-self-hosted-fonts.test.ts</files><files>src/__tests__/quality-utils-adaptive.test.ts</files><files>src/__tests__/score-badge-calibration.test.tsx</files><files>src/__tests__/workflow-graph.test.ts</files><files>worker/__tests__/spa-fallback.test.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:03:14 -0500</date><message>refactor: use RoleSchema for allowedViews; add SPAN_NAME_TOOL_PREFIX constant</message><files>src/lib/validation/auth-schemas.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:42 -0500</date><message>chore: regenerate repomix docs after task-tracker prefix cleanup</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:25 -0500</date><message>refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)</message><files>scripts/judge-evaluations.ts</files><files>src/lib/workflow-graph.ts</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:52:53 -0500</date><message>style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:47:59 -0500</date><message>refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css</message><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:37 -0500</date><message>refactor(workflow-graph): replace inline height style with CSS variable</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:31 -0500</date><message>style(workflow): strip CR-PERF/CR-TS task-tracker prefixes from comments</message><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:20:34 -0500</date><message>style(admin): strip CR-AUTH-2 task-tracker prefix from comment</message><files>src/pages/AdminPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:18:15 -0500</date><message>chore: regenerate repomix compressed XML</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.
 

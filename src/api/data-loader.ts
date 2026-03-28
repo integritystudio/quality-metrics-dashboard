@@ -1,4 +1,5 @@
 import pLimit from 'p-limit';
+import { group } from 'd3-array';
 import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
@@ -6,7 +7,6 @@ import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces
 import { queryLogs } from '../../../dist/tools/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toDateOnly } from './api-constants.js';
-import { groupBy } from '../lib/quality-utils.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
@@ -49,7 +49,7 @@ export async function loadEvaluationsByMetric(
 ): Promise<Map<string, EvaluationResult[]>> {
   const be = getBackend();
   const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
-  return groupBy(evals, ev => ev.evaluationName);
+  return group(evals, ev => ev.evaluationName);
 }
 
 export async function loadEvaluationsForMetric(

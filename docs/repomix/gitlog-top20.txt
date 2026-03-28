@@ -1,3 +1,8 @@
+b8d0cee 2026-03-28 refactor(auth): extract AUTH0_CALLBACK_URI and AUTH0_LOGIN_PARAMS constants
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 ca17e96 2026-03-28 chore(deps): add d3-array and @types/d3-array as explicit deps (LIB-2)
   package-lock.json
 
@@ -372,6 +377,3 @@ f720297 2026-03-26 docs(backlog): add worker API validation/security code review
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
   docs/repomix/repomix.xml
-
-977bd3c 2026-03-26 refactor(sync-to-kv): remove what-comment before composite priority calculation
-  scripts/sync-to-kv.ts

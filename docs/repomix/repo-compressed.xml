@@ -831,11 +831,6 @@ function Wrapper(
 function SignOutTrigger()
 
 ================
-File: src/__tests__/auth0-env-validation.test.ts
-================
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-
-================
 File: src/__tests__/components.test.tsx
 ================
 import { describe, it, expect } from 'vitest';
@@ -2207,11 +2202,6 @@ export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
-File: src/lib/auth0.ts
-================
-
-
-================
 File: src/lib/dashboard-file-utils.ts
 ================
 import { readFileSync, existsSync, createReadStream } from 'fs';
@@ -2534,6 +2524,11 @@ function makeKV(store: Record<string, unknown> =
 function makeCalibrationData()
 
 ================
+File: src/__tests__/auth0-env-validation.test.ts
+================
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+================
 File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -2844,6 +2839,11 @@ import type { FrontendActivityEvent } from '../types/activity.js';
 export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise<void>
 
 ================
+File: src/lib/auth0.ts
+================
+
+
+================
 File: src/pages/AdminPage.tsx
 ================
 import { useState, useRef, useCallback } from 'react';
@@ -2867,13 +2867,6 @@ onRevoke: (roleId: string, roleName: string)
 async function adminFetch(path: string, method: string, body?: unknown): Promise<Response>
 async function handleAssign()
 async function handleRevoke(roleId: string, roleName: string)
-
-================
-File: src/pages/LoginPage.tsx
-================
-import { useEffect } from 'react';
-import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
-export function LoginPage()
 
 ================
 File: src/pages/RoutingTelemetryPage.tsx
@@ -3032,57 +3025,11 @@ export function supabasePost(
 ): Promise<void>
 
 ================
-File: src/App.tsx
+File: src/pages/LoginPage.tsx
 ================
-import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
-import { Route, Switch, Link, useLocation, Router } from 'wouter';
-import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
-import { Layout } from './components/Layout.js';
-import { RoleSelector } from './components/RoleSelector.js';
-import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
-import { AuthProvider, useAuth } from './contexts/AuthContext.js';
-import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
-import { RequireAuth } from './components/RequireAuth.js';
-import { LoginPage } from './pages/LoginPage.js';
-import { HealthOverview } from './components/HealthOverview.js';
-import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
-import { AlertList } from './components/AlertList.js';
-import { SLATable } from './components/SLATable.js';
-import { ScoreHistogram } from './components/ScoreHistogram.js';
-import { EvaluationDetail } from './components/EvaluationDetail.js';
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
-import { TrendChart } from './components/TrendChart.js';
-import { TrendSeries } from './components/TrendSeries.js';
-import { ConfidencePanel } from './components/ConfidencePanel.js';
-import { ViewSection } from './components/Section.js';
-import { CorrelationsPage } from './pages/CorrelationsPage.js';
-import { PipelinePage } from './pages/PipelinePage.js';
-import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
-import { CompliancePage } from './pages/CompliancePage.js';
-import { TraceDetailPage } from './pages/TraceDetailPage.js';
-import { AgentSessionPage } from './pages/AgentSessionPage.js';
-import { AgentsPage } from './pages/AgentsPage.js';
-import { SessionDetailPage } from './pages/SessionDetailPage.js';
-import { AdminPage } from './pages/AdminPage.js';
-import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
-import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
-import { ExecutiveView } from './components/views/ExecutiveView.js';
-import { OperatorView } from './components/views/OperatorView.js';
-import { AuditorView } from './components/views/AuditorView.js';
-import { formatScore } from './lib/quality-utils.js';
-import { useDashboard } from './hooks/useDashboard.js';
-import { useMetricDetail } from './hooks/useMetricDetail.js';
-import { useTrend } from './hooks/useTrend.js';
-import { RoleProvider } from './contexts/RoleContext.js';
-import { CalibrationProvider } from './context/CalibrationContext.js';
-import { ROLES } from './lib/constants.js';
-import type {
-  Period,
-  QualityDashboardSummary,
-  RoleViewType,
-  MetricDetailResult,
-  MetricDynamics,
-} from './types.js';
+import { useEffect } from 'react';
+import { useAuth0, AUTH0_LOGIN_PARAMS } from '../lib/auth0.js';
+export function LoginPage()
 
 ================
 File: src/__tests__/DegradationSignalsPage.test.tsx
@@ -3318,6 +3265,59 @@ export function adaptiveScoreColorBand(
 ): ScoreColorBand
 import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 export function formatTimestamp(ts: string): string
+
+================
+File: src/App.tsx
+================
+import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
+import { Route, Switch, Link, useLocation, Router } from 'wouter';
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import { Layout } from './components/Layout.js';
+import { RoleSelector } from './components/RoleSelector.js';
+import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
+import { AuthProvider, useAuth } from './contexts/AuthContext.js';
+import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE, AUTH0_CALLBACK_URI, AUTH0_LOGIN_PARAMS } from './lib/auth0.js';
+import { RequireAuth } from './components/RequireAuth.js';
+import { LoginPage } from './pages/LoginPage.js';
+import { HealthOverview } from './components/HealthOverview.js';
+import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
+import { AlertList } from './components/AlertList.js';
+import { SLATable } from './components/SLATable.js';
+import { ScoreHistogram } from './components/ScoreHistogram.js';
+import { EvaluationDetail } from './components/EvaluationDetail.js';
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
+import { TrendChart } from './components/TrendChart.js';
+import { TrendSeries } from './components/TrendSeries.js';
+import { ConfidencePanel } from './components/ConfidencePanel.js';
+import { ViewSection } from './components/Section.js';
+import { CorrelationsPage } from './pages/CorrelationsPage.js';
+import { PipelinePage } from './pages/PipelinePage.js';
+import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
+import { CompliancePage } from './pages/CompliancePage.js';
+import { TraceDetailPage } from './pages/TraceDetailPage.js';
+import { AgentSessionPage } from './pages/AgentSessionPage.js';
+import { AgentsPage } from './pages/AgentsPage.js';
+import { SessionDetailPage } from './pages/SessionDetailPage.js';
+import { AdminPage } from './pages/AdminPage.js';
+import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
+import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
+import { ExecutiveView } from './components/views/ExecutiveView.js';
+import { OperatorView } from './components/views/OperatorView.js';
+import { AuditorView } from './components/views/AuditorView.js';
+import { formatScore } from './lib/quality-utils.js';
+import { useDashboard } from './hooks/useDashboard.js';
+import { useMetricDetail } from './hooks/useMetricDetail.js';
+import { useTrend } from './hooks/useTrend.js';
+import { RoleProvider } from './contexts/RoleContext.js';
+import { CalibrationProvider } from './context/CalibrationContext.js';
+import { ROLES } from './lib/constants.js';
+import type {
+  Period,
+  QualityDashboardSummary,
+  RoleViewType,
+  MetricDetailResult,
+  MetricDynamics,
+} from './types.js';
 
 ================
 File: src/api/routes/metrics.ts

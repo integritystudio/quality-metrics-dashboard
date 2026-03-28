@@ -92,6 +92,15 @@ Code review follow-ups and backlog clearance: workflow visualization completion,
 |----|----------|-------|
 | E2E-1 | E2E integration test suite | 23 integration tests in `e2e/integration/api-contracts.spec.ts` hitting deployed worker with real Auth0 JWT. Setup creates ephemeral test user; teardown cleans up. |
 
+## Phase 4 DB Migrations
+
+| Task | Outcome |
+|------|---------|
+| Verify `public.users.id` = `auth.users.id` alignment | Done — zero mismatched rows confirmed (2026-03-26) |
+| Rename `auth0_id` → `identity_subject` | Permanently dropped — Auth0 remains canonical IdP; `auth0_id` column name is correct |
+| Drop `user_profiles.role` column | Done — column had zero code references; RBAC sourced exclusively from `user_roles → roles.permissions` (2026-03-26) |
+| AppSession code simplification | Not applicable — `authUserId` (Auth0 subject) and `appUserId` (Supabase UUID) are always distinct post-migration; fields must not be collapsed |
+
 ## Summary
 
 - **Items resolved**: 40+ (G5: 10 items, ADMIN: 1, TF: 2, CR-WK: 7, CR-TS: 4, CR-ERR: 4, CR-PERF: 3, CR-AUTH: 2, CR-STYLE: 1, E2E: 1)
