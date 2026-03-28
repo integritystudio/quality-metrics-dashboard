@@ -12553,6 +12553,449 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
 }
 
 ================
+File: src/pages/SessionDetailPage.tsx
+================
+import { Link } from 'wouter';
+import { format } from 'date-fns';
+import { useSessionDetail } from '../hooks/useSessionDetail.js';
+import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { PageShell } from '../components/PageShell.js';
+import { Section, type SectionHealth } from '../components/Section.js';
+import { StatDisplay } from '../components/StatDisplay.js';
+import { FreqBar } from '../components/FreqBar.js';
+import { FreqBarGrid } from '../components/FreqBarGrid.js';
+import { TruncatedList } from '../components/TruncatedList.js';
+import { IssueCallout } from '../components/IssueCallout.js';
+import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import {
+  HALLUCINATION_SCORE_THRESHOLD,
+  MAX_ERROR_ROWS,
+  MAX_HALLUCINATION_ROWS,
+  MAX_FAILED_EVAL_ROWS,
+  SCORE_DISPLAY_PRECISION,
+  SKELETON_HEIGHT_LG,
+  CODE_QUALITY_WARN_THRESHOLD,
+} from '../lib/constants.js';
+export function SessionDetailPage({ sessionId }: { sessionId: string }) {
+  const { data, isLoading, error } = useSessionDetail(sessionId);
+  const isNotSynced = !isLoading && error instanceof Error && error.message.startsWith('API error: 404');
+  if (isLoading || (!isNotSynced && error)) {
+    return <PageShell isLoading={isLoading} error={error ?? null} skeletonHeight={SKELETON_HEIGHT_LG}>{null}</PageShell>;
+  }
+  if (isNotSynced) {
+    return (
+      <div>
+        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
+        <div className="card card-spacious text-center">
+          <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
+          <div className="mono-xs text-secondary leading-relaxed centered-callout">
+            This session has not been synced to the dashboard KV store yet.
+            Data is synced periodically &mdash; check back after the next pipeline run.
+          </div>
+          <div className="mono-xs text-muted mt-3 break-all">{sessionId}</div>
+        </div>
+      </div>
+    );
+  }
+  if (!data) return null;
+  const {
+    dataSources, sessionInfo, timespan, toolUsage, mcpUsage,
+    agentActivity, fileAccess, gitCommits, tokenProgression, spanBreakdown,
+    alertSummary, codeStructure, errors,
+    multiAgentEvaluation, evaluations,
+  } = data;
+  const si = sessionInfo ?? {
+    projectName: 'unknown', workingDirectory: '', gitRepository: '', gitBranch: '',
+    nodeVersion: '', resumeCount: 0, initialMessageCount: 0, initialContextTokens: 0,
+    finalMessageCount: 0, taskCount: 0, uncommittedAtStart: 0,
+  };
+  const spanCount = dataSources.traces.count;
+  const errorDetails = errors.details;
+  const toolUsageValues = Object.values(toolUsage);
+  const mcpUsageValues = Object.values(mcpUsage);
+  const spanBreakdownValues = Object.values(spanBreakdown);
+  const totalToolCalls = toolUsageValues.reduce((a, b) => a + b, 0);
+  const totalMcpCalls = mcpUsageValues.reduce((a, b) => a + b, 0);
+  const maxTokenSnapshot = tokenProgression.at(-1);
+  const maxToolCount = Math.max(...toolUsageValues, 1);
+  const maxMcpCount = Math.max(...mcpUsageValues, 1);
+  const maxFileCount = fileAccess[0]?.count ?? 1;
+  const maxSpanCount = Math.max(...spanBreakdownValues, 1);
+  const hallucinationEvals: typeof evaluations = [];
+  const failedEvals: typeof evaluations = [];
+  const evalRows: EvalRow[] = [];
+  for (const e of evaluations) {
+    evalRows.push(evalToRow(e));
+    const label = (e.scoreLabel ?? '').toLowerCase();
+    const isFail = label === 'fail';
+    if (isFail) failedEvals.push(e);
+    if (
+      (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
+      (isFail && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
+    ) hallucinationEvals.push(e);
+  }
+  const errorCount = errorDetails.length;
+  const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
+    hallucinationEvals.length > 0 || failedEvals.length > 0;
+  let issueHealth: SectionHealth = 'ok';
+  if (errorCount > 0 || hallucinationEvals.length > 0) issueHealth = 'crit';
+  else if (alertSummary.totalFired > 0 || failedEvals.length > 0) issueHealth = 'warn';
+  const evaluation = multiAgentEvaluation;
+  const handoffScore = evaluation.handoffScore ?? 0;
+  const avgRelevance = evaluation.avgTurnRelevance ?? 0;
+  const completeness = evaluation.conversationCompleteness ?? 0;
+  const models = [...new Set(tokenProgression.map(t => t.model).filter(Boolean))];
+  return (
+    <div className="page-content">
+      <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
+      <div className="session-detail-header">
+        <div className="flex-wrap gap-4 justify-between align-start">
+          <div>
+            <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
+            <div className="mono font-semibold text-base mb-2 break-all text-accent-hover ls-id">{sessionId}</div>
+            <div className="text-secondary text-xs flex-wrap gap-4">
+              <span>{si.projectName}</span>
+              {si.gitRepository && (
+                <span className="text-muted">
+                  {si.gitRepository}
+                  {si.gitBranch ? ` · ${si.gitBranch}` : ''}
+                </span>
+              )}
+              {si.resumeCount > 1 && (
+                <span className="mono text-2xs chip chip-accent-muted uppercase">RESUMED ×{si.resumeCount}</span>
+              )}
+              {agentActivity.length > 1 && (
+                <span className="mono text-2xs chip chip-healthy uppercase">MULTI-AGENT ×{agentActivity.length}</span>
+              )}
+              {models.map(m => (
+                <span key={m} className="mono text-2xs text-muted chip chip-badge">{m}</span>
+              ))}
+            </div>
+            {timespan && (
+              <div className="text-muted text-xs flex-wrap gap-4 mt-1">
+                <span>{format(new Date(timespan.start), 'PPp')}</span>
+                <span>&rarr;</span>
+                <span>{format(new Date(timespan.end), 'PPp')}</span>
+                <span className="mono text-2xs chip chip-badge">{timespan.durationHours}h</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex-wrap session-vitals-strip">
+        <StatDisplay label="Spans" value={spanCount} />
+        <div className="vitals-divider" />
+        <StatDisplay label="Tool calls" value={totalToolCalls} />
+        <div className="vitals-divider" />
+        <StatDisplay label="MCP calls" value={totalMcpCalls} />
+        <div className="vitals-divider" />
+        <StatDisplay label="Commits" value={gitCommits.length} valueColor={gitCommits.length > 0 ? 'var(--status-healthy)' : undefined} />
+        <div className="vitals-divider" />
+        <StatDisplay label="Alerts fired" value={alertSummary.totalFired} valueColor={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
+        <div className="vitals-divider" />
+        <StatDisplay label="Errors" value={errorCount} valueColor={errorCount > 0 ? 'var(--status-critical)' : undefined} />
+        {maxTokenSnapshot && (
+          <>
+            <div className="vitals-divider" />
+            <StatDisplay label="Messages" value={maxTokenSnapshot.messages} />
+            <div className="vitals-divider" />
+            <StatDisplay label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
+          </>
+        )}
+      </div>
+      <Section
+        title="Issues & Anomalies"
+        badge={hasIssues ? `${[
+          alertSummary.totalFired > 0 && `${alertSummary.totalFired} alerts`,
+          errorCount > 0 && `${errorCount} errors`,
+          hallucinationEvals.length > 0 && `${hallucinationEvals.length} hallucinations`,
+          failedEvals.length > 0 && `${failedEvals.length} failures`,
+        ].filter(Boolean).join(' · ')}` : 'clean'}
+        health={issueHealth}
+        defaultOpen={hasIssues}
+      >
+        {!hasIssues && (
+          <div className="mono-xs text-healthy">
+            No issues detected in this session.
+          </div>
+        )}
+        {alertSummary.totalFired > 0 && (
+          <IssueCallout severity="warning" title={`${plural(alertSummary.totalFired, 'alert')} fired across ${plural(alertSummary.stopEvents, 'stop event')}`}>
+            <strong>task-completion-low</strong> — The task completion ratio fell below 0.85.
+            This fires when tasks are created but not marked complete before the session ends.
+            Common causes: work deferred to backlog, sub-tasks spawned but not resolved,
+            or tasks marked in-progress but not completed within the session.
+          </IssueCallout>
+        )}
+        {errorCount > 0 && (
+          <IssueCallout severity="critical" title={plural(errorCount, 'error span')}>
+            <div className="mb-2">Tool invocations or agent calls that reported errors:</div>
+            <TruncatedList
+              items={errorDetails}
+              max={MAX_ERROR_ROWS}
+              total={errorCount}
+              renderItem={(e, i) => (
+                <div key={i} className="mono-xs mb-1">
+                  <span className="text-critical">✗</span>{' '}
+                  {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
+                  {e.errorType && e.errorType !== 'unknown' && <span className="text-muted"> — {e.errorType}</span>}
+                </div>
+              )}
+            />
+          </IssueCallout>
+        )}
+        {hallucinationEvals.length > 0 && (
+          <IssueCallout severity="critical" title={`${plural(hallucinationEvals.length, 'hallucination indicator')} detected`}>
+            <div className="mb-2">
+              Evaluations flagging potential hallucination or very low confidence:
+            </div>
+            <TruncatedList
+              items={hallucinationEvals}
+              max={MAX_HALLUCINATION_ROWS}
+              renderItem={(e, i) => (
+                <div key={i} className="flex-center gap-2-5 mb-1-5">
+                  <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
+                  <div>
+                    <div className="mono-xs">{e.evaluationName}</div>
+                    {e.explanation && (
+                      <div className="text-muted text-xs mt-0-5">
+                        {truncateText(e.explanation, 200)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            />
+          </IssueCallout>
+        )}
+        {failedEvals.length > 0 && !hallucinationEvals.length && (
+          <IssueCallout severity="warning" title={`${plural(failedEvals.length, 'evaluation')} marked fail`}>
+            <TruncatedList
+              items={failedEvals}
+              max={MAX_FAILED_EVAL_ROWS}
+              renderItem={(e, i) => (
+                <div key={i} className="mono-xs mb-1">
+                  <span className="text-warning">⚠</span>{' '}
+                  {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
+                </div>
+              )}
+            />
+          </IssueCallout>
+        )}
+        {evaluation.errorPropagationTurns > 0 && (
+          <IssueCallout severity="warning" title={plural(evaluation.errorPropagationTurns, 'error propagation turn')}>
+            Errors detected in the multi-agent turn sequence may have propagated across agent handoffs.
+          </IssueCallout>
+        )}
+      </Section>
+      <Section
+        title="Token Journey"
+        badge={maxTokenSnapshot ? `${maxTokenSnapshot.messages} msg · ${fmtBytes(maxTokenSnapshot.outputTokens)} out` : 'no data'}
+        health="neutral"
+      >
+        {tokenProgression.length === 0 ? (
+          <div className="text-muted text-xs">No token snapshots recorded.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="mono-xs w-full table-collapse">
+              <MonoTableHead columns={[
+                { label: 'Messages' }, { label: 'Input' }, { label: 'Output' },
+                { label: 'Cache Read' }, { label: 'Cache Create' }, { label: 'Model' },
+              ]} />
+              <tbody>
+                {tokenProgression.map((t) => (
+                  <tr key={`${t.messages}-${t.model}`} className="border-b-subtle">
+                    <td className="cell-pad-wide text-right">{t.messages}</td>
+                    <td className="cell-pad-wide text-right text-secondary">{fmtBytes(t.inputTokens)}</td>
+                    <td className="cell-pad-wide text-right text-accent-hover">{fmtBytes(t.outputTokens)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheRead)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheCreation)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{t.model}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+      <Section
+        title="Tool Activity"
+        badge={`${totalToolCalls} calls · ${toolUsageValues.length} tools`}
+        health="neutral"
+      >
+        <FreqBarGrid entries={Object.entries(toolUsage)} max={maxToolCount} />
+        {totalMcpCalls > 0 && (
+          <>
+            <div className="stat-label stat-label-section">
+              MCP Tools — {totalMcpCalls} calls
+            </div>
+            <FreqBarGrid entries={Object.entries(mcpUsage)} max={maxMcpCount} color="var(--status-healthy)" />
+          </>
+        )}
+      </Section>
+      {agentActivity.length > 0 && (
+        <Section
+          title="Agent Activity"
+          badge={agentActivity.map(a => `${a.agentName} ×${a.invocations}`).join(' · ')}
+          health={agentActivity.some(a => a.errors > 0) ? 'warn' : 'neutral'}
+        >
+          <div className="d-grid gap-2-5 agent-activity-grid">
+            {agentActivity.map(a => (
+              <div key={a.agentName} className="agent-stat-card" data-has-error={a.errors > 0 ? 'true' : undefined}>
+                <div className="mono-xs mb-1-5 font-semibold">
+                  {a.agentName}
+                </div>
+                <div className="flex-wrap gap-3">
+                  <div>
+                    <div className="mono text-md font-bold">{a.invocations}</div>
+                    <div className="stat-label">invocations</div>
+                  </div>
+                  {a.errors > 0 && (
+                    <div>
+                      <div className="mono text-md font-bold text-warning">{a.errors}</div>
+                      <div className="stat-label">errors</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="mono text-md font-bold">{fmtBytes(a.avgOutputSize)}</div>
+                    <div className="stat-label">avg output</div>
+                  </div>
+                </div>
+                {a.hasRateLimit && (
+                  <div className="mono mt-2 text-2xs text-warning">
+                    ⚠ Hit rate limit
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4">
+            <AgentScoreSummary handoffScore={handoffScore} avgRelevance={avgRelevance} completeness={completeness} />
+          </div>
+        </Section>
+      )}
+      {fileAccess.length > 0 && (
+        <Section
+          title="Files Accessed"
+          badge={`${fileAccess.length} files · top: ${shortPath(fileAccess[0]?.path ?? '')}`}
+          health="neutral"
+        >
+          <div className="file-access-columns">
+            {fileAccess.map(({ path, count }) => (
+              <div key={path}>
+                <FreqBar
+                  label={shortPath(path)}
+                  count={count}
+                  max={maxFileCount}
+                  color="var(--accent)"
+                />
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+      {gitCommits.length > 0 && (
+        <Section
+          title="Git Commits"
+          badge={plural(gitCommits.length, 'commit')}
+          health="ok"
+        >
+          <div className="flex-col gap-half">
+            {gitCommits.map((commit) => {
+              const commitFiles = commit.files?.split(' ') ?? [];
+              return (
+                <details key={commit.subject} className="border-b-subtle">
+                  <summary className="flex-center gap-2-5 cursor-pointer list-none commit-summary">
+                    <span className="text-healthy text-2xs shrink-0">●</span>
+                    <span className="mono-xs font-semibold flex-1">
+                      {commit.subject}
+                    </span>
+                    {commitFiles.length > 0 && (
+                      <span className="text-2xs text-muted shrink-0">
+                        {plural(commitFiles.length, 'file')}
+                      </span>
+                    )}
+                  </summary>
+                  <div className="commit-detail">
+                    {commit.body && (
+                      <div className="text-secondary text-xs leading-relaxed mb-2 commit-body">
+                        {commit.body}
+                      </div>
+                    )}
+                    {commitFiles.length > 0 && (
+                      <div className="mono text-2xs text-muted">
+                        {commitFiles.map((f) => (
+                          <div key={f}>{shortPath(f)}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+      {codeStructure.length > 0 && (
+        <Section
+          title="Code Quality"
+          badge={`${plural(codeStructure.length, 'file')} analyzed`}
+          health={codeStructure.some(f => f.score < CODE_QUALITY_WARN_THRESHOLD) ? 'warn' : 'ok'}
+        >
+          <div className="overflow-x-auto">
+            <table className="mono-xs w-full table-collapse">
+              <MonoTableHead columns={[
+                { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },
+                { label: 'Lines' }, { label: 'Exports' }, { label: 'Functions' },
+                { label: 'Types' }, { label: 'Score' },
+              ]} />
+              <tbody>
+                {codeStructure.map((f) => (
+                  <tr key={`${f.file}:${f.tool}`} className="border-b-subtle">
+                    <td className="cell-pad text-secondary">{shortPath(f.file)}</td>
+                    <td className="cell-pad text-muted">{f.tool}</td>
+                    <td className="cell-pad text-right">{f.lines}</td>
+                    <td className="cell-pad text-right text-muted">{f.exports}</td>
+                    <td className="cell-pad text-right text-muted">{f.functions}</td>
+                    <td className="cell-pad text-center">{f.hasTypes ? '✓' : '·'}</td>
+                    <td className="cell-pad text-right font-semibold score-band" data-band={scoreColorBand(f.score)}>
+                      {formatScore(f.score)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+      <Section
+        title="Span Breakdown"
+        badge={`${spanCount} total · ${spanBreakdownValues.length} types`}
+        health="neutral"
+      >
+        <FreqBarGrid entries={Object.entries(spanBreakdown)} max={maxSpanCount} color="var(--border-accent)" />
+      </Section>
+      <Section
+        title="Evaluations"
+        badge={evalRows.length > 0 ? plural(evalRows.length, 'result') : 'none'}
+        health={hallucinationEvals.length > 0 ? 'crit' : failedEvals.length > 0 ? 'warn' : evalRows.length > 0 ? 'ok' : 'neutral'}
+      >
+        {evalRows.length === 0 ? (
+          <div className="text-muted text-xs">
+            No evaluations recorded for this session.
+          </div>
+        ) : (
+          <EvaluationTable evaluations={evalRows} />
+        )}
+      </Section>
+    </div>
+  );
+}
+
+================
 File: src/stubs/auth0-e2e.ts
 ================
 import { type ReactNode, createElement } from 'react';
@@ -13640,449 +14083,6 @@ export function supabasePost(
     body: JSON.stringify(body),
     signal: controller.signal,
   }).then(() => undefined).catch(() => undefined).finally(() => clearTimeout(timeout));
-}
-
-================
-File: src/pages/SessionDetailPage.tsx
-================
-import { Link } from 'wouter';
-import { format } from 'date-fns';
-import { useSessionDetail } from '../hooks/useSessionDetail.js';
-import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { PageShell } from '../components/PageShell.js';
-import { Section, type SectionHealth } from '../components/Section.js';
-import { StatDisplay } from '../components/StatDisplay.js';
-import { FreqBar } from '../components/FreqBar.js';
-import { FreqBarGrid } from '../components/FreqBarGrid.js';
-import { TruncatedList } from '../components/TruncatedList.js';
-import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
-import {
-  HALLUCINATION_SCORE_THRESHOLD,
-  MAX_ERROR_ROWS,
-  MAX_HALLUCINATION_ROWS,
-  MAX_FAILED_EVAL_ROWS,
-  SCORE_DISPLAY_PRECISION,
-  SKELETON_HEIGHT_LG,
-  CODE_QUALITY_WARN_THRESHOLD,
-} from '../lib/constants.js';
-export function SessionDetailPage({ sessionId }: { sessionId: string }) {
-  const { data, isLoading, error } = useSessionDetail(sessionId);
-  const isNotSynced = !isLoading && error instanceof Error && error.message.startsWith('API error: 404');
-  if (isLoading || (!isNotSynced && error)) {
-    return <PageShell isLoading={isLoading} error={error ?? null} skeletonHeight={SKELETON_HEIGHT_LG}>{null}</PageShell>;
-  }
-  if (isNotSynced) {
-    return (
-      <div>
-        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-        <div className="card card-spacious text-center">
-          <div className="mono-xs mb-1-5 uppercase text-warning">Session Not Yet Available</div>
-          <div className="mono-xs text-secondary leading-relaxed centered-callout">
-            This session has not been synced to the dashboard KV store yet.
-            Data is synced periodically &mdash; check back after the next pipeline run.
-          </div>
-          <div className="mono-xs text-muted mt-3 break-all">{sessionId}</div>
-        </div>
-      </div>
-    );
-  }
-  if (!data) return null;
-  const {
-    dataSources, sessionInfo, timespan, toolUsage, mcpUsage,
-    agentActivity, fileAccess, gitCommits, tokenProgression, spanBreakdown,
-    alertSummary, codeStructure, errors,
-    multiAgentEvaluation, evaluations,
-  } = data;
-  const si = sessionInfo ?? {
-    projectName: 'unknown', workingDirectory: '', gitRepository: '', gitBranch: '',
-    nodeVersion: '', resumeCount: 0, initialMessageCount: 0, initialContextTokens: 0,
-    finalMessageCount: 0, taskCount: 0, uncommittedAtStart: 0,
-  };
-  const spanCount = dataSources.traces.count;
-  const errorDetails = errors.details;
-  const toolUsageValues = Object.values(toolUsage);
-  const mcpUsageValues = Object.values(mcpUsage);
-  const spanBreakdownValues = Object.values(spanBreakdown);
-  const totalToolCalls = toolUsageValues.reduce((a, b) => a + b, 0);
-  const totalMcpCalls = mcpUsageValues.reduce((a, b) => a + b, 0);
-  const maxTokenSnapshot = tokenProgression.at(-1);
-  const maxToolCount = Math.max(...toolUsageValues, 1);
-  const maxMcpCount = Math.max(...mcpUsageValues, 1);
-  const maxFileCount = fileAccess[0]?.count ?? 1;
-  const maxSpanCount = Math.max(...spanBreakdownValues, 1);
-  const hallucinationEvals: typeof evaluations = [];
-  const failedEvals: typeof evaluations = [];
-  const evalRows: EvalRow[] = [];
-  for (const e of evaluations) {
-    evalRows.push(evalToRow(e));
-    const label = (e.scoreLabel ?? '').toLowerCase();
-    const isFail = label === 'fail';
-    if (isFail) failedEvals.push(e);
-    if (
-      (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
-      (isFail && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
-    ) hallucinationEvals.push(e);
-  }
-  const errorCount = errorDetails.length;
-  const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
-    hallucinationEvals.length > 0 || failedEvals.length > 0;
-  let issueHealth: SectionHealth = 'ok';
-  if (errorCount > 0 || hallucinationEvals.length > 0) issueHealth = 'crit';
-  else if (alertSummary.totalFired > 0 || failedEvals.length > 0) issueHealth = 'warn';
-  const evaluation = multiAgentEvaluation;
-  const handoffScore = evaluation.handoffScore ?? 0;
-  const avgRelevance = evaluation.avgTurnRelevance ?? 0;
-  const completeness = evaluation.conversationCompleteness ?? 0;
-  const models = [...new Set(tokenProgression.map(t => t.model).filter(Boolean))];
-  return (
-    <div className="page-content">
-      <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-      <div className="session-detail-header">
-        <div className="flex-wrap gap-4 justify-between align-start">
-          <div>
-            <div className="mono text-muted mb-1-5 text-2xs uppercase">Session Detail</div>
-            <div className="mono font-semibold text-base mb-2 break-all text-accent-hover ls-id">{sessionId}</div>
-            <div className="text-secondary text-xs flex-wrap gap-4">
-              <span>{si.projectName}</span>
-              {si.gitRepository && (
-                <span className="text-muted">
-                  {si.gitRepository}
-                  {si.gitBranch ? ` · ${si.gitBranch}` : ''}
-                </span>
-              )}
-              {si.resumeCount > 1 && (
-                <span className="mono text-2xs chip chip-accent-muted uppercase">RESUMED ×{si.resumeCount}</span>
-              )}
-              {agentActivity.length > 1 && (
-                <span className="mono text-2xs chip chip-healthy uppercase">MULTI-AGENT ×{agentActivity.length}</span>
-              )}
-              {models.map(m => (
-                <span key={m} className="mono text-2xs text-muted chip chip-badge">{m}</span>
-              ))}
-            </div>
-            {timespan && (
-              <div className="text-muted text-xs flex-wrap gap-4 mt-1">
-                <span>{format(new Date(timespan.start), 'PPp')}</span>
-                <span>&rarr;</span>
-                <span>{format(new Date(timespan.end), 'PPp')}</span>
-                <span className="mono text-2xs chip chip-badge">{timespan.durationHours}h</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex-wrap session-vitals-strip">
-        <StatDisplay label="Spans" value={spanCount} />
-        <div className="vitals-divider" />
-        <StatDisplay label="Tool calls" value={totalToolCalls} />
-        <div className="vitals-divider" />
-        <StatDisplay label="MCP calls" value={totalMcpCalls} />
-        <div className="vitals-divider" />
-        <StatDisplay label="Commits" value={gitCommits.length} valueColor={gitCommits.length > 0 ? 'var(--status-healthy)' : undefined} />
-        <div className="vitals-divider" />
-        <StatDisplay label="Alerts fired" value={alertSummary.totalFired} valueColor={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
-        <div className="vitals-divider" />
-        <StatDisplay label="Errors" value={errorCount} valueColor={errorCount > 0 ? 'var(--status-critical)' : undefined} />
-        {maxTokenSnapshot && (
-          <>
-            <div className="vitals-divider" />
-            <StatDisplay label="Messages" value={maxTokenSnapshot.messages} />
-            <div className="vitals-divider" />
-            <StatDisplay label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
-          </>
-        )}
-      </div>
-      <Section
-        title="Issues & Anomalies"
-        badge={hasIssues ? `${[
-          alertSummary.totalFired > 0 && `${alertSummary.totalFired} alerts`,
-          errorCount > 0 && `${errorCount} errors`,
-          hallucinationEvals.length > 0 && `${hallucinationEvals.length} hallucinations`,
-          failedEvals.length > 0 && `${failedEvals.length} failures`,
-        ].filter(Boolean).join(' · ')}` : 'clean'}
-        health={issueHealth}
-        defaultOpen={hasIssues}
-      >
-        {!hasIssues && (
-          <div className="mono-xs text-healthy">
-            No issues detected in this session.
-          </div>
-        )}
-        {alertSummary.totalFired > 0 && (
-          <IssueCallout severity="warning" title={`${plural(alertSummary.totalFired, 'alert')} fired across ${plural(alertSummary.stopEvents, 'stop event')}`}>
-            <strong>task-completion-low</strong> — The task completion ratio fell below 0.85.
-            This fires when tasks are created but not marked complete before the session ends.
-            Common causes: work deferred to backlog, sub-tasks spawned but not resolved,
-            or tasks marked in-progress but not completed within the session.
-          </IssueCallout>
-        )}
-        {errorCount > 0 && (
-          <IssueCallout severity="critical" title={plural(errorCount, 'error span')}>
-            <div className="mb-2">Tool invocations or agent calls that reported errors:</div>
-            <TruncatedList
-              items={errorDetails}
-              max={MAX_ERROR_ROWS}
-              total={errorCount}
-              renderItem={(e, i) => (
-                <div key={i} className="mono-xs mb-1">
-                  <span className="text-critical">✗</span>{' '}
-                  {e.spanName}{e.tool ? ` (${e.tool})` : ''}{e.filePath ? ` · ${shortPath(e.filePath)}` : ''}
-                  {e.errorType && e.errorType !== 'unknown' && <span className="text-muted"> — {e.errorType}</span>}
-                </div>
-              )}
-            />
-          </IssueCallout>
-        )}
-        {hallucinationEvals.length > 0 && (
-          <IssueCallout severity="critical" title={`${plural(hallucinationEvals.length, 'hallucination indicator')} detected`}>
-            <div className="mb-2">
-              Evaluations flagging potential hallucination or very low confidence:
-            </div>
-            <TruncatedList
-              items={hallucinationEvals}
-              max={MAX_HALLUCINATION_ROWS}
-              renderItem={(e, i) => (
-                <div key={i} className="flex-center gap-2-5 mb-1-5">
-                  <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
-                  <div>
-                    <div className="mono-xs">{e.evaluationName}</div>
-                    {e.explanation && (
-                      <div className="text-muted text-xs mt-0-5">
-                        {truncateText(e.explanation, 200)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            />
-          </IssueCallout>
-        )}
-        {failedEvals.length > 0 && !hallucinationEvals.length && (
-          <IssueCallout severity="warning" title={`${plural(failedEvals.length, 'evaluation')} marked fail`}>
-            <TruncatedList
-              items={failedEvals}
-              max={MAX_FAILED_EVAL_ROWS}
-              renderItem={(e, i) => (
-                <div key={i} className="mono-xs mb-1">
-                  <span className="text-warning">⚠</span>{' '}
-                  {e.evaluationName} — score {typeof e.scoreValue === 'number' ? e.scoreValue.toFixed(SCORE_DISPLAY_PRECISION) : 'N/A'}
-                </div>
-              )}
-            />
-          </IssueCallout>
-        )}
-        {evaluation.errorPropagationTurns > 0 && (
-          <IssueCallout severity="warning" title={plural(evaluation.errorPropagationTurns, 'error propagation turn')}>
-            Errors detected in the multi-agent turn sequence may have propagated across agent handoffs.
-          </IssueCallout>
-        )}
-      </Section>
-      <Section
-        title="Token Journey"
-        badge={maxTokenSnapshot ? `${maxTokenSnapshot.messages} msg · ${fmtBytes(maxTokenSnapshot.outputTokens)} out` : 'no data'}
-        health="neutral"
-      >
-        {tokenProgression.length === 0 ? (
-          <div className="text-muted text-xs">No token snapshots recorded.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="mono-xs w-full table-collapse">
-              <MonoTableHead columns={[
-                { label: 'Messages' }, { label: 'Input' }, { label: 'Output' },
-                { label: 'Cache Read' }, { label: 'Cache Create' }, { label: 'Model' },
-              ]} />
-              <tbody>
-                {tokenProgression.map((t) => (
-                  <tr key={`${t.messages}-${t.model}`} className="border-b-subtle">
-                    <td className="cell-pad-wide text-right">{t.messages}</td>
-                    <td className="cell-pad-wide text-right text-secondary">{fmtBytes(t.inputTokens)}</td>
-                    <td className="cell-pad-wide text-right text-accent-hover">{fmtBytes(t.outputTokens)}</td>
-                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheRead)}</td>
-                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheCreation)}</td>
-                    <td className="cell-pad-wide text-right text-muted">{t.model}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Section>
-      <Section
-        title="Tool Activity"
-        badge={`${totalToolCalls} calls · ${toolUsageValues.length} tools`}
-        health="neutral"
-      >
-        <FreqBarGrid entries={Object.entries(toolUsage)} max={maxToolCount} />
-        {totalMcpCalls > 0 && (
-          <>
-            <div className="stat-label stat-label-section">
-              MCP Tools — {totalMcpCalls} calls
-            </div>
-            <FreqBarGrid entries={Object.entries(mcpUsage)} max={maxMcpCount} color="var(--status-healthy)" />
-          </>
-        )}
-      </Section>
-      {agentActivity.length > 0 && (
-        <Section
-          title="Agent Activity"
-          badge={agentActivity.map(a => `${a.agentName} ×${a.invocations}`).join(' · ')}
-          health={agentActivity.some(a => a.errors > 0) ? 'warn' : 'neutral'}
-        >
-          <div className="d-grid gap-2-5 agent-activity-grid">
-            {agentActivity.map(a => (
-              <div key={a.agentName} className="agent-stat-card" data-has-error={a.errors > 0 ? 'true' : undefined}>
-                <div className="mono-xs mb-1-5 font-semibold">
-                  {a.agentName}
-                </div>
-                <div className="flex-wrap gap-3">
-                  <div>
-                    <div className="mono text-md font-bold">{a.invocations}</div>
-                    <div className="stat-label">invocations</div>
-                  </div>
-                  {a.errors > 0 && (
-                    <div>
-                      <div className="mono text-md font-bold text-warning">{a.errors}</div>
-                      <div className="stat-label">errors</div>
-                    </div>
-                  )}
-                  <div>
-                    <div className="mono text-md font-bold">{fmtBytes(a.avgOutputSize)}</div>
-                    <div className="stat-label">avg output</div>
-                  </div>
-                </div>
-                {a.hasRateLimit && (
-                  <div className="mono mt-2 text-2xs text-warning">
-                    ⚠ Hit rate limit
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="mt-4">
-            <AgentScoreSummary handoffScore={handoffScore} avgRelevance={avgRelevance} completeness={completeness} />
-          </div>
-        </Section>
-      )}
-      {fileAccess.length > 0 && (
-        <Section
-          title="Files Accessed"
-          badge={`${fileAccess.length} files · top: ${shortPath(fileAccess[0]?.path ?? '')}`}
-          health="neutral"
-        >
-          <div className="file-access-columns">
-            {fileAccess.map(({ path, count }) => (
-              <div key={path}>
-                <FreqBar
-                  label={shortPath(path)}
-                  count={count}
-                  max={maxFileCount}
-                  color="var(--accent)"
-                />
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-      {gitCommits.length > 0 && (
-        <Section
-          title="Git Commits"
-          badge={plural(gitCommits.length, 'commit')}
-          health="ok"
-        >
-          <div className="flex-col gap-half">
-            {gitCommits.map((commit) => {
-              const commitFiles = commit.files?.split(' ') ?? [];
-              return (
-                <details key={commit.subject} className="border-b-subtle">
-                  <summary className="flex-center gap-2-5 cursor-pointer list-none commit-summary">
-                    <span className="text-healthy text-2xs shrink-0">●</span>
-                    <span className="mono-xs font-semibold flex-1">
-                      {commit.subject}
-                    </span>
-                    {commitFiles.length > 0 && (
-                      <span className="text-2xs text-muted shrink-0">
-                        {plural(commitFiles.length, 'file')}
-                      </span>
-                    )}
-                  </summary>
-                  <div className="commit-detail">
-                    {commit.body && (
-                      <div className="text-secondary text-xs leading-relaxed mb-2 commit-body">
-                        {commit.body}
-                      </div>
-                    )}
-                    {commitFiles.length > 0 && (
-                      <div className="mono text-2xs text-muted">
-                        {commitFiles.map((f) => (
-                          <div key={f}>{shortPath(f)}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </details>
-              );
-            })}
-          </div>
-        </Section>
-      )}
-      {codeStructure.length > 0 && (
-        <Section
-          title="Code Quality"
-          badge={`${plural(codeStructure.length, 'file')} analyzed`}
-          health={codeStructure.some(f => f.score < CODE_QUALITY_WARN_THRESHOLD) ? 'warn' : 'ok'}
-        >
-          <div className="overflow-x-auto">
-            <table className="mono-xs w-full table-collapse">
-              <MonoTableHead columns={[
-                { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },
-                { label: 'Lines' }, { label: 'Exports' }, { label: 'Functions' },
-                { label: 'Types' }, { label: 'Score' },
-              ]} />
-              <tbody>
-                {codeStructure.map((f) => (
-                  <tr key={`${f.file}:${f.tool}`} className="border-b-subtle">
-                    <td className="cell-pad text-secondary">{shortPath(f.file)}</td>
-                    <td className="cell-pad text-muted">{f.tool}</td>
-                    <td className="cell-pad text-right">{f.lines}</td>
-                    <td className="cell-pad text-right text-muted">{f.exports}</td>
-                    <td className="cell-pad text-right text-muted">{f.functions}</td>
-                    <td className="cell-pad text-center">{f.hasTypes ? '✓' : '·'}</td>
-                    <td className="cell-pad text-right font-semibold score-band" data-band={scoreColorBand(f.score)}>
-                      {formatScore(f.score)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      )}
-      <Section
-        title="Span Breakdown"
-        badge={`${spanCount} total · ${spanBreakdownValues.length} types`}
-        health="neutral"
-      >
-        <FreqBarGrid entries={Object.entries(spanBreakdown)} max={maxSpanCount} color="var(--border-accent)" />
-      </Section>
-      <Section
-        title="Evaluations"
-        badge={evalRows.length > 0 ? plural(evalRows.length, 'result') : 'none'}
-        health={hallucinationEvals.length > 0 ? 'crit' : failedEvals.length > 0 ? 'warn' : evalRows.length > 0 ? 'ok' : 'neutral'}
-      >
-        {evalRows.length === 0 ? (
-          <div className="text-muted text-xs">
-            No evaluations recorded for this session.
-          </div>
-        ) : (
-          <EvaluationTable evaluations={evalRows} />
-        )}
-      </Section>
-    </div>
-  );
 }
 
 ================
@@ -16573,83 +16573,6 @@ export async function checkHealth(): Promise<{ status: string; hasData: boolean 
 }
 
 ================
-File: src/pages/DegradationSignalsPage.tsx
-================
-import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
-import { PageShell } from '../components/PageShell.js';
-import { StatusBadge } from '../components/Indicators.js';
-import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { Period } from '../types.js';
-const COVERAGE_DROPOUT_PRECISION = 1;
-const VARIANCE_TREND_LABEL = {
-  increasing: 'Increasing',
-  stable: 'Stable',
-  decreasing: 'Decreasing',
-} as const;
-function ReportRow({ report }: { report: DegradationReport }) {
-  const { signal } = report;
-  return (
-    <tr>
-      <td className="mono">{report.metricName}</td>
-      <td>
-        <StatusBadge status={signal.predictedStatus} />
-      </td>
-      <td className="mono">{signal.ewmaDriftDetected ? 'Yes' : 'No'}</td>
-      <td className="mono">{VARIANCE_TREND_LABEL[signal.varianceTrend]}</td>
-      <td className="mono">{signal.varianceRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
-      <td className="mono">{signal.consecutiveBreaches}</td>
-      <td className="mono">{signal.confirmed ? 'Yes' : 'No'}</td>
-      <td className="mono">{(signal.coverageDropoutRate * 100).toFixed(COVERAGE_DROPOUT_PRECISION)}%</td>
-      <td className="mono">{signal.latencySkewRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
-    </tr>
-  );
-}
-export function DegradationSignalsPage({ period }: { period: Period }) {
-  const { data, isLoading, error } = useDegradationSignals(period);
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && data.reports.length === 0 ? (
-        <div className="empty-state">
-          <h2>No Degradation Data</h2>
-          <p>No regression signals found for this period. Run the data pipeline to populate degradation signals.</p>
-        </div>
-      ) : data ? (
-        <>
-          <h2 className="text-lg mb-3">Regression Detection</h2>
-          {data.computedAt && (
-            <div className="text-secondary text-xs mb-3">
-              Last computed: {new Date(data.computedAt).toLocaleString()}
-            </div>
-          )}
-          <div className="card mb-3">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Metric</th>
-                  <th>Status</th>
-                  <th>EWMA Drift</th>
-                  <th>Variance Trend</th>
-                  <th>Variance Ratio</th>
-                  <th>Consecutive Breaches</th>
-                  <th>Confirmed</th>
-                  <th>Coverage Dropout</th>
-                  <th>Latency Skew</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.reports.map(r => (
-                  <ReportRow key={r.metricName} report={r} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : null}
-    </PageShell>
-  );
-}
-
-================
 File: src/lib/constants.ts
 ================
 import { z } from 'zod';
@@ -16785,6 +16708,83 @@ export const CHART_TOOLTIP_CONTENT_STYLE = {
 export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
 export const CHART_YAXIS_WIDTH = 48;
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
+
+================
+File: src/pages/DegradationSignalsPage.tsx
+================
+import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
+import { PageShell } from '../components/PageShell.js';
+import { StatusBadge } from '../components/Indicators.js';
+import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { Period } from '../types.js';
+const COVERAGE_DROPOUT_PRECISION = 1;
+const VARIANCE_TREND_LABEL = {
+  increasing: 'Increasing',
+  stable: 'Stable',
+  decreasing: 'Decreasing',
+} as const;
+function ReportRow({ report }: { report: DegradationReport }) {
+  const { signal } = report;
+  return (
+    <tr>
+      <td className="mono">{report.metricName}</td>
+      <td>
+        <StatusBadge status={signal.predictedStatus} />
+      </td>
+      <td className="mono">{signal.ewmaDriftDetected ? 'Yes' : 'No'}</td>
+      <td className="mono">{VARIANCE_TREND_LABEL[signal.varianceTrend]}</td>
+      <td className="mono">{signal.varianceRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
+      <td className="mono">{signal.consecutiveBreaches}</td>
+      <td className="mono">{signal.confirmed ? 'Yes' : 'No'}</td>
+      <td className="mono">{(signal.coverageDropoutRate * 100).toFixed(COVERAGE_DROPOUT_PRECISION)}%</td>
+      <td className="mono">{signal.latencySkewRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
+    </tr>
+  );
+}
+export function DegradationSignalsPage({ period }: { period: Period }) {
+  const { data, isLoading, error } = useDegradationSignals(period);
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
+      {data && data.reports.length === 0 ? (
+        <div className="empty-state">
+          <h2>No Degradation Data</h2>
+          <p>No regression signals found for this period. Run the data pipeline to populate degradation signals.</p>
+        </div>
+      ) : data ? (
+        <>
+          <h2 className="text-lg mb-3">Regression Detection</h2>
+          {data.computedAt && (
+            <div className="text-secondary text-xs mb-3">
+              Last computed: {new Date(data.computedAt).toLocaleString()}
+            </div>
+          )}
+          <div className="card mb-3">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Status</th>
+                  <th>EWMA Drift</th>
+                  <th>Variance Trend</th>
+                  <th>Variance Ratio</th>
+                  <th>Consecutive Breaches</th>
+                  <th>Confirmed</th>
+                  <th>Coverage Dropout</th>
+                  <th>Latency Skew</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.reports.map(r => (
+                  <ReportRow key={r.metricName} report={r} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+    </PageShell>
+  );
+}
 
 ================
 File: src/api/routes/trends.ts

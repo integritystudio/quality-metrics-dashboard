@@ -2844,6 +2844,41 @@ import type { Period } from '../types.js';
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup
 
 ================
+File: src/pages/SessionDetailPage.tsx
+================
+import { Link } from 'wouter';
+import { format } from 'date-fns';
+import { useSessionDetail } from '../hooks/useSessionDetail.js';
+import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
+import { MonoTableHead } from '../components/MonoTableHead.js';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
+import { PageShell } from '../components/PageShell.js';
+import { Section, type SectionHealth } from '../components/Section.js';
+import { StatDisplay } from '../components/StatDisplay.js';
+import { FreqBar } from '../components/FreqBar.js';
+import { FreqBarGrid } from '../components/FreqBarGrid.js';
+import { TruncatedList } from '../components/TruncatedList.js';
+import { IssueCallout } from '../components/IssueCallout.js';
+import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import {
+  HALLUCINATION_SCORE_THRESHOLD,
+  MAX_ERROR_ROWS,
+  MAX_HALLUCINATION_ROWS,
+  MAX_FAILED_EVAL_ROWS,
+  SCORE_DISPLAY_PRECISION,
+  SKELETON_HEIGHT_LG,
+  CODE_QUALITY_WARN_THRESHOLD,
+} from '../lib/constants.js';
+export function SessionDetailPage(
+⋮----
+<FreqBarGrid entries=
+⋮----
+label=
+⋮----
+<td className="cell-pad text-right font-semibold score-band" data-band=
+
+================
 File: src/stubs/auth0-e2e.ts
 ================
 import { type ReactNode, createElement } from 'react';
@@ -3049,41 +3084,6 @@ export function supabasePost(
   body: unknown,
   key: string,
 ): Promise<void>
-
-================
-File: src/pages/SessionDetailPage.tsx
-================
-import { Link } from 'wouter';
-import { format } from 'date-fns';
-import { useSessionDetail } from '../hooks/useSessionDetail.js';
-import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
-import { MonoTableHead } from '../components/MonoTableHead.js';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { AgentScoreSummary } from '../components/AgentScoreSummary.js';
-import { PageShell } from '../components/PageShell.js';
-import { Section, type SectionHealth } from '../components/Section.js';
-import { StatDisplay } from '../components/StatDisplay.js';
-import { FreqBar } from '../components/FreqBar.js';
-import { FreqBarGrid } from '../components/FreqBarGrid.js';
-import { TruncatedList } from '../components/TruncatedList.js';
-import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
-import {
-  HALLUCINATION_SCORE_THRESHOLD,
-  MAX_ERROR_ROWS,
-  MAX_HALLUCINATION_ROWS,
-  MAX_FAILED_EVAL_ROWS,
-  SCORE_DISPLAY_PRECISION,
-  SKELETON_HEIGHT_LG,
-  CODE_QUALITY_WARN_THRESHOLD,
-} from '../lib/constants.js';
-export function SessionDetailPage(
-⋮----
-<FreqBarGrid entries=
-⋮----
-label=
-⋮----
-<td className="cell-pad text-right font-semibold score-band" data-band=
 
 ================
 File: src/__tests__/DegradationSignalsPage.test.tsx
@@ -3454,17 +3454,6 @@ export async function loadEvaluationsBySessionId(
 export async function checkHealth(): Promise<
 
 ================
-File: src/pages/DegradationSignalsPage.tsx
-================
-import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
-import { PageShell } from '../components/PageShell.js';
-import { StatusBadge } from '../components/Indicators.js';
-import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { Period } from '../types.js';
-⋮----
-function ReportRow(
-
-================
 File: src/lib/constants.ts
 ================
 import { z } from 'zod';
@@ -3502,6 +3491,17 @@ export type Role = z.infer<typeof RoleSchema>;
 export function computePeriodDates(period: string):
 ⋮----
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
+
+================
+File: src/pages/DegradationSignalsPage.tsx
+================
+import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
+import { PageShell } from '../components/PageShell.js';
+import { StatusBadge } from '../components/Indicators.js';
+import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { Period } from '../types.js';
+⋮----
+function ReportRow(
 
 ================
 File: src/api/routes/trends.ts
