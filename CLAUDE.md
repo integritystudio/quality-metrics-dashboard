@@ -6,8 +6,11 @@ React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displa
 
 ```bash
 npm run dev          # Vite + Hono API on :3001
+npm run dev:worker   # wrangler dev (local Worker)
 npm test             # Vitest
+npm run test:scripts # Vitest for scripts/ (separate config)
 npm run typecheck    # tsc --noEmit
+npm run lint         # ESLint (src/, scripts/, worker/)
 npm run build        # Production build
 npm run populate -- --seed   # Data pipeline (offline)
 npm run deploy:worker        # Deploy Cloudflare Worker
@@ -22,7 +25,7 @@ doppler run --project integrity-studio --config dev -- npm run test:e2e:integrat
 - **Auth**: Auth0 Universal Login + role-based permissions from Supabase `user_roles -> roles.permissions` (all DB access via service role key). See [docs/auth/user-authentication.md](docs/auth/user-authentication.md)
 - **Validation**: Zod schemas in `src/lib/validation/` for all auth and dashboard types
 - **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
-- **React Compiler**: Active via `babel-plugin-react-compiler`. Libraries incompatible with it (e.g., `useReactTable`) require `// eslint-disable-next-line react-compiler/react-compiler` suppression with a comment explaining why.
+- **React Compiler**: `babel-plugin-react-compiler` is installed but NOT configured (not wired into vite.config.ts). The compiler is inactive. For TanStack Table incompatibilities, use `// eslint-disable-next-line react-hooks/incompatible-library -- <reason>` (see `EvaluationTable.tsx:188`).
 
 ## Constants Architecture
 
@@ -54,6 +57,13 @@ Run against the deployed worker with a real Auth0 JWT. Requires Doppler dev conf
 - **Teardown** (`teardown.ts`): removes `user_roles`, `user_activity`, `public.users` row — Auth0 user is permanent, never deleted
 - **Sentry** (`sentry-reporter.ts`): captures `failed`/`timedOut` tests to Sentry (`SENTRY_DSN` from Doppler); no-ops if unset
 - Auth0 tenant: `dev-68gg87ow4mg4kzyo.us.auth0.com`, `password` grant enabled on `integritystudio-dashboard` SPA (`CNfd6xPPr2aLmvNyiearhmaLknAYvtnq`); default directory set to `Username-Password-Authentication`
+
+## Aliases & Stubs (`src/stubs/`)
+
+- **`@parent`** → `../dist` — imports from the parent observability-toolkit build. Run `npm run build` in `..` first or tests will fail without the `parentDistStub` vite plugin (active in Vitest only).
+- **`web-worker`** → `src/stubs/web-worker.ts` — always aliased; prevents bundler errors for worker imports.
+- **`VITE_E2E=1`** → stubs `@auth0/auth0-react` with `src/stubs/auth0-e2e.ts` for Playwright E2E runs.
+- **Vite proxy**: `/api/*` → `http://127.0.0.1:3001` — local dev auto-forwards API requests to the Hono server; no CORS config needed.
 
 ## Deployment
 
