@@ -7219,6 +7219,289 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
 }
 
 ================
+File: src/components/EvaluationTable.tsx
+================
+import { useState, Fragment } from 'react';
+import type { EvaluationResult } from '../types.js';
+import {
+  createColumnHelper,
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  getExpandedRowModel,
+  flexRender,
+  type SortingState,
+  type ColumnFiltersState,
+  type ExpandedState,
+  type SortingFn,
+  type FilterFn,
+} from '@tanstack/react-table';
+import type { CSSProperties } from 'react';
+import {
+  labelToOrdinal,
+  ordinalToCategory,
+  truncateText,
+  formatScore,
+  SCORE_COLORS,
+  type LabelFilterCategory,
+} from '../lib/quality-utils.js';
+import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
+import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
+import { TimestampCell } from './TimestampCell.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { ColoredChip } from './Chip.js';
+import { ScoreBadge } from './ScoreBadge.js';
+export interface EvalRow {
+  score: number | null;
+  explanation?: string;
+  traceId?: string;
+  timestamp?: string;
+  evaluator?: string;
+  label?: string;
+  evaluatorType?: string;
+  spanId?: string;
+  sessionId?: string;
+  agentName?: string;
+  trajectoryLength?: number;
+  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
+  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
+}
+const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
+  Pass: SCORE_COLORS.excellent,
+  Review: SCORE_COLORS.adequate,
+  Fail: SCORE_COLORS.failing,
+};
+const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) => {
+  const a = labelToOrdinal(rowA.original.label ?? 'unknown').ordinal;
+  const b = labelToOrdinal(rowB.original.label ?? 'unknown').ordinal;
+  return a - b;
+};
+const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) => {
+  if (!filterValue || filterValue.length === 0) return true;
+  const category = ordinalToCategory(labelToOrdinal(row.original.label ?? 'unknown').ordinal);
+  return filterValue.includes(category);
+};
+const columnHelper = createColumnHelper<EvalRow>();
+const columns = [
+  columnHelper.display({
+    id: 'expand',
+    header: '',
+    cell: ({ row }) => (
+      <button
+        type="button"
+        className="cursor-pointer btn-reset btn-expand"
+        onClick={row.getToggleExpandedHandler()}
+        aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
+      >
+        <ExpandChevron expanded={row.getIsExpanded()} className="text-secondary text-xs" />
+      </button>
+    ),
+    size: EVAL_TABLE_EXPAND_COL_SIZE,
+  }),
+  columnHelper.accessor('score', {
+    header: 'Score',
+    cell: (info) => {
+      const row = info.row.original;
+      return (
+        <ScoreBadge
+          score={info.getValue()}
+          metricName="score"
+          label={formatScore(info.getValue())}
+          evaluator={row.evaluator}
+          evaluatorType={row.evaluatorType}
+          explanation={row.explanation}
+          traceId={row.traceId}
+        />
+      );
+    },
+    sortingFn: 'basic',
+  }),
+  columnHelper.accessor('label', {
+    header: 'Label',
+    cell: (info) => {
+      const label = info.getValue() ?? 'unknown';
+      const { category } = labelToOrdinal(label);
+      return (
+        <ColoredChip color={CATEGORY_COLORS[category]} className="font-medium">
+          {label}
+        </ColoredChip>
+      );
+    },
+    sortingFn: labelSortFn,
+    filterFn: categoryFilterFn,
+  }),
+  columnHelper.display({
+    id: 'category',
+    header: 'Category',
+    cell: (info) => {
+      const label = info.row.original.label ?? 'unknown';
+      const category = ordinalToCategory(labelToOrdinal(label).ordinal);
+      return (
+        <ColoredChip color={CATEGORY_COLORS[category]} className="font-semibold">
+          {category}
+        </ColoredChip>
+      );
+    },
+  }),
+  columnHelper.accessor('explanation', {
+    header: 'Explanation',
+    cell: (info) => {
+      const text = info.getValue() ?? '-';
+      return (
+        <span className="explanation truncate" title={text}>
+          {truncateText(text, 60)}
+        </span>
+      );
+    },
+    enableSorting: false,
+  }),
+  columnHelper.accessor('evaluator', {
+    header: 'Evaluator',
+    cell: (info) => (
+      <span className="mono-xs">
+        {info.getValue() ?? '-'}
+      </span>
+    ),
+    enableSorting: false,
+  }),
+  columnHelper.accessor('timestamp', {
+    header: 'Timestamp',
+    cell: (info) => {
+      const ts = info.getValue();
+      if (!ts) return '-';
+      return (
+        <TimestampCell timestamp={ts} />
+      );
+    },
+    sortingFn: 'datetime',
+  }),
+];
+export function evalToRow(e: EvaluationResult): EvalRow {
+  return {
+    score: typeof e.scoreValue === 'number' ? e.scoreValue : null,
+    explanation: e.explanation,
+    traceId: e.traceId,
+    timestamp: e.timestamp,
+    evaluator: e.evaluator,
+    label: e.scoreLabel,
+    evaluatorType: e.evaluatorType,
+    spanId: e.spanId,
+    sessionId: e.sessionId,
+    agentName: e.agentName,
+    trajectoryLength: e.trajectoryLength,
+    stepScores: e.stepScores as EvalRow['stepScores'],
+    toolVerifications: e.toolVerifications as EvalRow['toolVerifications'],
+  };
+}
+export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
+  'use no memo';
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const table = useReactTable({
+    data: evaluations,
+    columns,
+    state: { sorting, columnFilters, expanded },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: () => true,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+  });
+  const activeCategories: LabelFilterCategory[] =
+    (columnFilters.find(f => f.id === 'label')?.value as LabelFilterCategory[]) ?? [];
+  const toggleCategory = (cat: LabelFilterCategory) => {
+    const next = activeCategories.includes(cat)
+      ? activeCategories.filter((c) => c !== cat)
+      : [...activeCategories, cat];
+    setColumnFilters(next.length > 0 ? [{ id: 'label', value: next }] : []);
+  };
+  const sortDir = (colId: string): 'ascending' | 'descending' | 'none' => {
+    const s = sorting.find((entry) => entry.id === colId);
+    if (!s) return 'none';
+    return s.desc ? 'descending' : 'ascending';
+  };
+  return (
+    <div>
+      <div className="d-flex mb-3 gap-1-5">
+        {(['Pass', 'Review', 'Fail'] as const).map((cat) => {
+          const active = activeCategories.includes(cat);
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => toggleCategory(cat)}
+              className="eval-filter-chip text-xs font-semibold cursor-pointer"
+              style={{ '--chip-color': CATEGORY_COLORS[cat] } as CSSProperties}
+              data-active={active || undefined}
+            >
+              {cat}
+            </button>
+          );
+        })}
+      </div>
+      <table className="data-table eval-table">
+        <thead>
+          {table.getHeaderGroups().map((hg) => (
+            <tr key={hg.id}>
+              {hg.headers.map((header) => {
+                const canSort = header.column.getCanSort();
+                return (
+                  <th
+                    key={header.id}
+                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                    className={`select-none${canSort ? ' cursor-pointer' : ''}`}
+                    aria-sort={canSort ? sortDir(header.id) : undefined}
+                  >
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {canSort && (
+                      <span className="ml-1 text-2xs">
+                        {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
+                      </span>
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <Fragment key={row.id}>
+              <tr className={row.getIsExpanded() ? 'eval-row-expanded' : ''}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+              {row.getIsExpanded() && (
+                <tr className="eval-expanded-panel">
+                  <td colSpan={row.getVisibleCells().length}>
+                    <EvaluationExpandedRow row={row.original} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          ))}
+          {table.getRowModel().rows.length === 0 && (
+            <tr>
+              <td colSpan={table.getVisibleLeafColumns().length} className="text-muted text-center p-4">
+                No evaluations match the current filter.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+================
 File: src/components/ExpandChevron.tsx
 ================
 import { CHEVRON_RIGHT } from '../lib/symbols.js';
@@ -11541,289 +11824,6 @@ File: src/api/config.ts
 ================
 export const API_HOST = '127.0.0.1';
 export const API_PORT = Number(process.env.API_PORT) || 3001;
-
-================
-File: src/components/EvaluationTable.tsx
-================
-import { useState, Fragment } from 'react';
-import type { EvaluationResult } from '../types.js';
-import {
-  createColumnHelper,
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getExpandedRowModel,
-  flexRender,
-  type SortingState,
-  type ColumnFiltersState,
-  type ExpandedState,
-  type SortingFn,
-  type FilterFn,
-} from '@tanstack/react-table';
-import type { CSSProperties } from 'react';
-import {
-  labelToOrdinal,
-  ordinalToCategory,
-  truncateText,
-  formatScore,
-  SCORE_COLORS,
-  type LabelFilterCategory,
-} from '../lib/quality-utils.js';
-import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
-import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
-import { TimestampCell } from './TimestampCell.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { ColoredChip } from './Chip.js';
-import { ScoreBadge } from './ScoreBadge.js';
-export interface EvalRow {
-  score: number | null;
-  explanation?: string;
-  traceId?: string;
-  timestamp?: string;
-  evaluator?: string;
-  label?: string;
-  evaluatorType?: string;
-  spanId?: string;
-  sessionId?: string;
-  agentName?: string;
-  trajectoryLength?: number;
-  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
-  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
-}
-const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
-  Pass: SCORE_COLORS.excellent,
-  Review: SCORE_COLORS.adequate,
-  Fail: SCORE_COLORS.failing,
-};
-const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) => {
-  const a = labelToOrdinal(rowA.original.label ?? 'unknown').ordinal;
-  const b = labelToOrdinal(rowB.original.label ?? 'unknown').ordinal;
-  return a - b;
-};
-const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) => {
-  if (!filterValue || filterValue.length === 0) return true;
-  const category = ordinalToCategory(labelToOrdinal(row.original.label ?? 'unknown').ordinal);
-  return filterValue.includes(category);
-};
-const columnHelper = createColumnHelper<EvalRow>();
-const columns = [
-  columnHelper.display({
-    id: 'expand',
-    header: '',
-    cell: ({ row }) => (
-      <button
-        type="button"
-        className="cursor-pointer btn-reset btn-expand"
-        onClick={row.getToggleExpandedHandler()}
-        aria-label={row.getIsExpanded() ? 'Collapse row' : 'Expand row'}
-      >
-        <ExpandChevron expanded={row.getIsExpanded()} className="text-secondary text-xs" />
-      </button>
-    ),
-    size: EVAL_TABLE_EXPAND_COL_SIZE,
-  }),
-  columnHelper.accessor('score', {
-    header: 'Score',
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <ScoreBadge
-          score={info.getValue()}
-          metricName="score"
-          label={formatScore(info.getValue())}
-          evaluator={row.evaluator}
-          evaluatorType={row.evaluatorType}
-          explanation={row.explanation}
-          traceId={row.traceId}
-        />
-      );
-    },
-    sortingFn: 'basic',
-  }),
-  columnHelper.accessor('label', {
-    header: 'Label',
-    cell: (info) => {
-      const label = info.getValue() ?? 'unknown';
-      const { category } = labelToOrdinal(label);
-      return (
-        <ColoredChip color={CATEGORY_COLORS[category]} className="font-medium">
-          {label}
-        </ColoredChip>
-      );
-    },
-    sortingFn: labelSortFn,
-    filterFn: categoryFilterFn,
-  }),
-  columnHelper.display({
-    id: 'category',
-    header: 'Category',
-    cell: (info) => {
-      const label = info.row.original.label ?? 'unknown';
-      const category = ordinalToCategory(labelToOrdinal(label).ordinal);
-      return (
-        <ColoredChip color={CATEGORY_COLORS[category]} className="font-semibold">
-          {category}
-        </ColoredChip>
-      );
-    },
-  }),
-  columnHelper.accessor('explanation', {
-    header: 'Explanation',
-    cell: (info) => {
-      const text = info.getValue() ?? '-';
-      return (
-        <span className="explanation truncate" title={text}>
-          {truncateText(text, 60)}
-        </span>
-      );
-    },
-    enableSorting: false,
-  }),
-  columnHelper.accessor('evaluator', {
-    header: 'Evaluator',
-    cell: (info) => (
-      <span className="mono-xs">
-        {info.getValue() ?? '-'}
-      </span>
-    ),
-    enableSorting: false,
-  }),
-  columnHelper.accessor('timestamp', {
-    header: 'Timestamp',
-    cell: (info) => {
-      const ts = info.getValue();
-      if (!ts) return '-';
-      return (
-        <TimestampCell timestamp={ts} />
-      );
-    },
-    sortingFn: 'datetime',
-  }),
-];
-export function evalToRow(e: EvaluationResult): EvalRow {
-  return {
-    score: typeof e.scoreValue === 'number' ? e.scoreValue : null,
-    explanation: e.explanation,
-    traceId: e.traceId,
-    timestamp: e.timestamp,
-    evaluator: e.evaluator,
-    label: e.scoreLabel,
-    evaluatorType: e.evaluatorType,
-    spanId: e.spanId,
-    sessionId: e.sessionId,
-    agentName: e.agentName,
-    trajectoryLength: e.trajectoryLength,
-    stepScores: e.stepScores as EvalRow['stepScores'],
-    toolVerifications: e.toolVerifications as EvalRow['toolVerifications'],
-  };
-}
-export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
-  'use no memo';
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [expanded, setExpanded] = useState<ExpandedState>({});
-  const table = useReactTable({
-    data: evaluations,
-    columns,
-    state: { sorting, columnFilters, expanded },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onExpandedChange: setExpanded,
-    getRowCanExpand: () => true,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
-  });
-  const activeCategories: LabelFilterCategory[] =
-    (columnFilters.find(f => f.id === 'label')?.value as LabelFilterCategory[]) ?? [];
-  const toggleCategory = (cat: LabelFilterCategory) => {
-    const next = activeCategories.includes(cat)
-      ? activeCategories.filter((c) => c !== cat)
-      : [...activeCategories, cat];
-    setColumnFilters(next.length > 0 ? [{ id: 'label', value: next }] : []);
-  };
-  const sortDir = (colId: string): 'ascending' | 'descending' | 'none' => {
-    const s = sorting.find((entry) => entry.id === colId);
-    if (!s) return 'none';
-    return s.desc ? 'descending' : 'ascending';
-  };
-  return (
-    <div>
-      <div className="d-flex mb-3 gap-1-5">
-        {(['Pass', 'Review', 'Fail'] as const).map((cat) => {
-          const active = activeCategories.includes(cat);
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => toggleCategory(cat)}
-              className="eval-filter-chip text-xs font-semibold cursor-pointer"
-              style={{ '--chip-color': CATEGORY_COLORS[cat] } as CSSProperties}
-              data-active={active || undefined}
-            >
-              {cat}
-            </button>
-          );
-        })}
-      </div>
-      <table className="data-table eval-table">
-        <thead>
-          {table.getHeaderGroups().map((hg) => (
-            <tr key={hg.id}>
-              {hg.headers.map((header) => {
-                const canSort = header.column.getCanSort();
-                return (
-                  <th
-                    key={header.id}
-                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                    className={`select-none${canSort ? ' cursor-pointer' : ''}`}
-                    aria-sort={canSort ? sortDir(header.id) : undefined}
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {canSort && (
-                      <span className="ml-1 text-2xs">
-                        {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
-                      </span>
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <Fragment key={row.id}>
-              <tr className={row.getIsExpanded() ? 'eval-row-expanded' : ''}>
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-              {row.getIsExpanded() && (
-                <tr className="eval-expanded-panel">
-                  <td colSpan={row.getVisibleCells().length}>
-                    <EvaluationExpandedRow row={row.original} />
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          ))}
-          {table.getRowModel().rows.length === 0 && (
-            <tr>
-              <td colSpan={table.getVisibleLeafColumns().length} className="text-muted text-center p-4">
-                No evaluations match the current filter.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 ================
 File: src/components/TruncatedIdLink.tsx
@@ -17010,6 +17010,179 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>
 }
 
 ================
+File: src/api/routes/agents.ts
+================
+import { Hono } from 'hono';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+const LIMIT_AGENT_SPANS = 1000;
+type AgentAcc = {
+  invocations: number;
+  errors: number;
+  rateLimitCount: number;
+  totalOutputSize: number;
+  sessions: Set<string>;
+  traceIds: Set<string>;
+  sourceTypes: Record<string, number>;
+  dailyCounts: number[];
+};
+function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+    count: sorted.length,
+  };
+}
+function createAgentAccumulator(periodDays: number): AgentAcc {
+  return {
+    invocations: 0,
+    errors: 0,
+    rateLimitCount: 0,
+    totalOutputSize: 0,
+    sessions: new Set(),
+    traceIds: new Set(),
+    sourceTypes: Object.create(null),
+    dailyCounts: new Array(periodDays).fill(0),
+  };
+}
+export const agentRoutes = new Hono();
+agentRoutes.get('/agents', async (c) => {
+  const periodParam = c.req.query('period') ?? '30d';
+  const periodDays = VALID_PERIODS[periodParam];
+  if (periodDays === undefined) {
+    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
+  }
+  const now = new Date();
+  const endDate = toDateOnly(now);
+  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
+  try {
+    const result = await queryTraces({
+      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
+      startDate,
+      endDate,
+      limit: LIMIT_AGENT_SPANS,
+    });
+    const dateBuckets: string[] = [];
+    for (let d = 0; d < periodDays; d++) {
+      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
+      dateBuckets.push(toDateOnly(day));
+    }
+    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
+    const acc: Record<string, AgentAcc> = Object.create(null);
+    const traceToAgents = new Map<string, Set<string>>();
+    for (const span of result.traces) {
+      const name = attrStr(span, 'gen_ai.agent.name');
+      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
+      entry.invocations++;
+      if (span.startTimeUnixNano) {
+        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
+        const idx = bucketIndex.get(dayKey);
+        if (idx !== undefined) entry.dailyCounts[idx]++;
+      }
+      if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
+      if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
+      entry.totalOutputSize += attrNum(span, 'agent.output_size');
+      const sid = attrStr(span, 'session.id', '');
+      if (sid) entry.sessions.add(sid);
+      if (span.traceId) {
+        entry.traceIds.add(span.traceId);
+        let agentSet = traceToAgents.get(span.traceId);
+        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
+        agentSet.add(name);
+      }
+      const rawSrc = attrStr(span, 'agent.source_type');
+      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
+      incrementCount(entry.sourceTypes, src);
+    }
+    const allTraceIds = [...traceToAgents.keys()];
+    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
+    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
+    for (const ev of evaluations) {
+      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+      const agentNames = traceToAgents.get(ev.traceId);
+      if (!agentNames) continue;
+      for (const agent of agentNames) {
+        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
+        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
+      }
+    }
+    const agents = Object.entries(acc).map(([agentName, d]) => {
+      const evalMetrics = agentEvalAcc[agentName] ?? {};
+      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
+      for (const [metric, scores] of Object.entries(evalMetrics)) {
+        evalSummary[metric] = computeEvalMetricSummary(scores);
+      }
+      const sessionIdList = [...d.sessions];
+      const traceIdList = [...d.traceIds];
+      return {
+        agentName,
+        invocations: d.invocations,
+        errors: d.errors,
+        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
+        rateLimitCount: d.rateLimitCount,
+        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+        sessionCount: d.sessions.size,
+        sessionIds: sessionIdList.slice(0, MAX_IDS),
+        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
+        traceIdsTotal: traceIdList.length,
+        traceIds: traceIdList.slice(0, MAX_IDS),
+        traceIdsTruncated: traceIdList.length > MAX_IDS,
+        sourceTypes: d.sourceTypes,
+        dailyCounts: d.dailyCounts,
+        evalSummary,
+      };
+    }).sort((a, b) => b.invocations - a.invocations);
+    return c.json({ period: periodParam, startDate, endDate, agents });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+agentRoutes.get('/agents/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  if (!isValidParam(sessionId, PARAM_ID_RE)) {
+    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  }
+  try {
+    const spans = await loadTracesBySessionId(sessionId);
+    const agentMap = new Map<number, string>();
+    const traceIds = new Set<string>();
+    spans.forEach((span, i) => {
+      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
+      if (agent) agentMap.set(i, agent);
+      if (span.traceId) traceIds.add(span.traceId);
+    });
+    const stepScores: StepScore[] = spans.map((span, i) => ({
+      step: i,
+      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+      explanation: span.name,
+    }));
+    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
+    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
+    const evaluations = await evalPromise;
+    const serializedAgentMap = Object.fromEntries(agentMap);
+    const graph = buildWorkflowGraph(evaluation, spans);
+    return c.json({
+      sessionId,
+      spans,
+      evaluation,
+      evaluations,
+      agentMap: serializedAgentMap,
+      graph,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: src/components/WorkflowGraph.tsx
 ================
 import React, { memo, useCallback, useEffect, useState } from 'react';
@@ -18865,179 +19038,6 @@ summary.section-rail {
 .metric-grid .skeleton {
   height: 180px;
 }
-
-================
-File: src/api/routes/agents.ts
-================
-import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-const LIMIT_AGENT_SPANS = 1000;
-type AgentAcc = {
-  invocations: number;
-  errors: number;
-  rateLimitCount: number;
-  totalOutputSize: number;
-  sessions: Set<string>;
-  traceIds: Set<string>;
-  sourceTypes: Record<string, number>;
-  dailyCounts: number[];
-};
-function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
-  const sorted = [...scores].sort((a, b) => a - b);
-  return {
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
-    count: sorted.length,
-  };
-}
-function createAgentAccumulator(periodDays: number): AgentAcc {
-  return {
-    invocations: 0,
-    errors: 0,
-    rateLimitCount: 0,
-    totalOutputSize: 0,
-    sessions: new Set(),
-    traceIds: new Set(),
-    sourceTypes: Object.create(null),
-    dailyCounts: new Array(periodDays).fill(0),
-  };
-}
-export const agentRoutes = new Hono();
-agentRoutes.get('/agents', async (c) => {
-  const periodParam = c.req.query('period') ?? '30d';
-  const periodDays = VALID_PERIODS[periodParam];
-  if (periodDays === undefined) {
-    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
-  }
-  const now = new Date();
-  const endDate = toDateOnly(now);
-  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
-  try {
-    const result = await queryTraces({
-      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
-      startDate,
-      endDate,
-      limit: LIMIT_AGENT_SPANS,
-    });
-    const dateBuckets: string[] = [];
-    for (let d = 0; d < periodDays; d++) {
-      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
-      dateBuckets.push(toDateOnly(day));
-    }
-    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
-    const acc: Record<string, AgentAcc> = Object.create(null);
-    const traceToAgents = new Map<string, Set<string>>();
-    for (const span of result.traces) {
-      const name = attrStr(span, 'gen_ai.agent.name');
-      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
-      entry.invocations++;
-      if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
-        const idx = bucketIndex.get(dayKey);
-        if (idx !== undefined) entry.dailyCounts[idx]++;
-      }
-      if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
-      if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
-      entry.totalOutputSize += attrNum(span, 'agent.output_size');
-      const sid = attrStr(span, 'session.id', '');
-      if (sid) entry.sessions.add(sid);
-      if (span.traceId) {
-        entry.traceIds.add(span.traceId);
-        let agentSet = traceToAgents.get(span.traceId);
-        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
-        agentSet.add(name);
-      }
-      const rawSrc = attrStr(span, 'agent.source_type');
-      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
-      incrementCount(entry.sourceTypes, src);
-    }
-    const allTraceIds = [...traceToAgents.keys()];
-    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
-    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
-    for (const ev of evaluations) {
-      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
-      const agentNames = traceToAgents.get(ev.traceId);
-      if (!agentNames) continue;
-      for (const agent of agentNames) {
-        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
-        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
-      }
-    }
-    const agents = Object.entries(acc).map(([agentName, d]) => {
-      const evalMetrics = agentEvalAcc[agentName] ?? {};
-      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
-      for (const [metric, scores] of Object.entries(evalMetrics)) {
-        evalSummary[metric] = computeEvalMetricSummary(scores);
-      }
-      const sessionIdList = [...d.sessions];
-      const traceIdList = [...d.traceIds];
-      return {
-        agentName,
-        invocations: d.invocations,
-        errors: d.errors,
-        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
-        rateLimitCount: d.rateLimitCount,
-        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-        sessionCount: d.sessions.size,
-        sessionIds: sessionIdList.slice(0, MAX_IDS),
-        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
-        traceIdsTotal: traceIdList.length,
-        traceIds: traceIdList.slice(0, MAX_IDS),
-        traceIdsTruncated: traceIdList.length > MAX_IDS,
-        sourceTypes: d.sourceTypes,
-        dailyCounts: d.dailyCounts,
-        evalSummary,
-      };
-    }).sort((a, b) => b.invocations - a.invocations);
-    return c.json({ period: periodParam, startDate, endDate, agents });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-agentRoutes.get('/agents/:sessionId', async (c) => {
-  const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
-  }
-  try {
-    const spans = await loadTracesBySessionId(sessionId);
-    const agentMap = new Map<number, string>();
-    const traceIds = new Set<string>();
-    spans.forEach((span, i) => {
-      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
-      if (agent) agentMap.set(i, agent);
-      if (span.traceId) traceIds.add(span.traceId);
-    });
-    const stepScores: StepScore[] = spans.map((span, i) => ({
-      step: i,
-      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
-      explanation: span.name,
-    }));
-    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
-    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
-    const evaluations = await evalPromise;
-    const serializedAgentMap = Object.fromEntries(agentMap);
-    const graph = buildWorkflowGraph(evaluation, spans);
-    return c.json({
-      sessionId,
-      spans,
-      evaluation,
-      evaluations,
-      agentMap: serializedAgentMap,
-      graph,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
 
 ================
 File: src/lib/workflow-graph.ts

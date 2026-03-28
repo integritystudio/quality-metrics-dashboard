@@ -1,3 +1,8 @@
+2742ab0 2026-03-27 chore(repomix): regenerate (no source changes — simplify confirmed clean)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 e156b63 2026-03-27 chore(repomix): regenerate after simplify round 2
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-docs.xml
@@ -351,7 +356,4 @@ e7849fe 2026-03-26 chore: regenerate repomix docs after Round 9 simplifications
   scripts/sync-to-kv.ts
 
 f6ecfed 2026-03-26 refactor(sync-to-kv): remove what-comments from session detail pre-computation
-  scripts/sync-to-kv.ts
-
-12cfc88 2026-03-26 refactor(sync-to-kv): remove section-separator divider comments
   scripts/sync-to-kv.ts
