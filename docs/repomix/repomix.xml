@@ -2116,6 +2116,209 @@ fi
 mv "$README_PATH.tmp" "$README_PATH"
 
 ================
+File: src/__tests__/api-agents.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
+  computeMultiAgentEvaluation: vi.fn(),
+}));
+vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+  sanitizeErrorForResponse: (err: unknown) => String(err),
+}));
+vi.mock('../../../dist/tools/query-traces.js', () => ({
+  queryTraces: vi.fn(),
+}));
+vi.mock('../lib/workflow-graph.js', () => ({
+  buildWorkflowGraph: vi.fn(),
+}));
+vi.mock('../api/data-loader.js', () => ({
+  loadEvaluationsByMetric: vi.fn(),
+  loadEvaluationsForMetric: vi.fn(),
+  loadEvaluationsByTraceId: vi.fn(),
+  loadEvaluationsByTraceIds: vi.fn(),
+  loadTracesByTraceId: vi.fn(),
+  loadTracesBySessionId: vi.fn(),
+  loadLogsByTraceId: vi.fn(),
+  loadLogsBySessionId: vi.fn(),
+  loadVerifications: vi.fn(),
+  loadEvaluationsBySessionId: vi.fn(),
+  checkHealth: vi.fn(),
+}));
+import { agentRoutes } from '../api/routes/agents.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}) {
+  return {
+    traceId,
+    spanId,
+    name: 'hook:agent-post-tool',
+    startTimeUnixNano: 1737000000_000_000_000,
+    status: { code: 0 },
+    attributes: {
+      'gen_ai.agent.name': agentName,
+      'agent.has_error': false,
+      'agent.has_rate_limit': false,
+      'agent.output_size': 500,
+      'agent.source_type': 'active',
+      'session.id': 'sess-001',
+      ...attrs,
+    },
+  };
+}
+function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = []) {
+  return { traces: spans } as any;
+}
+function makeMockEval(traceId = 'trace-001') {
+  return {
+    evaluationName: 'relevance',
+    scoreValue: 0.9,
+    traceId,
+    timestamp: '2026-01-15T12:00:00.000Z',
+    evaluatorType: 'seed',
+    scoreLabel: 'relevant',
+    explanation: '',
+    evaluator: 'seed',
+  } as any;
+}
+describe('GET /agents', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult());
+    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
+  });
+  it('returns 400 for invalid period', async () => {
+    const res = await agentRoutes.request('/agents?period=99d');
+    expect(res.status).toBe(400);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('error');
+  });
+  it('returns 200 with empty agents array when no spans', async () => {
+    const res = await agentRoutes.request('/agents?period=7d');
+    expect(res.status).toBe(200);
+    const body = await res.json() as { agents: unknown[]; period: string };
+    expect(Array.isArray(body.agents)).toBe(true);
+    expect(body.agents).toHaveLength(0);
+    expect(body.period).toBe('7d');
+  });
+  it('returns period, startDate, endDate in response', async () => {
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('period', '7d');
+    expect(body).toHaveProperty('startDate');
+    expect(body).toHaveProperty('endDate');
+  });
+  it('aggregates spans into agent records', async () => {
+    const spans = [
+      makeSpan('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' }),
+      makeSpan('trace-002', 'span-002', 'general-purpose', { 'session.id': 'sess-002' }),
+    ];
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = await res.json() as { agents: Array<{ agentName: string; invocations: number }> };
+    expect(body.agents).toHaveLength(1);
+    expect(body.agents[0].agentName).toBe('general-purpose');
+    expect(body.agents[0].invocations).toBe(2);
+  });
+  it('computes errorRate correctly', async () => {
+    const spans = [
+      makeSpan('trace-001', 'span-001', 'general-purpose', { 'agent.has_error': true }),
+      makeSpan('trace-002', 'span-002', 'general-purpose', { 'agent.has_error': false }),
+    ];
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = await res.json() as { agents: Array<{ errorRate: number }> };
+    expect(body.agents[0].errorRate).toBeCloseTo(0.5, 3);
+  });
+  it('agent record has required fields', async () => {
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan()]));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = await res.json() as { agents: Array<Record<string, unknown>> };
+    const agent = body.agents[0];
+    expect(agent).toHaveProperty('agentName');
+    expect(agent).toHaveProperty('invocations');
+    expect(agent).toHaveProperty('errors');
+    expect(agent).toHaveProperty('errorRate');
+    expect(agent).toHaveProperty('sessionCount');
+    expect(agent).toHaveProperty('dailyCounts');
+    expect(agent).toHaveProperty('sourceTypes');
+    expect(agent).toHaveProperty('evalSummary');
+  });
+  it('sorts agents by invocations descending', async () => {
+    const spans = [
+      makeSpan('trace-r', 'span-r', 'rare-agent'),
+      makeSpan('trace-b1', 'span-b1', 'busy-agent'),
+      makeSpan('trace-b2', 'span-b2', 'busy-agent'),
+    ];
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = await res.json() as { agents: Array<{ agentName: string; invocations: number }> };
+    expect(body.agents[0].agentName).toBe('busy-agent');
+    expect(body.agents[0].invocations).toBe(2);
+    expect(body.agents[1].invocations).toBe(1);
+  });
+  it('joins evaluation scores to agents via traceId', async () => {
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan('trace-eval-001')]));
+    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([makeMockEval('trace-eval-001')]);
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = await res.json() as { agents: Array<{ evalSummary: Record<string, { avg: number; count: number }> }> };
+    expect(body.agents[0].evalSummary).toHaveProperty('relevance');
+    expect(body.agents[0].evalSummary.relevance.avg).toBeCloseTo(0.9, 3);
+    expect(body.agents[0].evalSummary.relevance.count).toBe(1);
+  });
+  it('returns 500 when queryTraces throws', async () => {
+    vi.mocked(queryTraces).mockRejectedValue(new Error('JSONL read error'));
+    const res = await agentRoutes.request('/agents?period=7d');
+    expect(res.status).toBe(500);
+  });
+});
+describe('GET /agents/:sessionId', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([]);
+    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1, agentScores: {}, trajectory: [] } as any);
+    vi.mocked(buildWorkflowGraph).mockReturnValue({ nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent' } as any);
+  });
+  it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
+    const res = await agentRoutes.request('/agents/sess-abc');
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('sessionId', 'sess-abc');
+    expect(body).toHaveProperty('spans');
+    expect(body).toHaveProperty('evaluation');
+    expect(body).toHaveProperty('evaluations');
+    expect(body).toHaveProperty('agentMap');
+  });
+  it('returns spans from data-loader', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
+    const res = await agentRoutes.request('/agents/sess-abc');
+    const body = await res.json() as { spans: unknown[] };
+    expect(body.spans).toHaveLength(1);
+  });
+  it('calls computeMultiAgentEvaluation with step scores', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
+    await agentRoutes.request('/agents/sess-abc');
+    expect(vi.mocked(computeMultiAgentEvaluation)).toHaveBeenCalled();
+  });
+  it('returns 500 when loadTracesBySessionId throws', async () => {
+    vi.mocked(loadTracesBySessionId).mockRejectedValue(new Error('session not found'));
+    const res = await agentRoutes.request('/agents/sess-abc');
+    expect(res.status).toBe(500);
+  });
+  it('returns graph field from buildWorkflowGraph', async () => {
+    const mockGraph = { nodes: [{ id: 'a' }], edges: [], rootNodeId: 'a', workflowShape: 'single_agent' };
+    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph as any);
+    const res = await agentRoutes.request('/agents/sess-abc');
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toHaveProperty('graph');
+    expect(body.graph).toEqual(mockGraph);
+  });
+});
+
+================
 File: src/__tests__/api-compliance.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -4231,6 +4434,849 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends?period=invalid');
     expect(res.status).toBe(400);
+  });
+});
+
+================
+File: src/__tests__/f1-f6-components.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { CQIHero } from '../components/CQIHero.js';
+import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
+import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
+import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
+import type { CompositeQualityIndex, CorrelationFeature } from '../types.js';
+afterEach(cleanup);
+describe('ScoreBadge', () => {
+  it('renders null score as N/A with aria-label', () => {
+    render(<ScoreBadge score={null} metricName="relevance" />);
+    const badge = screen.getByLabelText('relevance: no data');
+    expect(badge).toBeInTheDocument();
+    expect(badge.textContent).toContain('N/A');
+  });
+  it('renders high score with excellent band', () => {
+    render(<ScoreBadge score={0.95} metricName="relevance" direction="maximize" />);
+    const badge = screen.getByLabelText(/Score: 0.95, excellent/);
+    expect(badge).toBeInTheDocument();
+    expect(badge.textContent).toContain('0.95');
+  });
+  it('renders minimize direction hint', () => {
+    render(<ScoreBadge score={0.05} metricName="hallucination" direction="minimize" />);
+    expect(screen.getByLabelText(/lower is better/)).toBeInTheDocument();
+  });
+  it('uses custom label when provided', () => {
+    render(<ScoreBadge score={0.85} metricName="coherence" label="0.8500" />);
+    const badge = screen.getByLabelText(/Score: 0.85/);
+    expect(badge.textContent).toContain('0.8500');
+  });
+  it('renders failing band for low maximize score', () => {
+    render(<ScoreBadge score={0.3} metricName="relevance" direction="maximize" />);
+    expect(screen.getByLabelText(/failing/)).toBeInTheDocument();
+  });
+});
+function makeCQI(overrides: Partial<CompositeQualityIndex> = {}): CompositeQualityIndex {
+  return {
+    value: 0.82,
+    featureVersion: '1.0',
+    weights: { relevance: 0.2, coherence: 0.15, hallucination: 0.2 },
+    contributions: [
+      { metric: 'relevance', rawScore: 0.9, normalizedScore: 0.9, weight: 0.2, contribution: 0.18 },
+      { metric: 'coherence', rawScore: 0.85, normalizedScore: 0.85, weight: 0.15, contribution: 0.1275 },
+      { metric: 'hallucination', rawScore: 0.05, normalizedScore: 0.95, weight: 0.2, contribution: 0.19 },
+    ],
+    ...overrides,
+  };
+}
+describe('CQIHero', () => {
+  it('renders CQI value as percentage', () => {
+    const { container } = render(<CQIHero cqi={makeCQI()} />);
+    expect(container.textContent).toContain('82.0');
+  });
+  it('has correct region role and aria-label', () => {
+    render(<CQIHero cqi={makeCQI()} />);
+    const region = screen.getByRole('region');
+    expect(region).toHaveAttribute('aria-label', 'Composite Quality Index: 82.0');
+  });
+  it('renders contribution segments with titles', () => {
+    const { container } = render(<CQIHero cqi={makeCQI()} />);
+    const segments = container.querySelectorAll('[title*="weight"]');
+    expect(segments).toHaveLength(3);
+  });
+  it('renders screen reader table with caption', () => {
+    const { container } = render(<CQIHero cqi={makeCQI()} />);
+    const caption = container.querySelector('caption');
+    expect(caption).toHaveTextContent('CQI Metric Breakdown');
+  });
+  it('handles empty contributions', () => {
+    const { container } = render(<CQIHero cqi={makeCQI({ contributions: [] })} />);
+    expect(container.textContent).toContain('82.0');
+    expect(container.querySelectorAll('[title*="weight"]')).toHaveLength(0);
+  });
+});
+function makeEvalRows(): EvalRow[] {
+  return [
+    { score: 0.95, label: 'excellent', explanation: 'Great output', evaluator: 'judge-1', timestamp: '2026-02-17T00:00:00Z' },
+    { score: 0.5, label: 'partial', explanation: 'Needs work', evaluator: 'judge-1', timestamp: '2026-02-16T00:00:00Z' },
+    { score: 0.1, label: 'hallucinated', explanation: 'Contains hallucination', evaluator: 'judge-2', timestamp: '2026-02-15T00:00:00Z' },
+  ];
+}
+describe('EvaluationTable', () => {
+  it('renders all evaluation rows', () => {
+    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(3);
+  });
+  it('renders score values in table cells', () => {
+    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
+    expect(container.textContent).toContain('0.9500');
+    expect(container.textContent).toContain('0.5000');
+    expect(container.textContent).toContain('0.1000');
+  });
+  it('renders category filter buttons', () => {
+    render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const buttons = screen.getAllByRole('button');
+    const labels = buttons.map(b => b.textContent);
+    expect(labels).toContain('Pass');
+    expect(labels).toContain('Review');
+    expect(labels).toContain('Fail');
+  });
+  it('filters rows when category button clicked', () => {
+    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const failBtn = screen.getAllByRole('button').find(b => b.textContent === 'Fail')!;
+    fireEvent.click(failBtn);
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows.length).toBeLessThan(3);
+  });
+  it('renders empty state when no evaluations', () => {
+    const { container } = render(<EvaluationTable evaluations={[]} />);
+    expect(container.textContent).toContain('No evaluations match');
+  });
+  it('has sortable column headers with aria-sort', () => {
+    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const sortableHeaders = container.querySelectorAll('th[aria-sort]');
+    expect(sortableHeaders.length).toBeGreaterThan(0);
+  });
+  it('renders expand toggle on each row', () => {
+    render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const expandBtns = screen.getAllByLabelText('Expand row');
+    expect(expandBtns).toHaveLength(3);
+  });
+  it('expands row on click to show full detail', () => {
+    const rows: EvalRow[] = [{
+      score: 0.95,
+      label: 'excellent',
+      explanation: 'A very detailed explanation that should be fully visible when expanded',
+      evaluator: 'judge-1',
+      timestamp: '2026-02-17T00:00:00Z',
+      evaluatorType: 'llm',
+      traceId: 'abc-123',
+      sessionId: 'sess-456',
+    }];
+    const { container } = render(<EvaluationTable evaluations={rows} />);
+    const expandBtn = screen.getByLabelText('Expand row');
+    fireEvent.click(expandBtn);
+    expect(container.textContent).toContain('Evaluator Type');
+    expect(container.textContent).toContain('llm');
+    expect(container.textContent).toContain('abc-123');
+    expect(container.textContent).toContain('sess-456');
+  });
+  it('collapses row on second click', () => {
+    const rows: EvalRow[] = [{
+      score: 0.95,
+      label: 'excellent',
+      explanation: 'Detail text',
+      evaluatorType: 'llm',
+      traceId: 'abc-123',
+    }];
+    const { container } = render(<EvaluationTable evaluations={rows} />);
+    const expandBtn = screen.getByLabelText('Expand row');
+    fireEvent.click(expandBtn);
+    expect(container.textContent).toContain('Evaluator Type');
+    const collapseBtn = screen.getByLabelText('Collapse row');
+    fireEvent.click(collapseBtn);
+    expect(container.textContent).not.toContain('Evaluator Type');
+  });
+});
+function makeCorrelations(): { correlations: CorrelationFeature[]; metrics: string[] } {
+  const metrics = ['relevance', 'coherence', 'hallucination'];
+  const correlations: CorrelationFeature[] = [
+    {
+      metricA: 'relevance', metricB: 'coherence',
+      pearsonR: 0.73, spearmanR: 0.7, effectSize: 0.5,
+      pValue: 0.001, significant: true,
+      lagHours: 0, isKnownToxicCombo: false,
+      coOccurrenceRate: 0, causalConfidence: 'correlation',
+      featureVersion: '3.0',
+    },
+    {
+      metricA: 'relevance', metricB: 'hallucination',
+      pearsonR: -0.85, spearmanR: -0.82, effectSize: 0.9,
+      pValue: 0.0001, significant: true,
+      lagHours: 1, isKnownToxicCombo: true,
+      coOccurrenceRate: 0.6, causalConfidence: 'correlation',
+      featureVersion: '3.0',
+    },
+    {
+      metricA: 'coherence', metricB: 'hallucination',
+      pearsonR: -0.45, spearmanR: -0.4, effectSize: 0.3,
+      pValue: 0.05, significant: false,
+      lagHours: 0, isKnownToxicCombo: false,
+      coOccurrenceRate: 0, causalConfidence: 'correlation',
+      featureVersion: '3.0',
+    },
+  ];
+  return { correlations, metrics };
+}
+describe('CorrelationHeatmap', () => {
+  it('renders table with correct role', () => {
+    const { correlations, metrics } = makeCorrelations();
+    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
+    expect(container.querySelector('[role="table"]')).toBeInTheDocument();
+  });
+  it('renders column headers', () => {
+    const { correlations, metrics } = makeCorrelations();
+    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
+    const headers = container.querySelectorAll('[role="columnheader"]');
+    expect(headers).toHaveLength(3);
+  });
+  it('renders diagonal cells as 1.00', () => {
+    const { correlations, metrics } = makeCorrelations();
+    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
+    const allCells = container.querySelectorAll('[role="cell"]');
+    let diagCount = 0;
+    allCells.forEach(cell => {
+      if (cell.textContent === '1.00') diagCount++;
+    });
+    expect(diagCount).toBe(3);
+  });
+  it('renders off-diagonal correlation values', () => {
+    const { correlations, metrics } = makeCorrelations();
+    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
+    expect(container.textContent).toContain('0.73');
+    expect(container.textContent).toContain('-0.85');
+  });
+  it('renders cells with aria-labels', () => {
+    const { correlations, metrics } = makeCorrelations();
+    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
+    const cell = container.querySelector('[aria-label*="relevance vs coherence"]');
+    expect(cell).toBeInTheDocument();
+  });
+  it('applies toxic border styling', () => {
+    const { correlations, metrics } = makeCorrelations();
+    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
+    const toxicCells = container.querySelectorAll('[data-toxic="true"]');
+    expect(toxicCells.length).toBeGreaterThanOrEqual(2);
+  });
+});
+function ShortcutConsumer({ shortcutKey, desc }: { shortcutKey: string; desc: string }) {
+  const action = vi.fn();
+  useShortcut(shortcutKey, desc, 'test', action);
+  return <div data-testid="consumer">{desc}</div>;
+}
+describe('KeyboardNavProvider', () => {
+  it('renders children without infinite loop', () => {
+    const { getByTestId } = render(
+      <KeyboardNavProvider>
+        <ShortcutConsumer shortcutKey="h" desc="Go home" />
+      </KeyboardNavProvider>,
+    );
+    expect(getByTestId('consumer')).toBeInTheDocument();
+  });
+  it('registers multiple shortcuts without loop', () => {
+    const { getAllByTestId } = render(
+      <KeyboardNavProvider>
+        <ShortcutConsumer shortcutKey="h" desc="Go home" />
+        <ShortcutConsumer shortcutKey="s" desc="Search" />
+        <ShortcutConsumer shortcutKey="?" desc="Help" />
+      </KeyboardNavProvider>,
+    );
+    expect(getAllByTestId('consumer')).toHaveLength(3);
+  });
+  it('useKeyboardNav throws outside provider', () => {
+    function Orphan() {
+      useKeyboardNav();
+      return null;
+    }
+    expect(() => render(<Orphan />)).toThrow('useKeyboardNav must be used within KeyboardNavProvider');
+  });
+  it('fires shortcut action on keydown', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('x', 'Test action', 'test', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => {
+      fireEvent.keyDown(document, { key: 'x' });
+    });
+    expect(action).toHaveBeenCalledOnce();
+  });
+  it('toggles overlay on ? key', () => {
+    function OverlayReader() {
+      const { overlayOpen } = useKeyboardNav();
+      return <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>;
+    }
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+    act(() => {
+      fireEvent.keyDown(document, { key: '?' });
+    });
+    expect(screen.getByTestId('overlay').textContent).toBe('open');
+  });
+});
+
+================
+File: src/__tests__/keyboard-nav-context.test.tsx
+================
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
+afterEach(cleanup);
+function ShortcutConsumer({ shortcutKey, desc, scope, action }: {
+  shortcutKey: string;
+  desc: string;
+  scope?: string;
+  action?: () => void;
+}) {
+  useShortcut(shortcutKey, desc, scope ?? 'test', action ?? (() => {}));
+  return <div data-testid="consumer">{shortcutKey}</div>;
+}
+function OverlayReader() {
+  const { overlayOpen } = useKeyboardNav();
+  return <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>;
+}
+describe('shortcut conflict guard', () => {
+  it('throws when registering single key "g" when combo "g h" already exists', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => {
+      render(
+        <KeyboardNavProvider>
+          <ShortcutConsumer shortcutKey="g h" desc="Go home" />
+          <ShortcutConsumer shortcutKey="g" desc="Conflicting single g" />
+        </KeyboardNavProvider>,
+      );
+    }).toThrow(/conflict/i);
+    spy.mockRestore();
+  });
+  it('throws when registering combo "g h" when single key "g" already exists', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => {
+      render(
+        <KeyboardNavProvider>
+          <ShortcutConsumer shortcutKey="g" desc="Go somewhere" />
+          <ShortcutConsumer shortcutKey="g h" desc="Conflicting combo g h" />
+        </KeyboardNavProvider>,
+      );
+    }).toThrow(/conflict/i);
+    spy.mockRestore();
+  });
+  it('error message names the conflicting shortcut description', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let caught: Error | null = null;
+    try {
+      render(
+        <KeyboardNavProvider>
+          <ShortcutConsumer shortcutKey="g h" desc="Go home page" />
+          <ShortcutConsumer shortcutKey="g" desc="Global search" />
+        </KeyboardNavProvider>,
+      );
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).toMatch(/Go home page/);
+    spy.mockRestore();
+  });
+  it('does NOT throw when two combos share no prefix relationship', () => {
+    expect(() => {
+      render(
+        <KeyboardNavProvider>
+          <ShortcutConsumer shortcutKey="g h" desc="Go home" />
+          <ShortcutConsumer shortcutKey="g j" desc="Go jobs" />
+        </KeyboardNavProvider>,
+      );
+    }).not.toThrow();
+  });
+});
+describe('two-key combo dispatch', () => {
+  it('fires combo action when both keys pressed in sequence', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
+    expect(action).not.toHaveBeenCalled();
+    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
+    expect(action).toHaveBeenCalledOnce();
+  });
+  it('fires correct action when two combos share the same prefix', () => {
+    const goHome = vi.fn();
+    const goJobs = vi.fn();
+    function MultiComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', goHome);
+      useShortcut('g j', 'Go jobs', 'nav', goJobs);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <MultiComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
+    act(() => { fireEvent.keyDown(document, { key: 'j' }); });
+    expect(goJobs).toHaveBeenCalledOnce();
+    expect(goHome).not.toHaveBeenCalled();
+  });
+  it('does NOT fire combo when only the first key is pressed', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('does NOT fire combo when second key does not match', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => {
+      fireEvent.keyDown(document, { key: 'g' });
+      fireEvent.keyDown(document, { key: 'x' });
+    });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('re-arms combo pending after a failed second key', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => {
+      fireEvent.keyDown(document, { key: 'g' });
+      fireEvent.keyDown(document, { key: 'x' });
+    });
+    act(() => {
+      fireEvent.keyDown(document, { key: 'g' });
+      fireEvent.keyDown(document, { key: 'h' });
+    });
+    expect(action).toHaveBeenCalledOnce();
+  });
+  it('combo should NOT fire when first key arrives from an ignored INPUT element', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return <input data-testid="input-field" />;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    const input = screen.getByTestId('input-field');
+    act(() => { fireEvent.keyDown(input, { key: 'g' }); });
+    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+});
+describe('combo timeout', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+  it('clears pending after 500ms so a late second key does not fire the combo', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
+    act(() => { vi.advanceTimersByTime(501); });
+    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('fires combo when second key arrives before the 500ms timeout', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
+    act(() => { vi.advanceTimersByTime(400); });
+    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
+    expect(action).toHaveBeenCalledOnce();
+  });
+  it('does NOT fire combo at exactly the 500ms boundary — second key at 500ms is too late', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ComboConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
+    act(() => { vi.advanceTimersByTime(500); });
+    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+});
+describe('overlay toggle', () => {
+  it('starts closed', () => {
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+  });
+  it('pressing ? opens the overlay', () => {
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: '?' }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('open');
+  });
+  it('pressing ? a second time closes the overlay', () => {
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: '?' }); });
+    act(() => { fireEvent.keyDown(document, { key: '?' }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+  });
+  it('pressing Escape closes an open overlay', () => {
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: '?' }); });
+    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+  });
+  it('pressing Escape when overlay is closed has no effect', () => {
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+  });
+  it('Escape with Ctrl held does NOT close the overlay', () => {
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: '?' }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('open');
+    act(() => { fireEvent.keyDown(document, { key: 'Escape', ctrlKey: true }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('open');
+  });
+  it('? with Ctrl held does NOT toggle overlay', () => {
+    render(
+      <KeyboardNavProvider>
+        <OverlayReader />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: '?', ctrlKey: true }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+  });
+  it('programmatic toggleOverlay opens the overlay and Escape then closes it', () => {
+    function TogglerAndReader() {
+      const { overlayOpen, toggleOverlay } = useKeyboardNav();
+      return (
+        <>
+          <button data-testid="btn" onClick={toggleOverlay}>toggle</button>
+          <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>
+        </>
+      );
+    }
+    render(
+      <KeyboardNavProvider>
+        <TogglerAndReader />
+      </KeyboardNavProvider>,
+    );
+    act(() => { screen.getByTestId('btn').click(); });
+    expect(screen.getByTestId('overlay').textContent).toBe('open');
+    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+  });
+});
+describe('ignored tags', () => {
+  it('does NOT fire shortcut when keydown originates from INPUT', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return <input data-testid="input-field" />;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(screen.getByTestId('input-field'), { key: 'k' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('does NOT fire shortcut when keydown originates from TEXTAREA', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return <textarea data-testid="textarea-field" />;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(screen.getByTestId('textarea-field'), { key: 'k' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('does NOT fire shortcut when keydown originates from SELECT', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return <select data-testid="select-field"><option value="a">A</option></select>;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(screen.getByTestId('select-field'), { key: 'k' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('DOES fire shortcut when keydown originates from a div', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return <div data-testid="div-field" tabIndex={0} />;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(screen.getByTestId('div-field'), { key: 'k' }); });
+    expect(action).toHaveBeenCalledOnce();
+  });
+  it('does NOT open overlay via ? when keydown originates from INPUT', () => {
+    function OverlayAndInput() {
+      const { overlayOpen } = useKeyboardNav();
+      return (
+        <>
+          <input data-testid="input-field" />
+          <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>
+        </>
+      );
+    }
+    render(
+      <KeyboardNavProvider>
+        <OverlayAndInput />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(screen.getByTestId('input-field'), { key: '?' }); });
+    expect(screen.getByTestId('overlay').textContent).toBe('closed');
+  });
+});
+describe('modifier key bypass', () => {
+  it('does NOT fire shortcut when Ctrl is held', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return null;
+    }
+    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
+    act(() => { fireEvent.keyDown(document, { key: 'k', ctrlKey: true }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('does NOT fire shortcut when Meta is held', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return null;
+    }
+    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
+    act(() => { fireEvent.keyDown(document, { key: 'k', metaKey: true }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('does NOT fire shortcut when Alt is held', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return null;
+    }
+    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
+    act(() => { fireEvent.keyDown(document, { key: 'k', altKey: true }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('DOES fire shortcut when no modifier keys are held', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Do something', 'test', action);
+      return null;
+    }
+    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
+    act(() => { fireEvent.keyDown(document, { key: 'k' }); });
+    expect(action).toHaveBeenCalledOnce();
+  });
+  it('does NOT prime combo pending when first key pressed with Ctrl held', () => {
+    const action = vi.fn();
+    function ComboConsumer() {
+      useShortcut('g h', 'Go home', 'nav', action);
+      return null;
+    }
+    render(<KeyboardNavProvider><ComboConsumer /></KeyboardNavProvider>);
+    act(() => { fireEvent.keyDown(document, { key: 'g', ctrlKey: true }); });
+    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
+    expect(action).not.toHaveBeenCalled();
+  });
+});
+describe('duplicate key registration guard', () => {
+  it('throws when the same single key is registered twice', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => {
+      render(
+        <KeyboardNavProvider>
+          <ShortcutConsumer shortcutKey="k" desc="First k handler" />
+          <ShortcutConsumer shortcutKey="k" desc="Second k handler" />
+        </KeyboardNavProvider>,
+      );
+    }).toThrow(/conflict|duplicate/i);
+    spy.mockRestore();
+  });
+  it('fires the shortcut action exactly once when registered once', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('k', 'Test action', 'test', action);
+      return null;
+    }
+    render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'k' }); });
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+});
+describe('unregister', () => {
+  it('shortcut no longer fires after the component that registered it unmounts', () => {
+    const action = vi.fn();
+    function ActionConsumer() {
+      useShortcut('z', 'Test action', 'test', action);
+      return null;
+    }
+    const { unmount } = render(
+      <KeyboardNavProvider>
+        <ActionConsumer />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'z' }); });
+    expect(action).toHaveBeenCalledOnce();
+    unmount();
+    render(<KeyboardNavProvider>{null}</KeyboardNavProvider>);
+    act(() => { fireEvent.keyDown(document, { key: 'z' }); });
+    expect(action).toHaveBeenCalledOnce();
+  });
+  it('unregistering one shortcut does not affect other registered shortcuts', () => {
+    const actionA = vi.fn();
+    const actionB = vi.fn();
+    function ConsumerA() {
+      useShortcut('a', 'Action A', 'test', actionA);
+      return null;
+    }
+    function ConsumerB() {
+      useShortcut('b', 'Action B', 'test', actionB);
+      return null;
+    }
+    const { rerender } = render(
+      <KeyboardNavProvider>
+        <ConsumerA />
+        <ConsumerB />
+      </KeyboardNavProvider>,
+    );
+    rerender(
+      <KeyboardNavProvider>
+        <ConsumerB />
+      </KeyboardNavProvider>,
+    );
+    act(() => { fireEvent.keyDown(document, { key: 'a' }); });
+    act(() => { fireEvent.keyDown(document, { key: 'b' }); });
+    expect(actionA).not.toHaveBeenCalled();
+    expect(actionB).toHaveBeenCalledOnce();
+  });
+  it('shortcuts array in context reflects the current registered set', () => {
+    function ShortcutsCounter() {
+      const { shortcuts } = useKeyboardNav();
+      return <div data-testid="count">{shortcuts.length}</div>;
+    }
+    function RegisteredShortcut() {
+      useShortcut('m', 'Maybe shortcut', 'test', () => {});
+      return null;
+    }
+    const { rerender } = render(
+      <KeyboardNavProvider>
+        <ShortcutsCounter />
+        <RegisteredShortcut />
+      </KeyboardNavProvider>,
+    );
+    expect(screen.getByTestId('count').textContent).toBe('1');
+    rerender(
+      <KeyboardNavProvider>
+        <ShortcutsCounter />
+      </KeyboardNavProvider>,
+    );
+    expect(screen.getByTestId('count').textContent).toBe('0');
   });
 });
 
@@ -9939,846 +10985,88 @@ describe('Coverage tab (CVG-1)', () => {
 });
 
 ================
-File: src/__tests__/f1-f6-components.test.tsx
+File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
 ================
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { CQIHero } from '../components/CQIHero.js';
-import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
-import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
-import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
-import type { CompositeQualityIndex, CorrelationFeature } from '../types.js';
-afterEach(cleanup);
-describe('ScoreBadge', () => {
-  it('renders null score as N/A with aria-label', () => {
-    render(<ScoreBadge score={null} metricName="relevance" />);
-    const badge = screen.getByLabelText('relevance: no data');
-    expect(badge).toBeInTheDocument();
-    expect(badge.textContent).toContain('N/A');
+import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'fs';
+import { resolve } from 'path';
+const DASHBOARD_ROOT = resolve(__dirname, '../../');
+const THEME_CSS = resolve(DASHBOARD_ROOT, 'src/theme.css');
+const PUBLIC_FONTS_DIR = resolve(DASHBOARD_ROOT, 'public/fonts');
+const REQUIRED_FAMILIES = ['JetBrains Mono', 'IBM Plex Sans'] as const;
+const REQUIRED_WEIGHTS = [400, 500, 600] as const;
+const EXPECTED_FONT_FILES: Record<string, string[]> = {
+  'JetBrains Mono': [
+    'JetBrainsMono-Regular.woff2',
+    'JetBrainsMono-Medium.woff2',
+    'JetBrainsMono-SemiBold.woff2',
+  ],
+  'IBM Plex Sans': [
+    'IBMPlexSans-Regular.woff2',
+    'IBMPlexSans-Medium.woff2',
+    'IBMPlexSans-SemiBold.woff2',
+  ],
+};
+describe('theme.css — no external Google Fonts import', () => {
+  it('should not contain a fonts.googleapis.com @import', () => {
+    const css = readFileSync(THEME_CSS, 'utf-8');
+    expect(css).not.toMatch(/fonts\.googleapis\.com/);
   });
-  it('renders high score with excellent band', () => {
-    render(<ScoreBadge score={0.95} metricName="relevance" direction="maximize" />);
-    const badge = screen.getByLabelText(/Score: 0.95, excellent/);
-    expect(badge).toBeInTheDocument();
-    expect(badge.textContent).toContain('0.95');
-  });
-  it('renders minimize direction hint', () => {
-    render(<ScoreBadge score={0.05} metricName="hallucination" direction="minimize" />);
-    expect(screen.getByLabelText(/lower is better/)).toBeInTheDocument();
-  });
-  it('uses custom label when provided', () => {
-    render(<ScoreBadge score={0.85} metricName="coherence" label="0.8500" />);
-    const badge = screen.getByLabelText(/Score: 0.85/);
-    expect(badge.textContent).toContain('0.8500');
-  });
-  it('renders failing band for low maximize score', () => {
-    render(<ScoreBadge score={0.3} metricName="relevance" direction="maximize" />);
-    expect(screen.getByLabelText(/failing/)).toBeInTheDocument();
+  it('should not contain any external @import url starting with https://', () => {
+    const css = readFileSync(THEME_CSS, 'utf-8');
+    const externalImport = /@import\s+url\(['"]?https?:\/\//;
+    expect(css).not.toMatch(externalImport);
   });
 });
-function makeCQI(overrides: Partial<CompositeQualityIndex> = {}): CompositeQualityIndex {
-  return {
-    value: 0.82,
-    featureVersion: '1.0',
-    weights: { relevance: 0.2, coherence: 0.15, hallucination: 0.2 },
-    contributions: [
-      { metric: 'relevance', rawScore: 0.9, normalizedScore: 0.9, weight: 0.2, contribution: 0.18 },
-      { metric: 'coherence', rawScore: 0.85, normalizedScore: 0.85, weight: 0.15, contribution: 0.1275 },
-      { metric: 'hallucination', rawScore: 0.05, normalizedScore: 0.95, weight: 0.2, contribution: 0.19 },
-    ],
-    ...overrides,
-  };
-}
-describe('CQIHero', () => {
-  it('renders CQI value as percentage', () => {
-    const { container } = render(<CQIHero cqi={makeCQI()} />);
-    expect(container.textContent).toContain('82.0');
+describe('local @font-face declarations exist', () => {
+  function getFontFaceSource(): string {
+    const fontsCss = resolve(DASHBOARD_ROOT, 'src/fonts.css');
+    if (existsSync(fontsCss)) {
+      return readFileSync(fontsCss, 'utf-8');
+    }
+    return readFileSync(THEME_CSS, 'utf-8');
+  }
+  it('should declare @font-face for JetBrains Mono', () => {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/font-family:\s*['"]?JetBrains Mono['"]?/i);
   });
-  it('has correct region role and aria-label', () => {
-    render(<CQIHero cqi={makeCQI()} />);
-    const region = screen.getByRole('region');
-    expect(region).toHaveAttribute('aria-label', 'Composite Quality Index: 82.0');
+  it('should declare @font-face for IBM Plex Sans', () => {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/font-family:\s*['"]?IBM Plex Sans['"]?/i);
   });
-  it('renders contribution segments with titles', () => {
-    const { container } = render(<CQIHero cqi={makeCQI()} />);
-    const segments = container.querySelectorAll('[title*="weight"]');
-    expect(segments).toHaveLength(3);
-  });
-  it('renders screen reader table with caption', () => {
-    const { container } = render(<CQIHero cqi={makeCQI()} />);
-    const caption = container.querySelector('caption');
-    expect(caption).toHaveTextContent('CQI Metric Breakdown');
-  });
-  it('handles empty contributions', () => {
-    const { container } = render(<CQIHero cqi={makeCQI({ contributions: [] })} />);
-    expect(container.textContent).toContain('82.0');
-    expect(container.querySelectorAll('[title*="weight"]')).toHaveLength(0);
+  for (const family of REQUIRED_FAMILIES) {
+    for (const weight of REQUIRED_WEIGHTS) {
+      it(`should have a @font-face block for ${family} weight ${weight}`, () => {
+        const css = getFontFaceSource();
+        // Find all @font-face blocks that mention this family
+        const fontFaceBlocks = [...css.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m => m[0]);
+        const familyBlocks = fontFaceBlocks.filter(block =>
+          new RegExp(`font-family:\\s*['"]?${family}['"]?`, 'i').test(block)
+        );
+        const hasWeight = familyBlocks.some(block =>
+          new RegExp(`font-weight:\\s*${weight}`).test(block)
+        );
+        expect(hasWeight, `Expected @font-face for "${family}" with font-weight: ${weight}`).toBe(true);
+      });
+    }
+  }
+  it('should reference /fonts/ local path in @font-face src', () => {
+    const css = getFontFaceSource();
+    expect(css).toMatch(/url\(['"]?\/fonts\//);
   });
 });
-function makeEvalRows(): EvalRow[] {
-  return [
-    { score: 0.95, label: 'excellent', explanation: 'Great output', evaluator: 'judge-1', timestamp: '2026-02-17T00:00:00Z' },
-    { score: 0.5, label: 'partial', explanation: 'Needs work', evaluator: 'judge-1', timestamp: '2026-02-16T00:00:00Z' },
-    { score: 0.1, label: 'hallucinated', explanation: 'Contains hallucination', evaluator: 'judge-2', timestamp: '2026-02-15T00:00:00Z' },
-  ];
-}
-describe('EvaluationTable', () => {
-  it('renders all evaluation rows', () => {
-    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
-    const rows = container.querySelectorAll('tbody tr');
-    expect(rows).toHaveLength(3);
+describe('public/fonts/ directory and font files exist', () => {
+  it('should have a public/fonts/ directory', () => {
+    expect(existsSync(PUBLIC_FONTS_DIR), `Expected directory: ${PUBLIC_FONTS_DIR}`).toBe(true);
   });
-  it('renders score values in table cells', () => {
-    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
-    expect(container.textContent).toContain('0.9500');
-    expect(container.textContent).toContain('0.5000');
-    expect(container.textContent).toContain('0.1000');
-  });
-  it('renders category filter buttons', () => {
-    render(<EvaluationTable evaluations={makeEvalRows()} />);
-    const buttons = screen.getAllByRole('button');
-    const labels = buttons.map(b => b.textContent);
-    expect(labels).toContain('Pass');
-    expect(labels).toContain('Review');
-    expect(labels).toContain('Fail');
-  });
-  it('filters rows when category button clicked', () => {
-    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
-    const failBtn = screen.getAllByRole('button').find(b => b.textContent === 'Fail')!;
-    fireEvent.click(failBtn);
-    const rows = container.querySelectorAll('tbody tr');
-    expect(rows.length).toBeLessThan(3);
-  });
-  it('renders empty state when no evaluations', () => {
-    const { container } = render(<EvaluationTable evaluations={[]} />);
-    expect(container.textContent).toContain('No evaluations match');
-  });
-  it('has sortable column headers with aria-sort', () => {
-    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
-    const sortableHeaders = container.querySelectorAll('th[aria-sort]');
-    expect(sortableHeaders.length).toBeGreaterThan(0);
-  });
-  it('renders expand toggle on each row', () => {
-    render(<EvaluationTable evaluations={makeEvalRows()} />);
-    const expandBtns = screen.getAllByLabelText('Expand row');
-    expect(expandBtns).toHaveLength(3);
-  });
-  it('expands row on click to show full detail', () => {
-    const rows: EvalRow[] = [{
-      score: 0.95,
-      label: 'excellent',
-      explanation: 'A very detailed explanation that should be fully visible when expanded',
-      evaluator: 'judge-1',
-      timestamp: '2026-02-17T00:00:00Z',
-      evaluatorType: 'llm',
-      traceId: 'abc-123',
-      sessionId: 'sess-456',
-    }];
-    const { container } = render(<EvaluationTable evaluations={rows} />);
-    const expandBtn = screen.getByLabelText('Expand row');
-    fireEvent.click(expandBtn);
-    expect(container.textContent).toContain('Evaluator Type');
-    expect(container.textContent).toContain('llm');
-    expect(container.textContent).toContain('abc-123');
-    expect(container.textContent).toContain('sess-456');
-  });
-  it('collapses row on second click', () => {
-    const rows: EvalRow[] = [{
-      score: 0.95,
-      label: 'excellent',
-      explanation: 'Detail text',
-      evaluatorType: 'llm',
-      traceId: 'abc-123',
-    }];
-    const { container } = render(<EvaluationTable evaluations={rows} />);
-    const expandBtn = screen.getByLabelText('Expand row');
-    fireEvent.click(expandBtn);
-    expect(container.textContent).toContain('Evaluator Type');
-    const collapseBtn = screen.getByLabelText('Collapse row');
-    fireEvent.click(collapseBtn);
-    expect(container.textContent).not.toContain('Evaluator Type');
-  });
-});
-function makeCorrelations(): { correlations: CorrelationFeature[]; metrics: string[] } {
-  const metrics = ['relevance', 'coherence', 'hallucination'];
-  const correlations: CorrelationFeature[] = [
-    {
-      metricA: 'relevance', metricB: 'coherence',
-      pearsonR: 0.73, spearmanR: 0.7, effectSize: 0.5,
-      pValue: 0.001, significant: true,
-      lagHours: 0, isKnownToxicCombo: false,
-      coOccurrenceRate: 0, causalConfidence: 'correlation',
-      featureVersion: '3.0',
-    },
-    {
-      metricA: 'relevance', metricB: 'hallucination',
-      pearsonR: -0.85, spearmanR: -0.82, effectSize: 0.9,
-      pValue: 0.0001, significant: true,
-      lagHours: 1, isKnownToxicCombo: true,
-      coOccurrenceRate: 0.6, causalConfidence: 'correlation',
-      featureVersion: '3.0',
-    },
-    {
-      metricA: 'coherence', metricB: 'hallucination',
-      pearsonR: -0.45, spearmanR: -0.4, effectSize: 0.3,
-      pValue: 0.05, significant: false,
-      lagHours: 0, isKnownToxicCombo: false,
-      coOccurrenceRate: 0, causalConfidence: 'correlation',
-      featureVersion: '3.0',
-    },
-  ];
-  return { correlations, metrics };
-}
-describe('CorrelationHeatmap', () => {
-  it('renders table with correct role', () => {
-    const { correlations, metrics } = makeCorrelations();
-    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    expect(container.querySelector('[role="table"]')).toBeInTheDocument();
-  });
-  it('renders column headers', () => {
-    const { correlations, metrics } = makeCorrelations();
-    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    const headers = container.querySelectorAll('[role="columnheader"]');
-    expect(headers).toHaveLength(3);
-  });
-  it('renders diagonal cells as 1.00', () => {
-    const { correlations, metrics } = makeCorrelations();
-    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    const allCells = container.querySelectorAll('[role="cell"]');
-    let diagCount = 0;
-    allCells.forEach(cell => {
-      if (cell.textContent === '1.00') diagCount++;
-    });
-    expect(diagCount).toBe(3);
-  });
-  it('renders off-diagonal correlation values', () => {
-    const { correlations, metrics } = makeCorrelations();
-    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    expect(container.textContent).toContain('0.73');
-    expect(container.textContent).toContain('-0.85');
-  });
-  it('renders cells with aria-labels', () => {
-    const { correlations, metrics } = makeCorrelations();
-    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    const cell = container.querySelector('[aria-label*="relevance vs coherence"]');
-    expect(cell).toBeInTheDocument();
-  });
-  it('applies toxic border styling', () => {
-    const { correlations, metrics } = makeCorrelations();
-    const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    const toxicCells = container.querySelectorAll('[data-toxic="true"]');
-    expect(toxicCells.length).toBeGreaterThanOrEqual(2);
-  });
-});
-function ShortcutConsumer({ shortcutKey, desc }: { shortcutKey: string; desc: string }) {
-  const action = vi.fn();
-  useShortcut(shortcutKey, desc, 'test', action);
-  return <div data-testid="consumer">{desc}</div>;
-}
-describe('KeyboardNavProvider', () => {
-  it('renders children without infinite loop', () => {
-    const { getByTestId } = render(
-      <KeyboardNavProvider>
-        <ShortcutConsumer shortcutKey="h" desc="Go home" />
-      </KeyboardNavProvider>,
-    );
-    expect(getByTestId('consumer')).toBeInTheDocument();
-  });
-  it('registers multiple shortcuts without loop', () => {
-    const { getAllByTestId } = render(
-      <KeyboardNavProvider>
-        <ShortcutConsumer shortcutKey="h" desc="Go home" />
-        <ShortcutConsumer shortcutKey="s" desc="Search" />
-        <ShortcutConsumer shortcutKey="?" desc="Help" />
-      </KeyboardNavProvider>,
-    );
-    expect(getAllByTestId('consumer')).toHaveLength(3);
-  });
-  it('useKeyboardNav throws outside provider', () => {
-    function Orphan() {
-      useKeyboardNav();
-      return null;
+  for (const [family, files] of Object.entries(EXPECTED_FONT_FILES)) {
+    for (const file of files) {
+      it(`should have font file public/fonts/${file} for ${family}`, () => {
+        const filePath = resolve(PUBLIC_FONTS_DIR, file);
+        expect(existsSync(filePath), `Expected font file at: ${filePath}`).toBe(true);
+      });
     }
-    expect(() => render(<Orphan />)).toThrow('useKeyboardNav must be used within KeyboardNavProvider');
-  });
-  it('fires shortcut action on keydown', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('x', 'Test action', 'test', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => {
-      fireEvent.keyDown(document, { key: 'x' });
-    });
-    expect(action).toHaveBeenCalledOnce();
-  });
-  it('toggles overlay on ? key', () => {
-    function OverlayReader() {
-      const { overlayOpen } = useKeyboardNav();
-      return <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>;
-    }
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-    act(() => {
-      fireEvent.keyDown(document, { key: '?' });
-    });
-    expect(screen.getByTestId('overlay').textContent).toBe('open');
-  });
-});
-
-================
-File: src/__tests__/keyboard-nav-context.test.tsx
-================
-import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
-import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
-afterEach(cleanup);
-function ShortcutConsumer({ shortcutKey, desc, scope, action }: {
-  shortcutKey: string;
-  desc: string;
-  scope?: string;
-  action?: () => void;
-}) {
-  useShortcut(shortcutKey, desc, scope ?? 'test', action ?? (() => {}));
-  return <div data-testid="consumer">{shortcutKey}</div>;
-}
-function OverlayReader() {
-  const { overlayOpen } = useKeyboardNav();
-  return <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>;
-}
-describe('shortcut conflict guard', () => {
-  it('throws when registering single key "g" when combo "g h" already exists', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => {
-      render(
-        <KeyboardNavProvider>
-          <ShortcutConsumer shortcutKey="g h" desc="Go home" />
-          <ShortcutConsumer shortcutKey="g" desc="Conflicting single g" />
-        </KeyboardNavProvider>,
-      );
-    }).toThrow(/conflict/i);
-    spy.mockRestore();
-  });
-  it('throws when registering combo "g h" when single key "g" already exists', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => {
-      render(
-        <KeyboardNavProvider>
-          <ShortcutConsumer shortcutKey="g" desc="Go somewhere" />
-          <ShortcutConsumer shortcutKey="g h" desc="Conflicting combo g h" />
-        </KeyboardNavProvider>,
-      );
-    }).toThrow(/conflict/i);
-    spy.mockRestore();
-  });
-  it('error message names the conflicting shortcut description', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    let caught: Error | null = null;
-    try {
-      render(
-        <KeyboardNavProvider>
-          <ShortcutConsumer shortcutKey="g h" desc="Go home page" />
-          <ShortcutConsumer shortcutKey="g" desc="Global search" />
-        </KeyboardNavProvider>,
-      );
-    } catch (e) {
-      caught = e as Error;
-    }
-    expect(caught).not.toBeNull();
-    expect(caught!.message).toMatch(/Go home page/);
-    spy.mockRestore();
-  });
-  it('does NOT throw when two combos share no prefix relationship', () => {
-    expect(() => {
-      render(
-        <KeyboardNavProvider>
-          <ShortcutConsumer shortcutKey="g h" desc="Go home" />
-          <ShortcutConsumer shortcutKey="g j" desc="Go jobs" />
-        </KeyboardNavProvider>,
-      );
-    }).not.toThrow();
-  });
-});
-describe('two-key combo dispatch', () => {
-  it('fires combo action when both keys pressed in sequence', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    expect(action).not.toHaveBeenCalled();
-    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
-    expect(action).toHaveBeenCalledOnce();
-  });
-  it('fires correct action when two combos share the same prefix', () => {
-    const goHome = vi.fn();
-    const goJobs = vi.fn();
-    function MultiComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', goHome);
-      useShortcut('g j', 'Go jobs', 'nav', goJobs);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <MultiComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    act(() => { fireEvent.keyDown(document, { key: 'j' }); });
-    expect(goJobs).toHaveBeenCalledOnce();
-    expect(goHome).not.toHaveBeenCalled();
-  });
-  it('does NOT fire combo when only the first key is pressed', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('does NOT fire combo when second key does not match', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => {
-      fireEvent.keyDown(document, { key: 'g' });
-      fireEvent.keyDown(document, { key: 'x' });
-    });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('re-arms combo pending after a failed second key', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => {
-      fireEvent.keyDown(document, { key: 'g' });
-      fireEvent.keyDown(document, { key: 'x' });
-    });
-    act(() => {
-      fireEvent.keyDown(document, { key: 'g' });
-      fireEvent.keyDown(document, { key: 'h' });
-    });
-    expect(action).toHaveBeenCalledOnce();
-  });
-  it('combo should NOT fire when first key arrives from an ignored INPUT element', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return <input data-testid="input-field" />;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    const input = screen.getByTestId('input-field');
-    act(() => { fireEvent.keyDown(input, { key: 'g' }); });
-    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-});
-describe('combo timeout', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
-  it('clears pending after 500ms so a late second key does not fire the combo', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    act(() => { vi.advanceTimersByTime(501); });
-    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('fires combo when second key arrives before the 500ms timeout', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    act(() => { vi.advanceTimersByTime(400); });
-    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
-    expect(action).toHaveBeenCalledOnce();
-  });
-  it('does NOT fire combo at exactly the 500ms boundary — second key at 500ms is too late', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    act(() => { vi.advanceTimersByTime(500); });
-    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-});
-describe('overlay toggle', () => {
-  it('starts closed', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-  });
-  it('pressing ? opens the overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: '?' }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('open');
-  });
-  it('pressing ? a second time closes the overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: '?' }); });
-    act(() => { fireEvent.keyDown(document, { key: '?' }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-  });
-  it('pressing Escape closes an open overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: '?' }); });
-    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-  });
-  it('pressing Escape when overlay is closed has no effect', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-  });
-  it('Escape with Ctrl held does NOT close the overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: '?' }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('open');
-    act(() => { fireEvent.keyDown(document, { key: 'Escape', ctrlKey: true }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('open');
-  });
-  it('? with Ctrl held does NOT toggle overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: '?', ctrlKey: true }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-  });
-  it('programmatic toggleOverlay opens the overlay and Escape then closes it', () => {
-    function TogglerAndReader() {
-      const { overlayOpen, toggleOverlay } = useKeyboardNav();
-      return (
-        <>
-          <button data-testid="btn" onClick={toggleOverlay}>toggle</button>
-          <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>
-        </>
-      );
-    }
-    render(
-      <KeyboardNavProvider>
-        <TogglerAndReader />
-      </KeyboardNavProvider>,
-    );
-    act(() => { screen.getByTestId('btn').click(); });
-    expect(screen.getByTestId('overlay').textContent).toBe('open');
-    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-  });
-});
-describe('ignored tags', () => {
-  it('does NOT fire shortcut when keydown originates from INPUT', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return <input data-testid="input-field" />;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('input-field'), { key: 'k' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('does NOT fire shortcut when keydown originates from TEXTAREA', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return <textarea data-testid="textarea-field" />;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('textarea-field'), { key: 'k' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('does NOT fire shortcut when keydown originates from SELECT', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return <select data-testid="select-field"><option value="a">A</option></select>;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('select-field'), { key: 'k' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('DOES fire shortcut when keydown originates from a div', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return <div data-testid="div-field" tabIndex={0} />;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('div-field'), { key: 'k' }); });
-    expect(action).toHaveBeenCalledOnce();
-  });
-  it('does NOT open overlay via ? when keydown originates from INPUT', () => {
-    function OverlayAndInput() {
-      const { overlayOpen } = useKeyboardNav();
-      return (
-        <>
-          <input data-testid="input-field" />
-          <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>
-        </>
-      );
-    }
-    render(
-      <KeyboardNavProvider>
-        <OverlayAndInput />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('input-field'), { key: '?' }); });
-    expect(screen.getByTestId('overlay').textContent).toBe('closed');
-  });
-});
-describe('modifier key bypass', () => {
-  it('does NOT fire shortcut when Ctrl is held', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k', ctrlKey: true }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('does NOT fire shortcut when Meta is held', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k', metaKey: true }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('does NOT fire shortcut when Alt is held', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k', altKey: true }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-  it('DOES fire shortcut when no modifier keys are held', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k' }); });
-    expect(action).toHaveBeenCalledOnce();
-  });
-  it('does NOT prime combo pending when first key pressed with Ctrl held', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ComboConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'g', ctrlKey: true }); });
-    act(() => { fireEvent.keyDown(document, { key: 'h' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-});
-describe('duplicate key registration guard', () => {
-  it('throws when the same single key is registered twice', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => {
-      render(
-        <KeyboardNavProvider>
-          <ShortcutConsumer shortcutKey="k" desc="First k handler" />
-          <ShortcutConsumer shortcutKey="k" desc="Second k handler" />
-        </KeyboardNavProvider>,
-      );
-    }).toThrow(/conflict|duplicate/i);
-    spy.mockRestore();
-  });
-  it('fires the shortcut action exactly once when registered once', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Test action', 'test', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'k' }); });
-    expect(action).toHaveBeenCalledTimes(1);
-  });
-});
-describe('unregister', () => {
-  it('shortcut no longer fires after the component that registered it unmounts', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('z', 'Test action', 'test', action);
-      return null;
-    }
-    const { unmount } = render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'z' }); });
-    expect(action).toHaveBeenCalledOnce();
-    unmount();
-    render(<KeyboardNavProvider>{null}</KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'z' }); });
-    expect(action).toHaveBeenCalledOnce();
-  });
-  it('unregistering one shortcut does not affect other registered shortcuts', () => {
-    const actionA = vi.fn();
-    const actionB = vi.fn();
-    function ConsumerA() {
-      useShortcut('a', 'Action A', 'test', actionA);
-      return null;
-    }
-    function ConsumerB() {
-      useShortcut('b', 'Action B', 'test', actionB);
-      return null;
-    }
-    const { rerender } = render(
-      <KeyboardNavProvider>
-        <ConsumerA />
-        <ConsumerB />
-      </KeyboardNavProvider>,
-    );
-    rerender(
-      <KeyboardNavProvider>
-        <ConsumerB />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(document, { key: 'a' }); });
-    act(() => { fireEvent.keyDown(document, { key: 'b' }); });
-    expect(actionA).not.toHaveBeenCalled();
-    expect(actionB).toHaveBeenCalledOnce();
-  });
-  it('shortcuts array in context reflects the current registered set', () => {
-    function ShortcutsCounter() {
-      const { shortcuts } = useKeyboardNav();
-      return <div data-testid="count">{shortcuts.length}</div>;
-    }
-    function RegisteredShortcut() {
-      useShortcut('m', 'Maybe shortcut', 'test', () => {});
-      return null;
-    }
-    const { rerender } = render(
-      <KeyboardNavProvider>
-        <ShortcutsCounter />
-        <RegisteredShortcut />
-      </KeyboardNavProvider>,
-    );
-    expect(screen.getByTestId('count').textContent).toBe('1');
-    rerender(
-      <KeyboardNavProvider>
-        <ShortcutsCounter />
-      </KeyboardNavProvider>,
-    );
-    expect(screen.getByTestId('count').textContent).toBe('0');
-  });
+  }
 });
 
 ================
@@ -12730,294 +13018,6 @@ for worker in "${WORKERS[@]}"; do
   done
 done
 echo "Done."
-
-================
-File: src/__tests__/api-agents.test.ts
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
-  computeMultiAgentEvaluation: vi.fn(),
-}));
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-vi.mock('../../../dist/tools/query-traces.js', () => ({
-  queryTraces: vi.fn(),
-}));
-vi.mock('../lib/workflow-graph.js', () => ({
-  buildWorkflowGraph: vi.fn(),
-}));
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-import { agentRoutes } from '../api/routes/agents.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}) {
-  return {
-    traceId,
-    spanId,
-    name: 'hook:agent-post-tool',
-    startTimeUnixNano: 1737000000_000_000_000,
-    status: { code: 0 },
-    attributes: {
-      'gen_ai.agent.name': agentName,
-      'agent.has_error': false,
-      'agent.has_rate_limit': false,
-      'agent.output_size': 500,
-      'agent.source_type': 'active',
-      'session.id': 'sess-001',
-      ...attrs,
-    },
-  };
-}
-function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = []) {
-  return { traces: spans } as any;
-}
-function makeMockEval(traceId = 'trace-001') {
-  return {
-    evaluationName: 'relevance',
-    scoreValue: 0.9,
-    traceId,
-    timestamp: '2026-01-15T12:00:00.000Z',
-    evaluatorType: 'seed',
-    scoreLabel: 'relevant',
-    explanation: '',
-    evaluator: 'seed',
-  } as any;
-}
-describe('GET /agents', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult());
-    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
-  });
-  it('returns 400 for invalid period', async () => {
-    const res = await agentRoutes.request('/agents?period=99d');
-    expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, unknown>;
-    expect(body).toHaveProperty('error');
-  });
-  it('returns 200 with empty agents array when no spans', async () => {
-    const res = await agentRoutes.request('/agents?period=7d');
-    expect(res.status).toBe(200);
-    const body = await res.json() as { agents: unknown[]; period: string };
-    expect(Array.isArray(body.agents)).toBe(true);
-    expect(body.agents).toHaveLength(0);
-    expect(body.period).toBe('7d');
-  });
-  it('returns period, startDate, endDate in response', async () => {
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as Record<string, unknown>;
-    expect(body).toHaveProperty('period', '7d');
-    expect(body).toHaveProperty('startDate');
-    expect(body).toHaveProperty('endDate');
-  });
-  it('aggregates spans into agent records', async () => {
-    const spans = [
-      makeSpan('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' }),
-      makeSpan('trace-002', 'span-002', 'general-purpose', { 'session.id': 'sess-002' }),
-    ];
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as { agents: Array<{ agentName: string; invocations: number }> };
-    expect(body.agents).toHaveLength(1);
-    expect(body.agents[0].agentName).toBe('general-purpose');
-    expect(body.agents[0].invocations).toBe(2);
-  });
-  it('computes errorRate correctly', async () => {
-    const spans = [
-      makeSpan('trace-001', 'span-001', 'general-purpose', { 'agent.has_error': true }),
-      makeSpan('trace-002', 'span-002', 'general-purpose', { 'agent.has_error': false }),
-    ];
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as { agents: Array<{ errorRate: number }> };
-    expect(body.agents[0].errorRate).toBeCloseTo(0.5, 3);
-  });
-  it('agent record has required fields', async () => {
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan()]));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as { agents: Array<Record<string, unknown>> };
-    const agent = body.agents[0];
-    expect(agent).toHaveProperty('agentName');
-    expect(agent).toHaveProperty('invocations');
-    expect(agent).toHaveProperty('errors');
-    expect(agent).toHaveProperty('errorRate');
-    expect(agent).toHaveProperty('sessionCount');
-    expect(agent).toHaveProperty('dailyCounts');
-    expect(agent).toHaveProperty('sourceTypes');
-    expect(agent).toHaveProperty('evalSummary');
-  });
-  it('sorts agents by invocations descending', async () => {
-    const spans = [
-      makeSpan('trace-r', 'span-r', 'rare-agent'),
-      makeSpan('trace-b1', 'span-b1', 'busy-agent'),
-      makeSpan('trace-b2', 'span-b2', 'busy-agent'),
-    ];
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as { agents: Array<{ agentName: string; invocations: number }> };
-    expect(body.agents[0].agentName).toBe('busy-agent');
-    expect(body.agents[0].invocations).toBe(2);
-    expect(body.agents[1].invocations).toBe(1);
-  });
-  it('joins evaluation scores to agents via traceId', async () => {
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan('trace-eval-001')]));
-    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([makeMockEval('trace-eval-001')]);
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as { agents: Array<{ evalSummary: Record<string, { avg: number; count: number }> }> };
-    expect(body.agents[0].evalSummary).toHaveProperty('relevance');
-    expect(body.agents[0].evalSummary.relevance.avg).toBeCloseTo(0.9, 3);
-    expect(body.agents[0].evalSummary.relevance.count).toBe(1);
-  });
-  it('returns 500 when queryTraces throws', async () => {
-    vi.mocked(queryTraces).mockRejectedValue(new Error('JSONL read error'));
-    const res = await agentRoutes.request('/agents?period=7d');
-    expect(res.status).toBe(500);
-  });
-});
-describe('GET /agents/:sessionId', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([]);
-    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
-    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1, agentScores: {}, trajectory: [] } as any);
-    vi.mocked(buildWorkflowGraph).mockReturnValue({ nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent' } as any);
-  });
-  it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
-    const res = await agentRoutes.request('/agents/sess-abc');
-    expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
-    expect(body).toHaveProperty('sessionId', 'sess-abc');
-    expect(body).toHaveProperty('spans');
-    expect(body).toHaveProperty('evaluation');
-    expect(body).toHaveProperty('evaluations');
-    expect(body).toHaveProperty('agentMap');
-  });
-  it('returns spans from data-loader', async () => {
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
-    const res = await agentRoutes.request('/agents/sess-abc');
-    const body = await res.json() as { spans: unknown[] };
-    expect(body.spans).toHaveLength(1);
-  });
-  it('calls computeMultiAgentEvaluation with step scores', async () => {
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
-    await agentRoutes.request('/agents/sess-abc');
-    expect(vi.mocked(computeMultiAgentEvaluation)).toHaveBeenCalled();
-  });
-  it('returns 500 when loadTracesBySessionId throws', async () => {
-    vi.mocked(loadTracesBySessionId).mockRejectedValue(new Error('session not found'));
-    const res = await agentRoutes.request('/agents/sess-abc');
-    expect(res.status).toBe(500);
-  });
-  it('returns graph field from buildWorkflowGraph', async () => {
-    const mockGraph = { nodes: [{ id: 'a' }], edges: [], rootNodeId: 'a', workflowShape: 'single_agent' };
-    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph as any);
-    const res = await agentRoutes.request('/agents/sess-abc');
-    expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
-    expect(body).toHaveProperty('graph');
-    expect(body.graph).toEqual(mockGraph);
-  });
-});
-
-================
-File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-const DASHBOARD_ROOT = resolve(__dirname, '../../');
-const THEME_CSS = resolve(DASHBOARD_ROOT, 'src/theme.css');
-const PUBLIC_FONTS_DIR = resolve(DASHBOARD_ROOT, 'public/fonts');
-const REQUIRED_FAMILIES = ['JetBrains Mono', 'IBM Plex Sans'] as const;
-const REQUIRED_WEIGHTS = [400, 500, 600] as const;
-const EXPECTED_FONT_FILES: Record<string, string[]> = {
-  'JetBrains Mono': [
-    'JetBrainsMono-Regular.woff2',
-    'JetBrainsMono-Medium.woff2',
-    'JetBrainsMono-SemiBold.woff2',
-  ],
-  'IBM Plex Sans': [
-    'IBMPlexSans-Regular.woff2',
-    'IBMPlexSans-Medium.woff2',
-    'IBMPlexSans-SemiBold.woff2',
-  ],
-};
-describe('theme.css — no external Google Fonts import', () => {
-  it('should not contain a fonts.googleapis.com @import', () => {
-    const css = readFileSync(THEME_CSS, 'utf-8');
-    expect(css).not.toMatch(/fonts\.googleapis\.com/);
-  });
-  it('should not contain any external @import url starting with https://', () => {
-    const css = readFileSync(THEME_CSS, 'utf-8');
-    const externalImport = /@import\s+url\(['"]?https?:\/\//;
-    expect(css).not.toMatch(externalImport);
-  });
-});
-describe('local @font-face declarations exist', () => {
-  function getFontFaceSource(): string {
-    const fontsCss = resolve(DASHBOARD_ROOT, 'src/fonts.css');
-    if (existsSync(fontsCss)) {
-      return readFileSync(fontsCss, 'utf-8');
-    }
-    return readFileSync(THEME_CSS, 'utf-8');
-  }
-  it('should declare @font-face for JetBrains Mono', () => {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/font-family:\s*['"]?JetBrains Mono['"]?/i);
-  });
-  it('should declare @font-face for IBM Plex Sans', () => {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/font-family:\s*['"]?IBM Plex Sans['"]?/i);
-  });
-  for (const family of REQUIRED_FAMILIES) {
-    for (const weight of REQUIRED_WEIGHTS) {
-      it(`should have a @font-face block for ${family} weight ${weight}`, () => {
-        const css = getFontFaceSource();
-        // Find all @font-face blocks that mention this family
-        const fontFaceBlocks = [...css.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m => m[0]);
-        const familyBlocks = fontFaceBlocks.filter(block =>
-          new RegExp(`font-family:\\s*['"]?${family}['"]?`, 'i').test(block)
-        );
-        const hasWeight = familyBlocks.some(block =>
-          new RegExp(`font-weight:\\s*${weight}`).test(block)
-        );
-        expect(hasWeight, `Expected @font-face for "${family}" with font-weight: ${weight}`).toBe(true);
-      });
-    }
-  }
-  it('should reference /fonts/ local path in @font-face src', () => {
-    const css = getFontFaceSource();
-    expect(css).toMatch(/url\(['"]?\/fonts\//);
-  });
-});
-describe('public/fonts/ directory and font files exist', () => {
-  it('should have a public/fonts/ directory', () => {
-    expect(existsSync(PUBLIC_FONTS_DIR), `Expected directory: ${PUBLIC_FONTS_DIR}`).toBe(true);
-  });
-  for (const [family, files] of Object.entries(EXPECTED_FONT_FILES)) {
-    for (const file of files) {
-      it(`should have font file public/fonts/${file} for ${family}`, () => {
-        const filePath = resolve(PUBLIC_FONTS_DIR, file);
-        expect(existsSync(filePath), `Expected font file at: ${filePath}`).toBe(true);
-      });
-    }
-  }
-});
 
 ================
 File: src/api/routes/evaluations.ts
@@ -16787,73 +16787,6 @@ export const CHART_YAXIS_WIDTH = 48;
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
 
 ================
-File: src/api/api-constants.ts
-================
-export const PERCENT_BASE = 100;
-export const KV_SCHEMA_VERSION = 1;
-export const LATENCY_P50 = 50;
-export const LATENCY_P95 = 95;
-export const LATENCY_DISPLAY_PRECISION = 1;
-export const RATE_DISPLAY_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const FILE_ACCESS_TOP_N = 30;
-export const CONCENTRATION_THRESHOLD = 0.2;
-export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
-export const COMMIT_BODY_START_LINE_INDEX = 2;
-export const MAX_TRACE_ID_LEN = 128;
-export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
-export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
-export const SCORE_ROUND_FACTOR = 10_000;
-export const LOG_SUMMARY_MAX_ENTRIES = 200;
-export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-export const NANOS_TO_MS = 1_000_000;
-export function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
-}
-export const HOOK_NAME = {
-  SESSION_START: 'session-start',
-  TOKEN_METRICS: 'token-metrics-extraction',
-  AGENT_POST_TOOL: 'agent-post-tool',
-  POST_COMMIT_REVIEW: 'post-commit-review',
-  ALERT_EVALUATION: 'telemetry-alert-evaluation',
-  CODE_STRUCTURE: 'code-structure',
-} as const;
-export function isValidParam(value: string | undefined, re: RegExp): boolean {
-  return !!value && re.test(value);
-}
-export function toDateOnly(d: Date): string;
-export function toDateOnly(d: string): string;
-export function toDateOnly(d: Date | string): string {
-  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0];
-}
-export type SpanLike = { attributes?: Record<string, unknown> };
-export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
-  const v = span.attributes?.[key];
-  return typeof v === 'string' ? v : fallback;
-}
-export function attrNum(span: SpanLike, key: string, fallback = 0): number {
-  const v = span.attributes?.[key];
-  return typeof v === 'number' ? v : fallback;
-}
-export type SpanAttrType = 'string' | 'number' | 'boolean';
-type SpanAttrValue<K extends SpanAttrType> =
-  K extends 'string' ? string :
-  K extends 'number' ? number :
-  K extends 'boolean' ? boolean :
-  never;
-export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, type: K): SpanAttrValue<K> | undefined {
-  const v = span.attributes?.[key];
-  if (typeof v === type) return v as SpanAttrValue<K>;
-  return undefined;
-}
-export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals
-    .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
-    .map(e => e.scoreValue as number);
-}
-
-================
 File: src/api/routes/trends.ts
 ================
 import { Hono } from 'hono';
@@ -17008,6 +16941,73 @@ trendRoutes.get('/trends', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
+
+================
+File: src/api/api-constants.ts
+================
+export const PERCENT_BASE = 100;
+export const KV_SCHEMA_VERSION = 1;
+export const LATENCY_P50 = 50;
+export const LATENCY_P95 = 95;
+export const LATENCY_DISPLAY_PRECISION = 1;
+export const RATE_DISPLAY_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const FILE_ACCESS_TOP_N = 30;
+export const CONCENTRATION_THRESHOLD = 0.2;
+export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
+export const COMMIT_BODY_START_LINE_INDEX = 2;
+export const MAX_TRACE_ID_LEN = 128;
+export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
+export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
+export const SCORE_ROUND_FACTOR = 10_000;
+export const LOG_SUMMARY_MAX_ENTRIES = 200;
+export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+export const NANOS_TO_MS = 1_000_000;
+export function incrementCount(map: Record<string, number>, key: string): void {
+  map[key] = (map[key] ?? 0) + 1;
+}
+export const HOOK_NAME = {
+  SESSION_START: 'session-start',
+  TOKEN_METRICS: 'token-metrics-extraction',
+  AGENT_POST_TOOL: 'agent-post-tool',
+  POST_COMMIT_REVIEW: 'post-commit-review',
+  ALERT_EVALUATION: 'telemetry-alert-evaluation',
+  CODE_STRUCTURE: 'code-structure',
+} as const;
+export function isValidParam(value: string | undefined, re: RegExp): boolean {
+  return !!value && re.test(value);
+}
+export function toDateOnly(d: Date): string;
+export function toDateOnly(d: string): string;
+export function toDateOnly(d: Date | string): string {
+  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0];
+}
+export type SpanLike = { attributes?: Record<string, unknown> };
+export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
+  const v = span.attributes?.[key];
+  return typeof v === 'string' ? v : fallback;
+}
+export function attrNum(span: SpanLike, key: string, fallback = 0): number {
+  const v = span.attributes?.[key];
+  return typeof v === 'number' ? v : fallback;
+}
+export type SpanAttrType = 'string' | 'number' | 'boolean';
+type SpanAttrValue<K extends SpanAttrType> =
+  K extends 'string' ? string :
+  K extends 'number' ? number :
+  K extends 'boolean' ? boolean :
+  never;
+export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, type: K): SpanAttrValue<K> | undefined {
+  const v = span.attributes?.[key];
+  if (typeof v === type) return v as SpanAttrValue<K>;
+  return undefined;
+}
+export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals
+    .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
+    .map(e => e.scoreValue as number);
+}
 
 ================
 File: src/components/WorkflowGraph.tsx
@@ -19053,6 +19053,11 @@ const SPAN_NAME_TOOL_CALL = 'tool_call';
 const SPAN_NAME_TOOL_PREFIX = 'tool:';
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
 const NS_TO_MS = 1_000_000;
+function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string {
+  const parts = [primaryLabel];
+  if (latencyMs !== null) parts.push(`${latencyMs}ms`);
+  return parts.join(' · ');
+}
 export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
   spans: TraceSpan[],
@@ -19084,8 +19089,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     }
   }
   const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
-  // Build per-agent span timing bounds for handoff latency computation.
-  // lastEndNs: the latest endTimeUnixNano seen for an agent's spans.
+  // Per-agent span timing bounds used to compute handoff latency.
   const agentLastEndNs = new Map<string, number>();
   const agentFirstStartNs = new Map<string, number>();
   for (const [agentId, group] of spansByAgent) {
@@ -19143,8 +19147,6 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     const latencyMs = gapNs !== null && gapNs >= 0 && isFinite(gapNs)
       ? Math.round(gapNs / NS_TO_MS)
       : null;
-    const labelParts = [`${score.toFixed(SCORE_CHIP_PRECISION)}`];
-    if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
     edges.push({
       id: key,
       source: h.sourceAgent,
@@ -19152,7 +19154,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       handoffScore: score,
       contextPreserved: h.contextPreserved,
       latencyMs,
-      label: labelParts.join(' · '),
+      label: buildEdgeLabel(score.toFixed(SCORE_CHIP_PRECISION), latencyMs),
     });
   }
   return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
@@ -19203,8 +19205,6 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
       const key = `${curr.id}->${next.id}`;
       const gapNs = next.minStart - curr.maxEnd;
       const latencyMs = gapNs >= 0 && isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
-      const labelParts: string[] = ['inferred'];
-      if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
       edges.push({
         id: key,
         source: curr.id,
@@ -19212,7 +19212,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
         handoffScore: null,
         contextPreserved: false,
         latencyMs,
-        label: labelParts.join(' · '),
+        label: buildEdgeLabel('inferred', latencyMs),
       });
     }
   }

@@ -690,6 +690,20 @@ fi
 mv "$README_PATH.tmp" "$README_PATH"
 
 ================
+File: src/__tests__/api-agents.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+⋮----
+import { agentRoutes } from '../api/routes/agents.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> =
+function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
+function makeMockEval(traceId = 'trace-001')
+
+================
 File: src/__tests__/api-compliance.test.ts
 ================
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -884,6 +898,60 @@ function makeOperatorData()
 render(<OperatorView data=
 ⋮----
 async function loadTrendRoutes()
+
+================
+File: src/__tests__/f1-f6-components.test.tsx
+================
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { ScoreBadge } from '../components/ScoreBadge.js';
+import { CQIHero } from '../components/CQIHero.js';
+import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
+import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
+import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
+import type { CompositeQualityIndex, CorrelationFeature } from '../types.js';
+⋮----
+const
+⋮----
+render(<CQIHero cqi=
+⋮----
+render(<EvaluationTable evaluations=
+⋮----
+function Orphan()
+⋮----
+function ActionConsumer()
+⋮----
+function OverlayReader()
+
+================
+File: src/__tests__/keyboard-nav-context.test.tsx
+================
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
+⋮----
+function ShortcutConsumer({ shortcutKey, desc, scope, action }: {
+  shortcutKey: string;
+  desc: string;
+  scope?: string;
+action?: ()
+function OverlayReader()
+⋮----
+function ComboConsumer()
+⋮----
+function MultiComboConsumer()
+⋮----
+function TogglerAndReader()
+⋮----
+function ActionConsumer()
+⋮----
+function OverlayAndInput()
+⋮----
+function ConsumerA()
+function ConsumerB()
+⋮----
+function ShortcutsCounter()
+function RegisteredShortcut()
 
 ================
 File: src/__tests__/p1-explainability.test.tsx
@@ -2476,58 +2544,15 @@ File: src/__tests__/coverage-tab.test.tsx
 import { describe, it } from 'vitest';
 
 ================
-File: src/__tests__/f1-f6-components.test.tsx
+File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
 ================
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
-import { ScoreBadge } from '../components/ScoreBadge.js';
-import { CQIHero } from '../components/CQIHero.js';
-import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
-import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
-import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
-import type { CompositeQualityIndex, CorrelationFeature } from '../types.js';
+import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'fs';
+import { resolve } from 'path';
 ⋮----
-const
+function getFontFaceSource(): string
 ⋮----
-render(<CQIHero cqi=
-⋮----
-render(<EvaluationTable evaluations=
-⋮----
-function Orphan()
-⋮----
-function ActionConsumer()
-⋮----
-function OverlayReader()
-
-================
-File: src/__tests__/keyboard-nav-context.test.tsx
-================
-import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
-import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
-⋮----
-function ShortcutConsumer({ shortcutKey, desc, scope, action }: {
-  shortcutKey: string;
-  desc: string;
-  scope?: string;
-action?: ()
-function OverlayReader()
-⋮----
-function ComboConsumer()
-⋮----
-function MultiComboConsumer()
-⋮----
-function TogglerAndReader()
-⋮----
-function ActionConsumer()
-⋮----
-function OverlayAndInput()
-⋮----
-function ConsumerA()
-function ConsumerB()
-⋮----
-function ShortcutsCounter()
-function RegisteredShortcut()
+// Find all @font-face blocks that mention this family
 
 ================
 File: src/__tests__/quality-utils-adaptive.test.ts
@@ -2902,31 +2927,6 @@ for worker in "${WORKERS[@]}"; do
   done
 done
 echo "Done."
-
-================
-File: src/__tests__/api-agents.test.ts
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-⋮----
-import { agentRoutes } from '../api/routes/agents.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> =
-function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
-function makeMockEval(traceId = 'trace-001')
-
-================
-File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-⋮----
-function getFontFaceSource(): string
-⋮----
-// Find all @font-face blocks that mention this family
 
 ================
 File: src/api/routes/evaluations.ts
@@ -3504,29 +3504,6 @@ export function computePeriodDates(period: string):
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
 
 ================
-File: src/api/api-constants.ts
-================
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
-⋮----
-export function incrementCount(map: Record<string, number>, key: string): void
-⋮----
-export function isValidParam(value: string | undefined, re: RegExp): boolean
-export function toDateOnly(d: Date): string;
-export function toDateOnly(d: string): string;
-export function toDateOnly(d: Date | string): string
-export type SpanLike = { attributes?: Record<string, unknown> };
-export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string
-export function attrNum(span: SpanLike, key: string, fallback = 0): number
-export type SpanAttrType = 'string' | 'number' | 'boolean';
-type SpanAttrValue<K extends SpanAttrType> =
-  K extends 'string' ? string :
-  K extends 'number' ? number :
-  K extends 'boolean' ? boolean :
-  never;
-export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, type: K): SpanAttrValue<K> | undefined
-export function extractFiniteScores(evals: Array<
-
-================
 File: src/api/routes/trends.ts
 ================
 import { Hono } from 'hono';
@@ -3548,6 +3525,29 @@ import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, 
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
 ⋮----
 type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
+File: src/api/api-constants.ts
+================
+export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+⋮----
+export function incrementCount(map: Record<string, number>, key: string): void
+⋮----
+export function isValidParam(value: string | undefined, re: RegExp): boolean
+export function toDateOnly(d: Date): string;
+export function toDateOnly(d: string): string;
+export function toDateOnly(d: Date | string): string
+export type SpanLike = { attributes?: Record<string, unknown> };
+export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string
+export function attrNum(span: SpanLike, key: string, fallback = 0): number
+export type SpanAttrType = 'string' | 'number' | 'boolean';
+type SpanAttrValue<K extends SpanAttrType> =
+  K extends 'string' ? string :
+  K extends 'number' ? number :
+  K extends 'boolean' ? boolean :
+  never;
+export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, type: K): SpanAttrValue<K> | undefined
+export function extractFiniteScores(evals: Array<
 
 ================
 File: src/components/WorkflowGraph.tsx
@@ -4058,14 +4058,14 @@ import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '.
 import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
 import { groupBy } from './quality-utils.js';
 ⋮----
+function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string
 export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
   spans: TraceSpan[],
 ): WorkflowGraph
 function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
 ⋮----
-// Build per-agent span timing bounds for handoff latency computation.
-// lastEndNs: the latest endTimeUnixNano seen for an agent's spans.
+// Per-agent span timing bounds used to compute handoff latency.
 ⋮----
 function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
 function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean

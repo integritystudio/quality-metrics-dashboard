@@ -1,3 +1,9 @@
+c083880 2026-03-27 chore(repomix): regenerate docs after simplify pass
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 8d23a53 2026-03-27 refactor(simplify): replace capitalize with VARIANCE_TREND_LABEL map; fix mock types and logAuditEvent nullability
   worker/index.ts
 
@@ -345,7 +351,4 @@ e8a33b1 2026-03-26 chore: regenerate repomix docs after final simplification rou
   docs/repomix/repomix.xml
 
 02b70b1 2026-03-26 refactor(bar-indicator): replace fillStyle inline object with CSS custom properties
-  src/theme.css
-
-1ded19e 2026-03-26 refactor(span-tree): replace barStyle inline object with span-bar CSS class and custom properties
   src/theme.css
