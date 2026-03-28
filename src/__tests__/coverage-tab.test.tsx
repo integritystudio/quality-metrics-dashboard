@@ -1,10 +1,10 @@
 /**
- * CVG-1: Test stubs documenting intended Coverage tab behavior.
- * Blocked by: data compression for coverage heatmap payloads (see BACKLOG.md CVG-1).
+ * Test stubs documenting intended Coverage tab behavior.
+ * Blocked by: data compression for coverage heatmap payloads (see BACKLOG.md).
  */
 import { describe, it } from 'vitest';
 
-describe('Coverage tab (CVG-1)', () => {
+describe('Coverage tab', () => {
   it.todo('Coverage tab is visible in navigation when enabled');
   it.todo('navigating to /coverage renders CoveragePage');
   it.todo('keyboard shortcut g v navigates to /coverage');
