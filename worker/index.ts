@@ -85,6 +85,8 @@ async function getKv<T>(kv: KVNamespace, key: string): Promise<T | null> {
 }
 
 type AuditAction = 'role.assign' | 'role.revoke';
+type SupabaseEnv = { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string };
+type WaitUntilFn = (promise: Promise<unknown>) => void;
 
 // Fire-and-forget: logs sensitive admin mutations to audit_log without blocking the response.
 // Only fires on success — never called when the upstream Supabase operation fails.
@@ -93,8 +95,8 @@ function logAuditEvent(
   action: AuditAction,
   targetUserId: string,
   roleId: string,
-  env: { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string },
-  waitUntil: (promise: Promise<unknown>) => void,
+  env: SupabaseEnv,
+  waitUntil: WaitUntilFn,
 ): void {
   waitUntil(supabasePost(
     `${env.SUPABASE_URL}/rest/v1/audit_log`,
@@ -111,8 +113,8 @@ function logAuditEvent(
 function logActivity(
   appUserId: string | undefined,
   activityType: UserActivityEvent,
-  env: { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string },
-  waitUntil: (promise: Promise<unknown>) => void,
+  env: SupabaseEnv,
+  waitUntil: WaitUntilFn,
 ): void {
   if (!appUserId) return;
   waitUntil(supabasePost(
