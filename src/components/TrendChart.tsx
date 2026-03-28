@@ -8,6 +8,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
+import { extent } from 'd3-array';
 import type { MetricDynamics, MetricTrend } from '../types.js';
 import {
   CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
@@ -75,8 +76,7 @@ export function TrendChart({
   if (allValues.length === 0) {
     return <EmptyState message="Insufficient data" />;
   }
-  const yMin = Math.min(...allValues);
-  const yMax = Math.max(...allValues);
+  const [yMin, yMax] = extent(allValues) as [number, number];
   const yPad = (yMax - yMin) * 0.15 || 0.05;
 
   return (

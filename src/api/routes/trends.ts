@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import {
@@ -15,6 +16,8 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+
+const TRENDS_CONCURRENCY = 5;
 
 /** Fraction of data span added as padding on each side when auto-narrowing the time axis. */
 const TREND_PADDING_RATIO = 0.1;
@@ -164,16 +167,19 @@ trendRoutes.get('/trends', async (c) => {
     const { start, end } = computePeriodDates(period);
 
     const metricNames = Object.keys(QUALITY_METRICS);
+    const limit = pLimit(TRENDS_CONCURRENCY);
     const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
+      metricNames.map((name: string) =>
+        limit(async () => {
+          const evals = await loadEvaluationsForMetric(name, start, end);
+          const scores = extractFiniteScores(evals);
+          return {
+            metric: name,
+            count: scores.length,
+            percentiles: computePercentileDistribution(scores) ?? null,
+          };
+        }),
+      ),
     );
 
     return c.json({ period, metrics: summaries });

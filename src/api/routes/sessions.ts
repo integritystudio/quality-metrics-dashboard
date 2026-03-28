@@ -1,3 +1,4 @@
+import { min, max, mean, quantileSorted } from 'd3-array';
 import { Hono } from 'hono';
 import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
@@ -45,12 +46,6 @@ function parseTimestamp(value: string | undefined | null): number | null {
   return ms;
 }
 
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.ceil(sorted.length * p / PERCENT_BASE) - 1;
-  return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
-}
-
 type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
 
 function computeLatencyStats(durations: number[]): LatencyStats {
@@ -58,10 +53,10 @@ function computeLatencyStats(durations: number[]): LatencyStats {
   const sorted = [...durations].sort((a, b) => a - b);
   return {
     count: sorted.length,
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(LATENCY_DISPLAY_PRECISION),
-    p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
-    p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
+    avg: +(mean(sorted) as number).toFixed(LATENCY_DISPLAY_PRECISION),
+    p50: +(quantileSorted(sorted, LATENCY_P50 / PERCENT_BASE) as number).toFixed(LATENCY_DISPLAY_PRECISION),
+    p95: +(quantileSorted(sorted, LATENCY_P95 / PERCENT_BASE) as number).toFixed(LATENCY_DISPLAY_PRECISION),
+    max: +(max(sorted) as number).toFixed(LATENCY_DISPLAY_PRECISION),
   };
 }
 
@@ -69,11 +64,10 @@ type ScoreStats = { avg: number | null; min: number | null; max: number | null }
 
 function computeScoreStats(scores: number[]): ScoreStats {
   if (scores.length === 0) return { avg: null, min: null, max: null };
-  const sorted = [...scores].sort((a, b) => a - b);
   return {
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+    avg: +(mean(scores) as number).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +(min(scores) as number).toFixed(SCORE_DISPLAY_PRECISION),
+    max: +(max(scores) as number).toFixed(SCORE_DISPLAY_PRECISION),
   };
 }
 

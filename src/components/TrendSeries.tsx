@@ -8,6 +8,7 @@ import {
   Area,
   ResponsiveContainer,
 } from 'recharts';
+import { extent } from 'd3-array';
 import { format, differenceInMilliseconds } from 'date-fns';
 import type { TrendBucket } from '../hooks/useTrend.js';
 import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
@@ -62,8 +63,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
     return <EmptyState message="No scored evaluations in period" />;
   }
 
-  const yMin = Math.min(...allVals);
-  const yMax = Math.max(...allVals);
+  const [yMin, yMax] = extent(allVals) as [number, number];
   const yPad = (yMax - yMin) * 0.15 || 0.05;
 
   return (

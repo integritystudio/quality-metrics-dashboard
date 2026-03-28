@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
+import { max } from 'd3-array';
 
 export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket: string; count: number }> }) {
   if (distribution.length === 0) return null;
 
-  const maxCount = distribution.reduce((m, d) => Math.max(m, d.count), 1);
+  const maxCount = max(distribution, d => d.count) ?? 1;
 
   return (
     <div>

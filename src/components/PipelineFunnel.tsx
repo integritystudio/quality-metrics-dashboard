@@ -1,4 +1,5 @@
 import { memo, type CSSProperties } from 'react';
+import { max } from 'd3-array';
 import type { PipelineStage, PipelineDropoff } from '../types.js';
 import { EmptyState } from './EmptyState.js';
 import { formatPercent } from '../lib/quality-utils.js';
@@ -13,7 +14,7 @@ interface PipelineFunnelProps {
 function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: PipelineFunnelProps) {
   if (stages.length === 0) return <EmptyState message="No pipeline data available." />;
 
-  const maxCount = Math.max(...stages.map(s => s.entryCount), 1);
+  const maxCount = max(stages, s => s.entryCount) ?? 1;
 
   return (
     <div role="region" aria-label="Evaluation pipeline funnel">

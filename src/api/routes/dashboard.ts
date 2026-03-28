@@ -1,3 +1,4 @@
+import { rollup, mean } from 'd3-array';
 import { Hono } from 'hono';
 import {
   computeDashboardSummary,
@@ -22,20 +23,13 @@ function computeSparklineData(
   if (range <= 0 || evaluations.length === 0) return [];
 
   const bucketWidth = range / buckets;
-  const sums = new Array(buckets).fill(0);
-  const counts = new Array(buckets).fill(0);
-
-  for (const ev of evaluations) {
-    if (ev.scoreValue === null || !Number.isFinite(ev.scoreValue)) continue;
-    const ts = new Date(ev.timestamp).getTime();
-    const idx = Math.min(Math.floor((ts - startMs) / bucketWidth), buckets - 1);
-    if (idx >= 0) {
-      sums[idx] += ev.scoreValue;
-      counts[idx]++;
-    }
-  }
-
-  return sums.map((s, i) => counts[i] > 0 ? s / counts[i] : null);
+  const valid = evaluations.filter(ev => ev.scoreValue !== null && Number.isFinite(ev.scoreValue));
+  const bucketMap = rollup(
+    valid,
+    evals => mean(evals, ev => ev.scoreValue as number) ?? null,
+    ev => Math.min(Math.floor((new Date(ev.timestamp).getTime() - startMs) / bucketWidth), buckets - 1),
+  );
+  return Array.from({ length: buckets }, (_, i) => bucketMap.get(i) ?? null);
 }
 
 export const dashboardRoutes = new Hono();
