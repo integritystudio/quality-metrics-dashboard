@@ -47,7 +47,7 @@ function buildTree(
 
   for (const s of spans) {
     const node = nodeMap.get(s.spanId)!;
-    const parentId = (s as { parentSpanId?: string }).parentSpanId;
+    const parentId = s.parentSpanId;
     if (parentId && nodeMap.has(parentId)) {
       nodeMap.get(parentId)!.children.push(node);
     } else {
