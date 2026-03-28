@@ -109,12 +109,14 @@ function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
   return new Map(nodes.map(n => [n.id, n]));
 }
 
-/**
- * Returns a synthetic cluster node id from a clusterId string.
- * Kept as a pure function so both collapse and layout can use the same convention.
- */
+const CLUSTER_NODE_PREFIX = '__cluster__';
+
 function clusterNodeId(clusterId: string): string {
-  return `__cluster__${clusterId}`;
+  return `${CLUSTER_NODE_PREFIX}${clusterId}`;
+}
+
+function isClusterNodeId(id: string): boolean {
+  return id.startsWith(CLUSTER_NODE_PREFIX);
 }
 
 /**
@@ -214,7 +216,7 @@ async function computeLayout(
     id: 'root',
     layoutOptions: ELK_OPTIONS,
     children: nodes.map(n => {
-      const isCluster = n.id.startsWith('__cluster__');
+      const isCluster = isClusterNodeId(n.id);
       return {
         id: n.id,
         width: isCluster ? CLUSTER_NODE_WIDTH : NODE_WIDTH,
@@ -232,7 +234,7 @@ async function computeLayout(
       const workflowNode = nodeDataMap.get(elkNode.id)!;
       const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
       const critical = criticalPath != null && criticalPath.has(elkNode.id);
-      const isCluster = elkNode.id.startsWith('__cluster__');
+      const isCluster = isClusterNodeId(elkNode.id);
 
       if (isCluster) {
         const avgScore = workflowNode.evaluationScore;
