@@ -6636,102 +6636,6 @@ export function AgentScoreSummary({ handoffScore, avgRelevance, completeness }: 
 }
 
 ================
-File: src/components/AlertList.tsx
-================
-import { Link } from 'wouter';
-import type { CSSProperties } from 'react';
-import { formatScore } from '../lib/quality-utils.js';
-import type { TriggeredAlert } from '../types.js';
-type AlertWithMeta = TriggeredAlert & { metricName?: string };
-function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
-  return (
-    <li className="alert-item" data-status={alert.severity}>
-      <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
-      </div>
-      {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <div className="remediation text-xs">
-          Hint: {alert.remediationHints[0]}
-        </div>
-      )}
-    </li>
-  );
-}
-function ThresholdBar({ actual, threshold, direction }: {
-  actual: number;
-  threshold: number;
-  direction: 'above' | 'below';
-}) {
-  const max = Math.max(actual, threshold) * 1.2 || 1;
-  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
-  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
-  const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
-  return (
-    <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
-      <div
-        className="threshold-bar-fill"
-        data-violating={isViolating || undefined}
-        style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
-      />
-      <div
-        className="threshold-bar-marker"
-        style={{ '--bar-marker-left': `${thresholdPct}%` } as CSSProperties}
-        title={`Threshold: ${formatScore(threshold)}`}
-      />
-    </div>
-  );
-}
-function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
-  return (
-    <li className="alert-item alert-compound" data-status={alert.severity}>
-      <div className="alert-message">{alert.message}</div>
-      <div className="alert-meta text-secondary text-xs">
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
-      </div>
-      <ThresholdBar
-        actual={alert.actualValue}
-        threshold={alert.threshold}
-        direction={alert.direction}
-      />
-      {alert.remediationHints && alert.remediationHints.length > 0 && (
-        <ol className="remediation-list text-xs">
-          {alert.remediationHints.map((hint, i) => (
-            <li key={i}>{hint}</li>
-          ))}
-        </ol>
-      )}
-      {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
-        <div className="alert-related flex-center">
-          <span className="text-secondary text-xs">Related:</span>
-          {alert.relatedMetrics.map((m) => (
-            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
-              {m}
-            </Link>
-          ))}
-        </div>
-      )}
-    </li>
-  );
-}
-export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
-  if (alerts.length === 0) return null;
-  const sorted = [...alerts].sort((a, b) => {
-    const order = { critical: 0, warning: 1, info: 2 };
-    return (order[a.severity as keyof typeof order] ?? 2) - (order[b.severity as keyof typeof order] ?? 2);
-  });
-  return (
-    <ul className="alert-list">
-      {sorted.map((alert, i) =>
-        alert.isCompound
-          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
-          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
-      )}
-    </ul>
-  );
-}
-
-================
 File: src/components/ChainOfThoughtPanel.tsx
 ================
 import { MetaItem } from './MetaItem.js';
@@ -8863,300 +8767,6 @@ export function TimestampCell({ timestamp, className }: TimestampCellProps) {
     <span className={className} title={format(new Date(timestamp), 'PPp')}>
       {formatTimestamp(timestamp)}
     </span>
-  );
-}
-
-================
-File: src/components/TrendChart.tsx
-================
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ResponsiveContainer,
-} from 'recharts';
-import type { MetricDynamics, MetricTrend } from '../types.js';
-import {
-  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
-  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
-  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
-  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
-} from '../lib/constants.js';
-import { formatPercent } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-interface TrendChartProps {
-  trend?: MetricTrend;
-  dynamics?: MetricDynamics;
-  warningThreshold?: number;
-  criticalThreshold?: number;
-  metricName: string;
-}
-function formatValue(v: number): string {
-  return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
-}
-function formatBreachTime(iso: string): string {
-  const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
-  if (hours <= 0) return 'threshold exceeded';
-  if (hours < 1) return `${Math.round(hours * 60)}m`;
-  if (hours < 48) return `${hours.toFixed(1)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
-}
-export function TrendChart({
-  trend,
-  dynamics,
-  warningThreshold,
-  criticalThreshold,
-  metricName,
-}: TrendChartProps) {
-  if (!trend) {
-    return <EmptyState message="No trend data available" />;
-  }
-  const data: Array<{ label: string; value: number; projected?: number }> = [
-    { label: 'Previous', value: trend.previousValue },
-    { label: 'Current', value: trend.currentValue },
-  ];
-  if (dynamics && dynamics.velocity !== 0) {
-    const projectedValue = trend.currentValue + dynamics.velocity;
-    data.push({
-      label: 'Projected',
-      value: trend.currentValue,
-      projected: projectedValue,
-    });
-    data[1].projected = trend.currentValue;
-  }
-  const allValues = data.flatMap((d) => [d.value, d.projected].filter((v): v is number => v != null));
-  if (warningThreshold != null) allValues.push(warningThreshold);
-  if (criticalThreshold != null) allValues.push(criticalThreshold);
-  if (allValues.length === 0) {
-    return <EmptyState message="Insufficient data" />;
-  }
-  const yMin = Math.min(...allValues);
-  const yMax = Math.max(...allValues);
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
-  return (
-    <div>
-      <div role="img" aria-label={`Trend chart for ${metricName}`}>
-        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-          <LineChart data={data} margin={CHART_MARGIN}>
-            <CartesianGrid {...CHART_GRID_PROPS} />
-            <XAxis
-              dataKey="label"
-              tick={CHART_AXIS_TICK}
-              stroke={CHART_COLORS.grid}
-            />
-            <YAxis
-              domain={[yMin - yPad, yMax + yPad]}
-              tick={CHART_AXIS_TICK}
-              stroke={CHART_COLORS.grid}
-              tickFormatter={CHART_YAXIS_TICK_FORMATTER}
-              width={CHART_YAXIS_WIDTH}
-            />
-            <Tooltip
-              contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-              formatter={(v) => [typeof v === 'number' ? formatValue(v) : 'N/A', '']}
-              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
-            />
-            {warningThreshold != null && (
-              <ReferenceLine
-                y={warningThreshold}
-                stroke={CHART_COLORS.warning}
-                strokeDasharray={CHART_DASH_THRESHOLD}
-                label={{ value: 'Warning', fill: CHART_COLORS.warning, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
-              />
-            )}
-            {criticalThreshold != null && (
-              <ReferenceLine
-                y={criticalThreshold}
-                stroke={CHART_COLORS.critical}
-                strokeDasharray={CHART_DASH_THRESHOLD}
-                label={{ value: 'Critical', fill: CHART_COLORS.critical, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
-              />
-            )}
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke={CHART_COLORS.line}
-              strokeWidth={CHART_STROKE_WIDTH}
-              dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS }}
-              activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
-              connectNulls
-            />
-            {dynamics && dynamics.velocity !== 0 && (
-              <Line
-                type="monotone"
-                dataKey="projected"
-                stroke={CHART_COLORS.line}
-                strokeWidth={CHART_STROKE_WIDTH}
-                strokeDasharray={CHART_DASH_PROJECTED}
-                dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS_PROJECTED, strokeDasharray: '' }}
-                connectNulls
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      {dynamics && (
-        <div className="flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics">
-          <div>
-            <span className="font-semibold">Velocity:</span>{' '}
-            <span className="mono">
-              {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold">Acceleration:</span>{' '}
-            <span className="mono">
-              {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
-            </span>
-          </div>
-          {dynamics.projectedBreachTime && (
-            <div>
-              <span className="font-semibold">Breach in:</span>{' '}
-              <span className="mono chart-breach-time" data-status={dynamics.projectedStatus}>
-                {formatBreachTime(dynamics.projectedBreachTime)}
-              </span>
-            </div>
-          )}
-          <div>
-            <span className="font-semibold">Confidence:</span>{' '}
-            <span className="mono">
-              {formatPercent(dynamics.confidence * 100, 0)}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-================
-File: src/components/TrendSeries.tsx
-================
-import {
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Area,
-  ResponsiveContainer,
-} from 'recharts';
-import { format, differenceInMilliseconds } from 'date-fns';
-import type { TrendBucket } from '../hooks/useTrend.js';
-import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
-import { formatScore } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-interface TrendSeriesProps {
-  data: TrendBucket[];
-  metricName: string;
-}
-const TREND_COLORS = {
-  band: 'rgba(88, 166, 255, 0.1)',
-  bandStroke: 'rgba(88, 166, 255, 0.3)',
-  background: '#131920',
-} as const;
-function formatTime(iso: string, spanDays: number): string {
-  const d = new Date(iso);
-  if (spanDays <= 1) return format(d, 'HH:mm');
-  if (spanDays <= 7) return format(d, 'EEE HH:mm');
-  return format(d, 'MMM d');
-}
-export function TrendSeries({ data, metricName }: TrendSeriesProps) {
-  if (data.length === 0) {
-    return <EmptyState message="No trend data available" />;
-  }
-  const spanMs = differenceInMilliseconds(
-    new Date(data[data.length - 1].endTime),
-    new Date(data[0].startTime)
-  );
-  const spanDays = spanMs / (1000 * 60 * 60 * 24);
-  const chartData = data.map((bucket) => ({
-    time: formatTime(bucket.startTime, spanDays),
-    avg: bucket.avg,
-    p10: bucket.percentiles?.p10 ?? null,
-    p50: bucket.percentiles?.p50 ?? null,
-    p90: bucket.percentiles?.p90 ?? null,
-    count: bucket.count,
-  }));
-  const allVals = chartData.flatMap(d =>
-    [d.avg, d.p10, d.p90].filter((v): v is number => v !== null)
-  );
-  if (allVals.length === 0) {
-    return <EmptyState message="No scored evaluations in period" />;
-  }
-  const yMin = Math.min(...allVals);
-  const yMax = Math.max(...allVals);
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
-  return (
-    <div role="img" aria-label={`Time series trend for ${metricName}`}>
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-        <ComposedChart data={chartData} margin={CHART_MARGIN}>
-          <CartesianGrid {...CHART_GRID_PROPS} />
-          <XAxis
-            dataKey="time"
-            tick={CHART_AXIS_TICK}
-            stroke={CHART_COLORS.grid}
-          />
-          <YAxis
-            domain={[yMin - yPad, yMax + yPad]}
-            tick={CHART_AXIS_TICK}
-            stroke={CHART_COLORS.grid}
-            tickFormatter={CHART_YAXIS_TICK_FORMATTER}
-            width={CHART_YAXIS_WIDTH}
-          />
-          <Tooltip
-            contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-            formatter={(v, name) => [
-              formatScore(typeof v === 'number' ? v : null),
-              name === 'avg' ? 'Average' : (String(name ?? '')).toUpperCase(),
-            ]}
-            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
-          />
-          <Area
-            type="monotone"
-            dataKey="p90"
-            stroke="none"
-            fill={TREND_COLORS.band}
-            connectNulls
-          />
-          <Area
-            type="monotone"
-            dataKey="p10"
-            stroke="none"
-            fill={TREND_COLORS.background}
-            connectNulls
-          />
-          <Line
-            type="monotone"
-            dataKey="p50"
-            stroke={TREND_COLORS.bandStroke}
-            strokeWidth={1}
-            strokeDasharray="4 3"
-            dot={false}
-            connectNulls
-          />
-          <Line
-            type="monotone"
-            dataKey="avg"
-            stroke={CHART_COLORS.line}
-            strokeWidth={2}
-            dot={{ fill: CHART_COLORS.line, r: 3 }}
-            activeDot={{ r: 5 }}
-            connectNulls
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <div className="flex-center justify-center gap-4 mt-1 text-xs chart-dynamics">
-        <span><span className="chart-line-indicator">&#9473;</span> avg</span>
-        <span><span className="opacity-50">- -</span> p50</span>
-        <span><span className="opacity-30">&#9608;</span> p10-p90</span>
-      </div>
-    </div>
   );
 }
 
@@ -12122,6 +11732,102 @@ export const API_HOST = '127.0.0.1';
 export const API_PORT = Number(process.env.API_PORT) || 3001;
 
 ================
+File: src/components/AlertList.tsx
+================
+import { Link } from 'wouter';
+import type { CSSProperties } from 'react';
+import { formatScore } from '../lib/quality-utils.js';
+import type { TriggeredAlert } from '../types.js';
+type AlertWithMeta = TriggeredAlert & { metricName?: string };
+function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
+  return (
+    <li className="alert-item" data-status={alert.severity}>
+      <div className="alert-message">{alert.message}</div>
+      <div className="alert-meta text-secondary text-xs">
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      </div>
+      {alert.remediationHints && alert.remediationHints.length > 0 && (
+        <div className="remediation text-xs">
+          Hint: {alert.remediationHints[0]}
+        </div>
+      )}
+    </li>
+  );
+}
+function ThresholdBar({ actual, threshold, direction }: {
+  actual: number;
+  threshold: number;
+  direction: 'above' | 'below';
+}) {
+  const max = Math.max(actual, threshold) * 1.2 || 1;
+  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
+  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
+  const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
+  return (
+    <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
+      <div
+        className="threshold-bar-fill"
+        data-violating={isViolating || undefined}
+        style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
+      />
+      <div
+        className="threshold-bar-marker"
+        style={{ '--bar-marker-left': `${thresholdPct}%` } as CSSProperties}
+        title={`Threshold: ${formatScore(threshold)}`}
+      />
+    </div>
+  );
+}
+function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
+  return (
+    <li className="alert-item alert-compound" data-status={alert.severity}>
+      <div className="alert-message">{alert.message}</div>
+      <div className="alert-meta text-secondary text-xs">
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      </div>
+      <ThresholdBar
+        actual={alert.actualValue}
+        threshold={alert.threshold}
+        direction={alert.direction}
+      />
+      {alert.remediationHints && alert.remediationHints.length > 0 && (
+        <ol className="remediation-list text-xs">
+          {alert.remediationHints.map((hint, i) => (
+            <li key={i}>{hint}</li>
+          ))}
+        </ol>
+      )}
+      {alert.relatedMetrics && alert.relatedMetrics.length > 0 && (
+        <div className="alert-related flex-center">
+          <span className="text-secondary text-xs">Related:</span>
+          {alert.relatedMetrics.map((m) => (
+            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
+              {m}
+            </Link>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
+  if (alerts.length === 0) return null;
+  const sorted = [...alerts].sort((a, b) =>
+    (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2)
+  );
+  return (
+    <ul className="alert-list">
+      {sorted.map((alert, i) =>
+        alert.isCompound
+          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
+          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
+      )}
+    </ul>
+  );
+}
+
+================
 File: src/components/SpanTree.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -12234,6 +11940,307 @@ export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
       {roots.map(node => (
         <SpanRow key={node.spanId} node={node} depth={0} maxDuration={maxDuration} />
       ))}
+    </div>
+  );
+}
+
+================
+File: src/components/TrendChart.tsx
+================
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  ResponsiveContainer,
+} from 'recharts';
+import type { MetricDynamics, MetricTrend } from '../types.js';
+import {
+  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
+  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
+  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
+  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
+} from '../lib/constants.js';
+import { formatPercent } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+interface TrendChartProps {
+  trend?: MetricTrend;
+  dynamics?: MetricDynamics;
+  warningThreshold?: number;
+  criticalThreshold?: number;
+  metricName: string;
+}
+function formatValue(v: number): string {
+  return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
+}
+function formatBreachTime(iso: string): string {
+  const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
+  if (hours <= 0) return 'threshold exceeded';
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  if (hours < 48) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+export function TrendChart({
+  trend,
+  dynamics,
+  warningThreshold,
+  criticalThreshold,
+  metricName,
+}: TrendChartProps) {
+  if (!trend) {
+    return <EmptyState message="No trend data available" />;
+  }
+  const data: Array<{ label: string; value: number; projected?: number }> = [
+    { label: 'Previous', value: trend.previousValue },
+    { label: 'Current', value: trend.currentValue },
+  ];
+  if (dynamics && dynamics.velocity !== 0) {
+    const projectedValue = trend.currentValue + dynamics.velocity;
+    data.push({
+      label: 'Projected',
+      value: trend.currentValue,
+      projected: projectedValue,
+    });
+    data[1].projected = trend.currentValue;
+  }
+  const allValues: number[] = [];
+  for (const d of data) {
+    allValues.push(d.value);
+    if (d.projected != null) allValues.push(d.projected);
+  }
+  if (warningThreshold != null) allValues.push(warningThreshold);
+  if (criticalThreshold != null) allValues.push(criticalThreshold);
+  if (allValues.length === 0) {
+    return <EmptyState message="Insufficient data" />;
+  }
+  const yMin = Math.min(...allValues);
+  const yMax = Math.max(...allValues);
+  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  return (
+    <div>
+      <div role="img" aria-label={`Trend chart for ${metricName}`}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+          <LineChart data={data} margin={CHART_MARGIN}>
+            <CartesianGrid {...CHART_GRID_PROPS} />
+            <XAxis
+              dataKey="label"
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
+            />
+            <YAxis
+              domain={[yMin - yPad, yMax + yPad]}
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
+              tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+              width={CHART_YAXIS_WIDTH}
+            />
+            <Tooltip
+              contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+              formatter={(v) => [typeof v === 'number' ? formatValue(v) : 'N/A', '']}
+              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+            />
+            {warningThreshold != null && (
+              <ReferenceLine
+                y={warningThreshold}
+                stroke={CHART_COLORS.warning}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: 'Warning', fill: CHART_COLORS.warning, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
+              />
+            )}
+            {criticalThreshold != null && (
+              <ReferenceLine
+                y={criticalThreshold}
+                stroke={CHART_COLORS.critical}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: 'Critical', fill: CHART_COLORS.critical, fontSize: CHART_AXIS_TICK.fontSize, position: 'right' }}
+              />
+            )}
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={CHART_COLORS.line}
+              strokeWidth={CHART_STROKE_WIDTH}
+              dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS }}
+              activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
+              connectNulls
+            />
+            {dynamics && dynamics.velocity !== 0 && (
+              <Line
+                type="monotone"
+                dataKey="projected"
+                stroke={CHART_COLORS.line}
+                strokeWidth={CHART_STROKE_WIDTH}
+                strokeDasharray={CHART_DASH_PROJECTED}
+                dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS_PROJECTED, strokeDasharray: '' }}
+                connectNulls
+              />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      {dynamics && (
+        <div className="flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics">
+          <div>
+            <span className="font-semibold">Velocity:</span>{' '}
+            <span className="mono">
+              {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
+            </span>
+          </div>
+          <div>
+            <span className="font-semibold">Acceleration:</span>{' '}
+            <span className="mono">
+              {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
+            </span>
+          </div>
+          {dynamics.projectedBreachTime && (
+            <div>
+              <span className="font-semibold">Breach in:</span>{' '}
+              <span className="mono chart-breach-time" data-status={dynamics.projectedStatus}>
+                {formatBreachTime(dynamics.projectedBreachTime)}
+              </span>
+            </div>
+          )}
+          <div>
+            <span className="font-semibold">Confidence:</span>{' '}
+            <span className="mono">
+              {formatPercent(dynamics.confidence * 100, 0)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+================
+File: src/components/TrendSeries.tsx
+================
+import {
+  ComposedChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Area,
+  ResponsiveContainer,
+} from 'recharts';
+import { format, differenceInMilliseconds } from 'date-fns';
+import type { TrendBucket } from '../hooks/useTrend.js';
+import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import { formatScore } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+interface TrendSeriesProps {
+  data: TrendBucket[];
+  metricName: string;
+}
+const TREND_COLORS = {
+  band: 'rgba(88, 166, 255, 0.1)',
+  bandStroke: 'rgba(88, 166, 255, 0.3)',
+  background: '#131920',
+} as const;
+function formatTime(iso: string, spanDays: number): string {
+  const d = new Date(iso);
+  if (spanDays <= 1) return format(d, 'HH:mm');
+  if (spanDays <= 7) return format(d, 'EEE HH:mm');
+  return format(d, 'MMM d');
+}
+export function TrendSeries({ data, metricName }: TrendSeriesProps) {
+  if (data.length === 0) {
+    return <EmptyState message="No trend data available" />;
+  }
+  const spanMs = differenceInMilliseconds(
+    new Date(data[data.length - 1].endTime),
+    new Date(data[0].startTime)
+  );
+  const spanDays = spanMs / (1000 * 60 * 60 * 24);
+  const chartData = data.map((bucket) => ({
+    time: formatTime(bucket.startTime, spanDays),
+    avg: bucket.avg,
+    p10: bucket.percentiles?.p10 ?? null,
+    p50: bucket.percentiles?.p50 ?? null,
+    p90: bucket.percentiles?.p90 ?? null,
+    count: bucket.count,
+  }));
+  const allVals: number[] = [];
+  for (const d of chartData) {
+    if (d.avg !== null) allVals.push(d.avg);
+    if (d.p10 !== null) allVals.push(d.p10);
+    if (d.p90 !== null) allVals.push(d.p90);
+  }
+  if (allVals.length === 0) {
+    return <EmptyState message="No scored evaluations in period" />;
+  }
+  const yMin = Math.min(...allVals);
+  const yMax = Math.max(...allVals);
+  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  return (
+    <div role="img" aria-label={`Time series trend for ${metricName}`}>
+      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+        <ComposedChart data={chartData} margin={CHART_MARGIN}>
+          <CartesianGrid {...CHART_GRID_PROPS} />
+          <XAxis
+            dataKey="time"
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
+          />
+          <YAxis
+            domain={[yMin - yPad, yMax + yPad]}
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
+            tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+            width={CHART_YAXIS_WIDTH}
+          />
+          <Tooltip
+            contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+            formatter={(v, name) => [
+              formatScore(typeof v === 'number' ? v : null),
+              name === 'avg' ? 'Average' : (String(name ?? '')).toUpperCase(),
+            ]}
+            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+          />
+          <Area
+            type="monotone"
+            dataKey="p90"
+            stroke="none"
+            fill={TREND_COLORS.band}
+            connectNulls
+          />
+          <Area
+            type="monotone"
+            dataKey="p10"
+            stroke="none"
+            fill={TREND_COLORS.background}
+            connectNulls
+          />
+          <Line
+            type="monotone"
+            dataKey="p50"
+            stroke={TREND_COLORS.bandStroke}
+            strokeWidth={1}
+            strokeDasharray="4 3"
+            dot={false}
+            connectNulls
+          />
+          <Line
+            type="monotone"
+            dataKey="avg"
+            stroke={CHART_COLORS.line}
+            strokeWidth={2}
+            dot={{ fill: CHART_COLORS.line, r: 3 }}
+            activeDot={{ r: 5 }}
+            connectNulls
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div className="flex-center justify-center gap-4 mt-1 text-xs chart-dynamics">
+        <span><span className="chart-line-indicator">&#9473;</span> avg</span>
+        <span><span className="opacity-50">- -</span> p50</span>
+        <span><span className="opacity-30">&#9608;</span> p10-p90</span>
+      </div>
     </div>
   );
 }
@@ -15174,6 +15181,162 @@ describe('WorkflowGraphView cluster toggle UI', () => {
 });
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+const TREND_PADDING_RATIO = 0.1;
+const TREND_PADDING_MIN_MS = 60_000;
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const validTs = evaluations
+      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
+      .filter(({ ts }) => Number.isFinite(ts));
+    const { dataMin, dataMax } = validTs.length > 0
+      ? validTs.reduce(
+          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
+          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
+        )
+      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
+    const dataSpan = dataMax - dataMin;
+    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+        evals: [],
+      });
+    }
+    for (const { ev, ts } of validTs) {
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
+      }
+    }
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+        : undefined;
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = extractFiniteScores(evaluations);
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: src/components/CoverageGrid.tsx
 ================
 import { memo, useState, useMemo, type CSSProperties } from 'react';
@@ -16122,162 +16285,6 @@ qualityRoutes.get('/degradation-signals', async (c) => {
 });
 
 ================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
-const TREND_PADDING_RATIO = 0.1;
-const TREND_PADDING_MIN_MS = 60_000;
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const validTs = evaluations
-      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
-      .filter(({ ts }) => Number.isFinite(ts));
-    const { dataMin, dataMax } = validTs.length > 0
-      ? validTs.reduce(
-          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
-          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
-        )
-      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
-    const dataSpan = dataMax - dataMin;
-    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-    for (const { ev, ts } of validTs) {
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
-        }
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
 File: src/types/workflow-graph.ts
 ================
 export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
@@ -16309,6 +16316,180 @@ export interface WorkflowGraph {
   workflowShape: WorkflowShape;
   droppedTurns: number;
 }
+
+================
+File: src/api/routes/agents.ts
+================
+import { Hono } from 'hono';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+const LIMIT_AGENT_SPANS = 1000;
+type AgentAcc = {
+  invocations: number;
+  errors: number;
+  rateLimitCount: number;
+  totalOutputSize: number;
+  sessions: Set<string>;
+  traceIds: Set<string>;
+  sourceTypes: Record<string, number>;
+  dailyCounts: number[];
+};
+function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
+  const sorted = [...scores].sort((a, b) => a - b);
+  return {
+    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
+    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+    count: sorted.length,
+  };
+}
+function createAgentAccumulator(periodDays: number): AgentAcc {
+  return {
+    invocations: 0,
+    errors: 0,
+    rateLimitCount: 0,
+    totalOutputSize: 0,
+    sessions: new Set(),
+    traceIds: new Set(),
+    sourceTypes: Object.create(null),
+    dailyCounts: new Array(periodDays).fill(0),
+  };
+}
+export const agentRoutes = new Hono();
+agentRoutes.get('/agents', async (c) => {
+  const periodParam = c.req.query('period') ?? '30d';
+  const periodDays = VALID_PERIODS[periodParam];
+  if (periodDays === undefined) {
+    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
+  }
+  const now = new Date();
+  const endDate = toDateOnly(now);
+  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
+  try {
+    const result = await queryTraces({
+      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
+      startDate,
+      endDate,
+      limit: LIMIT_AGENT_SPANS,
+    });
+    const dateBuckets: string[] = [];
+    const bucketIndex = new Map<string, number>();
+    for (let d = 0; d < periodDays; d++) {
+      const day = toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY));
+      dateBuckets.push(day);
+      bucketIndex.set(day, d);
+    }
+    const acc: Record<string, AgentAcc> = Object.create(null);
+    const traceToAgents = new Map<string, Set<string>>();
+    for (const span of result.traces) {
+      const name = attrStr(span, 'gen_ai.agent.name');
+      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
+      entry.invocations++;
+      if (span.startTimeUnixNano) {
+        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
+        const idx = bucketIndex.get(dayKey);
+        if (idx !== undefined) entry.dailyCounts[idx]++;
+      }
+      if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
+      if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
+      entry.totalOutputSize += attrNum(span, 'agent.output_size');
+      const sid = attrStr(span, 'session.id', '');
+      if (sid) entry.sessions.add(sid);
+      if (span.traceId) {
+        entry.traceIds.add(span.traceId);
+        let agentSet = traceToAgents.get(span.traceId);
+        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
+        agentSet.add(name);
+      }
+      const rawSrc = attrStr(span, 'agent.source_type');
+      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
+      incrementCount(entry.sourceTypes, src);
+    }
+    const allTraceIds = [...traceToAgents.keys()];
+    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
+    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
+    for (const ev of evaluations) {
+      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+      const agentNames = traceToAgents.get(ev.traceId);
+      if (!agentNames) continue;
+      for (const agent of agentNames) {
+        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
+        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
+      }
+    }
+    const agents = Object.entries(acc).map(([agentName, d]) => {
+      const evalMetrics = agentEvalAcc[agentName] ?? {};
+      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
+      for (const [metric, scores] of Object.entries(evalMetrics)) {
+        evalSummary[metric] = computeEvalMetricSummary(scores);
+      }
+      const sessionIdList = [...d.sessions];
+      const traceIdList = [...d.traceIds];
+      return {
+        agentName,
+        invocations: d.invocations,
+        errors: d.errors,
+        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
+        rateLimitCount: d.rateLimitCount,
+        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+        sessionCount: d.sessions.size,
+        sessionIds: sessionIdList.slice(0, MAX_IDS),
+        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
+        traceIdsTotal: traceIdList.length,
+        traceIds: traceIdList.slice(0, MAX_IDS),
+        traceIdsTruncated: traceIdList.length > MAX_IDS,
+        sourceTypes: d.sourceTypes,
+        dailyCounts: d.dailyCounts,
+        evalSummary,
+      };
+    }).sort((a, b) => b.invocations - a.invocations);
+    return c.json({ period: periodParam, startDate, endDate, agents });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+agentRoutes.get('/agents/:sessionId', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  if (!isValidParam(sessionId, PARAM_ID_RE)) {
+    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  }
+  try {
+    const spans = await loadTracesBySessionId(sessionId);
+    const agentMap = new Map<number, string>();
+    const traceIds = new Set<string>();
+    spans.forEach((span, i) => {
+      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
+      if (agent) agentMap.set(i, agent);
+      if (span.traceId) traceIds.add(span.traceId);
+    });
+    const stepScores: StepScore[] = spans.map((span, i) => ({
+      step: i,
+      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+      explanation: span.name,
+    }));
+    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
+    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
+    const evaluations = await evalPromise;
+    const serializedAgentMap = Object.fromEntries(agentMap);
+    const graph = buildWorkflowGraph(evaluation, spans);
+    return c.json({
+      sessionId,
+      spans,
+      evaluation,
+      evaluations,
+      agentMap: serializedAgentMap,
+      graph,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
 
 ================
 File: src/api/api-constants.ts
@@ -16873,180 +17054,6 @@ export function DegradationSignalsPage({ period }: { period: Period }) {
     </PageShell>
   );
 }
-
-================
-File: src/api/routes/agents.ts
-================
-import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-const LIMIT_AGENT_SPANS = 1000;
-type AgentAcc = {
-  invocations: number;
-  errors: number;
-  rateLimitCount: number;
-  totalOutputSize: number;
-  sessions: Set<string>;
-  traceIds: Set<string>;
-  sourceTypes: Record<string, number>;
-  dailyCounts: number[];
-};
-function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
-  const sorted = [...scores].sort((a, b) => a - b);
-  return {
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
-    count: sorted.length,
-  };
-}
-function createAgentAccumulator(periodDays: number): AgentAcc {
-  return {
-    invocations: 0,
-    errors: 0,
-    rateLimitCount: 0,
-    totalOutputSize: 0,
-    sessions: new Set(),
-    traceIds: new Set(),
-    sourceTypes: Object.create(null),
-    dailyCounts: new Array(periodDays).fill(0),
-  };
-}
-export const agentRoutes = new Hono();
-agentRoutes.get('/agents', async (c) => {
-  const periodParam = c.req.query('period') ?? '30d';
-  const periodDays = VALID_PERIODS[periodParam];
-  if (periodDays === undefined) {
-    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
-  }
-  const now = new Date();
-  const endDate = toDateOnly(now);
-  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
-  try {
-    const result = await queryTraces({
-      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
-      startDate,
-      endDate,
-      limit: LIMIT_AGENT_SPANS,
-    });
-    const dateBuckets: string[] = [];
-    const bucketIndex = new Map<string, number>();
-    for (let d = 0; d < periodDays; d++) {
-      const day = toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY));
-      dateBuckets.push(day);
-      bucketIndex.set(day, d);
-    }
-    const acc: Record<string, AgentAcc> = Object.create(null);
-    const traceToAgents = new Map<string, Set<string>>();
-    for (const span of result.traces) {
-      const name = attrStr(span, 'gen_ai.agent.name');
-      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
-      entry.invocations++;
-      if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
-        const idx = bucketIndex.get(dayKey);
-        if (idx !== undefined) entry.dailyCounts[idx]++;
-      }
-      if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
-      if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
-      entry.totalOutputSize += attrNum(span, 'agent.output_size');
-      const sid = attrStr(span, 'session.id', '');
-      if (sid) entry.sessions.add(sid);
-      if (span.traceId) {
-        entry.traceIds.add(span.traceId);
-        let agentSet = traceToAgents.get(span.traceId);
-        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
-        agentSet.add(name);
-      }
-      const rawSrc = attrStr(span, 'agent.source_type');
-      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
-      incrementCount(entry.sourceTypes, src);
-    }
-    const allTraceIds = [...traceToAgents.keys()];
-    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
-    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
-    for (const ev of evaluations) {
-      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
-      const agentNames = traceToAgents.get(ev.traceId);
-      if (!agentNames) continue;
-      for (const agent of agentNames) {
-        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
-        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
-      }
-    }
-    const agents = Object.entries(acc).map(([agentName, d]) => {
-      const evalMetrics = agentEvalAcc[agentName] ?? {};
-      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
-      for (const [metric, scores] of Object.entries(evalMetrics)) {
-        evalSummary[metric] = computeEvalMetricSummary(scores);
-      }
-      const sessionIdList = [...d.sessions];
-      const traceIdList = [...d.traceIds];
-      return {
-        agentName,
-        invocations: d.invocations,
-        errors: d.errors,
-        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
-        rateLimitCount: d.rateLimitCount,
-        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-        sessionCount: d.sessions.size,
-        sessionIds: sessionIdList.slice(0, MAX_IDS),
-        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
-        traceIdsTotal: traceIdList.length,
-        traceIds: traceIdList.slice(0, MAX_IDS),
-        traceIdsTruncated: traceIdList.length > MAX_IDS,
-        sourceTypes: d.sourceTypes,
-        dailyCounts: d.dailyCounts,
-        evalSummary,
-      };
-    }).sort((a, b) => b.invocations - a.invocations);
-    return c.json({ period: periodParam, startDate, endDate, agents });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-agentRoutes.get('/agents/:sessionId', async (c) => {
-  const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
-  }
-  try {
-    const spans = await loadTracesBySessionId(sessionId);
-    const agentMap = new Map<number, string>();
-    const traceIds = new Set<string>();
-    spans.forEach((span, i) => {
-      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
-      if (agent) agentMap.set(i, agent);
-      if (span.traceId) traceIds.add(span.traceId);
-    });
-    const stepScores: StepScore[] = spans.map((span, i) => ({
-      step: i,
-      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
-      explanation: span.name,
-    }));
-    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
-    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
-    const evaluations = await evalPromise;
-    const serializedAgentMap = Object.fromEntries(agentMap);
-    const graph = buildWorkflowGraph(evaluation, spans);
-    return c.json({
-      sessionId,
-      spans,
-      evaluation,
-      evaluations,
-      agentMap: serializedAgentMap,
-      graph,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
 
 ================
 File: src/lib/constants.ts

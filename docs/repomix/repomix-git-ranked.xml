@@ -10954,97 +10954,6 @@ export function AgentScoreSummary({ handoffScore, avgRelevance, completeness }: 
       ))}
     &lt;/div&gt;
   );
-}</file><file path="src/components/AlertList.tsx">import { Link } from &apos;wouter&apos;;
-import type { CSSProperties } from &apos;react&apos;;
-import { formatScore } from &apos;../lib/quality-utils.js&apos;;
-import type { TriggeredAlert } from &apos;../types.js&apos;;
-type AlertWithMeta = TriggeredAlert &amp; { metricName?: string };
-function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
-  return (
-    &lt;li className=&quot;alert-item&quot; data-status={alert.severity}&gt;
-      &lt;div className=&quot;alert-message&quot;&gt;{alert.message}&lt;/div&gt;
-      &lt;div className=&quot;alert-meta text-secondary text-xs&quot;&gt;
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
-      &lt;/div&gt;
-      {alert.remediationHints &amp;&amp; alert.remediationHints.length &gt; 0 &amp;&amp; (
-        &lt;div className=&quot;remediation text-xs&quot;&gt;
-          Hint: {alert.remediationHints[0]}
-        &lt;/div&gt;
-      )}
-    &lt;/li&gt;
-  );
-}
-function ThresholdBar({ actual, threshold, direction }: {
-  actual: number;
-  threshold: number;
-  direction: &apos;above&apos; | &apos;below&apos;;
-}) {
-  const max = Math.max(actual, threshold) * 1.2 || 1;
-  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
-  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
-  const isViolating = direction === &apos;below&apos; ? actual &lt; threshold : actual &gt; threshold;
-  return (
-    &lt;div className=&quot;threshold-bar&quot; aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}&gt;
-      &lt;div
-        className=&quot;threshold-bar-fill&quot;
-        data-violating={isViolating || undefined}
-        style={{ &apos;--bar-fill-width&apos;: `${actualPct}%` } as CSSProperties}
-      /&gt;
-      &lt;div
-        className=&quot;threshold-bar-marker&quot;
-        style={{ &apos;--bar-marker-left&apos;: `${thresholdPct}%` } as CSSProperties}
-        title={`Threshold: ${formatScore(threshold)}`}
-      /&gt;
-    &lt;/div&gt;
-  );
-}
-function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
-  return (
-    &lt;li className=&quot;alert-item alert-compound&quot; data-status={alert.severity}&gt;
-      &lt;div className=&quot;alert-message&quot;&gt;{alert.message}&lt;/div&gt;
-      &lt;div className=&quot;alert-meta text-secondary text-xs&quot;&gt;
-        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
-      &lt;/div&gt;
-      &lt;ThresholdBar
-        actual={alert.actualValue}
-        threshold={alert.threshold}
-        direction={alert.direction}
-      /&gt;
-      {alert.remediationHints &amp;&amp; alert.remediationHints.length &gt; 0 &amp;&amp; (
-        &lt;ol className=&quot;remediation-list text-xs&quot;&gt;
-          {alert.remediationHints.map((hint, i) =&gt; (
-            &lt;li key={i}&gt;{hint}&lt;/li&gt;
-          ))}
-        &lt;/ol&gt;
-      )}
-      {alert.relatedMetrics &amp;&amp; alert.relatedMetrics.length &gt; 0 &amp;&amp; (
-        &lt;div className=&quot;alert-related flex-center&quot;&gt;
-          &lt;span className=&quot;text-secondary text-xs&quot;&gt;Related:&lt;/span&gt;
-          {alert.relatedMetrics.map((m) =&gt; (
-            &lt;Link key={m} href={`/metrics/${m}`} className=&quot;alert-metric-link text-xs&quot;&gt;
-              {m}
-            &lt;/Link&gt;
-          ))}
-        &lt;/div&gt;
-      )}
-    &lt;/li&gt;
-  );
-}
-export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
-  if (alerts.length === 0) return null;
-  const sorted = [...alerts].sort((a, b) =&gt; {
-    const order = { critical: 0, warning: 1, info: 2 };
-    return (order[a.severity as keyof typeof order] ?? 2) - (order[b.severity as keyof typeof order] ?? 2);
-  });
-  return (
-    &lt;ul className=&quot;alert-list&quot;&gt;
-      {sorted.map((alert, i) =&gt;
-        alert.isCompound
-          ? &lt;CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} /&gt;
-          : &lt;SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} /&gt;
-      )}
-    &lt;/ul&gt;
-  );
 }</file><file path="src/components/BarIndicator.tsx">import type { CSSProperties } from &apos;react&apos;;
 interface BarIndicatorProps {
   value: number;
@@ -13004,290 +12913,6 @@ export function TimestampCell({ timestamp, className }: TimestampCellProps) {
     &lt;span className={className} title={format(new Date(timestamp), &apos;PPp&apos;)}&gt;
       {formatTimestamp(timestamp)}
     &lt;/span&gt;
-  );
-}</file><file path="src/components/TrendChart.tsx">import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ResponsiveContainer,
-} from &apos;recharts&apos;;
-import type { MetricDynamics, MetricTrend } from &apos;../types.js&apos;;
-import {
-  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
-  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
-  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
-  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
-} from &apos;../lib/constants.js&apos;;
-import { formatPercent } from &apos;../lib/quality-utils.js&apos;;
-import { EmptyState } from &apos;./EmptyState.js&apos;;
-interface TrendChartProps {
-  trend?: MetricTrend;
-  dynamics?: MetricDynamics;
-  warningThreshold?: number;
-  criticalThreshold?: number;
-  metricName: string;
-}
-function formatValue(v: number): string {
-  return Math.abs(v) &lt; 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
-}
-function formatBreachTime(iso: string): string {
-  const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
-  if (hours &lt;= 0) return &apos;threshold exceeded&apos;;
-  if (hours &lt; 1) return `${Math.round(hours * 60)}m`;
-  if (hours &lt; 48) return `${hours.toFixed(1)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
-}
-export function TrendChart({
-  trend,
-  dynamics,
-  warningThreshold,
-  criticalThreshold,
-  metricName,
-}: TrendChartProps) {
-  if (!trend) {
-    return &lt;EmptyState message=&quot;No trend data available&quot; /&gt;;
-  }
-  const data: Array&lt;{ label: string; value: number; projected?: number }&gt; = [
-    { label: &apos;Previous&apos;, value: trend.previousValue },
-    { label: &apos;Current&apos;, value: trend.currentValue },
-  ];
-  if (dynamics &amp;&amp; dynamics.velocity !== 0) {
-    const projectedValue = trend.currentValue + dynamics.velocity;
-    data.push({
-      label: &apos;Projected&apos;,
-      value: trend.currentValue,
-      projected: projectedValue,
-    });
-    data[1].projected = trend.currentValue;
-  }
-  const allValues = data.flatMap((d) =&gt; [d.value, d.projected].filter((v): v is number =&gt; v != null));
-  if (warningThreshold != null) allValues.push(warningThreshold);
-  if (criticalThreshold != null) allValues.push(criticalThreshold);
-  if (allValues.length === 0) {
-    return &lt;EmptyState message=&quot;Insufficient data&quot; /&gt;;
-  }
-  const yMin = Math.min(...allValues);
-  const yMax = Math.max(...allValues);
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
-  return (
-    &lt;div&gt;
-      &lt;div role=&quot;img&quot; aria-label={`Trend chart for ${metricName}`}&gt;
-        &lt;ResponsiveContainer width=&quot;100%&quot; height={CHART_HEIGHT}&gt;
-          &lt;LineChart data={data} margin={CHART_MARGIN}&gt;
-            &lt;CartesianGrid {...CHART_GRID_PROPS} /&gt;
-            &lt;XAxis
-              dataKey=&quot;label&quot;
-              tick={CHART_AXIS_TICK}
-              stroke={CHART_COLORS.grid}
-            /&gt;
-            &lt;YAxis
-              domain={[yMin - yPad, yMax + yPad]}
-              tick={CHART_AXIS_TICK}
-              stroke={CHART_COLORS.grid}
-              tickFormatter={CHART_YAXIS_TICK_FORMATTER}
-              width={CHART_YAXIS_WIDTH}
-            /&gt;
-            &lt;Tooltip
-              contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-              formatter={(v) =&gt; [typeof v === &apos;number&apos; ? formatValue(v) : &apos;N/A&apos;, &apos;&apos;]}
-              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
-            /&gt;
-            {warningThreshold != null &amp;&amp; (
-              &lt;ReferenceLine
-                y={warningThreshold}
-                stroke={CHART_COLORS.warning}
-                strokeDasharray={CHART_DASH_THRESHOLD}
-                label={{ value: &apos;Warning&apos;, fill: CHART_COLORS.warning, fontSize: CHART_AXIS_TICK.fontSize, position: &apos;right&apos; }}
-              /&gt;
-            )}
-            {criticalThreshold != null &amp;&amp; (
-              &lt;ReferenceLine
-                y={criticalThreshold}
-                stroke={CHART_COLORS.critical}
-                strokeDasharray={CHART_DASH_THRESHOLD}
-                label={{ value: &apos;Critical&apos;, fill: CHART_COLORS.critical, fontSize: CHART_AXIS_TICK.fontSize, position: &apos;right&apos; }}
-              /&gt;
-            )}
-            &lt;Line
-              type=&quot;monotone&quot;
-              dataKey=&quot;value&quot;
-              stroke={CHART_COLORS.line}
-              strokeWidth={CHART_STROKE_WIDTH}
-              dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS }}
-              activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
-              connectNulls
-            /&gt;
-            {dynamics &amp;&amp; dynamics.velocity !== 0 &amp;&amp; (
-              &lt;Line
-                type=&quot;monotone&quot;
-                dataKey=&quot;projected&quot;
-                stroke={CHART_COLORS.line}
-                strokeWidth={CHART_STROKE_WIDTH}
-                strokeDasharray={CHART_DASH_PROJECTED}
-                dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS_PROJECTED, strokeDasharray: &apos;&apos; }}
-                connectNulls
-              /&gt;
-            )}
-          &lt;/LineChart&gt;
-        &lt;/ResponsiveContainer&gt;
-      &lt;/div&gt;
-      {dynamics &amp;&amp; (
-        &lt;div className=&quot;flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics&quot;&gt;
-          &lt;div&gt;
-            &lt;span className=&quot;font-semibold&quot;&gt;Velocity:&lt;/span&gt;{&apos; &apos;}
-            &lt;span className=&quot;mono&quot;&gt;
-              {dynamics.velocity &gt;= 0 ? &apos;+&apos; : &apos;&apos;}{formatValue(dynamics.velocity)}/hr
-            &lt;/span&gt;
-          &lt;/div&gt;
-          &lt;div&gt;
-            &lt;span className=&quot;font-semibold&quot;&gt;Acceleration:&lt;/span&gt;{&apos; &apos;}
-            &lt;span className=&quot;mono&quot;&gt;
-              {dynamics.acceleration &gt;= 0 ? &apos;+&apos; : &apos;&apos;}{formatValue(dynamics.acceleration)}/hr
-            &lt;/span&gt;
-          &lt;/div&gt;
-          {dynamics.projectedBreachTime &amp;&amp; (
-            &lt;div&gt;
-              &lt;span className=&quot;font-semibold&quot;&gt;Breach in:&lt;/span&gt;{&apos; &apos;}
-              &lt;span className=&quot;mono chart-breach-time&quot; data-status={dynamics.projectedStatus}&gt;
-                {formatBreachTime(dynamics.projectedBreachTime)}
-              &lt;/span&gt;
-            &lt;/div&gt;
-          )}
-          &lt;div&gt;
-            &lt;span className=&quot;font-semibold&quot;&gt;Confidence:&lt;/span&gt;{&apos; &apos;}
-            &lt;span className=&quot;mono&quot;&gt;
-              {formatPercent(dynamics.confidence * 100, 0)}
-            &lt;/span&gt;
-          &lt;/div&gt;
-        &lt;/div&gt;
-      )}
-    &lt;/div&gt;
-  );
-}</file><file path="src/components/TrendSeries.tsx">import {
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Area,
-  ResponsiveContainer,
-} from &apos;recharts&apos;;
-import { format, differenceInMilliseconds } from &apos;date-fns&apos;;
-import type { TrendBucket } from &apos;../hooks/useTrend.js&apos;;
-import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from &apos;../lib/constants.js&apos;;
-import { formatScore } from &apos;../lib/quality-utils.js&apos;;
-import { EmptyState } from &apos;./EmptyState.js&apos;;
-interface TrendSeriesProps {
-  data: TrendBucket[];
-  metricName: string;
-}
-const TREND_COLORS = {
-  band: &apos;rgba(88, 166, 255, 0.1)&apos;,
-  bandStroke: &apos;rgba(88, 166, 255, 0.3)&apos;,
-  background: &apos;#131920&apos;,
-} as const;
-function formatTime(iso: string, spanDays: number): string {
-  const d = new Date(iso);
-  if (spanDays &lt;= 1) return format(d, &apos;HH:mm&apos;);
-  if (spanDays &lt;= 7) return format(d, &apos;EEE HH:mm&apos;);
-  return format(d, &apos;MMM d&apos;);
-}
-export function TrendSeries({ data, metricName }: TrendSeriesProps) {
-  if (data.length === 0) {
-    return &lt;EmptyState message=&quot;No trend data available&quot; /&gt;;
-  }
-  const spanMs = differenceInMilliseconds(
-    new Date(data[data.length - 1].endTime),
-    new Date(data[0].startTime)
-  );
-  const spanDays = spanMs / (1000 * 60 * 60 * 24);
-  const chartData = data.map((bucket) =&gt; ({
-    time: formatTime(bucket.startTime, spanDays),
-    avg: bucket.avg,
-    p10: bucket.percentiles?.p10 ?? null,
-    p50: bucket.percentiles?.p50 ?? null,
-    p90: bucket.percentiles?.p90 ?? null,
-    count: bucket.count,
-  }));
-  const allVals = chartData.flatMap(d =&gt;
-    [d.avg, d.p10, d.p90].filter((v): v is number =&gt; v !== null)
-  );
-  if (allVals.length === 0) {
-    return &lt;EmptyState message=&quot;No scored evaluations in period&quot; /&gt;;
-  }
-  const yMin = Math.min(...allVals);
-  const yMax = Math.max(...allVals);
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
-  return (
-    &lt;div role=&quot;img&quot; aria-label={`Time series trend for ${metricName}`}&gt;
-      &lt;ResponsiveContainer width=&quot;100%&quot; height={CHART_HEIGHT}&gt;
-        &lt;ComposedChart data={chartData} margin={CHART_MARGIN}&gt;
-          &lt;CartesianGrid {...CHART_GRID_PROPS} /&gt;
-          &lt;XAxis
-            dataKey=&quot;time&quot;
-            tick={CHART_AXIS_TICK}
-            stroke={CHART_COLORS.grid}
-          /&gt;
-          &lt;YAxis
-            domain={[yMin - yPad, yMax + yPad]}
-            tick={CHART_AXIS_TICK}
-            stroke={CHART_COLORS.grid}
-            tickFormatter={CHART_YAXIS_TICK_FORMATTER}
-            width={CHART_YAXIS_WIDTH}
-          /&gt;
-          &lt;Tooltip
-            contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
-            formatter={(v, name) =&gt; [
-              formatScore(typeof v === &apos;number&apos; ? v : null),
-              name === &apos;avg&apos; ? &apos;Average&apos; : (String(name ?? &apos;&apos;)).toUpperCase(),
-            ]}
-            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
-          /&gt;
-          &lt;Area
-            type=&quot;monotone&quot;
-            dataKey=&quot;p90&quot;
-            stroke=&quot;none&quot;
-            fill={TREND_COLORS.band}
-            connectNulls
-          /&gt;
-          &lt;Area
-            type=&quot;monotone&quot;
-            dataKey=&quot;p10&quot;
-            stroke=&quot;none&quot;
-            fill={TREND_COLORS.background}
-            connectNulls
-          /&gt;
-          &lt;Line
-            type=&quot;monotone&quot;
-            dataKey=&quot;p50&quot;
-            stroke={TREND_COLORS.bandStroke}
-            strokeWidth={1}
-            strokeDasharray=&quot;4 3&quot;
-            dot={false}
-            connectNulls
-          /&gt;
-          &lt;Line
-            type=&quot;monotone&quot;
-            dataKey=&quot;avg&quot;
-            stroke={CHART_COLORS.line}
-            strokeWidth={2}
-            dot={{ fill: CHART_COLORS.line, r: 3 }}
-            activeDot={{ r: 5 }}
-            connectNulls
-          /&gt;
-        &lt;/ComposedChart&gt;
-      &lt;/ResponsiveContainer&gt;
-      &lt;div className=&quot;flex-center justify-center gap-4 mt-1 text-xs chart-dynamics&quot;&gt;
-        &lt;span&gt;&lt;span className=&quot;chart-line-indicator&quot;&gt;&amp;#9473;&lt;/span&gt; avg&lt;/span&gt;
-        &lt;span&gt;&lt;span className=&quot;opacity-50&quot;&gt;- -&lt;/span&gt; p50&lt;/span&gt;
-        &lt;span&gt;&lt;span className=&quot;opacity-30&quot;&gt;&amp;#9608;&lt;/span&gt; p10-p90&lt;/span&gt;
-      &lt;/div&gt;
-    &lt;/div&gt;
   );
 }</file><file path="src/components/TruncatedIdLink.tsx">import type { MouseEvent } from &apos;react&apos;;
 import { Link } from &apos;wouter&apos;;
@@ -17807,7 +17432,215 @@ export interface QualityLiveData {
   metrics: LiveMetric[];
   sessionCount: number;
   lastUpdated: string;
-}</file><file path="src/vite-env.d.ts"></file><file path="src/api/routes/correlations.ts">import { Hono } from &apos;hono&apos;;
+}</file><file path="src/vite-env.d.ts"></file><file path="src/__tests__/DegradationSignalsPage.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
+import { render, screen, cleanup } from &apos;@testing-library/react&apos;;
+import type { PageShellProps } from &apos;./test-types.js&apos;;
+import type { DegradationReport, DegradationSignalsResponse } from &apos;../hooks/useDegradationSignals.js&apos;;
+const TEST_TIMEOUT_MS = 30_000;
+vi.mock(&apos;../hooks/useDegradationSignals.js&apos;, () =&gt; ({
+  useDegradationSignals: vi.fn(),
+}));
+vi.mock(&apos;../components/PageShell.js&apos;, () =&gt; ({
+  PageShell: ({ isLoading, error, children }: PageShellProps) =&gt; {
+    if (isLoading) return &lt;div data-testid=&quot;page-shell-loading&quot; /&gt;;
+    if (error) return &lt;div data-testid=&quot;page-shell-error&quot;&gt;{error.message}&lt;/div&gt;;
+    return &lt;div data-testid=&quot;page-shell&quot;&gt;{children}&lt;/div&gt;;
+  },
+}));
+import { useDegradationSignals } from &apos;../hooks/useDegradationSignals.js&apos;;
+import { DegradationSignalsPage } from &apos;../pages/DegradationSignalsPage.js&apos;;
+const mockUseDegradationSignals = vi.mocked(useDegradationSignals);
+afterEach(() =&gt; {
+  cleanup();
+  vi.clearAllMocks();
+});
+function makeSignal(overrides: Partial&lt;DegradationReport[&apos;signal&apos;]&gt; = {}): DegradationReport[&apos;signal&apos;] {
+  return {
+    featureVersion: &apos;1.0.0&apos;,
+    varianceTrend: &apos;stable&apos;,
+    varianceRatio: 1.234,
+    coverageDropoutRate: 0.05,
+    latencySkewRatio: 1.567,
+    predictedStatus: &apos;healthy&apos;,
+    ewmaDriftDetected: false,
+    consecutiveBreaches: 0,
+    confirmed: false,
+    ...overrides,
+  };
+}
+function makeReport(overrides: Partial&lt;DegradationReport&gt; = {}): DegradationReport {
+  return {
+    metricName: &apos;relevance&apos;,
+    signal: makeSignal(),
+    ...overrides,
+  };
+}
+function makeResponse(overrides: Partial&lt;DegradationSignalsResponse&gt; = {}): DegradationSignalsResponse {
+  return {
+    period: &apos;7d&apos;,
+    reports: [makeReport()],
+    computedAt: &apos;2026-03-27T00:00:00Z&apos;,
+    ...overrides,
+  };
+}
+type MockQueryResult = { data: DegradationSignalsResponse | undefined; isLoading: boolean; error: Error | null };
+function mockQuery(result: MockQueryResult) {
+  mockUseDegradationSignals.mockReturnValue(result as unknown as ReturnType&lt;typeof useDegradationSignals&gt;);
+}
+function mockLoaded(data: DegradationSignalsResponse | undefined = makeResponse()) {
+  mockQuery({ data, isLoading: false, error: null });
+}
+describe(&apos;DegradationSignalsPage — render&apos;, () =&gt; {
+  it(&apos;renders table header columns when data is present&apos;, () =&gt; {
+    mockLoaded();
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Metric&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Status&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;EWMA Drift&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Variance Trend&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Variance Ratio&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Consecutive Breaches&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Confirmed&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Coverage Dropout&apos; })).toBeInTheDocument();
+    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Latency Skew&apos; })).toBeInTheDocument();
+  }, TEST_TIMEOUT_MS);
+  it(&apos;renders loading state when isLoading is true&apos;, () =&gt; {
+    mockQuery({ data: undefined, isLoading: true, error: null });
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByTestId(&apos;page-shell-loading&apos;)).toBeInTheDocument();
+  });
+  it(&apos;renders error state when error is present&apos;, () =&gt; {
+    mockQuery({ data: undefined, isLoading: false, error: new Error(&apos;Network failure&apos;) });
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByTestId(&apos;page-shell-error&apos;)).toBeInTheDocument();
+    expect(screen.getByText(&apos;Network failure&apos;)).toBeInTheDocument();
+  });
+  it(&apos;renders empty state when data has no reports&apos;, () =&gt; {
+    mockLoaded(makeResponse({ reports: [] }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;No Degradation Data&apos;)).toBeInTheDocument();
+  });
+  it(&apos;renders nothing (no table) when data is undefined&apos;, () =&gt; {
+    mockQuery({ data: undefined, isLoading: false, error: null });
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.queryByRole(&apos;table&apos;)).not.toBeInTheDocument();
+  });
+});
+describe(&apos;DegradationSignalsPage — signal display&apos;, () =&gt; {
+  it(&apos;renders metric name in the row&apos;, () =&gt; {
+    mockLoaded(makeResponse({ reports: [makeReport({ metricName: &apos;coherence&apos; })] }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;coherence&apos;)).toBeInTheDocument();
+  });
+  it(&apos;shows &quot;Yes&quot; in EWMA Drift column when ewmaDriftDetected is true&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: true }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;Yes&apos;)).toBeInTheDocument();
+  });
+  it(&apos;shows &quot;No&quot; in EWMA Drift column when ewmaDriftDetected is false&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: false, confirmed: false }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    const noCells = screen.getAllByText(&apos;No&apos;);
+    expect(noCells.length).toBeGreaterThanOrEqual(1);
+  });
+  it(&apos;displays &quot;Increasing&quot; when varianceTrend is &quot;increasing&quot;&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ varianceTrend: &apos;increasing&apos; }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;Increasing&apos;)).toBeInTheDocument();
+  });
+  it(&apos;displays &quot;Stable&quot; when varianceTrend is &quot;stable&quot;&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ varianceTrend: &apos;stable&apos; }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;Stable&apos;)).toBeInTheDocument();
+  });
+  it(&apos;displays &quot;Decreasing&quot; when varianceTrend is &quot;decreasing&quot;&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ varianceTrend: &apos;decreasing&apos; }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;Decreasing&apos;)).toBeInTheDocument();
+  });
+  it(&apos;displays consecutiveBreaches value as integer&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ consecutiveBreaches: 3 }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;3&apos;)).toBeInTheDocument();
+  });
+  it(&apos;displays varianceRatio formatted to 3 decimal places&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ varianceRatio: 1.5678 }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;1.568&apos;)).toBeInTheDocument();
+  });
+  it(&apos;shows &quot;Yes&quot; in Confirmed column when confirmed is true&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: false, confirmed: true }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;Yes&apos;)).toBeInTheDocument();
+  });
+  it(&apos;displays coverageDropoutRate as percentage with 1 decimal place&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ coverageDropoutRate: 0.075 }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;7.5%&apos;)).toBeInTheDocument();
+  });
+  it(&apos;displays latencySkewRatio formatted to 3 decimal places&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ latencySkewRatio: 2.3456 }) })],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;2.346&apos;)).toBeInTheDocument();
+  });
+  it(&apos;renders a row for each report&apos;, () =&gt; {
+    mockLoaded(makeResponse({
+      reports: [
+        makeReport({ metricName: &apos;relevance&apos; }),
+        makeReport({ metricName: &apos;coherence&apos; }),
+        makeReport({ metricName: &apos;faithfulness&apos; }),
+      ],
+    }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(&apos;relevance&apos;)).toBeInTheDocument();
+    expect(screen.getByText(&apos;coherence&apos;)).toBeInTheDocument();
+    expect(screen.getByText(&apos;faithfulness&apos;)).toBeInTheDocument();
+  });
+});
+describe(&apos;DegradationSignalsPage — computed at timestamp&apos;, () =&gt; {
+  it(&apos;renders &quot;Last computed&quot; label when computedAt is present&apos;, () =&gt; {
+    mockLoaded(makeResponse({ computedAt: &apos;2026-03-27T12:00:00Z&apos; }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.getByText(/Last computed:/)).toBeInTheDocument();
+  });
+  it(&apos;does not render &quot;Last computed&quot; when computedAt is null&apos;, () =&gt; {
+    mockLoaded(makeResponse({ computedAt: null }));
+    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
+    expect(screen.queryByText(/Last computed:/)).not.toBeInTheDocument();
+  });
+});
+describe(&apos;DegradationSignalsPage — hook invocation&apos;, () =&gt; {
+  it(&apos;calls useDegradationSignals with the provided period&apos;, () =&gt; {
+    mockLoaded();
+    render(&lt;DegradationSignalsPage period=&quot;24h&quot; /&gt;);
+    expect(mockUseDegradationSignals).toHaveBeenCalledWith(&apos;24h&apos;);
+  });
+  it(&apos;calls useDegradationSignals with period &quot;30d&quot;&apos;, () =&gt; {
+    mockLoaded(makeResponse({ period: &apos;30d&apos; }));
+    render(&lt;DegradationSignalsPage period=&quot;30d&quot; /&gt;);
+    expect(mockUseDegradationSignals).toHaveBeenCalledWith(&apos;30d&apos;);
+  });
+});</file><file path="src/api/routes/correlations.ts">import { Hono } from &apos;hono&apos;;
 import { computeCorrelationMatrix } from &apos;../../../../dist/lib/quality/quality-feature-engineering.js&apos;;
 import { sanitizeErrorForResponse } from &apos;../../../../dist/lib/errors/error-sanitizer.js&apos;;
 import { loadEvaluationsByMetric } from &apos;../data-loader.js&apos;;
@@ -18213,6 +18046,97 @@ export function AgentWorkflowView({
       &lt;/div&gt;
     &lt;/div&gt;
   );
+}</file><file path="src/components/AlertList.tsx">import { Link } from &apos;wouter&apos;;
+import type { CSSProperties } from &apos;react&apos;;
+import { formatScore } from &apos;../lib/quality-utils.js&apos;;
+import type { TriggeredAlert } from &apos;../types.js&apos;;
+type AlertWithMeta = TriggeredAlert &amp; { metricName?: string };
+function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
+  return (
+    &lt;li className=&quot;alert-item&quot; data-status={alert.severity}&gt;
+      &lt;div className=&quot;alert-message&quot;&gt;{alert.message}&lt;/div&gt;
+      &lt;div className=&quot;alert-meta text-secondary text-xs&quot;&gt;
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      &lt;/div&gt;
+      {alert.remediationHints &amp;&amp; alert.remediationHints.length &gt; 0 &amp;&amp; (
+        &lt;div className=&quot;remediation text-xs&quot;&gt;
+          Hint: {alert.remediationHints[0]}
+        &lt;/div&gt;
+      )}
+    &lt;/li&gt;
+  );
+}
+function ThresholdBar({ actual, threshold, direction }: {
+  actual: number;
+  threshold: number;
+  direction: &apos;above&apos; | &apos;below&apos;;
+}) {
+  const max = Math.max(actual, threshold) * 1.2 || 1;
+  const actualPct = Math.max(0, Math.min((actual / max) * 100, 100));
+  const thresholdPct = Math.max(0, Math.min((threshold / max) * 100, 100));
+  const isViolating = direction === &apos;below&apos; ? actual &lt; threshold : actual &gt; threshold;
+  return (
+    &lt;div className=&quot;threshold-bar&quot; aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}&gt;
+      &lt;div
+        className=&quot;threshold-bar-fill&quot;
+        data-violating={isViolating || undefined}
+        style={{ &apos;--bar-fill-width&apos;: `${actualPct}%` } as CSSProperties}
+      /&gt;
+      &lt;div
+        className=&quot;threshold-bar-marker&quot;
+        style={{ &apos;--bar-marker-left&apos;: `${thresholdPct}%` } as CSSProperties}
+        title={`Threshold: ${formatScore(threshold)}`}
+      /&gt;
+    &lt;/div&gt;
+  );
+}
+function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
+  return (
+    &lt;li className=&quot;alert-item alert-compound&quot; data-status={alert.severity}&gt;
+      &lt;div className=&quot;alert-message&quot;&gt;{alert.message}&lt;/div&gt;
+      &lt;div className=&quot;alert-meta text-secondary text-xs&quot;&gt;
+        {alert.aggregation} = {formatScore(alert.actualValue)} (threshold: {formatScore(alert.threshold)})
+      &lt;/div&gt;
+      &lt;ThresholdBar
+        actual={alert.actualValue}
+        threshold={alert.threshold}
+        direction={alert.direction}
+      /&gt;
+      {alert.remediationHints &amp;&amp; alert.remediationHints.length &gt; 0 &amp;&amp; (
+        &lt;ol className=&quot;remediation-list text-xs&quot;&gt;
+          {alert.remediationHints.map((hint, i) =&gt; (
+            &lt;li key={i}&gt;{hint}&lt;/li&gt;
+          ))}
+        &lt;/ol&gt;
+      )}
+      {alert.relatedMetrics &amp;&amp; alert.relatedMetrics.length &gt; 0 &amp;&amp; (
+        &lt;div className=&quot;alert-related flex-center&quot;&gt;
+          &lt;span className=&quot;text-secondary text-xs&quot;&gt;Related:&lt;/span&gt;
+          {alert.relatedMetrics.map((m) =&gt; (
+            &lt;Link key={m} href={`/metrics/${m}`} className=&quot;alert-metric-link text-xs&quot;&gt;
+              {m}
+            &lt;/Link&gt;
+          ))}
+        &lt;/div&gt;
+      )}
+    &lt;/li&gt;
+  );
+}
+const SEVERITY_ORDER: Record&lt;string, number&gt; = { critical: 0, warning: 1, info: 2 };
+export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
+  if (alerts.length === 0) return null;
+  const sorted = [...alerts].sort((a, b) =&gt;
+    (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2)
+  );
+  return (
+    &lt;ul className=&quot;alert-list&quot;&gt;
+      {sorted.map((alert, i) =&gt;
+        alert.isCompound
+          ? &lt;CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} /&gt;
+          : &lt;SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} /&gt;
+      )}
+    &lt;/ul&gt;
+  );
 }</file><file path="src/components/CorrelationHeatmap.tsx">import { useMemo } from &apos;react&apos;;
 import type { CSSProperties } from &apos;react&apos;;
 import { scaleSequential } from &apos;d3-scale&apos;;
@@ -18571,6 +18495,297 @@ export function SpanTree({ spans, evalsBySpan, maxDuration }: SpanTreeProps) {
       ))}
     &lt;/div&gt;
   );
+}</file><file path="src/components/TrendChart.tsx">import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  ResponsiveContainer,
+} from &apos;recharts&apos;;
+import type { MetricDynamics, MetricTrend } from &apos;../types.js&apos;;
+import {
+  CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
+  CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
+  CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
+  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
+} from &apos;../lib/constants.js&apos;;
+import { formatPercent } from &apos;../lib/quality-utils.js&apos;;
+import { EmptyState } from &apos;./EmptyState.js&apos;;
+interface TrendChartProps {
+  trend?: MetricTrend;
+  dynamics?: MetricDynamics;
+  warningThreshold?: number;
+  criticalThreshold?: number;
+  metricName: string;
+}
+function formatValue(v: number): string {
+  return Math.abs(v) &lt; 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
+}
+function formatBreachTime(iso: string): string {
+  const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
+  if (hours &lt;= 0) return &apos;threshold exceeded&apos;;
+  if (hours &lt; 1) return `${Math.round(hours * 60)}m`;
+  if (hours &lt; 48) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+export function TrendChart({
+  trend,
+  dynamics,
+  warningThreshold,
+  criticalThreshold,
+  metricName,
+}: TrendChartProps) {
+  if (!trend) {
+    return &lt;EmptyState message=&quot;No trend data available&quot; /&gt;;
+  }
+  const data: Array&lt;{ label: string; value: number; projected?: number }&gt; = [
+    { label: &apos;Previous&apos;, value: trend.previousValue },
+    { label: &apos;Current&apos;, value: trend.currentValue },
+  ];
+  if (dynamics &amp;&amp; dynamics.velocity !== 0) {
+    const projectedValue = trend.currentValue + dynamics.velocity;
+    data.push({
+      label: &apos;Projected&apos;,
+      value: trend.currentValue,
+      projected: projectedValue,
+    });
+    data[1].projected = trend.currentValue;
+  }
+  const allValues: number[] = [];
+  for (const d of data) {
+    allValues.push(d.value);
+    if (d.projected != null) allValues.push(d.projected);
+  }
+  if (warningThreshold != null) allValues.push(warningThreshold);
+  if (criticalThreshold != null) allValues.push(criticalThreshold);
+  if (allValues.length === 0) {
+    return &lt;EmptyState message=&quot;Insufficient data&quot; /&gt;;
+  }
+  const yMin = Math.min(...allValues);
+  const yMax = Math.max(...allValues);
+  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  return (
+    &lt;div&gt;
+      &lt;div role=&quot;img&quot; aria-label={`Trend chart for ${metricName}`}&gt;
+        &lt;ResponsiveContainer width=&quot;100%&quot; height={CHART_HEIGHT}&gt;
+          &lt;LineChart data={data} margin={CHART_MARGIN}&gt;
+            &lt;CartesianGrid {...CHART_GRID_PROPS} /&gt;
+            &lt;XAxis
+              dataKey=&quot;label&quot;
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
+            /&gt;
+            &lt;YAxis
+              domain={[yMin - yPad, yMax + yPad]}
+              tick={CHART_AXIS_TICK}
+              stroke={CHART_COLORS.grid}
+              tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+              width={CHART_YAXIS_WIDTH}
+            /&gt;
+            &lt;Tooltip
+              contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+              formatter={(v) =&gt; [typeof v === &apos;number&apos; ? formatValue(v) : &apos;N/A&apos;, &apos;&apos;]}
+              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+            /&gt;
+            {warningThreshold != null &amp;&amp; (
+              &lt;ReferenceLine
+                y={warningThreshold}
+                stroke={CHART_COLORS.warning}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: &apos;Warning&apos;, fill: CHART_COLORS.warning, fontSize: CHART_AXIS_TICK.fontSize, position: &apos;right&apos; }}
+              /&gt;
+            )}
+            {criticalThreshold != null &amp;&amp; (
+              &lt;ReferenceLine
+                y={criticalThreshold}
+                stroke={CHART_COLORS.critical}
+                strokeDasharray={CHART_DASH_THRESHOLD}
+                label={{ value: &apos;Critical&apos;, fill: CHART_COLORS.critical, fontSize: CHART_AXIS_TICK.fontSize, position: &apos;right&apos; }}
+              /&gt;
+            )}
+            &lt;Line
+              type=&quot;monotone&quot;
+              dataKey=&quot;value&quot;
+              stroke={CHART_COLORS.line}
+              strokeWidth={CHART_STROKE_WIDTH}
+              dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS }}
+              activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
+              connectNulls
+            /&gt;
+            {dynamics &amp;&amp; dynamics.velocity !== 0 &amp;&amp; (
+              &lt;Line
+                type=&quot;monotone&quot;
+                dataKey=&quot;projected&quot;
+                stroke={CHART_COLORS.line}
+                strokeWidth={CHART_STROKE_WIDTH}
+                strokeDasharray={CHART_DASH_PROJECTED}
+                dot={{ fill: CHART_COLORS.line, r: CHART_DOT_RADIUS_PROJECTED, strokeDasharray: &apos;&apos; }}
+                connectNulls
+              /&gt;
+            )}
+          &lt;/LineChart&gt;
+        &lt;/ResponsiveContainer&gt;
+      &lt;/div&gt;
+      {dynamics &amp;&amp; (
+        &lt;div className=&quot;flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics&quot;&gt;
+          &lt;div&gt;
+            &lt;span className=&quot;font-semibold&quot;&gt;Velocity:&lt;/span&gt;{&apos; &apos;}
+            &lt;span className=&quot;mono&quot;&gt;
+              {dynamics.velocity &gt;= 0 ? &apos;+&apos; : &apos;&apos;}{formatValue(dynamics.velocity)}/hr
+            &lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div&gt;
+            &lt;span className=&quot;font-semibold&quot;&gt;Acceleration:&lt;/span&gt;{&apos; &apos;}
+            &lt;span className=&quot;mono&quot;&gt;
+              {dynamics.acceleration &gt;= 0 ? &apos;+&apos; : &apos;&apos;}{formatValue(dynamics.acceleration)}/hr
+            &lt;/span&gt;
+          &lt;/div&gt;
+          {dynamics.projectedBreachTime &amp;&amp; (
+            &lt;div&gt;
+              &lt;span className=&quot;font-semibold&quot;&gt;Breach in:&lt;/span&gt;{&apos; &apos;}
+              &lt;span className=&quot;mono chart-breach-time&quot; data-status={dynamics.projectedStatus}&gt;
+                {formatBreachTime(dynamics.projectedBreachTime)}
+              &lt;/span&gt;
+            &lt;/div&gt;
+          )}
+          &lt;div&gt;
+            &lt;span className=&quot;font-semibold&quot;&gt;Confidence:&lt;/span&gt;{&apos; &apos;}
+            &lt;span className=&quot;mono&quot;&gt;
+              {formatPercent(dynamics.confidence * 100, 0)}
+            &lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      )}
+    &lt;/div&gt;
+  );
+}</file><file path="src/components/TrendSeries.tsx">import {
+  ComposedChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Area,
+  ResponsiveContainer,
+} from &apos;recharts&apos;;
+import { format, differenceInMilliseconds } from &apos;date-fns&apos;;
+import type { TrendBucket } from &apos;../hooks/useTrend.js&apos;;
+import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from &apos;../lib/constants.js&apos;;
+import { formatScore } from &apos;../lib/quality-utils.js&apos;;
+import { EmptyState } from &apos;./EmptyState.js&apos;;
+interface TrendSeriesProps {
+  data: TrendBucket[];
+  metricName: string;
+}
+const TREND_COLORS = {
+  band: &apos;rgba(88, 166, 255, 0.1)&apos;,
+  bandStroke: &apos;rgba(88, 166, 255, 0.3)&apos;,
+  background: &apos;#131920&apos;,
+} as const;
+function formatTime(iso: string, spanDays: number): string {
+  const d = new Date(iso);
+  if (spanDays &lt;= 1) return format(d, &apos;HH:mm&apos;);
+  if (spanDays &lt;= 7) return format(d, &apos;EEE HH:mm&apos;);
+  return format(d, &apos;MMM d&apos;);
+}
+export function TrendSeries({ data, metricName }: TrendSeriesProps) {
+  if (data.length === 0) {
+    return &lt;EmptyState message=&quot;No trend data available&quot; /&gt;;
+  }
+  const spanMs = differenceInMilliseconds(
+    new Date(data[data.length - 1].endTime),
+    new Date(data[0].startTime)
+  );
+  const spanDays = spanMs / (1000 * 60 * 60 * 24);
+  const chartData = data.map((bucket) =&gt; ({
+    time: formatTime(bucket.startTime, spanDays),
+    avg: bucket.avg,
+    p10: bucket.percentiles?.p10 ?? null,
+    p50: bucket.percentiles?.p50 ?? null,
+    p90: bucket.percentiles?.p90 ?? null,
+    count: bucket.count,
+  }));
+  const allVals: number[] = [];
+  for (const d of chartData) {
+    if (d.avg !== null) allVals.push(d.avg);
+    if (d.p10 !== null) allVals.push(d.p10);
+    if (d.p90 !== null) allVals.push(d.p90);
+  }
+  if (allVals.length === 0) {
+    return &lt;EmptyState message=&quot;No scored evaluations in period&quot; /&gt;;
+  }
+  const yMin = Math.min(...allVals);
+  const yMax = Math.max(...allVals);
+  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  return (
+    &lt;div role=&quot;img&quot; aria-label={`Time series trend for ${metricName}`}&gt;
+      &lt;ResponsiveContainer width=&quot;100%&quot; height={CHART_HEIGHT}&gt;
+        &lt;ComposedChart data={chartData} margin={CHART_MARGIN}&gt;
+          &lt;CartesianGrid {...CHART_GRID_PROPS} /&gt;
+          &lt;XAxis
+            dataKey=&quot;time&quot;
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
+          /&gt;
+          &lt;YAxis
+            domain={[yMin - yPad, yMax + yPad]}
+            tick={CHART_AXIS_TICK}
+            stroke={CHART_COLORS.grid}
+            tickFormatter={CHART_YAXIS_TICK_FORMATTER}
+            width={CHART_YAXIS_WIDTH}
+          /&gt;
+          &lt;Tooltip
+            contentStyle={CHART_TOOLTIP_CONTENT_STYLE}
+            formatter={(v, name) =&gt; [
+              formatScore(typeof v === &apos;number&apos; ? v : null),
+              name === &apos;avg&apos; ? &apos;Average&apos; : (String(name ?? &apos;&apos;)).toUpperCase(),
+            ]}
+            labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+          /&gt;
+          &lt;Area
+            type=&quot;monotone&quot;
+            dataKey=&quot;p90&quot;
+            stroke=&quot;none&quot;
+            fill={TREND_COLORS.band}
+            connectNulls
+          /&gt;
+          &lt;Area
+            type=&quot;monotone&quot;
+            dataKey=&quot;p10&quot;
+            stroke=&quot;none&quot;
+            fill={TREND_COLORS.background}
+            connectNulls
+          /&gt;
+          &lt;Line
+            type=&quot;monotone&quot;
+            dataKey=&quot;p50&quot;
+            stroke={TREND_COLORS.bandStroke}
+            strokeWidth={1}
+            strokeDasharray=&quot;4 3&quot;
+            dot={false}
+            connectNulls
+          /&gt;
+          &lt;Line
+            type=&quot;monotone&quot;
+            dataKey=&quot;avg&quot;
+            stroke={CHART_COLORS.line}
+            strokeWidth={2}
+            dot={{ fill: CHART_COLORS.line, r: 3 }}
+            activeDot={{ r: 5 }}
+            connectNulls
+          /&gt;
+        &lt;/ComposedChart&gt;
+      &lt;/ResponsiveContainer&gt;
+      &lt;div className=&quot;flex-center justify-center gap-4 mt-1 text-xs chart-dynamics&quot;&gt;
+        &lt;span&gt;&lt;span className=&quot;chart-line-indicator&quot;&gt;&amp;#9473;&lt;/span&gt; avg&lt;/span&gt;
+        &lt;span&gt;&lt;span className=&quot;opacity-50&quot;&gt;- -&lt;/span&gt; p50&lt;/span&gt;
+        &lt;span&gt;&lt;span className=&quot;opacity-30&quot;&gt;&amp;#9608;&lt;/span&gt; p10-p90&lt;/span&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
 }</file><file path="src/components/TurnTimeline.tsx">import type { CSSProperties } from &apos;react&apos;;
 import { scoreColor, agentColor } from &apos;../lib/quality-utils.js&apos;;
 import { BarIndicator } from &apos;./BarIndicator.js&apos;;
@@ -18618,6 +18833,414 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
           &lt;/div&gt;
         );
       })}
+    &lt;/div&gt;
+  );
+}</file><file path="src/components/WorkflowGraph.tsx">import React, { memo, useCallback, useEffect, useState } from &apos;react&apos;;
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from &apos;@xyflow/react&apos;;
+import &apos;@xyflow/react/dist/style.css&apos;;
+import ELK from &apos;elkjs/lib/elk.bundled.js&apos;;
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from &apos;../types/workflow-graph.js&apos;;
+import { fmtDuration, groupBy } from &apos;../lib/quality-utils.js&apos;;
+import { SCORE_CHIP_PRECISION } from &apos;../lib/constants.js&apos;;
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
+const CLUSTER_NODE_WIDTH = 240;
+const CLUSTER_NODE_HEIGHT = 90;
+const MINIMAP_THRESHOLD = 5;
+const MAX_ELK_NODES = 50;
+const WORKFLOW_SCORE_HIGH_MIN = 0.7;
+const WORKFLOW_SCORE_MID_MIN = 0.4;
+const SCORE_BANDS = {
+  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: &apos;Good&apos;, className: &apos;workflow-node--score-high&apos; },
+  MID: { min: WORKFLOW_SCORE_MID_MIN, label: &apos;Fair&apos;, className: &apos;workflow-node--score-mid&apos; },
+  LOW: { min: 0, label: &apos;Poor&apos;, className: &apos;workflow-node--score-low&apos; },
+} as const;
+const ELK_OPTIONS = {
+  &apos;elk.algorithm&apos;: &apos;layered&apos;,
+  &apos;elk.direction&apos;: &apos;DOWN&apos;,
+  &apos;elk.layered.cycleBreaking.strategy&apos;: &apos;GREEDY&apos;,
+  &apos;elk.edgeRouting&apos;: &apos;ORTHOGONAL&apos;,
+  &apos;elk.layered.spacing.nodeNodeBetweenLayers&apos;: &apos;80&apos;,
+  &apos;elk.spacing.nodeNode&apos;: &apos;60&apos;,
+  &apos;elk.layered.feedbackEdges&apos;: &apos;true&apos;,
+} as const;
+function getScoreBand(score: number | null) {
+  if (score === null) return null;
+  if (score &gt;= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
+  if (score &gt;= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
+  return SCORE_BANDS.LOW;
+}
+const elk = new ELK();
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  dimmed?: boolean;
+  critical?: boolean;
+}
+interface ClusterNodeData {
+  clusterId: string;
+  memberCount: number;
+  hasError: boolean;
+  avgScore: number | null;
+}
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
+  if (!value || typeof value !== &apos;object&apos;) return false;
+  const v = value as Record&lt;string, unknown&gt;;
+  return (
+    typeof v[&apos;id&apos;] === &apos;string&apos; &amp;&amp;
+    typeof v[&apos;label&apos;] === &apos;string&apos; &amp;&amp;
+    typeof v[&apos;toolCallCount&apos;] === &apos;number&apos; &amp;&amp;
+    typeof v[&apos;turnCount&apos;] === &apos;number&apos; &amp;&amp;
+    typeof v[&apos;durationMs&apos;] === &apos;number&apos; &amp;&amp;
+    typeof v[&apos;hasError&apos;] === &apos;boolean&apos;
+  );
+}
+function isClusterNodeData(value: unknown): value is ClusterNodeData {
+  if (!value || typeof value !== &apos;object&apos;) return false;
+  const v = value as Record&lt;string, unknown&gt;;
+  return (
+    typeof v[&apos;clusterId&apos;] === &apos;string&apos; &amp;&amp;
+    typeof v[&apos;memberCount&apos;] === &apos;number&apos; &amp;&amp;
+    typeof v[&apos;hasError&apos;] === &apos;boolean&apos;
+  );
+}
+function buildNodeDataMap(nodes: WorkflowNode[]): Map&lt;string, WorkflowNode&gt; {
+  const map = new Map&lt;string, WorkflowNode&gt;();
+  for (const n of nodes) map.set(n.id, n);
+  return map;
+}
+const CLUSTER_NODE_PREFIX = &apos;__cluster__&apos;;
+function clusterNodeId(clusterId: string): string {
+  return `${CLUSTER_NODE_PREFIX}${clusterId}`;
+}
+function isClusterNodeId(id: string): boolean {
+  return id.startsWith(CLUSTER_NODE_PREFIX);
+}
+export function applyClusterCollapse(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  collapsedClusters: ReadonlySet&lt;string&gt;,
+): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
+  if (collapsedClusters.size === 0) return { nodes, edges };
+  const nodeClusterMap = new Map&lt;string, string&gt;();
+  for (const n of nodes) {
+    if (n.clusterId &amp;&amp; collapsedClusters.has(n.clusterId)) {
+      nodeClusterMap.set(n.id, n.clusterId);
+    }
+  }
+  const nodeDataMap = buildNodeDataMap(nodes);
+  const clusterableNodes = [...nodeClusterMap.keys()].map(id =&gt; nodeDataMap.get(id)).filter((n): n is WorkflowNode =&gt; n != null);
+  const clusterMembers = groupBy(clusterableNodes, n =&gt; nodeClusterMap.get(n.id));
+  const syntheticNodes: WorkflowNode[] = [];
+  for (const [cId, members] of clusterMembers) {
+    const scores = members.map(m =&gt; m.evaluationScore).filter((s): s is number =&gt; s !== null);
+    const avgScore = scores.length &gt; 0 ? scores.reduce((a, b) =&gt; a + b, 0) / scores.length : null;
+    syntheticNodes.push({
+      id: clusterNodeId(cId),
+      label: `[Cluster] ${cId}`,
+      evaluationScore: avgScore,
+      toolCallCount: members.reduce((s, m) =&gt; s + m.toolCallCount, 0),
+      totalTokens: members.reduce((s, m) =&gt; s + (m.totalTokens ?? 0), 0),
+      durationMs: members.reduce((s, m) =&gt; s + m.durationMs, 0),
+      turnCount: members.reduce((s, m) =&gt; s + m.turnCount, 0),
+      hasError: members.some(m =&gt; m.hasError),
+      clusterId: cId,
+      clusterMemberCount: members.length,
+    });
+  }
+  const outNodes = [
+    ...nodes.filter(n =&gt; !nodeClusterMap.has(n.id)),
+    ...syntheticNodes,
+  ];
+  const resolveId = (id: string): string =&gt; {
+    const cId = nodeClusterMap.get(id);
+    return cId ? clusterNodeId(cId) : id;
+  };
+  const seenEdgeKeys = new Set&lt;string&gt;();
+  const outEdges: WorkflowEdge[] = [];
+  for (const e of edges) {
+    const src = resolveId(e.source);
+    const tgt = resolveId(e.target);
+    if (src === tgt) continue;
+    const key = `${src}-&gt;${tgt}`;
+    if (seenEdgeKeys.has(key)) continue;
+    seenEdgeKeys.add(key);
+    outEdges.push({ ...e, id: key, source: src, target: tgt });
+  }
+  return { nodes: outNodes, edges: outEdges };
+}
+export function extractClusterIds(nodes: WorkflowNode[]): string[] {
+  const seen = new Set&lt;string&gt;();
+  for (const n of nodes) {
+    if (n.clusterId) seen.add(n.clusterId);
+  }
+  return [...seen].sort();
+}
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet&lt;string&gt;,
+  criticalPath?: ReadonlySet&lt;string&gt;,
+): Promise&lt;{ nodes: Node[]; edges: Edge[] }&gt; {
+  const nodeDataMap = buildNodeDataMap(nodes);
+  const elkGraph = {
+    id: &apos;root&apos;,
+    layoutOptions: ELK_OPTIONS,
+    children: nodes.map(n =&gt; {
+      const isCluster = isClusterNodeId(n.id);
+      return {
+        id: n.id,
+        width: isCluster ? CLUSTER_NODE_WIDTH : NODE_WIDTH,
+        height: isCluster ? CLUSTER_NODE_HEIGHT : NODE_HEIGHT,
+      };
+    }),
+    edges: edges.map(e =&gt; ({ id: e.id, sources: [e.source], targets: [e.target] })),
+  };
+  const layout = await elk.layout(elkGraph);
+  const rfNodes: Node[] = (layout.children ?? [])
+    .filter(elkNode =&gt; nodeDataMap.has(elkNode.id))
+    .map(elkNode =&gt; {
+      const workflowNode = nodeDataMap.get(elkNode.id)!;
+      const dimmed = selectedAgents != null &amp;&amp; !selectedAgents.has(elkNode.id);
+      const critical = criticalPath != null &amp;&amp; criticalPath.has(elkNode.id);
+      const isCluster = isClusterNodeId(elkNode.id);
+      if (isCluster) {
+        const avgScore = workflowNode.evaluationScore;
+        const data: ClusterNodeData = {
+          clusterId: workflowNode.clusterId ?? elkNode.id,
+          memberCount: workflowNode.clusterMemberCount ?? 0,
+          hasError: workflowNode.hasError,
+          avgScore,
+        };
+        return {
+          id: elkNode.id,
+          position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+          data: data as unknown as Record&lt;string, unknown&gt;,
+          type: &apos;clusterNode&apos;,
+        };
+      }
+      return {
+        id: elkNode.id,
+        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+        data: { ...workflowNode, dimmed, critical } as unknown as Record&lt;string, unknown&gt;,
+        type: &apos;agentNode&apos;,
+      };
+    });
+  const rfEdges: Edge[] = edges.map(e =&gt; ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label,
+  }));
+  return { nodes: rfNodes, edges: rfEdges };
+}
+const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
+  if (!isWorkflowNode(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.evaluationScore);
+  const nodeClass = [
+    &apos;workflow-node&apos;,
+    band?.className,
+    d.dimmed &amp;&amp; &apos;workflow-node--dimmed&apos;,
+    d.critical &amp;&amp; &apos;workflow-node--critical&apos;,
+  ].filter(Boolean).join(&apos; &apos;);
+  return (
+    &lt;div
+      className={nodeClass}
+      role=&quot;group&quot;
+      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? &apos;N/A&apos;}`}
+    &gt;
+      &lt;div className=&quot;workflow-node__label&quot;&gt;{d.label}&lt;/div&gt;
+      {band &amp;&amp; (
+        &lt;div className=&quot;workflow-node__score&quot;&gt;
+          &lt;span&gt;{band.label}&lt;/span&gt;: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
+        &lt;/div&gt;
+      )}
+      &lt;div className=&quot;workflow-node__meta&quot;&gt;
+        &lt;span&gt;{d.toolCallCount} tools&lt;/span&gt; | &lt;span&gt;{d.turnCount} turns&lt;/span&gt;
+        {d.totalTokens != null &amp;&amp; &lt;span&gt; | {(d.totalTokens / 1000).toFixed(1)}K tok&lt;/span&gt;}
+      &lt;/div&gt;
+      &lt;div className=&quot;workflow-node__duration&quot;&gt;
+        {fmtDuration(d.durationMs)}
+      &lt;/div&gt;
+      {d.hasError &amp;&amp; &lt;div className=&quot;workflow-node__error&quot;&gt;Error&lt;/div&gt;}
+      &lt;Handle type=&quot;target&quot; position={Position.Top} /&gt;
+      &lt;Handle type=&quot;source&quot; position={Position.Bottom} /&gt;
+    &lt;/div&gt;
+  );
+});
+const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodeProps) {
+  if (!isClusterNodeData(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.avgScore);
+  const nodeClass = [
+    &apos;workflow-cluster-node&apos;,
+    band?.className,
+    d.hasError &amp;&amp; &apos;workflow-cluster-node--error&apos;,
+  ].filter(Boolean).join(&apos; &apos;);
+  return (
+    &lt;div
+      className={nodeClass}
+      role=&quot;group&quot;
+      aria-label={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
+    &gt;
+      &lt;div className=&quot;workflow-cluster-node__label&quot;&gt;{d.clusterId}&lt;/div&gt;
+      &lt;div className=&quot;workflow-cluster-node__meta&quot;&gt;
+        {d.memberCount} agents
+        {d.avgScore !== null &amp;&amp; (
+          &lt;span&gt; · avg {d.avgScore.toFixed(SCORE_CHIP_PRECISION)}&lt;/span&gt;
+        )}
+      &lt;/div&gt;
+      {d.hasError &amp;&amp; &lt;div className=&quot;workflow-node__error&quot;&gt;Error&lt;/div&gt;}
+      &lt;Handle type=&quot;target&quot; position={Position.Top} /&gt;
+      &lt;Handle type=&quot;source&quot; position={Position.Bottom} /&gt;
+    &lt;/div&gt;
+  );
+});
+const NODE_TYPES = { agentNode: AgentNodeComponent, clusterNode: ClusterNodeComponent };
+interface WorkflowGraphProps {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) =&gt; void;
+  height?: number;
+  selectedAgents?: ReadonlySet&lt;string&gt;;
+  criticalPath?: ReadonlySet&lt;string&gt;;
+  containerRef?: React.RefObject&lt;HTMLDivElement | null&gt;;
+}
+export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
+  const containerStyle = { &apos;--workflow-graph-height&apos;: `${height}px` } as React.CSSProperties;
+  const [nodes, setNodes, onNodesChange] = useNodesState&lt;Node&gt;([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState&lt;Edge&gt;([]);
+  const [layoutError, setLayoutError] = useState&lt;string | null&gt;(null);
+  const [collapsedClusters, setCollapsedClusters] = useState&lt;ReadonlySet&lt;string&gt;&gt;(new Set());
+  const clusterIds = extractClusterIds(graph.nodes);
+  const toggleCluster = useCallback((clusterId: string) =&gt; {
+    setCollapsedClusters(prev =&gt; {
+      const next = new Set(prev);
+      if (next.has(clusterId)) {
+        next.delete(clusterId);
+      } else {
+        next.add(clusterId);
+      }
+      return next;
+    });
+  }, []);
+  useEffect(() =&gt; {
+    if (graph.nodes.length === 0) return;
+    let cancelled = false;
+    const { nodes: visibleNodes, edges: visibleEdges } = applyClusterCollapse(
+      graph.nodes,
+      graph.edges,
+      collapsedClusters,
+    );
+    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath)
+      .then(({ nodes: rfNodes, edges: rfEdges }) =&gt; {
+        if (!cancelled) {
+          setLayoutError(null);
+          setNodes(rfNodes);
+          setEdges(rfEdges);
+        }
+      })
+      .catch(err =&gt; {
+        if (!cancelled) {
+          setLayoutError(err instanceof Error ? err.message : &apos;Layout computation failed&apos;);
+        }
+      });
+    return () =&gt; { cancelled = true; };
+  }, [graph.nodes, graph.edges, selectedAgents, criticalPath, collapsedClusters]);
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) =&gt; {
+    onNodeClick?.(node.id);
+  }, [onNodeClick]);
+  if (graph.nodes.length &gt; MAX_ELK_NODES) {
+    return (
+      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+        &lt;div className=&quot;workflow-oversize text-secondary text-xs&quot;&gt;
+          &lt;div className=&quot;workflow-oversize__heading&quot;&gt;
+            Graph too large to render ({graph.nodes.length} agents)
+          &lt;/div&gt;
+          &lt;div className=&quot;workflow-oversize__note text-muted&quot;&gt;
+            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
+          &lt;/div&gt;
+          &lt;ul className=&quot;workflow-oversize__list&quot;&gt;
+            {graph.nodes.map(n =&gt; (
+              &lt;li key={n.id} className=&quot;mono-xs mb-1&quot;&gt;
+                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
+                {n.hasError &amp;&amp; &lt;span className=&quot;text-warning&quot;&gt; (error)&lt;/span&gt;}
+              &lt;/li&gt;
+            ))}
+          &lt;/ul&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (graph.workflowShape === &apos;single_agent&apos; &amp;&amp; graph.nodes.length &lt;= 1) {
+    const node = graph.nodes[0];
+    return (
+      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+        &lt;div className=&quot;workflow-fallback&quot;&gt;
+          {node ? (
+            &lt;&gt;
+              &lt;div className=&quot;workflow-fallback__title&quot;&gt;{node.label}&lt;/div&gt;
+              &lt;div className=&quot;workflow-fallback__subtitle&quot;&gt;
+                {node.turnCount} turns | {node.toolCallCount} tools
+              &lt;/div&gt;
+            &lt;/&gt;
+          ) : (
+            &lt;div className=&quot;workflow-fallback__empty&quot;&gt;No agent data&lt;/div&gt;
+          )}
+        &lt;/div&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (layoutError) {
+    return (
+      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+        &lt;div className=&quot;error-state workflow-fallback&quot;&gt;
+          Failed to compute workflow layout: {layoutError}
+        &lt;/div&gt;
+      &lt;/div&gt;
+    );
+  }
+  const showMiniMap = graph.nodes.length &gt;= MINIMAP_THRESHOLD;
+  return (
+    &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
+      {clusterIds.length &gt; 0 &amp;&amp; (
+        &lt;div className=&quot;workflow-cluster-controls&quot; role=&quot;group&quot; aria-label=&quot;Cluster toggles&quot;&gt;
+          {clusterIds.map(cId =&gt; (
+            &lt;button
+              key={cId}
+              type=&quot;button&quot;
+              className={`workflow-cluster-toggle${collapsedClusters.has(cId) ? &apos; workflow-cluster-toggle--collapsed&apos; : &apos;&apos;}`}
+              onClick={() =&gt; toggleCluster(cId)}
+              aria-pressed={collapsedClusters.has(cId)}
+            &gt;
+              {collapsedClusters.has(cId) ? &apos;▶&apos; : &apos;▼&apos;} {cId}
+            &lt;/button&gt;
+          ))}
+        &lt;/div&gt;
+      )}
+      &lt;ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        nodeTypes={NODE_TYPES}
+        fitView
+      &gt;
+        &lt;Controls /&gt;
+        &lt;Background /&gt;
+        {showMiniMap &amp;&amp; &lt;MiniMap pannable zoomable /&gt;}
+      &lt;/ReactFlow&gt;
     &lt;/div&gt;
   );
 }</file><file path="src/components/WorkflowTimeline.tsx">import React from &apos;react&apos;;
@@ -19039,214 +19662,6 @@ describe(&apos;Coverage tab&apos;, () =&gt; {
   it.todo(&apos;CoveragePage shows error state when API returns an error&apos;);
   it.todo(&apos;CoverageGrid renders overall coverage percentage&apos;);
   it.todo(&apos;CoverageGrid renders gap cells for missing metric/input combinations&apos;);
-});</file><file path="src/__tests__/DegradationSignalsPage.test.tsx">import { describe, it, expect, afterEach, vi } from &apos;vitest&apos;;
-import { render, screen, cleanup } from &apos;@testing-library/react&apos;;
-import type { PageShellProps } from &apos;./test-types.js&apos;;
-import type { DegradationReport, DegradationSignalsResponse } from &apos;../hooks/useDegradationSignals.js&apos;;
-const TEST_TIMEOUT_MS = 30_000;
-vi.mock(&apos;../hooks/useDegradationSignals.js&apos;, () =&gt; ({
-  useDegradationSignals: vi.fn(),
-}));
-vi.mock(&apos;../components/PageShell.js&apos;, () =&gt; ({
-  PageShell: ({ isLoading, error, children }: PageShellProps) =&gt; {
-    if (isLoading) return &lt;div data-testid=&quot;page-shell-loading&quot; /&gt;;
-    if (error) return &lt;div data-testid=&quot;page-shell-error&quot;&gt;{error.message}&lt;/div&gt;;
-    return &lt;div data-testid=&quot;page-shell&quot;&gt;{children}&lt;/div&gt;;
-  },
-}));
-import { useDegradationSignals } from &apos;../hooks/useDegradationSignals.js&apos;;
-import { DegradationSignalsPage } from &apos;../pages/DegradationSignalsPage.js&apos;;
-const mockUseDegradationSignals = vi.mocked(useDegradationSignals);
-afterEach(() =&gt; {
-  cleanup();
-  vi.clearAllMocks();
-});
-function makeSignal(overrides: Partial&lt;DegradationReport[&apos;signal&apos;]&gt; = {}): DegradationReport[&apos;signal&apos;] {
-  return {
-    featureVersion: &apos;1.0.0&apos;,
-    varianceTrend: &apos;stable&apos;,
-    varianceRatio: 1.234,
-    coverageDropoutRate: 0.05,
-    latencySkewRatio: 1.567,
-    predictedStatus: &apos;healthy&apos;,
-    ewmaDriftDetected: false,
-    consecutiveBreaches: 0,
-    confirmed: false,
-    ...overrides,
-  };
-}
-function makeReport(overrides: Partial&lt;DegradationReport&gt; = {}): DegradationReport {
-  return {
-    metricName: &apos;relevance&apos;,
-    signal: makeSignal(),
-    ...overrides,
-  };
-}
-function makeResponse(overrides: Partial&lt;DegradationSignalsResponse&gt; = {}): DegradationSignalsResponse {
-  return {
-    period: &apos;7d&apos;,
-    reports: [makeReport()],
-    computedAt: &apos;2026-03-27T00:00:00Z&apos;,
-    ...overrides,
-  };
-}
-type MockQueryResult = { data: DegradationSignalsResponse | undefined; isLoading: boolean; error: Error | null };
-function mockQuery(result: MockQueryResult) {
-  mockUseDegradationSignals.mockReturnValue(result as unknown as ReturnType&lt;typeof useDegradationSignals&gt;);
-}
-function mockLoaded(data: DegradationSignalsResponse | undefined = makeResponse()) {
-  mockQuery({ data, isLoading: false, error: null });
-}
-describe(&apos;DegradationSignalsPage — render&apos;, () =&gt; {
-  it(&apos;renders table header columns when data is present&apos;, () =&gt; {
-    mockLoaded();
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Metric&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Status&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;EWMA Drift&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Variance Trend&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Variance Ratio&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Consecutive Breaches&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Confirmed&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Coverage Dropout&apos; })).toBeInTheDocument();
-    expect(screen.getByRole(&apos;columnheader&apos;, { name: &apos;Latency Skew&apos; })).toBeInTheDocument();
-  }, TEST_TIMEOUT_MS);
-  it(&apos;renders loading state when isLoading is true&apos;, () =&gt; {
-    mockQuery({ data: undefined, isLoading: true, error: null });
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByTestId(&apos;page-shell-loading&apos;)).toBeInTheDocument();
-  });
-  it(&apos;renders error state when error is present&apos;, () =&gt; {
-    mockQuery({ data: undefined, isLoading: false, error: new Error(&apos;Network failure&apos;) });
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByTestId(&apos;page-shell-error&apos;)).toBeInTheDocument();
-    expect(screen.getByText(&apos;Network failure&apos;)).toBeInTheDocument();
-  });
-  it(&apos;renders empty state when data has no reports&apos;, () =&gt; {
-    mockLoaded(makeResponse({ reports: [] }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;No Degradation Data&apos;)).toBeInTheDocument();
-  });
-  it(&apos;renders nothing (no table) when data is undefined&apos;, () =&gt; {
-    mockQuery({ data: undefined, isLoading: false, error: null });
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.queryByRole(&apos;table&apos;)).not.toBeInTheDocument();
-  });
-});
-describe(&apos;DegradationSignalsPage — signal display&apos;, () =&gt; {
-  it(&apos;renders metric name in the row&apos;, () =&gt; {
-    mockLoaded(makeResponse({ reports: [makeReport({ metricName: &apos;coherence&apos; })] }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;coherence&apos;)).toBeInTheDocument();
-  });
-  it(&apos;shows &quot;Yes&quot; in EWMA Drift column when ewmaDriftDetected is true&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: true }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;Yes&apos;)).toBeInTheDocument();
-  });
-  it(&apos;shows &quot;No&quot; in EWMA Drift column when ewmaDriftDetected is false&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: false, confirmed: false }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    const noCells = screen.getAllByText(&apos;No&apos;);
-    expect(noCells.length).toBeGreaterThanOrEqual(1);
-  });
-  it(&apos;displays &quot;Increasing&quot; when varianceTrend is &quot;increasing&quot;&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ varianceTrend: &apos;increasing&apos; }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;Increasing&apos;)).toBeInTheDocument();
-  });
-  it(&apos;displays &quot;Stable&quot; when varianceTrend is &quot;stable&quot;&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ varianceTrend: &apos;stable&apos; }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;Stable&apos;)).toBeInTheDocument();
-  });
-  it(&apos;displays &quot;Decreasing&quot; when varianceTrend is &quot;decreasing&quot;&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ varianceTrend: &apos;decreasing&apos; }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;Decreasing&apos;)).toBeInTheDocument();
-  });
-  it(&apos;displays consecutiveBreaches value as integer&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ consecutiveBreaches: 3 }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;3&apos;)).toBeInTheDocument();
-  });
-  it(&apos;displays varianceRatio formatted to 3 decimal places&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ varianceRatio: 1.5678 }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;1.568&apos;)).toBeInTheDocument();
-  });
-  it(&apos;shows &quot;Yes&quot; in Confirmed column when confirmed is true&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: false, confirmed: true }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;Yes&apos;)).toBeInTheDocument();
-  });
-  it(&apos;displays coverageDropoutRate as percentage with 1 decimal place&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ coverageDropoutRate: 0.075 }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;7.5%&apos;)).toBeInTheDocument();
-  });
-  it(&apos;displays latencySkewRatio formatted to 3 decimal places&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ latencySkewRatio: 2.3456 }) })],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;2.346&apos;)).toBeInTheDocument();
-  });
-  it(&apos;renders a row for each report&apos;, () =&gt; {
-    mockLoaded(makeResponse({
-      reports: [
-        makeReport({ metricName: &apos;relevance&apos; }),
-        makeReport({ metricName: &apos;coherence&apos; }),
-        makeReport({ metricName: &apos;faithfulness&apos; }),
-      ],
-    }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(&apos;relevance&apos;)).toBeInTheDocument();
-    expect(screen.getByText(&apos;coherence&apos;)).toBeInTheDocument();
-    expect(screen.getByText(&apos;faithfulness&apos;)).toBeInTheDocument();
-  });
-});
-describe(&apos;DegradationSignalsPage — computed at timestamp&apos;, () =&gt; {
-  it(&apos;renders &quot;Last computed&quot; label when computedAt is present&apos;, () =&gt; {
-    mockLoaded(makeResponse({ computedAt: &apos;2026-03-27T12:00:00Z&apos; }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.getByText(/Last computed:/)).toBeInTheDocument();
-  });
-  it(&apos;does not render &quot;Last computed&quot; when computedAt is null&apos;, () =&gt; {
-    mockLoaded(makeResponse({ computedAt: null }));
-    render(&lt;DegradationSignalsPage period=&quot;7d&quot; /&gt;);
-    expect(screen.queryByText(/Last computed:/)).not.toBeInTheDocument();
-  });
-});
-describe(&apos;DegradationSignalsPage — hook invocation&apos;, () =&gt; {
-  it(&apos;calls useDegradationSignals with the provided period&apos;, () =&gt; {
-    mockLoaded();
-    render(&lt;DegradationSignalsPage period=&quot;24h&quot; /&gt;);
-    expect(mockUseDegradationSignals).toHaveBeenCalledWith(&apos;24h&apos;);
-  });
-  it(&apos;calls useDegradationSignals with period &quot;30d&quot;&apos;, () =&gt; {
-    mockLoaded(makeResponse({ period: &apos;30d&apos; }));
-    render(&lt;DegradationSignalsPage period=&quot;30d&quot; /&gt;);
-    expect(mockUseDegradationSignals).toHaveBeenCalledWith(&apos;30d&apos;);
-  });
 });</file><file path="src/api/routes/agents.ts">import { Hono } from &apos;hono&apos;;
 import { computeMultiAgentEvaluation } from &apos;../../../../dist/lib/quality/quality-multi-agent.js&apos;;
 import { sanitizeErrorForResponse } from &apos;../../../../dist/lib/errors/error-sanitizer.js&apos;;
@@ -19973,414 +20388,6 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
       ))}
     &lt;/div&gt;
   );
-}</file><file path="src/components/WorkflowGraph.tsx">import React, { memo, useCallback, useEffect, useState } from &apos;react&apos;;
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from &apos;@xyflow/react&apos;;
-import &apos;@xyflow/react/dist/style.css&apos;;
-import ELK from &apos;elkjs/lib/elk.bundled.js&apos;;
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from &apos;../types/workflow-graph.js&apos;;
-import { fmtDuration, groupBy } from &apos;../lib/quality-utils.js&apos;;
-import { SCORE_CHIP_PRECISION } from &apos;../lib/constants.js&apos;;
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 120;
-const CLUSTER_NODE_WIDTH = 240;
-const CLUSTER_NODE_HEIGHT = 90;
-const MINIMAP_THRESHOLD = 5;
-const MAX_ELK_NODES = 50;
-const WORKFLOW_SCORE_HIGH_MIN = 0.7;
-const WORKFLOW_SCORE_MID_MIN = 0.4;
-const SCORE_BANDS = {
-  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: &apos;Good&apos;, className: &apos;workflow-node--score-high&apos; },
-  MID: { min: WORKFLOW_SCORE_MID_MIN, label: &apos;Fair&apos;, className: &apos;workflow-node--score-mid&apos; },
-  LOW: { min: 0, label: &apos;Poor&apos;, className: &apos;workflow-node--score-low&apos; },
-} as const;
-const ELK_OPTIONS = {
-  &apos;elk.algorithm&apos;: &apos;layered&apos;,
-  &apos;elk.direction&apos;: &apos;DOWN&apos;,
-  &apos;elk.layered.cycleBreaking.strategy&apos;: &apos;GREEDY&apos;,
-  &apos;elk.edgeRouting&apos;: &apos;ORTHOGONAL&apos;,
-  &apos;elk.layered.spacing.nodeNodeBetweenLayers&apos;: &apos;80&apos;,
-  &apos;elk.spacing.nodeNode&apos;: &apos;60&apos;,
-  &apos;elk.layered.feedbackEdges&apos;: &apos;true&apos;,
-} as const;
-function getScoreBand(score: number | null) {
-  if (score === null) return null;
-  if (score &gt;= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
-  if (score &gt;= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
-  return SCORE_BANDS.LOW;
-}
-const elk = new ELK();
-interface WorkflowNodeWithMeta extends WorkflowNode {
-  dimmed?: boolean;
-  critical?: boolean;
-}
-interface ClusterNodeData {
-  clusterId: string;
-  memberCount: number;
-  hasError: boolean;
-  avgScore: number | null;
-}
-function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
-  if (!value || typeof value !== &apos;object&apos;) return false;
-  const v = value as Record&lt;string, unknown&gt;;
-  return (
-    typeof v[&apos;id&apos;] === &apos;string&apos; &amp;&amp;
-    typeof v[&apos;label&apos;] === &apos;string&apos; &amp;&amp;
-    typeof v[&apos;toolCallCount&apos;] === &apos;number&apos; &amp;&amp;
-    typeof v[&apos;turnCount&apos;] === &apos;number&apos; &amp;&amp;
-    typeof v[&apos;durationMs&apos;] === &apos;number&apos; &amp;&amp;
-    typeof v[&apos;hasError&apos;] === &apos;boolean&apos;
-  );
-}
-function isClusterNodeData(value: unknown): value is ClusterNodeData {
-  if (!value || typeof value !== &apos;object&apos;) return false;
-  const v = value as Record&lt;string, unknown&gt;;
-  return (
-    typeof v[&apos;clusterId&apos;] === &apos;string&apos; &amp;&amp;
-    typeof v[&apos;memberCount&apos;] === &apos;number&apos; &amp;&amp;
-    typeof v[&apos;hasError&apos;] === &apos;boolean&apos;
-  );
-}
-function buildNodeDataMap(nodes: WorkflowNode[]): Map&lt;string, WorkflowNode&gt; {
-  const map = new Map&lt;string, WorkflowNode&gt;();
-  for (const n of nodes) map.set(n.id, n);
-  return map;
-}
-const CLUSTER_NODE_PREFIX = &apos;__cluster__&apos;;
-function clusterNodeId(clusterId: string): string {
-  return `${CLUSTER_NODE_PREFIX}${clusterId}`;
-}
-function isClusterNodeId(id: string): boolean {
-  return id.startsWith(CLUSTER_NODE_PREFIX);
-}
-export function applyClusterCollapse(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  collapsedClusters: ReadonlySet&lt;string&gt;,
-): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
-  if (collapsedClusters.size === 0) return { nodes, edges };
-  const nodeClusterMap = new Map&lt;string, string&gt;();
-  for (const n of nodes) {
-    if (n.clusterId &amp;&amp; collapsedClusters.has(n.clusterId)) {
-      nodeClusterMap.set(n.id, n.clusterId);
-    }
-  }
-  const nodeDataMap = buildNodeDataMap(nodes);
-  const clusterableNodes = [...nodeClusterMap.keys()].map(id =&gt; nodeDataMap.get(id)).filter((n): n is WorkflowNode =&gt; n != null);
-  const clusterMembers = groupBy(clusterableNodes, n =&gt; nodeClusterMap.get(n.id));
-  const syntheticNodes: WorkflowNode[] = [];
-  for (const [cId, members] of clusterMembers) {
-    const scores = members.map(m =&gt; m.evaluationScore).filter((s): s is number =&gt; s !== null);
-    const avgScore = scores.length &gt; 0 ? scores.reduce((a, b) =&gt; a + b, 0) / scores.length : null;
-    syntheticNodes.push({
-      id: clusterNodeId(cId),
-      label: `[Cluster] ${cId}`,
-      evaluationScore: avgScore,
-      toolCallCount: members.reduce((s, m) =&gt; s + m.toolCallCount, 0),
-      totalTokens: members.reduce((s, m) =&gt; s + (m.totalTokens ?? 0), 0),
-      durationMs: members.reduce((s, m) =&gt; s + m.durationMs, 0),
-      turnCount: members.reduce((s, m) =&gt; s + m.turnCount, 0),
-      hasError: members.some(m =&gt; m.hasError),
-      clusterId: cId,
-      clusterMemberCount: members.length,
-    });
-  }
-  const outNodes = [
-    ...nodes.filter(n =&gt; !nodeClusterMap.has(n.id)),
-    ...syntheticNodes,
-  ];
-  const resolveId = (id: string): string =&gt; {
-    const cId = nodeClusterMap.get(id);
-    return cId ? clusterNodeId(cId) : id;
-  };
-  const seenEdgeKeys = new Set&lt;string&gt;();
-  const outEdges: WorkflowEdge[] = [];
-  for (const e of edges) {
-    const src = resolveId(e.source);
-    const tgt = resolveId(e.target);
-    if (src === tgt) continue;
-    const key = `${src}-&gt;${tgt}`;
-    if (seenEdgeKeys.has(key)) continue;
-    seenEdgeKeys.add(key);
-    outEdges.push({ ...e, id: key, source: src, target: tgt });
-  }
-  return { nodes: outNodes, edges: outEdges };
-}
-export function extractClusterIds(nodes: WorkflowNode[]): string[] {
-  const seen = new Set&lt;string&gt;();
-  for (const n of nodes) {
-    if (n.clusterId) seen.add(n.clusterId);
-  }
-  return [...seen].sort();
-}
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  selectedAgents?: ReadonlySet&lt;string&gt;,
-  criticalPath?: ReadonlySet&lt;string&gt;,
-): Promise&lt;{ nodes: Node[]; edges: Edge[] }&gt; {
-  const nodeDataMap = buildNodeDataMap(nodes);
-  const elkGraph = {
-    id: &apos;root&apos;,
-    layoutOptions: ELK_OPTIONS,
-    children: nodes.map(n =&gt; {
-      const isCluster = isClusterNodeId(n.id);
-      return {
-        id: n.id,
-        width: isCluster ? CLUSTER_NODE_WIDTH : NODE_WIDTH,
-        height: isCluster ? CLUSTER_NODE_HEIGHT : NODE_HEIGHT,
-      };
-    }),
-    edges: edges.map(e =&gt; ({ id: e.id, sources: [e.source], targets: [e.target] })),
-  };
-  const layout = await elk.layout(elkGraph);
-  const rfNodes: Node[] = (layout.children ?? [])
-    .filter(elkNode =&gt; nodeDataMap.has(elkNode.id))
-    .map(elkNode =&gt; {
-      const workflowNode = nodeDataMap.get(elkNode.id)!;
-      const dimmed = selectedAgents != null &amp;&amp; !selectedAgents.has(elkNode.id);
-      const critical = criticalPath != null &amp;&amp; criticalPath.has(elkNode.id);
-      const isCluster = isClusterNodeId(elkNode.id);
-      if (isCluster) {
-        const avgScore = workflowNode.evaluationScore;
-        const data: ClusterNodeData = {
-          clusterId: workflowNode.clusterId ?? elkNode.id,
-          memberCount: workflowNode.clusterMemberCount ?? 0,
-          hasError: workflowNode.hasError,
-          avgScore,
-        };
-        return {
-          id: elkNode.id,
-          position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-          data: data as unknown as Record&lt;string, unknown&gt;,
-          type: &apos;clusterNode&apos;,
-        };
-      }
-      return {
-        id: elkNode.id,
-        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-        data: { ...workflowNode, dimmed, critical } as unknown as Record&lt;string, unknown&gt;,
-        type: &apos;agentNode&apos;,
-      };
-    });
-  const rfEdges: Edge[] = edges.map(e =&gt; ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    label: e.label,
-  }));
-  return { nodes: rfNodes, edges: rfEdges };
-}
-const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
-  if (!isWorkflowNode(data)) return null;
-  const d = data;
-  const band = getScoreBand(d.evaluationScore);
-  const nodeClass = [
-    &apos;workflow-node&apos;,
-    band?.className,
-    d.dimmed &amp;&amp; &apos;workflow-node--dimmed&apos;,
-    d.critical &amp;&amp; &apos;workflow-node--critical&apos;,
-  ].filter(Boolean).join(&apos; &apos;);
-  return (
-    &lt;div
-      className={nodeClass}
-      role=&quot;group&quot;
-      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? &apos;N/A&apos;}`}
-    &gt;
-      &lt;div className=&quot;workflow-node__label&quot;&gt;{d.label}&lt;/div&gt;
-      {band &amp;&amp; (
-        &lt;div className=&quot;workflow-node__score&quot;&gt;
-          &lt;span&gt;{band.label}&lt;/span&gt;: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
-        &lt;/div&gt;
-      )}
-      &lt;div className=&quot;workflow-node__meta&quot;&gt;
-        &lt;span&gt;{d.toolCallCount} tools&lt;/span&gt; | &lt;span&gt;{d.turnCount} turns&lt;/span&gt;
-        {d.totalTokens != null &amp;&amp; &lt;span&gt; | {(d.totalTokens / 1000).toFixed(1)}K tok&lt;/span&gt;}
-      &lt;/div&gt;
-      &lt;div className=&quot;workflow-node__duration&quot;&gt;
-        {fmtDuration(d.durationMs)}
-      &lt;/div&gt;
-      {d.hasError &amp;&amp; &lt;div className=&quot;workflow-node__error&quot;&gt;Error&lt;/div&gt;}
-      &lt;Handle type=&quot;target&quot; position={Position.Top} /&gt;
-      &lt;Handle type=&quot;source&quot; position={Position.Bottom} /&gt;
-    &lt;/div&gt;
-  );
-});
-const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodeProps) {
-  if (!isClusterNodeData(data)) return null;
-  const d = data;
-  const band = getScoreBand(d.avgScore);
-  const nodeClass = [
-    &apos;workflow-cluster-node&apos;,
-    band?.className,
-    d.hasError &amp;&amp; &apos;workflow-cluster-node--error&apos;,
-  ].filter(Boolean).join(&apos; &apos;);
-  return (
-    &lt;div
-      className={nodeClass}
-      role=&quot;group&quot;
-      aria-label={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
-    &gt;
-      &lt;div className=&quot;workflow-cluster-node__label&quot;&gt;{d.clusterId}&lt;/div&gt;
-      &lt;div className=&quot;workflow-cluster-node__meta&quot;&gt;
-        {d.memberCount} agents
-        {d.avgScore !== null &amp;&amp; (
-          &lt;span&gt; · avg {d.avgScore.toFixed(SCORE_CHIP_PRECISION)}&lt;/span&gt;
-        )}
-      &lt;/div&gt;
-      {d.hasError &amp;&amp; &lt;div className=&quot;workflow-node__error&quot;&gt;Error&lt;/div&gt;}
-      &lt;Handle type=&quot;target&quot; position={Position.Top} /&gt;
-      &lt;Handle type=&quot;source&quot; position={Position.Bottom} /&gt;
-    &lt;/div&gt;
-  );
-});
-const NODE_TYPES = { agentNode: AgentNodeComponent, clusterNode: ClusterNodeComponent };
-interface WorkflowGraphProps {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) =&gt; void;
-  height?: number;
-  selectedAgents?: ReadonlySet&lt;string&gt;;
-  criticalPath?: ReadonlySet&lt;string&gt;;
-  containerRef?: React.RefObject&lt;HTMLDivElement | null&gt;;
-}
-export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
-  const containerStyle = { &apos;--workflow-graph-height&apos;: `${height}px` } as React.CSSProperties;
-  const [nodes, setNodes, onNodesChange] = useNodesState&lt;Node&gt;([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState&lt;Edge&gt;([]);
-  const [layoutError, setLayoutError] = useState&lt;string | null&gt;(null);
-  const [collapsedClusters, setCollapsedClusters] = useState&lt;ReadonlySet&lt;string&gt;&gt;(new Set());
-  const clusterIds = extractClusterIds(graph.nodes);
-  const toggleCluster = useCallback((clusterId: string) =&gt; {
-    setCollapsedClusters(prev =&gt; {
-      const next = new Set(prev);
-      if (next.has(clusterId)) {
-        next.delete(clusterId);
-      } else {
-        next.add(clusterId);
-      }
-      return next;
-    });
-  }, []);
-  useEffect(() =&gt; {
-    if (graph.nodes.length === 0) return;
-    let cancelled = false;
-    const { nodes: visibleNodes, edges: visibleEdges } = applyClusterCollapse(
-      graph.nodes,
-      graph.edges,
-      collapsedClusters,
-    );
-    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath)
-      .then(({ nodes: rfNodes, edges: rfEdges }) =&gt; {
-        if (!cancelled) {
-          setLayoutError(null);
-          setNodes(rfNodes);
-          setEdges(rfEdges);
-        }
-      })
-      .catch(err =&gt; {
-        if (!cancelled) {
-          setLayoutError(err instanceof Error ? err.message : &apos;Layout computation failed&apos;);
-        }
-      });
-    return () =&gt; { cancelled = true; };
-  }, [graph.nodes, graph.edges, selectedAgents, criticalPath, collapsedClusters]);
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) =&gt; {
-    onNodeClick?.(node.id);
-  }, [onNodeClick]);
-  if (graph.nodes.length &gt; MAX_ELK_NODES) {
-    return (
-      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-        &lt;div className=&quot;workflow-oversize text-secondary text-xs&quot;&gt;
-          &lt;div className=&quot;workflow-oversize__heading&quot;&gt;
-            Graph too large to render ({graph.nodes.length} agents)
-          &lt;/div&gt;
-          &lt;div className=&quot;workflow-oversize__note text-muted&quot;&gt;
-            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
-          &lt;/div&gt;
-          &lt;ul className=&quot;workflow-oversize__list&quot;&gt;
-            {graph.nodes.map(n =&gt; (
-              &lt;li key={n.id} className=&quot;mono-xs mb-1&quot;&gt;
-                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
-                {n.hasError &amp;&amp; &lt;span className=&quot;text-warning&quot;&gt; (error)&lt;/span&gt;}
-              &lt;/li&gt;
-            ))}
-          &lt;/ul&gt;
-        &lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-  if (graph.workflowShape === &apos;single_agent&apos; &amp;&amp; graph.nodes.length &lt;= 1) {
-    const node = graph.nodes[0];
-    return (
-      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-        &lt;div className=&quot;workflow-fallback&quot;&gt;
-          {node ? (
-            &lt;&gt;
-              &lt;div className=&quot;workflow-fallback__title&quot;&gt;{node.label}&lt;/div&gt;
-              &lt;div className=&quot;workflow-fallback__subtitle&quot;&gt;
-                {node.turnCount} turns | {node.toolCallCount} tools
-              &lt;/div&gt;
-            &lt;/&gt;
-          ) : (
-            &lt;div className=&quot;workflow-fallback__empty&quot;&gt;No agent data&lt;/div&gt;
-          )}
-        &lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-  if (layoutError) {
-    return (
-      &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-        &lt;div className=&quot;error-state workflow-fallback&quot;&gt;
-          Failed to compute workflow layout: {layoutError}
-        &lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-  const showMiniMap = graph.nodes.length &gt;= MINIMAP_THRESHOLD;
-  return (
-    &lt;div ref={containerRef} className=&quot;workflow-graph-container&quot; style={containerStyle} role=&quot;img&quot; aria-label=&quot;Agent workflow graph&quot;&gt;
-      {clusterIds.length &gt; 0 &amp;&amp; (
-        &lt;div className=&quot;workflow-cluster-controls&quot; role=&quot;group&quot; aria-label=&quot;Cluster toggles&quot;&gt;
-          {clusterIds.map(cId =&gt; (
-            &lt;button
-              key={cId}
-              type=&quot;button&quot;
-              className={`workflow-cluster-toggle${collapsedClusters.has(cId) ? &apos; workflow-cluster-toggle--collapsed&apos; : &apos;&apos;}`}
-              onClick={() =&gt; toggleCluster(cId)}
-              aria-pressed={collapsedClusters.has(cId)}
-            &gt;
-              {collapsedClusters.has(cId) ? &apos;▶&apos; : &apos;▼&apos;} {cId}
-            &lt;/button&gt;
-          ))}
-        &lt;/div&gt;
-      )}
-      &lt;ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        nodeTypes={NODE_TYPES}
-        fitView
-      &gt;
-        &lt;Controls /&gt;
-        &lt;Background /&gt;
-        {showMiniMap &amp;&amp; &lt;MiniMap pannable zoomable /&gt;}
-      &lt;/ReactFlow&gt;
-    &lt;/div&gt;
-  );
 }</file><file path="src/lib/quality-utils.ts">export type ScoreDirection = &apos;maximize&apos; | &apos;minimize&apos;;
 export type ScoreColorBand = &apos;excellent&apos; | &apos;good&apos; | &apos;adequate&apos; | &apos;poor&apos; | &apos;failing&apos;;
 export type LabelFilterCategory = &apos;Pass&apos; | &apos;Review&apos; | &apos;Fail&apos;;
@@ -20955,7 +20962,7 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
     if (count &gt; 1) return &apos;branching&apos;;
   }
   return &apos;linear&apos;;
-}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-28 01:20:18 -0500</date><message>style(constants): collapse double blank lines</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-28 01:19:08 -0500</date><message>chore(repomix): regenerate compressed docs after Round 18 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:13:15 -0500</date><message>chore(.claude): remove stale ralph-loop state file after session completion</message><files>.claude/ralph-loop.local.md</files></git_log_commit><git_log_commit><date>2026-03-28 01:12:25 -0500</date><message>refactor(CoverageGrid): drop redundant Array.isArray guard in cellMap memo</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:11:28 -0500</date><message>chore(repomix): regenerate compressed docs after Round 17 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:07:48 -0500</date><message>perf: eliminate remaining intermediate arrays in Map constructors</message><files>src/api/routes/agents.ts</files><files>src/components/AgentActivityPanel.tsx</files><files>src/components/CorrelationHeatmap.tsx</files><files>src/components/TurnTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:06:54 -0500</date><message>chore(repomix): regenerate compressed docs after Round 16 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:53:06 -0500</date><message>perf(WorkflowTimeline): avoid intermediate arrays in agentLaneIndex/agentColorMap init</message><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:52:23 -0500</date><message>chore(repomix): regenerate compressed docs after Round 15 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:50 -0500</date><message>perf(AgentWorkflowView): avoid intermediate arrays in criticalPath map init</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:01 -0500</date><message>refactor(SpanTree): remove redundant type cast for parentSpanId</message><files>src/components/SpanTree.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:12:33 -0500</date><message>chore(repomix): regenerate compressed docs after Round 14 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:46:07 -0500</date><message>refactor(AgentActivityPanel): drop redundant Array.isArray guard in colorIndex memo</message><files>src/components/AgentActivityPanel.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:45:22 -0500</date><message>chore(repomix): regenerate compressed docs after Round 13 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:42:46 -0500</date><message>refactor(WorkflowGraph): use groupBy for cluster members, drop WHAT comments, avoid intermediate arrays</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:41:03 -0500</date><message>chore(repomix): regenerate compressed docs after Round 12 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:40:50 -0500</date><message>refactor(correlations): derive metric names from map keys, drop redundant array</message><files>src/api/routes/correlations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:38:10 -0500</date><message>chore(repomix): regenerate compressed docs after Round 11 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:37:57 -0500</date><message>perf(workflow-graph): avoid intermediate array in hasCycle state init</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:15 -0500</date><message>chore(repomix): regenerate compressed docs after Round 10 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:01 -0500</date><message>refactor(data-loader): use groupBy utility in loadEvaluationsByMetric</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:34:41 -0500</date><message>refactor(metrics): rename DYNAMICS_PERIOD_HOURS constants to BUCKET_HOURS for clarity</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:11 -0500</date><message>style(data-loader): collapse double blank line before defaultRange function</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:06 -0500</date><message>style(agents): collapse double blank line before type AgentAcc</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:54 -0500</date><message>chore: regenerate repomix docs after Round 9 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:48 -0500</date><message>chore(repomix): regenerate after simplify pass on llm-judge-code</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:27:18 -0500</date><message>style(quality-utils): collapse double blank lines to single throughout file</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:26:43 -0500</date><message>style(quality-utils): add missing space before ( in byValueDesc arrow function</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:13:10 -0500</date><message>chore: regenerate repomix docs after Round 8 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:12:57 -0500</date><message>style(workflow-graph): trim 3-line WHAT comment to single WHY line on null guard</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:11:25 -0500</date><message>chore(repomix): regenerate (no source changes — simplify confirmed clean)</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:39 -0500</date><message>chore(repomix): regenerate after simplify round 2</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:29 -0500</date><message>chore: regenerate repomix docs after Round 7 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:26 -0500</date><message>refactor(simplify): tighten VARIANCE_TREND_LABEL to as const; fix logAuditEvent comment</message><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:16 -0500</date><message>style(tests): strip CVG-1 task-tracker prefix from coverage-tab test file</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:17 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:04 -0500</date><message>refactor(workflow-graph): extract buildEdgeLabel helper to eliminate duplicate label construction</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:29 -0500</date><message>style(workflow-graph): remove redundant template literal wrapping toFixed() string</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:23 -0500</date><message>style(workflow-graph): trim over-verbose comment on agentLastEndNs/agentFirstStartNs</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:17 -0500</date><message>style(workflow-graph): remove WHAT comment from NS_TO_MS constant</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:39 -0500</date><message>chore(repomix): regenerate docs after simplify pass</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:25 -0500</date><message>refactor(simplify): replace capitalize with VARIANCE_TREND_LABEL map; fix mock types and logAuditEvent nullability</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:57 -0500</date><message>perf(degradation-signals): pre-compute bucket ISO strings once before metric loop</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:43 -0500</date><message>refactor(degradation-signals): remove bucketCount alias, use DEFAULT_BIN_COUNT directly</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:58:41 -0500</date><message>test(coverage): add CVG-1 todo stubs for Coverage tab re-enable</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:48 -0500</date><message>refactor(worker): extract SupabaseEnv and WaitUntilFn type aliases</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:27 -0500</date><message>style(worker): remove double blank line between logActivity and VIEW_PERMISSION_MAP</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:51 -0500</date><message>fix(test): correct TEST_TIMEOUT_MS comment — applies to one test, not the suite</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:42 -0500</date><message>refactor(degradation-signals): replace duplicate precision=3 constants with SCORE_DISPLAY_PRECISION</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:13:04 -0500</date><message>refactor(workflow-graph): remove redundant clusterLabel field from ClusterNodeData</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:33 -0500</date><message>refactor(workflow-graph): extract CLUSTER_NODE_PREFIX and isClusterNodeId helper</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:14 -0500</date><message>perf(workflow-graph): replace O(n²) nodes.find with buildNodeDataMap lookup</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 13:47:56 -0500</date><message>chore(vite): exclude .claude/worktrees from test runner</message><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 08:38:05 -0500</date><message>test(degradation): add comprehensive unit tests for DegradationSignalsPage</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 08:19:10 -0500</date><message>fix(workflow-graph): store actual cluster member count in clusterMemberCount field</message><files>src/components/WorkflowGraph.tsx</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:21:51 -0500</date><message>feat(workflow-graph): add collapsible sub-graphs for agent clusters (FU-G5-LAYOUT)</message><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/workflow-fixtures.ts</files><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:14:17 -0500</date><message>feat(degradation-signals): render coverageDropoutRate and latencySkewRatio columns</message><files>docs/BACKLOG.md</files><files>src/api/api-constants.ts</files><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:23 -0500</date><message>chore(backlog): mark CR-TS-1 Done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:00 -0500</date><message>docs(backlog): record code-review findings for FU-G5-LAYOUT and R5 session</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:09:54 -0500</date><message>fix(type-safety): replace unsafe spanAttr&lt;T&gt; cast with validated type-discriminant overload (CR-TS-1)</message><files>src/api/api-constants.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:07:00 -0500</date><message>refactor(degradation): simplify variance trend display with capitalize helper</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:03:54 -0500</date><message>feat(worker): add KV schema versioning envelope and audit log for admin mutations</message><files>.claude/ralph-loop.local.md</files><files>docs/BACKLOG.md</files><files>scripts/sync-to-kv.ts</files><files>src/api/api-constants.ts</files><files>worker/__tests__/admin-routes.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:02:41 -0500</date><message>feat(api): add /api/degradation-signals route to dev Hono server (R5)</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:00:29 -0500</date><message>feat(app): wire /degradation-signals route and g d shortcut (R5)</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:59:47 -0500</date><message>feat(pages): add DegradationSignalsPage for R5 regression detection UI</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:59 -0500</date><message>feat(hooks): add useDegradationSignals hook for R5 regression detection UI</message><files>src/hooks/useDegradationSignals.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:35 -0500</date><message>fix(workflow): harden latencyMs guards and add coverage for positive values (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:13:59 -0500</date><message>feat(workflow): add latencyMs to WorkflowEdge and compute from span timing (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:47:24 -0500</date><message>docs(auth0): mark post-deploy checklist items complete</message><files>docs/BACKLOG.md</files><files>docs/roadmap/impl-auth0-migration.md</files></git_log_commit><git_log_commit><date>2026-03-27 05:46:19 -0500</date><message>fix(worker): wire executionCtx.waitUntil to prevent cancelled activity logs</message><files>.github/workflows/ci.yml</files><files>src/lib/supabase-rest.ts</files><files>worker/__tests__/activity-logging.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:00:18 -0500</date><message>docs: document Auth0 integration test setup and Sentry reporter</message><files>CLAUDE.md</files><files>README.md</files></git_log_commit><git_log_commit><date>2026-03-27 04:48:39 -0500</date><message>feat(e2e): add Sentry reporter and migrate setup to Auth0 ROPC</message><files>e2e/integration/sentry-reporter.ts</files><files>e2e/integration/setup.ts</files><files>e2e/integration/teardown.ts</files><files>package-lock.json</files><files>package.json</files><files>playwright.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:33:31 -0500</date><message>test(e2e): purge orphaned test users before each integration run</message><files>e2e/integration/setup.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:51 -0500</date><message>chore: regenerate repomix docs after Round 4 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:30 -0500</date><message>refactor(tests): strip task-tracker prefixes from test files and derive script</message><files>scripts/derive-evaluations.ts</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/dr-l4-self-hosted-fonts.test.ts</files><files>src/__tests__/quality-utils-adaptive.test.ts</files><files>src/__tests__/score-badge-calibration.test.tsx</files><files>src/__tests__/workflow-graph.test.ts</files><files>worker/__tests__/spa-fallback.test.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:03:14 -0500</date><message>refactor: use RoleSchema for allowedViews; add SPAN_NAME_TOOL_PREFIX constant</message><files>src/lib/validation/auth-schemas.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:42 -0500</date><message>chore: regenerate repomix docs after task-tracker prefix cleanup</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:25 -0500</date><message>refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)</message><files>scripts/judge-evaluations.ts</files><files>src/lib/workflow-graph.ts</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:52:53 -0500</date><message>style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:47:59 -0500</date><message>refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css</message><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:37 -0500</date><message>refactor(workflow-graph): replace inline height style with CSS variable</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:31 -0500</date><message>style(workflow): strip CR-PERF/CR-TS task-tracker prefixes from comments</message><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:20:34 -0500</date><message>style(admin): strip CR-AUTH-2 task-tracker prefix from comment</message><files>src/pages/AdminPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:18:15 -0500</date><message>chore: regenerate repomix compressed XML</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:39:00 -0500</date><message>perf(sync-to-kv): parallelize metric detail queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:38:56 -0500</date><message>style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:31:03 -0500</date><message>refactor(sync-to-kv): use activePeriods in remaining period loops</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:28:00 -0500</date><message>perf(sync-to-kv): parallelize period batch queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:25:03 -0500</date><message>style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:22:33 -0500</date><message>fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:21:25 -0500</date><message>refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:20:58 -0500</date><message>refactor(judge-evaluations): extract JUDGE_MAX_TOKENS and JUDGE_DEFAULT_TEMPERATURE constants</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:17:17 -0500</date><message>perf(workflow): memoize agentNames derivation in AgentWorkflowView</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 02:14:28 -0500</date><message>style(judge-evaluations): remove task-tracker prefixes and WHAT comments from seedEvaluations/evaluateTurn</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:06:27 -0500</date><message>feat(workflow): add graph controls, critical path, and PNG export</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>package-lock.json</files><files>package.json</files><files>src/components/AgentWorkflowView.tsx</files><files>src/components/WorkflowGraph.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/theme.css</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
+}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-03-28 01:30:33 -0500</date><message>perf(TrendChart): replace flatMap+filter with for-loop for allValues</message><files>src/components/TrendChart.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:30 -0500</date><message>perf(TrendSeries): replace flatMap+filter with for-loop for allVals</message><files>src/components/TrendSeries.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:30:27 -0500</date><message>perf(AlertList): hoist SEVERITY_ORDER to module scope</message><files>src/components/AlertList.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:26:25 -0500</date><message>chore(repomix): regenerate compressed docs after Round 19 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-28 01:20:18 -0500</date><message>style(constants): collapse double blank lines</message><files>src/lib/constants.ts</files></git_log_commit><git_log_commit><date>2026-03-28 01:19:08 -0500</date><message>chore(repomix): regenerate compressed docs after Round 18 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:13:15 -0500</date><message>chore(.claude): remove stale ralph-loop state file after session completion</message><files>.claude/ralph-loop.local.md</files></git_log_commit><git_log_commit><date>2026-03-28 01:12:25 -0500</date><message>refactor(CoverageGrid): drop redundant Array.isArray guard in cellMap memo</message><files>src/components/CoverageGrid.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:11:28 -0500</date><message>chore(repomix): regenerate compressed docs after Round 17 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 01:07:48 -0500</date><message>perf: eliminate remaining intermediate arrays in Map constructors</message><files>src/api/routes/agents.ts</files><files>src/components/AgentActivityPanel.tsx</files><files>src/components/CorrelationHeatmap.tsx</files><files>src/components/TurnTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 01:06:54 -0500</date><message>chore(repomix): regenerate compressed docs after Round 16 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:53:06 -0500</date><message>perf(WorkflowTimeline): avoid intermediate arrays in agentLaneIndex/agentColorMap init</message><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:52:23 -0500</date><message>chore(repomix): regenerate compressed docs after Round 15 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:50 -0500</date><message>perf(AgentWorkflowView): avoid intermediate arrays in criticalPath map init</message><files>src/components/AgentWorkflowView.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:13:01 -0500</date><message>refactor(SpanTree): remove redundant type cast for parentSpanId</message><files>src/components/SpanTree.tsx</files></git_log_commit><git_log_commit><date>2026-03-28 00:12:33 -0500</date><message>chore(repomix): regenerate compressed docs after Round 14 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:46:07 -0500</date><message>refactor(AgentActivityPanel): drop redundant Array.isArray guard in colorIndex memo</message><files>src/components/AgentActivityPanel.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:45:22 -0500</date><message>chore(repomix): regenerate compressed docs after Round 13 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:42:46 -0500</date><message>refactor(WorkflowGraph): use groupBy for cluster members, drop WHAT comments, avoid intermediate arrays</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:41:03 -0500</date><message>chore(repomix): regenerate compressed docs after Round 12 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:40:50 -0500</date><message>refactor(correlations): derive metric names from map keys, drop redundant array</message><files>src/api/routes/correlations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:38:10 -0500</date><message>chore(repomix): regenerate compressed docs after Round 11 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:37:57 -0500</date><message>perf(workflow-graph): avoid intermediate array in hasCycle state init</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:15 -0500</date><message>chore(repomix): regenerate compressed docs after Round 10 simplify fixes</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:35:01 -0500</date><message>refactor(data-loader): use groupBy utility in loadEvaluationsByMetric</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:34:41 -0500</date><message>refactor(metrics): rename DYNAMICS_PERIOD_HOURS constants to BUCKET_HOURS for clarity</message><files>src/api/routes/metrics.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:11 -0500</date><message>style(data-loader): collapse double blank line before defaultRange function</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:33:06 -0500</date><message>style(agents): collapse double blank line before type AgentAcc</message><files>src/api/routes/agents.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:54 -0500</date><message>chore: regenerate repomix docs after Round 9 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:30:48 -0500</date><message>chore(repomix): regenerate after simplify pass on llm-judge-code</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:27:18 -0500</date><message>style(quality-utils): collapse double blank lines to single throughout file</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:26:43 -0500</date><message>style(quality-utils): add missing space before ( in byValueDesc arrow function</message><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:13:10 -0500</date><message>chore: regenerate repomix docs after Round 8 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:12:57 -0500</date><message>style(workflow-graph): trim 3-line WHAT comment to single WHY line on null guard</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:11:25 -0500</date><message>chore(repomix): regenerate (no source changes — simplify confirmed clean)</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:39 -0500</date><message>chore(repomix): regenerate after simplify round 2</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:29 -0500</date><message>chore: regenerate repomix docs after Round 7 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:26 -0500</date><message>refactor(simplify): tighten VARIANCE_TREND_LABEL to as const; fix logAuditEvent comment</message><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:10:16 -0500</date><message>style(tests): strip CVG-1 task-tracker prefix from coverage-tab test file</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:17 -0500</date><message>chore: regenerate repomix docs after Round 6 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:08:04 -0500</date><message>refactor(workflow-graph): extract buildEdgeLabel helper to eliminate duplicate label construction</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:29 -0500</date><message>style(workflow-graph): remove redundant template literal wrapping toFixed() string</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:23 -0500</date><message>style(workflow-graph): trim over-verbose comment on agentLastEndNs/agentFirstStartNs</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:07:17 -0500</date><message>style(workflow-graph): remove WHAT comment from NS_TO_MS constant</message><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:39 -0500</date><message>chore(repomix): regenerate docs after simplify pass</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 23:04:25 -0500</date><message>refactor(simplify): replace capitalize with VARIANCE_TREND_LABEL map; fix mock types and logAuditEvent nullability</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files><files>src/pages/DegradationSignalsPage.tsx</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:57 -0500</date><message>perf(degradation-signals): pre-compute bucket ISO strings once before metric loop</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:59:43 -0500</date><message>refactor(degradation-signals): remove bucketCount alias, use DEFAULT_BIN_COUNT directly</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:58:41 -0500</date><message>test(coverage): add CVG-1 todo stubs for Coverage tab re-enable</message><files>src/__tests__/coverage-tab.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:48 -0500</date><message>refactor(worker): extract SupabaseEnv and WaitUntilFn type aliases</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:32:27 -0500</date><message>style(worker): remove double blank line between logActivity and VIEW_PERMISSION_MAP</message><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:51 -0500</date><message>fix(test): correct TEST_TIMEOUT_MS comment — applies to one test, not the suite</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:16:42 -0500</date><message>refactor(degradation-signals): replace duplicate precision=3 constants with SCORE_DISPLAY_PRECISION</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:13:04 -0500</date><message>refactor(workflow-graph): remove redundant clusterLabel field from ClusterNodeData</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:33 -0500</date><message>refactor(workflow-graph): extract CLUSTER_NODE_PREFIX and isClusterNodeId helper</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 22:12:14 -0500</date><message>perf(workflow-graph): replace O(n²) nodes.find with buildNodeDataMap lookup</message><files>src/components/WorkflowGraph.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 13:47:56 -0500</date><message>chore(vite): exclude .claude/worktrees from test runner</message><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 08:38:05 -0500</date><message>test(degradation): add comprehensive unit tests for DegradationSignalsPage</message><files>src/__tests__/DegradationSignalsPage.test.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 08:19:10 -0500</date><message>fix(workflow-graph): store actual cluster member count in clusterMemberCount field</message><files>src/components/WorkflowGraph.tsx</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:21:51 -0500</date><message>feat(workflow-graph): add collapsible sub-graphs for agent clusters (FU-G5-LAYOUT)</message><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/workflow-fixtures.ts</files><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:14:17 -0500</date><message>feat(degradation-signals): render coverageDropoutRate and latencySkewRatio columns</message><files>docs/BACKLOG.md</files><files>src/api/api-constants.ts</files><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:23 -0500</date><message>chore(backlog): mark CR-TS-1 Done</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:10:00 -0500</date><message>docs(backlog): record code-review findings for FU-G5-LAYOUT and R5 session</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-03-27 07:09:54 -0500</date><message>fix(type-safety): replace unsafe spanAttr&lt;T&gt; cast with validated type-discriminant overload (CR-TS-1)</message><files>src/api/api-constants.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:07:00 -0500</date><message>refactor(degradation): simplify variance trend display with capitalize helper</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 07:03:54 -0500</date><message>feat(worker): add KV schema versioning envelope and audit log for admin mutations</message><files>.claude/ralph-loop.local.md</files><files>docs/BACKLOG.md</files><files>scripts/sync-to-kv.ts</files><files>src/api/api-constants.ts</files><files>worker/__tests__/admin-routes.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:02:41 -0500</date><message>feat(api): add /api/degradation-signals route to dev Hono server (R5)</message><files>src/api/routes/quality.ts</files></git_log_commit><git_log_commit><date>2026-03-27 07:00:29 -0500</date><message>feat(app): wire /degradation-signals route and g d shortcut (R5)</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:59:47 -0500</date><message>feat(pages): add DegradationSignalsPage for R5 regression detection UI</message><files>src/pages/DegradationSignalsPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:59 -0500</date><message>feat(hooks): add useDegradationSignals hook for R5 regression detection UI</message><files>src/hooks/useDegradationSignals.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:58:35 -0500</date><message>fix(workflow): harden latencyMs guards and add coverage for positive values (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 06:13:59 -0500</date><message>feat(workflow): add latencyMs to WorkflowEdge and compute from span timing (FU-G5-LAYOUT)</message><files>src/__tests__/workflow-fixtures.ts</files><files>src/__tests__/workflow-graph.test.ts</files><files>src/lib/workflow-graph.ts</files><files>src/types/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:47:24 -0500</date><message>docs(auth0): mark post-deploy checklist items complete</message><files>docs/BACKLOG.md</files><files>docs/roadmap/impl-auth0-migration.md</files></git_log_commit><git_log_commit><date>2026-03-27 05:46:19 -0500</date><message>fix(worker): wire executionCtx.waitUntil to prevent cancelled activity logs</message><files>.github/workflows/ci.yml</files><files>src/lib/supabase-rest.ts</files><files>worker/__tests__/activity-logging.test.ts</files><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 05:00:18 -0500</date><message>docs: document Auth0 integration test setup and Sentry reporter</message><files>CLAUDE.md</files><files>README.md</files></git_log_commit><git_log_commit><date>2026-03-27 04:48:39 -0500</date><message>feat(e2e): add Sentry reporter and migrate setup to Auth0 ROPC</message><files>e2e/integration/sentry-reporter.ts</files><files>e2e/integration/setup.ts</files><files>e2e/integration/teardown.ts</files><files>package-lock.json</files><files>package.json</files><files>playwright.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:33:31 -0500</date><message>test(e2e): purge orphaned test users before each integration run</message><files>e2e/integration/setup.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:51 -0500</date><message>chore: regenerate repomix docs after Round 4 simplifications</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:04:30 -0500</date><message>refactor(tests): strip task-tracker prefixes from test files and derive script</message><files>scripts/derive-evaluations.ts</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/dr-l4-self-hosted-fonts.test.ts</files><files>src/__tests__/quality-utils-adaptive.test.ts</files><files>src/__tests__/score-badge-calibration.test.tsx</files><files>src/__tests__/workflow-graph.test.ts</files><files>worker/__tests__/spa-fallback.test.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:03:14 -0500</date><message>refactor: use RoleSchema for allowedViews; add SPAN_NAME_TOOL_PREFIX constant</message><files>src/lib/validation/auth-schemas.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:42 -0500</date><message>chore: regenerate repomix docs after task-tracker prefix cleanup</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files></git_log_commit><git_log_commit><date>2026-03-27 04:00:25 -0500</date><message>refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)</message><files>scripts/judge-evaluations.ts</files><files>src/lib/workflow-graph.ts</files><files>src/theme.css</files><files>src/types/workflow-graph.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:52:53 -0500</date><message>style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:47:59 -0500</date><message>refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css</message><files>src/components/WorkflowGraph.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:37 -0500</date><message>refactor(workflow-graph): replace inline height style with CSS variable</message><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-03-27 03:45:31 -0500</date><message>style(workflow): strip CR-PERF/CR-TS task-tracker prefixes from comments</message><files>src/components/WorkflowGraph.tsx</files><files>src/components/WorkflowTimeline.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:20:34 -0500</date><message>style(admin): strip CR-AUTH-2 task-tracker prefix from comment</message><files>src/pages/AdminPage.tsx</files></git_log_commit><git_log_commit><date>2026-03-27 03:18:15 -0500</date><message>chore: regenerate repomix compressed XML</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:43 -0500</date><message>refactor(backtest): replace local DAY_MS constant with TIME_MS.DAY import</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:39 -0500</date><message>style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments</message><files>scripts/judge-evaluations.ts</files><files>src/lib/activity-logger.ts</files><files>src/lib/supabase-rest.ts</files><files>src/lib/workflow-graph.ts</files></git_log_commit><git_log_commit><date>2026-03-27 03:13:12 -0500</date><message>fix(ci): pin all Doppler secret fetches to prd config</message><files>.github/workflows/ci.yml</files><files>.github/workflows/deploy.yml</files><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>scripts/deploy-secrets.sh</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:49:50 -0500</date><message>feat(e2e): replace localStorage session seeding with Auth0 stub</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>e2e/fixtures.ts</files><files>playwright.config.ts</files><files>src/stubs/auth0-e2e.ts</files><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:47:42 -0500</date><message>style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments</message><files>src/api/routes/agents.ts</files><files>src/api/routes/sessions.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:39:00 -0500</date><message>perf(sync-to-kv): parallelize metric detail queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:38:56 -0500</date><message>style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:31:03 -0500</date><message>refactor(sync-to-kv): use activePeriods in remaining period loops</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:28:00 -0500</date><message>perf(sync-to-kv): parallelize period batch queries with Promise.all</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:25:03 -0500</date><message>style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:22:33 -0500</date><message>fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-03-27 02:21:25 -0500</date><message>refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants</message><files>scripts/sync-to-kv.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.
 
