@@ -93,9 +93,8 @@ qualityRoutes.get('/degradation-signals', async (c) => {
     const { start: startDate, end: endDate } = computePeriodDates(period);
     const startMs = new Date(startDate).getTime();
     const endMs = new Date(endDate).getTime();
-    const bucketCount = DEFAULT_BIN_COUNT;
-    const bucketMs = (endMs - startMs) / bucketCount;
-    const boundaries = buildEvenBucketBoundaries(startMs, endMs, bucketCount);
+    const bucketMs = (endMs - startMs) / DEFAULT_BIN_COUNT;
+    const boundaries = buildEvenBucketBoundaries(startMs, endMs, DEFAULT_BIN_COUNT);
 
     const evaluationsByMetric = await loadEvaluationsByMetric(startDate, endDate);
     const metricNames = [...evaluationsByMetric.keys()];
@@ -110,7 +109,7 @@ qualityRoutes.get('/degradation-signals', async (c) => {
       for (const ev of evals) {
         if (ev.scoreValue == null) continue;
         const ts = new Date(ev.timestamp).getTime();
-        const idx = getEvenBucketIndex(ts, startMs, bucketMs, bucketCount);
+        const idx = getEvenBucketIndex(ts, startMs, bucketMs, DEFAULT_BIN_COUNT);
         if (idx !== null) buckets[idx].scores.push(ev.scoreValue);
       }
       timeBuckets[name] = buckets;
