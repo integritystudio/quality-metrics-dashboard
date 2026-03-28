@@ -10,7 +10,6 @@ import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 
-
 type AgentAcc = {
   invocations: number;
   errors: number;
