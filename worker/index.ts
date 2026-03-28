@@ -91,13 +91,14 @@ type WaitUntilFn = (promise: Promise<unknown>) => void;
 // Fire-and-forget: logs sensitive admin mutations to audit_log without blocking the response.
 // Only fires on success — never called when the upstream Supabase operation fails.
 function logAuditEvent(
-  actorUserId: string,
+  actorUserId: string | undefined,
   action: AuditAction,
   targetUserId: string,
   roleId: string,
   env: SupabaseEnv,
   waitUntil: WaitUntilFn,
 ): void {
+  if (!actorUserId) return;
   waitUntil(supabasePost(
     `${env.SUPABASE_URL}/rest/v1/audit_log`,
     { actor_user_id: actorUserId, action, target_user_id: targetUserId, role_id: roleId },

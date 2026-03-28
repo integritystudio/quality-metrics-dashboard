@@ -61,12 +61,14 @@ function makeResponse(overrides: Partial<DegradationSignalsResponse> = {}): Degr
   };
 }
 
+type MockQueryResult = { data: DegradationSignalsResponse | undefined; isLoading: boolean; error: Error | null };
+
+function mockQuery(result: MockQueryResult) {
+  mockUseDegradationSignals.mockReturnValue(result as unknown as ReturnType<typeof useDegradationSignals>);
+}
+
 function mockLoaded(data: DegradationSignalsResponse | undefined = makeResponse()) {
-  mockUseDegradationSignals.mockReturnValue({
-    data,
-    isLoading: false,
-    error: null,
-  });
+  mockQuery({ data, isLoading: false, error: null });
 }
 
 
@@ -87,21 +89,13 @@ describe('DegradationSignalsPage — render', () => {
   }, TEST_TIMEOUT_MS);
 
   it('renders loading state when isLoading is true', () => {
-    mockUseDegradationSignals.mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      error: null,
-    });
+    mockQuery({ data: undefined, isLoading: true, error: null });
     render(<DegradationSignalsPage period="7d" />);
     expect(screen.getByTestId('page-shell-loading')).toBeInTheDocument();
   });
 
   it('renders error state when error is present', () => {
-    mockUseDegradationSignals.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      error: new Error('Network failure'),
-    });
+    mockQuery({ data: undefined, isLoading: false, error: new Error('Network failure') });
     render(<DegradationSignalsPage period="7d" />);
     expect(screen.getByTestId('page-shell-error')).toBeInTheDocument();
     expect(screen.getByText('Network failure')).toBeInTheDocument();
@@ -114,11 +108,7 @@ describe('DegradationSignalsPage — render', () => {
   });
 
   it('renders nothing (no table) when data is undefined', () => {
-    mockUseDegradationSignals.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      error: null,
-    });
+    mockQuery({ data: undefined, isLoading: false, error: null });
     render(<DegradationSignalsPage period="7d" />);
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });

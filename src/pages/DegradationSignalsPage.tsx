@@ -6,9 +6,11 @@ import type { Period } from '../types.js';
 
 const COVERAGE_DROPOUT_PRECISION = 1;
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+const VARIANCE_TREND_LABEL: Record<'increasing' | 'stable' | 'decreasing', string> = {
+  increasing: 'Increasing',
+  stable: 'Stable',
+  decreasing: 'Decreasing',
+};
 
 function ReportRow({ report }: { report: DegradationReport }) {
   const { signal } = report;
@@ -19,7 +21,7 @@ function ReportRow({ report }: { report: DegradationReport }) {
         <StatusBadge status={signal.predictedStatus} />
       </td>
       <td className="mono">{signal.ewmaDriftDetected ? 'Yes' : 'No'}</td>
-      <td className="mono">{capitalize(signal.varianceTrend)}</td>
+      <td className="mono">{VARIANCE_TREND_LABEL[signal.varianceTrend]}</td>
       <td className="mono">{signal.varianceRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
       <td className="mono">{signal.consecutiveBreaches}</td>
       <td className="mono">{signal.confirmed ? 'Yes' : 'No'}</td>
