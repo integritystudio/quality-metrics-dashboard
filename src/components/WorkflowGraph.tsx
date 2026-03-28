@@ -75,7 +75,6 @@ interface WorkflowNodeWithMeta extends WorkflowNode {
 /** Data shape for a collapsed cluster node. */
 interface ClusterNodeData {
   clusterId: string;
-  clusterLabel: string;
   memberCount: number;
   hasError: boolean;
   avgScore: number | null;
@@ -99,7 +98,6 @@ function isClusterNodeData(value: unknown): value is ClusterNodeData {
   const v = value as Record<string, unknown>;
   return (
     typeof v['clusterId'] === 'string' &&
-    typeof v['clusterLabel'] === 'string' &&
     typeof v['memberCount'] === 'number' &&
     typeof v['hasError'] === 'boolean'
   );
@@ -240,7 +238,6 @@ async function computeLayout(
         const avgScore = workflowNode.evaluationScore;
         const data: ClusterNodeData = {
           clusterId: workflowNode.clusterId ?? elkNode.id,
-          clusterLabel: workflowNode.clusterId ?? elkNode.id,
           memberCount: workflowNode.clusterMemberCount ?? 0,
           hasError: workflowNode.hasError,
           avgScore,
@@ -324,9 +321,9 @@ const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodePr
     <div
       className={nodeClass}
       role="group"
-      aria-label={`Cluster: ${d.clusterLabel}, ${d.memberCount} agents`}
+      aria-label={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
     >
-      <div className="workflow-cluster-node__label">{d.clusterLabel}</div>
+      <div className="workflow-cluster-node__label">{d.clusterId}</div>
       <div className="workflow-cluster-node__meta">
         {d.memberCount} agents
         {d.avgScore !== null && (
