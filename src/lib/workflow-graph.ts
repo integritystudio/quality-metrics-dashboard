@@ -14,7 +14,6 @@ const SPAN_NAME_TOOL_PREFIX = 'tool:';
  * sequential. Set to 1 ms = 1_000_000 ns.
  */
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
-/** Conversion factor from nanoseconds to milliseconds. */
 const NS_TO_MS = 1_000_000;
 
 export function buildWorkflowGraph(
