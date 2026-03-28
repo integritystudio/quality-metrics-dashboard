@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
@@ -83,9 +84,9 @@ export async function loadEvaluationsByTraceId(
 const TRACE_QUERY_CONCURRENCY = 10;
 
 /**
- * Deduplicates input, then issues batched per-traceId queries
- * (max {@link TRACE_QUERY_CONCURRENCY} in parallel) to avoid
- * saturating the backend with unbounded concurrent reads.
+ * Deduplicates input, then issues all per-traceId queries concurrently with a
+ * sliding-window limiter (max {@link TRACE_QUERY_CONCURRENCY} in-flight at a
+ * time) to avoid saturating the backend with unbounded concurrent reads.
  */
 export async function loadEvaluationsByTraceIds(
   traceIds: string[],
@@ -98,15 +99,15 @@ export async function loadEvaluationsByTraceIds(
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
   const start = startDate ?? defStart;
   const end = endDate ?? defEnd;
+  const limit = pLimit(TRACE_QUERY_CONCURRENCY);
+  const settled = await Promise.allSettled(
+    uniqueIds.map(traceId =>
+      limit(() => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
+    )
+  );
   const all: EvaluationResult[] = [];
-  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
-    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
-    const settled = await Promise.allSettled(
-      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
-    );
-    for (const result of settled) {
-      if (result.status === 'fulfilled') all.push(...result.value);
-    }
+  for (const result of settled) {
+    if (result.status === 'fulfilled') all.push(...result.value);
   }
   return all;
 }
