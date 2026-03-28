@@ -99,10 +99,10 @@ export async function loadEvaluationsByTraceIds(
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
   const start = startDate ?? defStart;
   const end = endDate ?? defEnd;
-  const limit = pLimit(TRACE_QUERY_CONCURRENCY);
+  const limiter = pLimit(TRACE_QUERY_CONCURRENCY);
   const settled = await Promise.allSettled(
     uniqueIds.map(traceId =>
-      limit(() => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
+      limiter(() => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
     )
   );
   const all: EvaluationResult[] = [];
