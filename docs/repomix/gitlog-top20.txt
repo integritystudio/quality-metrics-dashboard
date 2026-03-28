@@ -1,3 +1,14 @@
+ca17e96 2026-03-28 chore(deps): add d3-array and @types/d3-array as explicit deps (LIB-2)
+  package-lock.json
+
+8a6add5 2026-03-28 chore(deps): add p-limit v7 and record lib-audit backlog items
+  package-lock.json
+
+0144f08 2026-03-28 chore(repomix): regenerate compressed docs after Round 20 simplify fixes
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 f7e401c 2026-03-28 chore(repomix): regenerate compressed docs after Round 19 simplify fixes
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -363,14 +374,4 @@ f720297 2026-03-26 docs(backlog): add worker API validation/security code review
   docs/repomix/repomix.xml
 
 977bd3c 2026-03-26 refactor(sync-to-kv): remove what-comment before composite priority calculation
-  scripts/sync-to-kv.ts
-
-06d0de7 2026-03-26 refactor(scripts): trim what-prefixes from comments in judge and sync-to-kv
-  scripts/judge-evaluations.ts
-  scripts/sync-to-kv.ts
-
-f16648a 2026-03-26 refactor(judge): remove what-comments in directory scan and turn conversion
-  scripts/judge-evaluations.ts
-
-81cc510 2026-03-26 refactor(sync-to-kv): remove what-comments in session grouping and phase 3
   scripts/sync-to-kv.ts

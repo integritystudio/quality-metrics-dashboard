@@ -2286,6 +2286,23 @@ import { TimestampCell } from '../components/TimestampCell.js';
 import type { Period } from '../types.js';
 
 ================
+File: src/pages/CorrelationsPage.tsx
+================
+import { useState, useCallback } from 'react';
+import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
+import { SplitPane } from '../components/SplitPane.js';
+import { MetricCompare } from '../components/MetricCompare.js';
+import { PageShell } from '../components/PageShell.js';
+import { ViewSection } from '../components/Section.js';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
+import type { CorrelationFeature, Period } from '../types.js';
+interface CorrelationsResponse {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+}
+
+================
 File: src/pages/CoveragePage.tsx
 ================
 import { useState } from 'react';
@@ -2317,14 +2334,6 @@ import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
 <Link href=
 ⋮----
 href=
-
-================
-File: src/pages/LoginPage.tsx
-================
-import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
-export function LoginPage()
-⋮----
-const handleLogin = ()
 
 ================
 File: src/pages/PipelinePage.tsx
@@ -2860,21 +2869,11 @@ async function handleAssign()
 async function handleRevoke(roleId: string, roleName: string)
 
 ================
-File: src/pages/CorrelationsPage.tsx
+File: src/pages/LoginPage.tsx
 ================
-import { useState, useCallback } from 'react';
-import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
-import { SplitPane } from '../components/SplitPane.js';
-import { MetricCompare } from '../components/MetricCompare.js';
-import { PageShell } from '../components/PageShell.js';
-import { ViewSection } from '../components/Section.js';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
-import type { CorrelationFeature, Period } from '../types.js';
-interface CorrelationsResponse {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-}
+import { useEffect } from 'react';
+import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
+export function LoginPage()
 
 ================
 File: src/pages/RoutingTelemetryPage.tsx
@@ -2894,59 +2893,6 @@ import { type ReactNode, createElement } from 'react';
 ⋮----
 export function Auth0Provider(
 export function useAuth0()
-
-================
-File: src/App.tsx
-================
-import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
-import { Route, Switch, Link, useLocation, Router } from 'wouter';
-import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
-import { Layout } from './components/Layout.js';
-import { RoleSelector } from './components/RoleSelector.js';
-import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
-import { AuthProvider, useAuth } from './contexts/AuthContext.js';
-import { Auth0Provider, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
-import { RequireAuth } from './components/RequireAuth.js';
-import { LoginPage } from './pages/LoginPage.js';
-import { HealthOverview } from './components/HealthOverview.js';
-import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
-import { AlertList } from './components/AlertList.js';
-import { SLATable } from './components/SLATable.js';
-import { ScoreHistogram } from './components/ScoreHistogram.js';
-import { EvaluationDetail } from './components/EvaluationDetail.js';
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
-import { TrendChart } from './components/TrendChart.js';
-import { TrendSeries } from './components/TrendSeries.js';
-import { ConfidencePanel } from './components/ConfidencePanel.js';
-import { ViewSection } from './components/Section.js';
-import { CorrelationsPage } from './pages/CorrelationsPage.js';
-import { PipelinePage } from './pages/PipelinePage.js';
-import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
-import { CompliancePage } from './pages/CompliancePage.js';
-import { TraceDetailPage } from './pages/TraceDetailPage.js';
-import { AgentSessionPage } from './pages/AgentSessionPage.js';
-import { AgentsPage } from './pages/AgentsPage.js';
-import { SessionDetailPage } from './pages/SessionDetailPage.js';
-import { AdminPage } from './pages/AdminPage.js';
-import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
-import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
-import { ExecutiveView } from './components/views/ExecutiveView.js';
-import { OperatorView } from './components/views/OperatorView.js';
-import { AuditorView } from './components/views/AuditorView.js';
-import { formatScore } from './lib/quality-utils.js';
-import { useDashboard } from './hooks/useDashboard.js';
-import { useMetricDetail } from './hooks/useMetricDetail.js';
-import { useTrend } from './hooks/useTrend.js';
-import { RoleProvider } from './contexts/RoleContext.js';
-import { CalibrationProvider } from './context/CalibrationContext.js';
-import { ROLES } from './lib/constants.js';
-import type {
-  Period,
-  QualityDashboardSummary,
-  RoleViewType,
-  MetricDetailResult,
-  MetricDynamics,
-} from './types.js';
 
 ================
 File: scripts/deploy-secrets.sh
@@ -3084,6 +3030,59 @@ export function supabasePost(
   body: unknown,
   key: string,
 ): Promise<void>
+
+================
+File: src/App.tsx
+================
+import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
+import { Route, Switch, Link, useLocation, Router } from 'wouter';
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import { Layout } from './components/Layout.js';
+import { RoleSelector } from './components/RoleSelector.js';
+import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
+import { AuthProvider, useAuth } from './contexts/AuthContext.js';
+import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
+import { RequireAuth } from './components/RequireAuth.js';
+import { LoginPage } from './pages/LoginPage.js';
+import { HealthOverview } from './components/HealthOverview.js';
+import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
+import { AlertList } from './components/AlertList.js';
+import { SLATable } from './components/SLATable.js';
+import { ScoreHistogram } from './components/ScoreHistogram.js';
+import { EvaluationDetail } from './components/EvaluationDetail.js';
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
+import { TrendChart } from './components/TrendChart.js';
+import { TrendSeries } from './components/TrendSeries.js';
+import { ConfidencePanel } from './components/ConfidencePanel.js';
+import { ViewSection } from './components/Section.js';
+import { CorrelationsPage } from './pages/CorrelationsPage.js';
+import { PipelinePage } from './pages/PipelinePage.js';
+import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
+import { CompliancePage } from './pages/CompliancePage.js';
+import { TraceDetailPage } from './pages/TraceDetailPage.js';
+import { AgentSessionPage } from './pages/AgentSessionPage.js';
+import { AgentsPage } from './pages/AgentsPage.js';
+import { SessionDetailPage } from './pages/SessionDetailPage.js';
+import { AdminPage } from './pages/AdminPage.js';
+import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
+import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
+import { ExecutiveView } from './components/views/ExecutiveView.js';
+import { OperatorView } from './components/views/OperatorView.js';
+import { AuditorView } from './components/views/AuditorView.js';
+import { formatScore } from './lib/quality-utils.js';
+import { useDashboard } from './hooks/useDashboard.js';
+import { useMetricDetail } from './hooks/useMetricDetail.js';
+import { useTrend } from './hooks/useTrend.js';
+import { RoleProvider } from './contexts/RoleContext.js';
+import { CalibrationProvider } from './context/CalibrationContext.js';
+import { ROLES } from './lib/constants.js';
+import type {
+  Period,
+  QualityDashboardSummary,
+  RoleViewType,
+  MetricDetailResult,
+  MetricDynamics,
+} from './types.js';
 
 ================
 File: src/__tests__/DegradationSignalsPage.test.tsx
@@ -3440,8 +3439,42 @@ export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, ty
 export function extractFiniteScores(evals: Array<
 
 ================
+File: src/components/AgentWorkflowView.tsx
+================
+import React, { useState, useCallback, useMemo, useRef } from 'react';
+import { WorkflowGraphView } from './WorkflowGraph.js';
+import { WorkflowTimeline } from './WorkflowTimeline.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation } from '../types.js';
+import { agentColor, fmtDuration } from '../lib/quality-utils.js';
+import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
+type WorkflowTab = 'dag' | 'timeline';
+interface AgentWorkflowViewProps {
+  graph: WorkflowGraph;
+  evaluation?: MultiAgentEvaluation;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
+}
+⋮----
+function dfs(nodeId: string, visiting: Set<string>): [string[], number]
+⋮----
+onClick=
+
+================
+File: src/pages/DegradationSignalsPage.tsx
+================
+import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
+import { PageShell } from '../components/PageShell.js';
+import { StatusBadge } from '../components/Indicators.js';
+import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { Period } from '../types.js';
+⋮----
+function ReportRow(
+
+================
 File: src/api/data-loader.ts
 ================
+import pLimit from 'p-limit';
 import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
@@ -3503,39 +3536,6 @@ export async function loadEvaluationsBySessionId(
   endDate?: string,
 ): Promise<EvaluationResult[]>
 export async function checkHealth(): Promise<
-
-================
-File: src/components/AgentWorkflowView.tsx
-================
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import { WorkflowGraphView } from './WorkflowGraph.js';
-import { WorkflowTimeline } from './WorkflowTimeline.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation } from '../types.js';
-import { agentColor, fmtDuration } from '../lib/quality-utils.js';
-import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
-type WorkflowTab = 'dag' | 'timeline';
-interface AgentWorkflowViewProps {
-  graph: WorkflowGraph;
-  evaluation?: MultiAgentEvaluation;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-}
-⋮----
-function dfs(nodeId: string, visiting: Set<string>): [string[], number]
-⋮----
-onClick=
-
-================
-File: src/pages/DegradationSignalsPage.tsx
-================
-import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
-import { PageShell } from '../components/PageShell.js';
-import { StatusBadge } from '../components/Indicators.js';
-import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { Period } from '../types.js';
-⋮----
-function ReportRow(
 
 ================
 File: src/lib/constants.ts

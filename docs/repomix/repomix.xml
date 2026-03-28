@@ -9909,6 +9909,76 @@ export function CompliancePage({ period }: { period: Period }) {
 }
 
 ================
+File: src/pages/CorrelationsPage.tsx
+================
+import { useState, useCallback } from 'react';
+import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
+import { SplitPane } from '../components/SplitPane.js';
+import { MetricCompare } from '../components/MetricCompare.js';
+import { PageShell } from '../components/PageShell.js';
+import { ViewSection } from '../components/Section.js';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
+import type { CorrelationFeature, Period } from '../types.js';
+interface CorrelationsResponse {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+}
+export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
+  const { data, isLoading, error } = useApiQuery<CorrelationsResponse>(
+    ['correlations', period],
+    () => `${API_BASE}/api/correlations?period=${period}`,
+    { staleTime: STALE_TIME.AGGREGATE },
+  );
+  const [leftMetric, setLeftMetric] = useState<string | undefined>();
+  const [rightMetric, setRightMetric] = useState<string | undefined>();
+  const handleCellClick = useCallback((row: string, col: string) => {
+    setLeftMetric(row);
+    setRightMetric(col);
+  }, []);
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
+      {data && (
+        <>
+          <h2 className="text-lg mb-3">Metric Correlations</h2>
+          <div className="card">
+            <CorrelationHeatmap
+              correlations={data.correlations}
+              metrics={data.metrics}
+              onCellClick={handleCellClick}
+            />
+          </div>
+          {(leftMetric || rightMetric) && (
+            <ViewSection title="Compare Metrics">
+              <div className="card">
+                <SplitPane
+                  left={
+                    <MetricCompare
+                      metricName={leftMetric}
+                      period={period}
+                      availableMetrics={data.metrics}
+                      onMetricChange={setLeftMetric}
+                    />
+                  }
+                  right={
+                    <MetricCompare
+                      metricName={rightMetric}
+                      period={period}
+                      availableMetrics={data.metrics}
+                      onMetricChange={setRightMetric}
+                    />
+                  }
+                />
+              </div>
+            </ViewSection>
+          )}
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+================
 File: src/pages/CoveragePage.tsx
 ================
 import { useState } from 'react';
@@ -10052,31 +10122,6 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
         </>
       )}
     </PageShell>
-  );
-}
-
-================
-File: src/pages/LoginPage.tsx
-================
-import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
-export function LoginPage() {
-  const { loginWithRedirect } = useAuth0();
-  const handleLogin = () =>
-    loginWithRedirect({
-      authorizationParams: {
-        audience: AUTH0_AUDIENCE,
-        redirect_uri: `${window.location.origin}/callback`,
-      },
-    });
-  return (
-    <div className="login-page">
-      <div className="login-card">
-        <h1 className="login-title">Sign in</h1>
-        <button className="login-btn" onClick={handleLogin}>
-          Sign in
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -12803,73 +12848,21 @@ export function AdminPage() {
 }
 
 ================
-File: src/pages/CorrelationsPage.tsx
+File: src/pages/LoginPage.tsx
 ================
-import { useState, useCallback } from 'react';
-import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
-import { SplitPane } from '../components/SplitPane.js';
-import { MetricCompare } from '../components/MetricCompare.js';
-import { PageShell } from '../components/PageShell.js';
-import { ViewSection } from '../components/Section.js';
-import { useApiQuery } from '../hooks/useApiQuery.js';
-import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
-import type { CorrelationFeature, Period } from '../types.js';
-interface CorrelationsResponse {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-}
-export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
-  const { data, isLoading, error } = useApiQuery<CorrelationsResponse>(
-    ['correlations', period],
-    () => `${API_BASE}/api/correlations?period=${period}`,
-    { staleTime: STALE_TIME.AGGREGATE },
-  );
-  const [leftMetric, setLeftMetric] = useState<string | undefined>();
-  const [rightMetric, setRightMetric] = useState<string | undefined>();
-  const handleCellClick = useCallback((row: string, col: string) => {
-    setLeftMetric(row);
-    setRightMetric(col);
-  }, []);
-  return (
-    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_LG}>
-      {data && (
-        <>
-          <h2 className="text-lg mb-3">Metric Correlations</h2>
-          <div className="card">
-            <CorrelationHeatmap
-              correlations={data.correlations}
-              metrics={data.metrics}
-              onCellClick={handleCellClick}
-            />
-          </div>
-          {(leftMetric || rightMetric) && (
-            <ViewSection title="Compare Metrics">
-              <div className="card">
-                <SplitPane
-                  left={
-                    <MetricCompare
-                      metricName={leftMetric}
-                      period={period}
-                      availableMetrics={data.metrics}
-                      onMetricChange={setLeftMetric}
-                    />
-                  }
-                  right={
-                    <MetricCompare
-                      metricName={rightMetric}
-                      period={period}
-                      availableMetrics={data.metrics}
-                      onMetricChange={setRightMetric}
-                    />
-                  }
-                />
-              </div>
-            </ViewSection>
-          )}
-        </>
-      )}
-    </PageShell>
-  );
+import { useEffect } from 'react';
+import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
+export function LoginPage() {
+  const { loginWithRedirect } = useAuth0();
+  useEffect(() => {
+    loginWithRedirect({
+      authorizationParams: {
+        audience: AUTH0_AUDIENCE,
+        redirect_uri: `${window.location.origin}/callback`,
+      },
+    });
+  }, [loginWithRedirect]);
+  return <div className="auth-loading" role="status" aria-label="Loading" />;
 }
 
 ================
@@ -13043,416 +13036,6 @@ export function useAuth0() {
     logout: () => Promise.resolve(),
     loginWithRedirect: () => Promise.resolve(),
   };
-}
-
-================
-File: src/App.tsx
-================
-import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
-import { Route, Switch, Link, useLocation, Router } from 'wouter';
-import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
-import { Layout } from './components/Layout.js';
-import { RoleSelector } from './components/RoleSelector.js';
-import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
-import { AuthProvider, useAuth } from './contexts/AuthContext.js';
-import { Auth0Provider, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
-import { RequireAuth } from './components/RequireAuth.js';
-import { LoginPage } from './pages/LoginPage.js';
-import { HealthOverview } from './components/HealthOverview.js';
-import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
-import { AlertList } from './components/AlertList.js';
-import { SLATable } from './components/SLATable.js';
-import { ScoreHistogram } from './components/ScoreHistogram.js';
-import { EvaluationDetail } from './components/EvaluationDetail.js';
-import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
-import { TrendChart } from './components/TrendChart.js';
-import { TrendSeries } from './components/TrendSeries.js';
-import { ConfidencePanel } from './components/ConfidencePanel.js';
-import { ViewSection } from './components/Section.js';
-import { CorrelationsPage } from './pages/CorrelationsPage.js';
-import { PipelinePage } from './pages/PipelinePage.js';
-import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
-import { CompliancePage } from './pages/CompliancePage.js';
-import { TraceDetailPage } from './pages/TraceDetailPage.js';
-import { AgentSessionPage } from './pages/AgentSessionPage.js';
-import { AgentsPage } from './pages/AgentsPage.js';
-import { SessionDetailPage } from './pages/SessionDetailPage.js';
-import { AdminPage } from './pages/AdminPage.js';
-import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
-import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
-import { ExecutiveView } from './components/views/ExecutiveView.js';
-import { OperatorView } from './components/views/OperatorView.js';
-import { AuditorView } from './components/views/AuditorView.js';
-import { formatScore } from './lib/quality-utils.js';
-import { useDashboard } from './hooks/useDashboard.js';
-import { useMetricDetail } from './hooks/useMetricDetail.js';
-import { useTrend } from './hooks/useTrend.js';
-import { RoleProvider } from './contexts/RoleContext.js';
-import { CalibrationProvider } from './context/CalibrationContext.js';
-import { ROLES } from './lib/constants.js';
-import type {
-  Period,
-  QualityDashboardSummary,
-  RoleViewType,
-  MetricDetailResult,
-  MetricDynamics,
-} from './types.js';
-const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
-const VALID_ROLES: readonly RoleViewType[] = ROLES;
-function DashboardPage({ period }: { period: Period }) {
-  const { data, isLoading, isFetching, error } = useDashboard(period);
-  if (isLoading && !data) return <MetricGridSkeleton />;
-  if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
-  if (!data || ('role' in data)) return <MetricGridSkeleton />;
-  const dashboard = data;
-  const sparklines = (data as QualityDashboardSummary & { sparklines?: Record<string, (number | null)[]> }).sparklines;
-  if (dashboard.overallStatus === 'no_data') {
-    return (
-      <div className="empty-state">
-        <h2>No Evaluation Data</h2>
-        <p>No evaluations found for the selected period.</p>
-        <p className="mt-2">
-          Run evaluations using the <code>obs_inject_evaluations</code> tool to see metrics here.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <>
-      {isFetching && data && <div className="refetch-indicator surface-elevated">Updating...</div>}
-      <HealthOverview dashboard={dashboard} />
-      <MetricGrid metrics={dashboard.metrics} sparklines={sparklines} />
-      {dashboard.alerts.length > 0 && (
-        <ViewSection title="Active Alerts">
-          <AlertList alerts={dashboard.alerts} />
-        </ViewSection>
-      )}
-      {dashboard.slaCompliance && dashboard.slaCompliance.length > 0 && (
-        <ViewSection title="SLA Compliance">
-          <SLATable slas={dashboard.slaCompliance} />
-        </ViewSection>
-      )}
-    </>
-  );
-}
-function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
-  const { session, isLoading: authLoading } = useAuth();
-  const { data, isLoading, error } = useDashboard(period, role);
-  if (authLoading) return <MetricGridSkeleton />;
-  if (!session || !session.allowedViews.includes(role)) {
-    return (
-      <div className="empty-state">
-        <h2>Access Denied</h2>
-        <p>You do not have permission to view the {role} dashboard.</p>
-        <p><Link href="/">Go to dashboard</Link></p>
-      </div>
-    );
-  }
-  if (isLoading && !data) return <MetricGridSkeleton />;
-  if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
-  if (!data || !('role' in data)) return <MetricGridSkeleton />;
-  switch (data.role) {
-    case 'executive':
-      return <ExecutiveView data={data} />;
-    case 'operator':
-      return <OperatorView data={data} />;
-    case 'auditor':
-      return <AuditorView data={data} />;
-    default:
-      return null;
-  }
-}
-function MetricDetailPage({ name, period }: { name: string; period: Period }) {
-  const { data, isLoading, error } = useMetricDetail(name, period);
-  const { data: trendData } = useTrend(name, period, 10);
-  if (isLoading) {
-    return (
-      <div>
-        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-        <div className="card skeleton skeleton-md" />
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div>
-        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-        <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>
-      </div>
-    );
-  }
-  if (!data) return null;
-  const detail = data;
-  return (
-    <div>
-      <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-      <div className="card mb-6">
-        <div className="metric-card-header flex-center">
-          <h2 className="text-lg">{detail.displayName}</h2>
-          <StatusBadge status={detail.status} />
-        </div>
-        <div className="flex-wrap gap-8 mt-3">
-          {(['avg', 'min', 'max', 'p50', 'p95', 'p99'] as const)
-            .filter((key) => detail.values[key] != null)
-            .map((key) => (
-              <div key={key} className="text-center">
-                <div className="mono-xl font-semibold">
-                  {formatScore(detail.values[key])}
-                </div>
-                <div className="text-secondary text-xs uppercase">{key}</div>
-              </div>
-            ))}
-          <div className="text-center">
-            <div className="mono-xl font-semibold">{detail.sampleCount}</div>
-            <div className="text-secondary text-xs uppercase">samples</div>
-          </div>
-        </div>
-        <div className="flex-center gap-4 mt-3">
-          <TrendIndicator trend={detail.trend} />
-          <ConfidenceBadge confidence={detail.confidence} />
-        </div>
-      </div>
-      {detail.confidence && (
-        <ViewSection title="Confidence Analysis">
-          <div className="card">
-            <ConfidencePanel confidence={detail.confidence} />
-          </div>
-        </ViewSection>
-      )}
-      <ViewSection title="Trend">
-        <div className="card">
-          <TrendChart
-            trend={detail.trend}
-            dynamics={(detail as MetricDetailResult & { dynamics?: MetricDynamics }).dynamics}
-            warningThreshold={detail.alerts.find(a => a.severity === 'warning')?.threshold}
-            criticalThreshold={detail.alerts.find(a => a.severity === 'critical')?.threshold}
-            metricName={detail.displayName}
-          />
-        </div>
-      </ViewSection>
-      {trendData && trendData.trendData.length > 0 && (
-        <ViewSection title={<>
-          Time Series ({trendData.totalEvaluations} evaluations)
-          {trendData.narrowed && (
-            <span className="text-muted text-xs font-normal ml-2">auto-narrowed to data range</span>
-          )}
-        </>}>
-          <div className="card">
-            <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
-          </div>
-        </ViewSection>
-      )}
-      {detail.alerts.length > 0 && (
-        <ViewSection title="Alerts">
-          <AlertList alerts={detail.alerts} />
-        </ViewSection>
-      )}
-      <ViewSection title="Score Distribution">
-        <div className="card">
-          <ScoreHistogram distribution={detail.scoreDistribution} />
-        </div>
-      </ViewSection>
-      <ViewSection title="Evaluations">
-        <div className="card">
-          <EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} metricName={name} period={period} />
-        </div>
-      </ViewSection>
-    </div>
-  );
-}
-function RouteErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  return (
-    <div className="error-state">
-      <h2>Something went wrong</h2>
-      <p>{error instanceof Error ? error.message : String(error)}</p>
-      <div className="error-actions">
-        <button onClick={resetErrorBoundary}>Try again</button>
-        <Link href="/">Back to dashboard</Link>
-      </div>
-    </div>
-  );
-}
-function AdminLink() {
-  const { session } = useAuth();
-  if (!session?.permissions.includes('dashboard.admin')) return null;
-  return <Link href="/admin" className="admin-link text-xs text-muted">Admin</Link>;
-}
-function AdminGuard({ children }: { children: ReactNode }) {
-  const { session, isLoading } = useAuth();
-  if (isLoading) return null;
-  if (!session?.permissions.includes('dashboard.admin')) {
-    return (
-      <div className="empty-state">
-        <h2>Access Denied</h2>
-        <p>You do not have permission to access this page.</p>
-        <p><Link href="/">Go to dashboard</Link></p>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
-function GlobalShortcuts({ setPeriod, navigate }: {
-  setPeriod: (p: Period) => void;
-  navigate: (path: string) => void;
-}) {
-  useShortcut('1', 'Switch to 24h', 'Period', useCallback(() => setPeriod('24h'), [setPeriod]));
-  useShortcut('2', 'Switch to 7d', 'Period', useCallback(() => setPeriod('7d'), [setPeriod]));
-  useShortcut('3', 'Switch to 30d', 'Period', useCallback(() => setPeriod('30d'), [setPeriod]));
-  useShortcut('g h', 'Go to home', 'Navigation', useCallback(() => navigate('/'), [navigate]));
-  useShortcut('g c', 'Go to correlations', 'Navigation', useCallback(() => navigate('/correlations'), [navigate]));
-  useShortcut('g p', 'Go to pipeline', 'Navigation', useCallback(() => navigate('/pipeline'), [navigate]));
-  useShortcut('g a', 'Go to agents', 'Navigation', useCallback(() => navigate('/agents'), [navigate]));
-  useShortcut('g r', 'Go to routing telemetry', 'Navigation', useCallback(() => navigate('/routing-telemetry'), [navigate]));
-  useShortcut('g d', 'Go to degradation signals', 'Navigation', useCallback(() => navigate('/degradation-signals'), [navigate]));
-  return null;
-}
-const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '') || '';
-export function App() {
-  const [period, setPeriod] = useState<Period>('30d');
-  const [location, navigate] = useLocation();
-  return (
-    <Router base={BASE_PATH}>
-      <Auth0Provider
-        domain={AUTH0_DOMAIN}
-        clientId={AUTH0_CLIENT_ID}
-        authorizationParams={{
-          redirect_uri: window.location.origin,
-          audience: AUTH0_AUDIENCE,
-        }}
-      >
-      <AuthProvider>
-        <KeyboardNavProvider>
-          <RoleProvider>
-            <CalibrationProvider>
-              <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
-              <Switch>
-                <Route path="/login">
-                  <LoginPage />
-                </Route>
-                <Route path="/callback">
-                  {}
-                  <div className="auth-loading" role="status" aria-label="Loading" />
-                </Route>
-                <RequireAuth>
-                  <Layout period={period} onPeriodChange={setPeriod}>
-                    <RoleSelector />
-                    <AdminLink />
-                    <Switch>
-                      <Route path="/">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <DashboardPage period={period} />
-                        </ErrorBoundary>
-                      </Route>
-                      <Route path="/role/:roleName">
-                        {(params) => {
-                          const role = VALID_ROLES.find(r => r === params.roleName);
-                          if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
-                          return (
-                            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                              <RolePage role={role} period={period} />
-                            </ErrorBoundary>
-                          );
-                        }}
-                      </Route>
-                      <Route path="/metrics/:metricName">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <MetricDetailPage name={params.metricName} period={period} />
-                          </ErrorBoundary>
-                        )}
-                      </Route>
-                      <Route path="/evaluations/trace/:traceId">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <EvaluationDetailPage traceId={params.traceId} />
-                          </ErrorBoundary>
-                        )}
-                      </Route>
-                      <Route path="/correlations">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <CorrelationsPage period={period} />
-                        </ErrorBoundary>
-                      </Route>
-                      {}
-                      <Route path="/pipeline">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <PipelinePage period={period} />
-                        </ErrorBoundary>
-                      </Route>
-                      <Route path="/compliance">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <CompliancePage period={period} />
-                        </ErrorBoundary>
-                      </Route>
-                      <Route path="/agents">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <AgentsPage period={period} />
-                        </ErrorBoundary>
-                      </Route>
-                      <Route path="/traces/:traceId">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <TraceDetailPage traceId={params.traceId} />
-                          </ErrorBoundary>
-                        )}
-                      </Route>
-                      <Route path="/agents/:sessionId">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <AgentSessionPage sessionId={params.sessionId} />
-                          </ErrorBoundary>
-                        )}
-                      </Route>
-                      <Route path="/sessions/:sessionId">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <SessionDetailPage sessionId={params.sessionId} />
-                          </ErrorBoundary>
-                        )}
-                      </Route>
-                      <Route path="/workflows/:sessionId">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <Suspense fallback={<div className="card skeleton skeleton-xl" />}>
-                              <WorkflowPage sessionId={params.sessionId} />
-                            </Suspense>
-                          </ErrorBoundary>
-                        )}
-                      </Route>
-                      <Route path="/routing-telemetry">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <RoutingTelemetryPage period={period} />
-                        </ErrorBoundary>
-                      </Route>
-                      <Route path="/degradation-signals">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <DegradationSignalsPage period={period} />
-                        </ErrorBoundary>
-                      </Route>
-                      <Route path="/admin">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <AdminGuard>
-                            <AdminPage />
-                          </AdminGuard>
-                        </ErrorBoundary>
-                      </Route>
-                      <Route>
-                        <div className="empty-state">
-                          <h2>Page Not Found</h2>
-                          <p><Link href="/">Go to dashboard</Link></p>
-                        </div>
-                      </Route>
-                    </Switch>
-                  </Layout>
-                </RequireAuth>
-              </Switch>
-            </CalibrationProvider>
-          </RoleProvider>
-        </KeyboardNavProvider>
-      </AuthProvider>
-      </Auth0Provider>
-    </Router>
-  );
 }
 
 ================
@@ -14095,6 +13678,433 @@ export function supabasePost(
     body: JSON.stringify(body),
     signal: controller.signal,
   }).then(() => undefined).catch(() => undefined).finally(() => clearTimeout(timeout));
+}
+
+================
+File: src/App.tsx
+================
+import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
+import { Route, Switch, Link, useLocation, Router } from 'wouter';
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import { Layout } from './components/Layout.js';
+import { RoleSelector } from './components/RoleSelector.js';
+import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
+import { AuthProvider, useAuth } from './contexts/AuthContext.js';
+import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
+import { RequireAuth } from './components/RequireAuth.js';
+import { LoginPage } from './pages/LoginPage.js';
+import { HealthOverview } from './components/HealthOverview.js';
+import { MetricGrid, MetricGridSkeleton } from './components/MetricGrid.js';
+import { AlertList } from './components/AlertList.js';
+import { SLATable } from './components/SLATable.js';
+import { ScoreHistogram } from './components/ScoreHistogram.js';
+import { EvaluationDetail } from './components/EvaluationDetail.js';
+import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
+import { TrendChart } from './components/TrendChart.js';
+import { TrendSeries } from './components/TrendSeries.js';
+import { ConfidencePanel } from './components/ConfidencePanel.js';
+import { ViewSection } from './components/Section.js';
+import { CorrelationsPage } from './pages/CorrelationsPage.js';
+import { PipelinePage } from './pages/PipelinePage.js';
+import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
+import { CompliancePage } from './pages/CompliancePage.js';
+import { TraceDetailPage } from './pages/TraceDetailPage.js';
+import { AgentSessionPage } from './pages/AgentSessionPage.js';
+import { AgentsPage } from './pages/AgentsPage.js';
+import { SessionDetailPage } from './pages/SessionDetailPage.js';
+import { AdminPage } from './pages/AdminPage.js';
+import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
+import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
+import { ExecutiveView } from './components/views/ExecutiveView.js';
+import { OperatorView } from './components/views/OperatorView.js';
+import { AuditorView } from './components/views/AuditorView.js';
+import { formatScore } from './lib/quality-utils.js';
+import { useDashboard } from './hooks/useDashboard.js';
+import { useMetricDetail } from './hooks/useMetricDetail.js';
+import { useTrend } from './hooks/useTrend.js';
+import { RoleProvider } from './contexts/RoleContext.js';
+import { CalibrationProvider } from './context/CalibrationContext.js';
+import { ROLES } from './lib/constants.js';
+import type {
+  Period,
+  QualityDashboardSummary,
+  RoleViewType,
+  MetricDetailResult,
+  MetricDynamics,
+} from './types.js';
+const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
+const VALID_ROLES: readonly RoleViewType[] = ROLES;
+function DashboardPage({ period }: { period: Period }) {
+  const { data, isLoading, isFetching, error } = useDashboard(period);
+  if (isLoading && !data) return <MetricGridSkeleton />;
+  if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
+  if (!data || ('role' in data)) return <MetricGridSkeleton />;
+  const dashboard = data;
+  const sparklines = (data as QualityDashboardSummary & { sparklines?: Record<string, (number | null)[]> }).sparklines;
+  if (dashboard.overallStatus === 'no_data') {
+    return (
+      <div className="empty-state">
+        <h2>No Evaluation Data</h2>
+        <p>No evaluations found for the selected period.</p>
+        <p className="mt-2">
+          Run evaluations using the <code>obs_inject_evaluations</code> tool to see metrics here.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <>
+      {isFetching && data && <div className="refetch-indicator surface-elevated">Updating...</div>}
+      <HealthOverview dashboard={dashboard} />
+      <MetricGrid metrics={dashboard.metrics} sparklines={sparklines} />
+      {dashboard.alerts.length > 0 && (
+        <ViewSection title="Active Alerts">
+          <AlertList alerts={dashboard.alerts} />
+        </ViewSection>
+      )}
+      {dashboard.slaCompliance && dashboard.slaCompliance.length > 0 && (
+        <ViewSection title="SLA Compliance">
+          <SLATable slas={dashboard.slaCompliance} />
+        </ViewSection>
+      )}
+    </>
+  );
+}
+function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
+  const { session, isLoading: authLoading } = useAuth();
+  const { data, isLoading, error } = useDashboard(period, role);
+  if (authLoading) return <MetricGridSkeleton />;
+  if (!session || !session.allowedViews.includes(role)) {
+    return (
+      <div className="empty-state">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to view the {role} dashboard.</p>
+        <p><Link href="/">Go to dashboard</Link></p>
+      </div>
+    );
+  }
+  if (isLoading && !data) return <MetricGridSkeleton />;
+  if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
+  if (!data || !('role' in data)) return <MetricGridSkeleton />;
+  switch (data.role) {
+    case 'executive':
+      return <ExecutiveView data={data} />;
+    case 'operator':
+      return <OperatorView data={data} />;
+    case 'auditor':
+      return <AuditorView data={data} />;
+    default:
+      return null;
+  }
+}
+function MetricDetailPage({ name, period }: { name: string; period: Period }) {
+  const { data, isLoading, error } = useMetricDetail(name, period);
+  const { data: trendData } = useTrend(name, period, 10);
+  if (isLoading) {
+    return (
+      <div>
+        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
+        <div className="card skeleton skeleton-md" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div>
+        <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
+        <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>
+      </div>
+    );
+  }
+  if (!data) return null;
+  const detail = data;
+  return (
+    <div>
+      <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
+      <div className="card mb-6">
+        <div className="metric-card-header flex-center">
+          <h2 className="text-lg">{detail.displayName}</h2>
+          <StatusBadge status={detail.status} />
+        </div>
+        <div className="flex-wrap gap-8 mt-3">
+          {(['avg', 'min', 'max', 'p50', 'p95', 'p99'] as const)
+            .filter((key) => detail.values[key] != null)
+            .map((key) => (
+              <div key={key} className="text-center">
+                <div className="mono-xl font-semibold">
+                  {formatScore(detail.values[key])}
+                </div>
+                <div className="text-secondary text-xs uppercase">{key}</div>
+              </div>
+            ))}
+          <div className="text-center">
+            <div className="mono-xl font-semibold">{detail.sampleCount}</div>
+            <div className="text-secondary text-xs uppercase">samples</div>
+          </div>
+        </div>
+        <div className="flex-center gap-4 mt-3">
+          <TrendIndicator trend={detail.trend} />
+          <ConfidenceBadge confidence={detail.confidence} />
+        </div>
+      </div>
+      {detail.confidence && (
+        <ViewSection title="Confidence Analysis">
+          <div className="card">
+            <ConfidencePanel confidence={detail.confidence} />
+          </div>
+        </ViewSection>
+      )}
+      <ViewSection title="Trend">
+        <div className="card">
+          <TrendChart
+            trend={detail.trend}
+            dynamics={(detail as MetricDetailResult & { dynamics?: MetricDynamics }).dynamics}
+            warningThreshold={detail.alerts.find(a => a.severity === 'warning')?.threshold}
+            criticalThreshold={detail.alerts.find(a => a.severity === 'critical')?.threshold}
+            metricName={detail.displayName}
+          />
+        </div>
+      </ViewSection>
+      {trendData && trendData.trendData.length > 0 && (
+        <ViewSection title={<>
+          Time Series ({trendData.totalEvaluations} evaluations)
+          {trendData.narrowed && (
+            <span className="text-muted text-xs font-normal ml-2">auto-narrowed to data range</span>
+          )}
+        </>}>
+          <div className="card">
+            <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
+          </div>
+        </ViewSection>
+      )}
+      {detail.alerts.length > 0 && (
+        <ViewSection title="Alerts">
+          <AlertList alerts={detail.alerts} />
+        </ViewSection>
+      )}
+      <ViewSection title="Score Distribution">
+        <div className="card">
+          <ScoreHistogram distribution={detail.scoreDistribution} />
+        </div>
+      </ViewSection>
+      <ViewSection title="Evaluations">
+        <div className="card">
+          <EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} metricName={name} period={period} />
+        </div>
+      </ViewSection>
+    </div>
+  );
+}
+function RouteErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+  return (
+    <div className="error-state">
+      <h2>Something went wrong</h2>
+      <p>{error instanceof Error ? error.message : String(error)}</p>
+      <div className="error-actions">
+        <button onClick={resetErrorBoundary}>Try again</button>
+        <Link href="/">Back to dashboard</Link>
+      </div>
+    </div>
+  );
+}
+function AdminLink() {
+  const { session } = useAuth();
+  if (!session?.permissions.includes('dashboard.admin')) return null;
+  return <Link href="/admin" className="admin-link text-xs text-muted">Admin</Link>;
+}
+function AdminGuard({ children }: { children: ReactNode }) {
+  const { session, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!session?.permissions.includes('dashboard.admin')) {
+    return (
+      <div className="empty-state">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page.</p>
+        <p><Link href="/">Go to dashboard</Link></p>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+function GlobalShortcuts({ setPeriod, navigate }: {
+  setPeriod: (p: Period) => void;
+  navigate: (path: string) => void;
+}) {
+  useShortcut('1', 'Switch to 24h', 'Period', useCallback(() => setPeriod('24h'), [setPeriod]));
+  useShortcut('2', 'Switch to 7d', 'Period', useCallback(() => setPeriod('7d'), [setPeriod]));
+  useShortcut('3', 'Switch to 30d', 'Period', useCallback(() => setPeriod('30d'), [setPeriod]));
+  useShortcut('g h', 'Go to home', 'Navigation', useCallback(() => navigate('/'), [navigate]));
+  useShortcut('g c', 'Go to correlations', 'Navigation', useCallback(() => navigate('/correlations'), [navigate]));
+  useShortcut('g p', 'Go to pipeline', 'Navigation', useCallback(() => navigate('/pipeline'), [navigate]));
+  useShortcut('g a', 'Go to agents', 'Navigation', useCallback(() => navigate('/agents'), [navigate]));
+  useShortcut('g r', 'Go to routing telemetry', 'Navigation', useCallback(() => navigate('/routing-telemetry'), [navigate]));
+  useShortcut('g d', 'Go to degradation signals', 'Navigation', useCallback(() => navigate('/degradation-signals'), [navigate]));
+  return null;
+}
+function CallbackHandler() {
+  const { isLoading, isAuthenticated, loginWithRedirect } = useAuth0();
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    if (isLoading) return;
+    if (isAuthenticated) {
+      navigate('/');
+    } else {
+      loginWithRedirect({
+        authorizationParams: {
+          audience: AUTH0_AUDIENCE,
+          redirect_uri: `${window.location.origin}/callback`,
+        },
+      });
+    }
+  }, [isLoading, isAuthenticated, loginWithRedirect, navigate]);
+  return <div className="auth-loading" role="status" aria-label="Loading" />;
+}
+const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '') || '';
+export function App() {
+  const [period, setPeriod] = useState<Period>('30d');
+  const [location, navigate] = useLocation();
+  return (
+    <Router base={BASE_PATH}>
+      <Auth0Provider
+        domain={AUTH0_DOMAIN}
+        clientId={AUTH0_CLIENT_ID}
+        authorizationParams={{
+          redirect_uri: window.location.origin,
+          audience: AUTH0_AUDIENCE,
+        }}
+      >
+      <AuthProvider>
+        <KeyboardNavProvider>
+          <RoleProvider>
+            <CalibrationProvider>
+              <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
+              <Switch>
+                <Route path="/login">
+                  <LoginPage />
+                </Route>
+                <Route path="/callback">
+                  <CallbackHandler />
+                </Route>
+                <RequireAuth>
+                  <Layout period={period} onPeriodChange={setPeriod}>
+                    <RoleSelector />
+                    <AdminLink />
+                    <Switch>
+                      <Route path="/">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <DashboardPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/role/:roleName">
+                        {(params) => {
+                          const role = VALID_ROLES.find(r => r === params.roleName);
+                          if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
+                          return (
+                            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                              <RolePage role={role} period={period} />
+                            </ErrorBoundary>
+                          );
+                        }}
+                      </Route>
+                      <Route path="/metrics/:metricName">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <MetricDetailPage name={params.metricName} period={period} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/evaluations/trace/:traceId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <EvaluationDetailPage traceId={params.traceId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/correlations">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <CorrelationsPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      {}
+                      <Route path="/pipeline">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <PipelinePage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/compliance">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <CompliancePage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/agents">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <AgentsPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/traces/:traceId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <TraceDetailPage traceId={params.traceId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/agents/:sessionId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <AgentSessionPage sessionId={params.sessionId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/sessions/:sessionId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <SessionDetailPage sessionId={params.sessionId} />
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/workflows/:sessionId">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <Suspense fallback={<div className="card skeleton skeleton-xl" />}>
+                              <WorkflowPage sessionId={params.sessionId} />
+                            </Suspense>
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/routing-telemetry">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <RoutingTelemetryPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/degradation-signals">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <DegradationSignalsPage period={period} />
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/admin">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <AdminGuard>
+                            <AdminPage />
+                          </AdminGuard>
+                        </ErrorBoundary>
+                      </Route>
+                      <Route>
+                        <div className="empty-state">
+                          <h2>Page Not Found</h2>
+                          <p><Link href="/">Go to dashboard</Link></p>
+                        </div>
+                      </Route>
+                    </Switch>
+                  </Layout>
+                </RequireAuth>
+              </Switch>
+            </CalibrationProvider>
+          </RoleProvider>
+        </KeyboardNavProvider>
+      </AuthProvider>
+      </Auth0Provider>
+    </Router>
+  );
 }
 
 ================
@@ -16559,177 +16569,6 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>
 }
 
 ================
-File: src/api/data-loader.ts
-================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-import { queryLogs } from '../../../dist/tools/query-logs.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { toDateOnly } from './api-constants.js';
-import { groupBy } from '../lib/quality-utils.js';
-const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
-const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
-const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
-const LIMIT_EVALS_BULK = 100_000;
-const LIMIT_EVALS_METRIC = 10_000;
-const LIMIT_EVALS_PER_TRACE = 1_000;
-const LIMIT_EVALS_SESSION = 10_000;
-const LIMIT_TRACES = 500;
-const LIMIT_LOGS = 1_000;
-const LIMIT_HEALTH_PROBE = 1;
-let backend: MultiDirectoryBackend | undefined;
-function getBackend(): MultiDirectoryBackend {
-  if (!backend) {
-    backend = new MultiDirectoryBackend(undefined, true);
-  }
-  return backend;
-}
-function defaultRange(lookbackMs: number): { start: string; end: string } {
-  const now = new Date();
-  return {
-    start: new Date(now.getTime() - lookbackMs).toISOString(),
-    end: now.toISOString(),
-  };
-}
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>> {
-  const be = getBackend();
-  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
-  return groupBy(evals, ev => ev.evaluationName);
-}
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  return be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    evaluationName: metricName,
-    limit: LIMIT_EVALS_METRIC,
-  });
-}
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return be.queryEvaluations({
-    traceId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_PER_TRACE,
-  });
-}
-const TRACE_QUERY_CONCURRENCY = 10;
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]> {
-  const uniqueIds = [...new Set(traceIds)];
-  if (uniqueIds.length === 0) return [];
-  const be = getBackend();
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
-  const start = startDate ?? defStart;
-  const end = endDate ?? defEnd;
-  const all: EvaluationResult[] = [];
-  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
-    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
-    const settled = await Promise.allSettled(
-      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
-    );
-    for (const result of settled) {
-      if (result.status === 'fulfilled') all.push(...result.value);
-    }
-  }
-  return all;
-}
-function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
-}
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
-  const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
-}
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
-  const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
-}
-async function queryLogsWithDefaultRange(
-  filter: { traceId?: string; sessionId?: string },
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
-  return result.logs;
-}
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
-}
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]> {
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return queryVerificationsLib({
-    startDate: opts.startDate ?? start,
-    endDate: opts.endDate ?? end,
-    sessionId: opts.sessionId,
-    limit: opts.limit ?? LIMIT_LOGS,
-  });
-}
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
-}
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return be.queryEvaluations({
-    sessionId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_SESSION,
-  });
-}
-export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
-  const be = getBackend();
-  const health = await be.healthCheck();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
-  const evals = await be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_HEALTH_PROBE,
-  });
-  return { status: health.status, hasData: evals.length > 0 };
-}
-
-================
 File: src/components/AgentWorkflowView.tsx
 ================
 import React, { useState, useCallback, useMemo, useRef } from 'react';
@@ -17053,6 +16892,178 @@ export function DegradationSignalsPage({ period }: { period: Period }) {
       ) : null}
     </PageShell>
   );
+}
+
+================
+File: src/api/data-loader.ts
+================
+import pLimit from 'p-limit';
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+import { queryLogs } from '../../../dist/tools/query-logs.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { toDateOnly } from './api-constants.js';
+import { groupBy } from '../lib/quality-utils.js';
+const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
+const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
+const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
+const LIMIT_EVALS_BULK = 100_000;
+const LIMIT_EVALS_METRIC = 10_000;
+const LIMIT_EVALS_PER_TRACE = 1_000;
+const LIMIT_EVALS_SESSION = 10_000;
+const LIMIT_TRACES = 500;
+const LIMIT_LOGS = 1_000;
+const LIMIT_HEALTH_PROBE = 1;
+let backend: MultiDirectoryBackend | undefined;
+function getBackend(): MultiDirectoryBackend {
+  if (!backend) {
+    backend = new MultiDirectoryBackend(undefined, true);
+  }
+  return backend;
+}
+function defaultRange(lookbackMs: number): { start: string; end: string } {
+  const now = new Date();
+  return {
+    start: new Date(now.getTime() - lookbackMs).toISOString(),
+    end: now.toISOString(),
+  };
+}
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>> {
+  const be = getBackend();
+  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
+  return groupBy(evals, ev => ev.evaluationName);
+}
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  return be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    evaluationName: metricName,
+    limit: LIMIT_EVALS_METRIC,
+  });
+}
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return be.queryEvaluations({
+    traceId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_PER_TRACE,
+  });
+}
+const TRACE_QUERY_CONCURRENCY = 10;
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]> {
+  const uniqueIds = [...new Set(traceIds)];
+  if (uniqueIds.length === 0) return [];
+  const be = getBackend();
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
+  const start = startDate ?? defStart;
+  const end = endDate ?? defEnd;
+  const limiter = pLimit(TRACE_QUERY_CONCURRENCY);
+  const settled = await Promise.allSettled(
+    uniqueIds.map(traceId =>
+      limiter(() => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
+    )
+  );
+  const all: EvaluationResult[] = [];
+  for (const result of settled) {
+    if (result.status === 'fulfilled') all.push(...result.value);
+  }
+  return all;
+}
+function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
+}
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+async function queryLogsWithDefaultRange(
+  filter: { traceId?: string; sessionId?: string },
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const start = toDateOnly(startDate ?? defStart);
+  const end = toDateOnly(endDate ?? defEnd);
+  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
+  return result.logs;
+}
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
+}
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]> {
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return queryVerificationsLib({
+    startDate: opts.startDate ?? start,
+    endDate: opts.endDate ?? end,
+    sessionId: opts.sessionId,
+    limit: opts.limit ?? LIMIT_LOGS,
+  });
+}
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
+}
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return be.queryEvaluations({
+    sessionId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_SESSION,
+  });
+}
+export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
+  const be = getBackend();
+  const health = await be.healthCheck();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
+  const evals = await be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_HEALTH_PROBE,
+  });
+  return { status: health.status, hasData: evals.length > 0 };
 }
 
 ================

@@ -5,7 +5,7 @@ import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
-import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
+import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE, AUTH0_CALLBACK_URI, AUTH0_LOGIN_PARAMS } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { HealthOverview } from './components/HealthOverview.js';
@@ -292,12 +292,7 @@ function CallbackHandler() {
     if (isAuthenticated) {
       navigate('/');
     } else {
-      loginWithRedirect({
-        authorizationParams: {
-          audience: AUTH0_AUDIENCE,
-          redirect_uri: `${window.location.origin}/callback`,
-        },
-      });
+      loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
     }
   }, [isLoading, isAuthenticated, loginWithRedirect, navigate]);
 
@@ -316,7 +311,7 @@ export function App() {
         domain={AUTH0_DOMAIN}
         clientId={AUTH0_CLIENT_ID}
         authorizationParams={{
-          redirect_uri: window.location.origin,
+          redirect_uri: AUTH0_CALLBACK_URI,
           audience: AUTH0_AUDIENCE,
         }}
       >

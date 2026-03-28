@@ -57,5 +57,10 @@ describe('auth0.ts env var validation', () => {
     expect(mod.AUTH0_DOMAIN).toBe('integritystudio.us.auth0.com');
     expect(mod.AUTH0_CLIENT_ID).toBe('test-client-id');
     expect(mod.AUTH0_AUDIENCE).toBe('https://api.integritystudio.dev');
+    expect(mod.AUTH0_CALLBACK_URI).toBe(`${window.location.origin}/callback`);
+    expect(mod.AUTH0_LOGIN_PARAMS).toEqual({
+      audience: 'https://api.integritystudio.dev',
+      redirect_uri: `${window.location.origin}/callback`,
+    });
   });
 });
