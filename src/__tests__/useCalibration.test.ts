@@ -25,8 +25,8 @@ vi.mock('../hooks/useApiQuery.js', () => ({
 function makeCalibrationResponse(overrides: Partial<CalibrationResponse> = {}): CalibrationResponse {
   return {
     distributions: {
-      relevance: { p50: 0.7, p75: 0.82, p90: 0.91, p95: 0.95 },
-      coherence: { p50: 0.65, p75: 0.78, p90: 0.88, p95: 0.93 },
+      relevance: { p10: 0.5, p25: 0.62, p50: 0.7, p75: 0.82, p90: 0.91 },
+      coherence: { p10: 0.45, p25: 0.57, p50: 0.65, p75: 0.78, p90: 0.88 },
     },
     sampleCounts: { relevance: 120, coherence: 95 },
     lastCalibrated: '2026-01-15T12:00:00.000Z',
@@ -89,7 +89,7 @@ describe('getMetricCalibration', () => {
 
   it('returns undefined when distribution exists but sampleCount is missing', () => {
     const data = makeCalibrationResponse({
-      distributions: { relevance: { p50: 0.7, p75: 0.8, p90: 0.9, p95: 0.95 } },
+      distributions: { relevance: { p10: 0.5, p25: 0.62, p50: 0.7, p75: 0.8, p90: 0.9 } },
       sampleCounts: {},
     });
     expect(getMetricCalibration(data, 'relevance')).toBeUndefined();
@@ -100,7 +100,7 @@ describe('getMetricCalibration', () => {
     const result = getMetricCalibration(data, 'relevance');
 
     expect(result).toEqual({
-      distribution: { p50: 0.7, p75: 0.82, p90: 0.91, p95: 0.95 },
+      distribution: { p10: 0.5, p25: 0.62, p50: 0.7, p75: 0.82, p90: 0.91 },
       sampleSize: 120,
     });
   });
@@ -112,7 +112,7 @@ describe('getMetricCalibration', () => {
     const result = getMetricCalibration(data, 'relevance');
 
     expect(result).toEqual({
-      distribution: { p50: 0.7, p75: 0.82, p90: 0.91, p95: 0.95 },
+      distribution: { p10: 0.5, p25: 0.62, p50: 0.7, p75: 0.82, p90: 0.91 },
       sampleSize: 0,
     });
   });
@@ -122,7 +122,7 @@ describe('getMetricCalibration', () => {
     const result = getMetricCalibration(data, 'coherence');
 
     expect(result).toEqual({
-      distribution: { p50: 0.65, p75: 0.78, p90: 0.88, p95: 0.93 },
+      distribution: { p10: 0.45, p25: 0.57, p50: 0.65, p75: 0.78, p90: 0.88 },
       sampleSize: 95,
     });
   });
