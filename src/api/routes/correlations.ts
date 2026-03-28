@@ -18,14 +18,12 @@ correlationRoutes.get('/correlations', async (c) => {
     const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
 
     const metricTimeSeries = new Map<string, number[]>();
-    const metricNames: string[] = [];
     for (const [name, evals] of evaluationsByMetric) {
       metricTimeSeries.set(name, extractFiniteScores(evals));
-      metricNames.push(name);
     }
 
     const correlations = computeCorrelationMatrix(metricTimeSeries);
-    return c.json({ correlations, metrics: metricNames });
+    return c.json({ correlations, metrics: [...metricTimeSeries.keys()] });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
