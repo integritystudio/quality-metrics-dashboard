@@ -1686,41 +1686,6 @@ import { StatusBadge } from './Indicators.js';
 export function SLATable(
 
 ================
-File: src/components/SpanTree.tsx
-================
-import type { CSSProperties } from 'react';
-import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface SpanNode {
-  spanId: string;
-  name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
-  children: SpanNode[];
-  evalCount: number;
-}
-interface SpanTreeProps {
-  spans: Array<{
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record<string, unknown>;
-    parentSpanId?: string;
-  }>;
-  evalsBySpan: Map<string, number>;
-  maxDuration: number;
-}
-function buildTree(
-  spans: SpanTreeProps['spans'],
-  evalsBySpan: Map<string, number>,
-): SpanNode[]
-⋮----
-0: '',      // UNSET
-
-================
 File: src/components/Sparkline.tsx
 ================
 import { memo } from 'react';
@@ -2765,6 +2730,41 @@ interface IdListColumnProps {
 onClick=
 
 ================
+File: src/components/SpanTree.tsx
+================
+import type { CSSProperties } from 'react';
+import { fmtDuration, plural } from '../lib/quality-utils.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface SpanNode {
+  spanId: string;
+  name: string;
+  durationMs?: number;
+  status?: { code: number; message?: string };
+  attributes?: Record<string, unknown>;
+  children: SpanNode[];
+  evalCount: number;
+}
+interface SpanTreeProps {
+  spans: Array<{
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record<string, unknown>;
+    parentSpanId?: string;
+  }>;
+  evalsBySpan: Map<string, number>;
+  maxDuration: number;
+}
+function buildTree(
+  spans: SpanTreeProps['spans'],
+  evalsBySpan: Map<string, number>,
+): SpanNode[]
+⋮----
+0: '',      // UNSET
+
+================
 File: src/components/TruncatedIdLink.tsx
 ================
 import type { MouseEvent } from 'react';
@@ -3335,26 +3335,27 @@ import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, com
 import type { LiveMetric, QualityLiveData } from '../../types.js';
 
 ================
-File: src/components/AgentWorkflowView.tsx
+File: src/api/routes/trends.ts
 ================
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import { WorkflowGraphView } from './WorkflowGraph.js';
-import { WorkflowTimeline } from './WorkflowTimeline.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { MultiAgentEvaluation } from '../types.js';
-import { agentColor, fmtDuration } from '../lib/quality-utils.js';
-import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
-type WorkflowTab = 'dag' | 'timeline';
-interface AgentWorkflowViewProps {
-  graph: WorkflowGraph;
-  evaluation?: MultiAgentEvaluation;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-}
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
 ⋮----
-function dfs(nodeId: string, visiting: Set<string>): [string[], number]
-⋮----
-onClick=
+type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
 
 ================
 File: src/types/workflow-graph.ts
@@ -3388,29 +3389,6 @@ export interface WorkflowGraph {
   workflowShape: WorkflowShape;
   droppedTurns: number;
 }
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
-⋮----
-type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
 
 ================
 File: src/api/api-constants.ts
@@ -3499,6 +3477,28 @@ export async function loadEvaluationsBySessionId(
   endDate?: string,
 ): Promise<EvaluationResult[]>
 export async function checkHealth(): Promise<
+
+================
+File: src/components/AgentWorkflowView.tsx
+================
+import React, { useState, useCallback, useMemo, useRef } from 'react';
+import { WorkflowGraphView } from './WorkflowGraph.js';
+import { WorkflowTimeline } from './WorkflowTimeline.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { MultiAgentEvaluation } from '../types.js';
+import { agentColor, fmtDuration } from '../lib/quality-utils.js';
+import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
+type WorkflowTab = 'dag' | 'timeline';
+interface AgentWorkflowViewProps {
+  graph: WorkflowGraph;
+  evaluation?: MultiAgentEvaluation;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
+}
+⋮----
+function dfs(nodeId: string, visiting: Set<string>): [string[], number]
+⋮----
+onClick=
 
 ================
 File: src/lib/constants.ts
