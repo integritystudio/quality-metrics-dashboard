@@ -1,3 +1,30 @@
+8d23a53 2026-03-27 refactor(simplify): replace capitalize with VARIANCE_TREND_LABEL map; fix mock types and logAuditEvent nullability
+  worker/index.ts
+
+1811d4a 2026-03-27 refactor(worker): extract SupabaseEnv and WaitUntilFn type aliases
+  worker/index.ts
+
+54f384e 2026-03-27 style(worker): remove double blank line between logActivity and VIEW_PERMISSION_MAP
+  worker/index.ts
+
+d75fd1a 2026-03-27 feat(workflow-graph): add collapsible sub-graphs for agent clusters (FU-G5-LAYOUT)
+  src/theme.css
+
+2e44370 2026-03-27 feat(worker): add KV schema versioning envelope and audit log for admin mutations
+  scripts/sync-to-kv.ts
+  worker/index.ts
+
+a10d0c1 2026-03-27 fix(worker): wire executionCtx.waitUntil to prevent cancelled activity logs
+  worker/index.ts
+
+b92f6b8 2026-03-27 feat(e2e): add Sentry reporter and migrate setup to Auth0 ROPC
+  package-lock.json
+
+dbde04c 2026-03-27 chore: regenerate repomix docs after Round 4 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 a894348 2026-03-27 chore: regenerate repomix docs after task-tracker prefix cleanup
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -321,28 +348,4 @@ e8a33b1 2026-03-26 chore: regenerate repomix docs after final simplification rou
   src/theme.css
 
 1ded19e 2026-03-26 refactor(span-tree): replace barStyle inline object with span-bar CSS class and custom properties
-  src/theme.css
-
-5649fa5 2026-03-26 refactor(workflow-timeline): replace minWidth inline style with --timeline-min-width CSS custom property
-  src/theme.css
-
-2131feb 2026-03-26 refactor(coverage-grid): replace status background inline styles with --coverage-status-color CSS custom property
-  src/theme.css
-
-b6caaf6 2026-03-26 refactor(page-shell): replace skeleton height inline style with CSS custom property
-  src/theme.css
-
-d747de2 2026-03-26 refactor(alert-list): replace threshold bar width+left inline styles with CSS custom properties
-  src/theme.css
-
-e7a1b5d 2026-03-26 refactor(workflow-graph): replace 4x height inline style with --graph-height CSS custom property
-  src/theme.css
-
-0061304 2026-03-26 refactor(pipeline-funnel): replace bar width+background inline with CSS custom properties
-  src/theme.css
-
-21bd926 2026-03-26 refactor(split-pane): move static overflow:auto to CSS, width as --split-width custom property
-  src/theme.css
-
-5ca96cb 2026-03-26 refactor(span-tree): replace paddingLeft inline calc with CSS custom property --span-row-indent
   src/theme.css
