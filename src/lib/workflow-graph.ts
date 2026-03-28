@@ -224,7 +224,8 @@ function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
   const UNVISITED = 0;
   const IN_STACK = 1;
   const DONE = 2;
-  const state = new Map<string, 0 | 1 | 2>(nodes.map(n => [n.id, UNVISITED]));
+  const state = new Map<string, 0 | 1 | 2>();
+  for (const n of nodes) state.set(n.id, UNVISITED);
 
   function dfs(nodeId: string): boolean {
     state.set(nodeId, IN_STACK);
