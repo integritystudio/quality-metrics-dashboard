@@ -52,9 +52,12 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
     count: bucket.count,
   }));
 
-  const allVals = chartData.flatMap(d =>
-    [d.avg, d.p10, d.p90].filter((v): v is number => v !== null)
-  );
+  const allVals: number[] = [];
+  for (const d of chartData) {
+    if (d.avg !== null) allVals.push(d.avg);
+    if (d.p10 !== null) allVals.push(d.p10);
+    if (d.p90 !== null) allVals.push(d.p90);
+  }
   if (allVals.length === 0) {
     return <EmptyState message="No scored evaluations in period" />;
   }
