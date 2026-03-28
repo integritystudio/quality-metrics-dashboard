@@ -3,8 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import type { PageShellProps } from './test-types.js';
 import type { DegradationReport, DegradationSignalsResponse } from '../hooks/useDegradationSignals.js';
 
-// jsdom + React cold-start can exceed the default 5000ms on the first test
-// in a file. Apply a generous timeout for the entire suite.
+// jsdom + React cold-start can exceed the default 5000ms on the first render test.
 const TEST_TIMEOUT_MS = 30_000;
 
 vi.mock('../hooks/useDegradationSignals.js', () => ({
