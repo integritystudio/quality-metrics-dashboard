@@ -132,8 +132,13 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
     ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
     : handoffs;
 
-  const agentLaneIndex = new Map(visibleAgentNames.map((name, i) => [name, i]));
-  const agentColorMap = new Map(visibleAgentNames.map(name => [name, agentColor(name, agentNames)]));
+  const agentLaneIndex = new Map<string, number>();
+  const agentColorMap = new Map<string, string>();
+  for (let i = 0; i < visibleAgentNames.length; i++) {
+    const name = visibleAgentNames[i];
+    agentLaneIndex.set(name, i);
+    agentColorMap.set(name, agentColor(name, agentNames));
+  }
 
   const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
   const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
@@ -232,7 +237,6 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
           strokeWidth={1}
         />
 
-        {/* Handoff markers — drawn on top of lanes */}
         {visibleHandoffs.map((h, i) => {
           const turnIndex = findHandoffTurnIndex(h, turns);
           if (turnIndex == null) return null;
