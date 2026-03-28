@@ -89,7 +89,7 @@ type SupabaseEnv = { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string };
 type WaitUntilFn = (promise: Promise<unknown>) => void;
 
 // Fire-and-forget: logs sensitive admin mutations to audit_log without blocking the response.
-// Only fires on success — never called when the upstream Supabase operation fails.
+// No-ops when actorUserId is absent; otherwise only fires on success (not on upstream Supabase failure).
 function logAuditEvent(
   actorUserId: string | undefined,
   action: AuditAction,

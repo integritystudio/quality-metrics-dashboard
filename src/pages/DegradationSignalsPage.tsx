@@ -6,11 +6,11 @@ import type { Period } from '../types.js';
 
 const COVERAGE_DROPOUT_PRECISION = 1;
 
-const VARIANCE_TREND_LABEL: Record<'increasing' | 'stable' | 'decreasing', string> = {
+const VARIANCE_TREND_LABEL = {
   increasing: 'Increasing',
   stable: 'Stable',
   decreasing: 'Decreasing',
-};
+} as const;
 
 function ReportRow({ report }: { report: DegradationReport }) {
   const { signal } = report;
