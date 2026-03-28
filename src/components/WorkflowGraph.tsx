@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration } from '../lib/quality-utils.js';
+import { fmtDuration, groupBy } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 const NODE_WIDTH = 220;
@@ -104,7 +104,9 @@ function isClusterNodeData(value: unknown): value is ClusterNodeData {
 }
 
 function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
-  return new Map(nodes.map(n => [n.id, n]));
+  const map = new Map<string, WorkflowNode>();
+  for (const n of nodes) map.set(n.id, n);
+  return map;
 }
 
 const CLUSTER_NODE_PREFIX = '__cluster__';
@@ -129,7 +131,6 @@ export function applyClusterCollapse(
 ): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
   if (collapsedClusters.size === 0) return { nodes, edges };
 
-  // Build map from node id → clusterId for collapsed clusters only
   const nodeClusterMap = new Map<string, string>();
   for (const n of nodes) {
     if (n.clusterId && collapsedClusters.has(n.clusterId)) {
@@ -137,15 +138,9 @@ export function applyClusterCollapse(
     }
   }
 
-  // Build synthetic cluster nodes
   const nodeDataMap = buildNodeDataMap(nodes);
-  const clusterMembers = new Map<string, WorkflowNode[]>();
-  for (const [nodeId, cId] of nodeClusterMap) {
-    const existing = clusterMembers.get(cId) ?? [];
-    const node = nodeDataMap.get(nodeId);
-    if (node) existing.push(node);
-    clusterMembers.set(cId, existing);
-  }
+  const clusterableNodes = [...nodeClusterMap.keys()].map(id => nodeDataMap.get(id)).filter((n): n is WorkflowNode => n != null);
+  const clusterMembers = groupBy(clusterableNodes, n => nodeClusterMap.get(n.id));
 
   const syntheticNodes: WorkflowNode[] = [];
   for (const [cId, members] of clusterMembers) {
@@ -170,7 +165,6 @@ export function applyClusterCollapse(
     ...syntheticNodes,
   ];
 
-  // Reroute edges: replace collapsed-cluster member ids with their cluster node id
   const resolveId = (id: string): string => {
     const cId = nodeClusterMap.get(id);
     return cId ? clusterNodeId(cId) : id;
