@@ -98,14 +98,14 @@ qualityRoutes.get('/degradation-signals', async (c) => {
 
     const evaluationsByMetric = await loadEvaluationsByMetric(startDate, endDate);
     const metricNames = [...evaluationsByMetric.keys()];
+    const bucketLabels = boundaries.map(b => ({
+      startTime: new Date(b.start).toISOString(),
+      endTime: new Date(b.end).toISOString(),
+    }));
     const timeBuckets: Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>> = {};
 
     for (const [name, evals] of evaluationsByMetric) {
-      const buckets = boundaries.map(b => ({
-        startTime: new Date(b.start).toISOString(),
-        endTime: new Date(b.end).toISOString(),
-        scores: [] as number[],
-      }));
+      const buckets = bucketLabels.map(b => ({ ...b, scores: [] as number[] }));
       for (const ev of evals) {
         if (ev.scoreValue == null) continue;
         const ts = new Date(ev.timestamp).getTime();
