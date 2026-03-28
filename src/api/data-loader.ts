@@ -5,6 +5,7 @@ import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces
 import { queryLogs } from '../../../dist/tools/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toDateOnly } from './api-constants.js';
+import { groupBy } from '../lib/quality-utils.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
@@ -47,14 +48,7 @@ export async function loadEvaluationsByMetric(
 ): Promise<Map<string, EvaluationResult[]>> {
   const be = getBackend();
   const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
-  const grouped = new Map<string, EvaluationResult[]>();
-  for (const ev of evals) {
-    const name = ev.evaluationName;
-    let group = grouped.get(name);
-    if (!group) grouped.set(name, group = []);
-    group.push(ev);
-  }
-  return grouped;
+  return groupBy(evals, ev => ev.evaluationName);
 }
 
 export async function loadEvaluationsForMetric(
