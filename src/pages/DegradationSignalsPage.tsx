@@ -1,12 +1,10 @@
 import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
 import { PageShell } from '../components/PageShell.js';
 import { StatusBadge } from '../components/Indicators.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
-const VARIANCE_RATIO_PRECISION = 3;
 const COVERAGE_DROPOUT_PRECISION = 1;
-const LATENCY_SKEW_PRECISION = 3;
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -22,11 +20,11 @@ function ReportRow({ report }: { report: DegradationReport }) {
       </td>
       <td className="mono">{signal.ewmaDriftDetected ? 'Yes' : 'No'}</td>
       <td className="mono">{capitalize(signal.varianceTrend)}</td>
-      <td className="mono">{signal.varianceRatio.toFixed(VARIANCE_RATIO_PRECISION)}</td>
+      <td className="mono">{signal.varianceRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
       <td className="mono">{signal.consecutiveBreaches}</td>
       <td className="mono">{signal.confirmed ? 'Yes' : 'No'}</td>
       <td className="mono">{(signal.coverageDropoutRate * 100).toFixed(COVERAGE_DROPOUT_PRECISION)}%</td>
-      <td className="mono">{signal.latencySkewRatio.toFixed(LATENCY_SKEW_PRECISION)}</td>
+      <td className="mono">{signal.latencySkewRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
     </tr>
   );
 }
