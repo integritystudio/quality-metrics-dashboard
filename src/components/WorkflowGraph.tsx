@@ -138,10 +138,11 @@ export function applyClusterCollapse(
   }
 
   // Build synthetic cluster nodes
+  const nodeDataMap = buildNodeDataMap(nodes);
   const clusterMembers = new Map<string, WorkflowNode[]>();
   for (const [nodeId, cId] of nodeClusterMap) {
     const existing = clusterMembers.get(cId) ?? [];
-    const node = nodes.find(n => n.id === nodeId);
+    const node = nodeDataMap.get(nodeId);
     if (node) existing.push(node);
     clusterMembers.set(cId, existing);
   }
