@@ -28,10 +28,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
 
   const cellMap = useMemo(() => {
     const map = new Map<string, CoverageCell>();
-    if (!Array.isArray(cells)) return map;
-    for (const cell of cells) {
-      map.set(`${cell.metric}|${cell.input}`, cell);
-    }
+    for (const cell of cells) map.set(`${cell.metric}|${cell.input}`, cell);
     return map;
   }, [cells]);
 
