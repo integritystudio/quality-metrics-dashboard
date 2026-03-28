@@ -65,7 +65,11 @@ export function TrendChart({
     data[1].projected = trend.currentValue;
   }
 
-  const allValues = data.flatMap((d) => [d.value, d.projected].filter((v): v is number => v != null));
+  const allValues: number[] = [];
+  for (const d of data) {
+    allValues.push(d.value);
+    if (d.projected != null) allValues.push(d.projected);
+  }
   if (warningThreshold != null) allValues.push(warningThreshold);
   if (criticalThreshold != null) allValues.push(criticalThreshold);
   if (allValues.length === 0) {
