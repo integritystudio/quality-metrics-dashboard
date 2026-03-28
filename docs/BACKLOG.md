@@ -11,8 +11,6 @@ Findings from repomix-compressed audit + claude-code-guide + web-research-analys
 
 | # | Item | Priority | Notes |
 |---|------|----------|-------|
-| LIB-1 | Apply `p-limit` in `src/api/data-loader.ts:102` — replace batch-slice loop with sliding-window concurrency limiter (`pLimit(TRACE_QUERY_CONCURRENCY)`) | P2 | Installed. Not in worker — API route only |
-| LIB-2 | Add `"d3-array": "^3.2.4"` to `dependencies`; add `"@types/d3-array"` to `devDependencies` | P3 | Zero bundle cost — already transitive via `d3-scale` + `recharts`. `@types/d3-array` currently missing |
 | LIB-3 | Replace `groupBy` call sites with non-nullable keyFns using `d3.group` from `d3-array` | P3 | `InternMap extends Map` — type-safe drop-in. Keep custom `groupBy` where null-key skipping is needed |
 | LIB-4 | Replace `empiricalCDF` piecewise interpolation (`quality-utils.ts:257`) with `scaleLinear().domain([p10,p25,p50,p75,p90]).range([0.1,0.25,0.5,0.75,0.9]).clamp(true)` | P3 | Add degenerate-domain guard (p25===p50 etc → NaN) before constructing scale |
 | LIB-5 | Replace `result.error.message` in `dashboard-file-utils.ts` and error boundaries with `z.prettifyError(result.error)` | P3 | Built into Zod v4 — zero dep. Use `zod-validation-error@^5` only if `instanceof ValidationError` discrimination is needed |
@@ -20,6 +18,13 @@ Findings from repomix-compressed audit + claude-code-guide + web-research-analys
 **Not recommended:** `Map.groupBy` native — blocked by `tsconfig.json` lib target (`ES2022`); requires adding `ES2024.Collection` to lib array + Safari 17.4+ assumption. Use `d3.group` instead.
 
 ## Completed
+
+### Lib Audit — Resolved
+
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| LIB-1 | `p-limit` sliding-window concurrency in `data-loader.ts` — replaced batch-slice loop with `pLimit(TRACE_QUERY_CONCURRENCY)` | P2 | Done (a68db6a) |
+| LIB-2 | Add `"d3-array": "^3.2.4"` to `dependencies`; add `"@types/d3-array"` to `devDependencies` | P3 | Done — zero bundle cost, types now explicit |
 
 ### Type Safety — Resolved
 
