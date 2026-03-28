@@ -83,13 +83,14 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
   );
 }
 
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+
 export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
   if (alerts.length === 0) return null;
 
-  const sorted = [...alerts].sort((a, b) => {
-    const order = { critical: 0, warning: 1, info: 2 };
-    return (order[a.severity as keyof typeof order] ?? 2) - (order[b.severity as keyof typeof order] ?? 2);
-  });
+  const sorted = [...alerts].sort((a, b) =>
+    (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2)
+  );
 
   return (
     <ul className="alert-list">
