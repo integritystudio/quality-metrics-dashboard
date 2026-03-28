@@ -1,3 +1,8 @@
+93e24b5 2026-03-27 chore(repomix): regenerate compressed docs after Round 12 simplify fixes
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 ca4dc8f 2026-03-27 chore(repomix): regenerate compressed docs after Round 11 simplify fixes
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -362,8 +367,3 @@ ce7da7d 2026-03-26 chore: regenerate repomix docs after Round 12 simplifications
 
 83a05a8 2026-03-26 refactor(heatmap): extract display:grid and aspectRatio to CSS class
   src/theme.css
-
-a7dad5d 2026-03-26 chore: regenerate repomix docs after Round 10 simplifications
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml

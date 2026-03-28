@@ -13962,6 +13962,145 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
 }
 
 ================
+File: src/components/CoverageGrid.tsx
+================
+import { memo, useState, useMemo, type CSSProperties } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
+  COVERAGE_GRID_MAX_INPUTS,
+} from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
+}
+const STATUS_COLORS: Record<CoverageStatus, string> = {
+  covered: 'var(--score-good, #0072B2)',
+  partial: 'var(--score-fair, #E69F00)',
+  missing: 'var(--score-poor, #D55E00)',
+};
+const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
+function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
+  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
+  const cellMap = useMemo(() => {
+    const map = new Map<string, CoverageCell>();
+    if (!Array.isArray(cells)) return map;
+    for (const cell of cells) {
+      map.set(`${cell.metric}|${cell.input}`, cell);
+    }
+    return map;
+  }, [cells]);
+  if (metrics.length === 0 || inputs.length === 0) {
+    return <EmptyState message="No coverage data available." />;
+  }
+  const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
+  const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
+  return (
+    <div role="region" aria-label="Evaluation coverage heatmap">
+      <div className="flex-center mb-3 gap-3">
+        <span className="mono-xl font-semibold">
+          {formatPercent(overallCoveragePercent)}
+        </span>
+        <span className="text-secondary text-base">
+          coverage ({metrics.length} metrics x {inputs.length} inputs)
+        </span>
+      </div>
+      <div className="mb-3 text-xs flex-wrap gap-4">
+        {COVERAGE_STATUSES.map(status => (
+          <div key={status} className="flex-center gap-1">
+            <div
+              className="coverage-legend-swatch"
+              style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
+            />
+            <span>{status}</span>
+          </div>
+        ))}
+      </div>
+      <div className="overflow-x-auto">
+        <div
+          role="table"
+          aria-label="Coverage matrix"
+          className="coverage-grid gap-half"
+          style={{
+            '--coverage-grid-cols': `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
+          } as CSSProperties}
+        >
+          <div role="row" className="contents">
+            <div role="columnheader" className="text-xs font-semibold" />
+            {displayInputs.map(input => (
+              <div
+                key={input}
+                role="columnheader"
+                title={input}
+                className="text-secondary text-2xs coverage-header-cell"
+              >
+                {truncateId(input, 8)}
+              </div>
+            ))}
+          </div>
+          {metrics.map(metric => (
+            <div key={metric} role="row" className="contents">
+              <div
+                role="rowheader"
+                className="text-xs flex-center truncate font-medium"
+                title={metric}
+              >
+                {metric}
+              </div>
+              {displayInputs.map(input => {
+                const cell = cellMap.get(`${metric}|${input}`);
+                const status = cell?.status ?? 'missing';
+                const count = cell?.count ?? 0;
+                const isHovered = hovered?.metric === metric && hovered?.input === input;
+                return (
+                  <div
+                    key={input}
+                    role="cell"
+                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
+                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
+                    onMouseEnter={() => setHovered({ metric, input })}
+                    onMouseLeave={() => setHovered(null)}
+                    className="mono text-2xs flex-center justify-center coverage-cell"
+                    data-hovered={isHovered || undefined}
+                    style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
+                  >
+                    {count > 0 ? count : ''}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      {truncated && (
+        <p className="text-secondary text-xs mt-2">
+          Showing {COVERAGE_GRID_MAX_INPUTS} of {inputs.length} inputs.
+        </p>
+      )}
+      {gaps.length > 0 && (
+        <div className="mt-4">
+          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
+          <ul className="m-0 text-xs coverage-gap-list">
+            {gaps.map(gap => (
+              <li key={gap.metric} className="mb-1">
+                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
+                ({plural(gap.missingInputs.length, 'input')} missing)
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+export const CoverageGrid = memo(CoverageGridInner);
+
+================
 File: src/contexts/AuthContext.tsx
 ================
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
@@ -15167,145 +15306,6 @@ describe('WorkflowGraphView cluster toggle UI', () => {
 });
 
 ================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo, type CSSProperties } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
-  COVERAGE_GRID_MAX_INPUTS,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-const STATUS_COLORS: Record<CoverageStatus, string> = {
-  covered: 'var(--score-good, #0072B2)',
-  partial: 'var(--score-fair, #E69F00)',
-  missing: 'var(--score-poor, #D55E00)',
-};
-const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
-function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
-  const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
-  const cellMap = useMemo(() => {
-    const map = new Map<string, CoverageCell>();
-    if (!Array.isArray(cells)) return map;
-    for (const cell of cells) {
-      map.set(`${cell.metric}|${cell.input}`, cell);
-    }
-    return map;
-  }, [cells]);
-  if (metrics.length === 0 || inputs.length === 0) {
-    return <EmptyState message="No coverage data available." />;
-  }
-  const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
-  const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
-  return (
-    <div role="region" aria-label="Evaluation coverage heatmap">
-      <div className="flex-center mb-3 gap-3">
-        <span className="mono-xl font-semibold">
-          {formatPercent(overallCoveragePercent)}
-        </span>
-        <span className="text-secondary text-base">
-          coverage ({metrics.length} metrics x {inputs.length} inputs)
-        </span>
-      </div>
-      <div className="mb-3 text-xs flex-wrap gap-4">
-        {COVERAGE_STATUSES.map(status => (
-          <div key={status} className="flex-center gap-1">
-            <div
-              className="coverage-legend-swatch"
-              style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
-            />
-            <span>{status}</span>
-          </div>
-        ))}
-      </div>
-      <div className="overflow-x-auto">
-        <div
-          role="table"
-          aria-label="Coverage matrix"
-          className="coverage-grid gap-half"
-          style={{
-            '--coverage-grid-cols': `${COVERAGE_GRID_HEADER_WIDTH}px repeat(${displayInputs.length}, ${COVERAGE_GRID_CELL_SIZE}px)`,
-          } as CSSProperties}
-        >
-          <div role="row" className="contents">
-            <div role="columnheader" className="text-xs font-semibold" />
-            {displayInputs.map(input => (
-              <div
-                key={input}
-                role="columnheader"
-                title={input}
-                className="text-secondary text-2xs coverage-header-cell"
-              >
-                {truncateId(input, 8)}
-              </div>
-            ))}
-          </div>
-          {metrics.map(metric => (
-            <div key={metric} role="row" className="contents">
-              <div
-                role="rowheader"
-                className="text-xs flex-center truncate font-medium"
-                title={metric}
-              >
-                {metric}
-              </div>
-              {displayInputs.map(input => {
-                const cell = cellMap.get(`${metric}|${input}`);
-                const status = cell?.status ?? 'missing';
-                const count = cell?.count ?? 0;
-                const isHovered = hovered?.metric === metric && hovered?.input === input;
-                return (
-                  <div
-                    key={input}
-                    role="cell"
-                    aria-label={`${metric} / ${truncateId(input)}: ${status} (${count})`}
-                    title={`${metric} / ${truncateId(input)}: ${plural(count, 'evaluation')}`}
-                    onMouseEnter={() => setHovered({ metric, input })}
-                    onMouseLeave={() => setHovered(null)}
-                    className="mono text-2xs flex-center justify-center coverage-cell"
-                    data-hovered={isHovered || undefined}
-                    style={{ '--coverage-status-color': STATUS_COLORS[status] } as CSSProperties}
-                  >
-                    {count > 0 ? count : ''}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-      {truncated && (
-        <p className="text-secondary text-xs mt-2">
-          Showing {COVERAGE_GRID_MAX_INPUTS} of {inputs.length} inputs.
-        </p>
-      )}
-      {gaps.length > 0 && (
-        <div className="mt-4">
-          <h4 className="mb-1-5 text-base">Coverage Gaps</h4>
-          <ul className="m-0 text-xs coverage-gap-list">
-            {gaps.map(gap => (
-              <li key={gap.metric} className="mb-1">
-                <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
-                ({plural(gap.missingInputs.length, 'input')} missing)
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-export const CoverageGrid = memo(CoverageGridInner);
-
-================
 File: src/components/WorkflowTimeline.tsx
 ================
 import React from 'react';
@@ -16394,6 +16394,162 @@ export interface WorkflowGraph {
 }
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+const TREND_PADDING_RATIO = 0.1;
+const TREND_PADDING_MIN_MS = 60_000;
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const validTs = evaluations
+      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
+      .filter(({ ts }) => Number.isFinite(ts));
+    const { dataMin, dataMax } = validTs.length > 0
+      ? validTs.reduce(
+          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
+          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
+        )
+      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
+    const dataSpan = dataMax - dataMin;
+    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+        evals: [],
+      });
+    }
+    for (const { ev, ts } of validTs) {
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
+      }
+    }
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+        : undefined;
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = extractFiniteScores(evaluations);
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: src/api/api-constants.ts
 ================
 export const PERCENT_BASE = 100;
@@ -16630,162 +16786,6 @@ export async function checkHealth(): Promise<{ status: string; hasData: boolean 
   });
   return { status: health.status, hasData: evals.length > 0 };
 }
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
-const TREND_PADDING_RATIO = 0.1;
-const TREND_PADDING_MIN_MS = 60_000;
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const validTs = evaluations
-      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
-      .filter(({ ts }) => Number.isFinite(ts));
-    const { dataMin, dataMax } = validTs.length > 0
-      ? validTs.reduce(
-          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
-          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
-        )
-      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
-    const dataSpan = dataMax - dataMin;
-    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-    for (const { ev, ts } of validTs) {
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
-        }
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
 
 ================
 File: src/lib/constants.ts
@@ -17173,422 +17173,6 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
-
-================
-File: src/components/WorkflowGraph.tsx
-================
-import React, { memo, useCallback, useEffect, useState } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 120;
-const CLUSTER_NODE_WIDTH = 240;
-const CLUSTER_NODE_HEIGHT = 90;
-const MINIMAP_THRESHOLD = 5;
-const MAX_ELK_NODES = 50;
-const WORKFLOW_SCORE_HIGH_MIN = 0.7;
-const WORKFLOW_SCORE_MID_MIN = 0.4;
-const SCORE_BANDS = {
-  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: 'Good', className: 'workflow-node--score-high' },
-  MID: { min: WORKFLOW_SCORE_MID_MIN, label: 'Fair', className: 'workflow-node--score-mid' },
-  LOW: { min: 0, label: 'Poor', className: 'workflow-node--score-low' },
-} as const;
-const ELK_OPTIONS = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'DOWN',
-  'elk.layered.cycleBreaking.strategy': 'GREEDY',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '80',
-  'elk.spacing.nodeNode': '60',
-  'elk.layered.feedbackEdges': 'true',
-} as const;
-function getScoreBand(score: number | null) {
-  if (score === null) return null;
-  if (score >= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
-  if (score >= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
-  return SCORE_BANDS.LOW;
-}
-const elk = new ELK();
-interface WorkflowNodeWithMeta extends WorkflowNode {
-  dimmed?: boolean;
-  critical?: boolean;
-}
-interface ClusterNodeData {
-  clusterId: string;
-  memberCount: number;
-  hasError: boolean;
-  avgScore: number | null;
-}
-function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['id'] === 'string' &&
-    typeof v['label'] === 'string' &&
-    typeof v['toolCallCount'] === 'number' &&
-    typeof v['turnCount'] === 'number' &&
-    typeof v['durationMs'] === 'number' &&
-    typeof v['hasError'] === 'boolean'
-  );
-}
-function isClusterNodeData(value: unknown): value is ClusterNodeData {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['clusterId'] === 'string' &&
-    typeof v['memberCount'] === 'number' &&
-    typeof v['hasError'] === 'boolean'
-  );
-}
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
-  return new Map(nodes.map(n => [n.id, n]));
-}
-const CLUSTER_NODE_PREFIX = '__cluster__';
-function clusterNodeId(clusterId: string): string {
-  return `${CLUSTER_NODE_PREFIX}${clusterId}`;
-}
-function isClusterNodeId(id: string): boolean {
-  return id.startsWith(CLUSTER_NODE_PREFIX);
-}
-export function applyClusterCollapse(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  collapsedClusters: ReadonlySet<string>,
-): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
-  if (collapsedClusters.size === 0) return { nodes, edges };
-  const nodeClusterMap = new Map<string, string>();
-  for (const n of nodes) {
-    if (n.clusterId && collapsedClusters.has(n.clusterId)) {
-      nodeClusterMap.set(n.id, n.clusterId);
-    }
-  }
-  const nodeDataMap = buildNodeDataMap(nodes);
-  const clusterMembers = new Map<string, WorkflowNode[]>();
-  for (const [nodeId, cId] of nodeClusterMap) {
-    const existing = clusterMembers.get(cId) ?? [];
-    const node = nodeDataMap.get(nodeId);
-    if (node) existing.push(node);
-    clusterMembers.set(cId, existing);
-  }
-  const syntheticNodes: WorkflowNode[] = [];
-  for (const [cId, members] of clusterMembers) {
-    const scores = members.map(m => m.evaluationScore).filter((s): s is number => s !== null);
-    const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    syntheticNodes.push({
-      id: clusterNodeId(cId),
-      label: `[Cluster] ${cId}`,
-      evaluationScore: avgScore,
-      toolCallCount: members.reduce((s, m) => s + m.toolCallCount, 0),
-      totalTokens: members.reduce((s, m) => s + (m.totalTokens ?? 0), 0),
-      durationMs: members.reduce((s, m) => s + m.durationMs, 0),
-      turnCount: members.reduce((s, m) => s + m.turnCount, 0),
-      hasError: members.some(m => m.hasError),
-      clusterId: cId,
-      clusterMemberCount: members.length,
-    });
-  }
-  const outNodes = [
-    ...nodes.filter(n => !nodeClusterMap.has(n.id)),
-    ...syntheticNodes,
-  ];
-  const resolveId = (id: string): string => {
-    const cId = nodeClusterMap.get(id);
-    return cId ? clusterNodeId(cId) : id;
-  };
-  const seenEdgeKeys = new Set<string>();
-  const outEdges: WorkflowEdge[] = [];
-  for (const e of edges) {
-    const src = resolveId(e.source);
-    const tgt = resolveId(e.target);
-    if (src === tgt) continue;
-    const key = `${src}->${tgt}`;
-    if (seenEdgeKeys.has(key)) continue;
-    seenEdgeKeys.add(key);
-    outEdges.push({ ...e, id: key, source: src, target: tgt });
-  }
-  return { nodes: outNodes, edges: outEdges };
-}
-export function extractClusterIds(nodes: WorkflowNode[]): string[] {
-  const seen = new Set<string>();
-  for (const n of nodes) {
-    if (n.clusterId) seen.add(n.clusterId);
-  }
-  return [...seen].sort();
-}
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  selectedAgents?: ReadonlySet<string>,
-  criticalPath?: ReadonlySet<string>,
-): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const nodeDataMap = buildNodeDataMap(nodes);
-  const elkGraph = {
-    id: 'root',
-    layoutOptions: ELK_OPTIONS,
-    children: nodes.map(n => {
-      const isCluster = isClusterNodeId(n.id);
-      return {
-        id: n.id,
-        width: isCluster ? CLUSTER_NODE_WIDTH : NODE_WIDTH,
-        height: isCluster ? CLUSTER_NODE_HEIGHT : NODE_HEIGHT,
-      };
-    }),
-    edges: edges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] })),
-  };
-  const layout = await elk.layout(elkGraph);
-  const rfNodes: Node[] = (layout.children ?? [])
-    .filter(elkNode => nodeDataMap.has(elkNode.id))
-    .map(elkNode => {
-      const workflowNode = nodeDataMap.get(elkNode.id)!;
-      const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
-      const critical = criticalPath != null && criticalPath.has(elkNode.id);
-      const isCluster = isClusterNodeId(elkNode.id);
-      if (isCluster) {
-        const avgScore = workflowNode.evaluationScore;
-        const data: ClusterNodeData = {
-          clusterId: workflowNode.clusterId ?? elkNode.id,
-          memberCount: workflowNode.clusterMemberCount ?? 0,
-          hasError: workflowNode.hasError,
-          avgScore,
-        };
-        return {
-          id: elkNode.id,
-          position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-          data: data as unknown as Record<string, unknown>,
-          type: 'clusterNode',
-        };
-      }
-      return {
-        id: elkNode.id,
-        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-        data: { ...workflowNode, dimmed, critical } as unknown as Record<string, unknown>,
-        type: 'agentNode',
-      };
-    });
-  const rfEdges: Edge[] = edges.map(e => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    label: e.label,
-  }));
-  return { nodes: rfNodes, edges: rfEdges };
-}
-const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
-  if (!isWorkflowNode(data)) return null;
-  const d = data;
-  const band = getScoreBand(d.evaluationScore);
-  const nodeClass = [
-    'workflow-node',
-    band?.className,
-    d.dimmed && 'workflow-node--dimmed',
-    d.critical && 'workflow-node--critical',
-  ].filter(Boolean).join(' ');
-  return (
-    <div
-      className={nodeClass}
-      role="group"
-      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
-    >
-      <div className="workflow-node__label">{d.label}</div>
-      {band && (
-        <div className="workflow-node__score">
-          <span>{band.label}</span>: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
-        </div>
-      )}
-      <div className="workflow-node__meta">
-        <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
-        {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
-      </div>
-      <div className="workflow-node__duration">
-        {fmtDuration(d.durationMs)}
-      </div>
-      {d.hasError && <div className="workflow-node__error">Error</div>}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  );
-});
-const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodeProps) {
-  if (!isClusterNodeData(data)) return null;
-  const d = data;
-  const band = getScoreBand(d.avgScore);
-  const nodeClass = [
-    'workflow-cluster-node',
-    band?.className,
-    d.hasError && 'workflow-cluster-node--error',
-  ].filter(Boolean).join(' ');
-  return (
-    <div
-      className={nodeClass}
-      role="group"
-      aria-label={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
-    >
-      <div className="workflow-cluster-node__label">{d.clusterId}</div>
-      <div className="workflow-cluster-node__meta">
-        {d.memberCount} agents
-        {d.avgScore !== null && (
-          <span> · avg {d.avgScore.toFixed(SCORE_CHIP_PRECISION)}</span>
-        )}
-      </div>
-      {d.hasError && <div className="workflow-node__error">Error</div>}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  );
-});
-const NODE_TYPES = { agentNode: AgentNodeComponent, clusterNode: ClusterNodeComponent };
-interface WorkflowGraphProps {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
-  selectedAgents?: ReadonlySet<string>;
-  criticalPath?: ReadonlySet<string>;
-  containerRef?: React.RefObject<HTMLDivElement | null>;
-}
-export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
-  const containerStyle = { '--workflow-graph-height': `${height}px` } as React.CSSProperties;
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [layoutError, setLayoutError] = useState<string | null>(null);
-  const [collapsedClusters, setCollapsedClusters] = useState<ReadonlySet<string>>(new Set());
-  const clusterIds = extractClusterIds(graph.nodes);
-  const toggleCluster = useCallback((clusterId: string) => {
-    setCollapsedClusters(prev => {
-      const next = new Set(prev);
-      if (next.has(clusterId)) {
-        next.delete(clusterId);
-      } else {
-        next.add(clusterId);
-      }
-      return next;
-    });
-  }, []);
-  useEffect(() => {
-    if (graph.nodes.length === 0) return;
-    let cancelled = false;
-    const { nodes: visibleNodes, edges: visibleEdges } = applyClusterCollapse(
-      graph.nodes,
-      graph.edges,
-      collapsedClusters,
-    );
-    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath)
-      .then(({ nodes: rfNodes, edges: rfEdges }) => {
-        if (!cancelled) {
-          setLayoutError(null);
-          setNodes(rfNodes);
-          setEdges(rfEdges);
-        }
-      })
-      .catch(err => {
-        if (!cancelled) {
-          setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
-        }
-      });
-    return () => { cancelled = true; };
-  }, [graph.nodes, graph.edges, selectedAgents, criticalPath, collapsedClusters]);
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    onNodeClick?.(node.id);
-  }, [onNodeClick]);
-  if (graph.nodes.length > MAX_ELK_NODES) {
-    return (
-      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
-        <div className="workflow-oversize text-secondary text-xs">
-          <div className="workflow-oversize__heading">
-            Graph too large to render ({graph.nodes.length} agents)
-          </div>
-          <div className="workflow-oversize__note text-muted">
-            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
-          </div>
-          <ul className="workflow-oversize__list">
-            {graph.nodes.map(n => (
-              <li key={n.id} className="mono-xs mb-1">
-                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
-                {n.hasError && <span className="text-warning"> (error)</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    );
-  }
-  if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
-    const node = graph.nodes[0];
-    return (
-      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
-        <div className="workflow-fallback">
-          {node ? (
-            <>
-              <div className="workflow-fallback__title">{node.label}</div>
-              <div className="workflow-fallback__subtitle">
-                {node.turnCount} turns | {node.toolCallCount} tools
-              </div>
-            </>
-          ) : (
-            <div className="workflow-fallback__empty">No agent data</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-  if (layoutError) {
-    return (
-      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
-        <div className="error-state workflow-fallback">
-          Failed to compute workflow layout: {layoutError}
-        </div>
-      </div>
-    );
-  }
-  const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
-  return (
-    <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
-      {clusterIds.length > 0 && (
-        <div className="workflow-cluster-controls" role="group" aria-label="Cluster toggles">
-          {clusterIds.map(cId => (
-            <button
-              key={cId}
-              type="button"
-              className={`workflow-cluster-toggle${collapsedClusters.has(cId) ? ' workflow-cluster-toggle--collapsed' : ''}`}
-              onClick={() => toggleCluster(cId)}
-              aria-pressed={collapsedClusters.has(cId)}
-            >
-              {collapsedClusters.has(cId) ? '▶' : '▼'} {cId}
-            </button>
-          ))}
-        </div>
-      )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        nodeTypes={NODE_TYPES}
-        fitView
-      >
-        <Controls />
-        <Background />
-        {showMiniMap && <MiniMap pannable zoomable />}
-      </ReactFlow>
-    </div>
-  );
-}
 
 ================
 File: src/theme.css
@@ -19029,6 +18613,419 @@ summary.section-rail {
 }
 .metric-grid .skeleton {
   height: 180px;
+}
+
+================
+File: src/components/WorkflowGraph.tsx
+================
+import React, { memo, useCallback, useEffect, useState } from 'react';
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import ELK from 'elkjs/lib/elk.bundled.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { fmtDuration, groupBy } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
+const CLUSTER_NODE_WIDTH = 240;
+const CLUSTER_NODE_HEIGHT = 90;
+const MINIMAP_THRESHOLD = 5;
+const MAX_ELK_NODES = 50;
+const WORKFLOW_SCORE_HIGH_MIN = 0.7;
+const WORKFLOW_SCORE_MID_MIN = 0.4;
+const SCORE_BANDS = {
+  HIGH: { min: WORKFLOW_SCORE_HIGH_MIN, label: 'Good', className: 'workflow-node--score-high' },
+  MID: { min: WORKFLOW_SCORE_MID_MIN, label: 'Fair', className: 'workflow-node--score-mid' },
+  LOW: { min: 0, label: 'Poor', className: 'workflow-node--score-low' },
+} as const;
+const ELK_OPTIONS = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'DOWN',
+  'elk.layered.cycleBreaking.strategy': 'GREEDY',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+  'elk.spacing.nodeNode': '60',
+  'elk.layered.feedbackEdges': 'true',
+} as const;
+function getScoreBand(score: number | null) {
+  if (score === null) return null;
+  if (score >= SCORE_BANDS.HIGH.min) return SCORE_BANDS.HIGH;
+  if (score >= SCORE_BANDS.MID.min) return SCORE_BANDS.MID;
+  return SCORE_BANDS.LOW;
+}
+const elk = new ELK();
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  dimmed?: boolean;
+  critical?: boolean;
+}
+interface ClusterNodeData {
+  clusterId: string;
+  memberCount: number;
+  hasError: boolean;
+  avgScore: number | null;
+}
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['id'] === 'string' &&
+    typeof v['label'] === 'string' &&
+    typeof v['toolCallCount'] === 'number' &&
+    typeof v['turnCount'] === 'number' &&
+    typeof v['durationMs'] === 'number' &&
+    typeof v['hasError'] === 'boolean'
+  );
+}
+function isClusterNodeData(value: unknown): value is ClusterNodeData {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['clusterId'] === 'string' &&
+    typeof v['memberCount'] === 'number' &&
+    typeof v['hasError'] === 'boolean'
+  );
+}
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
+  const map = new Map<string, WorkflowNode>();
+  for (const n of nodes) map.set(n.id, n);
+  return map;
+}
+const CLUSTER_NODE_PREFIX = '__cluster__';
+function clusterNodeId(clusterId: string): string {
+  return `${CLUSTER_NODE_PREFIX}${clusterId}`;
+}
+function isClusterNodeId(id: string): boolean {
+  return id.startsWith(CLUSTER_NODE_PREFIX);
+}
+export function applyClusterCollapse(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  collapsedClusters: ReadonlySet<string>,
+): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
+  if (collapsedClusters.size === 0) return { nodes, edges };
+  const nodeClusterMap = new Map<string, string>();
+  for (const n of nodes) {
+    if (n.clusterId && collapsedClusters.has(n.clusterId)) {
+      nodeClusterMap.set(n.id, n.clusterId);
+    }
+  }
+  const nodeDataMap = buildNodeDataMap(nodes);
+  const clusterableNodes = [...nodeClusterMap.keys()].map(id => nodeDataMap.get(id)).filter((n): n is WorkflowNode => n != null);
+  const clusterMembers = groupBy(clusterableNodes, n => nodeClusterMap.get(n.id));
+  const syntheticNodes: WorkflowNode[] = [];
+  for (const [cId, members] of clusterMembers) {
+    const scores = members.map(m => m.evaluationScore).filter((s): s is number => s !== null);
+    const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    syntheticNodes.push({
+      id: clusterNodeId(cId),
+      label: `[Cluster] ${cId}`,
+      evaluationScore: avgScore,
+      toolCallCount: members.reduce((s, m) => s + m.toolCallCount, 0),
+      totalTokens: members.reduce((s, m) => s + (m.totalTokens ?? 0), 0),
+      durationMs: members.reduce((s, m) => s + m.durationMs, 0),
+      turnCount: members.reduce((s, m) => s + m.turnCount, 0),
+      hasError: members.some(m => m.hasError),
+      clusterId: cId,
+      clusterMemberCount: members.length,
+    });
+  }
+  const outNodes = [
+    ...nodes.filter(n => !nodeClusterMap.has(n.id)),
+    ...syntheticNodes,
+  ];
+  const resolveId = (id: string): string => {
+    const cId = nodeClusterMap.get(id);
+    return cId ? clusterNodeId(cId) : id;
+  };
+  const seenEdgeKeys = new Set<string>();
+  const outEdges: WorkflowEdge[] = [];
+  for (const e of edges) {
+    const src = resolveId(e.source);
+    const tgt = resolveId(e.target);
+    if (src === tgt) continue;
+    const key = `${src}->${tgt}`;
+    if (seenEdgeKeys.has(key)) continue;
+    seenEdgeKeys.add(key);
+    outEdges.push({ ...e, id: key, source: src, target: tgt });
+  }
+  return { nodes: outNodes, edges: outEdges };
+}
+export function extractClusterIds(nodes: WorkflowNode[]): string[] {
+  const seen = new Set<string>();
+  for (const n of nodes) {
+    if (n.clusterId) seen.add(n.clusterId);
+  }
+  return [...seen].sort();
+}
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet<string>,
+  criticalPath?: ReadonlySet<string>,
+): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const nodeDataMap = buildNodeDataMap(nodes);
+  const elkGraph = {
+    id: 'root',
+    layoutOptions: ELK_OPTIONS,
+    children: nodes.map(n => {
+      const isCluster = isClusterNodeId(n.id);
+      return {
+        id: n.id,
+        width: isCluster ? CLUSTER_NODE_WIDTH : NODE_WIDTH,
+        height: isCluster ? CLUSTER_NODE_HEIGHT : NODE_HEIGHT,
+      };
+    }),
+    edges: edges.map(e => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+  };
+  const layout = await elk.layout(elkGraph);
+  const rfNodes: Node[] = (layout.children ?? [])
+    .filter(elkNode => nodeDataMap.has(elkNode.id))
+    .map(elkNode => {
+      const workflowNode = nodeDataMap.get(elkNode.id)!;
+      const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
+      const critical = criticalPath != null && criticalPath.has(elkNode.id);
+      const isCluster = isClusterNodeId(elkNode.id);
+      if (isCluster) {
+        const avgScore = workflowNode.evaluationScore;
+        const data: ClusterNodeData = {
+          clusterId: workflowNode.clusterId ?? elkNode.id,
+          memberCount: workflowNode.clusterMemberCount ?? 0,
+          hasError: workflowNode.hasError,
+          avgScore,
+        };
+        return {
+          id: elkNode.id,
+          position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+          data: data as unknown as Record<string, unknown>,
+          type: 'clusterNode',
+        };
+      }
+      return {
+        id: elkNode.id,
+        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+        data: { ...workflowNode, dimmed, critical } as unknown as Record<string, unknown>,
+        type: 'agentNode',
+      };
+    });
+  const rfEdges: Edge[] = edges.map(e => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label,
+  }));
+  return { nodes: rfNodes, edges: rfEdges };
+}
+const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
+  if (!isWorkflowNode(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.evaluationScore);
+  const nodeClass = [
+    'workflow-node',
+    band?.className,
+    d.dimmed && 'workflow-node--dimmed',
+    d.critical && 'workflow-node--critical',
+  ].filter(Boolean).join(' ');
+  return (
+    <div
+      className={nodeClass}
+      role="group"
+      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
+    >
+      <div className="workflow-node__label">{d.label}</div>
+      {band && (
+        <div className="workflow-node__score">
+          <span>{band.label}</span>: {d.evaluationScore?.toFixed(SCORE_CHIP_PRECISION)}
+        </div>
+      )}
+      <div className="workflow-node__meta">
+        <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
+        {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(1)}K tok</span>}
+      </div>
+      <div className="workflow-node__duration">
+        {fmtDuration(d.durationMs)}
+      </div>
+      {d.hasError && <div className="workflow-node__error">Error</div>}
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+});
+const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodeProps) {
+  if (!isClusterNodeData(data)) return null;
+  const d = data;
+  const band = getScoreBand(d.avgScore);
+  const nodeClass = [
+    'workflow-cluster-node',
+    band?.className,
+    d.hasError && 'workflow-cluster-node--error',
+  ].filter(Boolean).join(' ');
+  return (
+    <div
+      className={nodeClass}
+      role="group"
+      aria-label={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
+    >
+      <div className="workflow-cluster-node__label">{d.clusterId}</div>
+      <div className="workflow-cluster-node__meta">
+        {d.memberCount} agents
+        {d.avgScore !== null && (
+          <span> · avg {d.avgScore.toFixed(SCORE_CHIP_PRECISION)}</span>
+        )}
+      </div>
+      {d.hasError && <div className="workflow-node__error">Error</div>}
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+});
+const NODE_TYPES = { agentNode: AgentNodeComponent, clusterNode: ClusterNodeComponent };
+interface WorkflowGraphProps {
+  graph: WorkflowGraph;
+  onNodeClick?: (nodeId: string) => void;
+  height?: number;
+  selectedAgents?: ReadonlySet<string>;
+  criticalPath?: ReadonlySet<string>;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
+}
+export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
+  const containerStyle = { '--workflow-graph-height': `${height}px` } as React.CSSProperties;
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [collapsedClusters, setCollapsedClusters] = useState<ReadonlySet<string>>(new Set());
+  const clusterIds = extractClusterIds(graph.nodes);
+  const toggleCluster = useCallback((clusterId: string) => {
+    setCollapsedClusters(prev => {
+      const next = new Set(prev);
+      if (next.has(clusterId)) {
+        next.delete(clusterId);
+      } else {
+        next.add(clusterId);
+      }
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    if (graph.nodes.length === 0) return;
+    let cancelled = false;
+    const { nodes: visibleNodes, edges: visibleEdges } = applyClusterCollapse(
+      graph.nodes,
+      graph.edges,
+      collapsedClusters,
+    );
+    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath)
+      .then(({ nodes: rfNodes, edges: rfEdges }) => {
+        if (!cancelled) {
+          setLayoutError(null);
+          setNodes(rfNodes);
+          setEdges(rfEdges);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [graph.nodes, graph.edges, selectedAgents, criticalPath, collapsedClusters]);
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    onNodeClick?.(node.id);
+  }, [onNodeClick]);
+  if (graph.nodes.length > MAX_ELK_NODES) {
+    return (
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+        <div className="workflow-oversize text-secondary text-xs">
+          <div className="workflow-oversize__heading">
+            Graph too large to render ({graph.nodes.length} agents)
+          </div>
+          <div className="workflow-oversize__note text-muted">
+            ELK layout is skipped for graphs with more than {MAX_ELK_NODES} nodes.
+          </div>
+          <ul className="workflow-oversize__list">
+            {graph.nodes.map(n => (
+              <li key={n.id} className="mono-xs mb-1">
+                {n.label} — {n.turnCount} turns, {n.toolCallCount} tools
+                {n.hasError && <span className="text-warning"> (error)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+  if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
+    const node = graph.nodes[0];
+    return (
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+        <div className="workflow-fallback">
+          {node ? (
+            <>
+              <div className="workflow-fallback__title">{node.label}</div>
+              <div className="workflow-fallback__subtitle">
+                {node.turnCount} turns | {node.toolCallCount} tools
+              </div>
+            </>
+          ) : (
+            <div className="workflow-fallback__empty">No agent data</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (layoutError) {
+    return (
+      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+        <div className="error-state workflow-fallback">
+          Failed to compute workflow layout: {layoutError}
+        </div>
+      </div>
+    );
+  }
+  const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
+  return (
+    <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+      {clusterIds.length > 0 && (
+        <div className="workflow-cluster-controls" role="group" aria-label="Cluster toggles">
+          {clusterIds.map(cId => (
+            <button
+              key={cId}
+              type="button"
+              className={`workflow-cluster-toggle${collapsedClusters.has(cId) ? ' workflow-cluster-toggle--collapsed' : ''}`}
+              onClick={() => toggleCluster(cId)}
+              aria-pressed={collapsedClusters.has(cId)}
+            >
+              {collapsedClusters.has(cId) ? '▶' : '▼'} {cId}
+            </button>
+          ))}
+        </div>
+      )}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        nodeTypes={NODE_TYPES}
+        fitView
+      >
+        <Controls />
+        <Background />
+        {showMiniMap && <MiniMap pannable zoomable />}
+      </ReactFlow>
+    </div>
+  );
 }
 
 ================

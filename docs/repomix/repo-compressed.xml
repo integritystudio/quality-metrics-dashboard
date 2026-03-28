@@ -3058,6 +3058,27 @@ const toLinear = (c: number) =>
 function corrKey(a: string, b: string): string
 
 ================
+File: src/components/CoverageGrid.tsx
+================
+import { memo, useState, useMemo, type CSSProperties } from 'react';
+import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import {
+  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
+  COVERAGE_GRID_MAX_INPUTS,
+} from '../lib/constants.js';
+import { EmptyState } from './EmptyState.js';
+interface CoverageGridProps {
+  metrics: string[];
+  inputs: string[];
+  cells: CoverageCell[];
+  gaps: CoverageGap[];
+  overallCoveragePercent: number;
+}
+⋮----
+onMouseLeave=
+
+================
 File: src/contexts/AuthContext.tsx
 ================
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
@@ -3169,27 +3190,6 @@ layout(graph: ELKGraph)
 ⋮----
 import { WorkflowGraphView, applyClusterCollapse, extractClusterIds } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph, makeClusteredGraph } from './workflow-fixtures.js';
-
-================
-File: src/components/CoverageGrid.tsx
-================
-import { memo, useState, useMemo, type CSSProperties } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
-import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
-import {
-  COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
-  COVERAGE_GRID_MAX_INPUTS,
-} from '../lib/constants.js';
-import { EmptyState } from './EmptyState.js';
-interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
-}
-⋮----
-onMouseLeave=
 
 ================
 File: src/components/WorkflowTimeline.tsx
@@ -3390,6 +3390,29 @@ export interface WorkflowGraph {
 }
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+⋮----
+type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
 File: src/api/api-constants.ts
 ================
 export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
@@ -3478,29 +3501,6 @@ export async function loadEvaluationsBySessionId(
 export async function checkHealth(): Promise<
 
 ================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
-⋮----
-type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-
-================
 File: src/lib/constants.ts
 ================
 import { z } from 'zod';
@@ -3575,63 +3575,6 @@ type AgentAcc = {
 };
 function computeEvalMetricSummary(scores: number[]):
 function createAgentAccumulator(periodDays: number): AgentAcc
-
-================
-File: src/components/WorkflowGraph.tsx
-================
-import React, { memo, useCallback, useEffect, useState } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type NodeProps,
-  type Node,
-  type Edge,
-} from '@xyflow/react';
-⋮----
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-function getScoreBand(score: number | null)
-⋮----
-interface WorkflowNodeWithMeta extends WorkflowNode {
-  dimmed?: boolean;
-  critical?: boolean;
-}
-interface ClusterNodeData {
-  clusterId: string;
-  memberCount: number;
-  hasError: boolean;
-  avgScore: number | null;
-}
-function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta
-function isClusterNodeData(value: unknown): value is ClusterNodeData
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
-⋮----
-function clusterNodeId(clusterId: string): string
-function isClusterNodeId(id: string): boolean
-export function applyClusterCollapse(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  collapsedClusters: ReadonlySet<string>,
-):
-⋮----
-const resolveId = (id: string): string =>
-⋮----
-export function extractClusterIds(nodes: WorkflowNode[]): string[]
-async function computeLayout(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  selectedAgents?: ReadonlySet<string>,
-  criticalPath?: ReadonlySet<string>,
-): Promise<
 
 ================
 File: src/theme.css
@@ -4050,6 +3993,63 @@ summary.section-rail {
 .skeleton-md {
 .skeleton-xl {
 .metric-grid .skeleton {
+
+================
+File: src/components/WorkflowGraph.tsx
+================
+import React, { memo, useCallback, useEffect, useState } from 'react';
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+⋮----
+import ELK from 'elkjs/lib/elk.bundled.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
+import { fmtDuration, groupBy } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+⋮----
+function getScoreBand(score: number | null)
+⋮----
+interface WorkflowNodeWithMeta extends WorkflowNode {
+  dimmed?: boolean;
+  critical?: boolean;
+}
+interface ClusterNodeData {
+  clusterId: string;
+  memberCount: number;
+  hasError: boolean;
+  avgScore: number | null;
+}
+function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta
+function isClusterNodeData(value: unknown): value is ClusterNodeData
+function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode>
+⋮----
+function clusterNodeId(clusterId: string): string
+function isClusterNodeId(id: string): boolean
+export function applyClusterCollapse(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  collapsedClusters: ReadonlySet<string>,
+):
+⋮----
+const resolveId = (id: string): string =>
+⋮----
+export function extractClusterIds(nodes: WorkflowNode[]): string[]
+async function computeLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  selectedAgents?: ReadonlySet<string>,
+  criticalPath?: ReadonlySet<string>,
+): Promise<
 
 ================
 File: src/lib/workflow-graph.ts
