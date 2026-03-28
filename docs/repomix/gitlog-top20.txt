@@ -1,3 +1,8 @@
+0928728 2026-03-27 chore(repomix): regenerate compressed docs after Round 10 simplify fixes
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 4d40037 2026-03-27 chore: regenerate repomix docs after Round 9 simplifications
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-docs.xml
@@ -360,8 +365,3 @@ a7dad5d 2026-03-26 chore: regenerate repomix docs after Round 10 simplifications
 
 dfe7a15 2026-03-26 refactor(judge-evaluations): remove section-separator divider comments
   scripts/judge-evaluations.ts
-
-e7849fe 2026-03-26 chore: regenerate repomix docs after Round 9 simplifications
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
