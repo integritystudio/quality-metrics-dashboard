@@ -122,7 +122,6 @@ function logActivity(
   ));
 }
 
-
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [
   ['dashboard.executive', 'executive'],
   ['dashboard.operator', 'operator'],
