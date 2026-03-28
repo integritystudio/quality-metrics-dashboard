@@ -56,9 +56,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
 
   const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
 
-  // Build per-agent span timing bounds for handoff latency computation.
-  // lastEndNs: the latest endTimeUnixNano seen for an agent's spans.
-  // firstStartNs: the earliest startTimeUnixNano seen for an agent's spans.
+  // Per-agent span timing bounds used to compute handoff latency.
   const agentLastEndNs = new Map<string, number>();
   const agentFirstStartNs = new Map<string, number>();
   for (const [agentId, group] of spansByAgent) {
