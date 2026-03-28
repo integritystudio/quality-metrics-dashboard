@@ -1,3 +1,8 @@
+6e48570 2026-03-27 chore(repomix): regenerate compressed docs after Round 13 simplify fixes
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 93e24b5 2026-03-27 chore(repomix): regenerate compressed docs after Round 12 simplify fixes
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -364,6 +369,3 @@ ce7da7d 2026-03-26 chore: regenerate repomix docs after Round 12 simplifications
 
 690d5d9 2026-03-26 refactor(tests): remove standalone label comments from dr13-coverage
   src/__tests__/dr13-coverage.test.tsx
-
-83a05a8 2026-03-26 refactor(heatmap): extract display:grid and aspectRatio to CSS class
-  src/theme.css
