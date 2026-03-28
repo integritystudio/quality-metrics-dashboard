@@ -63,7 +63,11 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
   const cols = n + 1;
 
   const corrMap = useMemo(
-    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
+    () => {
+      const m = new Map<string, CorrelationFeature>();
+      for (const c of correlations) m.set(corrKey(c.metricA, c.metricB), c);
+      return m;
+    },
     [correlations],
   );
 

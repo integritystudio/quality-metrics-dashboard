@@ -14,7 +14,8 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
     return <EmptyState message="No turns to display." />;
   }
 
-  const colorByAgent = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
+  const colorByAgent = new Map<string, string>();
+  for (const name of agentNames) colorByAgent.set(name, agentColor(name, agentNames));
 
   return (
     <div className="d-flex gap-2 overflow-x-auto py-2">

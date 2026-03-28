@@ -65,11 +65,12 @@ agentRoutes.get('/agents', async (c) => {
     });
 
     const dateBuckets: string[] = [];
+    const bucketIndex = new Map<string, number>();
     for (let d = 0; d < periodDays; d++) {
-      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
-      dateBuckets.push(toDateOnly(day));
+      const day = toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY));
+      dateBuckets.push(day);
+      bucketIndex.set(day, d);
     }
-    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
 
     const acc: Record<string, AgentAcc> = Object.create(null);
 
