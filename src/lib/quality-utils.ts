@@ -64,7 +64,7 @@ export function plural(count: number, singular: string, suffix = 's'): string {
   return `${count} ${singular}${count !== 1 ? suffix : ''}`;
 }
 
-export const byValueDesc =([, a]: [string, number], [, b]: [string, number]): number => b - a;
+export const byValueDesc = ([, a]: [string, number], [, b]: [string, number]): number => b - a;
 
 export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
   excellent: '#26d97f',
