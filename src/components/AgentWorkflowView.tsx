@@ -38,7 +38,6 @@ export function AgentWorkflowView({
   // Filter state: all agents selected by default (null = all selected, avoids Set churn on load)
   const [selectedAgents, setSelectedAgents] = useState<ReadonlySet<string> | null>(null);
 
-  // Secondary filter state
   const [minDurationMs, setMinDurationMs] = useState(0);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [showCriticalPath, setShowCriticalPath] = useState(false);
@@ -60,11 +59,13 @@ export function AgentWorkflowView({
   const criticalPathSet = useMemo((): ReadonlySet<string> | undefined => {
     if (!showCriticalPath || graph.nodes.length === 0 || graph.rootNodeId === null) return undefined;
 
-    const adj = new Map<string, string[]>(graph.nodes.map(n => [n.id, []]));
+    const adj = new Map<string, string[]>();
+    for (const n of graph.nodes) adj.set(n.id, []);
     for (const edge of graph.edges) {
       adj.get(edge.source)?.push(edge.target);
     }
-    const dur = new Map(graph.nodes.map(n => [n.id, n.durationMs]));
+    const dur = new Map<string, number>();
+    for (const n of graph.nodes) dur.set(n.id, n.durationMs);
 
     function dfs(nodeId: string, visiting: Set<string>): [string[], number] {
       if (visiting.has(nodeId)) return [[], 0]; // cycle guard
