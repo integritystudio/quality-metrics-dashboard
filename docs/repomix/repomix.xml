@@ -9183,59 +9183,6 @@ export function TruncatedList<T>({ items, max, renderItem, total }: {
 }
 
 ================
-File: src/components/TurnTimeline.tsx
-================
-import type { CSSProperties } from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult } from '../types.js';
-interface TurnTimelineProps {
-  turns: TurnLevelResult[];
-  agentNames: string[];
-}
-export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const colorByAgent = new Map(agentNames.map(name => [name, agentColor(name, agentNames)]));
-  return (
-    <div className="d-flex gap-2 overflow-x-auto py-2">
-      {turns.map((turn) => {
-        const agent = turn.agentName ?? 'unknown';
-        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
-        const bandColor = scoreColor(turn.relevance);
-        return (
-          <div
-            key={turn.turnIndex}
-            className="p-4 shrink-0 turn-card"
-            style={{ '--turn-color': color } as CSSProperties}
-          >
-            <div className="flex-center mb-1-5 justify-between">
-              <span className="text-2xs uppercase font-semibold turn-card-agent">{agent}</span>
-              <span className="text-muted text-2xs">#{turn.turnIndex}</span>
-            </div>
-            <div className="mb-1-5">
-              <div className="text-secondary text-2xs mb-1">Relevance</div>
-              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
-            </div>
-            <div className="mb-1-5">
-              <div className="text-secondary text-2xs mb-1">Progress</div>
-              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
-            </div>
-            {turn.hasError && (
-              <div className="text-2xs font-semibold text-critical mt-1">
-                Error
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-================
 File: src/context/CalibrationContext.tsx
 ================
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
@@ -12175,418 +12122,6 @@ export const API_HOST = '127.0.0.1';
 export const API_PORT = Number(process.env.API_PORT) || 3001;
 
 ================
-File: src/components/AgentActivityPanel.tsx
-================
-import { Fragment, useCallback, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
-import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
-import { TruncatedIdLink } from './TruncatedIdLink.js';
-import {
-  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
-  SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
-} from '../lib/constants.js';
-import { routes } from '../lib/routes.js';
-import { BarIndicator } from './BarIndicator.js';
-import { EmptyState } from './EmptyState.js';
-import { ExpandChevron } from './ExpandChevron.js';
-import { Sparkline } from './Sparkline.js';
-import { StatDisplay } from './StatDisplay.js';
-const COLUMN_COUNT = 7;
-type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
-interface IdListColumnProps {
-  label: string;
-  ids: string[];
-  totalCount: number;
-  isTruncated: boolean;
-  routeFn: (id: string) => string;
-}
-function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListColumnProps) {
-  return (
-    <div>
-      <div className="text-muted mb-1-5 text-xs uppercase">{label} ({totalCount})</div>
-      <div className="flex-col gap-1">
-        {ids.map(id => (
-          <TruncatedIdLink
-            key={id}
-            id={id}
-            href={routeFn(id)}
-            maxLen={12}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ))}
-        {ids.length === 0 && <span className="text-muted text-xs">none</span>}
-        {isTruncated && (
-          <span className="text-muted text-2xs italic">+{totalCount - ids.length} more</span>
-        )}
-      </div>
-    </div>
-  );
-}
-function errorRateColor(rate: number): string {
-  if (rate === 0) return 'var(--status-healthy)';
-  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
-  return 'var(--status-critical)';
-}
-interface AgentActivityPanelProps {
-  agents: AgentStat[];
-}
-export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
-  const [sort, setSort] = useState<SortKey>('invocations');
-  const [asc, setAsc] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const colorIndex = useMemo(
-    () => new Map(agents.map((a, i) => [a.agentName, AGENT_PALETTE[i % AGENT_PALETTE.length]])),
-    [agents],
-  );
-  const toggleSort = useCallback((key: SortKey) => {
-    if (key === sort) {
-      setAsc(v => !v);
-    } else {
-      setSort(key);
-      setAsc(false);
-    }
-  }, [sort]);
-  if (agents.length === 0) {
-    return <EmptyState message="No agent activity recorded for this period." />;
-  }
-  const maxInvocations = Math.max(...agents.map(a => a.invocations), 1);
-  const sorted = [...agents].sort((a, b) => {
-    const diff = a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0;
-    return asc ? diff : -diff;
-  });
-  const sortIndicator = (key: SortKey) =>
-    sort === key ? (asc ? ' \u2191' : ' \u2193') : '';
-  return (
-    <div className="overflow-x-auto">
-      <table className="data-table sla-table agent-activity-table">
-        <thead>
-          <tr>
-            <th className="col-agent">Agent</th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('invocations')}>
-              Invocations{sortIndicator('invocations')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('errorRate')}>
-              Error Rate{sortIndicator('errorRate')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('sessionCount')}>
-              Sessions{sortIndicator('sessionCount')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('avgOutputSize')}>
-              Avg Output{sortIndicator('avgOutputSize')}
-            </th>
-            <th>Rate Limits</th>
-            <th>Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((agent) => {
-            const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
-            const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
-            const invPct = (agent.invocations / maxInvocations) * 100;
-            const topSource = Object.entries(agent.sourceTypes).sort(byValueDesc)[0]?.[0];
-            const isExpanded = expanded === agent.agentName;
-            const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
-            return (
-              <Fragment key={agent.agentName}>
-                <tr
-                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
-                  style={{ '--agent-color': color } as CSSProperties}
-                  onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
-                >
-                  <td>
-                    <div className="flex-center gap-2">
-                      {hasLinks && (
-                        <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
-                      )}
-                      <span className="dot-sm agent-dot" />
-                      <span className="mono-xs text-primary break-all">
-                        {agent.agentName}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex-center gap-2">
-                      <span className="mono-xs agent-inv-count">
-                        {agent.invocations}
-                      </span>
-                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex-center gap-1-5">
-                      <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
-                        {agent.errors > 0 ? formatPercent(agent.errorRate * 100) : '\u2014'}
-                      </span>
-                      {agent.errors > 0 && (
-                        <span className="text-muted text-xs">
-                          ({agent.errors})
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <span className="mono-xs">
-                      {agent.sessionCount}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="mono-xs text-secondary">
-                      {fmtBytes(agent.avgOutputSize)}
-                    </span>
-                  </td>
-                  <td>
-                    {agent.rateLimitCount > 0 ? (
-                      <span className="mono-xs badge-warning">
-                        {agent.rateLimitCount}x
-                      </span>
-                    ) : (
-                      <span className="text-muted text-xs">{'\u2014'}</span>
-                    )}
-                  </td>
-                  <td>
-                    {topSource ? (
-                      <span className="mono text-muted text-2xs uppercase">
-                        {topSource}
-                      </span>
-                    ) : <span className="text-muted">{'\u2014'}</span>}
-                  </td>
-                </tr>
-                {isExpanded && (
-                  <tr className="eval-expanded-panel">
-                    <td colSpan={COLUMN_COUNT} className="border-b">
-                      <EvalSummaryRow evalSummary={agent.evalSummary} />
-                      {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
-                        <div className="border-b-subtle mb-1 pad-panel-section">
-                          <div className="flex-center gap-3">
-                            <div className="text-xs text-muted uppercase shrink-0">
-                              Daily Activity
-                            </div>
-                            <Sparkline
-                              data={agent.dailyCounts}
-                              width={SPARKLINE_WIDTH}
-                              height={SPARKLINE_HEIGHT}
-                              color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
-                              label={`Daily invocations for ${agent.agentName}`}
-                            />
-                            <span className="mono text-muted text-2xs shrink-0">
-                              peak {Math.max(...agent.dailyCounts)}/day
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="agent-expanded-grid">
-                        <IdListColumn
-                          label="Sessions"
-                          ids={agent.sessionIds}
-                          totalCount={agent.sessionCount}
-                          isTruncated={agent.sessionIdsTruncated}
-                          routeFn={routes.session}
-                        />
-                        <IdListColumn
-                          label="Traces"
-                          ids={agent.traceIds}
-                          totalCount={agent.traceIdsTotal ?? agent.traceIds.length}
-                          isTruncated={agent.traceIdsTruncated}
-                          routeFn={routes.trace}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetricSummary> }) {
-  const metrics = Object.entries(evalSummary);
-  if (metrics.length === 0) {
-    return (
-      <div className="text-xs text-muted border-b-subtle mb-1 pad-panel-sparse">
-        No evaluations linked to this agent.
-      </div>
-    );
-  }
-  return (
-    <div className="border-b-subtle mb-1 pad-panel-section">
-      <div className="text-muted mb-1-5 text-xs uppercase">
-        Evaluation Metrics
-      </div>
-      <div className="flex-wrap gap-3">
-        {metrics.map(([name, m]) => {
-          const barColor = scoreColor(m.avg);
-          const band = scoreColorBand(m.avg);
-          return (
-            <div key={name} className="metric-card-compact">
-              <div className="text-secondary mb-1 text-xs truncate">
-                {name}
-              </div>
-              <div className="flex-center mb-1 gap-2">
-                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
-                <span className="mono-xs font-semibold text-right score-label-width score-band" data-band={band}>
-                  {m.avg.toFixed(SCORE_CHIP_PRECISION)}
-                </span>
-              </div>
-              <div className="mono text-muted flex-wrap justify-between text-2xs">
-                <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}\u2013{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
-                <span>n={m.count}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
-  const totalInvocations = agents.reduce((s, a) => s + a.invocations, 0);
-  const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
-  const totalRateLimits = agents.reduce((s, a) => s + a.rateLimitCount, 0);
-  const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
-  const overallErrorRate = rawErrorRate * 100;
-  return (
-    <div className="d-flex flex-wrap gap-8 surface-elevated mb-5 p-4-5">
-      {[
-        { label: 'Agents', value: agents.length },
-        { label: 'Invocations', value: totalInvocations.toLocaleString() },
-        {
-          label: 'Error Rate',
-          value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
-          color: errorRateColor(rawErrorRate),
-        },
-        {
-          label: 'Rate Limits',
-          value: totalRateLimits > 0 ? totalRateLimits : '\u2014',
-          color: totalRateLimits > 0 ? 'var(--status-warning)' : undefined,
-        },
-      ].map(({ label, value, color }) => (
-        <StatDisplay key={label} value={value} label={label} valueColor={color} />
-      ))}
-    </div>
-  );
-}
-
-================
-File: src/components/CorrelationHeatmap.tsx
-================
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
-import { scaleSequential } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import { formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { CorrelationFeature } from '../types.js';
-interface CorrelationHeatmapProps {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-  onCellClick?: (rowMetric: string, colMetric: string) => void;
-}
-const CONTRAST_DARK = '#111';
-const CONTRAST_LIGHT = '#fff';
-const SHORT_NAMES: Record<string, string> = {
-  faithfulness: 'Faith',
-  relevance: 'Relev',
-  coherence: 'Coher',
-  safety: 'Safety',
-  instruction_adherence: 'Instr',
-  tool_accuracy: 'Tool',
-  latency: 'Latency',
-};
-function shortName(metric: string): string {
-  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
-}
-function contrastText(pearsonR: number): string {
-  const bg = colorScale(pearsonR);
-  const m = bg.match(/(\d+)/g);
-  if (!m || m.length < 3) return CONTRAST_DARK;
-  const [r, g, b] = m.map(Number);
-  const toLinear = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
-}
-const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
-function corrKey(a: string, b: string): string {
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
-}
-export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
-  const n = metrics.length;
-  const cols = n + 1;
-  const corrMap = useMemo(
-    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
-    [correlations],
-  );
-  return (
-    <div
-      role="table"
-      aria-label="Metric correlation matrix"
-      className="gap-half w-full heatmap-grid"
-      style={{
-        '--heatmap-aspect': `${cols} / ${cols}`,
-        '--heatmap-grid-cols': `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
-        '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
-      } as CSSProperties}
-    >
-      <div role="cell" />
-      {metrics.map((m) => (
-        <div
-          key={`col-${m}`}
-          role="columnheader"
-          className="text-secondary text-xs font-semibold truncate flex-center"
-        >
-          {shortName(m)}
-        </div>
-      ))}
-      {metrics.map((rowMetric, ri) => (
-        <div key={`row-${rowMetric}`} role="presentation" className="contents">
-          <div
-            role="rowheader"
-            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
-          >
-            {shortName(rowMetric)}
-          </div>
-          {metrics.map((colMetric, ci) => {
-            const isDiag = ri === ci;
-            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
-            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
-            const isToxic = corr?.isKnownToxicCombo ?? false;
-            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
-            const tooltip = isDiag
-              ? `${rowMetric}: diagonal (1.00)`
-              : corr
-                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
-                : `${rowMetric} vs ${colMetric}: no data`;
-            return (
-              <div
-                key={`${ri}-${ci}`}
-                role="cell"
-                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
-                data-toxic={isToxic ? 'true' : undefined}
-                title={tooltip}
-                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
-                style={{
-                  '--heatmap-cell-bg': bg,
-                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
-                } as CSSProperties}
-              >
-                {value.toFixed(SCORE_CHIP_PRECISION)}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-================
 File: src/components/SpanTree.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -12720,6 +12255,60 @@ export function TruncatedIdLink({ id, href, maxLen = 8, className = 'mono-xs lin
     <Link href={href} className={className} title={id} onClick={onClick}>
       {truncateId(id, maxLen)}
     </Link>
+  );
+}
+
+================
+File: src/components/TurnTimeline.tsx
+================
+import type { CSSProperties } from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult } from '../types.js';
+interface TurnTimelineProps {
+  turns: TurnLevelResult[];
+  agentNames: string[];
+}
+export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+  const colorByAgent = new Map<string, string>();
+  for (const name of agentNames) colorByAgent.set(name, agentColor(name, agentNames));
+  return (
+    <div className="d-flex gap-2 overflow-x-auto py-2">
+      {turns.map((turn) => {
+        const agent = turn.agentName ?? 'unknown';
+        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
+        const bandColor = scoreColor(turn.relevance);
+        return (
+          <div
+            key={turn.turnIndex}
+            className="p-4 shrink-0 turn-card"
+            style={{ '--turn-color': color } as CSSProperties}
+          >
+            <div className="flex-center mb-1-5 justify-between">
+              <span className="text-2xs uppercase font-semibold turn-card-agent">{agent}</span>
+              <span className="text-muted text-2xs">#{turn.turnIndex}</span>
+            </div>
+            <div className="mb-1-5">
+              <div className="text-secondary text-2xs mb-1">Relevance</div>
+              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
+            </div>
+            <div className="mb-1-5">
+              <div className="text-secondary text-2xs mb-1">Progress</div>
+              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
+            </div>
+            {turn.hasError && (
+              <div className="text-2xs font-semibold text-critical mt-1">
+                Error
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -13920,6 +13509,306 @@ evaluationRoutes.get('/evaluations/trace/:traceId', async (c) => {
 });
 
 ================
+File: src/components/AgentActivityPanel.tsx
+================
+import { Fragment, useCallback, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
+import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
+import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import { TruncatedIdLink } from './TruncatedIdLink.js';
+import {
+  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
+  SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
+} from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
+import { BarIndicator } from './BarIndicator.js';
+import { EmptyState } from './EmptyState.js';
+import { ExpandChevron } from './ExpandChevron.js';
+import { Sparkline } from './Sparkline.js';
+import { StatDisplay } from './StatDisplay.js';
+const COLUMN_COUNT = 7;
+type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
+interface IdListColumnProps {
+  label: string;
+  ids: string[];
+  totalCount: number;
+  isTruncated: boolean;
+  routeFn: (id: string) => string;
+}
+function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListColumnProps) {
+  return (
+    <div>
+      <div className="text-muted mb-1-5 text-xs uppercase">{label} ({totalCount})</div>
+      <div className="flex-col gap-1">
+        {ids.map(id => (
+          <TruncatedIdLink
+            key={id}
+            id={id}
+            href={routeFn(id)}
+            maxLen={12}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ))}
+        {ids.length === 0 && <span className="text-muted text-xs">none</span>}
+        {isTruncated && (
+          <span className="text-muted text-2xs italic">+{totalCount - ids.length} more</span>
+        )}
+      </div>
+    </div>
+  );
+}
+function errorRateColor(rate: number): string {
+  if (rate === 0) return 'var(--status-healthy)';
+  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
+  return 'var(--status-critical)';
+}
+interface AgentActivityPanelProps {
+  agents: AgentStat[];
+}
+export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
+  const [sort, setSort] = useState<SortKey>('invocations');
+  const [asc, setAsc] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const colorIndex = useMemo(
+    () => {
+      const m = new Map<string, string>();
+      for (let i = 0; i < agents.length; i++) m.set(agents[i].agentName, AGENT_PALETTE[i % AGENT_PALETTE.length]);
+      return m;
+    },
+    [agents],
+  );
+  const toggleSort = useCallback((key: SortKey) => {
+    if (key === sort) {
+      setAsc(v => !v);
+    } else {
+      setSort(key);
+      setAsc(false);
+    }
+  }, [sort]);
+  if (agents.length === 0) {
+    return <EmptyState message="No agent activity recorded for this period." />;
+  }
+  const maxInvocations = Math.max(...agents.map(a => a.invocations), 1);
+  const sorted = [...agents].sort((a, b) => {
+    const diff = a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0;
+    return asc ? diff : -diff;
+  });
+  const sortIndicator = (key: SortKey) =>
+    sort === key ? (asc ? ' \u2191' : ' \u2193') : '';
+  return (
+    <div className="overflow-x-auto">
+      <table className="data-table sla-table agent-activity-table">
+        <thead>
+          <tr>
+            <th className="col-agent">Agent</th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('invocations')}>
+              Invocations{sortIndicator('invocations')}
+            </th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('errorRate')}>
+              Error Rate{sortIndicator('errorRate')}
+            </th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('sessionCount')}>
+              Sessions{sortIndicator('sessionCount')}
+            </th>
+            <th className="cursor-pointer select-none" onClick={() => toggleSort('avgOutputSize')}>
+              Avg Output{sortIndicator('avgOutputSize')}
+            </th>
+            <th>Rate Limits</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((agent) => {
+            const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
+            const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
+            const invPct = (agent.invocations / maxInvocations) * 100;
+            const topSource = Object.entries(agent.sourceTypes).sort(byValueDesc)[0]?.[0];
+            const isExpanded = expanded === agent.agentName;
+            const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
+            return (
+              <Fragment key={agent.agentName}>
+                <tr
+                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
+                  style={{ '--agent-color': color } as CSSProperties}
+                  onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
+                >
+                  <td>
+                    <div className="flex-center gap-2">
+                      {hasLinks && (
+                        <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
+                      )}
+                      <span className="dot-sm agent-dot" />
+                      <span className="mono-xs text-primary break-all">
+                        {agent.agentName}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="flex-center gap-2">
+                      <span className="mono-xs agent-inv-count">
+                        {agent.invocations}
+                      </span>
+                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
+                    </div>
+                  </td>
+                  <td>
+                    <div className="flex-center gap-1-5">
+                      <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
+                        {agent.errors > 0 ? formatPercent(agent.errorRate * 100) : '\u2014'}
+                      </span>
+                      {agent.errors > 0 && (
+                        <span className="text-muted text-xs">
+                          ({agent.errors})
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className="mono-xs">
+                      {agent.sessionCount}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="mono-xs text-secondary">
+                      {fmtBytes(agent.avgOutputSize)}
+                    </span>
+                  </td>
+                  <td>
+                    {agent.rateLimitCount > 0 ? (
+                      <span className="mono-xs badge-warning">
+                        {agent.rateLimitCount}x
+                      </span>
+                    ) : (
+                      <span className="text-muted text-xs">{'\u2014'}</span>
+                    )}
+                  </td>
+                  <td>
+                    {topSource ? (
+                      <span className="mono text-muted text-2xs uppercase">
+                        {topSource}
+                      </span>
+                    ) : <span className="text-muted">{'\u2014'}</span>}
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <tr className="eval-expanded-panel">
+                    <td colSpan={COLUMN_COUNT} className="border-b">
+                      <EvalSummaryRow evalSummary={agent.evalSummary} />
+                      {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
+                        <div className="border-b-subtle mb-1 pad-panel-section">
+                          <div className="flex-center gap-3">
+                            <div className="text-xs text-muted uppercase shrink-0">
+                              Daily Activity
+                            </div>
+                            <Sparkline
+                              data={agent.dailyCounts}
+                              width={SPARKLINE_WIDTH}
+                              height={SPARKLINE_HEIGHT}
+                              color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
+                              label={`Daily invocations for ${agent.agentName}`}
+                            />
+                            <span className="mono text-muted text-2xs shrink-0">
+                              peak {Math.max(...agent.dailyCounts)}/day
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="agent-expanded-grid">
+                        <IdListColumn
+                          label="Sessions"
+                          ids={agent.sessionIds}
+                          totalCount={agent.sessionCount}
+                          isTruncated={agent.sessionIdsTruncated}
+                          routeFn={routes.session}
+                        />
+                        <IdListColumn
+                          label="Traces"
+                          ids={agent.traceIds}
+                          totalCount={agent.traceIdsTotal ?? agent.traceIds.length}
+                          isTruncated={agent.traceIdsTruncated}
+                          routeFn={routes.trace}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetricSummary> }) {
+  const metrics = Object.entries(evalSummary);
+  if (metrics.length === 0) {
+    return (
+      <div className="text-xs text-muted border-b-subtle mb-1 pad-panel-sparse">
+        No evaluations linked to this agent.
+      </div>
+    );
+  }
+  return (
+    <div className="border-b-subtle mb-1 pad-panel-section">
+      <div className="text-muted mb-1-5 text-xs uppercase">
+        Evaluation Metrics
+      </div>
+      <div className="flex-wrap gap-3">
+        {metrics.map(([name, m]) => {
+          const barColor = scoreColor(m.avg);
+          const band = scoreColorBand(m.avg);
+          return (
+            <div key={name} className="metric-card-compact">
+              <div className="text-secondary mb-1 text-xs truncate">
+                {name}
+              </div>
+              <div className="flex-center mb-1 gap-2">
+                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
+                <span className="mono-xs font-semibold text-right score-label-width score-band" data-band={band}>
+                  {m.avg.toFixed(SCORE_CHIP_PRECISION)}
+                </span>
+              </div>
+              <div className="mono text-muted flex-wrap justify-between text-2xs">
+                <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}\u2013{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
+                <span>n={m.count}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
+  const totalInvocations = agents.reduce((s, a) => s + a.invocations, 0);
+  const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
+  const totalRateLimits = agents.reduce((s, a) => s + a.rateLimitCount, 0);
+  const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
+  const overallErrorRate = rawErrorRate * 100;
+  return (
+    <div className="d-flex flex-wrap gap-8 surface-elevated mb-5 p-4-5">
+      {[
+        { label: 'Agents', value: agents.length },
+        { label: 'Invocations', value: totalInvocations.toLocaleString() },
+        {
+          label: 'Error Rate',
+          value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
+          color: errorRateColor(rawErrorRate),
+        },
+        {
+          label: 'Rate Limits',
+          value: totalRateLimits > 0 ? totalRateLimits : '\u2014',
+          color: totalRateLimits > 0 ? 'var(--status-warning)' : undefined,
+        },
+      ].map(({ label, value, color }) => (
+        <StatDisplay key={label} value={value} label={label} valueColor={color} />
+      ))}
+    </div>
+  );
+}
+
+================
 File: src/components/BarIndicator.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -13955,6 +13844,126 @@ export function BarIndicator({
       style={trackStyle}
     >
       <div className="mini-bar-fill" />
+    </div>
+  );
+}
+
+================
+File: src/components/CorrelationHeatmap.tsx
+================
+import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
+import { scaleSequential } from 'd3-scale';
+import { interpolateRdYlGn } from 'd3-scale-chromatic';
+import { formatScore } from '../lib/quality-utils.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { CorrelationFeature } from '../types.js';
+interface CorrelationHeatmapProps {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) => void;
+}
+const CONTRAST_DARK = '#111';
+const CONTRAST_LIGHT = '#fff';
+const SHORT_NAMES: Record<string, string> = {
+  faithfulness: 'Faith',
+  relevance: 'Relev',
+  coherence: 'Coher',
+  safety: 'Safety',
+  instruction_adherence: 'Instr',
+  tool_accuracy: 'Tool',
+  latency: 'Latency',
+};
+function shortName(metric: string): string {
+  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
+}
+function contrastText(pearsonR: number): string {
+  const bg = colorScale(pearsonR);
+  const m = bg.match(/(\d+)/g);
+  if (!m || m.length < 3) return CONTRAST_DARK;
+  const [r, g, b] = m.map(Number);
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
+}
+const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
+function corrKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
+  const n = metrics.length;
+  const cols = n + 1;
+  const corrMap = useMemo(
+    () => {
+      const m = new Map<string, CorrelationFeature>();
+      for (const c of correlations) m.set(corrKey(c.metricA, c.metricB), c);
+      return m;
+    },
+    [correlations],
+  );
+  return (
+    <div
+      role="table"
+      aria-label="Metric correlation matrix"
+      className="gap-half w-full heatmap-grid"
+      style={{
+        '--heatmap-aspect': `${cols} / ${cols}`,
+        '--heatmap-grid-cols': `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
+        '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
+      } as CSSProperties}
+    >
+      <div role="cell" />
+      {metrics.map((m) => (
+        <div
+          key={`col-${m}`}
+          role="columnheader"
+          className="text-secondary text-xs font-semibold truncate flex-center"
+        >
+          {shortName(m)}
+        </div>
+      ))}
+      {metrics.map((rowMetric, ri) => (
+        <div key={`row-${rowMetric}`} role="presentation" className="contents">
+          <div
+            role="rowheader"
+            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
+          >
+            {shortName(rowMetric)}
+          </div>
+          {metrics.map((colMetric, ci) => {
+            const isDiag = ri === ci;
+            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
+            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
+            const isToxic = corr?.isKnownToxicCombo ?? false;
+            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
+            const tooltip = isDiag
+              ? `${rowMetric}: diagonal (1.00)`
+              : corr
+                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
+                : `${rowMetric} vs ${colMetric}: no data`;
+            return (
+              <div
+                key={`${ri}-${ci}`}
+                role="cell"
+                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
+                data-toxic={isToxic ? 'true' : undefined}
+                title={tooltip}
+                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
+                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
+                style={{
+                  '--heatmap-cell-bg': bg,
+                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
+                } as CSSProperties}
+              >
+                {value.toFixed(SCORE_CHIP_PRECISION)}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -15304,6 +15313,284 @@ describe('WorkflowGraphView cluster toggle UI', () => {
 });
 
 ================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const LANE_HEIGHT = 64;
+const LANE_PADDING_TOP = 12;
+const TURN_BLOCK_HEIGHT = 32;
+const TURN_BLOCK_MIN_WIDTH = 40;
+const TURN_BLOCK_GAP = 6;
+const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
+const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+const LABEL_WIDTH = 120;
+const HANDOFF_MARKER_RADIUS = 7;
+const HEADER_HEIGHT = 28;
+const MAX_VISIBLE_TURNS = 200;
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[] {
+  return agentNames.map((name, laneIndex) => ({
+    agentName: name,
+    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
+    laneIndex,
+  }));
+}
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null {
+  let sawSource = false;
+  for (const t of turns) {
+    const agent = t.agentName ?? 'unknown';
+    if (agent === handoff.sourceAgent) sawSource = true;
+    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
+  }
+  return null;
+}
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
+  const barColor = scoreColor(turn.relevance);
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
+  return (
+    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
+      <rect
+        width={width}
+        height={TURN_BLOCK_HEIGHT}
+        rx={4}
+        fill={color}
+        fillOpacity={0.15}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      <rect
+        width={Math.max(2, width * turn.relevance)}
+        height={4}
+        rx={2}
+        fill={barColor}
+        fillOpacity={0.85}
+      />
+      {turn.hasError && (
+        <rect
+          x={width - 6}
+          width={4}
+          height={TURN_BLOCK_HEIGHT}
+          rx={2}
+          fill="var(--status-critical)"
+          fillOpacity={0.85}
+        />
+      )}
+      <text
+        x={width / 2}
+        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        textAnchor="middle"
+        fontSize={10}
+        fill={color}
+        fontFamily="var(--font-mono)"
+      >
+        {turn.turnIndex}
+      </text>
+    </g>
+  );
+}
+export interface WorkflowTimelineProps {
+  turns: TurnLevelResult[];
+  handoffs?: HandoffEvaluation[];
+  agentNames: string[];
+  selectedAgents?: ReadonlySet<string>;
+}
+export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
+  const truncated = turns.length > MAX_VISIBLE_TURNS;
+  const visibleAgentNames = selectedAgents != null
+    ? agentNames.filter(n => selectedAgents.has(n))
+    : agentNames;
+  const lanes = buildLanes(visibleTurns, visibleAgentNames);
+  const totalTurns = visibleTurns.length;
+  const visibleHandoffs = selectedAgents != null
+    ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
+    : handoffs;
+  const agentLaneIndex = new Map<string, number>();
+  const agentColorMap = new Map<string, string>();
+  for (let i = 0; i < visibleAgentNames.length; i++) {
+    const name = visibleAgentNames[i];
+    agentLaneIndex.set(name, i);
+    agentColorMap.set(name, agentColor(name, agentNames));
+  }
+  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
+  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
+  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
+  const turnX = (turnIndex: number): number =>
+    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
+  const laneY = (laneIndex: number): number =>
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
+  return (
+    <div
+      className="overflow-x-auto"
+      role="img"
+      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
+    >
+      <svg
+        width={svgWidth}
+        height={svgHeight}
+        className="d-block timeline-svg"
+        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
+      >
+        <g>
+          {turns.map(t => (
+            <text
+              key={t.turnIndex}
+              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
+              y={HEADER_HEIGHT - 8}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--text-muted)"
+              fontFamily="var(--font-mono)"
+            >
+              {t.turnIndex}
+            </text>
+          ))}
+        </g>
+        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
+          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
+          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
+          return (
+            <g key={agentName}>
+              <rect
+                x={0}
+                y={laneTop}
+                width={svgWidth}
+                height={LANE_HEIGHT}
+                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
+                fillOpacity={0.5}
+              />
+              <line
+                x1={0}
+                y1={laneTop}
+                x2={svgWidth}
+                y2={laneTop}
+                stroke="var(--border-subtle)"
+                strokeWidth={1}
+              />
+              <text
+                x={LABEL_WIDTH - 8}
+                y={laneTop + LANE_CENTER_OFFSET + 4}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight={600}
+                fill={color}
+                fontFamily="var(--font-mono)"
+              >
+                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+              </text>
+              {laneTurns.map(turn => (
+                <TurnBlock
+                  key={turn.turnIndex}
+                  turn={turn}
+                  color={color}
+                  width={TURN_BLOCK_MIN_WIDTH}
+                  x={turnX(turn.turnIndex)}
+                  y={laneTop + LANE_PADDING_TOP}
+                />
+              ))}
+            </g>
+          );
+        })}
+        <line
+          x1={0}
+          y1={svgHeight}
+          x2={svgWidth}
+          y2={svgHeight}
+          stroke="var(--border-subtle)"
+          strokeWidth={1}
+        />
+        {visibleHandoffs.map((h, i) => {
+          const turnIndex = findHandoffTurnIndex(h, turns);
+          if (turnIndex == null) return null;
+          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
+          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
+          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
+          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
+          const y1 = laneY(sourceLaneIdx);
+          const y2 = laneY(targetLaneIdx);
+          const midY = (y1 + y2) / 2;
+          const handoffColor = h.correctTarget
+            ? 'var(--status-healthy)'
+            : 'var(--status-warning)';
+          return (
+            <g
+              key={`handoff-${i}`}
+              role="img"
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
+            >
+              <line
+                x1={x}
+                y1={y1}
+                x2={x}
+                y2={y2}
+                stroke={handoffColor}
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                opacity={0.7}
+              />
+              <circle
+                cx={x}
+                cy={midY}
+                r={HANDOFF_MARKER_RADIUS}
+                fill="var(--bg-card)"
+                stroke={handoffColor}
+                strokeWidth={1.5}
+              />
+              <text
+                x={x}
+                y={midY + 4}
+                textAnchor="middle"
+                fontSize={8}
+                fill={handoffColor}
+                fontFamily="var(--font-mono)"
+                fontWeight={600}
+              >
+                {h.score.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex-wrap gap-4 mt-2 workflow-legend">
+        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
+        {visibleHandoffs.length > 0 && (
+          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
+        )}
+        {truncated && (
+          <span className="text-2xs text-warning">
+            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+================
 File: src/lib/quality-utils.ts
 ================
 export type ScoreDirection = 'maximize' | 'minimize';
@@ -15992,284 +16279,6 @@ trendRoutes.get('/trends', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
-
-================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const LANE_HEIGHT = 64;
-const LANE_PADDING_TOP = 12;
-const TURN_BLOCK_HEIGHT = 32;
-const TURN_BLOCK_MIN_WIDTH = 40;
-const TURN_BLOCK_GAP = 6;
-const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
-const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
-const LABEL_WIDTH = 120;
-const HANDOFF_MARKER_RADIUS = 7;
-const HEADER_HEIGHT = 28;
-const MAX_VISIBLE_TURNS = 200;
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[] {
-  return agentNames.map((name, laneIndex) => ({
-    agentName: name,
-    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
-    laneIndex,
-  }));
-}
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null {
-  let sawSource = false;
-  for (const t of turns) {
-    const agent = t.agentName ?? 'unknown';
-    if (agent === handoff.sourceAgent) sawSource = true;
-    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
-  }
-  return null;
-}
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
-  const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
-  return (
-    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
-      <rect
-        width={width}
-        height={TURN_BLOCK_HEIGHT}
-        rx={4}
-        fill={color}
-        fillOpacity={0.15}
-        stroke={color}
-        strokeWidth={1.5}
-      />
-      <rect
-        width={Math.max(2, width * turn.relevance)}
-        height={4}
-        rx={2}
-        fill={barColor}
-        fillOpacity={0.85}
-      />
-      {turn.hasError && (
-        <rect
-          x={width - 6}
-          width={4}
-          height={TURN_BLOCK_HEIGHT}
-          rx={2}
-          fill="var(--status-critical)"
-          fillOpacity={0.85}
-        />
-      )}
-      <text
-        x={width / 2}
-        y={TURN_BLOCK_HEIGHT / 2 + 5}
-        textAnchor="middle"
-        fontSize={10}
-        fill={color}
-        fontFamily="var(--font-mono)"
-      >
-        {turn.turnIndex}
-      </text>
-    </g>
-  );
-}
-export interface WorkflowTimelineProps {
-  turns: TurnLevelResult[];
-  handoffs?: HandoffEvaluation[];
-  agentNames: string[];
-  selectedAgents?: ReadonlySet<string>;
-}
-export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
-  const truncated = turns.length > MAX_VISIBLE_TURNS;
-  const visibleAgentNames = selectedAgents != null
-    ? agentNames.filter(n => selectedAgents.has(n))
-    : agentNames;
-  const lanes = buildLanes(visibleTurns, visibleAgentNames);
-  const totalTurns = visibleTurns.length;
-  const visibleHandoffs = selectedAgents != null
-    ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
-    : handoffs;
-  const agentLaneIndex = new Map<string, number>();
-  const agentColorMap = new Map<string, string>();
-  for (let i = 0; i < visibleAgentNames.length; i++) {
-    const name = visibleAgentNames[i];
-    agentLaneIndex.set(name, i);
-    agentColorMap.set(name, agentColor(name, agentNames));
-  }
-  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
-  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
-  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
-  const turnX = (turnIndex: number): number =>
-    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
-  const laneY = (laneIndex: number): number =>
-    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
-  return (
-    <div
-      className="overflow-x-auto"
-      role="img"
-      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
-    >
-      <svg
-        width={svgWidth}
-        height={svgHeight}
-        className="d-block timeline-svg"
-        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
-      >
-        <g>
-          {turns.map(t => (
-            <text
-              key={t.turnIndex}
-              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
-              y={HEADER_HEIGHT - 8}
-              textAnchor="middle"
-              fontSize={9}
-              fill="var(--text-muted)"
-              fontFamily="var(--font-mono)"
-            >
-              {t.turnIndex}
-            </text>
-          ))}
-        </g>
-        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
-          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
-          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
-          return (
-            <g key={agentName}>
-              <rect
-                x={0}
-                y={laneTop}
-                width={svgWidth}
-                height={LANE_HEIGHT}
-                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
-                fillOpacity={0.5}
-              />
-              <line
-                x1={0}
-                y1={laneTop}
-                x2={svgWidth}
-                y2={laneTop}
-                stroke="var(--border-subtle)"
-                strokeWidth={1}
-              />
-              <text
-                x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_CENTER_OFFSET + 4}
-                textAnchor="end"
-                fontSize={11}
-                fontWeight={600}
-                fill={color}
-                fontFamily="var(--font-mono)"
-              >
-                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
-              </text>
-              {laneTurns.map(turn => (
-                <TurnBlock
-                  key={turn.turnIndex}
-                  turn={turn}
-                  color={color}
-                  width={TURN_BLOCK_MIN_WIDTH}
-                  x={turnX(turn.turnIndex)}
-                  y={laneTop + LANE_PADDING_TOP}
-                />
-              ))}
-            </g>
-          );
-        })}
-        <line
-          x1={0}
-          y1={svgHeight}
-          x2={svgWidth}
-          y2={svgHeight}
-          stroke="var(--border-subtle)"
-          strokeWidth={1}
-        />
-        {visibleHandoffs.map((h, i) => {
-          const turnIndex = findHandoffTurnIndex(h, turns);
-          if (turnIndex == null) return null;
-          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
-          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
-          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
-          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
-          const y1 = laneY(sourceLaneIdx);
-          const y2 = laneY(targetLaneIdx);
-          const midY = (y1 + y2) / 2;
-          const handoffColor = h.correctTarget
-            ? 'var(--status-healthy)'
-            : 'var(--status-warning)';
-          return (
-            <g
-              key={`handoff-${i}`}
-              role="img"
-              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
-            >
-              <line
-                x1={x}
-                y1={y1}
-                x2={x}
-                y2={y2}
-                stroke={handoffColor}
-                strokeWidth={2}
-                strokeDasharray="4 2"
-                opacity={0.7}
-              />
-              <circle
-                cx={x}
-                cy={midY}
-                r={HANDOFF_MARKER_RADIUS}
-                fill="var(--bg-card)"
-                stroke={handoffColor}
-                strokeWidth={1.5}
-              />
-              <text
-                x={x}
-                y={midY + 4}
-                textAnchor="middle"
-                fontSize={8}
-                fill={handoffColor}
-                fontFamily="var(--font-mono)"
-                fontWeight={600}
-              >
-                {h.score.toFixed(1)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="flex-wrap gap-4 mt-2 workflow-legend">
-        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
-        {visibleHandoffs.length > 0 && (
-          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
-        )}
-        {truncated && (
-          <span className="text-2xs text-warning">
-            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 ================
 File: src/types/workflow-graph.ts
@@ -17067,11 +17076,12 @@ agentRoutes.get('/agents', async (c) => {
       limit: LIMIT_AGENT_SPANS,
     });
     const dateBuckets: string[] = [];
+    const bucketIndex = new Map<string, number>();
     for (let d = 0; d < periodDays; d++) {
-      const day = new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY);
-      dateBuckets.push(toDateOnly(day));
+      const day = toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY));
+      dateBuckets.push(day);
+      bucketIndex.set(day, d);
     }
-    const bucketIndex = new Map(dateBuckets.map((b, i) => [b, i]));
     const acc: Record<string, AgentAcc> = Object.create(null);
     const traceToAgents = new Map<string, Set<string>>();
     for (const span of result.traces) {
