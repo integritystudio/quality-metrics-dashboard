@@ -28,7 +28,6 @@ export const enum ErrorMessage {
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
 export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
 
-
 /** Zod schema for coverage input key param. Single source for type, values, and default. */
 export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
 export type InputKey = z.infer<typeof InputKeySchema>;
@@ -71,7 +70,6 @@ export function computePeriodDates(period: string): { start: string; end: string
   const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
   return { start: start.toISOString(), end: now.toISOString() };
 }
-
 
 /** Percentage of events sampled for T2 LLM evaluation. */
 export const LLM_SAMPLE_RATE = 10;
