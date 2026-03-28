@@ -16,6 +16,12 @@ const SPAN_NAME_TOOL_PREFIX = 'tool:';
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
 const NS_TO_MS = 1_000_000;
 
+function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string {
+  const parts = [primaryLabel];
+  if (latencyMs !== null) parts.push(`${latencyMs}ms`);
+  return parts.join(' · ');
+}
+
 export function buildWorkflowGraph(
   evaluation: MultiAgentEvaluation | null,
   spans: TraceSpan[],
@@ -123,9 +129,6 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       ? Math.round(gapNs / NS_TO_MS)
       : null;
 
-    const labelParts = [score.toFixed(SCORE_CHIP_PRECISION)];
-    if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
-
     edges.push({
       id: key,
       source: h.sourceAgent,
@@ -133,7 +136,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       handoffScore: score,
       contextPreserved: h.contextPreserved,
       latencyMs,
-      label: labelParts.join(' · '),
+      label: buildEdgeLabel(score.toFixed(SCORE_CHIP_PRECISION), latencyMs),
     });
   }
 
@@ -192,8 +195,6 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
       const key = `${curr.id}->${next.id}`;
       const gapNs = next.minStart - curr.maxEnd;
       const latencyMs = gapNs >= 0 && isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
-      const labelParts: string[] = ['inferred'];
-      if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
       edges.push({
         id: key,
         source: curr.id,
@@ -202,7 +203,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
         handoffScore: null,
         contextPreserved: false,
         latencyMs,
-        label: labelParts.join(' · '),
+        label: buildEdgeLabel('inferred', latencyMs),
       });
     }
   }
