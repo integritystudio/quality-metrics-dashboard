@@ -12,8 +12,8 @@ import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
-const DYNAMICS_PERIOD_HOURS_24H = 1;
-const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
+const DYNAMICS_BUCKET_HOURS_HOURLY = 1;
+const DYNAMICS_BUCKET_HOURS_DAILY = 24;
 
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
@@ -68,7 +68,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
     });
 
     const dynamics = detail.trend
-      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_PERIOD_HOURS_24H : DYNAMICS_PERIOD_HOURS_MULTI_DAY)
+      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
       : undefined;
 
     return c.json({ ...detail, dynamics });
