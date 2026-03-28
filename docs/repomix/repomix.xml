@@ -16798,143 +16798,6 @@ export function AgentWorkflowView({
 }
 
 ================
-File: src/lib/constants.ts
-================
-import { z } from 'zod';
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-export const enum ErrorMessage {
-  InvalidResponseShape = 'Invalid response shape',
-  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-  InvalidMetricNameFormat = 'Invalid metric name format',
-  InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
-  InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
-  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
-  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
-  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
-  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
-  InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
-  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
-  InvalidSessionIdFormat = 'Invalid sessionId format',
-  InvalidTraceId = 'Invalid traceId',
-}
-export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
-export type InputKey = z.infer<typeof InputKeySchema>;
-export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
-export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
-export type SortBy = z.infer<typeof SortBySchema>;
-export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
-export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
-export type Role = z.infer<typeof RoleSchema>;
-export const ROLES = RoleSchema.options;
-export const DEFAULT_ROLE: Role = 'executive';
-export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
-export const TIME_MS = {
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-} as const;
-export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
-export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
-export const PeriodEnum = z.enum(PERIOD_KEYS);
-export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
-export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
-export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
-export const PERIOD_MS: Record<string, number> = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
-);
-export function computePeriodDates(period: string): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
-  return { start: start.toISOString(), end: now.toISOString() };
-}
-export const LLM_SAMPLE_RATE = 10;
-export const SCORE_THRESHOLD_GREEN = 0.8;
-export const SCORE_THRESHOLD_YELLOW = 0.5;
-export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
-export const MAX_ERROR_ROWS = 10;
-export const MAX_HALLUCINATION_ROWS = 8;
-export const MAX_FAILED_EVAL_ROWS = 6;
-export const LIVE_WINDOW_MS = TIME_MS.DAY;
-export const QUERY_RETRY_COUNT = 2;
-export const POLL_INTERVAL_MS = 30_000;
-export const RETRY_DELAY_BASE = 1_000;
-export const RETRY_DELAY_CAP = 30_000;
-export const MAX_IDS = 50;
-export const EVAL_LIMIT = 100;
-export const SCORE_DISPLAY_PRECISION = 3;
-export const SCORE_CHIP_PRECISION = 2;
-export const SCORE_FORMAT_PRECISION = 4;
-export const OTEL_STATUS_ERROR_CODE = 2;
-export const STALE_TIME = {
-  DEFAULT: 25_000,
-  DETAIL: 30_000,
-  AGGREGATE: 60_000,
-} as const;
-export const DEFAULT_TOP_N = 5;
-export const DEFAULT_BUCKET_COUNT = 10;
-export const SKELETON_HEIGHT_SM = 200;
-export const SKELETON_HEIGHT_MD = 300;
-export const SKELETON_HEIGHT_LG = 400;
-export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
-export const DEFAULT_PAGE_LIMIT = 50;
-export const HEATMAP_ROW_HEADER_WIDTH = 80;
-export const HEATMAP_COL_HEADER_HEIGHT = 32;
-export const COVERAGE_GRID_HEADER_WIDTH = 120;
-export const COVERAGE_GRID_CELL_SIZE = 28;
-export const COVERAGE_GRID_MAX_INPUTS = 30;
-export const FUNNEL_DROPOFF_WARN_PCT = 20;
-export const WORKFLOW_FILTER_MIN_AGENTS = 2;
-export const SPAN_TREE_INDENT = 20;
-export const SPAN_TREE_BASE_PADDING = 8;
-export const SPARKLINE_WIDTH = 160;
-export const SPARKLINE_HEIGHT = 28;
-export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
-export const VARIANCE_LOW_PCT = 20;
-export const VARIANCE_MEDIUM_PCT = 50;
-export const CHART_HEIGHT = 200;
-export const CHART_STROKE_WIDTH = 2;
-export const CHART_DOT_RADIUS = 4;
-export const CHART_DOT_RADIUS_ACTIVE = 6;
-export const CHART_DOT_RADIUS_PROJECTED = 3;
-export const CHART_DASH_THRESHOLD = '6 3';
-export const CHART_DASH_PROJECTED = '6 4';
-export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
-export const CHART_COLORS = {
-  line: '#58a6ff',
-  grid: '#30363d',
-  text: '#8b949e',
-  surface: '#1f2937',
-  tooltip: '#161b22',
-  warning: '#d29922',
-  critical: '#f85149',
-} as const;
-export const AGENT_PALETTE = [
-  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
-  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
-] as const;
-export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
-export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
-export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
-export const CHART_TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: CHART_COLORS.tooltip,
-  border: `1px solid ${CHART_COLORS.grid}`,
-  borderRadius: 'var(--radius)',
-  color: CHART_COLORS.text,
-  fontSize: 12,
-};
-export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
-export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
-
-================
 File: src/pages/DegradationSignalsPage.tsx
 ================
 import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
@@ -17184,6 +17047,143 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
+
+================
+File: src/lib/constants.ts
+================
+import { z } from 'zod';
+export const enum HttpStatus {
+  BadRequest = 400,
+  NotFound = 404,
+  InternalServerError = 500,
+}
+export const enum ErrorMessage {
+  InvalidResponseShape = 'Invalid response shape',
+  MissingPeriodOrAgents = 'Invalid response: missing period or agents',
+  InvalidPeriod = 'Invalid period. Must be 24h, 7d, or 30d.',
+  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
+  InvalidMetricNameFormat = 'Invalid metric name format',
+  InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
+  InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
+  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
+  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
+  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
+  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
+  InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
+  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
+  InvalidSessionIdFormat = 'Invalid sessionId format',
+  InvalidTraceId = 'Invalid traceId',
+}
+export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
+/** Zod schema for coverage input key param. Single source for type, values, and default. */
+export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
+export type InputKey = z.infer<typeof InputKeySchema>;
+export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
+export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
+export type SortBy = z.infer<typeof SortBySchema>;
+export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
+export const RoleSchema = z.enum(['executive', 'operator', 'auditor']);
+export type Role = z.infer<typeof RoleSchema>;
+export const ROLES = RoleSchema.options;
+export const DEFAULT_ROLE: Role = 'executive';
+export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
+export const TIME_MS = {
+  HOUR: 60 * 60 * 1000,
+  DAY: 24 * 60 * 60 * 1000,
+} as const;
+export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
+export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
+export const PeriodEnum = z.enum(PERIOD_KEYS);
+export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
+export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
+export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
+export const PERIOD_MS: Record<string, number> = Object.fromEntries(
+  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
+);
+export function computePeriodDates(period: string): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
+export const LLM_SAMPLE_RATE = 10;
+export const SCORE_THRESHOLD_GREEN = 0.8;
+export const SCORE_THRESHOLD_YELLOW = 0.5;
+export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
+export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+export const MAX_ERROR_ROWS = 10;
+export const MAX_HALLUCINATION_ROWS = 8;
+export const MAX_FAILED_EVAL_ROWS = 6;
+export const LIVE_WINDOW_MS = TIME_MS.DAY;
+export const QUERY_RETRY_COUNT = 2;
+export const POLL_INTERVAL_MS = 30_000;
+export const RETRY_DELAY_BASE = 1_000;
+export const RETRY_DELAY_CAP = 30_000;
+export const MAX_IDS = 50;
+export const EVAL_LIMIT = 100;
+export const SCORE_DISPLAY_PRECISION = 3;
+export const SCORE_CHIP_PRECISION = 2;
+export const SCORE_FORMAT_PRECISION = 4;
+export const OTEL_STATUS_ERROR_CODE = 2;
+export const STALE_TIME = {
+  DEFAULT: 25_000,
+  DETAIL: 30_000,
+  AGGREGATE: 60_000,
+} as const;
+export const DEFAULT_TOP_N = 5;
+export const DEFAULT_BUCKET_COUNT = 10;
+export const SKELETON_HEIGHT_SM = 200;
+export const SKELETON_HEIGHT_MD = 300;
+export const SKELETON_HEIGHT_LG = 400;
+export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
+export const DEFAULT_PAGE_LIMIT = 50;
+export const HEATMAP_ROW_HEADER_WIDTH = 80;
+export const HEATMAP_COL_HEADER_HEIGHT = 32;
+export const COVERAGE_GRID_HEADER_WIDTH = 120;
+export const COVERAGE_GRID_CELL_SIZE = 28;
+export const COVERAGE_GRID_MAX_INPUTS = 30;
+export const FUNNEL_DROPOFF_WARN_PCT = 20;
+export const WORKFLOW_FILTER_MIN_AGENTS = 2;
+export const SPAN_TREE_INDENT = 20;
+export const SPAN_TREE_BASE_PADDING = 8;
+export const SPARKLINE_WIDTH = 160;
+export const SPARKLINE_HEIGHT = 28;
+export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
+export const VARIANCE_LOW_PCT = 20;
+export const VARIANCE_MEDIUM_PCT = 50;
+export const CHART_HEIGHT = 200;
+export const CHART_STROKE_WIDTH = 2;
+export const CHART_DOT_RADIUS = 4;
+export const CHART_DOT_RADIUS_ACTIVE = 6;
+export const CHART_DOT_RADIUS_PROJECTED = 3;
+export const CHART_DASH_THRESHOLD = '6 3';
+export const CHART_DASH_PROJECTED = '6 4';
+export const EVAL_TABLE_EXPAND_COL_SIZE = 32;
+export const CHART_COLORS = {
+  line: '#58a6ff',
+  grid: '#30363d',
+  text: '#8b949e',
+  surface: '#1f2937',
+  tooltip: '#161b22',
+  warning: '#d29922',
+  critical: '#f85149',
+} as const;
+export const AGENT_PALETTE = [
+  '#6366f1', '#ec4899', '#14b8a6', '#f59e0b',
+  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
+] as const;
+export const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 16 };
+export const CHART_GRID_PROPS = { stroke: CHART_COLORS.grid, strokeDasharray: '3 3' };
+export const CHART_AXIS_TICK = { fill: CHART_COLORS.text, fontSize: 12 };
+export const CHART_TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: CHART_COLORS.tooltip,
+  border: `1px solid ${CHART_COLORS.grid}`,
+  borderRadius: 'var(--radius)',
+  color: CHART_COLORS.text,
+  fontSize: 12,
+};
+export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
+export const CHART_YAXIS_WIDTH = 48;
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
 
 ================
 File: src/theme.css
@@ -19040,228 +19040,6 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
 }
 
 ================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-import { groupBy } from './quality-utils.js';
-const ATTR_AGENT_NAME = 'gen_ai.agent.name';
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
-const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
-const SPAN_NAME_TOOL_CALL = 'tool_call';
-const SPAN_NAME_TOOL_PREFIX = 'tool:';
-const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
-const NS_TO_MS = 1_000_000;
-function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string {
-  const parts = [primaryLabel];
-  if (latencyMs !== null) parts.push(`${latencyMs}ms`);
-  return parts.join(' · ');
-}
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph {
-  if (evaluation !== null && Array.isArray(evaluation.turns)) {
-    return buildFromEvaluation(evaluation, spans);
-  }
-  return inferFromSpans(spans);
-}
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
-  let droppedTurns = 0;
-  let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
-  for (const turn of evaluation.turns) {
-    if (turn.agentName == null) {
-      droppedTurns++;
-      continue;
-    }
-    const existing = agentTurns.get(turn.agentName);
-    if (existing) existing.push(turn);
-    else agentTurns.set(turn.agentName, [turn]);
-    if (
-      turn.turnIndex < minTurnIndex ||
-      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
-    ) {
-      minTurnIndex = turn.turnIndex;
-      rootAgentName = turn.agentName;
-    }
-  }
-  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
-  // Per-agent span timing bounds used to compute handoff latency.
-  const agentLastEndNs = new Map<string, number>();
-  const agentFirstStartNs = new Map<string, number>();
-  for (const [agentId, group] of spansByAgent) {
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of group) {
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
-      if (end > maxEnd) maxEnd = end;
-    }
-    if (isFinite(minStart)) agentFirstStartNs.set(agentId, minStart);
-    if (isFinite(maxEnd)) agentLastEndNs.set(agentId, maxEnd);
-  }
-  const nodes: WorkflowNode[] = [];
-  for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
-    const evaluationScore = relevances.length > 0
-      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
-      : null;
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    for (const s of spansByAgent.get(agentName) ?? []) {
-      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
-      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && isFinite(v)) {
-        tokenSum += v;
-        tokenCount++;
-      }
-      durationMs += s.durationMs ?? 0;
-    }
-    const totalTokens = tokenCount > 0 ? tokenSum : null;
-    nodes.push({
-      id: agentName,
-      label: agentName,
-      evaluationScore,
-      toolCallCount,
-      totalTokens,
-      durationMs,
-      turnCount: turns.length,
-      hasError: turns.some(t => t.hasError),
-    });
-  }
-  const seenEdges = new Set<string>();
-  const edges: WorkflowEdge[] = [];
-  for (const h of evaluation.handoffs) {
-    const key = `${h.sourceAgent}->${h.targetAgent}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
-    const score = isFinite(h.score) ? h.score : 0;
-    const sourceEnd = agentLastEndNs.get(h.sourceAgent);
-    const targetStart = agentFirstStartNs.get(h.targetAgent);
-    const gapNs = sourceEnd !== undefined && targetStart !== undefined ? targetStart - sourceEnd : null;
-    const latencyMs = gapNs !== null && gapNs >= 0 && isFinite(gapNs)
-      ? Math.round(gapNs / NS_TO_MS)
-      : null;
-    edges.push({
-      id: key,
-      source: h.sourceAgent,
-      target: h.targetAgent,
-      handoffScore: score,
-      contextPreserved: h.contextPreserved,
-      latencyMs,
-      label: buildEdgeLabel(score.toFixed(SCORE_CHIP_PRECISION), latencyMs),
-    });
-  }
-  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
-}
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
-  if (agentSpans.size === 0) {
-    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
-  }
-  const nodes: WorkflowNode[] = [];
-  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
-  for (const [agentId, group] of agentSpans) {
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    let hasError = false;
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of group) {
-      if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
-      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
-      durationMs += s.durationMs ?? 0;
-      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
-      if (end > maxEnd) maxEnd = end;
-    }
-    nodes.push({
-      id: agentId,
-      label: agentId,
-      evaluationScore: null,
-      toolCallCount,
-      totalTokens: tokenCount > 0 ? tokenSum : null,
-      durationMs,
-      turnCount: group.length,
-      hasError,
-    });
-    agentTimings.push({ id: agentId, minStart, maxEnd });
-  }
-  agentTimings.sort((a, b) => a.minStart - b.minStart);
-  const edges: WorkflowEdge[] = [];
-  for (let i = 0; i < agentTimings.length - 1; i++) {
-    const curr = agentTimings[i];
-    const next = agentTimings[i + 1];
-    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
-      const key = `${curr.id}->${next.id}`;
-      const gapNs = next.minStart - curr.maxEnd;
-      const latencyMs = gapNs >= 0 && isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
-      edges.push({
-        id: key,
-        source: curr.id,
-        target: next.id,
-        handoffScore: null,
-        contextPreserved: false,
-        latencyMs,
-        label: buildEdgeLabel('inferred', latencyMs),
-      });
-    }
-  }
-  const rootNodeId = agentTimings[0]?.id ?? null;
-  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
-}
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
-  const adjacency = new Map<string, string[]>();
-  for (const n of nodes) adjacency.set(n.id, []);
-  for (const e of edges) {
-    if (e.source !== e.target) {
-      adjacency.get(e.source)?.push(e.target);
-    }
-  }
-  const UNVISITED = 0;
-  const IN_STACK = 1;
-  const DONE = 2;
-  const state = new Map<string, 0 | 1 | 2>();
-  for (const n of nodes) state.set(n.id, UNVISITED);
-  function dfs(nodeId: string): boolean {
-    state.set(nodeId, IN_STACK);
-    for (const neighbor of adjacency.get(nodeId) ?? []) {
-      const neighborState = state.get(neighbor) ?? UNVISITED;
-      if (neighborState === IN_STACK) return true;
-      if (neighborState === UNVISITED && dfs(neighbor)) return true;
-    }
-    state.set(nodeId, DONE);
-    return false;
-  }
-  for (const n of nodes) {
-    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
-  }
-  return false;
-}
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
-  if (nodes.length <= 1) return 'single_agent';
-  if (edges.length === 0) return 'single_agent';
-  if (hasCycle(nodes, edges)) return 'cyclic';
-  const outDegree = new Map<string, number>();
-  for (const e of edges) {
-    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
-  }
-  for (const count of outDegree.values()) {
-    if (count > 1) return 'branching';
-  }
-  return 'linear';
-}
-
-================
 File: src/api/routes/sessions.ts
 ================
 import { Hono } from 'hono';
@@ -19575,6 +19353,228 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
+
+================
+File: src/lib/workflow-graph.ts
+================
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
+const ATTR_AGENT_NAME = 'gen_ai.agent.name';
+const ATTR_AGENT_ID = 'gen_ai.agent.id';
+const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
+const SPAN_NAME_TOOL_CALL = 'tool_call';
+const SPAN_NAME_TOOL_PREFIX = 'tool:';
+const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
+const NS_TO_MS = 1_000_000;
+function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string {
+  const parts = [primaryLabel];
+  if (latencyMs !== null) parts.push(`${latencyMs}ms`);
+  return parts.join(' · ');
+}
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph {
+  if (evaluation !== null && Array.isArray(evaluation.turns)) {
+    return buildFromEvaluation(evaluation, spans);
+  }
+  return inferFromSpans(spans);
+}
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
+  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  let droppedTurns = 0;
+  let rootAgentName: string | null = null;
+  let minTurnIndex = Infinity;
+  for (const turn of evaluation.turns) {
+    if (turn.agentName == null) {
+      droppedTurns++;
+      continue;
+    }
+    const existing = agentTurns.get(turn.agentName);
+    if (existing) existing.push(turn);
+    else agentTurns.set(turn.agentName, [turn]);
+    if (
+      turn.turnIndex < minTurnIndex ||
+      (turn.turnIndex === minTurnIndex && turn.agentName < (rootAgentName ?? ''))
+    ) {
+      minTurnIndex = turn.turnIndex;
+      rootAgentName = turn.agentName;
+    }
+  }
+  const spansByAgent = groupBy(spans, s => s.attributes?.[ATTR_AGENT_NAME] as string | undefined);
+  // Per-agent span timing bounds used to compute handoff latency.
+  const agentLastEndNs = new Map<string, number>();
+  const agentFirstStartNs = new Map<string, number>();
+  for (const [agentId, group] of spansByAgent) {
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
+    if (isFinite(minStart)) agentFirstStartNs.set(agentId, minStart);
+    if (isFinite(maxEnd)) agentLastEndNs.set(agentId, maxEnd);
+  }
+  const nodes: WorkflowNode[] = [];
+  for (const [agentName, turns] of agentTurns) {
+    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
+    const evaluationScore = relevances.length > 0
+      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
+      : null;
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    for (const s of spansByAgent.get(agentName) ?? []) {
+      if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
+      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof v === 'number' && isFinite(v)) {
+        tokenSum += v;
+        tokenCount++;
+      }
+      durationMs += s.durationMs ?? 0;
+    }
+    const totalTokens = tokenCount > 0 ? tokenSum : null;
+    nodes.push({
+      id: agentName,
+      label: agentName,
+      evaluationScore,
+      toolCallCount,
+      totalTokens,
+      durationMs,
+      turnCount: turns.length,
+      hasError: turns.some(t => t.hasError),
+    });
+  }
+  const seenEdges = new Set<string>();
+  const edges: WorkflowEdge[] = [];
+  for (const h of evaluation.handoffs) {
+    const key = `${h.sourceAgent}->${h.targetAgent}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    const score = isFinite(h.score) ? h.score : 0;
+    const sourceEnd = agentLastEndNs.get(h.sourceAgent);
+    const targetStart = agentFirstStartNs.get(h.targetAgent);
+    const gapNs = sourceEnd !== undefined && targetStart !== undefined ? targetStart - sourceEnd : null;
+    const latencyMs = gapNs !== null && gapNs >= 0 && isFinite(gapNs)
+      ? Math.round(gapNs / NS_TO_MS)
+      : null;
+    edges.push({
+      id: key,
+      source: h.sourceAgent,
+      target: h.targetAgent,
+      handoffScore: score,
+      contextPreserved: h.contextPreserved,
+      latencyMs,
+      label: buildEdgeLabel(score.toFixed(SCORE_CHIP_PRECISION), latencyMs),
+    });
+  }
+  return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
+}
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
+  const agentSpans = groupBy(spans, span => span.attributes?.[ATTR_AGENT_ID] as string | undefined);
+  if (agentSpans.size === 0) {
+    return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };
+  }
+  const nodes: WorkflowNode[] = [];
+  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
+  for (const [agentId, group] of agentSpans) {
+    let toolCallCount = 0;
+    let tokenSum = 0;
+    let tokenCount = 0;
+    let durationMs = 0;
+    let hasError = false;
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const s of group) {
+      if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
+      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
+      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
+      durationMs += s.durationMs ?? 0;
+      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
+      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
+      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      if (end > maxEnd) maxEnd = end;
+    }
+    nodes.push({
+      id: agentId,
+      label: agentId,
+      evaluationScore: null,
+      toolCallCount,
+      totalTokens: tokenCount > 0 ? tokenSum : null,
+      durationMs,
+      turnCount: group.length,
+      hasError,
+    });
+    agentTimings.push({ id: agentId, minStart, maxEnd });
+  }
+  agentTimings.sort((a, b) => a.minStart - b.minStart);
+  const edges: WorkflowEdge[] = [];
+  for (let i = 0; i < agentTimings.length - 1; i++) {
+    const curr = agentTimings[i];
+    const next = agentTimings[i + 1];
+    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
+      const key = `${curr.id}->${next.id}`;
+      const gapNs = next.minStart - curr.maxEnd;
+      const latencyMs = gapNs >= 0 && isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
+      edges.push({
+        id: key,
+        source: curr.id,
+        target: next.id,
+        handoffScore: null,
+        contextPreserved: false,
+        latencyMs,
+        label: buildEdgeLabel('inferred', latencyMs),
+      });
+    }
+  }
+  const rootNodeId = agentTimings[0]?.id ?? null;
+  return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
+}
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
+  const adjacency = new Map<string, string[]>();
+  for (const n of nodes) adjacency.set(n.id, []);
+  for (const e of edges) {
+    if (e.source !== e.target) {
+      adjacency.get(e.source)?.push(e.target);
+    }
+  }
+  const UNVISITED = 0;
+  const IN_STACK = 1;
+  const DONE = 2;
+  const state = new Map<string, 0 | 1 | 2>();
+  for (const n of nodes) state.set(n.id, UNVISITED);
+  function dfs(nodeId: string): boolean {
+    state.set(nodeId, IN_STACK);
+    for (const neighbor of adjacency.get(nodeId) ?? []) {
+      const neighborState = state.get(neighbor) ?? UNVISITED;
+      if (neighborState === IN_STACK) return true;
+      if (neighborState === UNVISITED && dfs(neighbor)) return true;
+    }
+    state.set(nodeId, DONE);
+    return false;
+  }
+  for (const n of nodes) {
+    if (state.get(n.id) === UNVISITED && dfs(n.id)) return true;
+  }
+  return false;
+}
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape {
+  if (nodes.length <= 1) return 'single_agent';
+  if (edges.length === 0) return 'single_agent';
+  if (hasCycle(nodes, edges)) return 'cyclic';
+  const outDegree = new Map<string, number>();
+  for (const e of edges) {
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+  }
+  for (const count of outDegree.values()) {
+    if (count > 1) return 'branching';
+  }
+  return 'linear';
+}
 
 ================
 File: scripts/sync-to-kv.ts

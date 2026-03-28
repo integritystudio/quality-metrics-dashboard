@@ -1,3 +1,8 @@
+7d224ae 2026-03-28 chore(repomix): regenerate compressed docs after Round 18 simplify fixes
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 4ec3387 2026-03-28 chore(repomix): regenerate compressed docs after Round 17 simplify fixes
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -366,7 +371,4 @@ f16648a 2026-03-26 refactor(judge): remove what-comments in directory scan and t
   scripts/sync-to-kv.ts
 
 72b0798 2026-03-26 refactor(sync-to-kv): remove section separators and what-comments
-  scripts/sync-to-kv.ts
-
-406095a 2026-03-26 refactor(api): consolidate attrStr/attrNum/spanAttr helpers into api-constants
   scripts/sync-to-kv.ts

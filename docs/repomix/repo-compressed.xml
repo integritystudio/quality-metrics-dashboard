@@ -3501,6 +3501,43 @@ function dfs(nodeId: string, visiting: Set<string>): [string[], number]
 onClick=
 
 ================
+File: src/pages/DegradationSignalsPage.tsx
+================
+import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
+import { PageShell } from '../components/PageShell.js';
+import { StatusBadge } from '../components/Indicators.js';
+import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { Period } from '../types.js';
+⋮----
+function ReportRow(
+
+================
+File: src/api/routes/agents.ts
+================
+import { Hono } from 'hono';
+import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
+import { queryTraces } from '../../../../dist/tools/query-traces.js';
+import type { StepScore } from '../../../../dist/backends/index.js';
+import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
+import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+⋮----
+type AgentAcc = {
+  invocations: number;
+  errors: number;
+  rateLimitCount: number;
+  totalOutputSize: number;
+  sessions: Set<string>;
+  traceIds: Set<string>;
+  sourceTypes: Record<string, number>;
+  dailyCounts: number[];
+};
+function computeEvalMetricSummary(scores: number[]):
+function createAgentAccumulator(periodDays: number): AgentAcc
+
+================
 File: src/lib/constants.ts
 ================
 import { z } from 'zod';
@@ -3538,43 +3575,6 @@ export type Role = z.infer<typeof RoleSchema>;
 export function computePeriodDates(period: string):
 ⋮----
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string
-
-================
-File: src/pages/DegradationSignalsPage.tsx
-================
-import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
-import { PageShell } from '../components/PageShell.js';
-import { StatusBadge } from '../components/Indicators.js';
-import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { Period } from '../types.js';
-⋮----
-function ReportRow(
-
-================
-File: src/api/routes/agents.ts
-================
-import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-⋮----
-type AgentAcc = {
-  invocations: number;
-  errors: number;
-  rateLimitCount: number;
-  totalOutputSize: number;
-  sessions: Set<string>;
-  traceIds: Set<string>;
-  sourceTypes: Record<string, number>;
-  dailyCounts: number[];
-};
-function computeEvalMetricSummary(scores: number[]):
-function createAgentAccumulator(periodDays: number): AgentAcc
 
 ================
 File: src/theme.css
@@ -4052,30 +4052,6 @@ async function computeLayout(
 ): Promise<
 
 ================
-File: src/lib/workflow-graph.ts
-================
-import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
-import { groupBy } from './quality-utils.js';
-⋮----
-function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string
-export function buildWorkflowGraph(
-  evaluation: MultiAgentEvaluation | null,
-  spans: TraceSpan[],
-): WorkflowGraph
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
-⋮----
-// Per-agent span timing bounds used to compute handoff latency.
-⋮----
-function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
-function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
-⋮----
-function dfs(nodeId: string): boolean
-⋮----
-function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
-
-================
 File: src/api/routes/sessions.ts
 ================
 import { Hono } from 'hono';
@@ -4116,6 +4092,30 @@ type ScoreStats = { avg: number | null; min: number | null; max: number | null }
 function computeScoreStats(scores: number[]): ScoreStats
 ⋮----
 async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string)
+
+================
+File: src/lib/workflow-graph.ts
+================
+import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
+import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
+import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { groupBy } from './quality-utils.js';
+⋮----
+function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string
+export function buildWorkflowGraph(
+  evaluation: MultiAgentEvaluation | null,
+  spans: TraceSpan[],
+): WorkflowGraph
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph
+⋮----
+// Per-agent span timing bounds used to compute handoff latency.
+⋮----
+function inferFromSpans(spans: TraceSpan[]): WorkflowGraph
+function hasCycle(nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean
+⋮----
+function dfs(nodeId: string): boolean
+⋮----
+function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowShape
 
 ================
 File: scripts/sync-to-kv.ts
