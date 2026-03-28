@@ -6,7 +6,6 @@
  * Keep in sync with the parent when these definitions change.
  */
 
-
 export type ScoreDirection = 'maximize' | 'minimize';
 export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
 export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
@@ -39,7 +38,6 @@ export interface RoleFeatureConfig {
   explanationTruncation: number;
   maxWorstEvaluations: number;
 }
-
 
 export function truncateText(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '...' : text;
@@ -79,7 +77,6 @@ export function scoreColor(value: number, direction?: ScoreDirection): string {
   return SCORE_COLORS[scoreColorBand(value, direction)];
 }
 
-
 export function scoreColorBand(
   value: number,
   direction: ScoreDirection = 'maximize',
@@ -92,7 +89,6 @@ export function scoreColorBand(
   return 'failing';
 }
 
-
 type ThresholdDirection = 'above' | 'below';
 
 export function inferScoreDirection(
@@ -100,7 +96,6 @@ export function inferScoreDirection(
 ): ScoreDirection {
   return alertDirection === 'above' ? 'minimize' : 'maximize';
 }
-
 
 const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
   excellent: { ordinal: 4, category: 'Pass' },
@@ -147,7 +142,6 @@ export function ordinalToCategory(ordinal: number): LabelFilterCategory {
   if (ordinal === 2) return 'Review';
   return 'Fail';
 }
-
 
 const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
 const OPERATOR_EXPLANATION_TRUNCATION = 500;
@@ -201,7 +195,6 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
   },
 };
 
-
 export function shortPath(fullPath: string): string {
   const parts = fullPath.replace(/\\/g, '/').split('/');
   return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
@@ -231,7 +224,6 @@ export function fmtBytes(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
-
 
 export interface PercentileDistribution {
   p10: number; p25: number; p50: number; p75: number; p90: number;
