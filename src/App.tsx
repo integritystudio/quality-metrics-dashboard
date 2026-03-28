@@ -1,11 +1,11 @@
-import { useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
 import { Route, Switch, Link, useLocation, Router } from 'wouter';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
-import { Auth0Provider, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
+import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { HealthOverview } from './components/HealthOverview.js';
@@ -283,6 +283,27 @@ function GlobalShortcuts({ setPeriod, navigate }: {
   return null;
 }
 
+function CallbackHandler() {
+  const { isLoading, isAuthenticated, loginWithRedirect } = useAuth0();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (isAuthenticated) {
+      navigate('/');
+    } else {
+      loginWithRedirect({
+        authorizationParams: {
+          audience: AUTH0_AUDIENCE,
+          redirect_uri: `${window.location.origin}/callback`,
+        },
+      });
+    }
+  }, [isLoading, isAuthenticated, loginWithRedirect, navigate]);
+
+  return <div className="auth-loading" role="status" aria-label="Loading" />;
+}
+
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '') || '';
 
 export function App() {
@@ -309,8 +330,7 @@ export function App() {
                   <LoginPage />
                 </Route>
                 <Route path="/callback">
-                  {/* Auth0 handles the token exchange on mount via Auth0Provider */}
-                  <div className="auth-loading" role="status" aria-label="Loading" />
+                  <CallbackHandler />
                 </Route>
                 <RequireAuth>
                   <Layout period={period} onPeriodChange={setPeriod}>
