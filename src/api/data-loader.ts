@@ -33,7 +33,6 @@ function getBackend(): MultiDirectoryBackend {
   return backend;
 }
 
-
 function defaultRange(lookbackMs: number): { start: string; end: string } {
   const now = new Date();
   return {
