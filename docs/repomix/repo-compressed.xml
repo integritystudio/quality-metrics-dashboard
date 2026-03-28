@@ -2730,6 +2730,29 @@ interface IdListColumnProps {
 onClick=
 
 ================
+File: src/components/CorrelationHeatmap.tsx
+================
+import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
+import { scaleSequential } from 'd3-scale';
+import { interpolateRdYlGn } from 'd3-scale-chromatic';
+import { formatScore } from '../lib/quality-utils.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { CorrelationFeature } from '../types.js';
+interface CorrelationHeatmapProps {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) => void;
+}
+⋮----
+function shortName(metric: string): string
+function contrastText(pearsonR: number): string
+⋮----
+const toLinear = (c: number) =>
+⋮----
+function corrKey(a: string, b: string): string
+
+================
 File: src/components/SpanTree.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -3035,29 +3058,6 @@ export function BarIndicator({
 }: BarIndicatorProps)
 
 ================
-File: src/components/CorrelationHeatmap.tsx
-================
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
-import { scaleSequential } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import { formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { CorrelationFeature } from '../types.js';
-interface CorrelationHeatmapProps {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-  onCellClick?: (rowMetric: string, colMetric: string) => void;
-}
-⋮----
-function shortName(metric: string): string
-function contrastText(pearsonR: number): string
-⋮----
-const toLinear = (c: number) =>
-⋮----
-function corrKey(a: string, b: string): string
-
-================
 File: src/components/CoverageGrid.tsx
 ================
 import { memo, useState, useMemo, type CSSProperties } from 'react';
@@ -3192,40 +3192,6 @@ import { WorkflowGraphView, applyClusterCollapse, extractClusterIds } from '../c
 import { makeNode, makeEdge, makeGraph, makeChainGraph, makeClusteredGraph } from './workflow-fixtures.js';
 
 ================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-⋮----
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[]
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock(
-⋮----
-const turnX = (turnIndex: number): number
-const laneY = (laneIndex: number): number
-
-================
 File: src/lib/quality-utils.ts
 ================
 export type ScoreDirection = 'maximize' | 'minimize';
@@ -3356,6 +3322,40 @@ import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, 
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
 ⋮----
 type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+⋮----
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[]
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock(
+⋮----
+const turnX = (turnIndex: number): number
+const laneY = (laneIndex: number): number
 
 ================
 File: src/types/workflow-graph.ts

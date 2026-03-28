@@ -12471,6 +12471,122 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
 }
 
 ================
+File: src/components/CorrelationHeatmap.tsx
+================
+import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
+import { scaleSequential } from 'd3-scale';
+import { interpolateRdYlGn } from 'd3-scale-chromatic';
+import { formatScore } from '../lib/quality-utils.js';
+import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import type { CorrelationFeature } from '../types.js';
+interface CorrelationHeatmapProps {
+  correlations: CorrelationFeature[];
+  metrics: string[];
+  onCellClick?: (rowMetric: string, colMetric: string) => void;
+}
+const CONTRAST_DARK = '#111';
+const CONTRAST_LIGHT = '#fff';
+const SHORT_NAMES: Record<string, string> = {
+  faithfulness: 'Faith',
+  relevance: 'Relev',
+  coherence: 'Coher',
+  safety: 'Safety',
+  instruction_adherence: 'Instr',
+  tool_accuracy: 'Tool',
+  latency: 'Latency',
+};
+function shortName(metric: string): string {
+  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
+}
+function contrastText(pearsonR: number): string {
+  const bg = colorScale(pearsonR);
+  const m = bg.match(/(\d+)/g);
+  if (!m || m.length < 3) return CONTRAST_DARK;
+  const [r, g, b] = m.map(Number);
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
+}
+const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
+function corrKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
+  const n = metrics.length;
+  const cols = n + 1;
+  const corrMap = useMemo(
+    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
+    [correlations],
+  );
+  return (
+    <div
+      role="table"
+      aria-label="Metric correlation matrix"
+      className="gap-half w-full heatmap-grid"
+      style={{
+        '--heatmap-aspect': `${cols} / ${cols}`,
+        '--heatmap-grid-cols': `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
+        '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
+      } as CSSProperties}
+    >
+      <div role="cell" />
+      {metrics.map((m) => (
+        <div
+          key={`col-${m}`}
+          role="columnheader"
+          className="text-secondary text-xs font-semibold truncate flex-center"
+        >
+          {shortName(m)}
+        </div>
+      ))}
+      {metrics.map((rowMetric, ri) => (
+        <div key={`row-${rowMetric}`} role="presentation" className="contents">
+          <div
+            role="rowheader"
+            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
+          >
+            {shortName(rowMetric)}
+          </div>
+          {metrics.map((colMetric, ci) => {
+            const isDiag = ri === ci;
+            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
+            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
+            const isToxic = corr?.isKnownToxicCombo ?? false;
+            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
+            const tooltip = isDiag
+              ? `${rowMetric}: diagonal (1.00)`
+              : corr
+                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
+                : `${rowMetric} vs ${colMetric}: no data`;
+            return (
+              <div
+                key={`${ri}-${ci}`}
+                role="cell"
+                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
+                data-toxic={isToxic ? 'true' : undefined}
+                title={tooltip}
+                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
+                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
+                style={{
+                  '--heatmap-cell-bg': bg,
+                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
+                } as CSSProperties}
+              >
+                {value.toFixed(SCORE_CHIP_PRECISION)}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+================
 File: src/components/SpanTree.tsx
 ================
 import type { CSSProperties } from 'react';
@@ -13844,122 +13960,6 @@ export function BarIndicator({
 }
 
 ================
-File: src/components/CorrelationHeatmap.tsx
-================
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
-import { scaleSequential } from 'd3-scale';
-import { interpolateRdYlGn } from 'd3-scale-chromatic';
-import { formatScore } from '../lib/quality-utils.js';
-import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
-import type { CorrelationFeature } from '../types.js';
-interface CorrelationHeatmapProps {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-  onCellClick?: (rowMetric: string, colMetric: string) => void;
-}
-const CONTRAST_DARK = '#111';
-const CONTRAST_LIGHT = '#fff';
-const SHORT_NAMES: Record<string, string> = {
-  faithfulness: 'Faith',
-  relevance: 'Relev',
-  coherence: 'Coher',
-  safety: 'Safety',
-  instruction_adherence: 'Instr',
-  tool_accuracy: 'Tool',
-  latency: 'Latency',
-};
-function shortName(metric: string): string {
-  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
-}
-function contrastText(pearsonR: number): string {
-  const bg = colorScale(pearsonR);
-  const m = bg.match(/(\d+)/g);
-  if (!m || m.length < 3) return CONTRAST_DARK;
-  const [r, g, b] = m.map(Number);
-  const toLinear = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  return L > 0.18 ? CONTRAST_DARK : CONTRAST_LIGHT;
-}
-const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
-function corrKey(a: string, b: string): string {
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
-}
-export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
-  const n = metrics.length;
-  const cols = n + 1;
-  const corrMap = useMemo(
-    () => new Map(correlations.map(c => [corrKey(c.metricA, c.metricB), c])),
-    [correlations],
-  );
-  return (
-    <div
-      role="table"
-      aria-label="Metric correlation matrix"
-      className="gap-half w-full heatmap-grid"
-      style={{
-        '--heatmap-aspect': `${cols} / ${cols}`,
-        '--heatmap-grid-cols': `${HEATMAP_ROW_HEADER_WIDTH}px repeat(${n}, 1fr)`,
-        '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
-      } as CSSProperties}
-    >
-      <div role="cell" />
-      {metrics.map((m) => (
-        <div
-          key={`col-${m}`}
-          role="columnheader"
-          className="text-secondary text-xs font-semibold truncate flex-center"
-        >
-          {shortName(m)}
-        </div>
-      ))}
-      {metrics.map((rowMetric, ri) => (
-        <div key={`row-${rowMetric}`} role="presentation" className="contents">
-          <div
-            role="rowheader"
-            className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
-          >
-            {shortName(rowMetric)}
-          </div>
-          {metrics.map((colMetric, ci) => {
-            const isDiag = ri === ci;
-            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
-            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
-            const isToxic = corr?.isKnownToxicCombo ?? false;
-            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
-            const tooltip = isDiag
-              ? `${rowMetric}: diagonal (1.00)`
-              : corr
-                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
-                : `${rowMetric} vs ${colMetric}: no data`;
-            return (
-              <div
-                key={`${ri}-${ci}`}
-                role="cell"
-                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
-                data-toxic={isToxic ? 'true' : undefined}
-                title={tooltip}
-                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
-                style={{
-                  '--heatmap-cell-bg': bg,
-                  '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),
-                } as CSSProperties}
-              >
-                {value.toFixed(SCORE_CHIP_PRECISION)}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-================
 File: src/components/CoverageGrid.tsx
 ================
 import { memo, useState, useMemo, type CSSProperties } from 'react';
@@ -15304,280 +15304,6 @@ describe('WorkflowGraphView cluster toggle UI', () => {
 });
 
 ================
-File: src/components/WorkflowTimeline.tsx
-================
-import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
-import { EmptyState } from './EmptyState.js';
-import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
-const LANE_HEIGHT = 64;
-const LANE_PADDING_TOP = 12;
-const TURN_BLOCK_HEIGHT = 32;
-const TURN_BLOCK_MIN_WIDTH = 40;
-const TURN_BLOCK_GAP = 6;
-const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
-const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
-const LABEL_WIDTH = 120;
-const HANDOFF_MARKER_RADIUS = 7;
-const HEADER_HEIGHT = 28;
-const MAX_VISIBLE_TURNS = 200;
-interface LaneSegment {
-  agentName: string;
-  turns: TurnLevelResult[];
-  laneIndex: number;
-}
-function buildLanes(
-  turns: TurnLevelResult[],
-  agentNames: string[],
-): LaneSegment[] {
-  return agentNames.map((name, laneIndex) => ({
-    agentName: name,
-    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
-    laneIndex,
-  }));
-}
-function findHandoffTurnIndex(
-  handoff: HandoffEvaluation,
-  turns: TurnLevelResult[],
-): number | null {
-  let sawSource = false;
-  for (const t of turns) {
-    const agent = t.agentName ?? 'unknown';
-    if (agent === handoff.sourceAgent) sawSource = true;
-    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
-  }
-  return null;
-}
-interface TurnBlockProps {
-  turn: TurnLevelResult;
-  color: string;
-  width: number;
-  x: number;
-  y: number;
-}
-function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
-  const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
-  return (
-    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
-      <rect
-        width={width}
-        height={TURN_BLOCK_HEIGHT}
-        rx={4}
-        fill={color}
-        fillOpacity={0.15}
-        stroke={color}
-        strokeWidth={1.5}
-      />
-      <rect
-        width={Math.max(2, width * turn.relevance)}
-        height={4}
-        rx={2}
-        fill={barColor}
-        fillOpacity={0.85}
-      />
-      {turn.hasError && (
-        <rect
-          x={width - 6}
-          width={4}
-          height={TURN_BLOCK_HEIGHT}
-          rx={2}
-          fill="var(--status-critical)"
-          fillOpacity={0.85}
-        />
-      )}
-      <text
-        x={width / 2}
-        y={TURN_BLOCK_HEIGHT / 2 + 5}
-        textAnchor="middle"
-        fontSize={10}
-        fill={color}
-        fontFamily="var(--font-mono)"
-      >
-        {turn.turnIndex}
-      </text>
-    </g>
-  );
-}
-export interface WorkflowTimelineProps {
-  turns: TurnLevelResult[];
-  handoffs?: HandoffEvaluation[];
-  agentNames: string[];
-  selectedAgents?: ReadonlySet<string>;
-}
-export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
-  if (turns.length === 0) {
-    return <EmptyState message="No turns to display." />;
-  }
-  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
-  const truncated = turns.length > MAX_VISIBLE_TURNS;
-  const visibleAgentNames = selectedAgents != null
-    ? agentNames.filter(n => selectedAgents.has(n))
-    : agentNames;
-  const lanes = buildLanes(visibleTurns, visibleAgentNames);
-  const totalTurns = visibleTurns.length;
-  const visibleHandoffs = selectedAgents != null
-    ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
-    : handoffs;
-  const agentLaneIndex = new Map(visibleAgentNames.map((name, i) => [name, i]));
-  const agentColorMap = new Map(visibleAgentNames.map(name => [name, agentColor(name, agentNames)]));
-  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
-  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
-  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
-  const turnX = (turnIndex: number): number =>
-    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
-  const laneY = (laneIndex: number): number =>
-    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
-  return (
-    <div
-      className="overflow-x-auto"
-      role="img"
-      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
-    >
-      <svg
-        width={svgWidth}
-        height={svgHeight}
-        className="d-block timeline-svg"
-        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
-      >
-        <g>
-          {turns.map(t => (
-            <text
-              key={t.turnIndex}
-              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
-              y={HEADER_HEIGHT - 8}
-              textAnchor="middle"
-              fontSize={9}
-              fill="var(--text-muted)"
-              fontFamily="var(--font-mono)"
-            >
-              {t.turnIndex}
-            </text>
-          ))}
-        </g>
-        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
-          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
-          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
-          return (
-            <g key={agentName}>
-              <rect
-                x={0}
-                y={laneTop}
-                width={svgWidth}
-                height={LANE_HEIGHT}
-                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
-                fillOpacity={0.5}
-              />
-              <line
-                x1={0}
-                y1={laneTop}
-                x2={svgWidth}
-                y2={laneTop}
-                stroke="var(--border-subtle)"
-                strokeWidth={1}
-              />
-              <text
-                x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_CENTER_OFFSET + 4}
-                textAnchor="end"
-                fontSize={11}
-                fontWeight={600}
-                fill={color}
-                fontFamily="var(--font-mono)"
-              >
-                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
-              </text>
-              {laneTurns.map(turn => (
-                <TurnBlock
-                  key={turn.turnIndex}
-                  turn={turn}
-                  color={color}
-                  width={TURN_BLOCK_MIN_WIDTH}
-                  x={turnX(turn.turnIndex)}
-                  y={laneTop + LANE_PADDING_TOP}
-                />
-              ))}
-            </g>
-          );
-        })}
-        <line
-          x1={0}
-          y1={svgHeight}
-          x2={svgWidth}
-          y2={svgHeight}
-          stroke="var(--border-subtle)"
-          strokeWidth={1}
-        />
-        {}
-        {visibleHandoffs.map((h, i) => {
-          const turnIndex = findHandoffTurnIndex(h, turns);
-          if (turnIndex == null) return null;
-          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
-          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
-          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
-          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
-          const y1 = laneY(sourceLaneIdx);
-          const y2 = laneY(targetLaneIdx);
-          const midY = (y1 + y2) / 2;
-          const handoffColor = h.correctTarget
-            ? 'var(--status-healthy)'
-            : 'var(--status-warning)';
-          return (
-            <g
-              key={`handoff-${i}`}
-              role="img"
-              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
-            >
-              <line
-                x1={x}
-                y1={y1}
-                x2={x}
-                y2={y2}
-                stroke={handoffColor}
-                strokeWidth={2}
-                strokeDasharray="4 2"
-                opacity={0.7}
-              />
-              <circle
-                cx={x}
-                cy={midY}
-                r={HANDOFF_MARKER_RADIUS}
-                fill="var(--bg-card)"
-                stroke={handoffColor}
-                strokeWidth={1.5}
-              />
-              <text
-                x={x}
-                y={midY + 4}
-                textAnchor="middle"
-                fontSize={8}
-                fill={handoffColor}
-                fontFamily="var(--font-mono)"
-                fontWeight={600}
-              >
-                {h.score.toFixed(1)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="flex-wrap gap-4 mt-2 workflow-legend">
-        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
-        {visibleHandoffs.length > 0 && (
-          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
-        )}
-        {truncated && (
-          <span className="text-2xs text-warning">
-            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-================
 File: src/lib/quality-utils.ts
 ================
 export type ScoreDirection = 'maximize' | 'minimize';
@@ -16266,6 +15992,284 @@ trendRoutes.get('/trends', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
+
+================
+File: src/components/WorkflowTimeline.tsx
+================
+import React from 'react';
+import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { EmptyState } from './EmptyState.js';
+import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+const LANE_HEIGHT = 64;
+const LANE_PADDING_TOP = 12;
+const TURN_BLOCK_HEIGHT = 32;
+const TURN_BLOCK_MIN_WIDTH = 40;
+const TURN_BLOCK_GAP = 6;
+const TURN_BLOCK_STRIDE = TURN_BLOCK_MIN_WIDTH + TURN_BLOCK_GAP;
+const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
+const LABEL_WIDTH = 120;
+const HANDOFF_MARKER_RADIUS = 7;
+const HEADER_HEIGHT = 28;
+const MAX_VISIBLE_TURNS = 200;
+interface LaneSegment {
+  agentName: string;
+  turns: TurnLevelResult[];
+  laneIndex: number;
+}
+function buildLanes(
+  turns: TurnLevelResult[],
+  agentNames: string[],
+): LaneSegment[] {
+  return agentNames.map((name, laneIndex) => ({
+    agentName: name,
+    turns: turns.filter(t => (t.agentName ?? 'unknown') === name),
+    laneIndex,
+  }));
+}
+function findHandoffTurnIndex(
+  handoff: HandoffEvaluation,
+  turns: TurnLevelResult[],
+): number | null {
+  let sawSource = false;
+  for (const t of turns) {
+    const agent = t.agentName ?? 'unknown';
+    if (agent === handoff.sourceAgent) sawSource = true;
+    if (sawSource && agent === handoff.targetAgent) return t.turnIndex;
+  }
+  return null;
+}
+interface TurnBlockProps {
+  turn: TurnLevelResult;
+  color: string;
+  width: number;
+  x: number;
+  y: number;
+}
+function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
+  const barColor = scoreColor(turn.relevance);
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
+  return (
+    <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
+      <rect
+        width={width}
+        height={TURN_BLOCK_HEIGHT}
+        rx={4}
+        fill={color}
+        fillOpacity={0.15}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      <rect
+        width={Math.max(2, width * turn.relevance)}
+        height={4}
+        rx={2}
+        fill={barColor}
+        fillOpacity={0.85}
+      />
+      {turn.hasError && (
+        <rect
+          x={width - 6}
+          width={4}
+          height={TURN_BLOCK_HEIGHT}
+          rx={2}
+          fill="var(--status-critical)"
+          fillOpacity={0.85}
+        />
+      )}
+      <text
+        x={width / 2}
+        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        textAnchor="middle"
+        fontSize={10}
+        fill={color}
+        fontFamily="var(--font-mono)"
+      >
+        {turn.turnIndex}
+      </text>
+    </g>
+  );
+}
+export interface WorkflowTimelineProps {
+  turns: TurnLevelResult[];
+  handoffs?: HandoffEvaluation[];
+  agentNames: string[];
+  selectedAgents?: ReadonlySet<string>;
+}
+export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
+  if (turns.length === 0) {
+    return <EmptyState message="No turns to display." />;
+  }
+  const visibleTurns = turns.length > MAX_VISIBLE_TURNS ? turns.slice(0, MAX_VISIBLE_TURNS) : turns;
+  const truncated = turns.length > MAX_VISIBLE_TURNS;
+  const visibleAgentNames = selectedAgents != null
+    ? agentNames.filter(n => selectedAgents.has(n))
+    : agentNames;
+  const lanes = buildLanes(visibleTurns, visibleAgentNames);
+  const totalTurns = visibleTurns.length;
+  const visibleHandoffs = selectedAgents != null
+    ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
+    : handoffs;
+  const agentLaneIndex = new Map<string, number>();
+  const agentColorMap = new Map<string, string>();
+  for (let i = 0; i < visibleAgentNames.length; i++) {
+    const name = visibleAgentNames[i];
+    agentLaneIndex.set(name, i);
+    agentColorMap.set(name, agentColor(name, agentNames));
+  }
+  const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
+  const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
+  const svgHeight = HEADER_HEIGHT + lanes.length * LANE_HEIGHT;
+  const turnX = (turnIndex: number): number =>
+    LABEL_WIDTH + turnIndex * TURN_BLOCK_STRIDE + TURN_BLOCK_GAP;
+  const laneY = (laneIndex: number): number =>
+    HEADER_HEIGHT + laneIndex * LANE_HEIGHT + LANE_CENTER_OFFSET;
+  return (
+    <div
+      className="overflow-x-auto"
+      role="img"
+      aria-label={`Workflow timeline: ${visibleAgentNames.length} agents, ${totalTurns} turns`}
+    >
+      <svg
+        width={svgWidth}
+        height={svgHeight}
+        className="d-block timeline-svg"
+        style={{ '--timeline-min-width': `${svgWidth}px` } as React.CSSProperties}
+      >
+        <g>
+          {turns.map(t => (
+            <text
+              key={t.turnIndex}
+              x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
+              y={HEADER_HEIGHT - 8}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--text-muted)"
+              fontFamily="var(--font-mono)"
+            >
+              {t.turnIndex}
+            </text>
+          ))}
+        </g>
+        {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
+          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
+          const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
+          return (
+            <g key={agentName}>
+              <rect
+                x={0}
+                y={laneTop}
+                width={svgWidth}
+                height={LANE_HEIGHT}
+                fill={laneIndex % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)'}
+                fillOpacity={0.5}
+              />
+              <line
+                x1={0}
+                y1={laneTop}
+                x2={svgWidth}
+                y2={laneTop}
+                stroke="var(--border-subtle)"
+                strokeWidth={1}
+              />
+              <text
+                x={LABEL_WIDTH - 8}
+                y={laneTop + LANE_CENTER_OFFSET + 4}
+                textAnchor="end"
+                fontSize={11}
+                fontWeight={600}
+                fill={color}
+                fontFamily="var(--font-mono)"
+              >
+                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+              </text>
+              {laneTurns.map(turn => (
+                <TurnBlock
+                  key={turn.turnIndex}
+                  turn={turn}
+                  color={color}
+                  width={TURN_BLOCK_MIN_WIDTH}
+                  x={turnX(turn.turnIndex)}
+                  y={laneTop + LANE_PADDING_TOP}
+                />
+              ))}
+            </g>
+          );
+        })}
+        <line
+          x1={0}
+          y1={svgHeight}
+          x2={svgWidth}
+          y2={svgHeight}
+          stroke="var(--border-subtle)"
+          strokeWidth={1}
+        />
+        {visibleHandoffs.map((h, i) => {
+          const turnIndex = findHandoffTurnIndex(h, turns);
+          if (turnIndex == null) return null;
+          const sourceLaneIdx = agentLaneIndex.get(h.sourceAgent) ?? -1;
+          const targetLaneIdx = agentLaneIndex.get(h.targetAgent) ?? -1;
+          if (sourceLaneIdx < 0 || targetLaneIdx < 0) return null;
+          const x = turnX(turnIndex) + TURN_BLOCK_MIN_WIDTH / 2;
+          const y1 = laneY(sourceLaneIdx);
+          const y2 = laneY(targetLaneIdx);
+          const midY = (y1 + y2) / 2;
+          const handoffColor = h.correctTarget
+            ? 'var(--status-healthy)'
+            : 'var(--status-warning)';
+          return (
+            <g
+              key={`handoff-${i}`}
+              role="img"
+              aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
+            >
+              <line
+                x1={x}
+                y1={y1}
+                x2={x}
+                y2={y2}
+                stroke={handoffColor}
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                opacity={0.7}
+              />
+              <circle
+                cx={x}
+                cy={midY}
+                r={HANDOFF_MARKER_RADIUS}
+                fill="var(--bg-card)"
+                stroke={handoffColor}
+                strokeWidth={1.5}
+              />
+              <text
+                x={x}
+                y={midY + 4}
+                textAnchor="middle"
+                fontSize={8}
+                fill={handoffColor}
+                fontFamily="var(--font-mono)"
+                fontWeight={600}
+              >
+                {h.score.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex-wrap gap-4 mt-2 workflow-legend">
+        <span className="text-2xs text-muted">Turn relevance bar at top of each block</span>
+        {visibleHandoffs.length > 0 && (
+          <span className="text-2xs text-muted">Dashed lines = handoffs with score</span>
+        )}
+        {truncated && (
+          <span className="text-2xs text-warning">
+            Showing first {MAX_VISIBLE_TURNS} of {turns.length} turns
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 ================
 File: src/types/workflow-graph.ts
