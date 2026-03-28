@@ -1,5 +1,49 @@
+4d40037 2026-03-27 chore: regenerate repomix docs after Round 9 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+43ed4c4 2026-03-27 chore(repomix): regenerate after simplify pass on llm-judge-code
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+d769250 2026-03-27 chore: regenerate repomix docs after Round 8 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+2742ab0 2026-03-27 chore(repomix): regenerate (no source changes — simplify confirmed clean)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+e156b63 2026-03-27 chore(repomix): regenerate after simplify round 2
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+c0e498f 2026-03-27 chore: regenerate repomix docs after Round 7 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 5339971 2026-03-27 refactor(simplify): tighten VARIANCE_TREND_LABEL to as const; fix logAuditEvent comment
   worker/index.ts
+
+4b00f2e 2026-03-27 chore: regenerate repomix docs after Round 6 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+c083880 2026-03-27 chore(repomix): regenerate docs after simplify pass
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
 8d23a53 2026-03-27 refactor(simplify): replace capitalize with VARIANCE_TREND_LABEL map; fix mock types and logAuditEvent nullability
   worker/index.ts
@@ -17,17 +61,21 @@ d75fd1a 2026-03-27 feat(workflow-graph): add collapsible sub-graphs for agent cl
   scripts/sync-to-kv.ts
   worker/index.ts
 
-013bba0 2026-03-27 feat(app): wire /degradation-signals route and g d shortcut (R5)
-  src/App.tsx
-
-c96513a 2026-03-27 docs(auth0): mark post-deploy checklist items complete
-  docs/roadmap/impl-auth0-migration.md
-
 a10d0c1 2026-03-27 fix(worker): wire executionCtx.waitUntil to prevent cancelled activity logs
   worker/index.ts
 
 b92f6b8 2026-03-27 feat(e2e): add Sentry reporter and migrate setup to Auth0 ROPC
   package-lock.json
+
+dbde04c 2026-03-27 chore: regenerate repomix docs after Round 4 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+a894348 2026-03-27 chore: regenerate repomix docs after task-tracker prefix cleanup
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
 a592dd5 2026-03-27 refactor(comments): strip remaining task-tracker prefixes (WG-*, P0-*, P1-*, P2-*, ADMIN-P4-*, DR-L4)
   scripts/judge-evaluations.ts
@@ -43,11 +91,24 @@ a0165c1 2026-03-27 refactor(workflow): hoist containerStyle const; strip CR-STYL
 360e735 2026-03-27 refactor(workflow-graph): replace inline height style with CSS variable
   src/theme.css
 
+153d4d4 2026-03-27 chore: regenerate repomix compressed XML
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 835dd30 2026-03-27 style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments
   scripts/judge-evaluations.ts
 
 f6e3825 2026-03-27 fix(ci): pin all Doppler secret fetches to prd config
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
   scripts/judge-evaluations.ts
+
+48f38b5 2026-03-27 feat(e2e): replace localStorage session seeding with Auth0 stub
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
 34d779b 2026-03-27 style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments
   worker/index.ts
@@ -80,6 +141,9 @@ d61d1b6 2026-03-27 style(judge-evaluations): remove task-tracker prefixes and WH
   scripts/judge-evaluations.ts
 
 fa7315f 2026-03-27 feat(workflow): add graph controls, critical path, and PNG export
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
   package-lock.json
   src/theme.css
 
@@ -116,7 +180,15 @@ f652c5b 2026-03-27 fix(judge-evaluations): correct self-referential sessionPrevi
 1cc72fa 2026-03-26 refactor(scripts): extract LLM_JUDGE_EVALUATOR constant; remove blank line
   scripts/judge-evaluations.ts
 
+5356e01 2026-03-26 perf(workflow): memoize effectiveSelected Set and document style exemption
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 a64d695 2026-03-26 feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
   src/theme.css
 
 107873e 2026-03-26 refactor(judge-evaluations): remove redundant streaming WHAT comments
@@ -133,10 +205,20 @@ a64d695 2026-03-26 feat(workflow): add agent filter chip bar to AgentWorkflowVie
   scripts/sync-to-kv.ts
 
 5c52517 2026-03-26 fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
   worker/index.ts
 
 8df9944 2026-03-26 refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME
   scripts/sync-to-kv.ts
+
+6a39352 2026-03-26 docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
 9265670 2026-03-26 refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable
   src/theme.css
@@ -146,6 +228,11 @@ b89436f 2026-03-26 refactor(CorrelationHeatmap): replace inline grid-template st
 
 c07f7f3 2026-03-26 refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds
   worker/index.ts
+
+74ca2f1 2026-03-26 chore: regenerate repomix docs after Round 6 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
 1609a58 2026-03-26 refactor(worker): extract remaining inline error strings to ERR_ constants
   worker/index.ts
@@ -164,6 +251,11 @@ d98d147 2026-03-26 refactor(worker): extract safeArray helper for Array.isArray 
 
 488b543 2026-03-26 fix(worker): replace unsafe KV payload casts with Array.isArray guards
   worker/index.ts
+
+a3b4012 2026-03-26 chore: regenerate repomix docs
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
 af4a3a0 2026-03-26 fix(worker): guard logActivity against undefined appUserId instead of passing empty string
   worker/index.ts
@@ -216,6 +308,11 @@ a8895a0 2026-03-26 refactor(judge): remove section header comments
 5a146c8 2026-03-26 fix(worker): validate sortBy param against enum constant
   worker/index.ts
 
+f720297 2026-03-26 docs(backlog): add worker API validation/security code review items (CR-WK-1 through CR-WK-9)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 977bd3c 2026-03-26 refactor(sync-to-kv): remove what-comment before composite priority calculation
   scripts/sync-to-kv.ts
 
@@ -232,17 +329,23 @@ f16648a 2026-03-26 refactor(judge): remove what-comments in directory scan and t
 72b0798 2026-03-26 refactor(sync-to-kv): remove section separators and what-comments
   scripts/sync-to-kv.ts
 
-8925969 2026-03-26 refactor(session-detail): merge evalToRow map into existing evaluations loop
-  src/pages/SessionDetailPage.tsx
-
 406095a 2026-03-26 refactor(api): consolidate attrStr/attrNum/spanAttr helpers into api-constants
   scripts/sync-to-kv.ts
 
-81f57a6 2026-03-26 perf(SessionDetail): merge hallucination+failed eval filters into single pass
-  src/pages/SessionDetailPage.tsx
+5c57a9d 2026-03-26 chore: regenerate repomix docs after Round 13 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
-2ccbd89 2026-03-26 chore(tests): remove redundant section comments that duplicate describe block names
-  src/__tests__/keyboard-nav-context.test.tsx
+ce7da7d 2026-03-26 chore: regenerate repomix docs after Round 12 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+0d40ca0 2026-03-26 chore: regenerate repomix docs after Round 11 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
 
 690d5d9 2026-03-26 refactor(tests): remove standalone label comments from dr13-coverage
   src/__tests__/dr13-coverage.test.tsx
@@ -250,56 +353,15 @@ f16648a 2026-03-26 refactor(judge): remove what-comments in directory scan and t
 83a05a8 2026-03-26 refactor(heatmap): extract display:grid and aspectRatio to CSS class
   src/theme.css
 
+a7dad5d 2026-03-26 chore: regenerate repomix docs after Round 10 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 dfe7a15 2026-03-26 refactor(judge-evaluations): remove section-separator divider comments
   scripts/judge-evaluations.ts
 
-4a98d08 2026-03-26 refactor(SessionDetail): use formatScore() for code structure score display
-  src/pages/SessionDetailPage.tsx
-
-1aea9a6 2026-03-26 refactor(sync-to-kv): remove remaining what-comments and section separators
-  scripts/sync-to-kv.ts
-
-2a9175d 2026-03-26 refactor(sync-to-kv): remove what-comments from main sync loop
-  scripts/sync-to-kv.ts
-
-f6ecfed 2026-03-26 refactor(sync-to-kv): remove what-comments from session detail pre-computation
-  scripts/sync-to-kv.ts
-
-12cfc88 2026-03-26 refactor(sync-to-kv): remove section-separator divider comments
-  scripts/sync-to-kv.ts
-
-ca7558a 2026-03-26 refactor(tests): remove section-separator divider comments from f1-f6-components, keyboard-nav-context, p1-explainability
-  src/__tests__/keyboard-nav-context.test.tsx
-
-39098f4 2026-03-26 refactor(tests): remove section-separator divider comments from components, dr13-coverage
-  src/__tests__/dr13-coverage.test.tsx
-
-02b70b1 2026-03-26 refactor(bar-indicator): replace fillStyle inline object with CSS custom properties
-  src/theme.css
-
-1ded19e 2026-03-26 refactor(span-tree): replace barStyle inline object with span-bar CSS class and custom properties
-  src/theme.css
-
-79c6d97 2026-03-26 refactor: remove self-evident sr-table and section-divider JSX comments
-  src/pages/SessionDetailPage.tsx
-
-5649fa5 2026-03-26 refactor(workflow-timeline): replace minWidth inline style with --timeline-min-width CSS custom property
-  src/theme.css
-
-2131feb 2026-03-26 refactor(coverage-grid): replace status background inline styles with --coverage-status-color CSS custom property
-  src/theme.css
-
-b6caaf6 2026-03-26 refactor(page-shell): replace skeleton height inline style with CSS custom property
-  src/theme.css
-
-d747de2 2026-03-26 refactor(alert-list): replace threshold bar width+left inline styles with CSS custom properties
-  src/theme.css
-
-e7a1b5d 2026-03-26 refactor(workflow-graph): replace 4x height inline style with --graph-height CSS custom property
-  src/theme.css
-
-0061304 2026-03-26 refactor(pipeline-funnel): replace bar width+background inline with CSS custom properties
-  src/theme.css
-
-21bd926 2026-03-26 refactor(split-pane): move static overflow:auto to CSS, width as --split-width custom property
-  src/theme.css
+e7849fe 2026-03-26 chore: regenerate repomix docs after Round 9 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml

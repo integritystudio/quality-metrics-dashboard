@@ -1653,6 +1653,126 @@ describe('prioritizeTraces: referenced trace prioritization', () => {
 });
 
 ================
+File: scripts/__tests__/sync-to-kv.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { buildCalibrationEntry } from '../sync-to-kv.js';
+import type { CalibrationState } from '../../../dist/lib/quality/quality-feature-engineering.js';
+type KVEntry = { key: string; value: string };
+function makeCalibrationState(overrides: Partial<CalibrationState> = {}): CalibrationState {
+  return {
+    lastCalibrated: '2026-03-15T10:00:00.000Z',
+    distributions: {
+      relevance: {
+        distribution: { p10: 0.3, p25: 0.5, p50: 0.7, p75: 0.85, p90: 0.95 },
+        sampleSize: 120,
+        windowStart: '2026-02-13T10:00:00.000Z',
+        windowEnd: '2026-03-15T10:00:00.000Z',
+      },
+      faithfulness: {
+        distribution: { p10: 0.4, p25: 0.6, p50: 0.75, p75: 0.88, p90: 0.96 },
+        sampleSize: 85,
+        windowStart: '2026-02-13T10:00:00.000Z',
+        windowEnd: '2026-03-15T10:00:00.000Z',
+      },
+    },
+    ...overrides,
+  };
+}
+describe('buildCalibrationEntry', () => {
+  it('produces a meta:calibration KV entry from valid CalibrationState', () => {
+    const state = makeCalibrationState();
+    const entry = buildCalibrationEntry(state);
+    expect(entry).not.toBeNull();
+    expect((entry as KVEntry).key).toBe('meta:calibration');
+  });
+  it('entry value is valid JSON', () => {
+    const state = makeCalibrationState();
+    const entry = buildCalibrationEntry(state) as KVEntry;
+    const parsed = JSON.parse(entry.value);
+    expect(parsed).toBeDefined();
+  });
+  it('transforms distributions to flat PercentileDistribution records (drops window metadata)', () => {
+    const state = makeCalibrationState();
+    const entry = buildCalibrationEntry(state) as KVEntry;
+    const response = JSON.parse(entry.value);
+    expect(response.distributions).toBeDefined();
+    expect(response.distributions.relevance).toEqual({
+      p10: 0.3, p25: 0.5, p50: 0.7, p75: 0.85, p90: 0.95,
+    });
+    expect(response.distributions.faithfulness).toEqual({
+      p10: 0.4, p25: 0.6, p50: 0.75, p75: 0.88, p90: 0.96,
+    });
+    expect((response.distributions.relevance as Record<string, unknown>).sampleSize).toBeUndefined();
+    expect((response.distributions.relevance as Record<string, unknown>).windowStart).toBeUndefined();
+  });
+  it('extracts sampleCounts as a flat Record<string, number>', () => {
+    const state = makeCalibrationState();
+    const entry = buildCalibrationEntry(state) as KVEntry;
+    const response = JSON.parse(entry.value);
+    expect(response.sampleCounts).toBeDefined();
+    expect(response.sampleCounts.relevance).toBe(120);
+    expect(response.sampleCounts.faithfulness).toBe(85);
+  });
+  it('preserves lastCalibrated timestamp verbatim', () => {
+    const state = makeCalibrationState({
+      lastCalibrated: '2026-03-10T08:30:00.000Z',
+    });
+    const entry = buildCalibrationEntry(state) as KVEntry;
+    const response = JSON.parse(entry.value);
+    expect(response.lastCalibrated).toBe('2026-03-10T08:30:00.000Z');
+  });
+  it('drops rawScores from the response payload', () => {
+    const state = makeCalibrationState({
+      rawScores: { relevance: [0.5, 0.7, 0.8] },
+    });
+    const entry = buildCalibrationEntry(state) as KVEntry;
+    const response = JSON.parse(entry.value);
+    expect(response.rawScores).toBeUndefined();
+  });
+  it('drops psiValues from the response payload', () => {
+    const state = makeCalibrationState({
+      psiValues: { relevance: 0.04 },
+    });
+    const entry = buildCalibrationEntry(state) as KVEntry;
+    const response = JSON.parse(entry.value);
+    expect(response.psiValues).toBeUndefined();
+  });
+  it('handles CalibrationState with a single metric', () => {
+    const state: CalibrationState = {
+      lastCalibrated: '2026-03-01T00:00:00.000Z',
+      distributions: {
+        coherence: {
+          distribution: { p10: 0.2, p25: 0.45, p50: 0.65, p75: 0.8, p90: 0.92 },
+          sampleSize: 50,
+          windowStart: '2026-02-01T00:00:00.000Z',
+          windowEnd: '2026-03-01T00:00:00.000Z',
+        },
+      },
+    };
+    const entry = buildCalibrationEntry(state) as KVEntry;
+    const response = JSON.parse(entry.value);
+    expect(Object.keys(response.distributions)).toHaveLength(1);
+    expect(response.sampleCounts.coherence).toBe(50);
+  });
+});
+describe('buildCalibrationEntry: graceful skip on missing or invalid state', () => {
+  it('returns null when given null (file not found)', () => {
+    const result = buildCalibrationEntry(null);
+    expect(result).toBeNull();
+  });
+  it('returns null when given undefined', () => {
+    const result = buildCalibrationEntry(undefined as unknown as null);
+    expect(result).toBeNull();
+  });
+  it('returns null when distributions is an empty object', () => {
+    const state = makeCalibrationState({ distributions: {} });
+    const result = buildCalibrationEntry(state);
+    expect(result).toBeNull();
+  });
+});
+
+================
 File: scripts/.degradation-incidents.json
 ================
 [
@@ -11278,126 +11398,6 @@ File: src/vite-env.d.ts
 
 
 ================
-File: scripts/__tests__/sync-to-kv.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { buildCalibrationEntry } from '../sync-to-kv.js';
-import type { CalibrationState } from '../../../dist/lib/quality/quality-feature-engineering.js';
-type KVEntry = { key: string; value: string };
-function makeCalibrationState(overrides: Partial<CalibrationState> = {}): CalibrationState {
-  return {
-    lastCalibrated: '2026-03-15T10:00:00.000Z',
-    distributions: {
-      relevance: {
-        distribution: { p10: 0.3, p25: 0.5, p50: 0.7, p75: 0.85, p90: 0.95 },
-        sampleSize: 120,
-        windowStart: '2026-02-13T10:00:00.000Z',
-        windowEnd: '2026-03-15T10:00:00.000Z',
-      },
-      faithfulness: {
-        distribution: { p10: 0.4, p25: 0.6, p50: 0.75, p75: 0.88, p90: 0.96 },
-        sampleSize: 85,
-        windowStart: '2026-02-13T10:00:00.000Z',
-        windowEnd: '2026-03-15T10:00:00.000Z',
-      },
-    },
-    ...overrides,
-  };
-}
-describe('buildCalibrationEntry', () => {
-  it('produces a meta:calibration KV entry from valid CalibrationState', () => {
-    const state = makeCalibrationState();
-    const entry = buildCalibrationEntry(state);
-    expect(entry).not.toBeNull();
-    expect((entry as KVEntry).key).toBe('meta:calibration');
-  });
-  it('entry value is valid JSON', () => {
-    const state = makeCalibrationState();
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const parsed = JSON.parse(entry.value);
-    expect(parsed).toBeDefined();
-  });
-  it('transforms distributions to flat PercentileDistribution records (drops window metadata)', () => {
-    const state = makeCalibrationState();
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
-    expect(response.distributions).toBeDefined();
-    expect(response.distributions.relevance).toEqual({
-      p10: 0.3, p25: 0.5, p50: 0.7, p75: 0.85, p90: 0.95,
-    });
-    expect(response.distributions.faithfulness).toEqual({
-      p10: 0.4, p25: 0.6, p50: 0.75, p75: 0.88, p90: 0.96,
-    });
-    expect((response.distributions.relevance as Record<string, unknown>).sampleSize).toBeUndefined();
-    expect((response.distributions.relevance as Record<string, unknown>).windowStart).toBeUndefined();
-  });
-  it('extracts sampleCounts as a flat Record<string, number>', () => {
-    const state = makeCalibrationState();
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
-    expect(response.sampleCounts).toBeDefined();
-    expect(response.sampleCounts.relevance).toBe(120);
-    expect(response.sampleCounts.faithfulness).toBe(85);
-  });
-  it('preserves lastCalibrated timestamp verbatim', () => {
-    const state = makeCalibrationState({
-      lastCalibrated: '2026-03-10T08:30:00.000Z',
-    });
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
-    expect(response.lastCalibrated).toBe('2026-03-10T08:30:00.000Z');
-  });
-  it('drops rawScores from the response payload', () => {
-    const state = makeCalibrationState({
-      rawScores: { relevance: [0.5, 0.7, 0.8] },
-    });
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
-    expect(response.rawScores).toBeUndefined();
-  });
-  it('drops psiValues from the response payload', () => {
-    const state = makeCalibrationState({
-      psiValues: { relevance: 0.04 },
-    });
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
-    expect(response.psiValues).toBeUndefined();
-  });
-  it('handles CalibrationState with a single metric', () => {
-    const state: CalibrationState = {
-      lastCalibrated: '2026-03-01T00:00:00.000Z',
-      distributions: {
-        coherence: {
-          distribution: { p10: 0.2, p25: 0.45, p50: 0.65, p75: 0.8, p90: 0.92 },
-          sampleSize: 50,
-          windowStart: '2026-02-01T00:00:00.000Z',
-          windowEnd: '2026-03-01T00:00:00.000Z',
-        },
-      },
-    };
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
-    expect(Object.keys(response.distributions)).toHaveLength(1);
-    expect(response.sampleCounts.coherence).toBe(50);
-  });
-});
-describe('buildCalibrationEntry: graceful skip on missing or invalid state', () => {
-  it('returns null when given null (file not found)', () => {
-    const result = buildCalibrationEntry(null);
-    expect(result).toBeNull();
-  });
-  it('returns null when given undefined', () => {
-    const result = buildCalibrationEntry(undefined as unknown as null);
-    expect(result).toBeNull();
-  });
-  it('returns null when distributions is an empty object', () => {
-    const state = makeCalibrationState({ distributions: {} });
-    const result = buildCalibrationEntry(state);
-    expect(result).toBeNull();
-  });
-});
-
-================
 File: scripts/backtest-degradation.ts
 ================
 #!/usr/bin/env tsx
@@ -15582,6 +15582,296 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
 }
 
 ================
+File: src/lib/quality-utils.ts
+================
+export type ScoreDirection = 'maximize' | 'minimize';
+export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
+export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
+export interface LabelOrdinal {
+  ordinal: number;
+  category: LabelFilterCategory;
+  mapped: boolean;
+}
+import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
+export type FeatureRoleType = Role;
+export function agentColor(agentName: string, agentNames: string[]): string {
+  const idx = agentNames.indexOf(agentName);
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+}
+export interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;
+  maxWorstEvaluations: number;
+}
+export function truncateText(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+export function truncateId(id: string, max = 10): string {
+  if (id.length <= max) return id;
+  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+}
+export function formatScore(val: number | null | undefined): string {
+  if (val === null || val === undefined) return 'N/A';
+  return val.toFixed(SCORE_FORMAT_PRECISION);
+}
+export function formatPercent(value: number, decimals = 1): string {
+  if (!Number.isFinite(value)) return '\u2014';
+  return `${value.toFixed(decimals)}%`;
+}
+export function plural(count: number, singular: string, suffix = 's'): string {
+  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
+}
+export const byValueDesc = ([, a]: [string, number], [, b]: [string, number]): number => b - a;
+export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
+  excellent: '#26d97f',
+  good: '#34d399',
+  adequate: '#e5a00d',
+  poor: '#f97316',
+  failing: '#f04438',
+  no_data: '#6b7280',
+};
+export function scoreColor(value: number, direction?: ScoreDirection): string {
+  return SCORE_COLORS[scoreColorBand(value, direction)];
+}
+export function scoreColorBand(
+  value: number,
+  direction: ScoreDirection = 'maximize',
+): ScoreColorBand {
+  const v = direction === 'minimize' ? 1 - value : value;
+  if (v >= 0.9) return 'excellent';
+  if (v >= 0.8) return 'good';
+  if (v >= 0.6) return 'adequate';
+  if (v >= 0.4) return 'poor';
+  return 'failing';
+}
+type ThresholdDirection = 'above' | 'below';
+export function inferScoreDirection(
+  alertDirection: ThresholdDirection | undefined,
+): ScoreDirection {
+  return alertDirection === 'above' ? 'minimize' : 'maximize';
+}
+const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
+  excellent: { ordinal: 4, category: 'Pass' },
+  highly_relevant: { ordinal: 4, category: 'Pass' },
+  fully_faithful: { ordinal: 4, category: 'Pass' },
+  perfect: { ordinal: 4, category: 'Pass' },
+  relevant: { ordinal: 3, category: 'Pass' },
+  good: { ordinal: 3, category: 'Pass' },
+  faithful: { ordinal: 3, category: 'Pass' },
+  pass: { ordinal: 3, category: 'Pass' },
+  correct: { ordinal: 3, category: 'Pass' },
+  coherent: { ordinal: 3, category: 'Pass' },
+  partial: { ordinal: 2, category: 'Review' },
+  borderline: { ordinal: 2, category: 'Review' },
+  adequate: { ordinal: 2, category: 'Review' },
+  mixed: { ordinal: 2, category: 'Review' },
+  off_topic: { ordinal: 1, category: 'Fail' },
+  irrelevant: { ordinal: 1, category: 'Fail' },
+  unfaithful: { ordinal: 1, category: 'Fail' },
+  fail: { ordinal: 1, category: 'Fail' },
+  incorrect: { ordinal: 1, category: 'Fail' },
+  incoherent: { ordinal: 1, category: 'Fail' },
+  hallucinated: { ordinal: 0, category: 'Fail' },
+  fabricated: { ordinal: 0, category: 'Fail' },
+  toxic: { ordinal: 0, category: 'Fail' },
+  dangerous: { ordinal: 0, category: 'Fail' },
+};
+function normalizeLabel(label: string): string {
+  return label.toLowerCase().replace(/-/g, '_').trim();
+}
+export function labelToOrdinal(label: string): LabelOrdinal {
+  const normalized = normalizeLabel(label);
+  const entry = LABEL_ORDINAL_MAP[normalized];
+  if (entry) {
+    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
+  }
+  return { ordinal: 2, category: 'Review', mapped: false };
+}
+export function ordinalToCategory(ordinal: number): LabelFilterCategory {
+  if (ordinal >= 3) return 'Pass';
+  if (ordinal === 2) return 'Review';
+  return 'Fail';
+}
+const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
+const OPERATOR_EXPLANATION_TRUNCATION = 500;
+const AUDITOR_EXPLANATION_TRUNCATION = 2000;
+const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
+const OPERATOR_MAX_WORST_EVALUATIONS = 5;
+const AUDITOR_MAX_WORST_EVALUATIONS = 10;
+export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
+  executive: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: false,
+    showAcceleration: false,
+    showProjectedBreach: true,
+    showCorrelationRemediation: false,
+    showCoverageHeatmap: false,
+    showPipelineFunnel: false,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
+  },
+  operator: {
+    showCQI: false,
+    showCQIBreakdown: false,
+    showVariance: true,
+    showAcceleration: true,
+    showProjectedBreach: true,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: false,
+    showRawExport: false,
+    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
+  },
+  auditor: {
+    showCQI: true,
+    showCQIBreakdown: true,
+    showVariance: true,
+    showAcceleration: false,
+    showProjectedBreach: false,
+    showCorrelationRemediation: true,
+    showCoverageHeatmap: true,
+    showPipelineFunnel: true,
+    showProvenance: true,
+    showRawExport: true,
+    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
+    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
+  },
+};
+export function shortPath(fullPath: string): string {
+  const parts = fullPath.replace(/\\/g, '/').split('/');
+  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
+}
+export function fmtDuration(ms: number, secDecimals = 1): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
+}
+export function groupBy<T, K extends PropertyKey = string>(
+  items: T[],
+  keyFn: (item: T) => K | undefined,
+): Map<K, T[]> {
+  const map = new Map<K, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (key == null) continue;
+    const group = map.get(key);
+    if (group) group.push(item);
+    else map.set(key, [item]);
+  }
+  return map;
+}
+export function fmtBytes(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+export interface PercentileDistribution {
+  p10: number; p25: number; p50: number; p75: number; p90: number;
+}
+export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
+export const MIN_QUANTILE_SAMPLE_SIZE = 100;
+const NUMERICAL_MIN_DENOMINATOR = 0.001;
+const LOG_SCALE_DIVISOR = 3;
+const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
+const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
+const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
+const QUANTILE_P10 = 0.1;
+const QUANTILE_P25 = 0.25;
+const QUANTILE_P50 = 0.5;
+const QUANTILE_P75 = 0.75;
+const QUANTILE_P90 = 0.9;
+export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
+  relevance: 'quantile',
+  faithfulness: 'binary',
+  coherence: 'uniform',
+  hallucination: 'log',
+  task_completion: 'step',
+  tool_correctness: 'categorical',
+  evaluation_latency: 'percentile_rank',
+};
+export function empiricalCDF(value: number, dist: PercentileDistribution): number {
+  if (!Number.isFinite(value)) return QUANTILE_P50;
+  const points: [number, number][] = [
+    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
+    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
+  ];
+  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
+  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
+  for (let i = 0; i < points.length - 1; i++) {
+    const [v0, p0] = points[i];
+    const [v1, p1] = points[i + 1];
+    if (value >= v0 && value <= v1) {
+      const range = v1 - v0;
+      if (range === 0) return p0;
+      return p0 + (p1 - p0) * ((value - v0) / range);
+    }
+  }
+  return QUANTILE_P50;
+}
+export function adaptiveScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection = 'maximize',
+  distribution?: PercentileDistribution,
+  sampleSize?: number,
+): ScoreColorBand {
+  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
+  switch (strategy) {
+    case 'quantile': {
+      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
+        return scoreColorBand(value, direction);
+      }
+      const rank = empiricalCDF(value, distribution);
+      if (rank >= QUANTILE_P90) return 'excellent';
+      if (rank >= QUANTILE_P75) return 'good';
+      if (rank >= QUANTILE_P50) return 'adequate';
+      if (rank >= QUANTILE_P25) return 'poor';
+      return 'failing';
+    }
+    case 'log': {
+      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
+      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
+      return scoreColorBand(logNorm, 'maximize');
+    }
+    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
+    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
+    case 'categorical': return scoreColorBand(value, direction);
+    case 'percentile_rank': {
+      if (!distribution) return scoreColorBand(value, direction);
+      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
+    }
+    case 'uniform':
+    default: return scoreColorBand(value, direction);
+  }
+}
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+export function formatTimestamp(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts || '-';
+  const now = new Date();
+  const diffMin = differenceInMinutes(now, d);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = differenceInHours(now, d);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = differenceInDays(now, d);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return format(d, 'PP');
+}
+
+================
 File: src/api/routes/metrics.ts
 ================
 import { Hono } from 'hono';
@@ -15597,8 +15887,8 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
-const DYNAMICS_PERIOD_HOURS_24H = 1;
-const DYNAMICS_PERIOD_HOURS_MULTI_DAY = 24;
+const DYNAMICS_BUCKET_HOURS_HOURLY = 1;
+const DYNAMICS_BUCKET_HOURS_DAILY = 24;
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
 const LimitSchema = z.coerce.number().int().min(1).max(200).default(50);
@@ -15644,7 +15934,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
       previousValues,
     });
     const dynamics = detail.trend
-      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_PERIOD_HOURS_24H : DYNAMICS_PERIOD_HOURS_MULTI_DAY)
+      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
       : undefined;
     return c.json({ ...detail, dynamics });
   } catch (err) {
@@ -15824,183 +16114,6 @@ qualityRoutes.get('/degradation-signals', async (c) => {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
 });
-
-================
-File: src/api/data-loader.ts
-================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-import { queryLogs } from '../../../dist/tools/query-logs.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { toDateOnly } from './api-constants.js';
-const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
-const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
-const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
-const LIMIT_EVALS_BULK = 100_000;
-const LIMIT_EVALS_METRIC = 10_000;
-const LIMIT_EVALS_PER_TRACE = 1_000;
-const LIMIT_EVALS_SESSION = 10_000;
-const LIMIT_TRACES = 500;
-const LIMIT_LOGS = 1_000;
-const LIMIT_HEALTH_PROBE = 1;
-let backend: MultiDirectoryBackend | undefined;
-function getBackend(): MultiDirectoryBackend {
-  if (!backend) {
-    backend = new MultiDirectoryBackend(undefined, true);
-  }
-  return backend;
-}
-function defaultRange(lookbackMs: number): { start: string; end: string } {
-  const now = new Date();
-  return {
-    start: new Date(now.getTime() - lookbackMs).toISOString(),
-    end: now.toISOString(),
-  };
-}
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>> {
-  const be = getBackend();
-  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
-  const grouped = new Map<string, EvaluationResult[]>();
-  for (const ev of evals) {
-    const name = ev.evaluationName;
-    let group = grouped.get(name);
-    if (!group) grouped.set(name, group = []);
-    group.push(ev);
-  }
-  return grouped;
-}
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  return be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    evaluationName: metricName,
-    limit: LIMIT_EVALS_METRIC,
-  });
-}
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return be.queryEvaluations({
-    traceId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_PER_TRACE,
-  });
-}
-const TRACE_QUERY_CONCURRENCY = 10;
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]> {
-  const uniqueIds = [...new Set(traceIds)];
-  if (uniqueIds.length === 0) return [];
-  const be = getBackend();
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
-  const start = startDate ?? defStart;
-  const end = endDate ?? defEnd;
-  const all: EvaluationResult[] = [];
-  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
-    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
-    const settled = await Promise.allSettled(
-      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
-    );
-    for (const result of settled) {
-      if (result.status === 'fulfilled') all.push(...result.value);
-    }
-  }
-  return all;
-}
-function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
-}
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
-  const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
-}
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
-  const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
-}
-async function queryLogsWithDefaultRange(
-  filter: { traceId?: string; sessionId?: string },
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
-  return result.logs;
-}
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
-}
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]> {
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
-  return queryVerificationsLib({
-    startDate: opts.startDate ?? start,
-    endDate: opts.endDate ?? end,
-    sessionId: opts.sessionId,
-    limit: opts.limit ?? LIMIT_LOGS,
-  });
-}
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
-  return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
-}
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return be.queryEvaluations({
-    sessionId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
-    limit: LIMIT_EVALS_SESSION,
-  });
-}
-export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
-  const be = getBackend();
-  const health = await be.healthCheck();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
-  const evals = await be.queryEvaluations({
-    startDate: start,
-    endDate: end,
-    limit: LIMIT_HEALTH_PROBE,
-  });
-  return { status: health.status, hasData: evals.length > 0 };
-}
 
 ================
 File: src/components/AgentWorkflowView.tsx
@@ -16350,293 +16463,174 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>
 }
 
 ================
-File: src/lib/quality-utils.ts
+File: src/api/data-loader.ts
 ================
-export type ScoreDirection = 'maximize' | 'minimize';
-export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
-export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
-export interface LabelOrdinal {
-  ordinal: number;
-  category: LabelFilterCategory;
-  mapped: boolean;
-}
-import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
-export type FeatureRoleType = Role;
-export function agentColor(agentName: string, agentNames: string[]): string {
-  const idx = agentNames.indexOf(agentName);
-  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
-}
-export interface RoleFeatureConfig {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
-}
-export function truncateText(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + '...' : text;
-}
-export function truncateId(id: string, max = 10): string {
-  if (id.length <= max) return id;
-  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
-}
-export function formatScore(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  return val.toFixed(SCORE_FORMAT_PRECISION);
-}
-export function formatPercent(value: number, decimals = 1): string {
-  if (!Number.isFinite(value)) return '\u2014';
-  return `${value.toFixed(decimals)}%`;
-}
-export function plural(count: number, singular: string, suffix = 's'): string {
-  return `${count} ${singular}${count !== 1 ? suffix : ''}`;
-}
-export const byValueDesc = ([, a]: [string, number], [, b]: [string, number]): number => b - a;
-export const SCORE_COLORS: Record<ScoreColorBand | 'no_data', string> = {
-  excellent: '#26d97f',
-  good: '#34d399',
-  adequate: '#e5a00d',
-  poor: '#f97316',
-  failing: '#f04438',
-  no_data: '#6b7280',
-};
-export function scoreColor(value: number, direction?: ScoreDirection): string {
-  return SCORE_COLORS[scoreColorBand(value, direction)];
-}
-export function scoreColorBand(
-  value: number,
-  direction: ScoreDirection = 'maximize',
-): ScoreColorBand {
-  const v = direction === 'minimize' ? 1 - value : value;
-  if (v >= 0.9) return 'excellent';
-  if (v >= 0.8) return 'good';
-  if (v >= 0.6) return 'adequate';
-  if (v >= 0.4) return 'poor';
-  return 'failing';
-}
-type ThresholdDirection = 'above' | 'below';
-export function inferScoreDirection(
-  alertDirection: ThresholdDirection | undefined,
-): ScoreDirection {
-  return alertDirection === 'above' ? 'minimize' : 'maximize';
-}
-const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
-  excellent: { ordinal: 4, category: 'Pass' },
-  highly_relevant: { ordinal: 4, category: 'Pass' },
-  fully_faithful: { ordinal: 4, category: 'Pass' },
-  perfect: { ordinal: 4, category: 'Pass' },
-  relevant: { ordinal: 3, category: 'Pass' },
-  good: { ordinal: 3, category: 'Pass' },
-  faithful: { ordinal: 3, category: 'Pass' },
-  pass: { ordinal: 3, category: 'Pass' },
-  correct: { ordinal: 3, category: 'Pass' },
-  coherent: { ordinal: 3, category: 'Pass' },
-  partial: { ordinal: 2, category: 'Review' },
-  borderline: { ordinal: 2, category: 'Review' },
-  adequate: { ordinal: 2, category: 'Review' },
-  mixed: { ordinal: 2, category: 'Review' },
-  off_topic: { ordinal: 1, category: 'Fail' },
-  irrelevant: { ordinal: 1, category: 'Fail' },
-  unfaithful: { ordinal: 1, category: 'Fail' },
-  fail: { ordinal: 1, category: 'Fail' },
-  incorrect: { ordinal: 1, category: 'Fail' },
-  incoherent: { ordinal: 1, category: 'Fail' },
-  hallucinated: { ordinal: 0, category: 'Fail' },
-  fabricated: { ordinal: 0, category: 'Fail' },
-  toxic: { ordinal: 0, category: 'Fail' },
-  dangerous: { ordinal: 0, category: 'Fail' },
-};
-function normalizeLabel(label: string): string {
-  return label.toLowerCase().replace(/-/g, '_').trim();
-}
-export function labelToOrdinal(label: string): LabelOrdinal {
-  const normalized = normalizeLabel(label);
-  const entry = LABEL_ORDINAL_MAP[normalized];
-  if (entry) {
-    return { ordinal: entry.ordinal, category: entry.category, mapped: true };
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+import { queryLogs } from '../../../dist/tools/query-logs.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { toDateOnly } from './api-constants.js';
+import { groupBy } from '../lib/quality-utils.js';
+const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
+const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
+const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
+const LIMIT_EVALS_BULK = 100_000;
+const LIMIT_EVALS_METRIC = 10_000;
+const LIMIT_EVALS_PER_TRACE = 1_000;
+const LIMIT_EVALS_SESSION = 10_000;
+const LIMIT_TRACES = 500;
+const LIMIT_LOGS = 1_000;
+const LIMIT_HEALTH_PROBE = 1;
+let backend: MultiDirectoryBackend | undefined;
+function getBackend(): MultiDirectoryBackend {
+  if (!backend) {
+    backend = new MultiDirectoryBackend(undefined, true);
   }
-  return { ordinal: 2, category: 'Review', mapped: false };
+  return backend;
 }
-export function ordinalToCategory(ordinal: number): LabelFilterCategory {
-  if (ordinal >= 3) return 'Pass';
-  if (ordinal === 2) return 'Review';
-  return 'Fail';
-}
-const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
-const OPERATOR_EXPLANATION_TRUNCATION = 500;
-const AUDITOR_EXPLANATION_TRUNCATION = 2000;
-const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
-const OPERATOR_MAX_WORST_EVALUATIONS = 5;
-const AUDITOR_MAX_WORST_EVALUATIONS = 10;
-export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
-  executive: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: false,
-    showAcceleration: false,
-    showProjectedBreach: true,
-    showCorrelationRemediation: false,
-    showCoverageHeatmap: false,
-    showPipelineFunnel: false,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
-  },
-  operator: {
-    showCQI: false,
-    showCQIBreakdown: false,
-    showVariance: true,
-    showAcceleration: true,
-    showProjectedBreach: true,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: false,
-    showRawExport: false,
-    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
-  },
-  auditor: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: true,
-    showAcceleration: false,
-    showProjectedBreach: false,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: true,
-    showRawExport: true,
-    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
-  },
-};
-export function shortPath(fullPath: string): string {
-  const parts = fullPath.replace(/\\/g, '/').split('/');
-  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
-}
-export function fmtDuration(ms: number, secDecimals = 1): string {
-  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
-}
-export function groupBy<T, K extends PropertyKey = string>(
-  items: T[],
-  keyFn: (item: T) => K | undefined,
-): Map<K, T[]> {
-  const map = new Map<K, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (key == null) continue;
-    const group = map.get(key);
-    if (group) group.push(item);
-    else map.set(key, [item]);
-  }
-  return map;
-}
-export function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-export interface PercentileDistribution {
-  p10: number; p25: number; p50: number; p75: number; p90: number;
-}
-export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
-export const MIN_QUANTILE_SAMPLE_SIZE = 100;
-const NUMERICAL_MIN_DENOMINATOR = 0.001;
-const LOG_SCALE_DIVISOR = 3;
-const BINARY_SCALE_EXCELLENT_THRESHOLD = 0.7;
-const STEP_SCALE_EXCELLENT_THRESHOLD = 0.8;
-const STEP_SCALE_ADEQUATE_THRESHOLD = 0.5;
-const QUANTILE_P10 = 0.1;
-const QUANTILE_P25 = 0.25;
-const QUANTILE_P50 = 0.5;
-const QUANTILE_P75 = 0.75;
-const QUANTILE_P90 = 0.9;
-export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
-  relevance: 'quantile',
-  faithfulness: 'binary',
-  coherence: 'uniform',
-  hallucination: 'log',
-  task_completion: 'step',
-  tool_correctness: 'categorical',
-  evaluation_latency: 'percentile_rank',
-};
-export function empiricalCDF(value: number, dist: PercentileDistribution): number {
-  if (!Number.isFinite(value)) return QUANTILE_P50;
-  const points: [number, number][] = [
-    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
-    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
-  ];
-  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
-  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
-  for (let i = 0; i < points.length - 1; i++) {
-    const [v0, p0] = points[i];
-    const [v1, p1] = points[i + 1];
-    if (value >= v0 && value <= v1) {
-      const range = v1 - v0;
-      if (range === 0) return p0;
-      return p0 + (p1 - p0) * ((value - v0) / range);
-    }
-  }
-  return QUANTILE_P50;
-}
-export function adaptiveScoreColorBand(
-  value: number,
-  metric: string,
-  direction: ScoreDirection = 'maximize',
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
-): ScoreColorBand {
-  const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
-  switch (strategy) {
-    case 'quantile': {
-      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
-        return scoreColorBand(value, direction);
-      }
-      const rank = empiricalCDF(value, distribution);
-      if (rank >= QUANTILE_P90) return 'excellent';
-      if (rank >= QUANTILE_P75) return 'good';
-      if (rank >= QUANTILE_P50) return 'adequate';
-      if (rank >= QUANTILE_P25) return 'poor';
-      return 'failing';
-    }
-    case 'log': {
-      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
-      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
-      return scoreColorBand(logNorm, 'maximize');
-    }
-    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
-    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
-    case 'categorical': return scoreColorBand(value, direction);
-    case 'percentile_rank': {
-      if (!distribution) return scoreColorBand(value, direction);
-      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
-    }
-    case 'uniform':
-    default: return scoreColorBand(value, direction);
-  }
-}
-import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
-export function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return ts || '-';
+function defaultRange(lookbackMs: number): { start: string; end: string } {
   const now = new Date();
-  const diffMin = differenceInMinutes(now, d);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = differenceInHours(now, d);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = differenceInDays(now, d);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return format(d, 'PP');
+  return {
+    start: new Date(now.getTime() - lookbackMs).toISOString(),
+    end: now.toISOString(),
+  };
+}
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>> {
+  const be = getBackend();
+  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
+  return groupBy(evals, ev => ev.evaluationName);
+}
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  return be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    evaluationName: metricName,
+    limit: LIMIT_EVALS_METRIC,
+  });
+}
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return be.queryEvaluations({
+    traceId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_PER_TRACE,
+  });
+}
+const TRACE_QUERY_CONCURRENCY = 10;
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]> {
+  const uniqueIds = [...new Set(traceIds)];
+  if (uniqueIds.length === 0) return [];
+  const be = getBackend();
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
+  const start = startDate ?? defStart;
+  const end = endDate ?? defEnd;
+  const all: EvaluationResult[] = [];
+  for (let i = 0; i < uniqueIds.length; i += TRACE_QUERY_CONCURRENCY) {
+    const batch = uniqueIds.slice(i, i + TRACE_QUERY_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      batch.map(traceId => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
+    );
+    for (const result of settled) {
+      if (result.status === 'fulfilled') all.push(...result.value);
+    }
+  }
+  return all;
+}
+function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
+}
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
+  const { start, end } = traceQueryDates(startDate, endDate);
+  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+}
+async function queryLogsWithDefaultRange(
+  filter: { traceId?: string; sessionId?: string },
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const start = toDateOnly(startDate ?? defStart);
+  const end = toDateOnly(endDate ?? defEnd);
+  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
+  return result.logs;
+}
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
+}
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]> {
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  return queryVerificationsLib({
+    startDate: opts.startDate ?? start,
+    endDate: opts.endDate ?? end,
+    sessionId: opts.sessionId,
+    limit: opts.limit ?? LIMIT_LOGS,
+  });
+}
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+  return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
+}
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]> {
+  const be = getBackend();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
+  return be.queryEvaluations({
+    sessionId,
+    startDate: startDate ?? start,
+    endDate: endDate ?? end,
+    limit: LIMIT_EVALS_SESSION,
+  });
+}
+export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
+  const be = getBackend();
+  const health = await be.healthCheck();
+  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
+  const evals = await be.queryEvaluations({
+    startDate: start,
+    endDate: end,
+    limit: LIMIT_HEALTH_PROBE,
+  });
+  return { status: health.status, hasData: evals.length > 0 };
 }
 
 ================
@@ -16854,6 +16848,162 @@ export function DegradationSignalsPage({ period }: { period: Period }) {
 }
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+const TREND_PADDING_RATIO = 0.1;
+const TREND_PADDING_MIN_MS = 60_000;
+const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
+export const trendRoutes = new Hono();
+trendRoutes.get('/trends/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
+    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
+  }
+  const config = getQualityMetric(name);
+  if (!config) {
+    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
+  }
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
+  if (!bucketsResult.success) {
+    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
+  }
+  try {
+    const now = new Date();
+    const period = periodResult.data;
+    const bucketCount = bucketsResult.data;
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodStart = new Date(now.getTime() - periodMs);
+    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+    const validTs = evaluations
+      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
+      .filter(({ ts }) => Number.isFinite(ts));
+    const { dataMin, dataMax } = validTs.length > 0
+      ? validTs.reduce(
+          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
+          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
+        )
+      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
+    const dataSpan = dataMax - dataMin;
+    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+    const start = narrowed ? new Date(dataMin - pad) : periodStart;
+    const end = narrowed ? new Date(dataMax + pad) : now;
+    const rangeMs = end.getTime() - start.getTime();
+    const bucketMs = rangeMs / bucketCount;
+    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+    const buckets: BucketEntry[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+      buckets.push({
+        startTime: bucketStart.toISOString(),
+        endTime: bucketEnd.toISOString(),
+        scores: [],
+        evals: [],
+      });
+    }
+    for (const { ev, ts } of validTs) {
+      const bucketIdx = Math.min(
+        Math.floor((ts - start.getTime()) / bucketMs),
+        bucketCount - 1,
+      );
+      if (bucketIdx >= 0) {
+        buckets[bucketIdx].evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          buckets[bucketIdx].scores.push(ev.scoreValue);
+        }
+      }
+    }
+    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+    let previousTrend: MetricTrend | undefined;
+    const trendData = buckets.map((bucket, idx) => {
+      const scores = bucket.scores;
+      const percentiles = computePercentileDistribution(scores);
+      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const count = scores.length;
+      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
+        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+        : undefined;
+      const detail = bucket.evals.length > 0
+        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+        : undefined;
+      const dynamics = detail?.trend
+        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        : undefined;
+      if (detail?.trend) previousTrend = detail.trend;
+      return {
+        startTime: bucket.startTime,
+        endTime: bucket.endTime,
+        count,
+        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+        percentiles,
+        trend: detail?.trend ?? null,
+        dynamics: dynamics ?? null,
+      };
+    });
+    const allScores = extractFiniteScores(evaluations);
+    const overallPercentiles = computePercentileDistribution(allScores);
+    return c.json({
+      metric: name,
+      period,
+      bucketCount,
+      totalEvaluations: allScores.length,
+      overallPercentiles,
+      trendData,
+      narrowed,
+    });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+trendRoutes.get('/trends', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start, end } = computePeriodDates(period);
+    const metricNames = Object.keys(QUALITY_METRICS);
+    const summaries = await Promise.all(
+      metricNames.map(async (name: string) => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    );
+    return c.json({ period, metrics: summaries });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: src/api/routes/agents.ts
 ================
 import { Hono } from 'hono';
@@ -17021,162 +17171,6 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
       agentMap: serializedAgentMap,
       graph,
     });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
-const TREND_PADDING_RATIO = 0.1;
-const TREND_PADDING_MIN_MS = 60_000;
-const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
-export const trendRoutes = new Hono();
-trendRoutes.get('/trends/:name', async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
-  }
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
-    const periodStart = new Date(now.getTime() - periodMs);
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-    const validTs = evaluations
-      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
-      .filter(({ ts }) => Number.isFinite(ts));
-    const { dataMin, dataMax } = validTs.length > 0
-      ? validTs.reduce(
-          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
-          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
-        )
-      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
-    const dataSpan = dataMax - dataMin;
-    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-    for (const { ev, ts } of validTs) {
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
-        }
-      }
-    }
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
-      const count = scores.length;
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
-        : undefined;
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const summaries = await Promise.all(
-      metricNames.map(async (name: string) => {
-        const evals = await loadEvaluationsForMetric(name, start, end);
-        const scores = extractFiniteScores(evals);
-        return {
-          metric: name,
-          count: scores.length,
-          percentiles: computePercentileDistribution(scores) ?? null,
-        };
-      }),
-    );
-    return c.json({ period, metrics: summaries });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }

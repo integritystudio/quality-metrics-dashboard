@@ -308,6 +308,15 @@ function makeHighPriorityEntries(count: number): KVEntry[]
 function makeTracePool(count: number):
 
 ================
+File: scripts/__tests__/sync-to-kv.test.ts
+================
+import { describe, it, expect } from 'vitest';
+import { buildCalibrationEntry } from '../sync-to-kv.js';
+import type { CalibrationState } from '../../../dist/lib/quality/quality-feature-engineering.js';
+type KVEntry = { key: string; value: string };
+function makeCalibrationState(overrides: Partial<CalibrationState> =
+
+================
 File: scripts/.degradation-incidents.json
 ================
 [
@@ -2584,15 +2593,6 @@ File: src/vite-env.d.ts
 
 
 ================
-File: scripts/__tests__/sync-to-kv.test.ts
-================
-import { describe, it, expect } from 'vitest';
-import { buildCalibrationEntry } from '../sync-to-kv.js';
-import type { CalibrationState } from '../../../dist/lib/quality/quality-feature-engineering.js';
-type KVEntry = { key: string; value: string };
-function makeCalibrationState(overrides: Partial<CalibrationState> =
-
-================
 File: scripts/backtest-degradation.ts
 ================
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -3226,6 +3226,78 @@ const turnX = (turnIndex: number): number
 const laneY = (laneIndex: number): number
 
 ================
+File: src/lib/quality-utils.ts
+================
+export type ScoreDirection = 'maximize' | 'minimize';
+export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
+export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
+export interface LabelOrdinal {
+  ordinal: number;
+  category: LabelFilterCategory;
+  mapped: boolean;
+}
+import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
+export type FeatureRoleType = Role;
+export function agentColor(agentName: string, agentNames: string[]): string
+export interface RoleFeatureConfig {
+  showCQI: boolean;
+  showCQIBreakdown: boolean;
+  showVariance: boolean;
+  showAcceleration: boolean;
+  showProjectedBreach: boolean;
+  showCorrelationRemediation: boolean;
+  showCoverageHeatmap: boolean;
+  showPipelineFunnel: boolean;
+  showProvenance: boolean;
+  showRawExport: boolean;
+  explanationTruncation: number;
+  maxWorstEvaluations: number;
+}
+export function truncateText(text: string, max: number): string
+export function truncateId(id: string, max = 10): string
+export function formatScore(val: number | null | undefined): string
+export function formatPercent(value: number, decimals = 1): string
+export function plural(count: number, singular: string, suffix = 's'): string
+export const byValueDesc = ([, a]: [string, number], [, b]: [string, number]): number
+⋮----
+export function scoreColor(value: number, direction?: ScoreDirection): string
+export function scoreColorBand(
+  value: number,
+  direction: ScoreDirection = 'maximize',
+): ScoreColorBand
+type ThresholdDirection = 'above' | 'below';
+export function inferScoreDirection(
+  alertDirection: ThresholdDirection | undefined,
+): ScoreDirection
+⋮----
+function normalizeLabel(label: string): string
+export function labelToOrdinal(label: string): LabelOrdinal
+export function ordinalToCategory(ordinal: number): LabelFilterCategory
+⋮----
+export function shortPath(fullPath: string): string
+export function fmtDuration(ms: number, secDecimals = 1): string
+export function groupBy<T, K extends PropertyKey = string>(
+  items: T[],
+  keyFn: (item: T) => K | undefined,
+): Map<K, T[]>
+export function fmtBytes(n: number): string
+export interface PercentileDistribution {
+  p10: number; p25: number; p50: number; p75: number; p90: number;
+}
+export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
+⋮----
+export function empiricalCDF(value: number, dist: PercentileDistribution): number
+export function adaptiveScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection = 'maximize',
+  distribution?: PercentileDistribution,
+  sampleSize?: number,
+): ScoreColorBand
+import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+export function formatTimestamp(ts: string): string
+
+================
 File: src/api/routes/metrics.ts
 ================
 import { Hono } from 'hono';
@@ -3261,70 +3333,6 @@ import {
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
 import type { LiveMetric, QualityLiveData } from '../../types.js';
-
-================
-File: src/api/data-loader.ts
-================
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-import { queryLogs } from '../../../dist/tools/query-logs.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { toDateOnly } from './api-constants.js';
-⋮----
-function getBackend(): MultiDirectoryBackend
-function defaultRange(lookbackMs: number):
-export async function loadEvaluationsByMetric(
-  start: string,
-  end: string
-): Promise<Map<string, EvaluationResult[]>>
-export async function loadEvaluationsForMetric(
-  metricName: string,
-  start: string,
-  end: string
-): Promise<EvaluationResult[]>
-export async function loadEvaluationsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
-⋮----
-export async function loadEvaluationsByTraceIds(
-  traceIds: string[],
-  startDate?: string,
-  endDate?: string
-): Promise<EvaluationResult[]>
-function traceQueryDates(startDate?: string, endDate?: string):
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string)
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string)
-async function queryLogsWithDefaultRange(
-  filter: { traceId?: string; sessionId?: string },
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadVerifications(opts: {
-  startDate?: string;
-  endDate?: string;
-  sessionId?: string;
-  limit?: number;
-}): Promise<HumanVerificationEvent[]>
-export async function loadLogsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
-export async function loadEvaluationsBySessionId(
-  sessionId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<EvaluationResult[]>
-export async function checkHealth(): Promise<
 
 ================
 File: src/components/AgentWorkflowView.tsx
@@ -3405,76 +3413,69 @@ export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, ty
 export function extractFiniteScores(evals: Array<
 
 ================
-File: src/lib/quality-utils.ts
+File: src/api/data-loader.ts
 ================
-export type ScoreDirection = 'maximize' | 'minimize';
-export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
-export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
-export interface LabelOrdinal {
-  ordinal: number;
-  category: LabelFilterCategory;
-  mapped: boolean;
-}
-import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
-export type FeatureRoleType = Role;
-export function agentColor(agentName: string, agentNames: string[]): string
-export interface RoleFeatureConfig {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
-}
-export function truncateText(text: string, max: number): string
-export function truncateId(id: string, max = 10): string
-export function formatScore(val: number | null | undefined): string
-export function formatPercent(value: number, decimals = 1): string
-export function plural(count: number, singular: string, suffix = 's'): string
-export const byValueDesc = ([, a]: [string, number], [, b]: [string, number]): number
+import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import type { EvaluationResult } from '../../../dist/backends/index.js';
+import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
+import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
+import { queryLogs } from '../../../dist/tools/query-logs.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { toDateOnly } from './api-constants.js';
+import { groupBy } from '../lib/quality-utils.js';
 ⋮----
-export function scoreColor(value: number, direction?: ScoreDirection): string
-export function scoreColorBand(
-  value: number,
-  direction: ScoreDirection = 'maximize',
-): ScoreColorBand
-type ThresholdDirection = 'above' | 'below';
-export function inferScoreDirection(
-  alertDirection: ThresholdDirection | undefined,
-): ScoreDirection
+function getBackend(): MultiDirectoryBackend
+function defaultRange(lookbackMs: number):
+export async function loadEvaluationsByMetric(
+  start: string,
+  end: string
+): Promise<Map<string, EvaluationResult[]>>
+export async function loadEvaluationsForMetric(
+  metricName: string,
+  start: string,
+  end: string
+): Promise<EvaluationResult[]>
+export async function loadEvaluationsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
 ⋮----
-function normalizeLabel(label: string): string
-export function labelToOrdinal(label: string): LabelOrdinal
-export function ordinalToCategory(ordinal: number): LabelFilterCategory
-⋮----
-export function shortPath(fullPath: string): string
-export function fmtDuration(ms: number, secDecimals = 1): string
-export function groupBy<T, K extends PropertyKey = string>(
-  items: T[],
-  keyFn: (item: T) => K | undefined,
-): Map<K, T[]>
-export function fmtBytes(n: number): string
-export interface PercentileDistribution {
-  p10: number; p25: number; p50: number; p75: number; p90: number;
-}
-export type ScaleStrategy = 'quantile' | 'binary' | 'log' | 'step' | 'categorical' | 'percentile_rank' | 'uniform';
-⋮----
-export function empiricalCDF(value: number, dist: PercentileDistribution): number
-export function adaptiveScoreColorBand(
-  value: number,
-  metric: string,
-  direction: ScoreDirection = 'maximize',
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
-): ScoreColorBand
-import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
-export function formatTimestamp(ts: string): string
+export async function loadEvaluationsByTraceIds(
+  traceIds: string[],
+  startDate?: string,
+  endDate?: string
+): Promise<EvaluationResult[]>
+function traceQueryDates(startDate?: string, endDate?: string):
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string)
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string)
+async function queryLogsWithDefaultRange(
+  filter: { traceId?: string; sessionId?: string },
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadLogsByTraceId(
+  traceId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadVerifications(opts: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<HumanVerificationEvent[]>
+export async function loadLogsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>>
+export async function loadEvaluationsBySessionId(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<EvaluationResult[]>
+export async function checkHealth(): Promise<
 
 ================
 File: src/lib/constants.ts
@@ -3527,6 +3528,29 @@ import type { Period } from '../types.js';
 function ReportRow(
 
 ================
+File: src/api/routes/trends.ts
+================
+import { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  computeMetricDetail,
+  computeAggregations,
+  getQualityMetric,
+  QUALITY_METRICS,
+  type MetricTrend,
+} from '../../../../dist/lib/quality/quality-metrics.js';
+import {
+  computePercentileDistribution,
+  computeMetricDynamics,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { loadEvaluationsForMetric } from '../data-loader.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+⋮----
+type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+
+================
 File: src/api/routes/agents.ts
 ================
 import { Hono } from 'hono';
@@ -3551,29 +3575,6 @@ type AgentAcc = {
 };
 function computeEvalMetricSummary(scores: number[]):
 function createAgentAccumulator(periodDays: number): AgentAcc
-
-================
-File: src/api/routes/trends.ts
-================
-import { Hono } from 'hono';
-import { z } from 'zod';
-import {
-  computeMetricDetail,
-  computeAggregations,
-  getQualityMetric,
-  QUALITY_METRICS,
-  type MetricTrend,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
-⋮----
-type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
 
 ================
 File: src/components/WorkflowGraph.tsx
