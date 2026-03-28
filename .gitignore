@@ -14,3 +14,5 @@ e2e/integration/.integration-state.json
 tsconfig.tsbuildinfo
 local/
 .env
+.claude/worktrees/
+coverage/
