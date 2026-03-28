@@ -123,7 +123,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       ? Math.round(gapNs / NS_TO_MS)
       : null;
 
-    const labelParts = [`${score.toFixed(SCORE_CHIP_PRECISION)}`];
+    const labelParts = [score.toFixed(SCORE_CHIP_PRECISION)];
     if (latencyMs !== null) labelParts.push(`${latencyMs}ms`);
 
     edges.push({
