@@ -1,3 +1,11 @@
+5339971 2026-03-27 refactor(simplify): tighten VARIANCE_TREND_LABEL to as const; fix logAuditEvent comment
+  worker/index.ts
+
+4b00f2e 2026-03-27 chore: regenerate repomix docs after Round 6 simplifications
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 c083880 2026-03-27 chore(repomix): regenerate docs after simplify pass
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-docs.xml
@@ -344,11 +352,3 @@ f6ecfed 2026-03-26 refactor(sync-to-kv): remove what-comments from session detai
 
 39098f4 2026-03-26 refactor(tests): remove section-separator divider comments from components, dr13-coverage
   src/__tests__/dr13-coverage.test.tsx
-
-e8a33b1 2026-03-26 chore: regenerate repomix docs after final simplification rounds
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-02b70b1 2026-03-26 refactor(bar-indicator): replace fillStyle inline object with CSS custom properties
-  src/theme.css

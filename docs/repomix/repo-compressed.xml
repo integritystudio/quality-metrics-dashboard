@@ -2539,11 +2539,6 @@ function makeKV(store: Record<string, unknown> =
 function makeCalibrationData()
 
 ================
-File: src/__tests__/coverage-tab.test.tsx
-================
-import { describe, it } from 'vitest';
-
-================
 File: src/__tests__/dr-l4-self-hosted-fonts.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -2927,6 +2922,11 @@ for worker in "${WORKERS[@]}"; do
   done
 done
 echo "Done."
+
+================
+File: src/__tests__/coverage-tab.test.tsx
+================
+import { describe, it } from 'vitest';
 
 ================
 File: src/api/routes/evaluations.ts
