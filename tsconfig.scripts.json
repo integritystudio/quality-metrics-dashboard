@@ -16,5 +16,6 @@
       "@parent/*": ["../dist/*"]
     }
   },
-  "include": ["scripts", "src/lib", "src/api/api-constants.ts", "../dist"]
+  "include": ["scripts", "src/lib", "src/api/api-constants.ts", "../dist"],
+  "exclude": ["src/lib/auth0.ts"]
 }

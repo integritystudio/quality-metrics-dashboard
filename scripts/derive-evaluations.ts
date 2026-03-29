@@ -16,6 +16,7 @@ import {
 } from '../../src/lib/quality/quality-feature-engineering.js';
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan, type GenAiEvaluator, type GenAiEvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
+export type { TraceSpan };
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
@@ -29,7 +30,7 @@ export interface EvalRecord {
   evaluator: GenAiEvaluator;
   evaluatorType: GenAiEvaluatorType;
   traceId: string;
-  sessionId?: string;
+  sessionId: string;
 }
 
 function toOTelRecord(ev: EvalRecord): object {
