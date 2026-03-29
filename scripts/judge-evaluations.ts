@@ -34,7 +34,8 @@ import {
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
-import { HOOK_NAME } from '../../src/api/api-constants.js';
+import { HOOK_NAME } from '../src/api/api-constants.js';
+import pLimit from 'p-limit';
 
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',
@@ -836,24 +837,15 @@ export async function processBatch<T, R>(
   delayMs: number,
   fn: (item: T) => Promise<R>,
 ): Promise<R[]> {
-  const results: R[] = [];
-
-  for (let i = 0; i < items.length; i += concurrency) {
-    const batch = items.slice(i, i + concurrency);
-    const batchResults = await Promise.allSettled(batch.map(fn));
-
-    for (const r of batchResults) {
-      if (r.status === 'fulfilled') {
-        results.push(r.value);
-      }
-    }
-
-    if (i + concurrency < items.length) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-  }
-
-  return results;
+  const limit = pLimit(concurrency);
+  const settled = await Promise.allSettled(
+    items.map(item => limit(async () => {
+      const result = await fn(item);
+      if (delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs));
+      return result;
+    })),
+  );
+  return settled.filter(r => r.status === 'fulfilled').map(r => r.value);
 }
 
 async function main() {
@@ -926,7 +918,8 @@ async function main() {
 
   const transcripts = await _discoverTranscripts();
 
-  const turnArrays = await Promise.all(transcripts.map(info => extractTurns(info)));
+  const concurrencyLimit = pLimit(CONCURRENCY);
+  const turnArrays = await Promise.all(transcripts.map(info => concurrencyLimit(() => extractTurns(info))));
   const allTurns = turnArrays.flat().slice(0, limit);
 
   if (dryRun) {

@@ -18,7 +18,7 @@ import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constan
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA } from './judge-evaluations.js';
-import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
+import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
 
 export interface EvalRecord {
   timestamp: string;

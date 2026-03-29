@@ -10,7 +10,11 @@
 
 import { readFileSync, existsSync, createReadStream } from 'fs';
 import { createInterface } from 'readline';
-import type { z } from 'zod';
+
+/** Structural schema interface compatible with both Zod v3 and Zod v4 schemas. */
+interface ParseableSchema<T> {
+  safeParse(data: unknown): { success: true; data: T } | { success: false; error: { message: string } };
+}
 
 /**
  * Stream lines from a file with Zod schema validation.
@@ -29,7 +33,7 @@ import type { z } from 'zod';
  */
 export async function* streamJsonlWithValidation<T>(
   filePath: string,
-  schema: z.ZodType<T>
+  schema: ParseableSchema<T>
 ): AsyncGenerator<T> {
   if (!existsSync(filePath)) return;
 
@@ -66,7 +70,7 @@ export async function* streamJsonlWithValidation<T>(
  */
 export async function readJsonlWithValidation<T>(
   filePath: string,
-  schema: z.ZodType<T>,
+  schema: ParseableSchema<T>,
   limit?: number
 ): Promise<T[]> {
   const results: T[] = [];
@@ -90,7 +94,7 @@ export async function readJsonlWithValidation<T>(
  */
 export function readJsonlWithValidationSync<T>(
   filePath: string,
-  schema: z.ZodType<T>,
+  schema: ParseableSchema<T>,
   limit?: number
 ): T[] {
   const results: T[] = [];
@@ -132,7 +136,7 @@ export function readJsonlWithValidationSync<T>(
  */
 export function loadJsonWithValidation<T>(
   filePath: string,
-  schema: z.ZodType<T>
+  schema: ParseableSchema<T>
 ): T | null {
   if (!existsSync(filePath)) return null;
 
@@ -162,7 +166,7 @@ export function loadJsonWithValidation<T>(
  */
 export function loadJsonWithValidationSafe<T>(
   filePath: string,
-  schema: z.ZodType<T>,
+  schema: ParseableSchema<T>,
   fallback: T
 ): T {
   try {

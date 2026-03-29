@@ -16,6 +16,7 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+import { extent, mean } from 'd3-array';
 
 const TRENDS_CONCURRENCY = 5;
 
@@ -60,12 +61,10 @@ trendRoutes.get('/trends/:name', async (c) => {
       .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
       .filter(({ ts }) => Number.isFinite(ts));
 
-    const { dataMin, dataMax } = validTs.length > 0
-      ? validTs.reduce(
-          (acc, { ts }) => ({ dataMin: Math.min(acc.dataMin, ts), dataMax: Math.max(acc.dataMax, ts) }),
-          { dataMin: validTs[0].ts, dataMax: validTs[0].ts },
-        )
-      : { dataMin: periodStart.getTime(), dataMax: now.getTime() };
+    const tsValues = validTs.map(({ ts }) => ts);
+    const [extentMin, extentMax] = validTs.length > 0 ? (extent(tsValues) as [number, number]) : [periodStart.getTime(), now.getTime()];
+    const dataMin = extentMin;
+    const dataMax = extentMax;
     const dataSpan = dataMax - dataMin;
     const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
     const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
@@ -108,7 +107,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     const trendData = buckets.map((bucket, idx) => {
       const scores = bucket.scores;
       const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null;
+      const avg = scores.length > 0 ? (mean(scores) ?? null) : null;
       const count = scores.length;
 
       const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)

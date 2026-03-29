@@ -7,6 +7,7 @@ import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+import { mean } from 'd3-array';
 
 const LIMIT_AGENT_SPANS = 1000;
 
@@ -24,7 +25,7 @@ type AgentAcc = {
 function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
   const sorted = [...scores].sort((a, b) => a - b);
   return {
-    avg: +(sorted.reduce((a, b) => a + b, 0) / sorted.length).toFixed(SCORE_DISPLAY_PRECISION),
+    avg: +(mean(sorted) ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
     min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
     max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
     count: sorted.length,

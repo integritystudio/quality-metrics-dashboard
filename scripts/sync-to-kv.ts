@@ -71,6 +71,7 @@ import {
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE } from './judge-evaluations.js';
+import { mean, quantileSorted } from 'd3-array';
 
 function resolveNamespaceId(): string {
   if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
@@ -185,7 +186,7 @@ function loadLastCoverage(): CoverageHeatmap | null {
   }
 }
 
-function saveLastCoverage(coverage: CoverageData): void {
+function saveLastCoverage(coverage: CoverageHeatmap): void {
   writeFileSync(COVERAGE_FILE, JSON.stringify(coverage));
 }
 
@@ -193,10 +194,10 @@ function hashValue(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
 
-function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
+function filterChanged(entries: KVEntry[], state: KvSyncState): KVEntry[] {
   return entries.filter(e => {
     const hash = hashValue(e.value);
-    return state[e.key] !== hash;
+    return state[e.key]?.hash !== hash;
   });
 }
 
@@ -350,15 +351,7 @@ function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
   group.push(value);
 }
 
-function arrayAvg(nums: number[]): number | null {
-  return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
-}
 
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.ceil(sorted.length * p / 100) - 1;
-  return sorted[Math.max(0, idx)];
-}
 
 function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[]) {
   const traceIdSet = new Set<string>();
@@ -389,34 +382,34 @@ function computeTimespan(evaluations: EvaluationResult[]) {
 }
 
 function computeSessionInfo(spans: SessionSpan[]) {
-  const sessionStarts = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.SESSION_START);
+  const sessionStarts = spans.filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.SESSION_START);
   const first = sessionStarts[0];
   const last = sessionStarts[sessionStarts.length - 1] ?? first;
   return first ? {
-    projectName: spanAttr<string>(first, 'project.name') ?? 'unknown',
-    workingDirectory: spanAttr<string>(first, 'working.directory') ?? '',
-    gitRepository: spanAttr<string>(first, 'git.repository') ?? '',
-    gitBranch: spanAttr<string>(first, 'git.branch') ?? '',
-    nodeVersion: spanAttr<string>(first, 'node.version') ?? '',
+    projectName: spanAttr(first, 'project.name', 'string') ?? 'unknown',
+    workingDirectory: spanAttr(first, 'working.directory', 'string') ?? '',
+    gitRepository: spanAttr(first, 'git.repository', 'string') ?? '',
+    gitBranch: spanAttr(first, 'git.branch', 'string') ?? '',
+    nodeVersion: spanAttr(first, 'node.version', 'string') ?? '',
     resumeCount: sessionStarts.length,
-    initialMessageCount: spanAttr<number>(first, 'context.message_count') ?? 0,
-    initialContextTokens: spanAttr<number>(first, 'context.estimated_tokens') ?? 0,
-    finalMessageCount: spanAttr<number>(last, 'context.message_count') ?? 0,
-    taskCount: spanAttr<number>(first, 'tasks.active') ?? 0,
-    uncommittedAtStart: spanAttr<number>(first, 'git.uncommitted') ?? 0,
+    initialMessageCount: spanAttr(first, 'context.message_count', 'number') ?? 0,
+    initialContextTokens: spanAttr(first, 'context.estimated_tokens', 'number') ?? 0,
+    finalMessageCount: spanAttr(last, 'context.message_count', 'number') ?? 0,
+    taskCount: spanAttr(first, 'tasks.active', 'number') ?? 0,
+    uncommittedAtStart: spanAttr(first, 'git.uncommitted', 'number') ?? 0,
   } : null;
 }
 
 function computeTokenMetrics(spans: SessionSpan[]) {
   const tokenProgression = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.TOKEN_METRICS)
+    .filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.TOKEN_METRICS)
     .map(s => ({
-      messages: spanAttr<number>(s, 'tokens.messages') ?? 0,
-      inputTokens: spanAttr<number>(s, 'tokens.input') ?? 0,
-      outputTokens: spanAttr<number>(s, 'tokens.output') ?? 0,
-      cacheRead: spanAttr<number>(s, 'tokens.cache_read') ?? 0,
-      cacheCreation: spanAttr<number>(s, 'tokens.cache_creation') ?? 0,
-      model: spanAttr<string>(s, 'tokens.model') ?? '',
+      messages: spanAttr(s, 'tokens.messages', 'number') ?? 0,
+      inputTokens: spanAttr(s, 'tokens.input', 'number') ?? 0,
+      outputTokens: spanAttr(s, 'tokens.output', 'number') ?? 0,
+      cacheRead: spanAttr(s, 'tokens.cache_read', 'number') ?? 0,
+      cacheCreation: spanAttr(s, 'tokens.cache_creation', 'number') ?? 0,
+      model: spanAttr(s, 'tokens.model', 'string') ?? '',
     }))
     .sort((a, b) => a.messages - b.messages);
 
@@ -439,14 +432,14 @@ function computeUsageCounts(spans: SessionSpan[]) {
   const toolUsage: Record<string, number> = {};
   const mcpUsage: Record<string, number> = {};
   for (const s of spans) {
-    const trigger = spanAttr<string>(s, 'hook.trigger');
+    const trigger = spanAttr(s, 'hook.trigger', 'string');
     if (trigger !== 'PostToolUse') continue;
-    const type = spanAttr<string>(s, 'hook.type');
+    const type = spanAttr(s, 'hook.type', 'string');
     if (type === 'builtin') {
-      const tool = spanAttr<string>(s, 'builtin.tool') ?? 'unknown';
+      const tool = spanAttr(s, 'builtin.tool', 'string') ?? 'unknown';
       toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
     } else if (type === 'mcp') {
-      const tool = spanAttr<string>(s, 'mcp.tool') ?? 'unknown';
+      const tool = spanAttr(s, 'mcp.tool', 'string') ?? 'unknown';
       mcpUsage[tool] = (mcpUsage[tool] ?? 0) + 1;
     }
   }
@@ -469,9 +462,9 @@ function computeSpanLatency(spans: SessionSpan[]) {
     const sorted = durations.sort((a, b) => a - b);
     hookLatency[name] = {
       count: sorted.length,
-      avg: +(arrayAvg(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      p50: +percentile(sorted, LATENCY_P50).toFixed(LATENCY_DISPLAY_PRECISION),
-      p95: +percentile(sorted, LATENCY_P95).toFixed(LATENCY_DISPLAY_PRECISION),
+      avg: +(mean(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
+      p50: +(quantileSorted(sorted, LATENCY_P50 / 100) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
+      p95: +(quantileSorted(sorted, LATENCY_P95 / 100) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
       max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
     };
   }
@@ -482,19 +475,19 @@ function computeErrorSummary(spans: SessionSpan[]) {
   const byCategory: Record<string, number> = {};
   const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
   for (const s of spans) {
-    const hasError = spanAttr<boolean>(s, 'builtin.has_error') === true
-      || spanAttr<boolean>(s, 'agent.has_error') === true
+    const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
+      || spanAttr(s, 'agent.has_error', 'boolean') === true
       || s.status?.code === OTEL_STATUS_ERROR_CODE;
     if (!hasError) continue;
-    const tool = spanAttr<string>(s, 'builtin.tool') ?? spanAttr<string>(s, 'agent.type') ?? 'unknown';
-    const errType = spanAttr<string>(s, 'builtin.error_type') ?? 'unknown';
+    const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'agent.type', 'string') ?? 'unknown';
+    const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
     const key = `${tool} -> ${errType}`;
     byCategory[key] = (byCategory[key] ?? 0) + 1;
     details.push({
       spanName: s.name,
       tool,
       errorType: errType,
-      filePath: spanAttr<string>(s, 'builtin.file_path'),
+      filePath: spanAttr(s, 'builtin.file_path', 'string'),
     });
   }
   return { byCategory, details };
@@ -543,8 +536,8 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
     truncatedCount: number; emptyCount: number;
   }> = {};
   for (const s of spans) {
-    if (spanAttr<string>(s, 'hook.name') === HOOK_NAME.AGENT_POST_TOOL) {
-      const name = spanAttr<string>(s, 'gen_ai.agent.name') ?? 'unknown';
+    if (spanAttr(s, 'hook.name', 'string') === HOOK_NAME.AGENT_POST_TOOL) {
+      const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
       if (!acc[name]) acc[name] = {
         invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
         totalOutputSize: 0, durationSum: 0, durationCount: 0,
@@ -552,16 +545,16 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
       };
       const a = acc[name];
       a.invocations++;
-      if (spanAttr<boolean>(s, 'agent.has_error')) a.errors++;
-      if (spanAttr<boolean>(s, 'agent.has_rate_limit')) {
+      if (spanAttr(s, 'agent.has_error', 'boolean')) a.errors++;
+      if (spanAttr(s, 'agent.has_rate_limit', 'boolean')) {
         a.hasRateLimit = true;
         a.rateLimitEvents++;
       }
-      a.totalOutputSize += spanAttr<number>(s, 'agent.output_size') ?? 0;
+      a.totalOutputSize += spanAttr(s, 'agent.output_size', 'number') ?? 0;
       const dur = s.durationMs ?? 0;
       if (dur > 0) { a.durationSum += dur; a.durationCount++; }
-      if (spanAttr<boolean>(s, 'agent.output.truncated')) a.truncatedCount++;
-      if (spanAttr<boolean>(s, 'agent.output.empty')) a.emptyCount++;
+      if (spanAttr(s, 'agent.output.truncated', 'boolean')) a.truncatedCount++;
+      if (spanAttr(s, 'agent.output.empty', 'boolean')) a.emptyCount++;
     }
   }
   return Object.entries(acc).map(([agentName, d]) => ({
@@ -590,7 +583,7 @@ function computeEvalBreakdown(evaluations: EvaluationResult[]) {
   }
   return Object.entries(evalByName).map(([name, d]) => {
     const sorted = d.scores.sort((a, b) => a - b);
-    const avg = arrayAvg(sorted);
+    const avg = mean(sorted);
     return {
       name,
       count: d.count,
@@ -618,7 +611,7 @@ function computeSessionDetail(
 
   const fileCount: Record<string, number> = {};
   for (const s of spans) {
-    const fp = spanAttr<string>(s, 'builtin.file_path');
+    const fp = spanAttr(s, 'builtin.file_path', 'string');
     if (fp) fileCount[fp] = (fileCount[fp] ?? 0) + 1;
   }
   const fileAccess = Object.entries(fileCount)
@@ -627,9 +620,9 @@ function computeSessionDetail(
     .slice(0, FILE_ACCESS_TOP_N);
 
   const gitCommits = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.POST_COMMIT_REVIEW)
+    .filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.POST_COMMIT_REVIEW)
     .map(s => {
-      const raw = spanAttr<string>(s, 'git.command') ?? '';
+      const raw = spanAttr(s, 'git.command', 'string') ?? '';
       const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
       const files = filesMatch ? filesMatch[1].trim() : '';
       const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
@@ -639,32 +632,32 @@ function computeSessionDetail(
       return { subject, body, files };
     });
 
-  const alertSpans = spans.filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.ALERT_EVALUATION);
+  const alertSpans = spans.filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.ALERT_EVALUATION);
   const alertSummary = {
-    totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr<number>(s, 'alerts.triggered_count') ?? 0), 0),
+    totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr(s, 'alerts.triggered_count', 'number') ?? 0), 0),
     stopEvents: alertSpans.length,
   };
 
   const codeStructure = spans
-    .filter(s => spanAttr<string>(s, 'hook.name') === HOOK_NAME.CODE_STRUCTURE)
+    .filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.CODE_STRUCTURE)
     .map(s => ({
-      file: spanAttr<string>(s, 'code.structure.file') ?? '',
-      lines: spanAttr<number>(s, 'code.structure.lines') ?? 0,
-      exports: spanAttr<number>(s, 'code.structure.exports') ?? 0,
-      functions: spanAttr<number>(s, 'code.structure.functions') ?? 0,
-      hasTypes: spanAttr<boolean>(s, 'code.structure.has_types') ?? false,
-      score: spanAttr<number>(s, 'code.structure.score') ?? 0,
-      tool: spanAttr<string>(s, 'code.structure.tool') ?? '',
+      file: spanAttr(s, 'code.structure.file', 'string') ?? '',
+      lines: spanAttr(s, 'code.structure.lines', 'number') ?? 0,
+      exports: spanAttr(s, 'code.structure.exports', 'number') ?? 0,
+      functions: spanAttr(s, 'code.structure.functions', 'number') ?? 0,
+      hasTypes: spanAttr(s, 'code.structure.has_types', 'boolean') ?? false,
+      score: spanAttr(s, 'code.structure.score', 'number') ?? 0,
+      tool: spanAttr(s, 'code.structure.tool', 'string') ?? '',
     }));
 
   const agentMapForEval = new Map<number, string>();
   spans.forEach((span, i) => {
-    const agent = spanAttr<string>(span, 'agent.name');
+    const agent = spanAttr(span, 'agent.name', 'string');
     if (agent) agentMapForEval.set(i, agent);
   });
   const stepScores: StepScore[] = spans.map((span, i) => ({
     step: i,
-    score: spanAttr<number>(span, 'evaluation.score')
+    score: spanAttr(span, 'evaluation.score', 'number')
       ?? (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
     explanation: span.name,
   }));
@@ -897,7 +890,7 @@ async function main(): Promise<void> {
       const trendData = timeBuckets.map((bucket, idx) => {
         const { scores } = bucket;
         const percentiles = computePercentileDistribution(scores);
-        const avg = arrayAvg(scores);
+        const avg = mean(scores);
         const previousValues = (idx > 0 && timeBuckets[idx - 1].scores.length > 0)
           ? computeAggregations(timeBuckets[idx - 1].scores, config.aggregations)
           : undefined;
@@ -1119,7 +1112,7 @@ async function main(): Promise<void> {
       avgDurationMs: acc.totalInvocations > 0
         ? Math.round(acc.weightedDurationSum / acc.totalInvocations)
         : 0,
-      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(percentile(sortedSessionDurations, LATENCY_P95)) : 0,
+      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(quantileSorted(sortedSessionDurations, LATENCY_P95 / 100) ?? 0) : 0,
       truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
       emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
       lastSeen,
@@ -1149,9 +1142,9 @@ async function main(): Promise<void> {
   if (changed.length === 0) {
     // Still update lastSync timestamp
     const metaEntry: KVEntry = { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) };
-    if (prevState[META_LAST_SYNC_KEY] !== hashValue(metaEntry.value)) {
+    if (prevState[META_LAST_SYNC_KEY]?.hash !== hashValue(metaEntry.value)) {
       kvBulkPut([metaEntry]);
-      prevState[META_LAST_SYNC_KEY] = hashValue(metaEntry.value);
+      prevState[META_LAST_SYNC_KEY] = { hash: hashValue(metaEntry.value) };
       saveSyncState(prevState);
     }
     // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
@@ -1191,7 +1184,7 @@ async function main(): Promise<void> {
 
   const newState = { ...prevState };
   for (const e of toWrite.slice(0, written)) {
-    newState[e.key] = hashValue(e.value);
+    newState[e.key] = { hash: hashValue(e.value) };
   }
   const computedKeys = new Set(allEntries.map(e => e.key));
   computedKeys.add(META_LAST_SYNC_KEY);
@@ -1229,10 +1222,10 @@ async function main(): Promise<void> {
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
   const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: JSON.stringify(coverage) };
-  if (newState[META_SYNC_COVERAGE_KEY] !== coverageHash) {
+  if (newState[META_SYNC_COVERAGE_KEY]?.hash !== coverageHash) {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
-      newState[META_SYNC_COVERAGE_KEY] = coverageHash;
+      newState[META_SYNC_COVERAGE_KEY] = { hash: coverageHash };
       saveSyncState(newState);
     }
   }

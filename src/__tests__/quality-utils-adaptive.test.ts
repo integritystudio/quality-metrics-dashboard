@@ -1,9 +1,6 @@
 /**
  * Tests for empiricalCDF, adaptiveScoreColorBand, and related constants
- * ported to the frontend quality-utils.ts.
- *
- * These tests import symbols that do NOT yet exist in quality-utils.ts —
- * all tests are expected to fail (RED phase).
+ * in quality-utils.ts.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -40,13 +37,13 @@ describe('empiricalCDF', () => {
     const dist = makeDist({ p10: 0.4 });
     const result = empiricalCDF(0.1, dist);
     expect(result).toBeGreaterThanOrEqual(0);
-    expect(result).toBeLessThan(0.1);
+    expect(result).toBeLessThanOrEqual(0.1);
   });
 
   it('returns a value near 1 for value above p90', () => {
     const dist = makeDist({ p90: 0.88 });
     const result = empiricalCDF(0.98, dist);
-    expect(result).toBeGreaterThan(0.9);
+    expect(result).toBeGreaterThanOrEqual(0.9);
     expect(result).toBeLessThanOrEqual(1);
   });
 

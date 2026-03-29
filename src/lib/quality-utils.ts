@@ -16,6 +16,7 @@ export interface LabelOrdinal {
   mapped: boolean;
 }
 
+import { scaleLinear } from 'd3-scale';
 import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
 export type FeatureRoleType = Role;
 
@@ -256,22 +257,13 @@ export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
 
 export function empiricalCDF(value: number, dist: PercentileDistribution): number {
   if (!Number.isFinite(value)) return QUANTILE_P50;
-  const points: [number, number][] = [
-    [dist.p10, QUANTILE_P10], [dist.p25, QUANTILE_P25],
-    [dist.p50, QUANTILE_P50], [dist.p75, QUANTILE_P75], [dist.p90, QUANTILE_P90],
-  ];
-  if (value <= dist.p10) return Math.max(0, QUANTILE_P10 * (value / Math.max(dist.p10, NUMERICAL_MIN_DENOMINATOR)));
-  if (value >= dist.p90) return Math.min(1, QUANTILE_P90 + QUANTILE_P10 * Math.min(1, (value - dist.p90) / Math.max(1 - dist.p90, NUMERICAL_MIN_DENOMINATOR)));
-  for (let i = 0; i < points.length - 1; i++) {
-    const [v0, p0] = points[i];
-    const [v1, p1] = points[i + 1];
-    if (value >= v0 && value <= v1) {
-      const range = v1 - v0;
-      if (range === 0) return p0;
-      return p0 + (p1 - p0) * ((value - v0) / range);
-    }
+  if (dist.p10 === dist.p25 || dist.p25 === dist.p50 || dist.p50 === dist.p75 || dist.p75 === dist.p90) {
+    return QUANTILE_P50;
   }
-  return QUANTILE_P50;
+  return scaleLinear()
+    .domain([dist.p10, dist.p25, dist.p50, dist.p75, dist.p90])
+    .range([QUANTILE_P10, QUANTILE_P25, QUANTILE_P50, QUANTILE_P75, QUANTILE_P90])
+    .clamp(true)(value);
 }
 
 export function adaptiveScoreColorBand(
