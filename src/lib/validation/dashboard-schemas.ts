@@ -57,7 +57,7 @@ export const traceSpanSchema = z.object({
     code: z.number(),
     message: z.string().optional(),
   }).optional(),
-  attributes: z.record(z.string(), z.unknown()).optional(),
+  attributes: z.record(z.string(), z.unknown()),
   events: z.array(z.object({
     name: z.string(),
     timestamp: z.number().optional(),
@@ -138,8 +138,6 @@ export type OTelEvaluationRecord = z.infer<typeof otelEvaluationRecordSchema>;
  */
 export const kvSyncEntrySchema = z.object({
   hash: z.string().describe('Content hash (SHA-256 hex)'),
-  syncedAt: z.string().optional().describe('ISO timestamp of last sync'),
-  size: z.number().optional().describe('Size in bytes'),
 });
 
 export type KvSyncEntry = z.infer<typeof kvSyncEntrySchema>;
