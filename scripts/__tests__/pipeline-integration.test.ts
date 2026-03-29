@@ -29,6 +29,7 @@ import {
   type Turn,
   type EvalRecord as JudgeEvalRecord,
 } from '../judge-evaluations.js';
+import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -211,6 +212,10 @@ describe('pipeline contract: judge seed output', () => {
     expect(canaryEvals.length).toBeGreaterThan(0);
     expect(seedEvals.length).toBeGreaterThan(0);
 
+    // evaluator field matches evaluatorType: canary → 'llm-judge', seed → 'seed-hash'
+    for (const ev of canaryEvals) expect(ev.evaluator).toBe('llm-judge');
+    for (const ev of seedEvals) expect(ev.evaluator).toBe('seed-hash');
+
     // Canary evals should NOT appear if filtered out (as sync-to-kv does)
     const afterFilter = evals.filter(e => e.evaluatorType !== 'canary');
     expect(afterFilter.length).toBeLessThan(evals.length);
@@ -262,6 +267,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
       const evalName = attrs['gen_ai.evaluation.name'] as string;
       expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
       expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
+      expect(genAiEvaluatorTypeSchema.safeParse(attrs['gen_ai.evaluation.evaluator.type']).success).toBe(true);
     }
   });
 

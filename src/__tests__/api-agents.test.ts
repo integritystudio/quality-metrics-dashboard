@@ -78,7 +78,7 @@ function makeMockEval(traceId = 'trace-001') {
     evaluatorType: 'seed',
     scoreLabel: 'relevant',
     explanation: '',
-    evaluator: 'seed',
+    evaluator: 'seed-hash',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }

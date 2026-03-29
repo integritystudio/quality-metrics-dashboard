@@ -54,7 +54,7 @@ function makeMockEval(name = 'relevance', score = 0.85, timestamp = '2026-01-15T
     evaluatorType: 'seed',
     scoreLabel: 'relevant',
     explanation: 'Response is relevant.',
-    evaluator: 'seed-evaluator',
+    evaluator: 'seed-hash',
   };
 }
 

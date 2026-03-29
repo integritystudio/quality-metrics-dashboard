@@ -12,6 +12,30 @@
 
 import { z } from 'zod';
 
+/**
+ * Identifies which system produced an evaluation record.
+ * Distinct from evaluatorType (which classifies the mechanism).
+ */
+export const genAiEvaluatorSchema = z.enum([
+  'llm-judge',
+  'seed-hash',
+  'telemetry-rule-engine',
+]);
+export type GenAiEvaluator = z.infer<typeof genAiEvaluatorSchema>;
+
+/**
+ * Classifies the mechanism that produced an evaluation record.
+ * Distinct from GenAiEvaluator (which identifies the system).
+ */
+export const genAiEvaluatorTypeSchema = z.enum([
+  'llm',
+  'seed',
+  'canary',
+  'rule',
+  'human',
+  'trace-backfill',
+]);
+export type GenAiEvaluatorType = z.infer<typeof genAiEvaluatorTypeSchema>;
 
 /**
  * High-resolution time tuple: [seconds, nanoseconds]
@@ -28,7 +52,7 @@ export const traceSpanSchema = z.object({
   name: z.string().describe('Span operation name'),
   startTime: hrtSchema,
   endTime: hrtSchema.optional(),
-  duration: hrtSchema.optional(),
+  duration: hrtSchema,
   status: z.object({
     code: z.number(),
     message: z.string().optional(),
@@ -91,14 +115,14 @@ export type TranscriptEntry = z.infer<typeof transcriptEntrySchema>;
  */
 export const otelEvaluationRecordSchema = z.object({
   timestamp: z.string(),
-  name: z.string().optional(),
+  name: z.literal('gen_ai.evaluation.result'),
   attributes: z.object({
     'gen_ai.evaluation.name': z.string().optional(),
     'gen_ai.evaluation.score.value': z.number().optional(),
     'gen_ai.evaluation.score.unit': z.string().optional(),
     'gen_ai.evaluation.explanation': z.string().optional(),
-    'gen_ai.evaluation.evaluator': z.string().optional(),
-    'gen_ai.evaluation.evaluator.type': z.enum(['rule', 'llm', 'human', 'seed', 'trace-backfill']).optional(),
+    'gen_ai.evaluation.evaluator': genAiEvaluatorSchema,
+    'gen_ai.evaluation.evaluator.type': genAiEvaluatorTypeSchema,
     'session.id': z.string().optional(),
   }).strict().catchall(z.unknown()),
   traceId: z.string().optional(),

@@ -59,7 +59,7 @@ function makeMockEval(overrides: Partial<Record<string, unknown>> = {}) {
     evaluatorType: 'seed',
     scoreLabel: 'relevant',
     explanation: 'Response is relevant.',
-    evaluator: 'seed-evaluator',
+    evaluator: 'seed-hash',
     spanId: 'span-001',
     sessionId: 'sess-001',
     agentName: 'general-purpose',

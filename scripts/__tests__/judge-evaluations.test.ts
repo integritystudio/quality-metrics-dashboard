@@ -20,6 +20,7 @@ import {
   type Turn,
   type EvalRecord,
 } from '../judge-evaluations.js';
+import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 
@@ -523,6 +524,9 @@ describe('seedEvaluations', () => {
     const { evals } = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
     for (const ev of evals) {
       expect(['seed', 'canary']).toContain(ev.evaluatorType);
+      // seed records use 'seed-hash'; canary records use 'llm-judge'
+      const expectedEvaluator = ev.evaluatorType === 'seed' ? 'seed-hash' : 'llm-judge';
+      expect(ev.evaluator).toBe(expectedEvaluator);
     }
   });
 
@@ -633,7 +637,8 @@ describe('toOTelRecord', () => {
   it('uses dot notation for evaluator.type (not underscore)', () => {
     const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['gen_ai.evaluation.evaluator.type']).toBeDefined();
+    const evalType = attrs['gen_ai.evaluation.evaluator.type'];
+    expect(genAiEvaluatorTypeSchema.safeParse(evalType).success).toBe(true);
     expect(attrs['gen_ai.evaluation.evaluator_type']).toBeUndefined();
   });
 });

@@ -30,6 +30,8 @@ import {
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
+  type GenAiEvaluator,
+  type GenAiEvaluatorType,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
@@ -67,6 +69,7 @@ export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
 export const LLM_JUDGE_EVALUATOR = 'llm-judge';
+export const SEED_EVALUATOR = 'seed-hash';
 export const LLM_EVALUATOR_TYPE = 'llm';
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
@@ -110,8 +113,8 @@ export interface EvalRecord {
   evaluationName: string;
   scoreValue: number;
   explanation: string;
-  evaluator: string;
-  evaluatorType: string;
+  evaluator: GenAiEvaluator;
+  evaluatorType: GenAiEvaluatorType;
   traceId: string;
   sessionId: string;
 }
@@ -447,7 +450,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
         explanation: canary
           ? `Relevance (canary) for session ${sessionPreview}`
           : `Relevance (seeded) for session ${sessionPreview}`,
-        evaluator: LLM_JUDGE_EVALUATOR,
+        evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
         evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
         traceId: turn.traceId,
         sessionId: turn.sessionId,
@@ -465,7 +468,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
         explanation: canary
           ? `Coherence (canary) for session ${sessionPreview}`
           : `Coherence (seeded) for session ${sessionPreview}`,
-        evaluator: LLM_JUDGE_EVALUATOR,
+        evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
         evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
         traceId: turn.traceId,
         sessionId: turn.sessionId,
@@ -487,7 +490,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           explanation: canary
             ? `Faithfulness (canary) for session ${sessionPreview}`
             : `Faithfulness (seeded) for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
+          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
           evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -503,7 +506,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           explanation: canary
             ? `Hallucination (canary) for session ${sessionPreview}`
             : `Hallucination (seeded) for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
+          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
           evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           traceId: turn.traceId,
           sessionId: turn.sessionId,
@@ -524,7 +527,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           explanation: canary
             ? `Tool correctness (canary) for session ${sessionPreview}`
             : `Tool correctness (seeded) for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
+          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
           evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           traceId: turn.traceId,
           sessionId: turn.sessionId,
