@@ -16,3 +16,4 @@ local/
 .env
 .claude/worktrees/
 coverage/
+.serena/cache/
