@@ -22,6 +22,7 @@ import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
 import {
   LLMJudge,
+  COHERENCE_CRITERIA,
 } from '../../src/lib/judge/llm-judge-config.js';
 import type { DatasetRunRecord } from '../../src/backends/index.js';
 import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
@@ -583,7 +584,7 @@ export async function evaluateTurn(
   const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
   if (!existingKeys.has(cohKey)) {
     try {
-      const result = await judge.evaluateCoherence(turn.assistantText);
+      const result = await judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText });
       evals.push({
         timestamp: turn.timestamp,
         evaluationName: COHERENCE_EVAL_NAME,

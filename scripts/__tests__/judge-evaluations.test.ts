@@ -691,23 +691,25 @@ describe('processBatch', () => {
 
 // G-Eval makes 2 calls: (1) step generation, (2) evaluation scoring (1-5 scale).
 // QAG makes 2 calls: (1) statement extraction (JSON array), (2) verdict per statement.
+const MOCK_GEVAL_STEPS = '1. Check quality\n2. Assess completeness\n3. Verify accuracy';
+
+function mockResponse(prompt: string, gEvalScore = 4): { text: string } {
+  if (prompt.includes('Generate detailed')) {
+    return { text: MOCK_GEVAL_STEPS };
+  }
+  if (prompt.includes('statements') || prompt.includes('claims')) {
+    return { text: JSON.stringify(['The response is correct.']) };
+  }
+  if (prompt.includes('verdict') || prompt.includes('supported')) {
+    return { text: 'yes' };
+  }
+  return { text: String(gEvalScore) };
+}
+
 function createMockLLM(gEvalScore = 4): LLMProvider {
   return {
     async generate(prompt: string) {
-      // G-Eval step generation prompt contains "Generate detailed"
-      if (prompt.includes('Generate detailed')) {
-        return { text: '1. Check quality\n2. Assess completeness' };
-      }
-      // QAG statement extraction
-      if (prompt.includes('statements') || prompt.includes('claims')) {
-        return { text: JSON.stringify(['The response is correct.']) };
-      }
-      // QAG verdict
-      if (prompt.includes('verdict') || prompt.includes('supported')) {
-        return { text: 'yes' };
-      }
-      // G-Eval scoring — return just the score digit
-      return { text: String(gEvalScore) };
+      return mockResponse(prompt, gEvalScore);
     },
   };
 }
@@ -718,16 +720,7 @@ function createFailingLLM(failKeyword: string): LLMProvider {
       if (prompt.toLowerCase().includes(failKeyword.toLowerCase())) {
         throw new Error(`Mock ${failKeyword} failure`);
       }
-      if (prompt.includes('Generate detailed')) {
-        return { text: '1. Check quality\n2. Assess completeness' };
-      }
-      if (prompt.includes('statements') || prompt.includes('claims')) {
-        return { text: JSON.stringify(['The response is correct.']) };
-      }
-      if (prompt.includes('verdict') || prompt.includes('supported')) {
-        return { text: 'yes' };
-      }
-      return { text: '4' };
+      return mockResponse(prompt);
     },
   };
 }
