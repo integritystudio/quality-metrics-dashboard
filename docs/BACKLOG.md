@@ -12,8 +12,10 @@ Findings from repomix-compressed audit + claude-code-guide + web-research-analys
 | # | Item | Priority | Notes |
 |---|------|----------|-------|
 | ~~LIB-3~~ | ~~Replace `groupBy` call sites with non-nullable keyFns using `d3.group` from `d3-array`~~ | P3 | Done — `data-loader.ts` migrated to `d3.group`; `workflow-graph.ts` retained custom `groupBy` (nullable keys) |
-| LIB-4 | Replace `empiricalCDF` piecewise interpolation (`quality-utils.ts:257`) with `scaleLinear().domain([p10,p25,p50,p75,p90]).range([0.1,0.25,0.5,0.75,0.9]).clamp(true)` | P3 | Add degenerate-domain guard (p25===p50 etc → NaN) before constructing scale |
-| LIB-5 | Replace `result.error.message` in `dashboard-file-utils.ts` and error boundaries with `z.prettifyError(result.error)` | P3 | Built into Zod v4 — zero dep. Use `zod-validation-error@^5` only if `instanceof ValidationError` discrimination is needed |
+| ~~LIB-4~~ | ~~Replace `empiricalCDF` piecewise interpolation (`quality-utils.ts:257`) with `scaleLinear().domain([p10,p25,p50,p75,p90]).range([0.1,0.25,0.5,0.75,0.9]).clamp(true)`~~ | P3 | Done — degenerate-domain guard added; clamp replaces manual extrapolation |
+| ~~LIB-5~~ | ~~Replace `result.error.message` in `dashboard-file-utils.ts` with `prettifyError(result.error)`~~ | P3 | Done — `prettifyError` imported from `zod` directly (type-only import unchanged) |
+| ~~LIB-6~~ | ~~Migrate `processBatch()` in `scripts/judge-evaluations.ts` from custom batch loop to `pLimit(concurrency)`~~ | P3 | Done — sliding-window concurrency; per-item `delayMs` delay preserved |
+| ~~LIB-7~~ | ~~Add `pLimit` to `Promise.all(transcripts.map(...))` in `scripts/judge-evaluations.ts`~~ | P3 | Done — `concurrencyLimit = pLimit(CONCURRENCY)` wraps transcript loading |
 
 **Not recommended:** `Map.groupBy` native — blocked by `tsconfig.json` lib target (`ES2022`); requires adding `ES2024.Collection` to lib array + Safari 17.4+ assumption. Use `d3.group` instead.
 
