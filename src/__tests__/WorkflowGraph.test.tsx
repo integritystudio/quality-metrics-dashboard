@@ -23,6 +23,7 @@ interface ReactFlowProps {
 }
 
 vi.mock('@xyflow/react', async () => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vitest requires dynamic import in typeof
   const React = await vi.importActual<typeof import('react')>('react');
   return {
     ReactFlow: ({ nodes, edges, onNodeClick, nodeTypes, children, ...rest }: ReactFlowProps) => (

@@ -53,7 +53,7 @@ export function useApiQuery<TRaw, T = TRaw>(
         const body = await res.text().catch(() => '');
         throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
       }
-      return res.json() as Promise<TRaw>;
+      return res.json();
     },
     select,
     enabled,

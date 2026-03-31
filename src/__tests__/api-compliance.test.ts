@@ -50,7 +50,7 @@ describe('GET /compliance/sla', () => {
   it('returns 200 with period, results, noSLAsConfigured', async () => {
     const res = await complianceRoutes.request('/compliance/sla?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('period');
     expect(body).toHaveProperty('results');
     expect(body).toHaveProperty('noSLAsConfigured');
@@ -78,7 +78,7 @@ describe('GET /compliance/verifications', () => {
   it('returns 200 with period, count, verifications', async () => {
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('period');
     expect(body).toHaveProperty('count');
     expect(body).toHaveProperty('verifications');
@@ -88,7 +88,7 @@ describe('GET /compliance/verifications', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(loadVerifications).mockResolvedValue([{ id: 'v1' }, { id: 'v2' }] as any);
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
-    const body = await res.json() as { count: number };
+    const body = await res.json() as Record<string, any>;
     expect(body.count).toBe(2);
   });
 

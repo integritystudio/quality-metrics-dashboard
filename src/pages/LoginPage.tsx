@@ -5,7 +5,7 @@ export function LoginPage() {
   const { loginWithRedirect } = useAuth0();
 
   useEffect(() => {
-    loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
+    void loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
   }, [loginWithRedirect]);
 
   return <div className="auth-loading" role="status" aria-label="Loading" />;

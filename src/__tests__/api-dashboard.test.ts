@@ -89,21 +89,21 @@ describe('GET /dashboard', () => {
   it('rejects invalid period with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=99d');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('error');
   });
 
   it('rejects invalid role with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=superadmin');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with metrics, cqi, sparklines for valid period', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('cqi');
     expect(body).toHaveProperty('sparklines');
@@ -128,7 +128,7 @@ describe('GET /dashboard', () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=executive');
     expect(res.status).toBe(200);
     expect(vi.mocked(computeRoleView)).toHaveBeenCalled();
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('cqi');
   });
 
@@ -139,14 +139,14 @@ describe('GET /dashboard', () => {
 
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=operator');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     // operator role does not include cqi at top level (only executive)
     expect(body).not.toHaveProperty('cqi');
   });
 
   it('returns sparklines as object keyed by metric name', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d');
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     const sparklines = body.sparklines as Record<string, unknown>;
     expect(typeof sparklines).toBe('object');
     expect(sparklines).toHaveProperty('relevance');
@@ -170,7 +170,7 @@ describe('GET /health', () => {
     vi.mocked(checkHealth).mockResolvedValue({ status: 'healthy', hasData: true });
     const res = await dashboardRoutes.request('/health');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('status');
     expect(body).toHaveProperty('hasData');
   });
@@ -200,7 +200,7 @@ describe('GET /quality/live', () => {
   it('returns 200 with metrics, sessionCount, lastUpdated', async () => {
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('sessionCount');
     expect(body).toHaveProperty('lastUpdated');
@@ -208,14 +208,14 @@ describe('GET /quality/live', () => {
 
   it('returns metrics sorted by name', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as { metrics: { name: string }[] };
-    const names = body.metrics.map(m => m.name);
+    const body = await res.json() as Record<string, any>;
+    const names = body.metrics.map((m: Record<string, unknown>) => m.name);
     expect(names).toEqual([...names].sort());
   });
 
   it('each metric has name, score, evaluatorType, timestamp', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as { metrics: Record<string, unknown>[] };
+    const body = await res.json() as Record<string, any>;
     for (const m of body.metrics) {
       expect(m).toHaveProperty('name');
       expect(m).toHaveProperty('score');
@@ -229,7 +229,7 @@ describe('GET /quality/live', () => {
     vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map() as any);
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(200);
-    const body = await res.json() as { metrics: unknown[] };
+    const body = await res.json() as Record<string, any>;
     expect(body.metrics).toHaveLength(0);
   });
 

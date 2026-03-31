@@ -153,7 +153,7 @@ describe('GET /api/admin/users', () => {
       makeEnv(),
     );
     expect(res.status).toBe(200);
-    const data = await res.json() as unknown[];
+    const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 });
@@ -190,7 +190,7 @@ describe('GET /api/admin/roles', () => {
       makeEnv(),
     );
     expect(res.status).toBe(200);
-    const data = await res.json() as unknown[];
+    const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
     expect(data).toHaveLength(1);
   });

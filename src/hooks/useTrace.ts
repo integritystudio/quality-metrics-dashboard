@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME, QUERY_RETRY_COUNT, HttpStatus } from '../lib/constants.js';
+import { API_BASE, STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
 import { useAuth } from '../contexts/AuthContext.js';
 
 interface TraceSpanResponse {
@@ -36,7 +36,7 @@ export function useTrace(traceId: string | undefined) {
       });
       if (!res.ok) {
         // Worker returns 404 with JSON body when trace not in KV — return empty data
-        if (res.status === HttpStatus.NotFound) return { traceId, spans: [], evaluations: [] };
+        if (res.status === 404) return { traceId, spans: [], evaluations: [] };
         throw new Error(`API error: ${res.status}`);
       }
       return res.json();

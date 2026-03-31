@@ -162,7 +162,7 @@ describe('ScoreBadge with calibration prop', () => {
     );
 
     // The badge should show a band label in aria-label
-    const scope = within(container as HTMLElement);
+    const scope = within(container);
     const allLabeled = scope.getAllByRole('generic', { hidden: true });
     const labeled = allLabeled.filter(el => el.hasAttribute('aria-label'));
     expect(labeled.length).toBeGreaterThan(0);

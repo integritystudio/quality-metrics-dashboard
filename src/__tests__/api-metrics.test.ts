@@ -100,14 +100,14 @@ describe('GET /metrics/:name', () => {
     vi.mocked(getQualityMetric).mockReturnValue(undefined as any);
     const res = await metricsRoutes.request('/metrics/nonexistent?period=7d');
     expect(res.status).toBe(404);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 400 for invalid period', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=99d');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('error');
   });
 
@@ -124,7 +124,7 @@ describe('GET /metrics/:name', () => {
   it('returns 200 with metric detail for valid request', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('config');
     expect(body).toHaveProperty('aggregations');
     expect(body).toHaveProperty('trend');
@@ -138,7 +138,7 @@ describe('GET /metrics/:name', () => {
   it('includes dynamics when trend is present', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('dynamics');
   });
 
@@ -148,7 +148,7 @@ describe('GET /metrics/:name', () => {
 
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body.dynamics).toBeUndefined();
   });
 
@@ -191,7 +191,7 @@ describe('GET /metrics/:name/evaluations', () => {
   it('returns 200 with rows, total, hasMore', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('rows');
     expect(body).toHaveProperty('total');
     expect(body).toHaveProperty('hasMore');
@@ -201,34 +201,34 @@ describe('GET /metrics/:name/evaluations', () => {
 
   it('total matches evaluation count', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
-    const body = await res.json() as { total: number; rows: unknown[] };
+    const body = await res.json() as Record<string, any>;
     expect(body.total).toBe(3);
   });
 
   it('filters by scoreLabel', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&scoreLabel=relevant');
-    const body = await res.json() as { rows: Array<{ label: string }>; total: number };
+    const body = await res.json() as Record<string, any>;
     expect(body.total).toBe(1);
     expect(body.rows[0].label).toBe('relevant');
   });
 
   it('sorts score_asc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_asc');
-    const body = await res.json() as { rows: Array<{ score: number }> };
-    const scores = body.rows.map(r => r.score);
+    const body = await res.json() as Record<string, any>;
+    const scores = body.rows.map((r: Record<string, unknown>) => r.score);
     expect(scores[0]).toBeLessThanOrEqual(scores[scores.length - 1]);
   });
 
   it('sorts score_desc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_desc');
-    const body = await res.json() as { rows: Array<{ score: number }> };
-    const scores = body.rows.map(r => r.score);
+    const body = await res.json() as Record<string, any>;
+    const scores = body.rows.map((r: Record<string, unknown>) => r.score);
     expect(scores[0]).toBeGreaterThanOrEqual(scores[scores.length - 1]);
   });
 
   it('pagination with limit and offset', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=2&offset=1');
-    const body = await res.json() as { rows: unknown[]; total: number; hasMore: boolean };
+    const body = await res.json() as Record<string, any>;
     expect(body.rows).toHaveLength(2);
     expect(body.total).toBe(3);
     expect(body.hasMore).toBe(false);
@@ -236,13 +236,13 @@ describe('GET /metrics/:name/evaluations', () => {
 
   it('hasMore is true when offset+limit < total', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=1&offset=0');
-    const body = await res.json() as { hasMore: boolean };
+    const body = await res.json() as Record<string, any>;
     expect(body.hasMore).toBe(true);
   });
 
   it('row shape has required fields', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=1');
-    const body = await res.json() as { rows: Array<Record<string, unknown>> };
+    const body = await res.json() as Record<string, any>;
     const row = body.rows[0];
     expect(row).toHaveProperty('score');
     expect(row).toHaveProperty('timestamp');

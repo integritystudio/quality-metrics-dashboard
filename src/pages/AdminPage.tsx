@@ -120,7 +120,7 @@ function UserRow({
         <div className="chip-list">
           {user.roles.length === 0 && <span className="text-muted text-xs">No roles</span>}
           {user.roles.map((r) => (
-            <RoleChip key={r.id} role={r} onRevoke={handleRevoke} revoking={busy} />
+            <RoleChip key={r.id} role={r} onRevoke={(id, name) => void handleRevoke(id, name)} revoking={busy} />
           ))}
         </div>
         {error && <div className="text-xs text-error mt-1">{error}</div>}
@@ -141,7 +141,7 @@ function UserRow({
           </select>
           <button
             className="btn-sm"
-            onClick={handleAssign}
+            onClick={() => void handleAssign()}
             disabled={busy || !selectedRoleId}
           >
             Assign

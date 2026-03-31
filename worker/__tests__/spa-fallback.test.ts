@@ -139,7 +139,7 @@ describe('API routes: unaffected by SPA fallback', () => {
   it('GET /api/health response body is valid JSON with status field', async () => {
     mockKV.get.mockResolvedValue('2026-03-16T00:00:00Z');
     const res = await app.request('/api/health', {}, makeEnv());
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json();
     expect(body).toHaveProperty('status');
   });
 

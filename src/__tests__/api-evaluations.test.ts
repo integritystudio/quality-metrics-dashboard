@@ -35,7 +35,7 @@ describe('GET /evaluations/trace/:traceId', () => {
   it('returns 200 with evaluations array for valid traceId', async () => {
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('evaluations');
     expect(Array.isArray(body.evaluations)).toBe(true);
   });
@@ -48,7 +48,7 @@ describe('GET /evaluations/trace/:traceId', () => {
     vi.mocked(loadEvaluationsByTraceId).mockResolvedValue(mockEvals as any);
 
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
-    const body = await res.json() as { evaluations: unknown[] };
+    const body = await res.json() as Record<string, any>;
     expect(body.evaluations).toHaveLength(1);
   });
 

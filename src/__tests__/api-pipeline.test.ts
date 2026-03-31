@@ -55,7 +55,7 @@ describe('GET /pipeline', () => {
   it('returns 200 with period and pipeline data', async () => {
     const res = await pipelineRoutes.request('/pipeline?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('period');
     expect(body).toHaveProperty('stages');
   });

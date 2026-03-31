@@ -292,7 +292,7 @@ function CallbackHandler() {
     if (isAuthenticated) {
       navigate('/');
     } else {
-      loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
+      void loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
     }
   }, [isLoading, isAuthenticated, loginWithRedirect, navigate]);
 

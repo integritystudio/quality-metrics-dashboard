@@ -97,7 +97,7 @@ export function AgentWorkflowView({
 
     let result = new Set(graph.nodes.map(n => n.id));
     if (hasAgentFilter) {
-      result = new Set([...result].filter(id => selectedAgents!.has(id)));
+      result = new Set([...result].filter(id => selectedAgents.has(id)));
     }
     if (hasDurFilter) {
       const durPass = new Set(graph.nodes.filter(n => n.durationMs >= minDurationMs).map(n => n.id));
@@ -237,7 +237,7 @@ export function AgentWorkflowView({
           <button
             type="button"
             className="btn-reset workflow-filter__export mono-xs"
-            onClick={handleExport}
+            onClick={() => void handleExport()}
             aria-label="Export graph as PNG"
           >
             Export PNG

@@ -73,13 +73,13 @@ describe('GET /sessions/:sessionId', () => {
   it('returns 200 with sessionId in response', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('sessionId', 'sess-abc');
   });
 
   it('returns dataSources summary', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('dataSources');
     const ds = body.dataSources as Record<string, unknown>;
     expect(ds).toHaveProperty('traces');
@@ -90,21 +90,21 @@ describe('GET /sessions/:sessionId', () => {
 
   it('returns token totals and tool usage', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('tokenTotals');
     expect(body).toHaveProperty('toolUsage');
   });
 
   it('returns error and agent sections', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('errors');
     expect(body).toHaveProperty('agentActivity');
   });
 
   it('returns evaluation and log summaries', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('evaluationBreakdown');
     expect(body).toHaveProperty('logSummary');
     expect(body).toHaveProperty('evaluations');
@@ -145,7 +145,7 @@ describe('GET /sessions/:sessionId', () => {
     vi.mocked(queryTraces).mockResolvedValue({ traces: spans } as any);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as { toolUsage: Record<string, number> };
+    const body = await res.json() as Record<string, any>;
     expect(body.toolUsage.Read).toBe(2);
     expect(body.toolUsage.Write).toBe(1);
   });
@@ -159,7 +159,7 @@ describe('GET /sessions/:sessionId', () => {
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as { dataSources: { total: number } };
+    const body = await res.json() as Record<string, any>;
     expect(body.dataSources.total).toBe(3); // 1 span + 1 log + 1 eval
   });
 

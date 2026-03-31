@@ -29,7 +29,7 @@ import {
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
-import type { QualityMetricConfig, MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { MetricTrend } from '../../src/lib/quality/quality-metrics.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
 import {
   computePercentileDistribution,
@@ -794,7 +794,7 @@ async function main(): Promise<void> {
         ? computeAggregations(prevScores, config.aggregations)
         : undefined;
 
-      const detail = computeMetricDetail(evals, config as QualityMetricConfig, {
+      const detail = computeMetricDetail(evals, config, {
         topN: DEFAULT_TOP_N,
         bucketCount: DEFAULT_BUCKET_COUNT,
         previousValues,
@@ -895,7 +895,7 @@ async function main(): Promise<void> {
           ? computeAggregations(timeBuckets[idx - 1].scores, config.aggregations)
           : undefined;
         const detail = scores.length > 0
-          ? computeMetricDetail(bucket.evals, config as QualityMetricConfig, { topN: 0, bucketCount: 0, previousValues })
+          ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
           : undefined;
         let dynamics = undefined;
         if (detail?.trend) {

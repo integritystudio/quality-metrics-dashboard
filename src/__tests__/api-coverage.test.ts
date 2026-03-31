@@ -52,14 +52,14 @@ describe('GET /coverage', () => {
   it('rejects invalid inputKey with 400', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d&inputKey=invalid');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body.error).toContain('inputKey');
   });
 
   it('returns 200 with period and heatmap data', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('period');
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('overallCoveragePercent');

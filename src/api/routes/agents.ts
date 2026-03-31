@@ -40,8 +40,8 @@ function createAgentAccumulator(periodDays: number): AgentAcc {
     totalOutputSize: 0,
     sessions: new Set(),
     traceIds: new Set(),
-    sourceTypes: Object.create(null),
-    dailyCounts: new Array(periodDays).fill(0),
+    sourceTypes: Object.create(null) as Record<string, number>,
+    dailyCounts: new Array<number>(periodDays).fill(0),
   };
 }
 
@@ -73,7 +73,7 @@ agentRoutes.get('/agents', async (c) => {
       bucketIndex.set(day, d);
     }
 
-    const acc: Record<string, AgentAcc> = Object.create(null);
+    const acc = Object.create(null) as Record<string, AgentAcc>;
 
     const traceToAgents = new Map<string, Set<string>>();
 
@@ -105,7 +105,7 @@ agentRoutes.get('/agents', async (c) => {
     const allTraceIds = [...traceToAgents.keys()];
     const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
 
-    const agentEvalAcc: Record<string, Record<string, number[]>> = Object.create(null);
+    const agentEvalAcc = Object.create(null) as Record<string, Record<string, number[]>>;
     for (const ev of evaluations) {
       if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
       const agentNames = traceToAgents.get(ev.traceId);

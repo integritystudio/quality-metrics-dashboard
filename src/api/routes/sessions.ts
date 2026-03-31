@@ -12,7 +12,7 @@ import {
   incrementCount,
   LATENCY_P50,
   LATENCY_P95,
-  LOG_SUMMARY_FIELDS,
+  logSummaryFieldSchema,
   LOG_SUMMARY_MAX_ENTRIES,
   type SafeLogEntry,
   OTEL_STATUS_ERROR_CODE,
@@ -241,7 +241,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         entry.scores.push(ev.scoreValue);
       }
     }
-    const logBySeverity: Record<string, number> = Object.create(null);
+    const logBySeverity = Object.create(null) as Record<string, number>;
     for (const l of logs) {
       const t = parseTimestamp(l.timestamp);
       if (t !== null) {
@@ -333,7 +333,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         bySeverity: logBySeverity,
         logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
           const entry: SafeLogEntry = {};
-          for (const key of LOG_SUMMARY_FIELDS) {
+          for (const key of logSummaryFieldSchema.options) {
             const val = l[key];
             if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
           }

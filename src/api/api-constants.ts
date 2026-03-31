@@ -1,3 +1,6 @@
+import type { LogRecord } from '../../../dist/backends/index.js';
+import { z } from 'zod';
+
 export const PERCENT_BASE = 100;
 
 /** Schema version embedded in every KV payload envelope. Increment when the payload shape changes. */
@@ -37,10 +40,12 @@ export const SCORE_ROUND_FACTOR = 10_000;
 
 export const LOG_SUMMARY_MAX_ENTRIES = 200;
 
-/** Safe fields exposed per log entry in logSummary (strips attributes/extractedFields/body). */
-export const LOG_SUMMARY_FIELDS = ['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId'] as const;
+/** Schema for safe fields exposed per log entry in logSummary (strips attributes/extractedFields/body). */
+export const logSummaryFieldSchema = z.enum(['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId']);
 
-export type SafeLogEntry = Partial<Pick<import('../../../dist/backends/index.js').LogRecord, typeof LOG_SUMMARY_FIELDS[number]>>;
+export type LogSummaryField = z.infer<typeof logSummaryFieldSchema>;
+
+export type SafeLogEntry = Partial<Pick<LogRecord, LogSummaryField>>;
 
 /** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
 export const NANOS_TO_MS = 1_000_000;

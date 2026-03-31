@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     if (!isAuthenticated) {
-      Promise.resolve().then(() => {
+      void Promise.resolve().then(() => {
         if (!cancelled) {
           setSession(null);
           setIsLoading(false);
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const jwt = await getAccessToken().catch(() => null);
       if (jwt) void fetch(`${API_BASE}/api/logout`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}` } }).catch(() => undefined);
     }
-    logout({ logoutParams: { returnTo: window.location.origin } });
+    void logout({ logoutParams: { returnTo: window.location.origin } });
     setSession(null);
   }, [session, logout, getAccessToken]);
 

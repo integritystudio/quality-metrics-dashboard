@@ -528,7 +528,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/nonexistent-metric');
     expect(res.status).toBe(404);
-    const body = await res.json() as { error: string };
+    const body = await res.json() as Record<string, any>;
     expect(body.error).toContain('nonexistent-metric');
   });
 
@@ -536,7 +536,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance?period=invalid');
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await res.json() as Record<string, any>;
     expect(body.error).toContain('Invalid period');
   });
 
@@ -544,7 +544,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance?period=7d&buckets=abc');
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await res.json() as Record<string, any>;
     expect(body.error).toContain('Invalid buckets');
   });
 
@@ -564,7 +564,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance');
     expect(res.status).toBe(200);
-    const body = await res.json() as { metric: string };
+    const body = await res.json() as Record<string, any>;
     expect(body.metric).toBe('relevance');
   });
 

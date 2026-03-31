@@ -70,7 +70,7 @@ function isValidId(id: string | undefined): id is string {
 // - Version mismatch: logs a warning and returns null (stale cache treated as missing).
 // - Legacy entries (no envelope): passes through as-is for backwards compatibility.
 async function getKv<T>(kv: KVNamespace, key: string): Promise<T | null> {
-  const raw = await kv.get(key, 'json') as unknown;
+  const raw = await kv.get(key, 'json');
   if (raw === null) return null;
   if (typeof raw === 'object' && raw !== null && 'v' in raw && 'data' in raw) {
     const envelope = raw as { v: unknown; data: unknown };
@@ -271,7 +271,7 @@ app.use('/api/*', async (c, next) => {
       ? [...VALID_ROLES]
       : VIEW_PERMISSION_MAP
           .filter(([perm]) => permissionSet.has(perm))
-          .map(([, view]) => view);
+          .map(([, view]: [DashboardPermission, DashboardView]) => view);
 
     c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
     return next();
@@ -545,7 +545,7 @@ app.get('/api/compliance/sla', async (c) => {
   });
 });
 
-app.get('/api/compliance/verifications', async (c) => {
+app.get('/api/compliance/verifications', (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';

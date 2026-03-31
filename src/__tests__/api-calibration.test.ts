@@ -53,7 +53,7 @@ describe('GET /api/calibration', () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('distributions');
   });
 
@@ -61,7 +61,7 @@ describe('GET /api/calibration', () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('lastCalibrated');
   });
 
@@ -69,7 +69,7 @@ describe('GET /api/calibration', () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as { distributions: Record<string, unknown> };
+    const body = await res.json() as Record<string, any>;
     expect(body.distributions).toHaveProperty('relevance');
     const relDist = body.distributions['relevance'] as Record<string, number>;
     expect(relDist).toHaveProperty('p10');
@@ -83,7 +83,7 @@ describe('GET /api/calibration', () => {
     const kv = makeKV({});
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     expect(res.status).toBe(404);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('error');
   });
 
@@ -91,7 +91,7 @@ describe('GET /api/calibration', () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    const body = await res.json() as { lastCalibrated: string };
+    const body = await res.json() as Record<string, any>;
     expect(body.lastCalibrated).toBe('2026-03-10T06:00:00.000Z');
   });
 });

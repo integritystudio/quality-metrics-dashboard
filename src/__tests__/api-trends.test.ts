@@ -101,7 +101,7 @@ describe('GET /trends/:name', () => {
   it('returns 200 with expected response shape', async () => {
     const res = await trendRoutes.request('/trends/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('metric', 'relevance');
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('bucketCount');
@@ -142,7 +142,7 @@ describe('GET /trends', () => {
   it('returns 200 with period and metrics array', async () => {
     const res = await trendRoutes.request('/trends?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('metrics');
     expect(Array.isArray(body.metrics)).toBe(true);
@@ -150,7 +150,7 @@ describe('GET /trends', () => {
 
   it('each metric entry has name, count, percentiles', async () => {
     const res = await trendRoutes.request('/trends?period=7d');
-    const body = await res.json() as { metrics: Array<Record<string, unknown>> };
+    const body = await res.json() as Record<string, any>;
     for (const m of body.metrics) {
       expect(m).toHaveProperty('metric');
       expect(m).toHaveProperty('count');

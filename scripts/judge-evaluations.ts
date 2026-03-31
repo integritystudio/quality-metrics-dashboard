@@ -162,7 +162,7 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   for (const file of logFiles) {
     const filepath = join(TELEMETRY_DIR, file);
     for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
-      const attrs = entry.attributes as Record<string, unknown> | undefined;
+      const attrs = entry.attributes;
       if (!attrs || attrs['hook.name'] !== HOOK_NAME.TOKEN_METRICS) continue;
 
       const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
@@ -236,7 +236,7 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
       const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
       if (!sessionId) continue;
 
-      const startTime = Array.isArray(span.startTime) ? span.startTime[0] as number : 0;
+      const startTime = Array.isArray(span.startTime) ? span.startTime[0] : 0;
       const traceId = span.traceId || '';
 
       const existing = sessions.get(sessionId);

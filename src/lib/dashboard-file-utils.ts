@@ -47,7 +47,7 @@ export async function* streamJsonlWithValidation<T>(
     if (!line.trim()) continue;
 
     try {
-      const parsed = JSON.parse(line);
+      const parsed = JSON.parse(line) as unknown;
       const result = schema.safeParse(parsed);
       if (result.success) {
         yield result.data;
@@ -109,7 +109,7 @@ export function readJsonlWithValidationSync<T>(
       if (!line.trim()) continue;
 
       try {
-        const parsed = JSON.parse(line);
+        const parsed = JSON.parse(line) as unknown;
         const result = schema.safeParse(parsed);
         if (result.success) {
           results.push(result.data);
@@ -142,7 +142,7 @@ export function loadJsonWithValidation<T>(
 
   try {
     const content = readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(content) as unknown;
     const result = schema.safeParse(parsed);
 
     if (result.success) {

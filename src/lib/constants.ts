@@ -26,7 +26,7 @@ export const enum ErrorMessage {
   InvalidTraceId = 'Invalid traceId',
 }
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
-export const API_BASE = import.meta.env?.VITE_API_URL ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
+export const API_BASE = (import.meta.env?.VITE_API_URL as string | undefined) ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
 
 /** Zod schema for coverage input key param. Single source for type, values, and default. */
 export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');

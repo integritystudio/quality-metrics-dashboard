@@ -51,14 +51,14 @@ describe('GET /correlations', () => {
   it('returns 200 with correlations and metrics', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json() as Record<string, any>;
     expect(body).toHaveProperty('correlations');
     expect(body).toHaveProperty('metrics');
   });
 
   it('metrics array contains metric names from data', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
-    const body = await res.json() as { metrics: string[] };
+    const body = await res.json() as Record<string, any>;
     expect(Array.isArray(body.metrics)).toBe(true);
   });
 
