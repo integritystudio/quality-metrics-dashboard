@@ -55,7 +55,7 @@ const VALID_ROLES: readonly RoleViewType[] = ROLES;
 function DashboardPage({ period }: { period: Period }) {
   const { data, isLoading, isFetching, error } = useDashboard(period);
 
-  if (isLoading && !data) return <MetricGridSkeleton />;
+  if (isLoading) return <MetricGridSkeleton />;
   if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
 
   if (!data || ('role' in data)) return <MetricGridSkeleton />;
@@ -76,7 +76,7 @@ function DashboardPage({ period }: { period: Period }) {
 
   return (
     <>
-      {isFetching && data && <div className="refetch-indicator surface-elevated">Updating...</div>}
+      {isFetching && <div className="refetch-indicator surface-elevated">Updating...</div>}
       <HealthOverview dashboard={dashboard} />
       <MetricGrid metrics={dashboard.metrics} sparklines={sparklines} />
       {dashboard.alerts.length > 0 && (
@@ -98,7 +98,7 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
   const { data, isLoading, error } = useDashboard(period, role);
 
   if (authLoading) return <MetricGridSkeleton />;
-  if (!session || !session.allowedViews.includes(role)) {
+  if (!session?.allowedViews.includes(role)) {
     return (
       <div className="empty-state">
         <h2>Access Denied</h2>
@@ -108,7 +108,7 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
     );
   }
 
-  if (isLoading && !data) return <MetricGridSkeleton />;
+  if (isLoading) return <MetricGridSkeleton />;
   if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
   if (!data || !('role' in data)) return <MetricGridSkeleton />;
 

@@ -63,8 +63,8 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
 
       {alert.remediationHints && alert.remediationHints.length > 0 && (
         <ol className="remediation-list text-xs">
-          {alert.remediationHints.map((hint, i) => (
-            <li key={i}>{hint}</li>
+          {alert.remediationHints.map((hint) => (
+            <li key={hint}>{hint}</li>
           ))}
         </ol>
       )}
@@ -94,10 +94,10 @@ export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
 
   return (
     <ul className="alert-list">
-      {sorted.map((alert, i) =>
+      {sorted.map((alert) =>
         alert.isCompound
-          ? <CompoundAlertCard key={`${alert.message}-${i}`} alert={alert} />
-          : <SimpleAlertItem key={`${alert.message}-${i}`} alert={alert} />
+          ? <CompoundAlertCard key={alert.message} alert={alert} />
+          : <SimpleAlertItem key={alert.message} alert={alert} />
       )}
     </ul>
   );

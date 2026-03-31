@@ -51,8 +51,8 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
           {handoffs.length > 0 && (
             <ViewSection title="Handoffs">
               <div className="flex-col gap-2">
-                {handoffs.map((h, i) => (
-                  <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${i}`} handoff={h} />
+                {handoffs.map((h) => (
+                  <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${h.score}`} handoff={h} />
                 ))}
               </div>
             </ViewSection>

@@ -51,8 +51,8 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
             )}
           </DetailPageHeader>
 
-          {evaluations.map((ev, i) => (
-            <div key={`${ev.evaluationName}-${ev.timestamp}-${i}`} className="eval-detail-card card">
+          {evaluations.map((ev) => (
+            <div key={`${ev.evaluationName}-${ev.timestamp}`} className="eval-detail-card card">
               <div className="flex-center mb-3 justify-between">
                 <div className="flex-center gap-3">
                   <ScoreBadge

@@ -80,9 +80,9 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       {row.toolVerifications && row.toolVerifications.length > 0 && (
         <SectionBlock label="Tool Verifications">
           <div className="flex-wrap gap-1-5">
-            {row.toolVerifications.map((tv, i) => (
+            {row.toolVerifications.map((tv) => (
               <ToolVerificationChip
-                key={`${tv.toolName}-${i}`}
+                key={`${tv.toolName}-${tv.score}`}
                 toolName={tv.toolName}
                 toolCorrect={tv.toolCorrect}
                 argsCorrect={tv.argsCorrect}

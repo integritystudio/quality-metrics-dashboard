@@ -45,8 +45,8 @@ export function CompliancePage({ period }: { period: Period }) {
                 </tr>
               </thead>
               <tbody>
-                {verData.verifications.map((v, i) => (
-                  <tr key={`${v.sessionId}-${v.timestamp}-${i}`}>
+                {verData.verifications.map((v) => (
+                  <tr key={`${v.sessionId}-${v.timestamp}`}>
                     <td><TimestampCell timestamp={v.timestamp} className="text-xs" /></td>
                     <td className="text-xs">{v.verificationType}</td>
                     <td className="mono-xs">{v.sessionId}</td>

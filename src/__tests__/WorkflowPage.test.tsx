@@ -23,7 +23,7 @@ vi.mock('wouter', () => ({
 vi.mock('../components/WorkflowGraph.js', () => ({
   WorkflowGraphView: ({ graph, onNodeClick }: WorkflowGraphViewProps) => (
     <div data-testid="workflow-graph-view">
-      {(graph.nodes ?? []).map(n => (
+      {graph.nodes.map(n => (
         <button
           key={n.id}
           data-testid={`graph-node-${n.id}`}

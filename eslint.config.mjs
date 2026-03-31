@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import react from 'eslint-plugin-react';
 
 export default tseslint.config(
   js.configs.recommended,
@@ -17,7 +18,7 @@ export default tseslint.config(
     files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts'],
   },
   {
-    plugins: { 'react-hooks': reactHooks },
+    plugins: { 'react-hooks': reactHooks, 'react': react },
     files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts'],
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -38,6 +39,17 @@ export default tseslint.config(
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+      '@typescript-eslint/prefer-nullish-coalescing': 'error',
+      '@typescript-eslint/prefer-optional-chain': 'error',
+      '@typescript-eslint/no-unnecessary-condition': 'error',
+      '@typescript-eslint/prefer-promise-reject-errors': 'error',
+      '@typescript-eslint/no-invalid-void-type': 'error',
+      'react/jsx-no-comment-textnodes': 'error',
+      'react/no-array-index-key': 'error',
+      'react/no-children-prop': 'error',
+      'react/no-danger-with-children': 'error',
+      'react/no-unescaped-entities': 'error',
     },
   },
   // src/ and worker/ test files - relax type safety and async patterns
@@ -85,6 +97,12 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': 'warn',
       '@typescript-eslint/require-await': 'warn',
       '@typescript-eslint/no-misused-promises': 'warn',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
+      '@typescript-eslint/prefer-nullish-coalescing': 'warn',
+      '@typescript-eslint/prefer-optional-chain': 'warn',
+      '@typescript-eslint/no-unnecessary-condition': 'warn',
+      '@typescript-eslint/prefer-promise-reject-errors': 'warn',
+      '@typescript-eslint/no-invalid-void-type': 'warn',
     },
   },
   {

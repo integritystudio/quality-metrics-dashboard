@@ -237,7 +237,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
           strokeWidth={1}
         />
 
-        {visibleHandoffs.map((h, i) => {
+        {visibleHandoffs.map((h) => {
           const turnIndex = findHandoffTurnIndex(h, turns);
           if (turnIndex == null) return null;
 
@@ -256,7 +256,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
 
           return (
             <g
-              key={`handoff-${i}`}
+              key={`handoff-${h.sourceAgent}-${h.targetAgent}-${turnIndex}`}
               role="img"
               aria-label={`Handoff from ${h.sourceAgent} to ${h.targetAgent}, score ${h.score.toFixed(SCORE_CHIP_PRECISION)}`}
             >

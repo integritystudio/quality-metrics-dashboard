@@ -9,9 +9,9 @@ export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket:
   return (
     <div>
       <div className="histogram">
-        {distribution.map((d, i) => (
+        {distribution.map((d) => (
           <div
-            key={i}
+            key={d.bucket}
             className="histogram-bar"
             style={{ '--histogram-bar-height': `${(d.count / maxCount) * 100}%` } as CSSProperties}
             aria-label={`${d.bucket}: ${d.count} evaluations`}

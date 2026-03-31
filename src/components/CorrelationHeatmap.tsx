@@ -118,7 +118,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
 
             return (
               <div
-                key={`${ri}-${ci}`}
+                key={`${rowMetric}-${colMetric}`}
                 role="cell"
                 aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
                 data-toxic={isToxic ? 'true' : undefined}

@@ -94,14 +94,14 @@ describe('GET /agents', () => {
   it('returns 400 for invalid period', async () => {
     const res = await agentRoutes.request('/agents?period=99d');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with empty agents array when no spans', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(Array.isArray(body.agents)).toBe(true);
     expect(body.agents).toHaveLength(0);
     expect(body.period).toBe('7d');
@@ -109,7 +109,7 @@ describe('GET /agents', () => {
 
   it('returns period, startDate, endDate in response', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('startDate');
     expect(body).toHaveProperty('endDate');
@@ -123,7 +123,7 @@ describe('GET /agents', () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body.agents).toHaveLength(1);
     expect(body.agents[0].agentName).toBe('general-purpose');
     expect(body.agents[0].invocations).toBe(2);
@@ -137,7 +137,7 @@ describe('GET /agents', () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body.agents[0].errorRate).toBeCloseTo(0.5, 3);
   });
 
@@ -145,7 +145,7 @@ describe('GET /agents', () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan()]));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     const agent = body.agents[0];
     expect(agent).toHaveProperty('agentName');
     expect(agent).toHaveProperty('invocations');
@@ -166,7 +166,7 @@ describe('GET /agents', () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body.agents[0].agentName).toBe('busy-agent');
     expect(body.agents[0].invocations).toBe(2);
     expect(body.agents[1].invocations).toBe(1);
@@ -177,7 +177,7 @@ describe('GET /agents', () => {
     vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([makeMockEval('trace-eval-001')]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body.agents[0].evalSummary).toHaveProperty('relevance');
     expect(body.agents[0].evalSummary.relevance.avg).toBeCloseTo(0.9, 3);
     expect(body.agents[0].evalSummary.relevance.count).toBe(1);
@@ -205,7 +205,7 @@ describe('GET /agents/:sessionId', () => {
   it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
     const res = await agentRoutes.request('/agents/sess-abc');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body).toHaveProperty('sessionId', 'sess-abc');
     expect(body).toHaveProperty('spans');
     expect(body).toHaveProperty('evaluation');
@@ -218,7 +218,7 @@ describe('GET /agents/:sessionId', () => {
     vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
 
     const res = await agentRoutes.request('/agents/sess-abc');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body.spans).toHaveLength(1);
   });
 
@@ -243,7 +243,7 @@ describe('GET /agents/:sessionId', () => {
 
     const res = await agentRoutes.request('/agents/sess-abc');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json();
     expect(body).toHaveProperty('graph');
     expect(body.graph).toEqual(mockGraph);
   });
