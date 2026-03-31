@@ -84,14 +84,40 @@ export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 export const JUDGE_MAX_TOKENS = 1024;
+/** Low temperature for consistent, deterministic evaluation scores */
 export const JUDGE_DEFAULT_TEMPERATURE = 0.1;
+/** Maximum characters per turn to prevent oversized LLM prompts and token explosion */
 export const MAX_TURN_TEXT_LEN = 8000;
+/** Maximum tool context items to balance quality vs cost in evaluations */
 export const MAX_TOOL_CONTEXT_ITEMS = 10;
+/** Maximum tool results to include per turn in evaluation context */
 export const MAX_TOOL_RESULTS_PER_TURN = 20;
 export const MAX_TURN_LIMIT = 10_000;
+export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09T01:11:15"
+export const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
 
 export function normalizeScore(score: number): number {
-  return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
+  return Math.round(score * 10000) / 10000;
+}
+
+function createEvalRecord(
+  turn: Turn,
+  evaluationName: string,
+  scoreValue: number,
+  explanation: string,
+  evaluator: string,
+  evaluatorType: string,
+): EvalRecord {
+  return {
+    timestamp: turn.timestamp,
+    evaluationName,
+    scoreValue: normalizeScore(scoreValue),
+    explanation,
+    evaluator: evaluator as GenAiEvaluator,
+    evaluatorType: evaluatorType as GenAiEvaluatorType,
+    traceId: turn.traceId,
+    sessionId: turn.sessionId,
+  };
 }
 
 export interface TranscriptInfo {
@@ -200,7 +226,7 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
         if (!f.endsWith('.jsonl')) continue;
         const sessionId = basename(f, '.jsonl');
         // Skip non-UUID filenames (memory files, etc.)
-        if (!/^[0-9a-f]{8}-/.test(sessionId)) continue;
+        if (!UUID_PREFIX_REGEX.test(sessionId)) continue;
         if (seen.has(sessionId)) continue;
         seen.add(sessionId);
         transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
@@ -338,10 +364,6 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
       const toolRes = extractToolResults(content);
       if (toolRes.length > 0) {
         accumulatedToolResults.push(...toolRes);
-        // Bound tool results to prevent unbounded memory growth
-        if (accumulatedToolResults.length > MAX_TOOL_RESULTS_PER_TURN) {
-          accumulatedToolResults.splice(0, accumulatedToolResults.length - MAX_TOOL_RESULTS_PER_TURN);
-        }
       }
 
       if (isToolResultOnly(content)) continue;
@@ -435,45 +457,45 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
   let canaryCount = 0;
 
   for (const turn of turns) {
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
     const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
     const canary = isCanaryTurn(turn.sessionId, turnKey);
     if (canary) canaryCount++;
 
     const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(relKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: RELEVANCE_EVAL_NAME,
-        scoreValue: canary
-          ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
-          : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
-        explanation: canary
-          ? `Relevance (canary) for session ${sessionPreview}`
-          : `Relevance (seeded) for session ${sessionPreview}`,
-        evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-        evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          RELEVANCE_EVAL_NAME,
+          canary
+            ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
+            : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
+          canary
+            ? `Relevance (canary) for session ${sessionPreview}`
+            : `Relevance (seeded) for session ${sessionPreview}`,
+          canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+          canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+        ),
+      );
     }
 
     const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(cohKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: COHERENCE_EVAL_NAME,
-        scoreValue: canary
-          ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
-          : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-        explanation: canary
-          ? `Coherence (canary) for session ${sessionPreview}`
-          : `Coherence (seeded) for session ${sessionPreview}`,
-        evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-        evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          COHERENCE_EVAL_NAME,
+          canary
+            ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
+            : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+          canary
+            ? `Coherence (canary) for session ${sessionPreview}`
+            : `Coherence (seeded) for session ${sessionPreview}`,
+          canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+          canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+        ),
+      );
     }
 
     {
@@ -484,34 +506,34 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
 
       const faithKey = `${turn.sessionId}:${FAITHFULNESS_EVAL_NAME}:${turnKey}`;
       if (!existingKeys.has(faithKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: FAITHFULNESS_EVAL_NAME,
-          scoreValue: faithScore,
-          explanation: canary
-            ? `Faithfulness (canary) for session ${sessionPreview}`
-            : `Faithfulness (seeded) for session ${sessionPreview}`,
-          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            FAITHFULNESS_EVAL_NAME,
+            faithScore,
+            canary
+              ? `Faithfulness (canary) for session ${sessionPreview}`
+              : `Faithfulness (seeded) for session ${sessionPreview}`,
+            canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          ),
+        );
       }
 
       const halKey = `${turn.sessionId}:${HALLUCINATION_EVAL_NAME}:${turnKey}`;
       if (!existingKeys.has(halKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: HALLUCINATION_EVAL_NAME,
-          scoreValue: halScore,
-          explanation: canary
-            ? `Hallucination (canary) for session ${sessionPreview}`
-            : `Hallucination (seeded) for session ${sessionPreview}`,
-          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            HALLUCINATION_EVAL_NAME,
+            halScore,
+            canary
+              ? `Hallucination (canary) for session ${sessionPreview}`
+              : `Hallucination (seeded) for session ${sessionPreview}`,
+            canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          ),
+        );
       }
     }
 
@@ -519,20 +541,20 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
     if (turn.toolResults.length > 0) {
       const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
       if (!existingKeys.has(tcKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
-          scoreValue: canary
-            ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
-            : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-          explanation: canary
-            ? `Tool correctness (canary) for session ${sessionPreview}`
-            : `Tool correctness (seeded) for session ${sessionPreview}`,
-          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            TOOL_CORRECTNESS_CRITERIA.name,
+            canary
+              ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
+              : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+            canary
+              ? `Tool correctness (canary) for session ${sessionPreview}`
+              : `Tool correctness (seeded) for session ${sessionPreview}`,
+            canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          ),
+        );
       }
     }
   }
@@ -553,7 +575,7 @@ export async function evaluateTurn(
   existingKeys: Set<string>,
 ): Promise<EvalRecord[]> {
   const evals: EvalRecord[] = [];
-  const turnKey = turn.timestamp.slice(0, 19);
+  const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
 
@@ -565,16 +587,16 @@ export async function evaluateTurn(
         turn.assistantText,
         toolContext,
       );
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: RELEVANCE_EVAL_NAME,
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-        evaluator: LLM_JUDGE_EVALUATOR,
-        evaluatorType: LLM_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          RELEVANCE_EVAL_NAME,
+          result.score,
+          result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+          LLM_JUDGE_EVALUATOR,
+          LLM_EVALUATOR_TYPE,
+        ),
+      );
     } catch (err) {
       trackFailure(RELEVANCE_EVAL_NAME);
       console.warn(`  [${RELEVANCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -585,16 +607,16 @@ export async function evaluateTurn(
   if (!existingKeys.has(cohKey)) {
     try {
       const result = await judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText });
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: COHERENCE_EVAL_NAME,
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-        evaluator: LLM_JUDGE_EVALUATOR,
-        evaluatorType: LLM_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          COHERENCE_EVAL_NAME,
+          result.score,
+          result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+          LLM_JUDGE_EVALUATOR,
+          LLM_EVALUATOR_TYPE,
+        ),
+      );
     } catch (err) {
       trackFailure(COHERENCE_EVAL_NAME);
       console.warn(`  [${COHERENCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -615,16 +637,16 @@ export async function evaluateTurn(
           turn.assistantText,
           toolContext,
         );
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: FAITHFULNESS_EVAL_NAME,
-          scoreValue: normalizeScore(faithResult.score),
-          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: LLM_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            FAITHFULNESS_EVAL_NAME,
+            faithResult.score,
+            faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
+            LLM_JUDGE_EVALUATOR,
+            LLM_EVALUATOR_TYPE,
+          ),
+        );
       } catch (err) {
         trackFailure(FAITHFULNESS_EVAL_NAME);
         console.warn(`  [${FAITHFULNESS_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -640,17 +662,17 @@ export async function evaluateTurn(
           toolContext,
         );
         // Invert: faithfulness measures consistency, hallucination is the complement
-        const halScore = normalizeScore(1 - halResult.score);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: HALLUCINATION_EVAL_NAME,
-          scoreValue: halScore,
-          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: LLM_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        const halScore = 1 - halResult.score;
+        evals.push(
+          createEvalRecord(
+            turn,
+            HALLUCINATION_EVAL_NAME,
+            halScore,
+            halResult.reason ?? `Hallucination: ${normalizeScore(halScore).toFixed(2)} for session ${sessionPreview}`,
+            LLM_JUDGE_EVALUATOR,
+            LLM_EVALUATOR_TYPE,
+          ),
+        );
       } catch (err) {
         trackFailure(HALLUCINATION_EVAL_NAME);
         console.warn(`  [${HALLUCINATION_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -666,16 +688,16 @@ export async function evaluateTurn(
       };
       try {
         const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
-          scoreValue: normalizeScore(tcResult.score),
-          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: LLM_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            TOOL_CORRECTNESS_CRITERIA.name,
+            tcResult.score,
+            tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
+            LLM_JUDGE_EVALUATOR,
+            LLM_EVALUATOR_TYPE,
+          ),
+        );
       } catch (err) {
         trackFailure(TOOL_CORRECTNESS_CRITERIA.name);
         console.warn(`  [${TOOL_CORRECTNESS_CRITERIA.name}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -693,16 +715,16 @@ export async function evaluateTurn(
         if (existingKeys.has(subKey)) continue;
         try {
           const result = await judge.gEval(config, tcTestCase);
-          evals.push({
-            timestamp: turn.timestamp,
-            evaluationName: name,
-            scoreValue: normalizeScore(result.score),
-            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-            evaluator: LLM_JUDGE_EVALUATOR,
-            evaluatorType: LLM_EVALUATOR_TYPE,
-            traceId: turn.traceId,
-            sessionId: turn.sessionId,
-          });
+          evals.push(
+            createEvalRecord(
+              turn,
+              name,
+              result.score,
+              result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+              LLM_JUDGE_EVALUATOR,
+              LLM_EVALUATOR_TYPE,
+            ),
+          );
         } catch (err) {
           trackFailure(name);
           console.warn(`  [${name}] Error for ${sessionPreview}: ${(err as Error).message}`);
