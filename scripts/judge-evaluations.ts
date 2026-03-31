@@ -33,6 +33,9 @@ import {
   otelEvaluationRecordSchema,
   type GenAiEvaluator,
   type GenAiEvaluatorType,
+  HALLUCINATION_EVAL_NAME,
+  LLM_JUDGE_EVALUATOR,
+  LLM_EVALUATOR_TYPE,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
@@ -69,9 +72,7 @@ const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
-export const LLM_JUDGE_EVALUATOR = 'llm-judge';
 export const SEED_EVALUATOR = 'seed-hash';
-export const LLM_EVALUATOR_TYPE = 'llm';
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
@@ -79,7 +80,6 @@ export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
 export const RELEVANCE_EVAL_NAME = 'relevance';
 export const COHERENCE_EVAL_NAME = 'coherence';
 export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
-export const HALLUCINATION_EVAL_NAME = 'hallucination';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';

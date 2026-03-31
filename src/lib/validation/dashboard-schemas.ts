@@ -38,6 +38,44 @@ export const genAiEvaluatorTypeSchema = z.enum([
 export type GenAiEvaluatorType = z.infer<typeof genAiEvaluatorTypeSchema>;
 
 /**
+ * Evaluation metric names used in LLM-as-Judge and rule-based evaluation pipelines.
+ * Zod 4 enum with type-safe inference for all supported evaluation metrics.
+ */
+const EVALUATION_NAMES = [
+  'relevance',
+  'coherence',
+  'faithfulness',
+  'hallucination',
+  'tool_correctness',
+  'tool_selection',
+  'tool_arguments',
+  'tool_integration',
+] as const;
+
+export const evaluationNameSchema = z.enum(EVALUATION_NAMES);
+export type EvaluationName = z.infer<typeof evaluationNameSchema>;
+
+/**
+ * Branded literal types for specific evaluation names and evaluator identifiers.
+ * Uses Zod 4 enum patterns for improved type inference and runtime validation.
+ */
+
+/** Hallucination evaluation metric identifier */
+export const HALLUCINATION_EVAL_NAME_SCHEMA = z.enum(['hallucination'] as const);
+export type HallucinationEvalName = z.infer<typeof HALLUCINATION_EVAL_NAME_SCHEMA>;
+export const HALLUCINATION_EVAL_NAME = HALLUCINATION_EVAL_NAME_SCHEMA.parse('hallucination');
+
+/** LLM Judge evaluator identifier */
+export const LLM_JUDGE_EVALUATOR_SCHEMA = z.enum(['llm-judge'] as const);
+export type LlmJudgeEvaluator = z.infer<typeof LLM_JUDGE_EVALUATOR_SCHEMA>;
+export const LLM_JUDGE_EVALUATOR = LLM_JUDGE_EVALUATOR_SCHEMA.parse('llm-judge');
+
+/** LLM evaluator type classification */
+export const LLM_EVALUATOR_TYPE_SCHEMA = z.enum(['llm'] as const);
+export type LlmEvaluatorType = z.infer<typeof LLM_EVALUATOR_TYPE_SCHEMA>;
+export const LLM_EVALUATOR_TYPE = LLM_EVALUATOR_TYPE_SCHEMA.parse('llm');
+
+/**
  * High-resolution time tuple: [seconds, nanoseconds]
  */
 export const hrtSchema = z.tuple([z.number(), z.number()]).describe('High-resolution time [seconds, nanoseconds]');

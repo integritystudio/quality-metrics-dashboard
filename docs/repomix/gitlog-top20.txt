@@ -1,3 +1,38 @@
+8e90d2e 2026-03-31 chore(deps): add eslint-plugin-react dev dependency
+  package-lock.json
+
+c53c462 2026-03-31 chore(deps): update package-lock.json
+  package-lock.json
+
+e5ffd1c 2026-03-31 feat(lint): enable recommendedTypeChecked ESLint rules and fix all violations
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+  worker/index.ts
+
+d0eee21 2026-03-30 chore(deps): bump wrangler from 4.77.0 to 4.78.0
+  package-lock.json
+
+c592c73 2026-03-29 chore(serena): add Serena MCP project config and TypeScript symbol cache
+  .serena/cache/typescript/document_symbols.pkl
+  .serena/cache/typescript/raw_document_symbols.pkl
+
+9cf8cf6 2026-03-29 test(scripts): wire test:scripts into npm test and fix failing judge tests
+  scripts/__tests__/judge-evaluations.test.ts
+  scripts/judge-evaluations.ts
+
+2eccfb5 2026-03-28 refactor(validation): add GenAiEvaluator/GenAiEvaluatorType enums and tighten EvalRecord types
+  scripts/__tests__/judge-evaluations.test.ts
+  scripts/judge-evaluations.ts
+
+c683fdb 2026-03-28 refactor(quality,scripts): complete d3/pLimit migration and type fixes
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+a575fc0 2026-03-28 refactor(data-loader): migrate groupBy to d3.group (LIB-3)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 b8d0cee 2026-03-28 refactor(auth): extract AUTH0_CALLBACK_URI and AUTH0_LOGIN_PARAMS constants
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
@@ -348,32 +383,3 @@ b6a7361 2026-03-26 refactor(worker): remove WHAT comments from admin route handl
 
 b27a65e 2026-03-26 refactor(judge): remove two more what-comments in turn extraction and sub-criteria
   scripts/judge-evaluations.ts
-
-d78a765 2026-03-26 refactor(worker): ERR_UNAUTHORIZED constant; VALID_ROLES for allowedViews; remove WHAT comment
-  worker/index.ts
-
-c625ad9 2026-03-26 refactor(judge): remove remaining what-comments inside function bodies
-  scripts/judge-evaluations.ts
-
-672a198 2026-03-26 refactor(worker): extract remaining inline literals/arrays to named constants
-  worker/index.ts
-
-ba1460e 2026-03-26 refactor(judge): remove metric section header comments in evaluateTurn
-  scripts/judge-evaluations.ts
-
-56cb5c8 2026-03-26 refactor(worker): extract repeated error message string literals to constants
-  worker/index.ts
-
-54ee7fe 2026-03-26 refactor(judge): remove remaining section header comments
-  scripts/judge-evaluations.ts
-
-a8895a0 2026-03-26 refactor(judge): remove section header comments
-  scripts/judge-evaluations.ts
-
-5a146c8 2026-03-26 fix(worker): validate sortBy param against enum constant
-  worker/index.ts
-
-f720297 2026-03-26 docs(backlog): add worker API validation/security code review items (CR-WK-1 through CR-WK-9)
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
