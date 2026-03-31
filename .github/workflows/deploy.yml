@@ -18,28 +18,44 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout parent observability-toolkit
+        uses: actions/checkout@v4
+        with:
+          repository: integritystudio/observability-toolkit
+          path: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm test
+      - name: Build parent dist (required by dashboard scripts)
+        run: npm ci && npm run build
+      - name: Install dashboard dependencies
+        run: cd dashboard && npm ci
+      - name: Run dashboard tests
+        run: cd dashboard && npm test
 
   build:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout parent observability-toolkit
+        uses: actions/checkout@v4
+        with:
+          repository: integritystudio/observability-toolkit
+          path: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
-      - run: npm ci
-      - name: Build with env vars from Doppler
+      - name: Build parent dist
+        run: npm ci && npm run build
+      - name: Install dashboard dependencies
+        run: cd dashboard && npm ci
+      - name: Build dashboard with env vars from Doppler
         run: |
+          cd dashboard
           export VITE_API_URL=$(doppler secrets get DEV_WORKER_URL --project integrity-studio --config prd --plain)
           export VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --project integrity-studio --config prd --plain)
           export VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --project integrity-studio --config prd --plain)
@@ -49,7 +65,7 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: dashboard/dist
 
   deploy-pages:
     needs: build
@@ -65,16 +81,24 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout parent observability-toolkit
+        uses: actions/checkout@v4
+        with:
+          repository: integritystudio/observability-toolkit
+          path: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
-      - run: npm ci
-      - name: Build with env vars from Doppler
+      - name: Build parent dist
+        run: npm ci && npm run build
+      - name: Install dashboard dependencies
+        run: cd dashboard && npm ci
+      - name: Build dashboard with env vars from Doppler
         run: |
+          cd dashboard
           export VITE_API_URL=$(doppler secrets get DEV_WORKER_URL --project integrity-studio --config prd --plain)
           export VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --project integrity-studio --config prd --plain)
           export VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --project integrity-studio --config prd --plain)
@@ -83,10 +107,10 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Deploy default worker
-        run: CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_WORKER_TOKEN --project integrity-studio --config prd --plain) npx wrangler deploy
+        run: cd dashboard && CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_WORKER_TOKEN --project integrity-studio --config prd --plain) npx wrangler deploy
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Deploy production worker
-        run: CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_WORKER_TOKEN --project integrity-studio --config prd --plain) npx wrangler deploy --name quality-metrics-api
+        run: cd dashboard && CLOUDFLARE_API_TOKEN=$(doppler secrets get CLOUDFLARE_WORKER_TOKEN --project integrity-studio --config prd --plain) npx wrangler deploy --name quality-metrics-api
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}

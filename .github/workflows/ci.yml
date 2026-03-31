@@ -9,7 +9,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout parent observability-toolkit
+        uses: actions/checkout@v4
+        with:
+          repository: integritystudio/observability-toolkit
+          path: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -17,8 +21,13 @@ jobs:
       - uses: dopplerhq/cli-action@v3
         with:
           token: ${{ secrets.DOPPLER_TOKEN }}
-      - run: npm ci
-      - run: npx playwright install chromium --with-deps
-      - run: npm run build
-      - run: doppler run --project integrity-studio --config prd -- npm test
-      - run: npm run test:e2e
+      - name: Build parent dist
+        run: npm ci && npm run build
+      - name: Install dashboard dependencies
+        run: cd dashboard && npm ci
+      - name: Install Playwright browsers
+        run: cd dashboard && npx playwright install chromium --with-deps
+      - name: Run dashboard tests
+        run: cd dashboard && doppler run --project integrity-studio --config prd -- npm test
+      - name: Run E2E tests
+        run: cd dashboard && npm run test:e2e
