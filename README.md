@@ -1,6 +1,6 @@
 # Quality Metrics Dashboard
 
-v3.0.4
+v3.0.5
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. **Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.**
 

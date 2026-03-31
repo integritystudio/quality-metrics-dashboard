@@ -27,6 +27,15 @@ doppler run --project integrity-studio --config dev -- npm run test:e2e:integrat
 - **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
 - **React Compiler**: `babel-plugin-react-compiler` is installed but NOT configured (not wired into vite.config.ts). The compiler is inactive. For TanStack Table incompatibilities, use `// eslint-disable-next-line react-hooks/incompatible-library -- <reason>` (see `EvaluationTable.tsx:188`).
 
+## Dependencies
+
+Key libraries:
+- **`d3-array`** — aggregation (`group`, `rollup`, `ascending`); preferred over custom groupBy
+- **`p-limit`** — concurrency control for parallel operations (API calls, aggregations)
+- **`recharts`** — charting; replaces custom D3 visualizations
+- **`@xyflow/react`** — workflow DAG visualization
+- **`jose`** — Auth0 JWKS JWT verification in worker
+
 ## Constants Architecture
 
 Two constants files with a hard module boundary — do not cross-import:
@@ -49,6 +58,8 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 
 Requires parent `dist/` — run `npm run build` in observability-toolkit first.
 
+**Test note**: `npm test` runs `src/__tests__` only (Vite context). Script tests (`scripts/*.test.ts`) require parent `dist/` and are run separately with `npm run test:scripts`. CI runs `npm test src/` to avoid script-test failures on parent build dependency.
+
 ## Integration Tests (`e2e/integration/`)
 
 Run against the deployed worker with a real Auth0 JWT. Requires Doppler dev config.
@@ -64,6 +75,14 @@ Run against the deployed worker with a real Auth0 JWT. Requires Doppler dev conf
 - **`web-worker`** → `src/stubs/web-worker.ts` — always aliased; prevents bundler errors for worker imports.
 - **`VITE_E2E=1`** → stubs `@auth0/auth0-react` with `src/stubs/auth0-e2e.ts` for Playwright E2E runs.
 - **Vite proxy**: `/api/*` → `http://127.0.0.1:3001` — local dev auto-forwards API requests to the Hono server; no CORS config needed.
+
+## Linting
+
+ESLint configuration (`eslint.config.mjs`) uses `@typescript-eslint/recommendedTypeChecked` with per-context strictness:
+- **`src/` and `worker/`**: strict enforcement (errors)
+- **`scripts/` and `src/__tests__/`**: warnings (allow passing tests while improving code)
+
+Run `npm run lint` to check `src/`, `scripts/`, and `worker/`. TypeScript type-aware rules enforce proper async handling, type assertions, and void floating promises.
 
 ## Deployment
 
