@@ -68,6 +68,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "concurrently": "^9.2.1",
     "eslint": "^10.1.0",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^29.0.1",
     "repomix": "^1.13.0",
