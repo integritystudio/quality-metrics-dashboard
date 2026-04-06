@@ -12,6 +12,8 @@
 
 import { z } from 'zod';
 
+/** Normalized score value: 0–1 inclusive (mirrors parent shared-schemas.ts) */
+const normalizedScoreSchema = z.number().min(0).max(1);
 
 // ---------- IDs ----------
 // OTel traceId: 16 bytes => 32 hex chars
@@ -282,7 +284,7 @@ export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
 
 const routingTelemetrySummarySchema = z.object({
   routedSpans: z.int().min(0),
-  fallbackRate: z.number().min(0).max(1),
+  fallbackRate: normalizedScoreSchema,
 });
 
 const routingTelemetryModelPairGroupSchema = z.object({
@@ -297,7 +299,7 @@ const routingTelemetryStrategyGroupSchema = z.object({
   strategy: z.string(),
   count: z.int().min(0),
   fallbackCount: z.int().min(0),
-  fallbackRate: z.number().min(0).max(1),
+  fallbackRate: normalizedScoreSchema,
 });
 
 const routingTelemetryGroupSchema = z.union([
