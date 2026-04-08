@@ -20,7 +20,7 @@ import {
   type Turn,
   type EvalRecord,
 } from '../judge-evaluations.js';
-import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 
@@ -638,7 +638,7 @@ describe('toOTelRecord', () => {
     const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
     const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-    expect(genAiEvaluatorTypeSchema.safeParse(evalType).success).toBe(true);
+    expect(evaluatorTypeSchema.safeParse(evalType).success).toBe(true);
     expect(attrs['gen_ai.evaluation.evaluator_type']).toBeUndefined();
   });
 });

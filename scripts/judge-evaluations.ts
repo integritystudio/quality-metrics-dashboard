@@ -31,10 +31,8 @@ import {
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
-  type GenAiEvaluator,
-  type GenAiEvaluatorType,
+  type EvaluatorType,
   HALLUCINATION_EVAL_NAME,
-  LLM_JUDGE_EVALUATOR,
   LLM_EVALUATOR_TYPE,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
@@ -72,7 +70,7 @@ const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
-export const SEED_EVALUATOR = 'seed-hash';
+export const SEED_EVALUATOR: EvaluatorType = 'seed';
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
@@ -105,16 +103,16 @@ function createEvalRecord(
   evaluationName: string,
   scoreValue: number,
   explanation: string,
-  evaluator: string,
-  evaluatorType: string,
+  evaluator: EvaluatorType,
+  evaluatorType: EvaluatorType,
 ): EvalRecord {
   return {
     timestamp: turn.timestamp,
     evaluationName,
     scoreValue: normalizeScore(scoreValue),
     explanation,
-    evaluator: evaluator as GenAiEvaluator,
-    evaluatorType: evaluatorType as GenAiEvaluatorType,
+    evaluator,
+    evaluatorType,
     traceId: turn.traceId,
     sessionId: turn.sessionId,
   };
@@ -140,8 +138,8 @@ export interface EvalRecord {
   evaluationName: string;
   scoreValue: number;
   explanation: string;
-  evaluator: GenAiEvaluator;
-  evaluatorType: GenAiEvaluatorType;
+  evaluator: EvaluatorType;
+  evaluatorType: EvaluatorType;
   traceId: string;
   sessionId: string;
 }
@@ -474,7 +472,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           canary
             ? `Relevance (canary) for session ${sessionPreview}`
             : `Relevance (seeded) for session ${sessionPreview}`,
-          canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+          canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
           canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
         ),
       );
@@ -492,7 +490,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           canary
             ? `Coherence (canary) for session ${sessionPreview}`
             : `Coherence (seeded) for session ${sessionPreview}`,
-          canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+          canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
           canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
         ),
       );
@@ -514,7 +512,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             canary
               ? `Faithfulness (canary) for session ${sessionPreview}`
               : `Faithfulness (seeded) for session ${sessionPreview}`,
-            canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
             canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           ),
         );
@@ -530,7 +528,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             canary
               ? `Hallucination (canary) for session ${sessionPreview}`
               : `Hallucination (seeded) for session ${sessionPreview}`,
-            canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
             canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           ),
         );
@@ -551,7 +549,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             canary
               ? `Tool correctness (canary) for session ${sessionPreview}`
               : `Tool correctness (seeded) for session ${sessionPreview}`,
-            canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
+            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
             canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
           ),
         );
@@ -593,7 +591,7 @@ export async function evaluateTurn(
           RELEVANCE_EVAL_NAME,
           result.score,
           result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-          LLM_JUDGE_EVALUATOR,
+          LLM_EVALUATOR_TYPE,
           LLM_EVALUATOR_TYPE,
         ),
       );
@@ -613,7 +611,7 @@ export async function evaluateTurn(
           COHERENCE_EVAL_NAME,
           result.score,
           result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-          LLM_JUDGE_EVALUATOR,
+          LLM_EVALUATOR_TYPE,
           LLM_EVALUATOR_TYPE,
         ),
       );
@@ -643,7 +641,7 @@ export async function evaluateTurn(
             FAITHFULNESS_EVAL_NAME,
             faithResult.score,
             faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
-            LLM_JUDGE_EVALUATOR,
+            LLM_EVALUATOR_TYPE,
             LLM_EVALUATOR_TYPE,
           ),
         );
@@ -669,7 +667,7 @@ export async function evaluateTurn(
             HALLUCINATION_EVAL_NAME,
             halScore,
             halResult.reason ?? `Hallucination: ${normalizeScore(halScore).toFixed(2)} for session ${sessionPreview}`,
-            LLM_JUDGE_EVALUATOR,
+            LLM_EVALUATOR_TYPE,
             LLM_EVALUATOR_TYPE,
           ),
         );
@@ -694,7 +692,7 @@ export async function evaluateTurn(
             TOOL_CORRECTNESS_CRITERIA.name,
             tcResult.score,
             tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
-            LLM_JUDGE_EVALUATOR,
+            LLM_EVALUATOR_TYPE,
             LLM_EVALUATOR_TYPE,
           ),
         );
@@ -721,7 +719,7 @@ export async function evaluateTurn(
               name,
               result.score,
               result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-              LLM_JUDGE_EVALUATOR,
+              LLM_EVALUATOR_TYPE,
               LLM_EVALUATOR_TYPE,
             ),
           );
@@ -1008,7 +1006,7 @@ async function main() {
       const judge = new LLMJudge(llm, {
         timeoutMs: TIME_MS.MINUTE,
         maxRetries: 2,
-        evaluator: LLM_JUDGE_EVALUATOR,
+        evaluator: LLM_EVALUATOR_TYPE,
         evaluatorType: LLM_EVALUATOR_TYPE,
         logger: {
           warn: (msg) => console.warn(`  [warn] ${msg}`),
@@ -1046,7 +1044,7 @@ async function main() {
         runAt: new Date().toISOString(),
         evaluationNames: evalNames,
         resultCount: flatEvals.length,
-        evaluator: seed ? SEED_EVALUATOR_TYPE : LLM_JUDGE_EVALUATOR,
+        evaluator: seed ? SEED_EVALUATOR_TYPE : LLM_EVALUATOR_TYPE,
       };
       await backend.appendDatasetRun(runRecord);
     }

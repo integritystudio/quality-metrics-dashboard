@@ -11,15 +11,11 @@ import { z } from 'zod';
 // ---------- Shared schemas from parent ----------
 // Re-export canonical schemas so existing consumers keep their imports stable.
 // TraceIdSchema/SpanIdSchema live in shared-schemas; the rest in dashboard-schemas.
-export { TraceIdSchema, SpanIdSchema } from '@parent/lib/core/shared-schemas.js';
+export { TraceIdSchema, SpanIdSchema, evaluatorTypeSchema, type EvaluatorType } from '@parent/lib/core/shared-schemas.js';
 
 export {
-  genAiEvaluatorSchema,
-  genAiEvaluatorTypeSchema,
   HALLUCINATION_EVAL_NAME_SCHEMA,
   HALLUCINATION_EVAL_NAME,
-  LLM_JUDGE_EVALUATOR_SCHEMA,
-  LLM_JUDGE_EVALUATOR,
   LLM_EVALUATOR_TYPE_SCHEMA,
   LLM_EVALUATOR_TYPE,
   hrtSchema,
@@ -34,10 +30,7 @@ export {
 } from '@parent/lib/validation/dashboard-schemas.js';
 
 export type {
-  GenAiEvaluator,
-  GenAiEvaluatorType,
   HallucinationEvalName,
-  LlmJudgeEvaluator,
   LlmEvaluatorType,
   TraceSpan,
   OTelLogEntry,

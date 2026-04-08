@@ -29,7 +29,7 @@ import {
   type Turn,
   type EvalRecord as JudgeEvalRecord,
 } from '../judge-evaluations.js';
-import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -267,7 +267,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
       const evalName = attrs['gen_ai.evaluation.name'] as string;
       expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
       expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-      expect(genAiEvaluatorTypeSchema.safeParse(attrs['gen_ai.evaluation.evaluator.type']).success).toBe(true);
+      expect(evaluatorTypeSchema.safeParse(attrs['gen_ai.evaluation.evaluator.type']).success).toBe(true);
     }
   });
 
