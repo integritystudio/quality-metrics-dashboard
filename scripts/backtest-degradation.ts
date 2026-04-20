@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { z } from 'zod';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
+import { CloudBackend } from '../../src/backends/cloud.js';
 import {
   computeStdDev,
   sweepDegradationParams,
@@ -245,7 +245,11 @@ async function main(): Promise<void> {
 
   console.log(`Backtest: ${days}-day window, ${incidents.length} incident(s), metric=${metricFilter ?? 'all'}`);
 
-  const backend = new MultiDirectoryBackend(undefined, true);
+  if (!CloudBackend.isConfigured()) {
+    console.error('[backtest] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
+    process.exit(1);
+  }
+  const backend = new CloudBackend();
   const now = Date.now();
   const startMs = now - days * TIME_MS.DAY;
   const startDate = new Date(startMs).toISOString();
@@ -332,7 +336,11 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1]?.endsWith('backtest-degradation.ts') ||
+  process.argv[1]?.endsWith('backtest-degradation.js');
+if (isDirectRun) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -19,7 +19,7 @@ import { createHash, randomBytes } from 'crypto';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
+import { CloudBackend } from '../../src/backends/cloud.js';
 import {
   computeDashboardSummary,
   computeRoleView,
@@ -688,7 +688,11 @@ function computeSessionDetail(
 }
 
 async function main(): Promise<void> {
-  const backend = new MultiDirectoryBackend(undefined, true);
+  if (!CloudBackend.isConfigured()) {
+    console.error('[sync-to-kv] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
+    process.exit(1);
+  }
+  const backend = new CloudBackend();
   if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
     console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${MIN_TRACE_BUDGET + 10}); high-priority entries may be skipped`);
   }
@@ -932,7 +936,8 @@ async function main(): Promise<void> {
   }
 
   // Compute degradation signals for all periods
-  const stateDir = backend.getDirectories().find(d => d.source === 'global')?.path ?? '';
+  // Cloud backend has no local state dir; use the scripts directory for degradation/calibration state files.
+  const stateDir = import.meta.dirname ?? '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
     const ms = PERIOD_MS[period];
@@ -1236,7 +1241,11 @@ async function main(): Promise<void> {
   const _actualDeferred = deferred + limitDeferred;
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1]?.endsWith('sync-to-kv.ts') ||
+  process.argv[1]?.endsWith('sync-to-kv.js');
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

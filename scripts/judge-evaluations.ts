@@ -24,8 +24,6 @@ import {
   LLMJudge,
   COHERENCE_CRITERIA,
 } from '../../src/lib/judge/llm-judge-config.js';
-import type { DatasetRunRecord } from '../../src/backends/index.js';
-import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
 import {
   traceSpanSchema,
   otelLogEntrySchema,
@@ -1030,23 +1028,9 @@ async function main() {
     writeEvaluations(flatEvals);
 
     if (datasetId) {
-      const backend = new LocalJsonlBackend(TELEMETRY_DIR);
-      const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
-      let datasetVersion = 1;
-      try {
-        const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
-        if (dsResult.action === 'get') datasetVersion = dsResult.dataset.version ?? 1;
-      } catch { /* dataset may not exist locally — use version 1 */ }
-      const runRecord: DatasetRunRecord = {
-        id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        datasetId,
-        datasetVersion,
-        runAt: new Date().toISOString(),
-        evaluationNames: evalNames,
-        resultCount: flatEvals.length,
-        evaluator: seed ? SEED_EVALUATOR_TYPE : LLM_EVALUATOR_TYPE,
-      };
-      await backend.appendDatasetRun(runRecord);
+      // --dataset-id scoping: dataset run recording is not yet supported by the cloud backend API.
+      // Evaluations are written to JSONL above; run metadata is skipped.
+      console.warn(`[judge] --dataset-id=${datasetId}: dataset run recording not supported in cloud backend; evaluations written to JSONL only.`);
     }
 
   } finally {
