@@ -226,8 +226,8 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       total: spans.length + logs.length + evaluations.length,
     };
 
-    const tsMin = Infinity;
-    const tsMax = -Infinity;
+    let tsMin = Infinity;
+    let tsMax = -Infinity;
     const evalByName = Object.create(null) as Record<string, { count: number; scores: number[] }>;
     for (const ev of evaluations) {
       const t = parseTimestamp(ev.timestamp);

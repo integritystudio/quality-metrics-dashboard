@@ -125,6 +125,8 @@ describe('GET /sessions/:sessionId', () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body = await res.json() as any;
+    expect(res.status).toBe(200);
+    expect(body).toHaveProperty('logSummary');
     const log = body.logSummary.logs[0];
     expect(log).not.toHaveProperty('body');
     expect(log).not.toHaveProperty('attributes');
