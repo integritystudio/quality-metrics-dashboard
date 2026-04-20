@@ -524,8 +524,8 @@ describe('seedEvaluations', () => {
     const { evals } = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
     for (const ev of evals) {
       expect(['seed', 'canary']).toContain(ev.evaluatorType);
-      // seed records use 'seed-hash'; canary records use 'llm-judge'
-      const expectedEvaluator = ev.evaluatorType === 'seed' ? 'seed-hash' : 'llm-judge';
+      // seed records use 'seed' evaluator; canary records use 'llm' evaluator
+      const expectedEvaluator = ev.evaluatorType === 'seed' ? 'seed' : 'llm';
       expect(ev.evaluator).toBe(expectedEvaluator);
     }
   });

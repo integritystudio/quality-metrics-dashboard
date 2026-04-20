@@ -111,7 +111,7 @@ describe('pipeline contract: derive → judge', () => {
     expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
     expect(attrs['gen_ai.evaluation.score.value']).toBe(1.0);
     expect(typeof attrs['gen_ai.evaluation.explanation']).toBe('string');
-    expect(attrs['gen_ai.evaluation.evaluator']).toBe('telemetry-rule-engine');
+    expect(attrs['gen_ai.evaluation.evaluator']).toBe('rule');
     expect(attrs['gen_ai.evaluation.evaluator.type']).toBe('rule');
     expect(attrs['session.id']).toBe('sess-pipeline');
   });
@@ -212,9 +212,9 @@ describe('pipeline contract: judge seed output', () => {
     expect(canaryEvals.length).toBeGreaterThan(0);
     expect(seedEvals.length).toBeGreaterThan(0);
 
-    // evaluator field matches evaluatorType: canary → 'llm-judge', seed → 'seed-hash'
-    for (const ev of canaryEvals) expect(ev.evaluator).toBe('llm-judge');
-    for (const ev of seedEvals) expect(ev.evaluator).toBe('seed-hash');
+    // evaluator field matches evaluatorType: canary → 'llm', seed → 'seed'
+    for (const ev of canaryEvals) expect(ev.evaluator).toBe('llm');
+    for (const ev of seedEvals) expect(ev.evaluator).toBe('seed');
 
     // Canary evals should NOT appear if filtered out (as sync-to-kv does)
     const afterFilter = evals.filter(e => e.evaluatorType !== 'canary');
