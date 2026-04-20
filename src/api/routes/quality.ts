@@ -34,7 +34,7 @@ qualityRoutes.get('/quality/live', async (c) => {
 
     const metrics: LiveMetric[] = [];
     const sessionIds = new Set<string>();
-    let latestTimestamp = '';
+    const latestTimestamp = '';
 
     for (const [name, evals] of evaluationsByMetric) {
       const sorted = evals

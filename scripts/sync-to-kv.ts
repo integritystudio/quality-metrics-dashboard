@@ -346,7 +346,7 @@ function isValidScore(v: number | null | undefined): v is number {
 }
 
 function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
-  let group = map.get(key);
+  const group = map.get(key);
   if (!group) map.set(key, group = []);
   group.push(value);
 }
@@ -367,8 +367,8 @@ function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[
 }
 
 function computeTimespan(evaluations: EvaluationResult[]) {
-  let tsMin = Infinity;
-  let tsMax = -Infinity;
+  const tsMin = Infinity;
+  const tsMax = -Infinity;
   for (const ev of evaluations) {
     const t = new Date(ev.timestamp).getTime();
     if (t < tsMin) tsMin = t;
@@ -881,7 +881,7 @@ async function main(): Promise<void> {
       }
 
       // Save buckets for degradation signal computation
-      let degradBucket = degradationBuckets.get(period);
+      const degradBucket = degradationBuckets.get(period);
       if (!degradBucket) degradationBuckets.set(period, degradBucket = {});
       degradBucket[name] = timeBuckets.map(b => ({
         scores: b.scores,
@@ -901,7 +901,7 @@ async function main(): Promise<void> {
         const detail = scores.length > 0
           ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
           : undefined;
-        let dynamics = undefined;
+        const dynamics = undefined;
         if (detail?.trend) {
           dynamics = computeMetricDynamics(detail.trend, previousTrend, periodHours);
           previousTrend = detail.trend;
@@ -1032,7 +1032,7 @@ async function main(): Promise<void> {
     });
 
     for (const ag of detail.agentActivity) {
-      let acc = agentCrossSession.get(ag.agentName);
+      const acc = agentCrossSession.get(ag.agentName);
       if (!acc) {
         acc = {
           totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
@@ -1076,7 +1076,7 @@ async function main(): Promise<void> {
       } else if (sessionDate) {
         // Evict oldest to keep the most recent sessions in the buffer
         let oldestIdx = 0;
-        for (let i = 1; i < acc.sessions.length; i++) {
+        for (const i = 1; i < acc.sessions.length; i++) {
           const d = acc.sessions[i].date;
           const oldest = acc.sessions[oldestIdx].date;
           if (!oldest || (d && d < oldest)) oldestIdx = i;

@@ -370,7 +370,7 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
   const data = await getKv<{ rows: Record<string, unknown>[] }>(c.env.DASHBOARD, `metric:evaluations:${name}:${period}`);
   if (!data) return c.json({ rows: [], total: 0, limit, offset, hasMore: false });
 
-  let rows = data.rows;
+  const rows = data.rows;
   if (scoreLabel) rows = rows.filter((r: Record<string, unknown>) => r.label === scoreLabel);
   if (sortBy === 'score_asc') rows.sort((a, b) => (typeof a.score === 'number' ? a.score : 0) - (typeof b.score === 'number' ? b.score : 0));
   else if (sortBy === 'score_desc') rows.sort((a, b) => (typeof b.score === 'number' ? b.score : 0) - (typeof a.score === 'number' ? a.score : 0));

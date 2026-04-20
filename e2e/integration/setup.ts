@@ -122,7 +122,7 @@ async function ensureE2eRole(
     `${supabaseUrl}/rest/v1/roles?select=id&name=eq.${E2E_ROLE_NAME}`,
     { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
   );
-  let roles = await rolesRes.json() as Array<{ id: string }>;
+  const roles = await rolesRes.json() as Array<{ id: string }>;
 
   if (!roles.length) {
     const createRes = await fetch(`${supabaseUrl}/rest/v1/roles`, {

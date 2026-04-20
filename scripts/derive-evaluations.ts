@@ -155,7 +155,7 @@ export function trackTaskActivity(span: TraceSpan): void {
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
 
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  let entry = sessionTasks.get(sessionId);
+  const entry = sessionTasks.get(sessionId);
   if (!entry) sessionTasks.set(sessionId, entry = { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
   entry.lastSpan = span;
 
@@ -168,7 +168,7 @@ export function trackTaskActivity(span: TraceSpan): void {
 
   if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
     const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;
-    let task = entry.tasks.get(id);
+    const task = entry.tasks.get(id);
     if (!task) entry.tasks.set(id, task = { statuses: new Set(), lastSpan: span });
     task.statuses.add(taskStatus);
     task.lastSpan = span;
@@ -248,7 +248,7 @@ function trackAgentActivity(span: TraceSpan): void {
   if (!isPre && !isPost) return;
 
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  let entry = sessionAgents.get(sessionId);
+  const entry = sessionAgents.get(sessionId);
   if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });
   if (isPre) entry.pre++;
   if (isPost) {
@@ -301,7 +301,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     let count = 0;
     let correct = 0;
     let preserved = 0;
-    for (let i = 1; i < data.agentSequence.length; i++) {
+    for (const i = 1; i < data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
       const curr = data.agentSequence[i];
       if (curr.agentName !== prev.agentName) {
@@ -364,7 +364,7 @@ function main(): void {
   const byDate = new Map<string, EvalRecord[]>();
   for (const ev of allEvals) {
     const date = toDateOnly(ev.timestamp);
-    let group = byDate.get(date);
+    const group = byDate.get(date);
     if (!group) byDate.set(date, group = []);
     group.push(ev);
   }

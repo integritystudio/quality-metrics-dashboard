@@ -93,7 +93,7 @@ agentRoutes.get('/agents', async (c) => {
       if (sid) entry.sessions.add(sid);
       if (span.traceId) {
         entry.traceIds.add(span.traceId);
-        let agentSet = traceToAgents.get(span.traceId);
+        const agentSet = traceToAgents.get(span.traceId);
         if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
         agentSet.add(name);
       }

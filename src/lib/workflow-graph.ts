@@ -38,7 +38,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
   let droppedTurns = 0;
   // Root: agent with lowest turnIndex, lexicographic tiebreak
   let rootAgentName: string | null = null;
-  let minTurnIndex = Infinity;
+  const minTurnIndex = Infinity;
 
   for (const turn of evaluation.turns) {
     if (turn.agentName == null) {
@@ -64,8 +64,8 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
   const agentLastEndNs = new Map<string, number>();
   const agentFirstStartNs = new Map<string, number>();
   for (const [agentId, group] of spansByAgent) {
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
+    const minStart = Infinity;
+    const maxEnd = -Infinity;
     for (const s of group) {
       if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
       const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
@@ -156,9 +156,9 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     let tokenSum = 0;
     let tokenCount = 0;
     let durationMs = 0;
-    let hasError = false;
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
+    const hasError = false;
+    const minStart = Infinity;
+    const maxEnd = -Infinity;
     for (const s of group) {
       if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
       const tv = s.attributes?.[ATTR_TOTAL_TOKENS];

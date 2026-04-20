@@ -806,7 +806,7 @@ function acquireLock(): boolean {
     }
 
     // Also check lock age — stale if older than 1 hour regardless of PID
-    let stale = false;
+    const stale = false;
     {
       try {
         const lockStat = statSync(LOCK_FILE);
@@ -876,7 +876,7 @@ async function main() {
   const seed = args.includes('--seed');
   const backfill = args.includes('--backfill');
   const limitIdx = args.indexOf('--limit');
-  let limit = Infinity;
+  const limit = Infinity;
   if (limitIdx !== -1) {
     const parsed = parseInt(args[limitIdx + 1], 10);
     if (isNaN(parsed) || parsed < 1) {
