@@ -3,7 +3,7 @@
 **Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
 **Date**: 2026-03-26
 **Status**: Code complete (commits `6a53313`, `37f71c0`, 2026-03-26). Worker secret provisioning and deployment remain.
-**Parent**: [`docs/roadmap/users.md`](users.md) (Phase 4 — Auth0 canonical decision)
+**Parent**: [`docs/roadmap/user-rationalization.md`](../../../docs/roadmap/user-rationalization.md) (Phase 4 — Auth0 canonical decision)
 
 ---
 
