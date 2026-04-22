@@ -1,3 +1,29 @@
+c741969 2026-04-20 fix(style): revert over-eager const conversions on reassigned variables
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+  worker/index.ts
+
+231e91d 2026-04-19 feat(scripts): migrate pipeline CLIs from LocalJsonlBackend to CloudBackend (REM-4)
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+4092324 2026-04-19 fix(tests): update evaluator name strings to match canonical values
+  scripts/__tests__/judge-evaluations.test.ts
+
+8468c40 2026-04-07 refactor(schemas): replace GenAiEvaluator types with canonical EvaluatorType
+  scripts/__tests__/judge-evaluations.test.ts
+  scripts/judge-evaluations.ts
+
+cbdf9ab 2026-03-31 refactor(dashboard-schemas): add Zod 4 enum-based typing for evaluation constants
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+  scripts/judge-evaluations.ts
+
+10da498 2026-03-31 refactor(judge-evaluations): consolidate EvalRecord creation + optimize performance
+  scripts/judge-evaluations.ts
+
 8e90d2e 2026-03-31 chore(deps): add eslint-plugin-react dev dependency
   package-lock.json
 
@@ -365,21 +391,3 @@ a660547 2026-03-26 refactor(judge-evaluations): remove WHAT JSDoc comment from n
 
 792c364 2026-03-26 refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants
   scripts/sync-to-kv.ts
-
-31fb8f1 2026-03-26 refactor(components,worker): remove WHAT JSDoc prop comments and route comment
-  worker/index.ts
-
-b6a7361 2026-03-26 refactor(worker): remove WHAT comments from admin route handlers
-  worker/index.ts
-
-26bab40 2026-03-26 refactor(sync-to-kv): trim WHAT comment in breach update loop; restore precision docs in constants
-  scripts/sync-to-kv.ts
-
-9d197f5 2026-03-26 refactor(sync-to-kv): eliminate double Map.get() in degradationBuckets
-  scripts/sync-to-kv.ts
-
-257cd0e 2026-03-26 refactor(scripts): eliminate double Map.get() in pushToGroup and byDate grouping
-  scripts/sync-to-kv.ts
-
-b27a65e 2026-03-26 refactor(judge): remove two more what-comments in turn extraction and sub-criteria
-  scripts/judge-evaluations.ts

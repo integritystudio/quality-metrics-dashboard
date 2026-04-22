@@ -263,11 +263,6 @@ File: scripts/.degradation-incidents.json
 ]
 
 ================
-File: scripts/.kv-sync-coverage.json
-================
-{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
-
-================
 File: scripts/find_duplication_tsx.sh
 ================
 set -euo pipefail
@@ -903,6 +898,29 @@ interface AgentScoreSummaryProps {
 }
 ⋮----
 export function AgentScoreSummary(
+
+================
+File: src/components/BarIndicator.tsx
+================
+import type { CSSProperties } from 'react';
+interface BarIndicatorProps {
+  value: number;
+  color?: string;
+  opacity?: number;
+  height?: number;
+  trackColor?: string;
+  className?: string;
+  style?: CSSProperties;
+}
+export function BarIndicator({
+  value,
+  color,
+  opacity,
+  height,
+  trackColor,
+  className,
+  style,
+}: BarIndicatorProps)
 
 ================
 File: src/components/ChainOfThoughtPanel.tsx
@@ -2066,31 +2084,6 @@ File: src/vite-env.d.ts
 
 
 ================
-File: scripts/__tests__/pipeline-integration.test.ts
-================
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import {
-  trackTaskActivity,
-  deriveTaskCompletionPerSession,
-  sessionTasks,
-  type TraceSpan,
-  type EvalRecord as DeriveEvalRecord,
-} from '../derive-evaluations.js';
-import {
-  seedEvaluations,
-  toOTelRecord,
-  type Turn,
-  type EvalRecord as JudgeEvalRecord,
-} from '../judge-evaluations.js';
-import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
-function makeTraceSpan(overrides: Partial<TraceSpan> &
-function makeTurn(overrides: Partial<Turn> =
-function parseJsonl(content: string): Record<string, unknown>[]
-
-================
 File: scripts/__tests__/sync-prioritization.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -2109,56 +2102,6 @@ function makeTraceEntries(traceId: string): KVEntry[]
 ⋮----
 function makeHighPriorityEntries(count: number): KVEntry[]
 function makeTracePool(count: number):
-
-================
-File: scripts/backtest-degradation.ts
-================
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { basename, join } from 'path';
-import { z } from 'zod';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
-import {
-  computeStdDev,
-  sweepDegradationParams,
-  CURRENT_PRODUCTION_CONFIG,
-  BACKTEST_SWEEP,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import type {
-  LabeledIncident,
-  BacktestSweepResult,
-  BacktestConfig,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-⋮----
-function parseIntArg(argList: string[], flag: string, defaultValue: number): number
-function parseStringArg(argList: string[], flag: string): string | null
-⋮----
-function loadIncidents(): LabeledIncident[]
-interface DailyBucket {
-  timestamp: number;
-  scores: number[];
-}
-function buildDailyBuckets(
-  evaluations: Array<{ timestamp: string; scoreValue: number }>,
-  startMs: number,
-  bucketCount: number,
-): DailyBucket[]
-type TimeSeriesPoint = {
-  timestamp: number;
-  currentStdDev: number;
-  baselineStdDev: number;
-  coverageGapCount: number;
-  totalCoverageCells: number;
-  latencyP95: number;
-  latencyP50: number;
-  historicalValues: number[];
-};
-function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[]
-function formatConfig(cfg: BacktestConfig): string
-function printSummaryTable(metricName: string, result: BacktestSweepResult, evalCount: number): void
-// ---- Main ----
-async function main(): Promise<void>
 
 ================
 File: src/__tests__/api-compliance.test.ts
@@ -2203,18 +2146,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { pipelineRoutes } from '../api/routes/pipeline.js';
 import { computePipelineView, computeDashboardSummary } from '../../../dist/lib/quality/quality-metrics.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
-
-================
-File: src/__tests__/api-sessions.test.ts
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-⋮----
-import { sessionRoutes } from '../api/routes/sessions.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loader.js';
-⋮----
-function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> =
 
 ================
 File: src/__tests__/api-traces.test.ts
@@ -2374,29 +2305,6 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import { HttpStatus, ErrorMessage } from '../../lib/constants.js';
 import { PARAM_ID_RE, isValidParam } from '../api-constants.js';
 import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../data-loader.js';
-
-================
-File: src/components/BarIndicator.tsx
-================
-import type { CSSProperties } from 'react';
-interface BarIndicatorProps {
-  value: number;
-  color?: string;
-  opacity?: number;
-  height?: number;
-  trackColor?: string;
-  className?: string;
-  style?: CSSProperties;
-}
-export function BarIndicator({
-  value,
-  color,
-  opacity,
-  height,
-  trackColor,
-  className,
-  style,
-}: BarIndicatorProps)
 
 ================
 File: src/components/EvaluationExpandedRow.tsx
@@ -2670,48 +2578,59 @@ export function Auth0Provider(
 export function useAuth0()
 
 ================
-File: scripts/__tests__/judge-evaluations.test.ts
+File: scripts/.kv-sync-coverage.json
 ================
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+{"totalTraces":0,"syncedTraces":0,"coveragePercent":100,"referencedCoverage":100,"runsRemaining":0,"timestamp":"2026-04-14T17:21:17.667Z","lastChecked":"2026-04-14T17:21:17.667Z"}
+
+================
+File: scripts/backtest-degradation.ts
+================
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { basename, join } from 'path';
+import { z } from 'zod';
+import { CloudBackend } from '../../src/backends/cloud.js';
 import {
-  isSystemPrompt,
-  isToolResultOnly,
-  extractTextFromContent,
-  extractToolResults,
-  extractTurns,
-  hashToScore,
-  normalizeScore,
-  isCanaryTurn,
-  seedEvaluations,
-  evaluateTurn,
-  evalFailures,
-  toOTelRecord,
-  processBatch,
-  type TranscriptInfo,
-  type Turn,
-  type EvalRecord,
-} from '../judge-evaluations.js';
-import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
-import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
-import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
-function makeTurn(overrides: Partial<Turn> =
-function makeEvalRecord(overrides: Partial<EvalRecord> =
+  computeStdDev,
+  sweepDegradationParams,
+  CURRENT_PRODUCTION_CONFIG,
+  BACKTEST_SWEEP,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import type {
+  LabeledIncident,
+  BacktestSweepResult,
+  BacktestConfig,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
 ⋮----
-// ---------------------------------------------------------------------------
-// extractToolResults
-// ---------------------------------------------------------------------------
+function parseIntArg(argList: string[], flag: string, defaultValue: number): number
+function parseStringArg(argList: string[], flag: string): string | null
 ⋮----
-function writeTranscript(lines: object[]): string
-⋮----
-function mockResponse(prompt: string, gEvalScore = 4):
-function createMockLLM(gEvalScore = 4): LLMProvider
-⋮----
-async generate(prompt: string)
-⋮----
-function createFailingLLM(failKeyword: string): LLMProvider
+function loadIncidents(): LabeledIncident[]
+interface DailyBucket {
+  timestamp: number;
+  scores: number[];
+}
+function buildDailyBuckets(
+  evaluations: Array<{ timestamp: string; scoreValue: number }>,
+  startMs: number,
+  bucketCount: number,
+): DailyBucket[]
+type TimeSeriesPoint = {
+  timestamp: number;
+  currentStdDev: number;
+  baselineStdDev: number;
+  coverageGapCount: number;
+  totalCoverageCells: number;
+  latencyP95: number;
+  latencyP50: number;
+  historicalValues: number[];
+};
+function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[]
+function formatConfig(cfg: BacktestConfig): string
+function printSummaryTable(metricName: string, result: BacktestSweepResult, evalCount: number): void
+// ---- Main ----
+async function main(): Promise<void>
 
 ================
 File: scripts/deploy-secrets.sh
@@ -2765,6 +2684,18 @@ import { loadEvaluationsForMetric } from '../api/data-loader.js';
 function makeMockConfig()
 function makeMockEval(overrides: Partial<Record<string, unknown>> =
 function makeMockDetail()
+
+================
+File: src/__tests__/api-sessions.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+⋮----
+import { sessionRoutes } from '../api/routes/sessions.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loader.js';
+⋮----
+function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> =
 
 ================
 File: src/__tests__/coverage-tab.test.tsx
@@ -2921,33 +2852,6 @@ interface TrendSeriesProps {
 function formatTime(iso: string, spanDays: number): string
 
 ================
-File: src/lib/validation/dashboard-schemas.ts
-================
-import { z } from 'zod';
-⋮----
-export type GenAiEvaluator = z.infer<typeof genAiEvaluatorSchema>;
-⋮----
-export type GenAiEvaluatorType = z.infer<typeof genAiEvaluatorTypeSchema>;
-⋮----
-export type TraceSpan = z.infer<typeof traceSpanSchema>;
-⋮----
-export type OTelLogEntry = z.infer<typeof otelLogEntrySchema>;
-⋮----
-export type TranscriptEntry = z.infer<typeof transcriptEntrySchema>;
-⋮----
-export type OTelEvaluationRecord = z.infer<typeof otelEvaluationRecordSchema>;
-⋮----
-export type KvSyncEntry = z.infer<typeof kvSyncEntrySchema>;
-⋮----
-export type KvSyncState = z.infer<typeof kvSyncStateSchema>;
-⋮----
-export type KvEntryValue = z.infer<typeof kvEntryValueSchema>;
-⋮----
-export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
-⋮----
-export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
-
-================
 File: src/lib/dashboard-file-utils.ts
 ================
 import { readFileSync, existsSync, createReadStream } from 'fs';
@@ -3013,18 +2917,29 @@ async function handleAssign()
 async function handleRevoke(roleId: string, roleName: string)
 
 ================
-File: src/__tests__/api-agents.test.ts
+File: scripts/__tests__/pipeline-integration.test.ts
 ================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-⋮----
-import { agentRoutes } from '../api/routes/agents.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> =
-function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
-function makeMockEval(traceId = 'trace-001')
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import {
+  trackTaskActivity,
+  deriveTaskCompletionPerSession,
+  sessionTasks,
+  type TraceSpan,
+  type EvalRecord as DeriveEvalRecord,
+} from '../derive-evaluations.js';
+import {
+  seedEvaluations,
+  toOTelRecord,
+  type Turn,
+  type EvalRecord as JudgeEvalRecord,
+} from '../judge-evaluations.js';
+import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+function makeTraceSpan(overrides: Partial<TraceSpan> &
+function makeTurn(overrides: Partial<Turn> =
+function parseJsonl(content: string): Record<string, unknown>[]
 
 ================
 File: src/__tests__/DegradationSignalsPage.test.tsx
@@ -3074,26 +2989,6 @@ import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
-
-================
-File: src/api/routes/quality.ts
-================
-import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import {
-  computeRollingDegradationSignals,
-  type DegradationState,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import {
-  DEFAULT_BIN_COUNT,
-} from '../../../../dist/lib/quality/quality-constants.js';
-import {
-  buildEvenBucketBoundaries,
-  getEvenBucketIndex,
-} from '../../../../dist/lib/quality/bucket-utils.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
-import type { LiveMetric, QualityLiveData } from '../../types.js';
 
 ================
 File: src/components/CorrelationHeatmap.tsx
@@ -3237,6 +3132,64 @@ File: src/pages/LoginPage.tsx
 import { useEffect } from 'react';
 import { useAuth0, AUTH0_LOGIN_PARAMS } from '../lib/auth0.js';
 export function LoginPage()
+
+================
+File: scripts/__tests__/judge-evaluations.test.ts
+================
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFileSync, mkdirSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import {
+  isSystemPrompt,
+  isToolResultOnly,
+  extractTextFromContent,
+  extractToolResults,
+  extractTurns,
+  hashToScore,
+  normalizeScore,
+  isCanaryTurn,
+  seedEvaluations,
+  evaluateTurn,
+  evalFailures,
+  toOTelRecord,
+  processBatch,
+  type TranscriptInfo,
+  type Turn,
+  type EvalRecord,
+} from '../judge-evaluations.js';
+import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
+import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
+function makeTurn(overrides: Partial<Turn> =
+function makeEvalRecord(overrides: Partial<EvalRecord> =
+⋮----
+// ---------------------------------------------------------------------------
+// extractToolResults
+// ---------------------------------------------------------------------------
+⋮----
+function writeTranscript(lines: object[]): string
+⋮----
+function mockResponse(prompt: string, gEvalScore = 4):
+function createMockLLM(gEvalScore = 4): LLMProvider
+⋮----
+async generate(prompt: string)
+⋮----
+function createFailingLLM(failKeyword: string): LLMProvider
+
+================
+File: src/__tests__/api-agents.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+⋮----
+import { agentRoutes } from '../api/routes/agents.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> =
+function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = [])
+function makeMockEval(traceId = 'trace-001')
 
 ================
 File: src/__tests__/WorkflowGraph.test.tsx
@@ -3433,6 +3386,26 @@ export interface WorkflowGraph {
 }
 
 ================
+File: src/api/routes/quality.ts
+================
+import { Hono } from 'hono';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import {
+  computeRollingDegradationSignals,
+  type DegradationState,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import {
+  DEFAULT_BIN_COUNT,
+} from '../../../../dist/lib/quality/quality-constants.js';
+import {
+  buildEvenBucketBoundaries,
+  getEvenBucketIndex,
+} from '../../../../dist/lib/quality/bucket-utils.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
+import type { LiveMetric, QualityLiveData } from '../../types.js';
+
+================
 File: src/App.tsx
 ================
 import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
@@ -3572,6 +3545,13 @@ interface AgentWorkflowViewProps {
 function dfs(nodeId: string, visiting: Set<string>): [string[], number]
 ⋮----
 onClick=
+
+================
+File: src/lib/validation/dashboard-schemas.ts
+================
+import { z } from 'zod';
+⋮----
+export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
 File: src/pages/DegradationSignalsPage.tsx
@@ -4160,7 +4140,7 @@ import { createHash, randomBytes } from 'crypto';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
+import { CloudBackend } from '../../src/backends/cloud.js';
 import {
   computeDashboardSummary,
   computeRoleView,
@@ -4334,7 +4314,7 @@ import {
   shouldRecalibrate,
 } from '../../src/lib/quality/quality-feature-engineering.js';
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
-import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan, type GenAiEvaluator, type GenAiEvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
+import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 ⋮----
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA } from './judge-evaluations.js';
@@ -4345,8 +4325,8 @@ export interface EvalRecord {
   scoreValue: number;
   scoreUnit?: string;
   explanation: string;
-  evaluator: GenAiEvaluator;
-  evaluatorType: GenAiEvaluatorType;
+  evaluator: EvaluatorType;
+  evaluatorType: EvaluatorType;
   traceId: string;
   sessionId: string;
 }
@@ -4397,15 +4377,14 @@ import {
   LLMJudge,
   COHERENCE_CRITERIA,
 } from '../../src/lib/judge/llm-judge-config.js';
-import type { DatasetRunRecord } from '../../src/backends/index.js';
-import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
 import {
   traceSpanSchema,
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
-  type GenAiEvaluator,
-  type GenAiEvaluatorType,
+  type EvaluatorType,
+  HALLUCINATION_EVAL_NAME,
+  LLM_EVALUATOR_TYPE,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
@@ -4414,6 +4393,14 @@ import { HOOK_NAME } from '../src/api/api-constants.js';
 import pLimit from 'p-limit';
 ⋮----
 export function normalizeScore(score: number): number
+function createEvalRecord(
+  turn: Turn,
+  evaluationName: string,
+  scoreValue: number,
+  explanation: string,
+  evaluator: EvaluatorType,
+  evaluatorType: EvaluatorType,
+): EvalRecord
 export interface TranscriptInfo {
   path: string;
   sessionId: string;
@@ -4432,8 +4419,8 @@ export interface EvalRecord {
   evaluationName: string;
   scoreValue: number;
   explanation: string;
-  evaluator: GenAiEvaluator;
-  evaluatorType: GenAiEvaluatorType;
+  evaluator: EvaluatorType;
+  evaluatorType: EvaluatorType;
   traceId: string;
   sessionId: string;
 }

@@ -645,11 +645,6 @@ File: scripts/.degradation-incidents.json
 ]
 
 ================
-File: scripts/.kv-sync-coverage.json
-================
-{"totalTraces":90126,"syncedTraces":100,"coveragePercent":0.11,"referencedCoverage":100,"runsRemaining":1801,"timestamp":"2026-03-23T19:54:47.055Z","lastChecked":"2026-03-23T19:54:47.055Z"}
-
-================
 File: scripts/find_duplication_tsx.sh
 ================
 set -euo pipefail
@@ -3446,6 +3441,46 @@ export function AgentScoreSummary({ handoffScore, avgRelevance, completeness }: 
           <ScoreBadge score={values[metricName]} metricName={metricName} />
         </div>
       ))}
+    </div>
+  );
+}
+
+================
+File: src/components/BarIndicator.tsx
+================
+import type { CSSProperties } from 'react';
+interface BarIndicatorProps {
+  value: number;
+  color?: string;
+  opacity?: number;
+  height?: number;
+  trackColor?: string;
+  className?: string;
+  style?: CSSProperties;
+}
+export function BarIndicator({
+  value,
+  color,
+  opacity,
+  height,
+  trackColor,
+  className,
+  style,
+}: BarIndicatorProps) {
+  const trackStyle: CSSProperties = {
+    ...style,
+    '--bar-fill-width': `${value}%`,
+    ...(height != null && { '--bar-h': `${height}px` } as CSSProperties),
+    ...(trackColor && { '--bar-track-color': trackColor } as CSSProperties),
+    ...(color && { '--bar-fill-color': color } as CSSProperties),
+    ...(opacity != null && { '--bar-fill-opacity': opacity } as CSSProperties),
+  } as CSSProperties;
+  return (
+    <div
+      className={className ? `mini-bar ${className}` : 'mini-bar'}
+      style={trackStyle}
+    >
+      <div className="mini-bar-fill" />
     </div>
   );
 }
@@ -6999,316 +7034,6 @@ File: src/vite-env.d.ts
 
 
 ================
-File: scripts/__tests__/pipeline-integration.test.ts
-================
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import {
-  trackTaskActivity,
-  deriveTaskCompletionPerSession,
-  sessionTasks,
-  type TraceSpan,
-  type EvalRecord as DeriveEvalRecord,
-} from '../derive-evaluations.js';
-import {
-  seedEvaluations,
-  toOTelRecord,
-  type Turn,
-  type EvalRecord as JudgeEvalRecord,
-} from '../judge-evaluations.js';
-import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
-function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, unknown> }): TraceSpan {
-  const { attributes: attrOverrides, ...rest } = overrides;
-  return {
-    traceId: 'trace-pipeline-001',
-    spanId: 'span-001',
-    name: 'hook:builtin-post-tool',
-    startTime: [1740441600, 0],
-    endTime: [1740441601, 0],
-    duration: [1, 0],
-    status: { code: 0 },
-    ...rest,
-    attributes: {
-      'session.id': 'sess-pipeline',
-      'builtin.tool': 'TaskCreate',
-      'builtin.task_status': 'pending',
-      'builtin.task_id': 'task-001',
-      ...attrOverrides,
-    },
-  };
-}
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'pipeline-sess-abc',
-    traceId: 'trace-pipeline-001',
-    timestamp: '2026-02-25T00:00:00.000Z',
-    userText: 'Fix the authentication bug in login.ts',
-    assistantText: 'I found the issue in the JWT validation. Here is the fix.',
-    toolResults: [],
-    ...overrides,
-  };
-}
-function parseJsonl(content: string): Record<string, unknown>[] {
-  return content
-    .split('\n')
-    .filter(Boolean)
-    .map(line => JSON.parse(line) as Record<string, unknown>);
-}
-describe('pipeline contract: derive → judge', () => {
-  beforeEach(() => {
-    sessionTasks.clear();
-  });
-  it('derive-evaluations toOTelRecord produces valid gen_ai.evaluation.result events', () => {
-    trackTaskActivity(makeTraceSpan({
-      attributes: { 'session.id': 'sess-pipeline', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-1' },
-    }));
-    trackTaskActivity(makeTraceSpan({
-      attributes: { 'session.id': 'sess-pipeline', 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 'task-1' },
-    }));
-    const evals = deriveTaskCompletionPerSession();
-    expect(evals).toHaveLength(1);
-    const [ev] = evals;
-    const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
-    expect(otelRecord.name).toBe('gen_ai.evaluation.result');
-    expect(typeof otelRecord.timestamp).toBe('string');
-    expect(typeof otelRecord.traceId).toBe('string');
-    const attrs = otelRecord.attributes as Record<string, unknown>;
-    expect(attrs['gen_ai.evaluation.name']).toBe('task_completion');
-    expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-    expect(attrs['gen_ai.evaluation.score.value']).toBe(1.0);
-    expect(typeof attrs['gen_ai.evaluation.explanation']).toBe('string');
-    expect(attrs['gen_ai.evaluation.evaluator']).toBe('telemetry-rule-engine');
-    expect(attrs['gen_ai.evaluation.evaluator.type']).toBe('rule');
-    expect(attrs['session.id']).toBe('sess-pipeline');
-  });
-  it('derive evaluation record has all required fields for judge dedup keys', () => {
-    trackTaskActivity(makeTraceSpan({
-      attributes: { 'session.id': 'sess-dedup', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-2' },
-    }));
-    const evals = deriveTaskCompletionPerSession();
-    const [ev] = evals;
-    expect(typeof ev.sessionId).toBe('string');
-    expect(ev.sessionId.length).toBeGreaterThan(0);
-    expect(typeof ev.evaluationName).toBe('string');
-    expect(typeof ev.timestamp).toBe('string');
-    const turnKey = ev.timestamp.slice(0, 19);
-    expect(turnKey).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
-  });
-});
-describe('pipeline contract: judge seed output', () => {
-  it('seedEvaluations produces OTel-compatible records', () => {
-    const turns = [makeTurn(), makeTurn({ sessionId: 'sess-b', timestamp: '2026-02-25T01:00:00.000Z' })];
-    const { evals } = seedEvaluations(turns, new Set());
-    expect(evals.length).toBeGreaterThan(0);
-    for (const ev of evals) {
-      const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
-      const attrs = otelRecord.attributes as Record<string, unknown>;
-      expect(otelRecord.name).toBe('gen_ai.evaluation.result');
-      expect(typeof otelRecord.timestamp).toBe('string');
-      expect(new Date(otelRecord.timestamp as string).getTime()).toBeGreaterThan(0);
-      expect(typeof attrs['gen_ai.evaluation.name']).toBe('string');
-      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-      const score = attrs['gen_ai.evaluation.score.value'] as number;
-      expect(score).toBeGreaterThanOrEqual(0);
-      expect(score).toBeLessThanOrEqual(1);
-    }
-  });
-  it('seed output covers all 5 expected metric names when tool results present', () => {
-    const turnWithTools = makeTurn({ toolResults: ['file contents here'] });
-    const { evals } = seedEvaluations([turnWithTools], new Set());
-    const names = new Set(evals.map(e => e.evaluationName));
-    expect(names.has('relevance')).toBe(true);
-    expect(names.has('coherence')).toBe(true);
-    expect(names.has('faithfulness')).toBe(true);
-    expect(names.has('hallucination')).toBe(true);
-    expect(names.has('tool_correctness')).toBe(true);
-  });
-  it('seed output covers 4 metric names without tool results', () => {
-    const turnNoTools = makeTurn({ toolResults: [] });
-    const { evals } = seedEvaluations([turnNoTools], new Set());
-    const names = new Set(evals.map(e => e.evaluationName));
-    expect(names.has('relevance')).toBe(true);
-    expect(names.has('coherence')).toBe(true);
-    expect(names.has('faithfulness')).toBe(true);
-    expect(names.has('hallucination')).toBe(true);
-    expect(names.has('tool_correctness')).toBe(false);
-  });
-  it('faithfulness + hallucination scores sum to 1.0 (complementary invariant)', () => {
-    const { evals } = seedEvaluations([makeTurn()], new Set());
-    const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
-    const hal = evals.find(e => e.evaluationName === 'hallucination')!;
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
-  });
-  it('canary evaluations have evaluatorType "canary", others have "seed"', () => {
-    const turns = Array.from({ length: 200 }, (_, i) =>
-      makeTurn({
-        sessionId: `canary-pipeline-${i}`,
-        timestamp: `2026-02-25T${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00.000Z`,
-      })
-    );
-    const { evals, canaryCount } = seedEvaluations(turns, new Set());
-    const canaryEvals = evals.filter(e => e.evaluatorType === 'canary');
-    const seedEvals = evals.filter(e => e.evaluatorType === 'seed');
-    expect(canaryCount).toBeGreaterThan(0);
-    expect(canaryEvals.length).toBeGreaterThan(0);
-    expect(seedEvals.length).toBeGreaterThan(0);
-    for (const ev of canaryEvals) expect(ev.evaluator).toBe('llm-judge');
-    for (const ev of seedEvals) expect(ev.evaluator).toBe('seed-hash');
-    const afterFilter = evals.filter(e => e.evaluatorType !== 'canary');
-    expect(afterFilter.length).toBeLessThan(evals.length);
-  });
-});
-describe('pipeline contract: judge → sync-to-kv', () => {
-  let tmpDir: string;
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `pipeline-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-  });
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-  it('JSONL written by judge is parseable and has required backend fields', () => {
-    const turns = [
-      makeTurn({ sessionId: 'test-session-001', traceId: 'trace-001' }),
-      makeTurn({ sessionId: 'test-session-001', traceId: 'trace-002', timestamp: '2026-02-25T00:01:00.000Z' }),
-    ];
-    const { evals } = seedEvaluations(turns, new Set());
-    const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
-    const lines = evals.map(ev => JSON.stringify(toOTelRecord(ev)));
-    writeFileSync(outFile, lines.join('\n') + '\n');
-    const content = readFileSync(outFile, 'utf-8');
-    const records = parseJsonl(content);
-    expect(records.length).toBe(evals.length);
-    for (const record of records) {
-      expect(record.name).toBe('gen_ai.evaluation.result');
-      expect(typeof record.timestamp).toBe('string');
-      const ts = new Date(record.timestamp as string);
-      expect(ts.getFullYear()).toBe(2026);
-      const attrs = record.attributes as Record<string, unknown>;
-      const evalName = attrs['gen_ai.evaluation.name'] as string;
-      expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
-      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-      expect(genAiEvaluatorTypeSchema.safeParse(attrs['gen_ai.evaluation.evaluator.type']).success).toBe(true);
-    }
-  });
-  it('sync-to-kv canary filter removes canary evals before aggregation', () => {
-    const turns = Array.from({ length: 100 }, (_, i) =>
-      makeTurn({
-        sessionId: `filter-test-${i}`,
-        timestamp: `2026-02-25T00:${String(i % 60).padStart(2, '0')}:00.000Z`,
-      })
-    );
-    const { evals } = seedEvaluations(turns, new Set());
-    const filtered = evals.filter(ev => ev.evaluatorType !== 'canary');
-    for (const ev of filtered) {
-      expect(ev.evaluatorType).toBe('seed');
-    }
-    const hasCanaries = evals.some(ev => ev.evaluatorType === 'canary');
-    if (hasCanaries) {
-      expect(filtered.length).toBeLessThan(evals.length);
-    }
-  });
-  it('deduplication prevents re-scoring already-evaluated turns', () => {
-    const turn = makeTurn({
-      sessionId: 'dedup-test',
-      timestamp: '2026-02-25T00:00:00.000Z',
-    });
-    const turnKey = turn.timestamp.slice(0, 19);
-    const { evals: firstPass } = seedEvaluations([turn], new Set());
-    expect(firstPass.length).toBeGreaterThan(0);
-    const existingKeys = new Set(
-      firstPass.map(ev => `${ev.sessionId}:${ev.evaluationName}:${turnKey}`)
-    );
-    const { evals: secondPass } = seedEvaluations([turn], existingKeys);
-    expect(secondPass).toHaveLength(0);
-  });
-  it('pipeline produces stable OTel records for same input (determinism)', () => {
-    const turn = makeTurn({ sessionId: 'stable-test', timestamp: '2026-02-25T00:30:00.000Z' });
-    const { evals: run1 } = seedEvaluations([turn], new Set());
-    const { evals: run2 } = seedEvaluations([turn], new Set());
-    expect(run1.length).toBe(run2.length);
-    for (let i = 0; i < run1.length; i++) {
-      expect(run1[i].scoreValue).toBe(run2[i].scoreValue);
-      expect(run1[i].evaluationName).toBe(run2[i].evaluationName);
-    }
-  });
-});
-describe('full pipeline: derive + judge write/read cycle', () => {
-  let tmpDir: string;
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `full-pipeline-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-    sessionTasks.clear();
-  });
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-  it('derive output + seed output combine into valid JSONL for backend ingestion', () => {
-    trackTaskActivity(makeTraceSpan({
-      attributes: {
-        'session.id': 'full-pipeline-session',
-        'builtin.tool': 'TaskCreate',
-        'builtin.task_status': 'pending',
-        'builtin.task_id': 'task-full',
-      },
-    }));
-    trackTaskActivity(makeTraceSpan({
-      spanId: 'span-002',
-      attributes: {
-        'session.id': 'full-pipeline-session',
-        'builtin.tool': 'TaskUpdate',
-        'builtin.task_status': 'completed',
-        'builtin.task_id': 'task-full',
-      },
-    }));
-    const deriveEvals = deriveTaskCompletionPerSession();
-    expect(deriveEvals).toHaveLength(1);
-    const turns = [
-      makeTurn({
-        sessionId: 'full-pipeline-session',
-        traceId: 'trace-pipeline-001',
-        timestamp: '2026-02-25T00:00:00.000Z',
-        toolResults: ['tool output here'],
-      }),
-    ];
-    const { evals: judgeEvals } = seedEvaluations(turns, new Set());
-    expect(judgeEvals.length).toBeGreaterThan(0);
-    const allEvals: (DeriveEvalRecord | JudgeEvalRecord)[] = [...deriveEvals, ...judgeEvals];
-    const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
-    const content = allEvals.map(ev => JSON.stringify(toOTelRecord(ev))).join('\n') + '\n';
-    writeFileSync(outFile, content);
-    const records = parseJsonl(readFileSync(outFile, 'utf-8'));
-    expect(records.length).toBe(allEvals.length);
-    for (const record of records) {
-      expect(record.name).toBe('gen_ai.evaluation.result');
-      const attrs = record.attributes as Record<string, unknown>;
-      expect(typeof attrs['gen_ai.evaluation.name']).toBe('string');
-      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-      const score = attrs['gen_ai.evaluation.score.value'] as number;
-      expect(score).toBeGreaterThanOrEqual(0);
-      expect(score).toBeLessThanOrEqual(1);
-    }
-    const taskCompletionRecords = records.filter(r => {
-      const attrs = r.attributes as Record<string, unknown>;
-      return attrs['gen_ai.evaluation.name'] === 'task_completion';
-    });
-    expect(taskCompletionRecords).toHaveLength(1);
-    const tcAttrs = taskCompletionRecords[0].attributes as Record<string, unknown>;
-    expect(tcAttrs['gen_ai.evaluation.score.value']).toBe(1.0);
-    const llmEvalNames = ['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness'];
-    for (const name of llmEvalNames) {
-      const found = records.some(r => {
-        const attrs = r.attributes as Record<string, unknown>;
-        return attrs['gen_ai.evaluation.name'] === name;
-      });
-      expect(found).toBe(true);
-    }
-  });
-});
-
-================
 File: scripts/__tests__/sync-prioritization.test.ts
 ================
 import { describe, it, expect } from 'vitest';
@@ -7507,269 +7232,6 @@ describe('prioritizeTraces: referenced trace prioritization', () => {
     );
     expect(batchTraceIds.has(referencedId)).toBe(true);
   });
-});
-
-================
-File: scripts/backtest-degradation.ts
-================
-#!/usr/bin/env tsx
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { basename, join } from 'path';
-import { z } from 'zod';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
-import {
-  computeStdDev,
-  sweepDegradationParams,
-  CURRENT_PRODUCTION_CONFIG,
-  BACKTEST_SWEEP,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import type {
-  LabeledIncident,
-  BacktestSweepResult,
-  BacktestConfig,
-} from '../../src/lib/quality/quality-feature-engineering.js';
-import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-const INCIDENTS_FILE = join(import.meta.dirname ?? process.cwd(), '.degradation-incidents.json');
-const F1_GRADUATION_THRESHOLD = 0.05;
-const MIN_INCIDENTS_WARN = 5;
-function parseIntArg(argList: string[], flag: string, defaultValue: number): number {
-  const match = argList.find(a => a.startsWith(`--${flag}=`));
-  const eqIdx = match ? match.indexOf('=') : -1;
-  const parsed = eqIdx !== -1 ? parseInt(match!.slice(eqIdx + 1), 10) : defaultValue;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
-}
-function parseStringArg(argList: string[], flag: string): string | null {
-  const match = argList.find(a => a.startsWith(`--${flag}=`));
-  if (!match) return null;
-  const eqIdx = match.indexOf('=');
-  return eqIdx === -1 ? null : match.slice(eqIdx + 1);
-}
-const cliArgs = process.argv.slice(2);
-const days = parseIntArg(cliArgs, 'days', 90);
-const metricFilter = parseStringArg(cliArgs, 'metric');
-const outputFile = basename(parseStringArg(cliArgs, 'output') ?? 'backtest-results.json');
-if (metricFilter !== null && !(metricFilter in QUALITY_METRICS)) {
-  console.error(`Unknown metric: "${metricFilter}". Valid: ${Object.keys(QUALITY_METRICS).join(', ')}`);
-  process.exit(1);
-}
-const labeledIncidentSchema = z.object({
-  startTime: z.iso.datetime({ local: true }),
-  endTime: z.iso.datetime({ local: true }),
-  severity: z.enum(['minor', 'major', 'critical']),
-});
-function loadIncidents(): LabeledIncident[] {
-  if (!existsSync(INCIDENTS_FILE)) {
-    console.error(`Incidents file not found: ${INCIDENTS_FILE}`);
-    console.error('Create .degradation-incidents.json first (see FU-FE-R5-INCIDENT backlog item).');
-    return [];
-  }
-  try {
-    const raw = readFileSync(INCIDENTS_FILE, 'utf8');
-    const data: unknown = JSON.parse(raw);
-    const result = z.array(labeledIncidentSchema).safeParse(data);
-    if (!result.success) {
-      console.error('Invalid .degradation-incidents.json:', result.error.flatten().fieldErrors);
-      return [];
-    }
-    return result.data;
-  } catch (err) {
-    console.error(`Failed to parse incidents file: ${err instanceof Error ? err.message : String(err)}`);
-    return [];
-  }
-}
-interface DailyBucket {
-  timestamp: number;
-  scores: number[];
-}
-function buildDailyBuckets(
-  evaluations: Array<{ timestamp: string; scoreValue: number }>,
-  startMs: number,
-  bucketCount: number,
-): DailyBucket[] {
-  const buckets: DailyBucket[] = Array.from({ length: bucketCount }, (_, i) => ({
-    timestamp: startMs + i * TIME_MS.DAY,
-    scores: [],
-  }));
-  for (const ev of evaluations) {
-    const ts = new Date(ev.timestamp).getTime();
-    const idx = Math.floor((ts - startMs) / TIME_MS.DAY);
-    if (idx >= 0 && idx < bucketCount) {
-      buckets[idx].scores.push(ev.scoreValue);
-    }
-  }
-  return buckets;
-}
-type TimeSeriesPoint = {
-  timestamp: number;
-  currentStdDev: number;
-  baselineStdDev: number;
-  coverageGapCount: number;
-  totalCoverageCells: number;
-  latencyP95: number;
-  latencyP50: number;
-  historicalValues: number[];
-};
-function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
-  const cumulativeScores: number[] = [];
-  const baselineScores: number[] = [];
-  let baselineEnd = 0;
-  let coverageGapCount = 0;
-  return buckets.map((bucket, i) => {
-    cumulativeScores.push(...bucket.scores);
-    if (bucket.scores.length === 0) coverageGapCount++;
-    const newBaselineEnd = Math.max(1, Math.floor((i + 1) * 0.7));
-    while (baselineEnd < newBaselineEnd) {
-      baselineScores.push(...buckets[baselineEnd].scores);
-      baselineEnd++;
-    }
-    return {
-      timestamp: bucket.timestamp,
-      currentStdDev: computeStdDev(bucket.scores) ?? 0,
-      baselineStdDev: computeStdDev(baselineScores) ?? 0,
-      coverageGapCount,
-      totalCoverageCells: i + 1,
-      latencyP95: 0,
-      latencyP50: 0,
-      historicalValues: [...cumulativeScores],
-    };
-  });
-}
-function formatConfig(cfg: BacktestConfig): string {
-  const parts = [
-    `var=${cfg.varianceThreshold}`,
-    `drop=${cfg.coverageDropoutThreshold}`,
-    `λ=${cfg.ewmaLambda ?? '-'}`,
-    `win=${cfg.confirmationWindow}`,
-    `stab=${cfg.stabilityThreshold ?? '-'}`,
-  ];
-  return parts.join(' ');
-}
-function printSummaryTable(metricName: string, result: BacktestSweepResult, evalCount: number): void {
-  const { bestByF1, currentConfigResult, results } = result;
-  const f1Gain = bestByF1.tapr.f1 - currentConfigResult.tapr.f1;
-  console.log(`\n=== ${metricName} (${evalCount} evals, ${results.length} configs) ===`);
-  console.log('Rank | Config                                      | TaPR-F1 | TaPR-P | TaPR-R | Delay');
-  console.log('-----|---------------------------------------------|---------|--------|--------|------');
-  const top5 = results
-    .slice()
-    .sort((a, b) => b.tapr.f1 - a.tapr.f1)
-    .slice(0, 5);
-  for (let rank = 0; rank < top5.length; rank++) {
-    const r = top5[rank];
-    const tag = r === currentConfigResult ? ' [prod]' : '';
-    console.log(
-      `${String(rank + 1).padStart(4)} | ${formatConfig(r.config).padEnd(43)} | ` +
-      `${r.tapr.f1.toFixed(3)}  | ${r.tapr.precision.toFixed(3)}  | ` +
-      `${r.tapr.recall.toFixed(3)}  | ${Math.round(r.tapr.detectionDelay)}ms${tag}`,
-    );
-  }
-  console.log('');
-  console.log(`Production: ${formatConfig(currentConfigResult.config)} → F1=${currentConfigResult.tapr.f1.toFixed(3)}`);
-  console.log(`Best F1:    ${formatConfig(bestByF1.config)} → F1=${bestByF1.tapr.f1.toFixed(3)} (Δ${f1Gain >= 0 ? '+' : ''}${f1Gain.toFixed(3)})`);
-  if (f1Gain >= F1_GRADUATION_THRESHOLD) {
-    console.log('');
-    console.log(`GRADUATION RECOMMENDED: best config outperforms production by +${f1Gain.toFixed(3)} F1`);
-    console.log('  Update CURRENT_PRODUCTION_CONFIG in src/lib/quality/quality-feature-engineering.ts:');
-    console.log(`    varianceThreshold:        ${bestByF1.config.varianceThreshold}`);
-    console.log(`    coverageDropoutThreshold: ${bestByF1.config.coverageDropoutThreshold}`);
-    if (bestByF1.config.ewmaLambda !== undefined) {
-      console.log(`    ewmaLambda:               ${bestByF1.config.ewmaLambda}`);
-    }
-    console.log(`    confirmationWindow:       ${bestByF1.config.confirmationWindow}`);
-    if (bestByF1.config.stabilityThreshold !== undefined) {
-      console.log(`    stabilityThreshold:       ${bestByF1.config.stabilityThreshold}`);
-    }
-  }
-}
-// ---- Main ----
-async function main(): Promise<void> {
-  const incidents = loadIncidents();
-  if (incidents.length < MIN_INCIDENTS_WARN) {
-    console.warn(
-      `Warning: only ${incidents.length} incident(s) loaded (${MIN_INCIDENTS_WARN} recommended for stable results).`,
-    );
-    if (incidents.length === 0) {
-      console.warn('Running in zero-incident mode — all configs will score 0 F1 by definition.');
-    }
-  }
-  console.log(`Backtest: ${days}-day window, ${incidents.length} incident(s), metric=${metricFilter ?? 'all'}`);
-  const backend = new MultiDirectoryBackend(undefined, true);
-  const now = Date.now();
-  const startMs = now - days * TIME_MS.DAY;
-  const startDate = new Date(startMs).toISOString();
-  const endDate = new Date(now).toISOString();
-  const metricNames = metricFilter
-    ? [metricFilter]
-    : Object.keys(QUALITY_METRICS);
-  const allResults: Record<string, {
-    sweepResult: BacktestSweepResult;
-    evalCount: number;
-    graduationRecommended: boolean;
-  }> = {};
-  for (const name of metricNames) {
-    const rawEvals = await backend.queryEvaluations({
-      evaluationName: name,
-      startDate,
-      endDate,
-      limit: 100_000,
-    });
-    const evaluations = rawEvals.filter(
-      (e): e is typeof e & { scoreValue: number } => e.scoreValue !== undefined,
-    );
-    if (evaluations.length === 0) {
-      console.log(`  ${name}: no evaluations in window, skipping`);
-      continue;
-    }
-    const dailyBuckets = buildDailyBuckets(evaluations, startMs, days);
-    const timeSeries = buildTimeSeries(dailyBuckets);
-    const sweepResult = sweepDegradationParams(timeSeries, incidents);
-    const f1Gain = sweepResult.bestByF1.tapr.f1 - sweepResult.currentConfigResult.tapr.f1;
-    allResults[name] = {
-      sweepResult,
-      evalCount: evaluations.length,
-      graduationRecommended: f1Gain >= F1_GRADUATION_THRESHOLD,
-    };
-    printSummaryTable(name, sweepResult, evaluations.length);
-  }
-  if (Object.keys(allResults).length === 0) {
-    console.log('\nNo metrics had evaluation data in the requested window.');
-    return;
-  }
-  const outputPath = join(import.meta.dirname ?? process.cwd(), outputFile);
-  const totalSweepGrid = Object.values(BACKTEST_SWEEP).reduce((acc, arr) => acc * arr.length, 1);
-  writeFileSync(outputPath, JSON.stringify({
-    generatedAt: new Date().toISOString(),
-    days,
-    incidentCount: incidents.length,
-    sweepGridSize: totalSweepGrid,
-    productionConfig: CURRENT_PRODUCTION_CONFIG,
-    metrics: Object.fromEntries(
-      Object.entries(allResults).map(([metricName, { sweepResult, evalCount, graduationRecommended }]) => [
-        metricName,
-        {
-          evalCount,
-          graduationRecommended,
-          currentConfigResult: sweepResult.currentConfigResult,
-          bestByF1: sweepResult.bestByF1,
-          bestByRecall: sweepResult.bestByRecall,
-          top10ByF1: sweepResult.results
-            .slice()
-            .sort((a, b) => b.tapr.f1 - a.tapr.f1)
-            .slice(0, 10),
-        },
-      ])
-    ),
-  }, null, 2));
-  console.log(`\nResults written to ${outputPath}`);
-  const graduationCount = Object.values(allResults).filter(r => r.graduationRecommended).length;
-  if (graduationCount > 0) {
-    console.log(`\n${graduationCount} metric(s) recommend threshold graduation — see above.`);
-  }
-}
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
 });
 
 ================
@@ -8101,145 +7563,6 @@ describe('GET /pipeline', () => {
   it('returns 500 when data-loader throws', async () => {
     vi.mocked(loadEvaluationsByMetric).mockRejectedValue(new Error('fail'));
     const res = await pipelineRoutes.request('/pipeline?period=7d');
-    expect(res.status).toBe(500);
-  });
-});
-
-================
-File: src/__tests__/api-sessions.test.ts
-================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
-  computeMultiAgentEvaluation: vi.fn(),
-}));
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-vi.mock('../../../dist/tools/query-traces.js', () => ({
-  queryTraces: vi.fn(),
-}));
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-import { sessionRoutes } from '../api/routes/sessions.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loader.js';
-beforeEach(vi.clearAllMocks);
-function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> = {}) {
-  return {
-    traceId: 'trace-001',
-    spanId: 'span-001',
-    name,
-    startTimeUnixNano: 1737000000_000_000_000,
-    endTimeUnixNano: 1737000001_000_000_000,
-    durationMs: 1000,
-    status: { code: 0 },
-    attributes: {
-      'session.id': 'sess-abc',
-      'builtin.tool': 'Read',
-      ...attrs,
-    },
-  };
-}
-describe('GET /sessions/:sessionId', () => {
-  beforeEach(() => {
-    vi.mocked(queryTraces).mockResolvedValue({ traces: [] } as any);
-    vi.mocked(loadLogsBySessionId).mockResolvedValue([]);
-    vi.mocked(loadEvaluationsBySessionId).mockResolvedValue([]);
-    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1 } as any);
-  });
-  it('returns 200 with sessionId in response', async () => {
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
-    expect(body).toHaveProperty('sessionId', 'sess-abc');
-  });
-  it('returns dataSources summary', async () => {
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, any>;
-    expect(body).toHaveProperty('dataSources');
-    const ds = body.dataSources as Record<string, unknown>;
-    expect(ds).toHaveProperty('traces');
-    expect(ds).toHaveProperty('logs');
-    expect(ds).toHaveProperty('evaluations');
-    expect(ds).toHaveProperty('total');
-  });
-  it('returns token totals and tool usage', async () => {
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, any>;
-    expect(body).toHaveProperty('tokenTotals');
-    expect(body).toHaveProperty('toolUsage');
-  });
-  it('returns error and agent sections', async () => {
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, any>;
-    expect(body).toHaveProperty('errors');
-    expect(body).toHaveProperty('agentActivity');
-  });
-  it('returns evaluation and log summaries', async () => {
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, any>;
-    expect(body).toHaveProperty('evaluationBreakdown');
-    expect(body).toHaveProperty('logSummary');
-    expect(body).toHaveProperty('evaluations');
-  });
-  it('strips sensitive fields from logSummary.logs', async () => {
-    vi.mocked(loadLogsBySessionId).mockResolvedValue([{
-      timestamp: '2026-01-01T00:00:00Z',
-      severity: 'INFO',
-      severityNumber: 9,
-      body: 'secret content',
-      traceId: 'trace-1',
-      spanId: 'span-1',
-      attributes: { 'user.token': 'abc123' },
-      extractedFields: { password: 'hunter2' },
-    }] as any);
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as any;
-    const log = body.logSummary.logs[0];
-    expect(log).not.toHaveProperty('body');
-    expect(log).not.toHaveProperty('attributes');
-    expect(log).not.toHaveProperty('extractedFields');
-    expect(log).toHaveProperty('severity', 'INFO');
-    expect(log).toHaveProperty('timestamp', '2026-01-01T00:00:00Z');
-    expect(log).toHaveProperty('traceId', 'trace-1');
-  });
-  it('builds tool usage from span attributes', async () => {
-    const toolAttrs = { 'hook.type': 'builtin', 'hook.trigger': 'PostToolUse' };
-    const spans = [
-      makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),
-      makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),
-      makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Write' }),
-    ];
-    vi.mocked(queryTraces).mockResolvedValue({ traces: spans } as any);
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, any>;
-    expect(body.toolUsage.Read).toBe(2);
-    expect(body.toolUsage.Write).toBe(1);
-  });
-  it('computes dataSources total from all sources', async () => {
-    const spans = [makeSpan()];
-    vi.mocked(queryTraces).mockResolvedValue({ traces: spans } as any);
-    vi.mocked(loadLogsBySessionId).mockResolvedValue([{ severity: 'INFO' }] as any);
-    vi.mocked(loadEvaluationsBySessionId).mockResolvedValue([{ evaluationName: 'relevance' }] as any);
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as Record<string, any>;
-    expect(body.dataSources.total).toBe(3);
-  });
-  it('returns 500 when queryTraces throws', async () => {
-    vi.mocked(queryTraces).mockRejectedValue(new Error('JSONL error'));
-    const res = await sessionRoutes.request('/sessions/sess-abc');
     expect(res.status).toBe(500);
   });
 });
@@ -9613,46 +8936,6 @@ traceRoutes.get('/traces/:traceId', async (c) => {
 });
 
 ================
-File: src/components/BarIndicator.tsx
-================
-import type { CSSProperties } from 'react';
-interface BarIndicatorProps {
-  value: number;
-  color?: string;
-  opacity?: number;
-  height?: number;
-  trackColor?: string;
-  className?: string;
-  style?: CSSProperties;
-}
-export function BarIndicator({
-  value,
-  color,
-  opacity,
-  height,
-  trackColor,
-  className,
-  style,
-}: BarIndicatorProps) {
-  const trackStyle: CSSProperties = {
-    ...style,
-    '--bar-fill-width': `${value}%`,
-    ...(height != null && { '--bar-h': `${height}px` } as CSSProperties),
-    ...(trackColor && { '--bar-track-color': trackColor } as CSSProperties),
-    ...(color && { '--bar-fill-color': color } as CSSProperties),
-    ...(opacity != null && { '--bar-fill-opacity': opacity } as CSSProperties),
-  } as CSSProperties;
-  return (
-    <div
-      className={className ? `mini-bar ${className}` : 'mini-bar'}
-      style={trackStyle}
-    >
-      <div className="mini-bar-fill" />
-    </div>
-  );
-}
-
-================
 File: src/components/EvaluationExpandedRow.tsx
 ================
 import { Link } from 'wouter';
@@ -10716,656 +9999,280 @@ export function useAuth0() {
 }
 
 ================
-File: scripts/__tests__/judge-evaluations.test.ts
+File: scripts/.kv-sync-coverage.json
 ================
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+{"totalTraces":0,"syncedTraces":0,"coveragePercent":100,"referencedCoverage":100,"runsRemaining":0,"timestamp":"2026-04-14T17:21:17.667Z","lastChecked":"2026-04-14T17:21:17.667Z"}
+
+================
+File: scripts/backtest-degradation.ts
+================
+#!/usr/bin/env tsx
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { basename, join } from 'path';
+import { z } from 'zod';
+import { CloudBackend } from '../../src/backends/cloud.js';
 import {
-  isSystemPrompt,
-  isToolResultOnly,
-  extractTextFromContent,
-  extractToolResults,
-  extractTurns,
-  hashToScore,
-  normalizeScore,
-  isCanaryTurn,
-  seedEvaluations,
-  evaluateTurn,
-  evalFailures,
-  toOTelRecord,
-  processBatch,
-  type TranscriptInfo,
-  type Turn,
-  type EvalRecord,
-} from '../judge-evaluations.js';
-import { genAiEvaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
-import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
-import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: '2026-02-09T01:11:15.525Z',
-    userText: 'Fix the login bug',
-    assistantText: 'I found the issue in auth.ts and fixed it.',
-    toolResults: [],
-    ...overrides,
-  };
+  computeStdDev,
+  sweepDegradationParams,
+  CURRENT_PRODUCTION_CONFIG,
+  BACKTEST_SWEEP,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import type {
+  LabeledIncident,
+  BacktestSweepResult,
+  BacktestConfig,
+} from '../../src/lib/quality/quality-feature-engineering.js';
+import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+const INCIDENTS_FILE = join(import.meta.dirname ?? process.cwd(), '.degradation-incidents.json');
+const F1_GRADUATION_THRESHOLD = 0.05;
+const MIN_INCIDENTS_WARN = 5;
+function parseIntArg(argList: string[], flag: string, defaultValue: number): number {
+  const match = argList.find(a => a.startsWith(`--${flag}=`));
+  const eqIdx = match ? match.indexOf('=') : -1;
+  const parsed = eqIdx !== -1 ? parseInt(match!.slice(eqIdx + 1), 10) : defaultValue;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
 }
-function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
-  return {
-    timestamp: '2026-02-09T01:11:15.525Z',
-    evaluationName: 'relevance',
-    scoreValue: 0.85,
-    explanation: 'Test explanation',
-    evaluator: 'llm-judge',
-    evaluatorType: 'llm',
-    traceId: 'trace-001',
-    sessionId: 'abc12345-session',
-    ...overrides,
-  };
+function parseStringArg(argList: string[], flag: string): string | null {
+  const match = argList.find(a => a.startsWith(`--${flag}=`));
+  if (!match) return null;
+  const eqIdx = match.indexOf('=');
+  return eqIdx === -1 ? null : match.slice(eqIdx + 1);
 }
-describe('isSystemPrompt', () => {
-  it('detects system-reminder tags', () => {
-    expect(isSystemPrompt('<system-reminder>some content</system-reminder>')).toBe(true);
-  });
-  it('detects system-reminder with leading whitespace', () => {
-    expect(isSystemPrompt('  <system-reminder>content')).toBe(true);
-  });
-  it('detects stop hook feedback', () => {
-    expect(isSystemPrompt('Stop hook feedback: some message')).toBe(true);
-  });
-  it('returns false for regular user text', () => {
-    expect(isSystemPrompt('Fix the login bug')).toBe(false);
-  });
-  it('returns false for empty string', () => {
-    expect(isSystemPrompt('')).toBe(false);
-  });
-  it('returns false for non-string input', () => {
-    expect(isSystemPrompt(42 as unknown as string)).toBe(false);
-  });
+const cliArgs = process.argv.slice(2);
+const days = parseIntArg(cliArgs, 'days', 90);
+const metricFilter = parseStringArg(cliArgs, 'metric');
+const outputFile = basename(parseStringArg(cliArgs, 'output') ?? 'backtest-results.json');
+if (metricFilter !== null && !(metricFilter in QUALITY_METRICS)) {
+  console.error(`Unknown metric: "${metricFilter}". Valid: ${Object.keys(QUALITY_METRICS).join(', ')}`);
+  process.exit(1);
+}
+const labeledIncidentSchema = z.object({
+  startTime: z.iso.datetime({ local: true }),
+  endTime: z.iso.datetime({ local: true }),
+  severity: z.enum(['minor', 'major', 'critical']),
 });
-describe('isToolResultOnly', () => {
-  it('returns true for array of tool_result blocks', () => {
-    expect(isToolResultOnly([
-      { type: 'tool_result', content: 'result' },
-    ])).toBe(true);
-  });
-  it('returns true for multiple tool_result blocks', () => {
-    expect(isToolResultOnly([
-      { type: 'tool_result', content: 'a' },
-      { type: 'tool_result', content: 'b' },
-    ])).toBe(true);
-  });
-  it('returns false when mixed with text blocks', () => {
-    expect(isToolResultOnly([
-      { type: 'text', text: 'hello' },
-      { type: 'tool_result', content: 'result' },
-    ])).toBe(false);
-  });
-  it('returns false for empty array', () => {
-    expect(isToolResultOnly([])).toBe(false);
-  });
-  it('returns false for non-array input', () => {
-    expect(isToolResultOnly('string')).toBe(false);
-    expect(isToolResultOnly(null)).toBe(false);
-  });
-});
-describe('extractTextFromContent', () => {
-  it('extracts text from string content', () => {
-    expect(extractTextFromContent('hello world')).toBe('hello world');
-  });
-  it('extracts text from content block array', () => {
-    const content = [
-      { type: 'text', text: 'First part.' },
-      { type: 'text', text: 'Second part.' },
-    ];
-    expect(extractTextFromContent(content)).toBe('First part.\nSecond part.');
-  });
-  it('filters out non-text blocks', () => {
-    const content = [
-      { type: 'text', text: 'Hello' },
-      { type: 'tool_use', id: '123', name: 'Read' },
-      { type: 'tool_result', content: 'file contents' },
-    ];
-    expect(extractTextFromContent(content)).toBe('Hello');
-  });
-  it('returns empty string for non-string non-array', () => {
-    expect(extractTextFromContent(null)).toBe('');
-    expect(extractTextFromContent(42)).toBe('');
-    expect(extractTextFromContent(undefined)).toBe('');
-  });
-  it('handles blocks with missing text field', () => {
-    const content = [{ type: 'text' }];
-    expect(extractTextFromContent(content)).toBe('');
-  });
-});
-// ---------------------------------------------------------------------------
-// extractToolResults
-// ---------------------------------------------------------------------------
-describe('extractToolResults', () => {
-  it('extracts string content from tool_result blocks', () => {
-    const content = [
-      { type: 'tool_result', content: 'File contents here' },
-    ];
-    expect(extractToolResults(content)).toEqual(['File contents here']);
-  });
-  it('extracts nested text blocks from tool_result', () => {
-    const content = [
-      {
-        type: 'tool_result',
-        content: [
-          { type: 'text', text: 'Line 1' },
-          { type: 'text', text: 'Line 2' },
-        ],
-      },
-    ];
-    expect(extractToolResults(content)).toEqual(['Line 1\nLine 2']);
-  });
-  it('filters out non-tool_result blocks', () => {
-    const content = [
-      { type: 'text', text: 'Not a tool result' },
-      { type: 'tool_result', content: 'Actual result' },
-    ];
-    expect(extractToolResults(content)).toEqual(['Actual result']);
-  });
-  it('returns empty array for non-array input', () => {
-    expect(extractToolResults(null)).toEqual([]);
-    expect(extractToolResults('string')).toEqual([]);
-  });
-  it('filters out empty tool results', () => {
-    const content = [
-      { type: 'tool_result', content: '' },
-      { type: 'tool_result', content: 'valid' },
-    ];
-    expect(extractToolResults(content)).toEqual(['valid']);
-  });
-});
-describe('extractTurns', () => {
-  let tmpDir: string;
-  function writeTranscript(lines: object[]): string {
-    const dir = join(tmpDir, 'transcripts');
-    mkdirSync(dir, { recursive: true });
-    const filepath = join(dir, 'test-session.jsonl');
-    const content = lines.map(l => JSON.stringify(l)).join('\n');
-    writeFileSync(filepath, content);
-    return filepath;
+function loadIncidents(): LabeledIncident[] {
+  if (!existsSync(INCIDENTS_FILE)) {
+    console.error(`Incidents file not found: ${INCIDENTS_FILE}`);
+    console.error('Create .degradation-incidents.json first (see FU-FE-R5-INCIDENT backlog item).');
+    return [];
   }
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `judge-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-  });
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-  it('extracts user/assistant turn pairs', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Fix the bug' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'I fixed it in auth.ts' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
-    const info: TranscriptInfo = { path: filepath, sessionId: 'sess-1', traceId: 'trace-1' };
-    const turns = await extractTurns(info);
-    expect(turns).toHaveLength(1);
-    expect(turns[0].userText).toBe('Fix the bug');
-    expect(turns[0].assistantText).toBe('I fixed it in auth.ts');
-    expect(turns[0].sessionId).toBe('sess-1');
-  });
-  it('skips system prompts', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>hook info</system-reminder>' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Response' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(0);
-  });
-  it('skips tool-result-only user messages', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', content: 'result data' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Response' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(0);
-  });
-  it('accumulates tool results from preceding messages', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output 1' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Now fix the tests' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:10Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Tests fixed' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:15Z',
-      },
-    ]);
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(1);
-    expect(turns[0].toolResults).toContain('tool output 1');
-  });
-  it('clears tool results between turns (M4)', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output from turn 1' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'First question' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:10Z',
-      },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Second question' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:15Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:20Z',
-      },
-    ]);
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(2);
-    expect(turns[0].toolResults).toContain('tool output from turn 1');
-    expect(turns[1].toolResults).toHaveLength(0);
-  });
-  it('skips progress and file-history-snapshot entries', async () => {
-    const filepath = writeTranscript([
-      { type: 'progress', message: null },
-      { type: 'file-history-snapshot', files: {} },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(1);
-  });
-  it('truncates long text to MAX_TURN_TEXT_LEN', async () => {
-    const longText = 'x'.repeat(10000);
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: longText }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: longText }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns[0].userText.length).toBe(8000);
-    expect(turns[0].assistantText.length).toBe(8000);
-  });
-  it('handles malformed JSON lines gracefully', async () => {
-    const dir = join(tmpDir, 'transcripts');
-    mkdirSync(dir, { recursive: true });
-    const filepath = join(dir, 'bad.jsonl');
-    writeFileSync(filepath, 'not json\n{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Hello"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:00Z"}\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:05Z"}\n');
-    const turns = await extractTurns({ path: filepath, sessionId: 's', traceId: 't' });
-    expect(turns).toHaveLength(1);
-  });
-});
-describe('normalizeScore', () => {
-  it('rounds to 4 decimal places', () => {
-    expect(normalizeScore(0.123456789)).toBe(0.1235);
-  });
-  it('preserves exact values', () => {
-    expect(normalizeScore(0.85)).toBe(0.85);
-  });
-  it('handles 0 and 1', () => {
-    expect(normalizeScore(0)).toBe(0);
-    expect(normalizeScore(1)).toBe(1);
-  });
-});
-describe('hashToScore', () => {
-  it('returns deterministic scores for same input', () => {
-    const score1 = hashToScore('test:abc', 0.5, 1.0);
-    const score2 = hashToScore('test:abc', 0.5, 1.0);
-    expect(score1).toBe(score2);
-  });
-  it('returns different scores for different inputs', () => {
-    const score1 = hashToScore('test:abc', 0.5, 1.0);
-    const score2 = hashToScore('test:def', 0.5, 1.0);
-    expect(score1).not.toBe(score2);
-  });
-  it('returns scores within specified range', () => {
-    for (let i = 0; i < 100; i++) {
-      const score = hashToScore(`input-${i}`, 0.3, 0.9);
-      expect(score).toBeGreaterThanOrEqual(0.3);
-      expect(score).toBeLessThanOrEqual(0.9);
+  try {
+    const raw = readFileSync(INCIDENTS_FILE, 'utf8');
+    const data: unknown = JSON.parse(raw);
+    const result = z.array(labeledIncidentSchema).safeParse(data);
+    if (!result.success) {
+      console.error('Invalid .degradation-incidents.json:', result.error.flatten().fieldErrors);
+      return [];
     }
-  });
-  it('returns 4 decimal precision', () => {
-    const score = hashToScore('test', 0.0, 1.0);
-    const decimals = score.toString().split('.')[1]?.length ?? 0;
-    expect(decimals).toBeLessThanOrEqual(4);
-  });
-});
-describe('seedEvaluations', () => {
-  it('generates relevance and coherence for all turns', () => {
-    const turns = [makeTurn()];
-    const { evals } = seedEvaluations(turns, new Set());
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
-  });
-  it('generates faithfulness, hallucination, and tool_correctness in seed mode', () => {
-    const turnNoTools = makeTurn({ toolResults: [] });
-    const turnWithTools = makeTurn({ toolResults: ['some tool output'] });
-    const { evals: evalsNoTools } = seedEvaluations([turnNoTools], new Set());
-    const { evals: evalsWithTools } = seedEvaluations([turnWithTools], new Set());
-    expect(evalsNoTools.map(e => e.evaluationName)).toContain('faithfulness');
-    expect(evalsNoTools.map(e => e.evaluationName)).toContain('hallucination');
-    expect(evalsNoTools.map(e => e.evaluationName)).not.toContain('tool_correctness');
-    expect(evalsWithTools.map(e => e.evaluationName)).toContain('faithfulness');
-    expect(evalsWithTools.map(e => e.evaluationName)).toContain('hallucination');
-    expect(evalsWithTools.map(e => e.evaluationName)).toContain('tool_correctness');
-  });
-  it('skips evaluations that exist in the dedup set', () => {
-    const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
-    const existingKeys = new Set([
-      `${turn.sessionId}:relevance:${turnKey}`,
-      `${turn.sessionId}:coherence:${turnKey}`,
-      `${turn.sessionId}:faithfulness:${turnKey}`,
-      `${turn.sessionId}:hallucination:${turnKey}`,
-    ]);
-    const { evals } = seedEvaluations([turn], existingKeys);
-    expect(evals).toHaveLength(0);
-  });
-  it('hallucination + faithfulness scores are complementary', () => {
-    const turn = makeTurn();
-    const { evals } = seedEvaluations([turn], new Set());
-    const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
-    const hal = evals.find(e => e.evaluationName === 'hallucination')!;
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
-  });
-  it('sets evaluatorType to seed or canary for seed evals', () => {
-    const { evals } = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
-    for (const ev of evals) {
-      expect(['seed', 'canary']).toContain(ev.evaluatorType);
-      const expectedEvaluator = ev.evaluatorType === 'seed' ? 'seed-hash' : 'llm-judge';
-      expect(ev.evaluator).toBe(expectedEvaluator);
+    return result.data;
+  } catch (err) {
+    console.error(`Failed to parse incidents file: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
+  }
+}
+interface DailyBucket {
+  timestamp: number;
+  scores: number[];
+}
+function buildDailyBuckets(
+  evaluations: Array<{ timestamp: string; scoreValue: number }>,
+  startMs: number,
+  bucketCount: number,
+): DailyBucket[] {
+  const buckets: DailyBucket[] = Array.from({ length: bucketCount }, (_, i) => ({
+    timestamp: startMs + i * TIME_MS.DAY,
+    scores: [],
+  }));
+  for (const ev of evaluations) {
+    const ts = new Date(ev.timestamp).getTime();
+    const idx = Math.floor((ts - startMs) / TIME_MS.DAY);
+    if (idx >= 0 && idx < bucketCount) {
+      buckets[idx].scores.push(ev.scoreValue);
     }
+  }
+  return buckets;
+}
+type TimeSeriesPoint = {
+  timestamp: number;
+  currentStdDev: number;
+  baselineStdDev: number;
+  coverageGapCount: number;
+  totalCoverageCells: number;
+  latencyP95: number;
+  latencyP50: number;
+  historicalValues: number[];
+};
+function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
+  const cumulativeScores: number[] = [];
+  const baselineScores: number[] = [];
+  let baselineEnd = 0;
+  let coverageGapCount = 0;
+  return buckets.map((bucket, i) => {
+    cumulativeScores.push(...bucket.scores);
+    if (bucket.scores.length === 0) coverageGapCount++;
+    const newBaselineEnd = Math.max(1, Math.floor((i + 1) * 0.7));
+    while (baselineEnd < newBaselineEnd) {
+      baselineScores.push(...buckets[baselineEnd].scores);
+      baselineEnd++;
+    }
+    return {
+      timestamp: bucket.timestamp,
+      currentStdDev: computeStdDev(bucket.scores) ?? 0,
+      baselineStdDev: computeStdDev(baselineScores) ?? 0,
+      coverageGapCount,
+      totalCoverageCells: i + 1,
+      latencyP95: 0,
+      latencyP50: 0,
+      historicalValues: [...cumulativeScores],
+    };
   });
-  it('non-canary scores are within expected ranges', () => {
-    const turns = Array.from({ length: 20 }, (_, i) =>
-      makeTurn({
-        sessionId: `session-${i}`,
-        timestamp: `2026-02-09T01:${String(i).padStart(2, '0')}:00.000Z`,
-        toolResults: ['ctx'],
-      })
+}
+function formatConfig(cfg: BacktestConfig): string {
+  const parts = [
+    `var=${cfg.varianceThreshold}`,
+    `drop=${cfg.coverageDropoutThreshold}`,
+    `λ=${cfg.ewmaLambda ?? '-'}`,
+    `win=${cfg.confirmationWindow}`,
+    `stab=${cfg.stabilityThreshold ?? '-'}`,
+  ];
+  return parts.join(' ');
+}
+function printSummaryTable(metricName: string, result: BacktestSweepResult, evalCount: number): void {
+  const { bestByF1, currentConfigResult, results } = result;
+  const f1Gain = bestByF1.tapr.f1 - currentConfigResult.tapr.f1;
+  console.log(`\n=== ${metricName} (${evalCount} evals, ${results.length} configs) ===`);
+  console.log('Rank | Config                                      | TaPR-F1 | TaPR-P | TaPR-R | Delay');
+  console.log('-----|---------------------------------------------|---------|--------|--------|------');
+  const top5 = results
+    .slice()
+    .sort((a, b) => b.tapr.f1 - a.tapr.f1)
+    .slice(0, 5);
+  for (let rank = 0; rank < top5.length; rank++) {
+    const r = top5[rank];
+    const tag = r === currentConfigResult ? ' [prod]' : '';
+    console.log(
+      `${String(rank + 1).padStart(4)} | ${formatConfig(r.config).padEnd(43)} | ` +
+      `${r.tapr.f1.toFixed(3)}  | ${r.tapr.precision.toFixed(3)}  | ` +
+      `${r.tapr.recall.toFixed(3)}  | ${Math.round(r.tapr.detectionDelay)}ms${tag}`,
     );
-    const { evals } = seedEvaluations(turns, new Set());
-    for (const ev of evals) {
-      const turnKey = ev.timestamp.slice(0, 19);
-      if (isCanaryTurn(ev.sessionId, turnKey)) continue;
-      if (ev.evaluationName === 'relevance') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70);
-        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
-      }
-      if (ev.evaluationName === 'coherence') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.75);
-        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
-      }
-      if (ev.evaluationName === 'hallucination') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.0);
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.09);
-      }
+  }
+  console.log('');
+  console.log(`Production: ${formatConfig(currentConfigResult.config)} → F1=${currentConfigResult.tapr.f1.toFixed(3)}`);
+  console.log(`Best F1:    ${formatConfig(bestByF1.config)} → F1=${bestByF1.tapr.f1.toFixed(3)} (Δ${f1Gain >= 0 ? '+' : ''}${f1Gain.toFixed(3)})`);
+  if (f1Gain >= F1_GRADUATION_THRESHOLD) {
+    console.log('');
+    console.log(`GRADUATION RECOMMENDED: best config outperforms production by +${f1Gain.toFixed(3)} F1`);
+    console.log('  Update CURRENT_PRODUCTION_CONFIG in src/lib/quality/quality-feature-engineering.ts:');
+    console.log(`    varianceThreshold:        ${bestByF1.config.varianceThreshold}`);
+    console.log(`    coverageDropoutThreshold: ${bestByF1.config.coverageDropoutThreshold}`);
+    if (bestByF1.config.ewmaLambda !== undefined) {
+      console.log(`    ewmaLambda:               ${bestByF1.config.ewmaLambda}`);
     }
-  });
-  it('backfill: partial existingKeys (only hallucination) still seeds missing metrics (H1)', () => {
-    const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
-    const existingKeys = new Set([`${turn.sessionId}:hallucination:${turnKey}`]);
-    const { evals } = seedEvaluations([turn], existingKeys);
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
-    expect(names).toContain('faithfulness');
-    expect(names).not.toContain('hallucination');
-  });
-  it('backfill idempotency: second run with all keys emits nothing (H1)', () => {
-    const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
-    const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
-    const existingKeys = new Set(SEED_METRICS.map(m => `${turn.sessionId}:${m}:${turnKey}`));
-    const { evals } = seedEvaluations([turn], existingKeys);
-    expect(evals).toHaveLength(0);
-  });
-  it('canary turns get intentionally low scores (B6)', () => {
-    const turns = Array.from({ length: 200 }, (_, i) =>
-      makeTurn({
-        sessionId: `canary-test-${i}`,
-        timestamp: `2026-02-09T01:${String(i % 60).padStart(2, '0')}:${String(Math.floor(i / 60)).padStart(2, '0')}.000Z`,
-        toolResults: ['ctx'],
-      })
+    console.log(`    confirmationWindow:       ${bestByF1.config.confirmationWindow}`);
+    if (bestByF1.config.stabilityThreshold !== undefined) {
+      console.log(`    stabilityThreshold:       ${bestByF1.config.stabilityThreshold}`);
+    }
+  }
+}
+// ---- Main ----
+async function main(): Promise<void> {
+  const incidents = loadIncidents();
+  if (incidents.length < MIN_INCIDENTS_WARN) {
+    console.warn(
+      `Warning: only ${incidents.length} incident(s) loaded (${MIN_INCIDENTS_WARN} recommended for stable results).`,
     );
-    const { evals } = seedEvaluations(turns, new Set());
-    const canaryEvals = evals.filter(e => e.explanation.includes('(canary)'));
-    expect(canaryEvals.length).toBeGreaterThan(0);
-    for (const ev of canaryEvals) {
-      if (ev.evaluationName === 'relevance') {
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.35);
-      }
-      if (ev.evaluationName === 'hallucination') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.50);
-      }
+    if (incidents.length === 0) {
+      console.warn('Running in zero-incident mode — all configs will score 0 F1 by definition.');
     }
-  });
-});
-describe('toOTelRecord', () => {
-  it('produces correct OTel flat evaluation format', () => {
-    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
-    expect(record.name).toBe('gen_ai.evaluation.result');
-    expect(record.timestamp).toBe('2026-02-09T01:11:15.525Z');
-    expect(record.traceId).toBe('trace-001');
-    const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['gen_ai.evaluation.name']).toBe('relevance');
-    expect(attrs['gen_ai.evaluation.score.value']).toBe(0.85);
-    expect(attrs['gen_ai.evaluation.explanation']).toBe('Test explanation');
-    expect(attrs['gen_ai.evaluation.evaluator']).toBe('llm-judge');
-    expect(attrs['gen_ai.evaluation.evaluator.type']).toBe('llm');
-    expect(attrs['session.id']).toBe('abc12345-session');
-  });
-  it('omits session.id when empty', () => {
-    const record = toOTelRecord(makeEvalRecord({ sessionId: '' })) as Record<string, unknown>;
-    const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['session.id']).toBeUndefined();
-  });
-  it('uses dot notation for evaluator.type (not underscore)', () => {
-    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
-    const attrs = record.attributes as Record<string, unknown>;
-    const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-    expect(genAiEvaluatorTypeSchema.safeParse(evalType).success).toBe(true);
-    expect(attrs['gen_ai.evaluation.evaluator_type']).toBeUndefined();
-  });
-});
-describe('processBatch', () => {
-  it('processes all items', async () => {
-    const items = [1, 2, 3, 4, 5];
-    const results = await processBatch(items, 2, 0, async (n) => n * 2);
-    expect(results).toEqual([2, 4, 6, 8, 10]);
-  });
-  it('handles empty array', async () => {
-    const results = await processBatch([], 3, 0, async (n: number) => n);
-    expect(results).toEqual([]);
-  });
-  it('continues on individual failures', async () => {
-    const items = [1, 2, 3];
-    const results = await processBatch(items, 3, 0, async (n) => {
-      if (n === 2) throw new Error('fail');
-      return n;
+  }
+  console.log(`Backtest: ${days}-day window, ${incidents.length} incident(s), metric=${metricFilter ?? 'all'}`);
+  if (!CloudBackend.isConfigured()) {
+    console.error('[backtest] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
+    process.exit(1);
+  }
+  const backend = new CloudBackend();
+  const now = Date.now();
+  const startMs = now - days * TIME_MS.DAY;
+  const startDate = new Date(startMs).toISOString();
+  const endDate = new Date(now).toISOString();
+  const metricNames = metricFilter
+    ? [metricFilter]
+    : Object.keys(QUALITY_METRICS);
+  const allResults: Record<string, {
+    sweepResult: BacktestSweepResult;
+    evalCount: number;
+    graduationRecommended: boolean;
+  }> = {};
+  for (const name of metricNames) {
+    const rawEvals = await backend.queryEvaluations({
+      evaluationName: name,
+      startDate,
+      endDate,
+      limit: 100_000,
     });
-    expect(results).toEqual([1, 3]);
-  });
-  it('respects concurrency limit', async () => {
-    let maxConcurrent = 0;
-    let current = 0;
-    const items = [1, 2, 3, 4, 5, 6];
-    await processBatch(items, 2, 0, async (n) => {
-      current++;
-      maxConcurrent = Math.max(maxConcurrent, current);
-      await new Promise(r => setTimeout(r, 10));
-      current--;
-      return n;
-    });
-    expect(maxConcurrent).toBeLessThanOrEqual(2);
-  });
-});
-const MOCK_GEVAL_STEPS = '1. Check quality\n2. Assess completeness\n3. Verify accuracy';
-function mockResponse(prompt: string, gEvalScore = 4): { text: string } {
-  if (prompt.includes('Generate detailed')) {
-    return { text: MOCK_GEVAL_STEPS };
-  }
-  if (prompt.includes('statements') || prompt.includes('claims')) {
-    return { text: JSON.stringify(['The response is correct.']) };
-  }
-  if (prompt.includes('verdict') || prompt.includes('supported')) {
-    return { text: 'yes' };
-  }
-  return { text: String(gEvalScore) };
-}
-function createMockLLM(gEvalScore = 4): LLMProvider {
-  return {
-    async generate(prompt: string) {
-      return mockResponse(prompt, gEvalScore);
-    },
-  };
-}
-function createFailingLLM(failKeyword: string): LLMProvider {
-  return {
-    async generate(prompt: string) {
-      if (prompt.toLowerCase().includes(failKeyword.toLowerCase())) {
-        throw new Error(`Mock ${failKeyword} failure`);
-      }
-      return mockResponse(prompt);
-    },
-  };
-}
-describe('evaluateTurn', () => {
-  beforeEach(() => {
-    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
-  });
-  it('evaluates relevance and coherence for turns without tool results', async () => {
-    const llm = createMockLLM(4);
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: [] });
-    const evals = await evaluateTurn(judge, turn, new Set());
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
-    expect(names).not.toContain('faithfulness');
-    expect(names).not.toContain('hallucination');
-    expect(names).not.toContain('tool_correctness');
-  });
-  it('evaluates all 5 metrics for turns with tool results', async () => {
-    const llm = createMockLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: ['file contents here'] });
-    const evals = await evaluateTurn(judge, turn, new Set());
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
-    expect(names).toContain('faithfulness');
-    expect(names).toContain('hallucination');
-    expect(names).toContain('tool_correctness');
-  });
-  it('skips already-evaluated metrics via existingKeys', async () => {
-    const llm = createMockLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
-    const existingKeys = new Set([
-      `${turn.sessionId}:relevance:${turnKey}`,
-      `${turn.sessionId}:coherence:${turnKey}`,
-    ]);
-    const evals = await evaluateTurn(judge, turn, existingKeys);
-    expect(evals).toHaveLength(0);
-  });
-  it('tracks failures in evalFailures on metric error', async () => {
-    const llm = createFailingLLM('evaluating: relevance');
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: [] });
-    const evals = await evaluateTurn(judge, turn, new Set());
-    expect(evalFailures['relevance']).toBe(1);
-    expect(evals.some(e => e.evaluationName === 'coherence')).toBe(true);
-  });
-  it('sets evaluatorType to llm for all results', async () => {
-    const llm = createMockLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: ['ctx'] });
-    const evals = await evaluateTurn(judge, turn, new Set());
-    for (const ev of evals) {
-      expect(ev.evaluatorType).toBe('llm');
+    const evaluations = rawEvals.filter(
+      (e): e is typeof e & { scoreValue: number } => e.scoreValue !== undefined,
+    );
+    if (evaluations.length === 0) {
+      console.log(`  ${name}: no evaluations in window, skipping`);
+      continue;
     }
+    const dailyBuckets = buildDailyBuckets(evaluations, startMs, days);
+    const timeSeries = buildTimeSeries(dailyBuckets);
+    const sweepResult = sweepDegradationParams(timeSeries, incidents);
+    const f1Gain = sweepResult.bestByF1.tapr.f1 - sweepResult.currentConfigResult.tapr.f1;
+    allResults[name] = {
+      sweepResult,
+      evalCount: evaluations.length,
+      graduationRecommended: f1Gain >= F1_GRADUATION_THRESHOLD,
+    };
+    printSummaryTable(name, sweepResult, evaluations.length);
+  }
+  if (Object.keys(allResults).length === 0) {
+    console.log('\nNo metrics had evaluation data in the requested window.');
+    return;
+  }
+  const outputPath = join(import.meta.dirname ?? process.cwd(), outputFile);
+  const totalSweepGrid = Object.values(BACKTEST_SWEEP).reduce((acc, arr) => acc * arr.length, 1);
+  writeFileSync(outputPath, JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    days,
+    incidentCount: incidents.length,
+    sweepGridSize: totalSweepGrid,
+    productionConfig: CURRENT_PRODUCTION_CONFIG,
+    metrics: Object.fromEntries(
+      Object.entries(allResults).map(([metricName, { sweepResult, evalCount, graduationRecommended }]) => [
+        metricName,
+        {
+          evalCount,
+          graduationRecommended,
+          currentConfigResult: sweepResult.currentConfigResult,
+          bestByF1: sweepResult.bestByF1,
+          bestByRecall: sweepResult.bestByRecall,
+          top10ByF1: sweepResult.results
+            .slice()
+            .sort((a, b) => b.tapr.f1 - a.tapr.f1)
+            .slice(0, 10),
+        },
+      ])
+    ),
+  }, null, 2));
+  console.log(`\nResults written to ${outputPath}`);
+  const graduationCount = Object.values(allResults).filter(r => r.graduationRecommended).length;
+  if (graduationCount > 0) {
+    console.log(`\n${graduationCount} metric(s) recommend threshold graduation — see above.`);
+  }
+}
+const isDirectRun = process.argv[1]?.endsWith('backtest-degradation.ts') ||
+  process.argv[1]?.endsWith('backtest-degradation.js');
+if (isDirectRun) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
   });
-});
+}
 
 ================
 File: scripts/deploy-secrets.sh
@@ -11865,6 +10772,147 @@ describe('GET /metrics/:name/evaluations', () => {
     expect(row).toHaveProperty('traceId');
     expect(row).toHaveProperty('evaluator');
     expect(row).toHaveProperty('label');
+  });
+});
+
+================
+File: src/__tests__/api-sessions.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
+  computeMultiAgentEvaluation: vi.fn(),
+}));
+vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+  sanitizeErrorForResponse: (err: unknown) => String(err),
+}));
+vi.mock('../../../dist/tools/query-traces.js', () => ({
+  queryTraces: vi.fn(),
+}));
+vi.mock('../api/data-loader.js', () => ({
+  loadEvaluationsByMetric: vi.fn(),
+  loadEvaluationsForMetric: vi.fn(),
+  loadEvaluationsByTraceId: vi.fn(),
+  loadEvaluationsByTraceIds: vi.fn(),
+  loadTracesByTraceId: vi.fn(),
+  loadTracesBySessionId: vi.fn(),
+  loadLogsByTraceId: vi.fn(),
+  loadLogsBySessionId: vi.fn(),
+  loadVerifications: vi.fn(),
+  loadEvaluationsBySessionId: vi.fn(),
+  checkHealth: vi.fn(),
+}));
+import { sessionRoutes } from '../api/routes/sessions.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loader.js';
+beforeEach(vi.clearAllMocks);
+function makeSpan(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> = {}) {
+  return {
+    traceId: 'trace-001',
+    spanId: 'span-001',
+    name,
+    startTimeUnixNano: 1737000000_000_000_000,
+    endTimeUnixNano: 1737000001_000_000_000,
+    durationMs: 1000,
+    status: { code: 0 },
+    attributes: {
+      'session.id': 'sess-abc',
+      'builtin.tool': 'Read',
+      ...attrs,
+    },
+  };
+}
+describe('GET /sessions/:sessionId', () => {
+  beforeEach(() => {
+    vi.mocked(queryTraces).mockResolvedValue({ traces: [] } as any);
+    vi.mocked(loadLogsBySessionId).mockResolvedValue([]);
+    vi.mocked(loadEvaluationsBySessionId).mockResolvedValue([]);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1 } as any);
+  });
+  it('returns 200 with sessionId in response', async () => {
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, any>;
+    expect(body).toHaveProperty('sessionId', 'sess-abc');
+  });
+  it('returns dataSources summary', async () => {
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as Record<string, any>;
+    expect(body).toHaveProperty('dataSources');
+    const ds = body.dataSources as Record<string, unknown>;
+    expect(ds).toHaveProperty('traces');
+    expect(ds).toHaveProperty('logs');
+    expect(ds).toHaveProperty('evaluations');
+    expect(ds).toHaveProperty('total');
+  });
+  it('returns token totals and tool usage', async () => {
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as Record<string, any>;
+    expect(body).toHaveProperty('tokenTotals');
+    expect(body).toHaveProperty('toolUsage');
+  });
+  it('returns error and agent sections', async () => {
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as Record<string, any>;
+    expect(body).toHaveProperty('errors');
+    expect(body).toHaveProperty('agentActivity');
+  });
+  it('returns evaluation and log summaries', async () => {
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as Record<string, any>;
+    expect(body).toHaveProperty('evaluationBreakdown');
+    expect(body).toHaveProperty('logSummary');
+    expect(body).toHaveProperty('evaluations');
+  });
+  it('strips sensitive fields from logSummary.logs', async () => {
+    vi.mocked(loadLogsBySessionId).mockResolvedValue([{
+      timestamp: '2026-01-01T00:00:00Z',
+      severity: 'INFO',
+      severityNumber: 9,
+      body: 'secret content',
+      traceId: 'trace-1',
+      spanId: 'span-1',
+      attributes: { 'user.token': 'abc123' },
+      extractedFields: { password: 'hunter2' },
+    }] as any);
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as any;
+    expect(res.status).toBe(200);
+    expect(body).toHaveProperty('logSummary');
+    const log = body.logSummary.logs[0];
+    expect(log).not.toHaveProperty('body');
+    expect(log).not.toHaveProperty('attributes');
+    expect(log).not.toHaveProperty('extractedFields');
+    expect(log).toHaveProperty('severity', 'INFO');
+    expect(log).toHaveProperty('timestamp', '2026-01-01T00:00:00Z');
+    expect(log).toHaveProperty('traceId', 'trace-1');
+  });
+  it('builds tool usage from span attributes', async () => {
+    const toolAttrs = { 'hook.type': 'builtin', 'hook.trigger': 'PostToolUse' };
+    const spans = [
+      makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),
+      makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),
+      makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Write' }),
+    ];
+    vi.mocked(queryTraces).mockResolvedValue({ traces: spans } as any);
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as Record<string, any>;
+    expect(body.toolUsage.Read).toBe(2);
+    expect(body.toolUsage.Write).toBe(1);
+  });
+  it('computes dataSources total from all sources', async () => {
+    const spans = [makeSpan()];
+    vi.mocked(queryTraces).mockResolvedValue({ traces: spans } as any);
+    vi.mocked(loadLogsBySessionId).mockResolvedValue([{ severity: 'INFO' }] as any);
+    vi.mocked(loadEvaluationsBySessionId).mockResolvedValue([{ evaluationName: 'relevance' }] as any);
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as Record<string, any>;
+    expect(body.dataSources.total).toBe(3);
+  });
+  it('returns 500 when queryTraces throws', async () => {
+    vi.mocked(queryTraces).mockRejectedValue(new Error('JSONL error'));
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    expect(res.status).toBe(500);
   });
 });
 
@@ -13040,144 +12088,6 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
 }
 
 ================
-File: src/lib/validation/dashboard-schemas.ts
-================
-import { z } from 'zod';
-export const genAiEvaluatorSchema = z.enum([
-  'llm-judge',
-  'seed-hash',
-  'telemetry-rule-engine',
-]);
-export type GenAiEvaluator = z.infer<typeof genAiEvaluatorSchema>;
-export const genAiEvaluatorTypeSchema = z.enum([
-  'llm',
-  'seed',
-  'canary',
-  'rule',
-  'human',
-  'trace-backfill',
-]);
-export type GenAiEvaluatorType = z.infer<typeof genAiEvaluatorTypeSchema>;
-export const hrtSchema = z.tuple([z.number(), z.number()]).describe('High-resolution time [seconds, nanoseconds]');
-export const traceSpanSchema = z.object({
-  traceId: z.string().min(1).describe('OTel trace ID'),
-  spanId: z.string().min(1).describe('OTel span ID'),
-  name: z.string().describe('Span operation name'),
-  startTime: hrtSchema,
-  endTime: hrtSchema.optional(),
-  duration: hrtSchema,
-  status: z.object({
-    code: z.number(),
-    message: z.string().optional(),
-  }).optional(),
-  attributes: z.record(z.string(), z.unknown()),
-  events: z.array(z.object({
-    name: z.string(),
-    timestamp: z.number().optional(),
-    attributes: z.record(z.string(), z.unknown()).optional(),
-  })).optional(),
-});
-export type TraceSpan = z.infer<typeof traceSpanSchema>;
-export const otelLogEntrySchema = z.object({
-  timestamp: z.string().optional(),
-  severity: z.string().optional(),
-  body: z.string().optional(),
-  attributes: z.record(z.string(), z.unknown()).optional(),
-  traceId: z.string().optional(),
-  spanId: z.string().optional(),
-});
-export type OTelLogEntry = z.infer<typeof otelLogEntrySchema>;
-export const transcriptEntrySchema = z.object({
-  type: z.enum(['user', 'assistant', 'progress', 'file-history-snapshot', 'system']),
-  message: z.object({
-    role: z.string().optional(),
-    content: z.unknown().optional(),
-    model: z.string().optional(),
-    usage: z.object({
-      input_tokens: z.number().optional(),
-      output_tokens: z.number().optional(),
-      cache_read_input_tokens: z.number().optional(),
-      cache_creation_input_tokens: z.number().optional(),
-    }).optional(),
-  }).optional(),
-  timestamp: z.string().optional(),
-});
-export type TranscriptEntry = z.infer<typeof transcriptEntrySchema>;
-export const otelEvaluationRecordSchema = z.object({
-  timestamp: z.string(),
-  name: z.literal('gen_ai.evaluation.result'),
-  attributes: z.object({
-    'gen_ai.evaluation.name': z.string().optional(),
-    'gen_ai.evaluation.score.value': z.number().optional(),
-    'gen_ai.evaluation.score.unit': z.string().optional(),
-    'gen_ai.evaluation.explanation': z.string().optional(),
-    'gen_ai.evaluation.evaluator': genAiEvaluatorSchema,
-    'gen_ai.evaluation.evaluator.type': genAiEvaluatorTypeSchema,
-    'session.id': z.string().optional(),
-  }).strict().catchall(z.unknown()),
-  traceId: z.string().optional(),
-  spanId: z.string().optional(),
-});
-export type OTelEvaluationRecord = z.infer<typeof otelEvaluationRecordSchema>;
-export const kvSyncEntrySchema = z.object({
-  hash: z.string().describe('Content hash (SHA-256 hex)'),
-});
-export type KvSyncEntry = z.infer<typeof kvSyncEntrySchema>;
-export const kvSyncStateSchema = z.record(z.string(), kvSyncEntrySchema);
-export type KvSyncState = z.infer<typeof kvSyncStateSchema>;
-export const kvEntryValueSchema = z.object({
-  timestamp: z.string().optional(),
-  value: z.number().optional(),
-  count: z.number().optional(),
-  unit: z.string().optional(),
-  data: z.record(z.string(), z.unknown()).optional(),
-}).passthrough();
-export type KvEntryValue = z.infer<typeof kvEntryValueSchema>;
-export const coverageHeatmapCellSchema = z.object({
-  line: z.number(),
-  coverage: z.number().min(0).max(100),
-  hitCount: z.number().optional(),
-});
-export const coverageHeatmapSchema = z.record(z.string(), z.array(coverageHeatmapCellSchema));
-export type CoverageHeatmap = z.infer<typeof coverageHeatmapSchema>;
-const routingTelemetrySummarySchema = z.object({
-  routedSpans: z.int().min(0),
-  fallbackRate: z.number().min(0).max(1),
-});
-const routingTelemetryModelPairGroupSchema = z.object({
-  pair: z.string(),
-  requestedModel: z.string(),
-  actualModel: z.string(),
-  provider: z.string().nullable(),
-  count: z.int().min(0),
-});
-const routingTelemetryStrategyGroupSchema = z.object({
-  strategy: z.string(),
-  count: z.int().min(0),
-  fallbackCount: z.int().min(0),
-  fallbackRate: z.number().min(0).max(1),
-});
-const routingTelemetryGroupSchema = z.union([
-  routingTelemetryStrategyGroupSchema,
-  routingTelemetryModelPairGroupSchema,
-]);
-export const routingTelemetryKvSchema = z.object({
-  period: z.string().optional(),
-  totalSpansScanned: z.int().min(0).default(0),
-  summary: routingTelemetrySummarySchema.default({ routedSpans: 0, fallbackRate: 0 }),
-  modelDistribution: z.record(z.string(), z.int().min(0)).default({}),
-  providerDistribution: z.record(z.string(), z.int().min(0)).default({}),
-  costSavings: z.number().min(0).default(0),
-  routingLatency: z.object({
-    p50: z.number().min(0),
-    p99: z.number().min(0),
-    source: z.enum(['classification_time', 'span_duration']),
-  }).optional(),
-  groups: z.array(routingTelemetryGroupSchema).default([]),
-});
-export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
-
-================
 File: src/lib/dashboard-file-utils.ts
 ================
 import { readFileSync, existsSync, createReadStream } from 'fs';
@@ -13505,205 +12415,312 @@ export function AdminPage() {
 }
 
 ================
-File: src/__tests__/api-agents.test.ts
+File: scripts/__tests__/pipeline-integration.test.ts
 ================
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
-  computeMultiAgentEvaluation: vi.fn(),
-}));
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-vi.mock('../../../dist/tools/query-traces.js', () => ({
-  queryTraces: vi.fn(),
-}));
-vi.mock('../lib/workflow-graph.js', () => ({
-  buildWorkflowGraph: vi.fn(),
-}));
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-import { agentRoutes } from '../api/routes/agents.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
-import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
-function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}) {
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import {
+  trackTaskActivity,
+  deriveTaskCompletionPerSession,
+  sessionTasks,
+  type TraceSpan,
+  type EvalRecord as DeriveEvalRecord,
+} from '../derive-evaluations.js';
+import {
+  seedEvaluations,
+  toOTelRecord,
+  type Turn,
+  type EvalRecord as JudgeEvalRecord,
+} from '../judge-evaluations.js';
+import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, unknown> }): TraceSpan {
+  const { attributes: attrOverrides, ...rest } = overrides;
   return {
-    traceId,
-    spanId,
-    name: 'hook:agent-post-tool',
-    startTimeUnixNano: 1737000000_000_000_000,
+    traceId: 'trace-pipeline-001',
+    spanId: 'span-001',
+    name: 'hook:builtin-post-tool',
+    startTime: [1740441600, 0],
+    endTime: [1740441601, 0],
+    duration: [1, 0],
     status: { code: 0 },
+    ...rest,
     attributes: {
-      'gen_ai.agent.name': agentName,
-      'agent.has_error': false,
-      'agent.has_rate_limit': false,
-      'agent.output_size': 500,
-      'agent.source_type': 'active',
-      'session.id': 'sess-001',
-      ...attrs,
+      'session.id': 'sess-pipeline',
+      'builtin.tool': 'TaskCreate',
+      'builtin.task_status': 'pending',
+      'builtin.task_id': 'task-001',
+      ...attrOverrides,
     },
   };
 }
-function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = []) {
-  return { traces: spans } as any;
-}
-function makeMockEval(traceId = 'trace-001') {
+function makeTurn(overrides: Partial<Turn> = {}): Turn {
   return {
-    evaluationName: 'relevance',
-    scoreValue: 0.9,
-    traceId,
-    timestamp: '2026-01-15T12:00:00.000Z',
-    evaluatorType: 'seed',
-    scoreLabel: 'relevant',
-    explanation: '',
-    evaluator: 'seed-hash',
-  } as any;
+    sessionId: 'pipeline-sess-abc',
+    traceId: 'trace-pipeline-001',
+    timestamp: '2026-02-25T00:00:00.000Z',
+    userText: 'Fix the authentication bug in login.ts',
+    assistantText: 'I found the issue in the JWT validation. Here is the fix.',
+    toolResults: [],
+    ...overrides,
+  };
 }
-describe('GET /agents', () => {
+function parseJsonl(content: string): Record<string, unknown>[] {
+  return content
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as Record<string, unknown>);
+}
+describe('pipeline contract: derive → judge', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult());
-    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
+    sessionTasks.clear();
   });
-  it('returns 400 for invalid period', async () => {
-    const res = await agentRoutes.request('/agents?period=99d');
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body).toHaveProperty('error');
+  it('derive-evaluations toOTelRecord produces valid gen_ai.evaluation.result events', () => {
+    trackTaskActivity(makeTraceSpan({
+      attributes: { 'session.id': 'sess-pipeline', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-1' },
+    }));
+    trackTaskActivity(makeTraceSpan({
+      attributes: { 'session.id': 'sess-pipeline', 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 'task-1' },
+    }));
+    const evals = deriveTaskCompletionPerSession();
+    expect(evals).toHaveLength(1);
+    const [ev] = evals;
+    const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
+    expect(otelRecord.name).toBe('gen_ai.evaluation.result');
+    expect(typeof otelRecord.timestamp).toBe('string');
+    expect(typeof otelRecord.traceId).toBe('string');
+    const attrs = otelRecord.attributes as Record<string, unknown>;
+    expect(attrs['gen_ai.evaluation.name']).toBe('task_completion');
+    expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
+    expect(attrs['gen_ai.evaluation.score.value']).toBe(1.0);
+    expect(typeof attrs['gen_ai.evaluation.explanation']).toBe('string');
+    expect(attrs['gen_ai.evaluation.evaluator']).toBe('rule');
+    expect(attrs['gen_ai.evaluation.evaluator.type']).toBe('rule');
+    expect(attrs['session.id']).toBe('sess-pipeline');
   });
-  it('returns 200 with empty agents array when no spans', async () => {
-    const res = await agentRoutes.request('/agents?period=7d');
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(Array.isArray(body.agents)).toBe(true);
-    expect(body.agents).toHaveLength(0);
-    expect(body.period).toBe('7d');
-  });
-  it('returns period, startDate, endDate in response', async () => {
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json();
-    expect(body).toHaveProperty('period', '7d');
-    expect(body).toHaveProperty('startDate');
-    expect(body).toHaveProperty('endDate');
-  });
-  it('aggregates spans into agent records', async () => {
-    const spans = [
-      makeSpan('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' }),
-      makeSpan('trace-002', 'span-002', 'general-purpose', { 'session.id': 'sess-002' }),
-    ];
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json();
-    expect(body.agents).toHaveLength(1);
-    expect(body.agents[0].agentName).toBe('general-purpose');
-    expect(body.agents[0].invocations).toBe(2);
-  });
-  it('computes errorRate correctly', async () => {
-    const spans = [
-      makeSpan('trace-001', 'span-001', 'general-purpose', { 'agent.has_error': true }),
-      makeSpan('trace-002', 'span-002', 'general-purpose', { 'agent.has_error': false }),
-    ];
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json();
-    expect(body.agents[0].errorRate).toBeCloseTo(0.5, 3);
-  });
-  it('agent record has required fields', async () => {
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan()]));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json();
-    const agent = body.agents[0];
-    expect(agent).toHaveProperty('agentName');
-    expect(agent).toHaveProperty('invocations');
-    expect(agent).toHaveProperty('errors');
-    expect(agent).toHaveProperty('errorRate');
-    expect(agent).toHaveProperty('sessionCount');
-    expect(agent).toHaveProperty('dailyCounts');
-    expect(agent).toHaveProperty('sourceTypes');
-    expect(agent).toHaveProperty('evalSummary');
-  });
-  it('sorts agents by invocations descending', async () => {
-    const spans = [
-      makeSpan('trace-r', 'span-r', 'rare-agent'),
-      makeSpan('trace-b1', 'span-b1', 'busy-agent'),
-      makeSpan('trace-b2', 'span-b2', 'busy-agent'),
-    ];
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json();
-    expect(body.agents[0].agentName).toBe('busy-agent');
-    expect(body.agents[0].invocations).toBe(2);
-    expect(body.agents[1].invocations).toBe(1);
-  });
-  it('joins evaluation scores to agents via traceId', async () => {
-    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan('trace-eval-001')]));
-    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([makeMockEval('trace-eval-001')]);
-    const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json();
-    expect(body.agents[0].evalSummary).toHaveProperty('relevance');
-    expect(body.agents[0].evalSummary.relevance.avg).toBeCloseTo(0.9, 3);
-    expect(body.agents[0].evalSummary.relevance.count).toBe(1);
-  });
-  it('returns 500 when queryTraces throws', async () => {
-    vi.mocked(queryTraces).mockRejectedValue(new Error('JSONL read error'));
-    const res = await agentRoutes.request('/agents?period=7d');
-    expect(res.status).toBe(500);
+  it('derive evaluation record has all required fields for judge dedup keys', () => {
+    trackTaskActivity(makeTraceSpan({
+      attributes: { 'session.id': 'sess-dedup', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-2' },
+    }));
+    const evals = deriveTaskCompletionPerSession();
+    const [ev] = evals;
+    expect(typeof ev.sessionId).toBe('string');
+    expect(ev.sessionId.length).toBeGreaterThan(0);
+    expect(typeof ev.evaluationName).toBe('string');
+    expect(typeof ev.timestamp).toBe('string');
+    const turnKey = ev.timestamp.slice(0, 19);
+    expect(turnKey).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
   });
 });
-describe('GET /agents/:sessionId', () => {
+describe('pipeline contract: judge seed output', () => {
+  it('seedEvaluations produces OTel-compatible records', () => {
+    const turns = [makeTurn(), makeTurn({ sessionId: 'sess-b', timestamp: '2026-02-25T01:00:00.000Z' })];
+    const { evals } = seedEvaluations(turns, new Set());
+    expect(evals.length).toBeGreaterThan(0);
+    for (const ev of evals) {
+      const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
+      const attrs = otelRecord.attributes as Record<string, unknown>;
+      expect(otelRecord.name).toBe('gen_ai.evaluation.result');
+      expect(typeof otelRecord.timestamp).toBe('string');
+      expect(new Date(otelRecord.timestamp as string).getTime()).toBeGreaterThan(0);
+      expect(typeof attrs['gen_ai.evaluation.name']).toBe('string');
+      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
+      const score = attrs['gen_ai.evaluation.score.value'] as number;
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(1);
+    }
+  });
+  it('seed output covers all 5 expected metric names when tool results present', () => {
+    const turnWithTools = makeTurn({ toolResults: ['file contents here'] });
+    const { evals } = seedEvaluations([turnWithTools], new Set());
+    const names = new Set(evals.map(e => e.evaluationName));
+    expect(names.has('relevance')).toBe(true);
+    expect(names.has('coherence')).toBe(true);
+    expect(names.has('faithfulness')).toBe(true);
+    expect(names.has('hallucination')).toBe(true);
+    expect(names.has('tool_correctness')).toBe(true);
+  });
+  it('seed output covers 4 metric names without tool results', () => {
+    const turnNoTools = makeTurn({ toolResults: [] });
+    const { evals } = seedEvaluations([turnNoTools], new Set());
+    const names = new Set(evals.map(e => e.evaluationName));
+    expect(names.has('relevance')).toBe(true);
+    expect(names.has('coherence')).toBe(true);
+    expect(names.has('faithfulness')).toBe(true);
+    expect(names.has('hallucination')).toBe(true);
+    expect(names.has('tool_correctness')).toBe(false);
+  });
+  it('faithfulness + hallucination scores sum to 1.0 (complementary invariant)', () => {
+    const { evals } = seedEvaluations([makeTurn()], new Set());
+    const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
+    const hal = evals.find(e => e.evaluationName === 'hallucination')!;
+    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
+  });
+  it('canary evaluations have evaluatorType "canary", others have "seed"', () => {
+    const turns = Array.from({ length: 200 }, (_, i) =>
+      makeTurn({
+        sessionId: `canary-pipeline-${i}`,
+        timestamp: `2026-02-25T${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00.000Z`,
+      })
+    );
+    const { evals, canaryCount } = seedEvaluations(turns, new Set());
+    const canaryEvals = evals.filter(e => e.evaluatorType === 'canary');
+    const seedEvals = evals.filter(e => e.evaluatorType === 'seed');
+    expect(canaryCount).toBeGreaterThan(0);
+    expect(canaryEvals.length).toBeGreaterThan(0);
+    expect(seedEvals.length).toBeGreaterThan(0);
+    for (const ev of canaryEvals) expect(ev.evaluator).toBe('llm');
+    for (const ev of seedEvals) expect(ev.evaluator).toBe('seed');
+    const afterFilter = evals.filter(e => e.evaluatorType !== 'canary');
+    expect(afterFilter.length).toBeLessThan(evals.length);
+  });
+});
+describe('pipeline contract: judge → sync-to-kv', () => {
+  let tmpDir: string;
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([]);
-    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
-    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1, agentScores: {}, trajectory: [] } as any);
-    vi.mocked(buildWorkflowGraph).mockReturnValue({ nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent' } as any);
+    tmpDir = join(tmpdir(), `pipeline-test-${Date.now()}`);
+    mkdirSync(tmpDir, { recursive: true });
   });
-  it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
-    const res = await agentRoutes.request('/agents/sess-abc');
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toHaveProperty('sessionId', 'sess-abc');
-    expect(body).toHaveProperty('spans');
-    expect(body).toHaveProperty('evaluation');
-    expect(body).toHaveProperty('evaluations');
-    expect(body).toHaveProperty('agentMap');
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
   });
-  it('returns spans from data-loader', async () => {
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
-    const res = await agentRoutes.request('/agents/sess-abc');
-    const body = await res.json();
-    expect(body.spans).toHaveLength(1);
+  it('JSONL written by judge is parseable and has required backend fields', () => {
+    const turns = [
+      makeTurn({ sessionId: 'test-session-001', traceId: 'trace-001' }),
+      makeTurn({ sessionId: 'test-session-001', traceId: 'trace-002', timestamp: '2026-02-25T00:01:00.000Z' }),
+    ];
+    const { evals } = seedEvaluations(turns, new Set());
+    const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
+    const lines = evals.map(ev => JSON.stringify(toOTelRecord(ev)));
+    writeFileSync(outFile, lines.join('\n') + '\n');
+    const content = readFileSync(outFile, 'utf-8');
+    const records = parseJsonl(content);
+    expect(records.length).toBe(evals.length);
+    for (const record of records) {
+      expect(record.name).toBe('gen_ai.evaluation.result');
+      expect(typeof record.timestamp).toBe('string');
+      const ts = new Date(record.timestamp as string);
+      expect(ts.getFullYear()).toBe(2026);
+      const attrs = record.attributes as Record<string, unknown>;
+      const evalName = attrs['gen_ai.evaluation.name'] as string;
+      expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
+      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
+      expect(evaluatorTypeSchema.safeParse(attrs['gen_ai.evaluation.evaluator.type']).success).toBe(true);
+    }
   });
-  it('calls computeMultiAgentEvaluation with step scores', async () => {
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
-    await agentRoutes.request('/agents/sess-abc');
-    expect(vi.mocked(computeMultiAgentEvaluation)).toHaveBeenCalled();
+  it('sync-to-kv canary filter removes canary evals before aggregation', () => {
+    const turns = Array.from({ length: 100 }, (_, i) =>
+      makeTurn({
+        sessionId: `filter-test-${i}`,
+        timestamp: `2026-02-25T00:${String(i % 60).padStart(2, '0')}:00.000Z`,
+      })
+    );
+    const { evals } = seedEvaluations(turns, new Set());
+    const filtered = evals.filter(ev => ev.evaluatorType !== 'canary');
+    for (const ev of filtered) {
+      expect(ev.evaluatorType).toBe('seed');
+    }
+    const hasCanaries = evals.some(ev => ev.evaluatorType === 'canary');
+    if (hasCanaries) {
+      expect(filtered.length).toBeLessThan(evals.length);
+    }
   });
-  it('returns 500 when loadTracesBySessionId throws', async () => {
-    vi.mocked(loadTracesBySessionId).mockRejectedValue(new Error('session not found'));
-    const res = await agentRoutes.request('/agents/sess-abc');
-    expect(res.status).toBe(500);
+  it('deduplication prevents re-scoring already-evaluated turns', () => {
+    const turn = makeTurn({
+      sessionId: 'dedup-test',
+      timestamp: '2026-02-25T00:00:00.000Z',
+    });
+    const turnKey = turn.timestamp.slice(0, 19);
+    const { evals: firstPass } = seedEvaluations([turn], new Set());
+    expect(firstPass.length).toBeGreaterThan(0);
+    const existingKeys = new Set(
+      firstPass.map(ev => `${ev.sessionId}:${ev.evaluationName}:${turnKey}`)
+    );
+    const { evals: secondPass } = seedEvaluations([turn], existingKeys);
+    expect(secondPass).toHaveLength(0);
   });
-  it('returns graph field from buildWorkflowGraph', async () => {
-    const mockGraph = { nodes: [{ id: 'a' }], edges: [], rootNodeId: 'a', workflowShape: 'single_agent' };
-    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph as any);
-    const res = await agentRoutes.request('/agents/sess-abc');
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toHaveProperty('graph');
-    expect(body.graph).toEqual(mockGraph);
+  it('pipeline produces stable OTel records for same input (determinism)', () => {
+    const turn = makeTurn({ sessionId: 'stable-test', timestamp: '2026-02-25T00:30:00.000Z' });
+    const { evals: run1 } = seedEvaluations([turn], new Set());
+    const { evals: run2 } = seedEvaluations([turn], new Set());
+    expect(run1.length).toBe(run2.length);
+    for (let i = 0; i < run1.length; i++) {
+      expect(run1[i].scoreValue).toBe(run2[i].scoreValue);
+      expect(run1[i].evaluationName).toBe(run2[i].evaluationName);
+    }
+  });
+});
+describe('full pipeline: derive + judge write/read cycle', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = join(tmpdir(), `full-pipeline-${Date.now()}`);
+    mkdirSync(tmpDir, { recursive: true });
+    sessionTasks.clear();
+  });
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+  it('derive output + seed output combine into valid JSONL for backend ingestion', () => {
+    trackTaskActivity(makeTraceSpan({
+      attributes: {
+        'session.id': 'full-pipeline-session',
+        'builtin.tool': 'TaskCreate',
+        'builtin.task_status': 'pending',
+        'builtin.task_id': 'task-full',
+      },
+    }));
+    trackTaskActivity(makeTraceSpan({
+      spanId: 'span-002',
+      attributes: {
+        'session.id': 'full-pipeline-session',
+        'builtin.tool': 'TaskUpdate',
+        'builtin.task_status': 'completed',
+        'builtin.task_id': 'task-full',
+      },
+    }));
+    const deriveEvals = deriveTaskCompletionPerSession();
+    expect(deriveEvals).toHaveLength(1);
+    const turns = [
+      makeTurn({
+        sessionId: 'full-pipeline-session',
+        traceId: 'trace-pipeline-001',
+        timestamp: '2026-02-25T00:00:00.000Z',
+        toolResults: ['tool output here'],
+      }),
+    ];
+    const { evals: judgeEvals } = seedEvaluations(turns, new Set());
+    expect(judgeEvals.length).toBeGreaterThan(0);
+    const allEvals: (DeriveEvalRecord | JudgeEvalRecord)[] = [...deriveEvals, ...judgeEvals];
+    const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
+    const content = allEvals.map(ev => JSON.stringify(toOTelRecord(ev))).join('\n') + '\n';
+    writeFileSync(outFile, content);
+    const records = parseJsonl(readFileSync(outFile, 'utf-8'));
+    expect(records.length).toBe(allEvals.length);
+    for (const record of records) {
+      expect(record.name).toBe('gen_ai.evaluation.result');
+      const attrs = record.attributes as Record<string, unknown>;
+      expect(typeof attrs['gen_ai.evaluation.name']).toBe('string');
+      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
+      const score = attrs['gen_ai.evaluation.score.value'] as number;
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(1);
+    }
+    const taskCompletionRecords = records.filter(r => {
+      const attrs = r.attributes as Record<string, unknown>;
+      return attrs['gen_ai.evaluation.name'] === 'task_completion';
+    });
+    expect(taskCompletionRecords).toHaveLength(1);
+    const tcAttrs = taskCompletionRecords[0].attributes as Record<string, unknown>;
+    expect(tcAttrs['gen_ai.evaluation.score.value']).toBe(1.0);
+    const llmEvalNames = ['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness'];
+    for (const name of llmEvalNames) {
+      const found = records.some(r => {
+        const attrs = r.attributes as Record<string, unknown>;
+        return attrs['gen_ai.evaluation.name'] === name;
+      });
+      expect(found).toBe(true);
+    }
   });
 });
 
@@ -14413,107 +13430,6 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
 });
 
 ================
-File: src/api/routes/quality.ts
-================
-import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import {
-  computeRollingDegradationSignals,
-  type DegradationState,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
-import {
-  DEFAULT_BIN_COUNT,
-} from '../../../../dist/lib/quality/quality-constants.js';
-import {
-  buildEvenBucketBoundaries,
-  getEvenBucketIndex,
-} from '../../../../dist/lib/quality/bucket-utils.js';
-import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
-import type { LiveMetric, QualityLiveData } from '../../types.js';
-export const qualityRoutes = new Hono();
-qualityRoutes.get('/quality/live', async (c) => {
-  try {
-    const now = new Date();
-    const start = new Date(now.getTime() - LIVE_WINDOW_MS);
-    const evaluationsByMetric = await loadEvaluationsByMetric(
-      start.toISOString(),
-      now.toISOString(),
-    );
-    const metrics: LiveMetric[] = [];
-    const sessionIds = new Set<string>();
-    let latestTimestamp = '';
-    for (const [name, evals] of evaluationsByMetric) {
-      const sorted = evals
-        .slice()
-        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-        .slice(0, EVAL_LIMIT);
-      for (const ev of sorted) {
-        if (ev.traceId) sessionIds.add(ev.traceId);
-      }
-      const latest = sorted[0];
-      if (latest && latest.scoreValue != null) {
-        metrics.push({
-          name,
-          score: latest.scoreValue,
-          evaluatorType: latest.evaluatorType ?? 'unknown',
-          timestamp: latest.timestamp,
-        });
-        if (latest.timestamp > latestTimestamp) {
-          latestTimestamp = latest.timestamp;
-        }
-      }
-    }
-    metrics.sort((a, b) => a.name.localeCompare(b.name));
-    const response: QualityLiveData = {
-      metrics,
-      sessionCount: sessionIds.size,
-      lastUpdated: latestTimestamp || now.toISOString(),
-    };
-    return c.json(response);
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-qualityRoutes.get('/degradation-signals', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  try {
-    const period = periodResult.data;
-    const { start: startDate, end: endDate } = computePeriodDates(period);
-    const startMs = new Date(startDate).getTime();
-    const endMs = new Date(endDate).getTime();
-    const bucketMs = (endMs - startMs) / DEFAULT_BIN_COUNT;
-    const boundaries = buildEvenBucketBoundaries(startMs, endMs, DEFAULT_BIN_COUNT);
-    const evaluationsByMetric = await loadEvaluationsByMetric(startDate, endDate);
-    const metricNames = [...evaluationsByMetric.keys()];
-    const bucketLabels = boundaries.map(b => ({
-      startTime: new Date(b.start).toISOString(),
-      endTime: new Date(b.end).toISOString(),
-    }));
-    const timeBuckets: Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>> = {};
-    for (const [name, evals] of evaluationsByMetric) {
-      const buckets = bucketLabels.map(b => ({ ...b, scores: [] as number[] }));
-      for (const ev of evals) {
-        if (ev.scoreValue == null) continue;
-        const ts = new Date(ev.timestamp).getTime();
-        const idx = getEvenBucketIndex(ts, startMs, bucketMs, DEFAULT_BIN_COUNT);
-        if (idx !== null) buckets[idx].scores.push(ev.scoreValue);
-      }
-      timeBuckets[name] = buckets;
-    }
-    const noBreachState: DegradationState = { lastRun: '', breaches: {} };
-    const window = { startDate, endDate };
-    const reports = computeRollingDegradationSignals(timeBuckets, metricNames, noBreachState, window);
-    return c.json({ period, reports, computedAt: new Date().toISOString() });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
-});
-
-================
 File: src/components/CorrelationHeatmap.tsx
 ================
 import { useMemo } from 'react';
@@ -15162,6 +14078,861 @@ export function LoginPage() {
   }, [loginWithRedirect]);
   return <div className="auth-loading" role="status" aria-label="Loading" />;
 }
+
+================
+File: scripts/__tests__/judge-evaluations.test.ts
+================
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFileSync, mkdirSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import {
+  isSystemPrompt,
+  isToolResultOnly,
+  extractTextFromContent,
+  extractToolResults,
+  extractTurns,
+  hashToScore,
+  normalizeScore,
+  isCanaryTurn,
+  seedEvaluations,
+  evaluateTurn,
+  evalFailures,
+  toOTelRecord,
+  processBatch,
+  type TranscriptInfo,
+  type Turn,
+  type EvalRecord,
+} from '../judge-evaluations.js';
+import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
+import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
+function makeTurn(overrides: Partial<Turn> = {}): Turn {
+  return {
+    sessionId: 'abc12345-session',
+    traceId: 'trace-001',
+    timestamp: '2026-02-09T01:11:15.525Z',
+    userText: 'Fix the login bug',
+    assistantText: 'I found the issue in auth.ts and fixed it.',
+    toolResults: [],
+    ...overrides,
+  };
+}
+function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
+  return {
+    timestamp: '2026-02-09T01:11:15.525Z',
+    evaluationName: 'relevance',
+    scoreValue: 0.85,
+    explanation: 'Test explanation',
+    evaluator: 'llm-judge',
+    evaluatorType: 'llm',
+    traceId: 'trace-001',
+    sessionId: 'abc12345-session',
+    ...overrides,
+  };
+}
+describe('isSystemPrompt', () => {
+  it('detects system-reminder tags', () => {
+    expect(isSystemPrompt('<system-reminder>some content</system-reminder>')).toBe(true);
+  });
+  it('detects system-reminder with leading whitespace', () => {
+    expect(isSystemPrompt('  <system-reminder>content')).toBe(true);
+  });
+  it('detects stop hook feedback', () => {
+    expect(isSystemPrompt('Stop hook feedback: some message')).toBe(true);
+  });
+  it('returns false for regular user text', () => {
+    expect(isSystemPrompt('Fix the login bug')).toBe(false);
+  });
+  it('returns false for empty string', () => {
+    expect(isSystemPrompt('')).toBe(false);
+  });
+  it('returns false for non-string input', () => {
+    expect(isSystemPrompt(42 as unknown as string)).toBe(false);
+  });
+});
+describe('isToolResultOnly', () => {
+  it('returns true for array of tool_result blocks', () => {
+    expect(isToolResultOnly([
+      { type: 'tool_result', content: 'result' },
+    ])).toBe(true);
+  });
+  it('returns true for multiple tool_result blocks', () => {
+    expect(isToolResultOnly([
+      { type: 'tool_result', content: 'a' },
+      { type: 'tool_result', content: 'b' },
+    ])).toBe(true);
+  });
+  it('returns false when mixed with text blocks', () => {
+    expect(isToolResultOnly([
+      { type: 'text', text: 'hello' },
+      { type: 'tool_result', content: 'result' },
+    ])).toBe(false);
+  });
+  it('returns false for empty array', () => {
+    expect(isToolResultOnly([])).toBe(false);
+  });
+  it('returns false for non-array input', () => {
+    expect(isToolResultOnly('string')).toBe(false);
+    expect(isToolResultOnly(null)).toBe(false);
+  });
+});
+describe('extractTextFromContent', () => {
+  it('extracts text from string content', () => {
+    expect(extractTextFromContent('hello world')).toBe('hello world');
+  });
+  it('extracts text from content block array', () => {
+    const content = [
+      { type: 'text', text: 'First part.' },
+      { type: 'text', text: 'Second part.' },
+    ];
+    expect(extractTextFromContent(content)).toBe('First part.\nSecond part.');
+  });
+  it('filters out non-text blocks', () => {
+    const content = [
+      { type: 'text', text: 'Hello' },
+      { type: 'tool_use', id: '123', name: 'Read' },
+      { type: 'tool_result', content: 'file contents' },
+    ];
+    expect(extractTextFromContent(content)).toBe('Hello');
+  });
+  it('returns empty string for non-string non-array', () => {
+    expect(extractTextFromContent(null)).toBe('');
+    expect(extractTextFromContent(42)).toBe('');
+    expect(extractTextFromContent(undefined)).toBe('');
+  });
+  it('handles blocks with missing text field', () => {
+    const content = [{ type: 'text' }];
+    expect(extractTextFromContent(content)).toBe('');
+  });
+});
+// ---------------------------------------------------------------------------
+// extractToolResults
+// ---------------------------------------------------------------------------
+describe('extractToolResults', () => {
+  it('extracts string content from tool_result blocks', () => {
+    const content = [
+      { type: 'tool_result', content: 'File contents here' },
+    ];
+    expect(extractToolResults(content)).toEqual(['File contents here']);
+  });
+  it('extracts nested text blocks from tool_result', () => {
+    const content = [
+      {
+        type: 'tool_result',
+        content: [
+          { type: 'text', text: 'Line 1' },
+          { type: 'text', text: 'Line 2' },
+        ],
+      },
+    ];
+    expect(extractToolResults(content)).toEqual(['Line 1\nLine 2']);
+  });
+  it('filters out non-tool_result blocks', () => {
+    const content = [
+      { type: 'text', text: 'Not a tool result' },
+      { type: 'tool_result', content: 'Actual result' },
+    ];
+    expect(extractToolResults(content)).toEqual(['Actual result']);
+  });
+  it('returns empty array for non-array input', () => {
+    expect(extractToolResults(null)).toEqual([]);
+    expect(extractToolResults('string')).toEqual([]);
+  });
+  it('filters out empty tool results', () => {
+    const content = [
+      { type: 'tool_result', content: '' },
+      { type: 'tool_result', content: 'valid' },
+    ];
+    expect(extractToolResults(content)).toEqual(['valid']);
+  });
+});
+describe('extractTurns', () => {
+  let tmpDir: string;
+  function writeTranscript(lines: object[]): string {
+    const dir = join(tmpDir, 'transcripts');
+    mkdirSync(dir, { recursive: true });
+    const filepath = join(dir, 'test-session.jsonl');
+    const content = lines.map(l => JSON.stringify(l)).join('\n');
+    writeFileSync(filepath, content);
+    return filepath;
+  }
+  beforeEach(() => {
+    tmpDir = join(tmpdir(), `judge-test-${Date.now()}`);
+    mkdirSync(tmpDir, { recursive: true });
+  });
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+  it('extracts user/assistant turn pairs', async () => {
+    const filepath = writeTranscript([
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Fix the bug' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'I fixed it in auth.ts' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:05Z',
+      },
+    ]);
+    const info: TranscriptInfo = { path: filepath, sessionId: 'sess-1', traceId: 'trace-1' };
+    const turns = await extractTurns(info);
+    expect(turns).toHaveLength(1);
+    expect(turns[0].userText).toBe('Fix the bug');
+    expect(turns[0].assistantText).toBe('I fixed it in auth.ts');
+    expect(turns[0].sessionId).toBe('sess-1');
+  });
+  it('skips system prompts', async () => {
+    const filepath = writeTranscript([
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>hook info</system-reminder>' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Response' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:05Z',
+      },
+    ]);
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    expect(turns).toHaveLength(0);
+  });
+  it('skips tool-result-only user messages', async () => {
+    const filepath = writeTranscript([
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'tool_result', content: 'result data' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Response' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:05Z',
+      },
+    ]);
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    expect(turns).toHaveLength(0);
+  });
+  it('accumulates tool results from preceding messages', async () => {
+    const filepath = writeTranscript([
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output 1' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Now fix the tests' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:10Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Tests fixed' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:15Z',
+      },
+    ]);
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    expect(turns).toHaveLength(1);
+    expect(turns[0].toolResults).toContain('tool output 1');
+  });
+  it('clears tool results between turns (M4)', async () => {
+    const filepath = writeTranscript([
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output from turn 1' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'First question' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:05Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:10Z',
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Second question' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:15Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:20Z',
+      },
+    ]);
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    expect(turns).toHaveLength(2);
+    expect(turns[0].toolResults).toContain('tool output from turn 1');
+    expect(turns[1].toolResults).toHaveLength(0);
+  });
+  it('skips progress and file-history-snapshot entries', async () => {
+    const filepath = writeTranscript([
+      { type: 'progress', message: null },
+      { type: 'file-history-snapshot', files: {} },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:05Z',
+      },
+    ]);
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    expect(turns).toHaveLength(1);
+  });
+  it('truncates long text to MAX_TURN_TEXT_LEN', async () => {
+    const longText = 'x'.repeat(10000);
+    const filepath = writeTranscript([
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: longText }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:00Z',
+      },
+      {
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: longText }] },
+        sessionId: 'sess-1',
+        timestamp: '2026-02-09T01:00:05Z',
+      },
+    ]);
+    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
+    expect(turns[0].userText.length).toBe(8000);
+    expect(turns[0].assistantText.length).toBe(8000);
+  });
+  it('handles malformed JSON lines gracefully', async () => {
+    const dir = join(tmpDir, 'transcripts');
+    mkdirSync(dir, { recursive: true });
+    const filepath = join(dir, 'bad.jsonl');
+    writeFileSync(filepath, 'not json\n{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Hello"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:00Z"}\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:05Z"}\n');
+    const turns = await extractTurns({ path: filepath, sessionId: 's', traceId: 't' });
+    expect(turns).toHaveLength(1);
+  });
+});
+describe('normalizeScore', () => {
+  it('rounds to 4 decimal places', () => {
+    expect(normalizeScore(0.123456789)).toBe(0.1235);
+  });
+  it('preserves exact values', () => {
+    expect(normalizeScore(0.85)).toBe(0.85);
+  });
+  it('handles 0 and 1', () => {
+    expect(normalizeScore(0)).toBe(0);
+    expect(normalizeScore(1)).toBe(1);
+  });
+});
+describe('hashToScore', () => {
+  it('returns deterministic scores for same input', () => {
+    const score1 = hashToScore('test:abc', 0.5, 1.0);
+    const score2 = hashToScore('test:abc', 0.5, 1.0);
+    expect(score1).toBe(score2);
+  });
+  it('returns different scores for different inputs', () => {
+    const score1 = hashToScore('test:abc', 0.5, 1.0);
+    const score2 = hashToScore('test:def', 0.5, 1.0);
+    expect(score1).not.toBe(score2);
+  });
+  it('returns scores within specified range', () => {
+    for (let i = 0; i < 100; i++) {
+      const score = hashToScore(`input-${i}`, 0.3, 0.9);
+      expect(score).toBeGreaterThanOrEqual(0.3);
+      expect(score).toBeLessThanOrEqual(0.9);
+    }
+  });
+  it('returns 4 decimal precision', () => {
+    const score = hashToScore('test', 0.0, 1.0);
+    const decimals = score.toString().split('.')[1]?.length ?? 0;
+    expect(decimals).toBeLessThanOrEqual(4);
+  });
+});
+describe('seedEvaluations', () => {
+  it('generates relevance and coherence for all turns', () => {
+    const turns = [makeTurn()];
+    const { evals } = seedEvaluations(turns, new Set());
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('relevance');
+    expect(names).toContain('coherence');
+  });
+  it('generates faithfulness, hallucination, and tool_correctness in seed mode', () => {
+    const turnNoTools = makeTurn({ toolResults: [] });
+    const turnWithTools = makeTurn({ toolResults: ['some tool output'] });
+    const { evals: evalsNoTools } = seedEvaluations([turnNoTools], new Set());
+    const { evals: evalsWithTools } = seedEvaluations([turnWithTools], new Set());
+    expect(evalsNoTools.map(e => e.evaluationName)).toContain('faithfulness');
+    expect(evalsNoTools.map(e => e.evaluationName)).toContain('hallucination');
+    expect(evalsNoTools.map(e => e.evaluationName)).not.toContain('tool_correctness');
+    expect(evalsWithTools.map(e => e.evaluationName)).toContain('faithfulness');
+    expect(evalsWithTools.map(e => e.evaluationName)).toContain('hallucination');
+    expect(evalsWithTools.map(e => e.evaluationName)).toContain('tool_correctness');
+  });
+  it('skips evaluations that exist in the dedup set', () => {
+    const turn = makeTurn();
+    const turnKey = turn.timestamp.slice(0, 19);
+    const existingKeys = new Set([
+      `${turn.sessionId}:relevance:${turnKey}`,
+      `${turn.sessionId}:coherence:${turnKey}`,
+      `${turn.sessionId}:faithfulness:${turnKey}`,
+      `${turn.sessionId}:hallucination:${turnKey}`,
+    ]);
+    const { evals } = seedEvaluations([turn], existingKeys);
+    expect(evals).toHaveLength(0);
+  });
+  it('hallucination + faithfulness scores are complementary', () => {
+    const turn = makeTurn();
+    const { evals } = seedEvaluations([turn], new Set());
+    const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
+    const hal = evals.find(e => e.evaluationName === 'hallucination')!;
+    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
+  });
+  it('sets evaluatorType to seed or canary for seed evals', () => {
+    const { evals } = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
+    for (const ev of evals) {
+      expect(['seed', 'canary']).toContain(ev.evaluatorType);
+      const expectedEvaluator = ev.evaluatorType === 'seed' ? 'seed' : 'llm';
+      expect(ev.evaluator).toBe(expectedEvaluator);
+    }
+  });
+  it('non-canary scores are within expected ranges', () => {
+    const turns = Array.from({ length: 20 }, (_, i) =>
+      makeTurn({
+        sessionId: `session-${i}`,
+        timestamp: `2026-02-09T01:${String(i).padStart(2, '0')}:00.000Z`,
+        toolResults: ['ctx'],
+      })
+    );
+    const { evals } = seedEvaluations(turns, new Set());
+    for (const ev of evals) {
+      const turnKey = ev.timestamp.slice(0, 19);
+      if (isCanaryTurn(ev.sessionId, turnKey)) continue;
+      if (ev.evaluationName === 'relevance') {
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70);
+        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
+      }
+      if (ev.evaluationName === 'coherence') {
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.75);
+        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
+      }
+      if (ev.evaluationName === 'hallucination') {
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.0);
+        expect(ev.scoreValue).toBeLessThanOrEqual(0.09);
+      }
+    }
+  });
+  it('backfill: partial existingKeys (only hallucination) still seeds missing metrics (H1)', () => {
+    const turn = makeTurn();
+    const turnKey = turn.timestamp.slice(0, 19);
+    const existingKeys = new Set([`${turn.sessionId}:hallucination:${turnKey}`]);
+    const { evals } = seedEvaluations([turn], existingKeys);
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('relevance');
+    expect(names).toContain('coherence');
+    expect(names).toContain('faithfulness');
+    expect(names).not.toContain('hallucination');
+  });
+  it('backfill idempotency: second run with all keys emits nothing (H1)', () => {
+    const turn = makeTurn();
+    const turnKey = turn.timestamp.slice(0, 19);
+    const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
+    const existingKeys = new Set(SEED_METRICS.map(m => `${turn.sessionId}:${m}:${turnKey}`));
+    const { evals } = seedEvaluations([turn], existingKeys);
+    expect(evals).toHaveLength(0);
+  });
+  it('canary turns get intentionally low scores (B6)', () => {
+    const turns = Array.from({ length: 200 }, (_, i) =>
+      makeTurn({
+        sessionId: `canary-test-${i}`,
+        timestamp: `2026-02-09T01:${String(i % 60).padStart(2, '0')}:${String(Math.floor(i / 60)).padStart(2, '0')}.000Z`,
+        toolResults: ['ctx'],
+      })
+    );
+    const { evals } = seedEvaluations(turns, new Set());
+    const canaryEvals = evals.filter(e => e.explanation.includes('(canary)'));
+    expect(canaryEvals.length).toBeGreaterThan(0);
+    for (const ev of canaryEvals) {
+      if (ev.evaluationName === 'relevance') {
+        expect(ev.scoreValue).toBeLessThanOrEqual(0.35);
+      }
+      if (ev.evaluationName === 'hallucination') {
+        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.50);
+      }
+    }
+  });
+});
+describe('toOTelRecord', () => {
+  it('produces correct OTel flat evaluation format', () => {
+    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
+    expect(record.name).toBe('gen_ai.evaluation.result');
+    expect(record.timestamp).toBe('2026-02-09T01:11:15.525Z');
+    expect(record.traceId).toBe('trace-001');
+    const attrs = record.attributes as Record<string, unknown>;
+    expect(attrs['gen_ai.evaluation.name']).toBe('relevance');
+    expect(attrs['gen_ai.evaluation.score.value']).toBe(0.85);
+    expect(attrs['gen_ai.evaluation.explanation']).toBe('Test explanation');
+    expect(attrs['gen_ai.evaluation.evaluator']).toBe('llm-judge');
+    expect(attrs['gen_ai.evaluation.evaluator.type']).toBe('llm');
+    expect(attrs['session.id']).toBe('abc12345-session');
+  });
+  it('omits session.id when empty', () => {
+    const record = toOTelRecord(makeEvalRecord({ sessionId: '' })) as Record<string, unknown>;
+    const attrs = record.attributes as Record<string, unknown>;
+    expect(attrs['session.id']).toBeUndefined();
+  });
+  it('uses dot notation for evaluator.type (not underscore)', () => {
+    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
+    const attrs = record.attributes as Record<string, unknown>;
+    const evalType = attrs['gen_ai.evaluation.evaluator.type'];
+    expect(evaluatorTypeSchema.safeParse(evalType).success).toBe(true);
+    expect(attrs['gen_ai.evaluation.evaluator_type']).toBeUndefined();
+  });
+});
+describe('processBatch', () => {
+  it('processes all items', async () => {
+    const items = [1, 2, 3, 4, 5];
+    const results = await processBatch(items, 2, 0, async (n) => n * 2);
+    expect(results).toEqual([2, 4, 6, 8, 10]);
+  });
+  it('handles empty array', async () => {
+    const results = await processBatch([], 3, 0, async (n: number) => n);
+    expect(results).toEqual([]);
+  });
+  it('continues on individual failures', async () => {
+    const items = [1, 2, 3];
+    const results = await processBatch(items, 3, 0, async (n) => {
+      if (n === 2) throw new Error('fail');
+      return n;
+    });
+    expect(results).toEqual([1, 3]);
+  });
+  it('respects concurrency limit', async () => {
+    let maxConcurrent = 0;
+    let current = 0;
+    const items = [1, 2, 3, 4, 5, 6];
+    await processBatch(items, 2, 0, async (n) => {
+      current++;
+      maxConcurrent = Math.max(maxConcurrent, current);
+      await new Promise(r => setTimeout(r, 10));
+      current--;
+      return n;
+    });
+    expect(maxConcurrent).toBeLessThanOrEqual(2);
+  });
+});
+const MOCK_GEVAL_STEPS = '1. Check quality\n2. Assess completeness\n3. Verify accuracy';
+function mockResponse(prompt: string, gEvalScore = 4): { text: string } {
+  if (prompt.includes('Generate detailed')) {
+    return { text: MOCK_GEVAL_STEPS };
+  }
+  if (prompt.includes('statements') || prompt.includes('claims')) {
+    return { text: JSON.stringify(['The response is correct.']) };
+  }
+  if (prompt.includes('verdict') || prompt.includes('supported')) {
+    return { text: 'yes' };
+  }
+  return { text: String(gEvalScore) };
+}
+function createMockLLM(gEvalScore = 4): LLMProvider {
+  return {
+    async generate(prompt: string) {
+      return mockResponse(prompt, gEvalScore);
+    },
+  };
+}
+function createFailingLLM(failKeyword: string): LLMProvider {
+  return {
+    async generate(prompt: string) {
+      if (prompt.toLowerCase().includes(failKeyword.toLowerCase())) {
+        throw new Error(`Mock ${failKeyword} failure`);
+      }
+      return mockResponse(prompt);
+    },
+  };
+}
+describe('evaluateTurn', () => {
+  beforeEach(() => {
+    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+  });
+  it('evaluates relevance and coherence for turns without tool results', async () => {
+    const llm = createMockLLM(4);
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: [] });
+    const evals = await evaluateTurn(judge, turn, new Set());
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('relevance');
+    expect(names).toContain('coherence');
+    expect(names).not.toContain('faithfulness');
+    expect(names).not.toContain('hallucination');
+    expect(names).not.toContain('tool_correctness');
+  });
+  it('evaluates all 5 metrics for turns with tool results', async () => {
+    const llm = createMockLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: ['file contents here'] });
+    const evals = await evaluateTurn(judge, turn, new Set());
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('relevance');
+    expect(names).toContain('coherence');
+    expect(names).toContain('faithfulness');
+    expect(names).toContain('hallucination');
+    expect(names).toContain('tool_correctness');
+  });
+  it('skips already-evaluated metrics via existingKeys', async () => {
+    const llm = createMockLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn();
+    const turnKey = turn.timestamp.slice(0, 19);
+    const existingKeys = new Set([
+      `${turn.sessionId}:relevance:${turnKey}`,
+      `${turn.sessionId}:coherence:${turnKey}`,
+    ]);
+    const evals = await evaluateTurn(judge, turn, existingKeys);
+    expect(evals).toHaveLength(0);
+  });
+  it('tracks failures in evalFailures on metric error', async () => {
+    const llm = createFailingLLM('evaluating: relevance');
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: [] });
+    const evals = await evaluateTurn(judge, turn, new Set());
+    expect(evalFailures['relevance']).toBe(1);
+    expect(evals.some(e => e.evaluationName === 'coherence')).toBe(true);
+  });
+  it('sets evaluatorType to llm for all results', async () => {
+    const llm = createMockLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: ['ctx'] });
+    const evals = await evaluateTurn(judge, turn, new Set());
+    for (const ev of evals) {
+      expect(ev.evaluatorType).toBe('llm');
+    }
+  });
+});
+
+================
+File: src/__tests__/api-agents.test.ts
+================
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
+  computeMultiAgentEvaluation: vi.fn(),
+}));
+vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+  sanitizeErrorForResponse: (err: unknown) => String(err),
+}));
+vi.mock('../../../dist/tools/query-traces.js', () => ({
+  queryTraces: vi.fn(),
+}));
+vi.mock('../lib/workflow-graph.js', () => ({
+  buildWorkflowGraph: vi.fn(),
+}));
+vi.mock('../api/data-loader.js', () => ({
+  loadEvaluationsByMetric: vi.fn(),
+  loadEvaluationsForMetric: vi.fn(),
+  loadEvaluationsByTraceId: vi.fn(),
+  loadEvaluationsByTraceIds: vi.fn(),
+  loadTracesByTraceId: vi.fn(),
+  loadTracesBySessionId: vi.fn(),
+  loadLogsByTraceId: vi.fn(),
+  loadLogsBySessionId: vi.fn(),
+  loadVerifications: vi.fn(),
+  loadEvaluationsBySessionId: vi.fn(),
+  checkHealth: vi.fn(),
+}));
+import { agentRoutes } from '../api/routes/agents.js';
+import { queryTraces } from '../../../dist/tools/query-traces.js';
+import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}) {
+  return {
+    traceId,
+    spanId,
+    name: 'hook:agent-post-tool',
+    startTimeUnixNano: 1737000000_000_000_000,
+    status: { code: 0 },
+    attributes: {
+      'gen_ai.agent.name': agentName,
+      'agent.has_error': false,
+      'agent.has_rate_limit': false,
+      'agent.output_size': 500,
+      'agent.source_type': 'active',
+      'session.id': 'sess-001',
+      ...attrs,
+    },
+  };
+}
+function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = []) {
+  return { traces: spans } as any;
+}
+function makeMockEval(traceId = 'trace-001') {
+  return {
+    evaluationName: 'relevance',
+    scoreValue: 0.9,
+    traceId,
+    timestamp: '2026-01-15T12:00:00.000Z',
+    evaluatorType: 'seed',
+    scoreLabel: 'relevant',
+    explanation: '',
+    evaluator: 'seed-hash',
+  } as any;
+}
+describe('GET /agents', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult());
+    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
+  });
+  it('returns 400 for invalid period', async () => {
+    const res = await agentRoutes.request('/agents?period=99d');
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body).toHaveProperty('error');
+  });
+  it('returns 200 with empty agents array when no spans', async () => {
+    const res = await agentRoutes.request('/agents?period=7d');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(Array.isArray(body.agents)).toBe(true);
+    expect(body.agents).toHaveLength(0);
+    expect(body.period).toBe('7d');
+  });
+  it('returns period, startDate, endDate in response', async () => {
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = (await res.json()) as any;
+    expect(body).toHaveProperty('period', '7d');
+    expect(body).toHaveProperty('startDate');
+    expect(body).toHaveProperty('endDate');
+  });
+  it('aggregates spans into agent records', async () => {
+    const spans = [
+      makeSpan('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' }),
+      makeSpan('trace-002', 'span-002', 'general-purpose', { 'session.id': 'sess-002' }),
+    ];
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = (await res.json()) as any;
+    expect(body.agents).toHaveLength(1);
+    expect(body.agents[0].agentName).toBe('general-purpose');
+    expect(body.agents[0].invocations).toBe(2);
+  });
+  it('computes errorRate correctly', async () => {
+    const spans = [
+      makeSpan('trace-001', 'span-001', 'general-purpose', { 'agent.has_error': true }),
+      makeSpan('trace-002', 'span-002', 'general-purpose', { 'agent.has_error': false }),
+    ];
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = (await res.json()) as any;
+    expect(body.agents[0].errorRate).toBeCloseTo(0.5, 3);
+  });
+  it('agent record has required fields', async () => {
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan()]));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = (await res.json()) as any;
+    const agent = body.agents[0];
+    expect(agent).toHaveProperty('agentName');
+    expect(agent).toHaveProperty('invocations');
+    expect(agent).toHaveProperty('errors');
+    expect(agent).toHaveProperty('errorRate');
+    expect(agent).toHaveProperty('sessionCount');
+    expect(agent).toHaveProperty('dailyCounts');
+    expect(agent).toHaveProperty('sourceTypes');
+    expect(agent).toHaveProperty('evalSummary');
+  });
+  it('sorts agents by invocations descending', async () => {
+    const spans = [
+      makeSpan('trace-r', 'span-r', 'rare-agent'),
+      makeSpan('trace-b1', 'span-b1', 'busy-agent'),
+      makeSpan('trace-b2', 'span-b2', 'busy-agent'),
+    ];
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = (await res.json()) as any;
+    expect(body.agents[0].agentName).toBe('busy-agent');
+    expect(body.agents[0].invocations).toBe(2);
+    expect(body.agents[1].invocations).toBe(1);
+  });
+  it('joins evaluation scores to agents via traceId', async () => {
+    vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan('trace-eval-001')]));
+    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([makeMockEval('trace-eval-001')]);
+    const res = await agentRoutes.request('/agents?period=7d');
+    const body = (await res.json()) as any;
+    expect(body.agents[0].evalSummary).toHaveProperty('relevance');
+    expect(body.agents[0].evalSummary.relevance.avg).toBeCloseTo(0.9, 3);
+    expect(body.agents[0].evalSummary.relevance.count).toBe(1);
+  });
+  it('returns 500 when queryTraces throws', async () => {
+    vi.mocked(queryTraces).mockRejectedValue(new Error('JSONL read error'));
+    const res = await agentRoutes.request('/agents?period=7d');
+    expect(res.status).toBe(500);
+  });
+});
+describe('GET /agents/:sessionId', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([]);
+    vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1, agentScores: {}, trajectory: [] } as any);
+    vi.mocked(buildWorkflowGraph).mockReturnValue({ nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent' } as any);
+  });
+  it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
+    const res = await agentRoutes.request('/agents/sess-abc');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body).toHaveProperty('sessionId', 'sess-abc');
+    expect(body).toHaveProperty('spans');
+    expect(body).toHaveProperty('evaluation');
+    expect(body).toHaveProperty('evaluations');
+    expect(body).toHaveProperty('agentMap');
+  });
+  it('returns spans from data-loader', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
+    const res = await agentRoutes.request('/agents/sess-abc');
+    const body = (await res.json()) as any;
+    expect(body.spans).toHaveLength(1);
+  });
+  it('calls computeMultiAgentEvaluation with step scores', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
+    await agentRoutes.request('/agents/sess-abc');
+    expect(vi.mocked(computeMultiAgentEvaluation)).toHaveBeenCalled();
+  });
+  it('returns 500 when loadTracesBySessionId throws', async () => {
+    vi.mocked(loadTracesBySessionId).mockRejectedValue(new Error('session not found'));
+    const res = await agentRoutes.request('/agents/sess-abc');
+    expect(res.status).toBe(500);
+  });
+  it('returns graph field from buildWorkflowGraph', async () => {
+    const mockGraph = { nodes: [{ id: 'a' }], edges: [], rootNodeId: 'a', workflowShape: 'single_agent' };
+    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph as any);
+    const res = await agentRoutes.request('/agents/sess-abc');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body).toHaveProperty('graph');
+    expect(body.graph).toEqual(mockGraph);
+  });
+});
 
 ================
 File: src/__tests__/WorkflowGraph.test.tsx
@@ -16220,6 +15991,107 @@ export interface WorkflowGraph {
 }
 
 ================
+File: src/api/routes/quality.ts
+================
+import { Hono } from 'hono';
+import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import {
+  computeRollingDegradationSignals,
+  type DegradationState,
+} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import {
+  DEFAULT_BIN_COUNT,
+} from '../../../../dist/lib/quality/quality-constants.js';
+import {
+  buildEvenBucketBoundaries,
+  getEvenBucketIndex,
+} from '../../../../dist/lib/quality/bucket-utils.js';
+import { loadEvaluationsByMetric } from '../data-loader.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
+import type { LiveMetric, QualityLiveData } from '../../types.js';
+export const qualityRoutes = new Hono();
+qualityRoutes.get('/quality/live', async (c) => {
+  try {
+    const now = new Date();
+    const start = new Date(now.getTime() - LIVE_WINDOW_MS);
+    const evaluationsByMetric = await loadEvaluationsByMetric(
+      start.toISOString(),
+      now.toISOString(),
+    );
+    const metrics: LiveMetric[] = [];
+    const sessionIds = new Set<string>();
+    let latestTimestamp = '';
+    for (const [name, evals] of evaluationsByMetric) {
+      const sorted = evals
+        .slice()
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+        .slice(0, EVAL_LIMIT);
+      for (const ev of sorted) {
+        if (ev.traceId) sessionIds.add(ev.traceId);
+      }
+      const latest = sorted[0];
+      if (latest && latest.scoreValue != null) {
+        metrics.push({
+          name,
+          score: latest.scoreValue,
+          evaluatorType: latest.evaluatorType ?? 'unknown',
+          timestamp: latest.timestamp,
+        });
+        if (latest.timestamp > latestTimestamp) {
+          latestTimestamp = latest.timestamp;
+        }
+      }
+    }
+    metrics.sort((a, b) => a.name.localeCompare(b.name));
+    const response: QualityLiveData = {
+      metrics,
+      sessionCount: sessionIds.size,
+      lastUpdated: latestTimestamp || now.toISOString(),
+    };
+    return c.json(response);
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+qualityRoutes.get('/degradation-signals', async (c) => {
+  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
+  if (!periodResult.success) {
+    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  }
+  try {
+    const period = periodResult.data;
+    const { start: startDate, end: endDate } = computePeriodDates(period);
+    const startMs = new Date(startDate).getTime();
+    const endMs = new Date(endDate).getTime();
+    const bucketMs = (endMs - startMs) / DEFAULT_BIN_COUNT;
+    const boundaries = buildEvenBucketBoundaries(startMs, endMs, DEFAULT_BIN_COUNT);
+    const evaluationsByMetric = await loadEvaluationsByMetric(startDate, endDate);
+    const metricNames = [...evaluationsByMetric.keys()];
+    const bucketLabels = boundaries.map(b => ({
+      startTime: new Date(b.start).toISOString(),
+      endTime: new Date(b.end).toISOString(),
+    }));
+    const timeBuckets: Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>> = {};
+    for (const [name, evals] of evaluationsByMetric) {
+      const buckets = bucketLabels.map(b => ({ ...b, scores: [] as number[] }));
+      for (const ev of evals) {
+        if (ev.scoreValue == null) continue;
+        const ts = new Date(ev.timestamp).getTime();
+        const idx = getEvenBucketIndex(ts, startMs, bucketMs, DEFAULT_BIN_COUNT);
+        if (idx !== null) buckets[idx].scores.push(ev.scoreValue);
+      }
+      timeBuckets[name] = buckets;
+    }
+    const noBreachState: DegradationState = { lastRun: '', breaches: {} };
+    const window = { startDate, endDate };
+    const reports = computeRollingDegradationSignals(timeBuckets, metricNames, noBreachState, window);
+    return c.json({ period, reports, computedAt: new Date().toISOString() });
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+================
 File: src/App.tsx
 ================
 import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
@@ -17061,6 +16933,75 @@ export function AgentWorkflowView({
     </div>
   );
 }
+
+================
+File: src/lib/validation/dashboard-schemas.ts
+================
+import { z } from 'zod';
+export { TraceIdSchema, SpanIdSchema, evaluatorTypeSchema, type EvaluatorType } from '@parent/lib/core/shared-schemas.js';
+export {
+  HALLUCINATION_EVAL_NAME_SCHEMA,
+  HALLUCINATION_EVAL_NAME,
+  LLM_EVALUATOR_TYPE_SCHEMA,
+  LLM_EVALUATOR_TYPE,
+  hrtSchema,
+  traceSpanSchema,
+  otelLogEntrySchema,
+  transcriptEntrySchema,
+  otelEvaluationRecordSchema,
+  kvSyncEntrySchema,
+  kvSyncStateSchema,
+  metricDetailValueSchema,
+  coverageHeatmapSchema,
+} from '@parent/lib/validation/dashboard-schemas.js';
+export type {
+  HallucinationEvalName,
+  LlmEvaluatorType,
+  TraceSpan,
+  OTelLogEntry,
+  TranscriptEntry,
+  OTelEvaluationRecord,
+  KvSyncEntry,
+  KvSyncState,
+  MetricDetailValue,
+  CoverageHeatmap,
+} from '@parent/lib/validation/dashboard-schemas.js';
+const routingTelemetrySummarySchema = z.object({
+  routedSpans: z.int().min(0),
+  fallbackRate: z.number().min(0).max(1),
+});
+const routingTelemetryModelPairGroupSchema = z.object({
+  pair: z.string(),
+  requestedModel: z.string(),
+  actualModel: z.string(),
+  provider: z.string().nullable(),
+  count: z.int().min(0),
+});
+const routingTelemetryStrategyGroupSchema = z.object({
+  strategy: z.string(),
+  count: z.int().min(0),
+  fallbackCount: z.int().min(0),
+  fallbackRate: z.number().min(0).max(1),
+});
+const routingTelemetryGroupSchema = z.union([
+  routingTelemetryStrategyGroupSchema,
+  routingTelemetryModelPairGroupSchema,
+]);
+export const routingTelemetryKvSchema = z.object({
+  period: z.string().optional(),
+  totalSpansScanned: z.int().min(0).default(0),
+  summary: routingTelemetrySummarySchema.default({ routedSpans: 0, fallbackRate: 0 }),
+  modelDistribution: z.record(z.string(), z.int().min(0)).default({}),
+  providerDistribution: z.record(z.string(), z.int().min(0)).default({}),
+  costSavings: z.number().min(0).default(0),
+  routingLatency: z.object({
+    p50: z.number().min(0),
+    p99: z.number().min(0),
+    source: z.enum(['classification_time', 'span_duration']),
+  }).optional(),
+  groups: z.array(routingTelemetryGroupSchema).default([]),
+});
+export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
 
 ================
 File: src/pages/DegradationSignalsPage.tsx
@@ -19709,7 +19650,7 @@ import { createHash, randomBytes } from 'crypto';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { MultiDirectoryBackend } from '../../src/backends/local-jsonl.js';
+import { CloudBackend } from '../../src/backends/cloud.js';
 import {
   computeDashboardSummary,
   computeRoleView,
@@ -19986,7 +19927,7 @@ function isValidScore(v: number | null | undefined): v is number {
   return v != null && Number.isFinite(v);
 }
 function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
-  let group = map.get(key);
+  const group = map.get(key);
   if (!group) map.set(key, group = []);
   group.push(value);
 }
@@ -20003,8 +19944,8 @@ function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[
   };
 }
 function computeTimespan(evaluations: EvaluationResult[]) {
-  let tsMin = Infinity;
-  let tsMax = -Infinity;
+  const tsMin = Infinity;
+  const tsMax = -Infinity;
   for (const ev of evaluations) {
     const t = new Date(ev.timestamp).getTime();
     if (t < tsMin) tsMin = t;
@@ -20305,7 +20246,11 @@ function computeSessionDetail(
   };
 }
 async function main(): Promise<void> {
-  const backend = new MultiDirectoryBackend(undefined, true);
+  if (!CloudBackend.isConfigured()) {
+    console.error('[sync-to-kv] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
+    process.exit(1);
+  }
+  const backend = new CloudBackend();
   if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
     console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${MIN_TRACE_BUDGET + 10}); high-priority entries may be skipped`);
   }
@@ -20464,7 +20409,7 @@ async function main(): Promise<void> {
           timeBuckets[idx].evals.push(ev);
         }
       }
-      let degradBucket = degradationBuckets.get(period);
+      const degradBucket = degradationBuckets.get(period);
       if (!degradBucket) degradationBuckets.set(period, degradBucket = {});
       degradBucket[name] = timeBuckets.map(b => ({
         scores: b.scores,
@@ -20483,7 +20428,7 @@ async function main(): Promise<void> {
         const detail = scores.length > 0
           ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
           : undefined;
-        let dynamics = undefined;
+        const dynamics = undefined;
         if (detail?.trend) {
           dynamics = computeMetricDynamics(detail.trend, previousTrend, periodHours);
           previousTrend = detail.trend;
@@ -20514,7 +20459,7 @@ async function main(): Promise<void> {
       });
     }
   }
-  const stateDir = backend.getDirectories().find(d => d.source === 'global')?.path ?? '';
+  const stateDir = import.meta.dirname ?? '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
     const ms = PERIOD_MS[period];
@@ -20601,7 +20546,7 @@ async function main(): Promise<void> {
       }),
     });
     for (const ag of detail.agentActivity) {
-      let acc = agentCrossSession.get(ag.agentName);
+      const acc = agentCrossSession.get(ag.agentName);
       if (!acc) {
         acc = {
           totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
@@ -20644,7 +20589,7 @@ async function main(): Promise<void> {
         acc.sessions.push(entry);
       } else if (sessionDate) {
         let oldestIdx = 0;
-        for (let i = 1; i < acc.sessions.length; i++) {
+        for (const i = 1; i < acc.sessions.length; i++) {
           const d = acc.sessions[i].date;
           const oldest = acc.sessions[oldestIdx].date;
           if (!oldest || (d && d < oldest)) oldestIdx = i;
@@ -20778,10 +20723,14 @@ async function main(): Promise<void> {
   const limitDeferred = Math.max(0, toWrite.length - 1 - written);
   const _actualDeferred = deferred + limitDeferred;
 }
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1]?.endsWith('sync-to-kv.ts') ||
+  process.argv[1]?.endsWith('sync-to-kv.js');
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
 
 ================
 File: scripts/derive-evaluations.ts
@@ -20796,7 +20745,7 @@ import {
   shouldRecalibrate,
 } from '../../src/lib/quality/quality-feature-engineering.js';
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
-import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan, type GenAiEvaluator, type GenAiEvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
+import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { TraceSpan };
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA } from './judge-evaluations.js';
@@ -20807,8 +20756,8 @@ export interface EvalRecord {
   scoreValue: number;
   scoreUnit?: string;
   explanation: string;
-  evaluator: GenAiEvaluator;
-  evaluatorType: GenAiEvaluatorType;
+  evaluator: EvaluatorType;
+  evaluatorType: EvaluatorType;
   traceId: string;
   sessionId: string;
 }
@@ -20902,7 +20851,7 @@ interface SessionTaskData {
   lastSpan: TraceSpan | null;
 }
 const sessionTasks = new Map<string, SessionTaskData>();
-export const RULE_EVALUATOR = 'telemetry-rule-engine';
+export const RULE_EVALUATOR: EvaluatorType = 'rule';
 export const TASK_COMPLETION_EVAL_NAME = 'task_completion';
 export const STATUS_SCORES: Record<string, number> = {
   pending: 0.0,
@@ -20915,7 +20864,7 @@ export function trackTaskActivity(span: TraceSpan): void {
   const tool = span.attributes['builtin.tool'];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  let entry = sessionTasks.get(sessionId);
+  const entry = sessionTasks.get(sessionId);
   if (!entry) sessionTasks.set(sessionId, entry = { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
   entry.lastSpan = span;
   if (tool === 'TaskCreate') entry.creates++;
@@ -20924,7 +20873,7 @@ export function trackTaskActivity(span: TraceSpan): void {
   const taskId = span.attributes['builtin.task_id'];
   if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
     const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;
-    let task = entry.tasks.get(id);
+    const task = entry.tasks.get(id);
     if (!task) entry.tasks.set(id, task = { statuses: new Set(), lastSpan: span });
     task.statuses.add(taskStatus);
     task.lastSpan = span;
@@ -20991,7 +20940,7 @@ function trackAgentActivity(span: TraceSpan): void {
   const isPost = span.name === 'hook:agent-post-tool';
   if (!isPre && !isPost) return;
   const sessionId = String(span.attributes['session.id'] ?? 'unknown');
-  let entry = sessionAgents.get(sessionId);
+  const entry = sessionAgents.get(sessionId);
   if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });
   if (isPre) entry.pre++;
   if (isPost) {
@@ -21035,7 +20984,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     let count = 0;
     let correct = 0;
     let preserved = 0;
-    for (let i = 1; i < data.agentSequence.length; i++) {
+    for (const i = 1; i < data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
       const curr = data.agentSequence[i];
       if (curr.agentName !== prev.agentName) {
@@ -21086,7 +21035,7 @@ function main(): void {
   const byDate = new Map<string, EvalRecord[]>();
   for (const ev of allEvals) {
     const date = toDateOnly(ev.timestamp);
-    let group = byDate.get(date);
+    const group = byDate.get(date);
     if (!group) byDate.set(date, group = []);
     group.push(ev);
   }
@@ -21152,15 +21101,14 @@ import {
   LLMJudge,
   COHERENCE_CRITERIA,
 } from '../../src/lib/judge/llm-judge-config.js';
-import type { DatasetRunRecord } from '../../src/backends/index.js';
-import { LocalJsonlBackend } from '../../src/backends/local-jsonl.js';
 import {
   traceSpanSchema,
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
-  type GenAiEvaluator,
-  type GenAiEvaluatorType,
+  type EvaluatorType,
+  HALLUCINATION_EVAL_NAME,
+  LLM_EVALUATOR_TYPE,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
@@ -21191,9 +21139,7 @@ const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
-export const LLM_JUDGE_EVALUATOR = 'llm-judge';
-export const SEED_EVALUATOR = 'seed-hash';
-export const LLM_EVALUATOR_TYPE = 'llm';
+export const SEED_EVALUATOR: EvaluatorType = 'seed';
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
@@ -21201,7 +21147,6 @@ export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
 export const RELEVANCE_EVAL_NAME = 'relevance';
 export const COHERENCE_EVAL_NAME = 'coherence';
 export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
-export const HALLUCINATION_EVAL_NAME = 'hallucination';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -21211,8 +21156,29 @@ export const MAX_TURN_TEXT_LEN = 8000;
 export const MAX_TOOL_CONTEXT_ITEMS = 10;
 export const MAX_TOOL_RESULTS_PER_TURN = 20;
 export const MAX_TURN_LIMIT = 10_000;
+export const TIMESTAMP_TURN_KEY_LEN = 19;
+export const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
 export function normalizeScore(score: number): number {
-  return parseFloat(score.toFixed(EVAL_SCORE_PRECISION));
+  return Math.round(score * 10000) / 10000;
+}
+function createEvalRecord(
+  turn: Turn,
+  evaluationName: string,
+  scoreValue: number,
+  explanation: string,
+  evaluator: EvaluatorType,
+  evaluatorType: EvaluatorType,
+): EvalRecord {
+  return {
+    timestamp: turn.timestamp,
+    evaluationName,
+    scoreValue: normalizeScore(scoreValue),
+    explanation,
+    evaluator,
+    evaluatorType,
+    traceId: turn.traceId,
+    sessionId: turn.sessionId,
+  };
 }
 export interface TranscriptInfo {
   path: string;
@@ -21232,8 +21198,8 @@ export interface EvalRecord {
   evaluationName: string;
   scoreValue: number;
   explanation: string;
-  evaluator: GenAiEvaluator;
-  evaluatorType: GenAiEvaluatorType;
+  evaluator: EvaluatorType;
+  evaluatorType: EvaluatorType;
   traceId: string;
   sessionId: string;
 }
@@ -21296,7 +21262,7 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
       for (const f of files) {
         if (!f.endsWith('.jsonl')) continue;
         const sessionId = basename(f, '.jsonl');
-        if (!/^[0-9a-f]{8}-/.test(sessionId)) continue;
+        if (!UUID_PREFIX_REGEX.test(sessionId)) continue;
         if (seen.has(sessionId)) continue;
         seen.add(sessionId);
         transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
@@ -21410,9 +21376,6 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
       const toolRes = extractToolResults(content);
       if (toolRes.length > 0) {
         accumulatedToolResults.push(...toolRes);
-        if (accumulatedToolResults.length > MAX_TOOL_RESULTS_PER_TURN) {
-          accumulatedToolResults.splice(0, accumulatedToolResults.length - MAX_TOOL_RESULTS_PER_TURN);
-        }
       }
       if (isToolResultOnly(content)) continue;
       const userText = extractTextFromContent(content);
@@ -21482,43 +21445,43 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
   const evals: EvalRecord[] = [];
   let canaryCount = 0;
   for (const turn of turns) {
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
     const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
     const canary = isCanaryTurn(turn.sessionId, turnKey);
     if (canary) canaryCount++;
     const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(relKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: RELEVANCE_EVAL_NAME,
-        scoreValue: canary
-          ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
-          : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
-        explanation: canary
-          ? `Relevance (canary) for session ${sessionPreview}`
-          : `Relevance (seeded) for session ${sessionPreview}`,
-        evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-        evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          RELEVANCE_EVAL_NAME,
+          canary
+            ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
+            : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
+          canary
+            ? `Relevance (canary) for session ${sessionPreview}`
+            : `Relevance (seeded) for session ${sessionPreview}`,
+          canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
+          canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+        ),
+      );
     }
     const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
     if (!existingKeys.has(cohKey)) {
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: COHERENCE_EVAL_NAME,
-        scoreValue: canary
-          ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
-          : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-        explanation: canary
-          ? `Coherence (canary) for session ${sessionPreview}`
-          : `Coherence (seeded) for session ${sessionPreview}`,
-        evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-        evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          COHERENCE_EVAL_NAME,
+          canary
+            ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
+            : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+          canary
+            ? `Coherence (canary) for session ${sessionPreview}`
+            : `Coherence (seeded) for session ${sessionPreview}`,
+          canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
+          canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+        ),
+      );
     }
     {
       const halScore = canary
@@ -21527,52 +21490,52 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
       const faithScore = normalizeScore(1 - halScore);
       const faithKey = `${turn.sessionId}:${FAITHFULNESS_EVAL_NAME}:${turnKey}`;
       if (!existingKeys.has(faithKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: FAITHFULNESS_EVAL_NAME,
-          scoreValue: faithScore,
-          explanation: canary
-            ? `Faithfulness (canary) for session ${sessionPreview}`
-            : `Faithfulness (seeded) for session ${sessionPreview}`,
-          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            FAITHFULNESS_EVAL_NAME,
+            faithScore,
+            canary
+              ? `Faithfulness (canary) for session ${sessionPreview}`
+              : `Faithfulness (seeded) for session ${sessionPreview}`,
+            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
+            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          ),
+        );
       }
       const halKey = `${turn.sessionId}:${HALLUCINATION_EVAL_NAME}:${turnKey}`;
       if (!existingKeys.has(halKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: HALLUCINATION_EVAL_NAME,
-          scoreValue: halScore,
-          explanation: canary
-            ? `Hallucination (canary) for session ${sessionPreview}`
-            : `Hallucination (seeded) for session ${sessionPreview}`,
-          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            HALLUCINATION_EVAL_NAME,
+            halScore,
+            canary
+              ? `Hallucination (canary) for session ${sessionPreview}`
+              : `Hallucination (seeded) for session ${sessionPreview}`,
+            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
+            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          ),
+        );
       }
     }
     if (turn.toolResults.length > 0) {
       const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
       if (!existingKeys.has(tcKey)) {
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
-          scoreValue: canary
-            ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
-            : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-          explanation: canary
-            ? `Tool correctness (canary) for session ${sessionPreview}`
-            : `Tool correctness (seeded) for session ${sessionPreview}`,
-          evaluator: canary ? LLM_JUDGE_EVALUATOR : SEED_EVALUATOR,
-          evaluatorType: canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            TOOL_CORRECTNESS_CRITERIA.name,
+            canary
+              ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
+              : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
+            canary
+              ? `Tool correctness (canary) for session ${sessionPreview}`
+              : `Tool correctness (seeded) for session ${sessionPreview}`,
+            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
+            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          ),
+        );
       }
     }
   }
@@ -21588,7 +21551,7 @@ export async function evaluateTurn(
   existingKeys: Set<string>,
 ): Promise<EvalRecord[]> {
   const evals: EvalRecord[] = [];
-  const turnKey = turn.timestamp.slice(0, 19);
+  const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
   const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
@@ -21599,16 +21562,16 @@ export async function evaluateTurn(
         turn.assistantText,
         toolContext,
       );
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: RELEVANCE_EVAL_NAME,
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-        evaluator: LLM_JUDGE_EVALUATOR,
-        evaluatorType: LLM_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          RELEVANCE_EVAL_NAME,
+          result.score,
+          result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+          LLM_EVALUATOR_TYPE,
+          LLM_EVALUATOR_TYPE,
+        ),
+      );
     } catch (err) {
       trackFailure(RELEVANCE_EVAL_NAME);
       console.warn(`  [${RELEVANCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -21618,16 +21581,16 @@ export async function evaluateTurn(
   if (!existingKeys.has(cohKey)) {
     try {
       const result = await judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText });
-      evals.push({
-        timestamp: turn.timestamp,
-        evaluationName: COHERENCE_EVAL_NAME,
-        scoreValue: normalizeScore(result.score),
-        explanation: result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-        evaluator: LLM_JUDGE_EVALUATOR,
-        evaluatorType: LLM_EVALUATOR_TYPE,
-        traceId: turn.traceId,
-        sessionId: turn.sessionId,
-      });
+      evals.push(
+        createEvalRecord(
+          turn,
+          COHERENCE_EVAL_NAME,
+          result.score,
+          result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+          LLM_EVALUATOR_TYPE,
+          LLM_EVALUATOR_TYPE,
+        ),
+      );
     } catch (err) {
       trackFailure(COHERENCE_EVAL_NAME);
       console.warn(`  [${COHERENCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -21645,16 +21608,16 @@ export async function evaluateTurn(
           turn.assistantText,
           toolContext,
         );
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: FAITHFULNESS_EVAL_NAME,
-          scoreValue: normalizeScore(faithResult.score),
-          explanation: faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: LLM_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            FAITHFULNESS_EVAL_NAME,
+            faithResult.score,
+            faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
+            LLM_EVALUATOR_TYPE,
+            LLM_EVALUATOR_TYPE,
+          ),
+        );
       } catch (err) {
         trackFailure(FAITHFULNESS_EVAL_NAME);
         console.warn(`  [${FAITHFULNESS_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -21667,17 +21630,17 @@ export async function evaluateTurn(
           turn.assistantText,
           toolContext,
         );
-        const halScore = normalizeScore(1 - halResult.score);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: HALLUCINATION_EVAL_NAME,
-          scoreValue: halScore,
-          explanation: halResult.reason ?? `Hallucination: ${halScore.toFixed(2)} for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: LLM_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        const halScore = 1 - halResult.score;
+        evals.push(
+          createEvalRecord(
+            turn,
+            HALLUCINATION_EVAL_NAME,
+            halScore,
+            halResult.reason ?? `Hallucination: ${normalizeScore(halScore).toFixed(2)} for session ${sessionPreview}`,
+            LLM_EVALUATOR_TYPE,
+            LLM_EVALUATOR_TYPE,
+          ),
+        );
       } catch (err) {
         trackFailure(HALLUCINATION_EVAL_NAME);
         console.warn(`  [${HALLUCINATION_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -21692,16 +21655,16 @@ export async function evaluateTurn(
       };
       try {
         const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
-        evals.push({
-          timestamp: turn.timestamp,
-          evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
-          scoreValue: normalizeScore(tcResult.score),
-          explanation: tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
-          evaluator: LLM_JUDGE_EVALUATOR,
-          evaluatorType: LLM_EVALUATOR_TYPE,
-          traceId: turn.traceId,
-          sessionId: turn.sessionId,
-        });
+        evals.push(
+          createEvalRecord(
+            turn,
+            TOOL_CORRECTNESS_CRITERIA.name,
+            tcResult.score,
+            tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
+            LLM_EVALUATOR_TYPE,
+            LLM_EVALUATOR_TYPE,
+          ),
+        );
       } catch (err) {
         trackFailure(TOOL_CORRECTNESS_CRITERIA.name);
         console.warn(`  [${TOOL_CORRECTNESS_CRITERIA.name}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -21717,16 +21680,16 @@ export async function evaluateTurn(
         if (existingKeys.has(subKey)) continue;
         try {
           const result = await judge.gEval(config, tcTestCase);
-          evals.push({
-            timestamp: turn.timestamp,
-            evaluationName: name,
-            scoreValue: normalizeScore(result.score),
-            explanation: result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-            evaluator: LLM_JUDGE_EVALUATOR,
-            evaluatorType: LLM_EVALUATOR_TYPE,
-            traceId: turn.traceId,
-            sessionId: turn.sessionId,
-          });
+          evals.push(
+            createEvalRecord(
+              turn,
+              name,
+              result.score,
+              result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+              LLM_EVALUATOR_TYPE,
+              LLM_EVALUATOR_TYPE,
+            ),
+          );
         } catch (err) {
           trackFailure(name);
           console.warn(`  [${name}] Error for ${sessionPreview}: ${(err as Error).message}`);
@@ -21796,7 +21759,7 @@ function acquireLock(): boolean {
     } catch {
       return false;
     }
-    let stale = false;
+    const stale = false;
     {
       try {
         const lockStat = statSync(LOCK_FILE);
@@ -21856,7 +21819,7 @@ async function main() {
   const seed = args.includes('--seed');
   const backfill = args.includes('--backfill');
   const limitIdx = args.indexOf('--limit');
-  let limit = Infinity;
+  const limit = Infinity;
   if (limitIdx !== -1) {
     const parsed = parseInt(args[limitIdx + 1], 10);
     if (isNaN(parsed) || parsed < 1) {
@@ -21957,7 +21920,7 @@ async function main() {
       const judge = new LLMJudge(llm, {
         timeoutMs: TIME_MS.MINUTE,
         maxRetries: 2,
-        evaluator: LLM_JUDGE_EVALUATOR,
+        evaluator: LLM_EVALUATOR_TYPE,
         evaluatorType: LLM_EVALUATOR_TYPE,
         logger: {
           warn: (msg) => console.warn(`  [warn] ${msg}`),
@@ -21977,23 +21940,7 @@ async function main() {
     }
     writeEvaluations(flatEvals);
     if (datasetId) {
-      const backend = new LocalJsonlBackend(TELEMETRY_DIR);
-      const evalNames = [...new Set(flatEvals.map(e => e.evaluationName))];
-      let datasetVersion = 1;
-      try {
-        const dsResult = await backend.manageDatasets({ action: 'get', datasetId });
-        if (dsResult.action === 'get') datasetVersion = dsResult.dataset.version ?? 1;
-      } catch {  }
-      const runRecord: DatasetRunRecord = {
-        id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        datasetId,
-        datasetVersion,
-        runAt: new Date().toISOString(),
-        evaluationNames: evalNames,
-        resultCount: flatEvals.length,
-        evaluator: seed ? SEED_EVALUATOR_TYPE : LLM_JUDGE_EVALUATOR,
-      };
-      await backend.appendDatasetRun(runRecord);
+      console.warn(`[judge] --dataset-id=${datasetId}: dataset run recording not supported in cloud backend; evaluations written to JSONL only.`);
     }
   } finally {
     releaseLock();
