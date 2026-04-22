@@ -3,12 +3,13 @@ import { Hono } from 'hono';
 import {
   computeDashboardSummary,
   computeRoleView,
-  type RoleViewType,
 } from '../../../../dist/lib/quality/quality-metrics.js';
+import type { RoleType as RoleViewType } from '../../../../dist/lib/quality/quality-constants.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
+import { NANOS_TO_MS } from '../api-constants.js';
 import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 
 const SPARKLINE_BUCKET_COUNT = 24;
@@ -27,7 +28,7 @@ function computeSparklineData(
   const bucketMap = rollup(
     valid,
     evals => mean(evals, ev => ev.scoreValue as number) ?? null,
-    ev => Math.min(Math.floor((new Date(ev.timestamp).getTime() - startMs) / bucketWidth), buckets - 1),
+    ev => Math.min(Math.floor((Number(ev.timestamp) / NANOS_TO_MS - startMs) / bucketWidth), buckets - 1),
   );
   return Array.from({ length: buckets }, (_, i) => bucketMap.get(i) ?? null);
 }

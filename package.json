@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.16.0",
-    "@hono/node-server": "^1.19.11",
+    "@hono/node-server": "^2.0.0",
     "@tanstack/react-query": "^5.95.2",
     "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.10.1",
@@ -51,7 +51,7 @@
     "undici": "^7.24.4"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
+    "@anthropic-ai/sdk": "^0.90.0",
     "@cloudflare/workers-types": "^4.20260317.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",

@@ -1,12 +1,12 @@
 import pLimit from 'p-limit';
 import { group } from 'd3-array';
-import { MultiDirectoryBackend } from '../../../dist/backends/local-jsonl.js';
+import { CloudBackend } from '../../../dist/backends/cloud.js';
 import type { EvaluationResult } from '../../../dist/backends/index.js';
 import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
 import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
 import { queryLogs } from '../../../dist/tools/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { toDateOnly } from './api-constants.js';
+import { toDateOnly, NANOS_TO_MS } from './api-constants.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
@@ -26,11 +26,11 @@ const LIMIT_TRACES = 500;
 const LIMIT_LOGS = 1_000;
 const LIMIT_HEALTH_PROBE = 1;
 
-let backend: MultiDirectoryBackend | undefined;
+let backend: CloudBackend | undefined;
 
-function getBackend(): MultiDirectoryBackend {
+function getBackend(): CloudBackend {
   if (!backend) {
-    backend = new MultiDirectoryBackend(undefined, true);
+    backend = new CloudBackend();
   }
   return backend;
 }
@@ -43,12 +43,16 @@ function defaultRange(lookbackMs: number): { start: string; end: string } {
   };
 }
 
+function isoToNs(iso: string): bigint {
+  return BigInt(new Date(iso).getTime()) * BigInt(NANOS_TO_MS);
+}
+
 export async function loadEvaluationsByMetric(
   start: string,
   end: string
 ): Promise<Map<string, EvaluationResult[]>> {
   const be = getBackend();
-  const evals = await be.queryEvaluations({ startDate: start, endDate: end, limit: LIMIT_EVALS_BULK });
+  const evals = await be.queryEvaluations({ startDate: isoToNs(start), endDate: isoToNs(end), limit: LIMIT_EVALS_BULK });
   return group(evals, ev => ev.evaluationName);
 }
 
@@ -59,8 +63,8 @@ export async function loadEvaluationsForMetric(
 ): Promise<EvaluationResult[]> {
   const be = getBackend();
   return be.queryEvaluations({
-    startDate: start,
-    endDate: end,
+    startDate: isoToNs(start),
+    endDate: isoToNs(end),
     evaluationName: metricName,
     limit: LIMIT_EVALS_METRIC,
   });
@@ -75,8 +79,8 @@ export async function loadEvaluationsByTraceId(
   const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
   return be.queryEvaluations({
     traceId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
+    startDate: isoToNs(startDate ?? start),
+    endDate: isoToNs(endDate ?? end),
     limit: LIMIT_EVALS_PER_TRACE,
   });
 }
@@ -102,7 +106,7 @@ export async function loadEvaluationsByTraceIds(
   const limiter = pLimit(TRACE_QUERY_CONCURRENCY);
   const settled = await Promise.allSettled(
     uniqueIds.map(traceId =>
-      limiter(() => be.queryEvaluations({ traceId, startDate: start, endDate: end, limit: LIMIT_EVALS_PER_TRACE }))
+      limiter(() => be.queryEvaluations({ traceId, startDate: isoToNs(start), endDate: isoToNs(end), limit: LIMIT_EVALS_PER_TRACE }))
     )
   );
   const all: EvaluationResult[] = [];
@@ -131,7 +135,7 @@ async function queryLogsWithDefaultRange(
   filter: { traceId?: string; sessionId?: string },
   startDate?: string,
   endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+): Promise<Awaited<ReturnType<typeof queryLogs>>['logs']> {
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
   const start = toDateOnly(startDate ?? defStart);
   const end = toDateOnly(endDate ?? defEnd);
@@ -143,7 +147,7 @@ export async function loadLogsByTraceId(
   traceId: string,
   startDate?: string,
   endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+): Promise<Awaited<ReturnType<typeof queryLogs>>['logs']> {
   return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
 }
 
@@ -155,8 +159,8 @@ export async function loadVerifications(opts: {
 }): Promise<HumanVerificationEvent[]> {
   const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
   return queryVerificationsLib({
-    startDate: opts.startDate ?? start,
-    endDate: opts.endDate ?? end,
+    startDate: isoToNs(opts.startDate ?? start),
+    endDate: isoToNs(opts.endDate ?? end),
     sessionId: opts.sessionId,
     limit: opts.limit ?? LIMIT_LOGS,
   });
@@ -166,7 +170,7 @@ export async function loadLogsBySessionId(
   sessionId: string,
   startDate?: string,
   endDate?: string,
-): Promise<Awaited<ReturnType<MultiDirectoryBackend['queryLogs']>>> {
+): Promise<Awaited<ReturnType<typeof queryLogs>>['logs']> {
   return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
 }
 
@@ -179,8 +183,8 @@ export async function loadEvaluationsBySessionId(
   const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
   return be.queryEvaluations({
     sessionId,
-    startDate: startDate ?? start,
-    endDate: endDate ?? end,
+    startDate: isoToNs(startDate ?? start),
+    endDate: isoToNs(endDate ?? end),
     limit: LIMIT_EVALS_SESSION,
   });
 }
@@ -190,8 +194,8 @@ export async function checkHealth(): Promise<{ status: string; hasData: boolean 
   const health = await be.healthCheck();
   const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
   const evals = await be.queryEvaluations({
-    startDate: start,
-    endDate: end,
+    startDate: isoToNs(start),
+    endDate: isoToNs(end),
     limit: LIMIT_HEALTH_PROBE,
   });
   return { status: health.status, hasData: evals.length > 0 };

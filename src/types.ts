@@ -12,7 +12,6 @@ export type {
   OperatorView,
   AuditorView,
   RoleView,
-  RoleViewType,
   AlertSeverity,
   TrendDirection,
   PipelineResult,
@@ -23,6 +22,8 @@ export type {
   CoverageGap,
   CoverageStatus,
 } from '../../dist/lib/quality/quality-metrics.js';
+
+export type { RoleType as RoleViewType } from '../../dist/lib/quality/quality-constants.js';
 
 export type { EvaluationResult, TraceSpan } from '../../dist/backends/index.js';
 export type { CompositeQualityIndex, CQIContribution, MetricDynamics, CorrelationFeature } from '../../dist/lib/quality/quality-feature-engineering.js';
