@@ -245,8 +245,8 @@ describe('buildWorkflowGraph — edge data binding', () => {
   it('edge latencyMs is computed from span timing when spans are provided', () => {
     // agentA ends at 2_000_000 ns, agentB starts at 7_000_000 ns → gap = 5_000_000 ns = 5 ms
     const spansWithTiming: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.name': 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { 'gen_ai.agent.name': 'agentB' }, startTimeUnixNano: 7_000_000, endTimeUnixNano: 9_000_000, durationMs: 2 }),
+      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.name': 'agentA' }, startTimeUnixNano: 1_000_000n, endTimeUnixNano: 2_000_000n, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { 'gen_ai.agent.name': 'agentB' }, startTimeUnixNano: 7_000_000n, endTimeUnixNano: 9_000_000n, durationMs: 2 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spansWithTiming);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
@@ -362,8 +362,8 @@ const ATTR_AGENT_ID = 'gen_ai.agent.id';
 describe('buildWorkflowGraph — span-inference fallback', () => {
   it('infers 2 nodes from spans when evaluation is null', () => {
     const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000n, endTimeUnixNano: 2_000n, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000n, endTimeUnixNano: 4_000n, durationMs: 1 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     expect(graph.nodes).toHaveLength(2);
@@ -371,8 +371,8 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
 
   it('infers sequential edge when agent A spans end before agent B spans start', () => {
     const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000, endTimeUnixNano: 4_000, durationMs: 1 }),
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000n, endTimeUnixNano: 2_000n, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 3_000n, endTimeUnixNano: 4_000n, durationMs: 1 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
@@ -381,8 +381,8 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
 
   it('sets rootNodeId to the agent with the earliest span start time', () => {
     const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 900, durationMs: 0.4 }),
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_000n, endTimeUnixNano: 2_000n, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500n, endTimeUnixNano: 900n, durationMs: 0.4 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     expect(graph.rootNodeId).toBe('agentA');
@@ -390,7 +390,7 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
 
   it('sets node hasError to true when any span for that agent has status.code === 2', () => {
     const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, status: { code: 2 }, startTimeUnixNano: 1_000, endTimeUnixNano: 2_000, durationMs: 1 }),
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, status: { code: 'ERROR' }, startTimeUnixNano: 1_000n, endTimeUnixNano: 2_000n, durationMs: 1 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     const node = graph.nodes.find(n => n.id === 'agentA');
@@ -409,8 +409,8 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
   it('infers edge between near-concurrent spans within epsilon tolerance (WG-M2)', () => {
     // agentA ends at 2_000_000 ns, agentB starts at 2_500_000 ns — gap is 500_000 ns < 1_000_000 ns epsilon
     const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 2_000_000, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 2_500_000, endTimeUnixNano: 4_000_000, durationMs: 1.5 }),
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000n, endTimeUnixNano: 2_000_000n, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 2_500_000n, endTimeUnixNano: 4_000_000n, durationMs: 1.5 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
@@ -420,8 +420,8 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
   it('does not infer edge when spans overlap by more than epsilon', () => {
     // agentA ends at 3_000_000 ns, agentB starts at 1_500_000 ns — truly concurrent, gap > epsilon
     const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000, endTimeUnixNano: 3_000_000, durationMs: 2 }),
-      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_500_000, endTimeUnixNano: 4_000_000, durationMs: 2.5 }),
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000_000n, endTimeUnixNano: 3_000_000n, durationMs: 2 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 'agentB' }, startTimeUnixNano: 1_500_000n, endTimeUnixNano: 4_000_000n, durationMs: 2.5 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
@@ -430,9 +430,9 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
 
   it('counts tool calls from span names starting with "tool:"', () => {
     const spans: TraceSpan[] = [
-      makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000, endTimeUnixNano: 1_500, durationMs: 0.5 }),
-      makeSpan({ spanId: 's2', name: 'tool:write', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_500, endTimeUnixNano: 2_000, durationMs: 0.5 }),
-      makeSpan({ spanId: 's3', name: 'agent_turn', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500, endTimeUnixNano: 1_000, durationMs: 0.5 }),
+      makeSpan({ spanId: 's1', name: 'tool:search', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000n, endTimeUnixNano: 1_500n, durationMs: 0.5 }),
+      makeSpan({ spanId: 's2', name: 'tool:write', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_500n, endTimeUnixNano: 2_000n, durationMs: 0.5 }),
+      makeSpan({ spanId: 's3', name: 'agent_turn', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 500n, endTimeUnixNano: 1_000n, durationMs: 0.5 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     const node = graph.nodes.find(n => n.id === 'agentA');

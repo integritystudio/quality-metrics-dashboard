@@ -153,7 +153,7 @@ vi.mock('../hooks/useTraceEvaluations.js', () => ({
 
 const mockEvalData = [
   {
-    timestamp: '2026-02-17T12:00:00Z',
+    timestamp: BigInt(Date.parse('2026-02-17T12:00:00Z')) * 1_000_000n,
     evaluationName: 'relevance',
     scoreValue: 0.92,
     scoreLabel: 'excellent',
@@ -163,7 +163,7 @@ const mockEvalData = [
     traceId: 'trace-123',
   },
   {
-    timestamp: '2026-02-17T12:00:00Z',
+    timestamp: BigInt(Date.parse('2026-02-17T12:00:00Z')) * 1_000_000n,
     evaluationName: 'coherence',
     scoreValue: 0.78,
     scoreLabel: 'good',
