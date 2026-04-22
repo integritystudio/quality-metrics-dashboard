@@ -67,8 +67,9 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     let minStart = Infinity;
     let maxEnd = -Infinity;
     for (const s of group) {
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      const start = Number(s.startTimeUnixNano);
+      if (start < minStart) minStart = start;
+      const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;
       if (end > maxEnd) maxEnd = end;
     }
     if (isFinite(minStart)) agentFirstStartNs.set(agentId, minStart);
@@ -165,8 +166,9 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
       if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
       durationMs += s.durationMs ?? 0;
       if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
-      if (s.startTimeUnixNano < minStart) minStart = s.startTimeUnixNano;
-      const end = s.endTimeUnixNano ?? s.startTimeUnixNano;
+      const start = Number(s.startTimeUnixNano);
+      if (start < minStart) minStart = start;
+      const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;
       if (end > maxEnd) maxEnd = end;
     }
     nodes.push({

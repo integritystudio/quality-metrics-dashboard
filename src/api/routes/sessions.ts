@@ -39,9 +39,9 @@ const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
  * Returns null for empty, missing, NaN, or out-of-range values that would
  * corrupt tsMin/tsMax comparisons or cause Date.toISOString() to throw.
  */
-function parseTimestamp(value: string | undefined | null): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
+function parseTimestamp(value: string | bigint | undefined | null): number | null {
+  if (value == null || value === '') return null;
+  const ms = typeof value === 'bigint' ? Number(value / 1_000_000n) : new Date(value).getTime();
   if (isNaN(ms) || ms < -DATE_ISO_SAFE_MAX_MS || ms > DATE_ISO_SAFE_MAX_MS) return null;
   return ms;
 }

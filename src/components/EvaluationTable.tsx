@@ -166,7 +166,7 @@ export function evalToRow(e: EvaluationResult): EvalRow {
     score: typeof e.scoreValue === 'number' ? e.scoreValue : null,
     explanation: e.explanation,
     traceId: e.traceId,
-    timestamp: e.timestamp,
+    timestamp: String(e.timestamp),
     evaluator: e.evaluator,
     label: e.scoreLabel,
     evaluatorType: e.evaluatorType,

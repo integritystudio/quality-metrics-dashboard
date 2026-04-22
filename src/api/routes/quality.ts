@@ -34,12 +34,12 @@ qualityRoutes.get('/quality/live', async (c) => {
 
     const metrics: LiveMetric[] = [];
     const sessionIds = new Set<string>();
-    let latestTimestamp = '';
+    let latestTimestamp = 0n;
 
     for (const [name, evals] of evaluationsByMetric) {
       const sorted = evals
         .slice()
-        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+        .sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
         .slice(0, EVAL_LIMIT);
 
       for (const ev of sorted) {
@@ -52,7 +52,7 @@ qualityRoutes.get('/quality/live', async (c) => {
           name,
           score: latest.scoreValue,
           evaluatorType: latest.evaluatorType ?? 'unknown',
-          timestamp: latest.timestamp,
+          timestamp: String(latest.timestamp),
         });
         if (latest.timestamp > latestTimestamp) {
           latestTimestamp = latest.timestamp;
@@ -65,7 +65,7 @@ qualityRoutes.get('/quality/live', async (c) => {
     const response: QualityLiveData = {
       metrics,
       sessionCount: sessionIds.size,
-      lastUpdated: latestTimestamp || now.toISOString(),
+      lastUpdated: latestTimestamp !== 0n ? String(latestTimestamp) : now.toISOString(),
     };
 
     return c.json(response);
@@ -108,7 +108,7 @@ qualityRoutes.get('/degradation-signals', async (c) => {
       const buckets = bucketLabels.map(b => ({ ...b, scores: [] as number[] }));
       for (const ev of evals) {
         if (ev.scoreValue == null) continue;
-        const ts = new Date(ev.timestamp).getTime();
+        const ts = Number(ev.timestamp / 1_000_000n);
         const idx = getEvenBucketIndex(ts, startMs, bucketMs, DEFAULT_BIN_COUNT);
         if (idx !== null) buckets[idx].scores.push(ev.scoreValue);
       }

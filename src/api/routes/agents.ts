@@ -82,7 +82,7 @@ agentRoutes.get('/agents', async (c) => {
       const entry = (acc[name] ??= createAgentAccumulator(periodDays));
       entry.invocations++;
       if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(span.startTimeUnixNano / NANOS_TO_MS));
+        const dayKey = toDateOnly(new Date(Number(span.startTimeUnixNano / 1_000_000n)));
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) entry.dailyCounts[idx]++;
       }

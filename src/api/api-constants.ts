@@ -41,7 +41,7 @@ export const SCORE_ROUND_FACTOR = 10_000;
 export const LOG_SUMMARY_MAX_ENTRIES = 200;
 
 /** Schema for safe fields exposed per log entry in logSummary (strips attributes/extractedFields/body). */
-export const logSummaryFieldSchema = z.enum(['timestamp', 'severity', 'severityNumber', 'traceId', 'spanId']);
+export const logSummaryFieldSchema = z.enum(['timestamp', 'severity', 'traceId']);
 
 export type LogSummaryField = z.infer<typeof logSummaryFieldSchema>;
 

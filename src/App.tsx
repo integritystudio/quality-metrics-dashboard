@@ -14,6 +14,7 @@ import { AlertList } from './components/AlertList.js';
 import { SLATable } from './components/SLATable.js';
 import { ScoreHistogram } from './components/ScoreHistogram.js';
 import { EvaluationDetail } from './components/EvaluationDetail.js';
+import type { EvalRow } from './components/EvaluationTable.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
 import { TrendChart } from './components/TrendChart.js';
 import { TrendSeries } from './components/TrendSeries.js';
@@ -124,6 +125,26 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
   }
 }
 
+const NS_PER_MS = 1_000_000n;
+
+function snapshotToEvalRow(s: {
+  timestamp: bigint;
+  scoreValue: number;
+  evaluator?: string;
+  sessionId?: string;
+  traceId?: string;
+  explanation?: string;
+}): EvalRow {
+  return {
+    score: s.scoreValue,
+    timestamp: new Date(Number(s.timestamp / NS_PER_MS)).toISOString(),
+    evaluator: s.evaluator,
+    sessionId: s.sessionId,
+    traceId: s.traceId,
+    explanation: s.explanation,
+  };
+}
+
 function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   const { data, isLoading, error } = useMetricDetail(name, period);
   const { data: trendData } = useTrend(name, period, 10);
@@ -225,7 +246,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
 
       <ViewSection title="Evaluations">
         <div className="card">
-          <EvaluationDetail worst={detail.worstEvaluations} best={detail.bestEvaluations} metricName={name} period={period} />
+          <EvaluationDetail worst={detail.worstEvaluations.map(snapshotToEvalRow)} best={detail.bestEvaluations.map(snapshotToEvalRow)} metricName={name} period={period} />
         </div>
       </ViewSection>
     </div>

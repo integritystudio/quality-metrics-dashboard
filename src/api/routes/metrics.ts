@@ -126,7 +126,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
         if (bVal === null) return -1;
         return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
       }
-      return b.timestamp.localeCompare(a.timestamp);
+      return a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0;
     });
 
     const total = evaluations.length;
