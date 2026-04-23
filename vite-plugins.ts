@@ -1,6 +1,7 @@
 import type { Plugin } from 'vite';
 import path from 'path';
 import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
 
 /** Matches 3+ level relative imports into a dist/ directory (e.g. ../../../dist/) */
 export const PARENT_DIST_RE = /\.\.\/\.\.\/\.\.(?:\/\.\.)*\/dist\//;
@@ -14,10 +15,12 @@ export const PARENT_ALIAS_RE = /^@parent\//;
  * (e.g. in standalone dashboard CI).
  */
 export function parentDistStub(): Plugin {
-  // Only stub @parent/ alias imports when the parent dist/ is absent (e.g. in
+  // Stub @parent/ alias imports only when the parent dist/ is absent (e.g. in
   // standalone dashboard CI). When the parent is built locally, let the real
   // exports resolve so tests exercise actual schema behavior.
-  const parentDistExists = existsSync(path.resolve(import.meta.dirname ?? __dirname, '../dist'));
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const parentDistAbs = path.resolve(here, '../dist');
+  const parentDistExists = existsSync(parentDistAbs);
   return {
     name: 'parent-dist-stub',
     enforce: 'pre',
@@ -25,8 +28,15 @@ export function parentDistStub(): Plugin {
       if (PARENT_DIST_RE.test(source)) {
         return '\0' + source.replace(/^(?:\.\.\/)+/, '');
       }
-      if (!parentDistExists && PARENT_ALIAS_RE.test(source)) {
-        return '\0' + source.replace(PARENT_ALIAS_RE, 'dist/');
+      if (!parentDistExists) {
+        // Match either the bare alias (if our plugin sees it first) or the
+        // already-resolved absolute path (Vite's alias plugin may have run first).
+        if (PARENT_ALIAS_RE.test(source)) {
+          return '\0' + source.replace(PARENT_ALIAS_RE, 'dist/');
+        }
+        if (source.startsWith(parentDistAbs)) {
+          return '\0dist/' + path.relative(parentDistAbs, source);
+        }
       }
     },
     load(id) {
