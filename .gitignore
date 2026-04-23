@@ -17,3 +17,7 @@ local/
 .claude/worktrees/
 coverage/
 .serena/cache/
+
+# Local Claude Code state (should never be committed)
+.claude/tsc-cache/
+.claude/scheduled_tasks.lock
