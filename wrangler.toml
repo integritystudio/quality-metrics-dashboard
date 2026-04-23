@@ -18,3 +18,11 @@ preview_id = "0f4d40dd84b14e038024a9775b9be4f7"
 [assets]
 directory = "./dist"
 binding = "ASSETS"
+
+# The worker imports a dashboard-schemas module that re-exports from @parent
+# (the parent observability-toolkit dist/). CI builds the dashboard standalone
+# without the parent package, so redirect @parent/ lookups to a local stub.
+# The worker does not consume any @parent exports at runtime.
+[alias]
+"@parent/lib/core/shared-schemas.js" = "./worker/parent-stub.ts"
+"@parent/lib/validation/dashboard-schemas.js" = "./worker/parent-stub.ts"

@@ -1,0 +1,1 @@
+dashboard:tsc:cd "/Users/alyshialedlie/.claude/mcp-servers/observability-toolkit/dashboard" && npm run typecheck
