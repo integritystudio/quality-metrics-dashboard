@@ -160,7 +160,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
       const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
         || spanAttr(s, 'agent.has_error', 'boolean') === true
-        || s.status?.code === OTEL_STATUS_ERROR_CODE;
+        || s.status?.code === 'ERROR';
       if (hasError) {
         const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'agent.type', 'string') ?? 'unknown';
         const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
@@ -214,7 +214,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       if (agent) agentMapForEval.set(i, agent);
       stepScores.push({
         step: i,
-        score: spanAttr(s, 'evaluation.score', 'number') ?? (s.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+        score: spanAttr(s, 'evaluation.score', 'number') ?? (s.status?.code === 'ERROR' ? 0 : 1),
         explanation: s.name,
       });
     }

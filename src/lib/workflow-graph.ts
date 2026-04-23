@@ -165,7 +165,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
       const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
       if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
       durationMs += s.durationMs ?? 0;
-      if (s.status?.code === OTEL_STATUS_ERROR_CODE) hasError = true;
+      if (s.status?.code === 'ERROR') hasError = true;
       const start = Number(s.startTimeUnixNano);
       if (start < minStart) minStart = start;
       const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;

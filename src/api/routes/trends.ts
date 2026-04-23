@@ -15,7 +15,7 @@ import {
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
-import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam } from '../api-constants.js';
+import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam, timestampToMs } from '../api-constants.js';
 import { extent, mean } from 'd3-array';
 
 const TRENDS_CONCURRENCY = 5;
@@ -58,7 +58,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
 
     const validTs = evaluations
-      .map(ev => ({ ev, ts: new Date(ev.timestamp).getTime() }))
+      .map(ev => ({ ev, ts: timestampToMs(ev.timestamp) }))
       .filter(({ ts }) => Number.isFinite(ts));
 
     const tsValues = validTs.map(({ ts }) => ts);

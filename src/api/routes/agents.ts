@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam } from '../api-constants.js';
+import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { mean } from 'd3-array';
 
@@ -82,7 +82,7 @@ agentRoutes.get('/agents', async (c) => {
       const entry = (acc[name] ??= createAgentAccumulator(periodDays));
       entry.invocations++;
       if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(Number(span.startTimeUnixNano / 1_000_000n)));
+        const dayKey = toDateOnly(new Date(timestampToMs(span.startTimeUnixNano)));
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) entry.dailyCounts[idx]++;
       }
@@ -179,7 +179,7 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
 
     const stepScores: StepScore[] = spans.map((span, i) => ({
       step: i,
-      score: attrNum(span, 'evaluation.score', span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+      score: attrNum(span, 'evaluation.score', span.status?.code === 'ERROR' ? 0 : 1),
       explanation: span.name,
     }));
 

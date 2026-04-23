@@ -10,14 +10,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockQueryEvaluations = vi.fn();
 
-vi.mock('../../../dist/backends/local-jsonl.js', () => {
-  class MockMultiDirectoryBackend {
+vi.mock('../../../dist/backends/cloud.js', () => {
+  class MockCloudBackend {
     queryEvaluations = mockQueryEvaluations;
   }
-  return { MultiDirectoryBackend: MockMultiDirectoryBackend };
+  return { CloudBackend: MockCloudBackend };
 });
 
 vi.mock('../../../dist/backends/index.js', () => ({}));
+vi.mock('../../../dist/tools/query-logs.js', () => ({
+  queryLogs: vi.fn(),
+}));
 vi.mock('../../../dist/lib/audit/verification-events.js', () => ({
   queryVerifications: vi.fn(),
 }));

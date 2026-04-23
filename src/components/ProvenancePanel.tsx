@@ -3,6 +3,17 @@ import { Link } from 'wouter';
 import { formatScore } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 
+const NS_THRESHOLD = 1e15;
+const NS_PER_MS = 1_000_000n;
+
+function timestampToMs(ts: string | number | bigint): number {
+  if (typeof ts === 'bigint') return Number(ts / NS_PER_MS);
+  if (typeof ts === 'number') return ts >= NS_THRESHOLD ? ts / 1_000_000 : ts;
+  const asNum = Number(ts);
+  if (Number.isFinite(asNum) && asNum >= NS_THRESHOLD) return asNum / 1_000_000;
+  return new Date(ts).getTime();
+}
+
 interface EvaluatorTypeCounts {
   rule: number;
   llm: number;
@@ -17,7 +28,7 @@ interface ProvenancePanelProps {
   traceId?: string;
   spanId?: string;
   sessionId?: string;
-  timestamp: string;
+  timestamp: string | number | bigint;
   evaluator?: string;
   evaluatorType?: string;
   scoreUnit?: string;
@@ -54,7 +65,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `eval-${evaluationName}-${new Date(timestamp).getTime()}.json`;
+    a.download = `eval-${evaluationName}-${timestampToMs(timestamp)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [rawData, evaluationName, scoreValue, scoreLabel, traceId, spanId, sessionId, timestamp, evaluator, evaluatorType, scoreUnit, agentName]);
@@ -76,7 +87,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
     { label: 'Span ID', value: spanId },
     { label: 'Session ID', value: sessionId },
     { label: 'Agent', value: agentName },
-    { label: 'Evaluated At', value: new Date(timestamp).toISOString() },
+    { label: 'Evaluated At', value: new Date(timestampToMs(timestamp)).toISOString() },
     { label: 'OTel Event', value: 'gen_ai.evaluation.result' },
   ];
 

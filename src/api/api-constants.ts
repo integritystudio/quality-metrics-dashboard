@@ -50,6 +50,23 @@ export type SafeLogEntry = Partial<Pick<LogRecord, LogSummaryField>>;
 /** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
 export const NANOS_TO_MS = 1_000_000;
 
+const NS_THRESHOLD = 1e15;
+const NS_PER_MS_BIG = 1_000_000n;
+
+/**
+ * Normalize a timestamp to milliseconds. Accepts bigint nanoseconds (OTel UnixNano),
+ * numeric ns/ms (auto-detected via magnitude), or ISO 8601 strings.
+ * Returns NaN for unparseable inputs.
+ */
+export function timestampToMs(ts: string | number | bigint | null | undefined): number {
+  if (ts == null) return NaN;
+  if (typeof ts === 'bigint') return Number(ts / NS_PER_MS_BIG);
+  if (typeof ts === 'number') return ts >= NS_THRESHOLD ? ts / NANOS_TO_MS : ts;
+  const asNum = Number(ts);
+  if (Number.isFinite(asNum) && asNum >= NS_THRESHOLD) return asNum / NANOS_TO_MS;
+  return new Date(ts).getTime();
+}
+
 export function incrementCount(map: Record<string, number>, key: string): void {
   map[key] = (map[key] ?? 0) + 1;
 }
