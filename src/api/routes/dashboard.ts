@@ -4,7 +4,6 @@ import {
   computeDashboardSummary,
   computeRoleView,
 } from '../../../../dist/lib/quality/quality-metrics.js';
-import type { RoleType as RoleViewType } from '../../../../dist/lib/quality/quality-constants.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
@@ -24,7 +23,7 @@ function computeSparklineData(
   if (range <= 0 || evaluations.length === 0) return [];
 
   const bucketWidth = range / buckets;
-  const valid = evaluations.filter(ev => ev.scoreValue !== null && Number.isFinite(ev.scoreValue));
+  const valid = evaluations.filter(ev => Number.isFinite(ev.scoreValue));
   const bucketMap = rollup(
     valid,
     evals => mean(evals, ev => ev.scoreValue as number) ?? null,
@@ -61,7 +60,7 @@ dashboardRoutes.get('/dashboard', async (c) => {
     }
 
     if (role) {
-      const view = computeRoleView(dashboard, role as RoleViewType);
+      const view = computeRoleView(dashboard, role);
       if (role === 'executive') {
         return c.json({ ...view, cqi, sparklines });
       }

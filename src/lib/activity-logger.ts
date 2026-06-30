@@ -25,7 +25,7 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
   } catch (err) {
     // Warn in development so audit trail failures are visible during debugging.
     // Swallowed in production — audit logging must not block auth flows.
-    if (import.meta.env?.DEV) {
+    if (import.meta.env.DEV) {
       console.warn('[activity-logger] Failed to post activity event:', activityType, err);
     }
   } finally {

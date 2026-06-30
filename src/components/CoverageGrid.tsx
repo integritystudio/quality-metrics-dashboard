@@ -98,7 +98,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
                 const cell = cellMap.get(`${metric}|${input}`);
                 const status = cell?.status ?? 'missing';
                 const count = cell?.count ?? 0;
-                const isHovered = hovered?.metric === metric && hovered?.input === input;
+                const isHovered = hovered?.metric === metric && hovered.input === input;
 
                 return (
                   <div

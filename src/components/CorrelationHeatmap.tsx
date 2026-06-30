@@ -39,7 +39,7 @@ function contrastText(pearsonR: number): string {
   const bg = colorScale(pearsonR);
   const m = bg.match(/(\d+)/g);
   if (!m || m.length < 3) return CONTRAST_DARK;
-  const [r, g, b] = m.map(Number);
+  const [r = 0, g = 0, b = 0] = m.map(Number);
   // sRGB relative luminance (WCAG 2.1)
   const toLinear = (c: number) => {
     const s = c / 255;

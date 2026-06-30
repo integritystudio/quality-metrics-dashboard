@@ -59,7 +59,7 @@ const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) => {
 };
 
 const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) => {
-  if (!filterValue || filterValue.length === 0) return true;
+  if (filterValue.length === 0) return true;
   const category = ordinalToCategory(labelToOrdinal(row.original.label ?? 'unknown').ordinal);
   return filterValue.includes(category);
 };
@@ -174,8 +174,8 @@ export function evalToRow(e: EvaluationResult): EvalRow {
     sessionId: e.sessionId,
     agentName: e.agentName,
     trajectoryLength: e.trajectoryLength,
-    stepScores: e.stepScores as EvalRow['stepScores'],
-    toolVerifications: e.toolVerifications as EvalRow['toolVerifications'],
+    stepScores: e.stepScores,
+    toolVerifications: e.toolVerifications,
   };
 }
 
@@ -201,7 +201,7 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
   });
 
   const activeCategories: LabelFilterCategory[] =
-    (columnFilters.find(f => f.id === 'label')?.value as LabelFilterCategory[]) ?? [];
+    (columnFilters.find(f => f.id === 'label')?.value as LabelFilterCategory[] | undefined) ?? [];
 
   const toggleCategory = (cat: LabelFilterCategory) => {
     const next = activeCategories.includes(cat)

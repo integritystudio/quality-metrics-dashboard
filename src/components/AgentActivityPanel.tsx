@@ -66,7 +66,11 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
   const colorIndex = useMemo(
     () => {
       const m = new Map<string, string>();
-      for (let i = 0; i < agents.length; i++) m.set(agents[i].agentName, AGENT_PALETTE[i % AGENT_PALETTE.length]);
+      for (let i = 0; i < agents.length; i++) {
+        const a = agents[i];
+        if (!a) continue;
+        m.set(a.agentName, AGENT_PALETTE[i % AGENT_PALETTE.length] ?? AGENT_PALETTE[0]);
+      }
       return m;
     },
     [agents],

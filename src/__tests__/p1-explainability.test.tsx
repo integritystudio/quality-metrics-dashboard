@@ -125,9 +125,9 @@ describe('AlertList compound alerts', () => {
     const { container } = render(<AlertList alerts={makeAlerts()} />);
     const links = container.querySelectorAll('.alert-metric-link');
     expect(links.length).toBe(3);
-    expect(links[0].getAttribute('href')).toBe('/metrics/relevance');
-    expect(links[1].getAttribute('href')).toBe('/metrics/hallucination');
-    expect(links[2].getAttribute('href')).toBe('/metrics/coherence');
+    expect(links[0]!.getAttribute('href')).toBe('/metrics/relevance');
+    expect(links[1]!.getAttribute('href')).toBe('/metrics/hallucination');
+    expect(links[2]!.getAttribute('href')).toBe('/metrics/coherence');
   });
 
   it('renders threshold bar for compound alerts', () => {

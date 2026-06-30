@@ -84,7 +84,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
     const isFail = label === 'fail';
     if (isFail) failedEvals.push(e);
     if (
-      (e.evaluationName ?? '').toLowerCase().includes('hallucin') ||
+      e.evaluationName.toLowerCase().includes('hallucin') ||
       (isFail && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
     ) hallucinationEvals.push(e);
   }
@@ -217,7 +217,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
               max={MAX_HALLUCINATION_ROWS}
               renderItem={(e, i) => (
                 <div key={i} className="flex-center gap-2-5 mb-1-5">
-                  <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName ?? 'hallucination'} />
+                  <ScoreBadge score={typeof e.scoreValue === 'number' ? e.scoreValue : 0} metricName={e.evaluationName} />
                   <div>
                     <div className="mono-xs">{e.evaluationName}</div>
                     {e.explanation && (
@@ -374,7 +374,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         >
           <div className="flex-col gap-half">
             {gitCommits.map((commit) => {
-              const commitFiles = commit.files?.split(' ') ?? [];
+              const commitFiles = commit.files.split(' ');
               return (
                 <details key={commit.subject} className="border-b-subtle">
                   <summary className="flex-center gap-2-5 cursor-pointer list-none commit-summary">

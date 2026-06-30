@@ -61,9 +61,9 @@ function JudgePanel({ scores }: { scores: EvaluatorScore[] }) {
       <div className="agreement-summary">
         <div>
           Agreement: <span className="summary-value">
-            {scores.every(s => s.label === scores[0].label) ? '100%' : 'partial'}
+            {scores.every(s => s.label === scores[0]?.label) ? '100%' : 'partial'}
           </span>
-          {' '}({scores.filter(s => s.label === scores[0].label).length}/{scores.length} same label)
+          {' '}({scores.filter(s => s.label === scores[0]?.label).length}/{scores.length} same label)
         </div>
         <div>
           Score Range: <span className="summary-value">

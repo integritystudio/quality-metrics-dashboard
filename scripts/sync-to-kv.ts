@@ -131,7 +131,7 @@ const TREND_BUCKETS = 10;
 export function buildCalibrationEntry(
   state: CalibrationState | null,
 ): KVEntry | null {
-  if (!state || !state.distributions || Object.keys(state.distributions).length === 0) {
+  if (!state?.distributions || Object.keys(state.distributions).length === 0) {
     return null;
   }
   const distributions: Record<string, object> = {};

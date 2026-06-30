@@ -331,7 +331,7 @@ describe('AuditorView', () => {
     // The 150 count appears in the first stats card
     const countCards = container.querySelectorAll('.card');
     const texts = Array.from(countCards).map(el => el.textContent);
-    expect(texts.some(t => t?.includes('150'))).toBe(true);
+    expect(texts.some(t => t.includes('150'))).toBe(true);
   });
 
   it('renders metrics count as 1', () => {
@@ -339,7 +339,7 @@ describe('AuditorView', () => {
     // stats cards: 150 (total), 1 (metrics), 1 (alerts)
     const cardTexts = Array.from(container.querySelectorAll('.card')).map(el => el.textContent);
     // At least one card shows "1" and "Metrics"
-    expect(cardTexts.some(t => t?.includes('Metrics') && t?.includes('1'))).toBe(true);
+    expect(cardTexts.some(t => t.includes('Metrics') && t.includes('1'))).toBe(true);
   });
 
   it('shows All Metrics section', () => {
@@ -424,7 +424,7 @@ describe('ExecutiveView', () => {
     render(<ExecutiveView data={data} />);
     // "1 alert" (no 's')
     const listItems = screen.getAllByRole('listitem');
-    expect(listItems.some(li => li.textContent?.includes('1 alert') && !li.textContent?.includes('alerts'))).toBe(true);
+    expect(listItems.some(li => li.textContent.includes('1 alert') && !li.textContent.includes('alerts'))).toBe(true);
   });
 });
 

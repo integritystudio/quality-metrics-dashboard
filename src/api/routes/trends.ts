@@ -52,7 +52,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     const now = new Date();
     const period = periodResult.data;
     const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d'];
+    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d']!;
     const periodStart = new Date(now.getTime() - periodMs);
 
     const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
@@ -94,9 +94,12 @@ trendRoutes.get('/trends/:name', async (c) => {
         bucketCount - 1,
       );
       if (bucketIdx >= 0) {
-        buckets[bucketIdx].evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          buckets[bucketIdx].scores.push(ev.scoreValue);
+        const bucket = buckets[bucketIdx];
+        if (bucket) {
+          bucket.evals.push(ev);
+          if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+            bucket.scores.push(ev.scoreValue);
+          }
         }
       }
     }
@@ -110,8 +113,9 @@ trendRoutes.get('/trends/:name', async (c) => {
       const avg = scores.length > 0 ? (mean(scores) ?? null) : null;
       const count = scores.length;
 
-      const previousValues = (idx > 0 && buckets[idx - 1].scores.length > 0)
-        ? computeAggregations(buckets[idx - 1].scores, config.aggregations)
+      const prevBucket = idx > 0 ? buckets[idx - 1] : undefined;
+      const previousValues = (prevBucket && prevBucket.scores.length > 0)
+        ? computeAggregations(prevBucket.scores, config.aggregations)
         : undefined;
 
       const detail = bucket.evals.length > 0

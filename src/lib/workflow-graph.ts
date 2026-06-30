@@ -1,6 +1,6 @@
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
-import { SCORE_CHIP_PRECISION, OTEL_STATUS_ERROR_CODE } from './constants.js';
+import { SCORE_CHIP_PRECISION } from './constants.js';
 import { groupBy } from './quality-utils.js';
 
 const ATTR_AGENT_NAME = 'gen_ai.agent.name';
@@ -78,7 +78,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
 
   const nodes: WorkflowNode[] = [];
   for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance).filter((r): r is number => r != null);
+    const relevances = turns.map(t => t.relevance);
     const evaluationScore = relevances.length > 0
       ? relevances.reduce((a, b) => a + b, 0) / relevances.length
       : null;
@@ -190,6 +190,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   for (let i = 0; i < agentTimings.length - 1; i++) {
     const curr = agentTimings[i];
     const next = agentTimings[i + 1];
+    if (!curr || !next) continue;
     // Use epsilon tolerance to catch near-concurrent spans that a strict <= would miss
     if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
       const key = `${curr.id}->${next.id}`;

@@ -46,8 +46,7 @@ export function AgentWorkflowView({
 
   const effectiveSelected: ReadonlySet<string> = useMemo(
     () => selectedAgents ?? new Set(agentNames),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedAgents, agentNames.join(',')],
+    [selectedAgents, agentNames],
   );
 
   const maxDurationMs = useMemo(

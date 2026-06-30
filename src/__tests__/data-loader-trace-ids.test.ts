@@ -51,7 +51,7 @@ describe('loadEvaluationsByTraceIds', () => {
     const result = await loadEvaluationsByTraceIds([targetTraceId]);
 
     expect(result).toHaveLength(1);
-    expect(result[0].traceId).toBe(targetTraceId);
+    expect(result[0]!.traceId).toBe(targetTraceId);
   });
 
   it('queries each traceId individually so results beyond a bulk limit are not silently dropped', async () => {

@@ -48,7 +48,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 
   try {
     const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
+    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d']!;
     const start = subMilliseconds(now, periodMs);
     const prevStart = subMilliseconds(start, periodMs);
 
@@ -111,7 +111,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
 
   try {
     const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d'];
+    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d']!;
     const start = subMilliseconds(now, periodMs);
 
     const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());

@@ -41,7 +41,7 @@ describe('useQualityLive', () => {
     renderHook(() => useQualityLive());
 
     expect(mockUseApiQuery).toHaveBeenCalledTimes(1);
-    const [queryKey, buildUrl, options] = mockUseApiQuery.mock.calls[0];
+    const [queryKey, buildUrl, options] = mockUseApiQuery.mock.calls[0]!;
     expect(queryKey).toEqual(['quality', 'live']);
     expect(buildUrl()).toContain('/api/quality/live');
     expect(options).toEqual({ refetchInterval: POLL_INTERVAL_MS });

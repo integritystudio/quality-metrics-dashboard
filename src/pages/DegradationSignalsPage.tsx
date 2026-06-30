@@ -36,7 +36,7 @@ export function DegradationSignalsPage({ period }: { period: Period }) {
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && data.reports.length === 0 ? (
+      {data?.reports.length === 0 ? (
         <div className="empty-state">
           <h2>No Degradation Data</h2>
           <p>No regression signals found for this period. Run the data pipeline to populate degradation signals.</p>

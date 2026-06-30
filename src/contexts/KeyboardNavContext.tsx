@@ -17,7 +17,7 @@ function isComboKey(key: string): key is ComboKey {
 }
 
 function comboPrefix(key: ComboKey): string {
-  return key.split(' ')[0];
+  return key.split(' ')[0] ?? '';
 }
 
 interface KeyboardNavContextValue {
@@ -87,7 +87,7 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function handleKeydown(e: KeyboardEvent) {
-      if (IGNORED_TAGS.has((e.target as HTMLElement)?.tagName)) return;
+      if (IGNORED_TAGS.has((e.target as HTMLElement | null)?.tagName ?? '')) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const key = e.key;

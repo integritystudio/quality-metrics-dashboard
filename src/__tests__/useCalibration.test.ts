@@ -45,21 +45,21 @@ describe('useCalibration', () => {
   it('passes query key ["calibration"] to useApiQuery', () => {
     renderHook(() => useCalibration());
 
-    const [queryKey] = mockUseApiQuery.mock.calls[0];
+    const [queryKey] = mockUseApiQuery.mock.calls[0]!;
     expect(queryKey).toEqual(['calibration']);
   });
 
   it('passes URL builder returning /api/calibration to useApiQuery', () => {
     renderHook(() => useCalibration());
 
-    const [, buildUrl] = mockUseApiQuery.mock.calls[0];
+    const [, buildUrl] = mockUseApiQuery.mock.calls[0]!;
     expect(buildUrl()).toBe(`${API_BASE}/api/calibration`);
   });
 
   it('passes staleTime=STALE_TIME.AGGREGATE and retry=1 to useApiQuery', () => {
     renderHook(() => useCalibration());
 
-    const [, , options] = mockUseApiQuery.mock.calls[0];
+    const [, , options] = mockUseApiQuery.mock.calls[0]!;
     expect(options).toEqual({ staleTime: STALE_TIME.AGGREGATE, retry: 1 });
   });
 

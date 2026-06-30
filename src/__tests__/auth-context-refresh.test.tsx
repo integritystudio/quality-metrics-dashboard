@@ -94,7 +94,7 @@ describe('AuthContext: authenticated state', () => {
     const meCalls = (fetchSpy.mock.calls as Array<[string, RequestInit | undefined]>)
       .filter(([url]) => url.includes('/api/me'));
     expect(meCalls.length).toBeGreaterThan(0);
-    const authHeader = (meCalls[0][1]?.headers as Record<string, string>)?.['Authorization'];
+    const authHeader = (meCalls[0]?.[1]?.headers as Record<string, string>)['Authorization'];
     expect(authHeader).toBe('Bearer mock-access-token');
   });
 

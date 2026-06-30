@@ -41,7 +41,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       // maxWorstEvaluations) "enabled" means present — Boolean(0) would be wrong.
       hasFeature: (feature: keyof RoleFeatureConfig) => {
         const v = config[feature];
-        return typeof v === 'boolean' ? v : v != null;
+        return typeof v === 'boolean' ? v : true;
       },
     };
   }, [role]);

@@ -47,7 +47,7 @@ qualityRoutes.get('/quality/live', async (c) => {
       }
 
       const latest = sorted[0];
-      if (latest && latest.scoreValue != null) {
+      if (latest?.scoreValue != null) {
         metrics.push({
           name,
           score: latest.scoreValue,
@@ -110,7 +110,7 @@ qualityRoutes.get('/degradation-signals', async (c) => {
         if (ev.scoreValue == null) continue;
         const ts = Number(ev.timestamp / 1_000_000n);
         const idx = getEvenBucketIndex(ts, startMs, bucketMs, DEFAULT_BIN_COUNT);
-        if (idx !== null) buckets[idx].scores.push(ev.scoreValue);
+        if (idx !== null) buckets[idx]?.scores.push(ev.scoreValue);
       }
       timeBuckets[name] = buckets;
     }

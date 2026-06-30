@@ -57,7 +57,7 @@ export function CompliancePage({ period }: { period: Period }) {
             </table>
           </div>
         )}
-        {verData && verData.verifications.length === 0 && (
+        {verData?.verifications.length === 0 && (
           <div className="card card--empty">
             No verification events for the selected period.
           </div>

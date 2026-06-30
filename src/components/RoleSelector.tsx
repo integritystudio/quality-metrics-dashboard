@@ -23,7 +23,7 @@ export function RoleSelector() {
   const visibleRoleTabs = ROLE_TABS.filter((t) => allowedViews.includes(t.role));
 
   const tabs = [
-    STATIC_TABS[0],
+    STATIC_TABS[0]!,
     ...visibleRoleTabs,
     ...STATIC_TABS.slice(1),
   ];

@@ -118,7 +118,7 @@ describe('SPA fallback: non-API routes serve index.html', () => {
   it('ASSETS.fetch is called with the original request', async () => {
     await app.request('/agents', {}, makeEnv());
     expect(mockAssets.fetch).toHaveBeenCalledTimes(1);
-    const passedReq = mockAssets.fetch.mock.calls[0][0] as Request;
+    const passedReq = mockAssets.fetch.mock.calls[0]![0] as Request;
     expect(new URL(passedReq.url).pathname).toBe('/agents');
   });
 });

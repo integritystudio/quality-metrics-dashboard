@@ -22,7 +22,7 @@ export type FeatureRoleType = Role;
 
 export function agentColor(agentName: string, agentNames: string[]): string {
   const idx = agentNames.indexOf(agentName);
-  return AGENT_PALETTE[idx % AGENT_PALETTE.length];
+  return AGENT_PALETTE[idx % AGENT_PALETTE.length] ?? AGENT_PALETTE[0];
 }
 
 export interface RoleFeatureConfig {

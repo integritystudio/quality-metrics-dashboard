@@ -28,7 +28,7 @@ function MetricCardInner({ metric, sparklineData }: {
             <ScoreBadge
               score={primaryValue ?? null}
               metricName={name}
-              direction={inferScoreDirection(alerts?.[0]?.direction)}
+              direction={inferScoreDirection(alerts[0]?.direction)}
               label={formatScore(primaryValue)}
             />
             {trend && <TrendIndicator trend={trend} />}
@@ -59,7 +59,7 @@ function MetricCardInner({ metric, sparklineData }: {
           )}
         </div>
 
-        {worst && worst.explanation && (
+        {worst?.explanation && (
           <div className="metric-worst truncate" title={worst.explanation}>
             <span className="worst-score">{worst.score.toFixed(SCORE_CHIP_PRECISION)}</span>{' '}
             {truncateText(worst.explanation, 60)}

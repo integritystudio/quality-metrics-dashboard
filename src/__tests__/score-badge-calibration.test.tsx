@@ -168,7 +168,7 @@ describe('ScoreBadge with calibration prop', () => {
     expect(labeled.length).toBeGreaterThan(0);
 
     // The aria-label should show 'good' or 'excellent' (adaptive), not 'adequate' (uniform)
-    const ariaLabel = labeled[0].getAttribute('aria-label') ?? '';
+    const ariaLabel = labeled[0]!.getAttribute('aria-label') ?? '';
     expect(ariaLabel).toMatch(/excellent|good/i);
   });
 });

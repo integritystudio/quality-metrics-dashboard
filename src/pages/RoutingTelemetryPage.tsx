@@ -15,7 +15,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && data.summary.routedSpans === 0 ? (
+      {data?.summary.routedSpans === 0 ? (
         <div className="empty-state">
           <h2>No Routing Telemetry</h2>
           <p>No routed spans found for this period. Routing telemetry is recorded when the request model differs from the actual response model.</p>

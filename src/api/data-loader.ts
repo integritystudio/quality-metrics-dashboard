@@ -8,8 +8,8 @@ import { queryLogs } from '../../../dist/tools/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toDateOnly, NANOS_TO_MS } from './api-constants.js';
 
-const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
-const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
+const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d']!;
+const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d']!;
 const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
 
 const LIMIT_EVALS_BULK = 100_000;
@@ -29,9 +29,7 @@ const LIMIT_HEALTH_PROBE = 1;
 let backend: CloudBackend | undefined;
 
 function getBackend(): CloudBackend {
-  if (!backend) {
-    backend = new CloudBackend();
-  }
+  backend ??= new CloudBackend();
   return backend;
 }
 

@@ -136,6 +136,7 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
   const agentColorMap = new Map<string, string>();
   for (let i = 0; i < visibleAgentNames.length; i++) {
     const name = visibleAgentNames[i];
+    if (name === undefined) continue;
     agentLaneIndex.set(name, i);
     agentColorMap.set(name, agentColor(name, agentNames));
   }

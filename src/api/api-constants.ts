@@ -87,7 +87,7 @@ export function isValidParam(value: string | undefined, re: RegExp): boolean {
 export function toDateOnly(d: Date): string;
 export function toDateOnly(d: string): string;
 export function toDateOnly(d: Date | string): string {
-  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0];
+  return (typeof d === 'string' ? d : d.toISOString()).split('T')[0] ?? '';
 }
 
 export type SpanLike = { attributes?: Record<string, unknown> };

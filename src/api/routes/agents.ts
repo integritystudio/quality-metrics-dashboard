@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../../../../dist/tools/query-traces.js';
 import type { StepScore } from '../../../../dist/backends/index.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, OTEL_STATUS_ERROR_CODE, PARAM_ID_RE, NANOS_TO_MS, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs } from '../api-constants.js';
+import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { mean } from 'd3-array';
 
@@ -26,8 +26,8 @@ function computeEvalMetricSummary(scores: number[]): { avg: number; min: number;
   const sorted = [...scores].sort((a, b) => a - b);
   return {
     avg: +(mean(sorted) ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +sorted[0].toFixed(SCORE_DISPLAY_PRECISION),
-    max: +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION),
+    min: +(sorted[0] ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
+    max: +(sorted[sorted.length - 1] ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
     count: sorted.length,
   };
 }
@@ -84,7 +84,7 @@ agentRoutes.get('/agents', async (c) => {
       if (span.startTimeUnixNano) {
         const dayKey = toDateOnly(new Date(timestampToMs(span.startTimeUnixNano)));
         const idx = bucketIndex.get(dayKey);
-        if (idx !== undefined) entry.dailyCounts[idx]++;
+        if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
       }
       if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
       if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;

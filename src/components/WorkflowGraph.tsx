@@ -225,7 +225,7 @@ async function computeLayout(
     .map(elkNode => {
       const workflowNode = nodeDataMap.get(elkNode.id)!;
       const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
-      const critical = criticalPath != null && criticalPath.has(elkNode.id);
+      const critical = criticalPath?.has(elkNode.id) ?? false;
       const isCluster = isClusterNodeId(elkNode.id);
 
       if (isCluster) {
@@ -247,7 +247,7 @@ async function computeLayout(
       return {
         id: elkNode.id,
         position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-        data: { ...workflowNode, dimmed, critical } as unknown as Record<string, unknown>,
+        data: { ...workflowNode, dimmed, critical },
         type: 'agentNode',
       };
     });

@@ -63,7 +63,8 @@ export function TrendChart({
       projected: projectedValue,
     });
     // Set current point's projected value to bridge the dashed line
-    data[1].projected = trend.currentValue;
+    const current = data[1];
+    if (current) current.projected = trend.currentValue;
   }
 
   const allValues: number[] = [];

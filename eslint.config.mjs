@@ -64,6 +64,11 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-call': 'warn',
       '@typescript-eslint/require-await': 'warn',
       '@typescript-eslint/no-misused-promises': 'warn',
+      // Untyped Hono `app.request()` responses make `res.json()` untyped; the
+      // explicit `as Record<string, any>` casts are required by `tsc` (without
+      // them `body` is `unknown`). The rule misreports them as unnecessary and
+      // `--fix` strips them, breaking typecheck. Disable it for tests only.
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
     },
   },
   // scripts/ files - uses tsconfig.scripts.json

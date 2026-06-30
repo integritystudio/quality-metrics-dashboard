@@ -70,10 +70,10 @@ function isValidId(id: string | undefined): id is string {
 // - Version mismatch: logs a warning and returns null (stale cache treated as missing).
 // - Legacy entries (no envelope): passes through as-is for backwards compatibility.
 async function getKv<T>(kv: KVNamespace, key: string): Promise<T | null> {
-  const raw = await kv.get(key, 'json');
+  const raw: unknown = await kv.get(key, 'json');
   if (raw === null) return null;
-  if (typeof raw === 'object' && raw !== null && 'v' in raw && 'data' in raw) {
-    const envelope = raw as { v: unknown; data: unknown };
+  if (typeof raw === 'object' && 'v' in raw && 'data' in raw) {
+    const envelope = raw;
     if (envelope.v !== KV_SCHEMA_VERSION) {
       console.warn(`[kv] schema version mismatch for "${key}": expected ${KV_SCHEMA_VERSION}, got ${String(envelope.v)} — treating as missing`);
       return null;
@@ -224,7 +224,7 @@ app.use('/api/*', async (c, next) => {
         issuer: `https://${c.env.AUTH0_DOMAIN}/`,
         audience: c.env.AUTH0_AUDIENCE,
       });
-      jwtPayload = payload as Record<string, unknown>;
+      jwtPayload = payload;
     } catch {
       return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
     }
@@ -324,7 +324,7 @@ app.post('/api/activity', async (c) => {
   const body: unknown = await c.req.json().catch(() => null);
   const result = ActivityRequestSchema.safeParse(body);
   if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  logActivity(c.get('session').appUserId, result.data.activity_type as UserActivityEvent, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  logActivity(c.get('session').appUserId, result.data.activity_type, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
 

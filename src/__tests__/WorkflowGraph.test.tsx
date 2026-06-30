@@ -356,7 +356,7 @@ describe('applyClusterCollapse', () => {
     );
     // Both b->c and a2->c reroute to cluster_node->c — should be deduped to 1 edge
     expect(result.edges).toHaveLength(1);
-    expect(result.edges[0].target).toBe('c');
+    expect(result.edges[0]!.target).toBe('c');
   });
 
   it('aggregates hasError: true when any member has error', () => {

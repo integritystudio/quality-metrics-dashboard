@@ -15,7 +15,6 @@ import {
   logSummaryFieldSchema,
   LOG_SUMMARY_MAX_ENTRIES,
   type SafeLogEntry,
-  OTEL_STATUS_ERROR_CODE,
   PARAM_ID_RE,
   isValidParam,
   PERCENT_BASE,
@@ -76,7 +75,7 @@ const LIMIT_SESSION_SPANS = 1000;
 async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
   const now = new Date();
   const end = endDate ?? formatISO(now, { representation: 'date' });
-  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
+  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']!), { representation: 'date' });
   const result = await queryTraces({
     attributeFilter: { 'session.id': sessionId },
     startDate: start,
@@ -124,6 +123,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     for (let i = 0; i < spans.length; i++) {
       const s = spans[i];
+      if (!s) continue;
       const hookName = spanAttr(s, 'hook.name', 'string');
       const hookType = spanAttr(s, 'hook.type', 'string');
       const hookTrigger = spanAttr(s, 'hook.trigger', 'string');
@@ -131,7 +131,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       if (s.traceId) traceIds.add(s.traceId);
 
       if (hookName === HOOK_NAME.SESSION_START) {
-        if (!firstSessionStart) firstSessionStart = s;
+        firstSessionStart ??= s;
         lastSessionStart = s;
         sessionStartCount++;
       }
@@ -183,11 +183,11 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
         const raw = spanAttr(s, 'git.command', 'string') ?? '';
         const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
-        const files = filesMatch ? filesMatch[1].trim() : '';
+        const files = filesMatch ? (filesMatch[1] ?? '').trim() : '';
         const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
         const fullMessage = msgMatch ? msgMatch[1] : '';
         gitCommits.push({
-          subject: fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS),
+          subject: fullMessage ? (fullMessage.split('\n')[0] ?? '').trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS),
           body: fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '',
           files,
         });

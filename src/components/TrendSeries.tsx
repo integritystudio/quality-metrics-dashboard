@@ -39,8 +39,8 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   }
 
   const spanMs = differenceInMilliseconds(
-    new Date(data[data.length - 1].endTime),
-    new Date(data[0].startTime)
+    new Date(data[data.length - 1]!.endTime),
+    new Date(data[0]!.startTime)
   );
   const spanDays = spanMs / (1000 * 60 * 60 * 24);
 
