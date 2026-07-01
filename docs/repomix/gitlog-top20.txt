@@ -1,3 +1,17 @@
+6c79b3f 2026-06-30 chore(types): enable noUncheckedIndexedAccess and harden index access
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+  worker/index.ts
+
+be35516 2026-04-21 docs(repomix): regenerate repomix artifacts after CloudBackend migration
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+08cc959 2026-04-21 refactor(data-loader): migrate MultiDirectoryBackend to CloudBackend with nanosecond timestamps
+  package-lock.json
+  worker/index.ts
+
 c741969 2026-04-20 fix(style): revert over-eager const conversions on reassigned variables
   scripts/judge-evaluations.ts
   scripts/sync-to-kv.ts
@@ -382,12 +396,3 @@ a3b4012 2026-03-26 chore: regenerate repomix docs
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
   docs/repomix/repomix.xml
-
-af4a3a0 2026-03-26 fix(worker): guard logActivity against undefined appUserId instead of passing empty string
-  worker/index.ts
-
-a660547 2026-03-26 refactor(judge-evaluations): remove WHAT JSDoc comment from normalizeScore
-  scripts/judge-evaluations.ts
-
-792c364 2026-03-26 refactor(sync-to-kv,components): remove WHAT JSDoc comments from internal functions and constants
-  scripts/sync-to-kv.ts

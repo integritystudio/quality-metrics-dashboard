@@ -152,7 +152,7 @@ describe('pipeline contract: judge seed output', () => {
       const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
       const attrs = otelRecord.attributes as Record<string, unknown>;
 
-      // Required fields for sync-to-kv MultiDirectoryBackend to ingest
+      // Required fields for sync-to-kv CloudBackend to ingest
       expect(otelRecord.name).toBe('gen_ai.evaluation.result');
       expect(typeof otelRecord.timestamp).toBe('string');
       expect(new Date(otelRecord.timestamp as string).getTime()).toBeGreaterThan(0);
@@ -257,7 +257,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
     expect(records.length).toBe(evals.length);
 
     for (const record of records) {
-      // MultiDirectoryBackend.queryEvaluations() checks these fields
+      // CloudBackend.queryEvaluations() checks these fields
       expect(record.name).toBe('gen_ai.evaluation.result');
       expect(typeof record.timestamp).toBe('string');
       const ts = new Date(record.timestamp as string);
