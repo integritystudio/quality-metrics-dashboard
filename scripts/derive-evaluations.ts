@@ -108,7 +108,7 @@ function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
   let hookType: string;
   if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrs['builtin.tool']}`;
   else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrs['mcp.tool']}`;
-  else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrs['agent.type']}`;
+  else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrs['integritystudio.agent.type'] ?? attrs['agent.type']}`;
   else hookType = span.name.replace('hook:', '');
 
   return {

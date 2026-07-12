@@ -59,6 +59,9 @@ agentRoutes.get('/agents', async (c) => {
 
   try {
     const result = await queryTraces({
+      // OBP7b: keep the LEGACY key for server-side exact-match filtering — historical
+      // D1 spans carry only 'hook.name', and dual-written spans carry both. Switch to
+      // 'integritystudio.hook.name' only at the legacy hard cutover (after backfill).
       attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
       startDate,
       endDate,
@@ -86,9 +89,9 @@ agentRoutes.get('/agents', async (c) => {
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
       }
-      if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
-      if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
-      entry.totalOutputSize += attrNum(span, 'agent.output_size');
+      if (spanAttr(span, 'integritystudio.agent.has_error', 'boolean')) entry.errors++;
+      if (spanAttr(span, 'integritystudio.agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
+      entry.totalOutputSize += attrNum(span, 'integritystudio.agent.output_size');
       const sid = attrStr(span, 'session.id', '');
       if (sid) entry.sessions.add(sid);
       if (span.traceId) {
@@ -97,7 +100,7 @@ agentRoutes.get('/agents', async (c) => {
         if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
         agentSet.add(name);
       }
-      const rawSrc = attrStr(span, 'agent.source_type');
+      const rawSrc = attrStr(span, 'integritystudio.agent.source_type');
       const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
       incrementCount(entry.sourceTypes, src);
     }

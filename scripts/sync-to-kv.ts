@@ -382,27 +382,27 @@ function computeTimespan(evaluations: EvaluationResult[]) {
 }
 
 function computeSessionInfo(spans: SessionSpan[]) {
-  const sessionStarts = spans.filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.SESSION_START);
+  const sessionStarts = spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.SESSION_START);
   const first = sessionStarts[0];
   const last = sessionStarts[sessionStarts.length - 1] ?? first;
   return first ? {
     projectName: spanAttr(first, 'project.name', 'string') ?? 'unknown',
     workingDirectory: spanAttr(first, 'working.directory', 'string') ?? '',
-    gitRepository: spanAttr(first, 'git.repository', 'string') ?? '',
-    gitBranch: spanAttr(first, 'git.branch', 'string') ?? '',
+    gitRepository: spanAttr(first, 'vcs.repository.name', 'string') ?? '',
+    gitBranch: spanAttr(first, 'vcs.ref.head.name', 'string') ?? '',
     nodeVersion: spanAttr(first, 'node.version', 'string') ?? '',
     resumeCount: sessionStarts.length,
     initialMessageCount: spanAttr(first, 'context.message_count', 'number') ?? 0,
     initialContextTokens: spanAttr(first, 'context.estimated_tokens', 'number') ?? 0,
     finalMessageCount: spanAttr(last, 'context.message_count', 'number') ?? 0,
     taskCount: spanAttr(first, 'tasks.active', 'number') ?? 0,
-    uncommittedAtStart: spanAttr(first, 'git.uncommitted', 'number') ?? 0,
+    uncommittedAtStart: spanAttr(first, 'integritystudio.git.uncommitted', 'number') ?? 0,
   } : null;
 }
 
 function computeTokenMetrics(spans: SessionSpan[]) {
   const tokenProgression = spans
-    .filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.TOKEN_METRICS)
+    .filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.TOKEN_METRICS)
     .map(s => ({
       messages: spanAttr(s, 'tokens.messages', 'number') ?? 0,
       inputTokens: spanAttr(s, 'tokens.input', 'number') ?? 0,
@@ -432,9 +432,9 @@ function computeUsageCounts(spans: SessionSpan[]) {
   const toolUsage: Record<string, number> = {};
   const mcpUsage: Record<string, number> = {};
   for (const s of spans) {
-    const trigger = spanAttr(s, 'hook.trigger', 'string');
+    const trigger = spanAttr(s, 'integritystudio.hook.trigger', 'string');
     if (trigger !== 'PostToolUse') continue;
-    const type = spanAttr(s, 'hook.type', 'string');
+    const type = spanAttr(s, 'integritystudio.hook.type', 'string');
     if (type === 'builtin') {
       const tool = spanAttr(s, 'builtin.tool', 'string') ?? 'unknown';
       toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
@@ -476,10 +476,10 @@ function computeErrorSummary(spans: SessionSpan[]) {
   const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
   for (const s of spans) {
     const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
-      || spanAttr(s, 'agent.has_error', 'boolean') === true
+      || spanAttr(s, 'integritystudio.agent.has_error', 'boolean') === true
       || s.status?.code === OTEL_STATUS_ERROR_CODE;
     if (!hasError) continue;
-    const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'agent.type', 'string') ?? 'unknown';
+    const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
     const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
     const key = `${tool} -> ${errType}`;
     byCategory[key] = (byCategory[key] ?? 0) + 1;
@@ -536,7 +536,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
     truncatedCount: number; emptyCount: number;
   }> = {};
   for (const s of spans) {
-    if (spanAttr(s, 'hook.name', 'string') === HOOK_NAME.AGENT_POST_TOOL) {
+    if (spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.AGENT_POST_TOOL) {
       const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
       if (!acc[name]) acc[name] = {
         invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
@@ -545,16 +545,16 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
       };
       const a = acc[name];
       a.invocations++;
-      if (spanAttr(s, 'agent.has_error', 'boolean')) a.errors++;
-      if (spanAttr(s, 'agent.has_rate_limit', 'boolean')) {
+      if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) a.errors++;
+      if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
         a.hasRateLimit = true;
         a.rateLimitEvents++;
       }
-      a.totalOutputSize += spanAttr(s, 'agent.output_size', 'number') ?? 0;
+      a.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
       const dur = s.durationMs ?? 0;
       if (dur > 0) { a.durationSum += dur; a.durationCount++; }
-      if (spanAttr(s, 'agent.output.truncated', 'boolean')) a.truncatedCount++;
-      if (spanAttr(s, 'agent.output.empty', 'boolean')) a.emptyCount++;
+      if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) a.truncatedCount++;
+      if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) a.emptyCount++;
     }
   }
   return Object.entries(acc).map(([agentName, d]) => ({
@@ -620,9 +620,9 @@ function computeSessionDetail(
     .slice(0, FILE_ACCESS_TOP_N);
 
   const gitCommits = spans
-    .filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.POST_COMMIT_REVIEW)
+    .filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.POST_COMMIT_REVIEW)
     .map(s => {
-      const raw = spanAttr(s, 'git.command', 'string') ?? '';
+      const raw = spanAttr(s, 'integritystudio.git.command', 'string') ?? '';
       const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
       const files = filesMatch ? filesMatch[1].trim() : '';
       const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
@@ -632,22 +632,22 @@ function computeSessionDetail(
       return { subject, body, files };
     });
 
-  const alertSpans = spans.filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.ALERT_EVALUATION);
+  const alertSpans = spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.ALERT_EVALUATION);
   const alertSummary = {
     totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr(s, 'alerts.triggered_count', 'number') ?? 0), 0),
     stopEvents: alertSpans.length,
   };
 
   const codeStructure = spans
-    .filter(s => spanAttr(s, 'hook.name', 'string') === HOOK_NAME.CODE_STRUCTURE)
+    .filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.CODE_STRUCTURE)
     .map(s => ({
-      file: spanAttr(s, 'code.structure.file', 'string') ?? '',
-      lines: spanAttr(s, 'code.structure.lines', 'number') ?? 0,
-      exports: spanAttr(s, 'code.structure.exports', 'number') ?? 0,
-      functions: spanAttr(s, 'code.structure.functions', 'number') ?? 0,
-      hasTypes: spanAttr(s, 'code.structure.has_types', 'boolean') ?? false,
-      score: spanAttr(s, 'code.structure.score', 'number') ?? 0,
-      tool: spanAttr(s, 'code.structure.tool', 'string') ?? '',
+      file: spanAttr(s, 'integritystudio.code.structure.file', 'string') ?? '',
+      lines: spanAttr(s, 'integritystudio.code.structure.lines', 'number') ?? 0,
+      exports: spanAttr(s, 'integritystudio.code.structure.exports', 'number') ?? 0,
+      functions: spanAttr(s, 'integritystudio.code.structure.functions', 'number') ?? 0,
+      hasTypes: spanAttr(s, 'integritystudio.code.structure.has_types', 'boolean') ?? false,
+      score: spanAttr(s, 'integritystudio.code.structure.score', 'number') ?? 0,
+      tool: spanAttr(s, 'integritystudio.code.structure.tool', 'string') ?? '',
     }));
 
   const agentMapForEval = new Map<number, string>();

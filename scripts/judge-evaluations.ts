@@ -185,7 +185,7 @@ async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
     const filepath = join(TELEMETRY_DIR, file);
     for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
       const attrs = entry.attributes;
-      if (attrs?.['hook.name'] !== HOOK_NAME.TOKEN_METRICS) continue;
+      if ((attrs?.['integritystudio.hook.name'] ?? attrs?.['hook.name']) !== HOOK_NAME.TOKEN_METRICS) continue;
 
       const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
       if (!tPath) continue;
