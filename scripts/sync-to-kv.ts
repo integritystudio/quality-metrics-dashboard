@@ -346,7 +346,7 @@ function isValidScore(v: number | null | undefined): v is number {
 }
 
 function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
-  const group = map.get(key);
+  let group = map.get(key);
   if (!group) map.set(key, group = []);
   group.push(value);
 }
@@ -881,7 +881,7 @@ async function main(): Promise<void> {
       }
 
       // Save buckets for degradation signal computation
-      const degradBucket = degradationBuckets.get(period);
+      let degradBucket = degradationBuckets.get(period);
       if (!degradBucket) degradationBuckets.set(period, degradBucket = {});
       degradBucket[name] = timeBuckets.map(b => ({
         scores: b.scores,
