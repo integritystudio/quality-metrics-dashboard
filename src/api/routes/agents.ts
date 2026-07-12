@@ -58,30 +58,16 @@ agentRoutes.get('/agents', async (c) => {
   const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
 
   try {
-    // OBP7b: local consumers are canonical-only, but cloud D1 still holds pre-cutover
-    // rows keyed 'hook.name' inside the 30d query window — so query both key eras and
-    // dedupe by spanId. Collapse to the canonical-key query alone once pre-cutover
-    // D1 rows age out of the window (after 2026-08-11).
-    const [canonicalResult, legacyResult] = await Promise.all([
-      queryTraces({
-        attributeFilter: { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },
-        startDate,
-        endDate,
-        limit: LIMIT_AGENT_SPANS,
-      }),
-      queryTraces({
-        attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
-        startDate,
-        endDate,
-        limit: LIMIT_AGENT_SPANS,
-      }),
-    ]);
-    const seenSpanIds = new Set<string>();
-    const agentSpans = [...canonicalResult.traces, ...legacyResult.traces].filter(span => {
-      if (span.spanId && seenSpanIds.has(span.spanId)) return false;
-      if (span.spanId) seenSpanIds.add(span.spanId);
-      return true;
+    // OBP7b: CloudBackend canonicalizes attribute keys on read (legacy pre-cutover
+    // D1 rows included) and applies non-sessionId attributeFilter entries
+    // client-side, so a single canonical-key query covers every row era.
+    const result = await queryTraces({
+      attributeFilter: { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },
+      startDate,
+      endDate,
+      limit: LIMIT_AGENT_SPANS,
     });
+    const agentSpans = result.traces;
 
     const dateBuckets: string[] = [];
     const bucketIndex = new Map<string, number>();
