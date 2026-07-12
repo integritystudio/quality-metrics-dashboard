@@ -137,7 +137,7 @@ describe('GET /sessions/:sessionId', () => {
   });
 
   it('builds tool usage from span attributes', async () => {
-    const toolAttrs = { 'hook.type': 'builtin', 'hook.trigger': 'PostToolUse' };
+    const toolAttrs = { 'integritystudio.hook.type': 'builtin', 'integritystudio.hook.trigger': 'PostToolUse' };
     const spans = [
       makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),
       makeSpan('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),

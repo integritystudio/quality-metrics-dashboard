@@ -58,10 +58,10 @@ agentRoutes.get('/agents', async (c) => {
   const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
 
   try {
-    // OBP7b: server-side exact-match filtering cannot dual-read, so query both key
-    // eras — historical D1 spans carry only legacy 'hook.name', post-cutover spans only
-    // 'integritystudio.hook.name', dual-written spans both (deduped by spanId below).
-    // Collapse to a single canonical-key query once legacy-era data ages out.
+    // OBP7b: local consumers are canonical-only, but cloud D1 still holds pre-cutover
+    // rows keyed 'hook.name' inside the 30d query window — so query both key eras and
+    // dedupe by spanId. Collapse to the canonical-key query alone once pre-cutover
+    // D1 rows age out of the window (after 2026-08-11).
     const [canonicalResult, legacyResult] = await Promise.all([
       queryTraces({
         attributeFilter: { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },

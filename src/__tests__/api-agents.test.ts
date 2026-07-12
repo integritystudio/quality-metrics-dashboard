@@ -54,10 +54,10 @@ function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'gener
     status: { code: 0 },
     attributes: {
       'gen_ai.agent.name': agentName,
-      'agent.has_error': false,
-      'agent.has_rate_limit': false,
-      'agent.output_size': 500,
-      'agent.source_type': 'active',
+      'integritystudio.agent.has_error': false,
+      'integritystudio.agent.has_rate_limit': false,
+      'integritystudio.agent.output_size': 500,
+      'integritystudio.agent.source_type': 'active',
       'session.id': 'sess-001',
       ...attrs,
     },
@@ -135,8 +135,8 @@ describe('GET /agents', () => {
 
   it('computes errorRate correctly', async () => {
     const spans = [
-      makeSpan('trace-001', 'span-001', 'general-purpose', { 'agent.has_error': true }),
-      makeSpan('trace-002', 'span-002', 'general-purpose', { 'agent.has_error': false }),
+      makeSpan('trace-001', 'span-001', 'general-purpose', { 'integritystudio.agent.has_error': true }),
+      makeSpan('trace-002', 'span-002', 'general-purpose', { 'integritystudio.agent.has_error': false }),
     ];
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
 

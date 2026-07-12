@@ -1,6 +1,5 @@
 import type { LogRecord } from '../../../dist/backends/index.js';
 import { z } from 'zod';
-import { attrAlias } from './attribute-aliases.js';
 
 export const PERCENT_BASE = 100;
 
@@ -93,25 +92,13 @@ export function toDateOnly(d: Date | string): string {
 
 export type SpanLike = { attributes?: Record<string, unknown> };
 
-/**
- * OBP7b dual-read: resolve an attribute under its key, falling back to its
- * alias (canonical ↔ legacy) so spans written before the telemetry key rename
- * keep resolving. See attribute-aliases.ts.
- */
-function attrRaw(span: SpanLike, key: string): unknown {
-  const v = span.attributes?.[key];
-  if (v !== undefined) return v;
-  const alias = attrAlias(key);
-  return alias === undefined ? undefined : span.attributes?.[alias];
-}
-
 export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
-  const v = attrRaw(span, key);
+  const v = span.attributes?.[key];
   return typeof v === 'string' ? v : fallback;
 }
 
 export function attrNum(span: SpanLike, key: string, fallback = 0): number {
-  const v = attrRaw(span, key);
+  const v = span.attributes?.[key];
   return typeof v === 'number' ? v : fallback;
 }
 
@@ -129,7 +116,7 @@ type SpanAttrValue<K extends SpanAttrType> =
  * Prevents silent `unknown`-to-T casts by enforcing a runtime type guard.
  */
 export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, type: K): SpanAttrValue<K> | undefined {
-  const v = attrRaw(span, key);
+  const v = span.attributes?.[key];
   if (typeof v === type) return v as SpanAttrValue<K>;
   return undefined;
 }
