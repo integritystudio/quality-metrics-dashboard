@@ -124,9 +124,9 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     for (let i = 0; i < spans.length; i++) {
       const s = spans[i];
       if (!s) continue;
-      const hookName = spanAttr(s, 'hook.name', 'string');
-      const hookType = spanAttr(s, 'hook.type', 'string');
-      const hookTrigger = spanAttr(s, 'hook.trigger', 'string');
+      const hookName = spanAttr(s, 'integritystudio.hook.name', 'string');
+      const hookType = spanAttr(s, 'integritystudio.hook.type', 'string');
+      const hookTrigger = spanAttr(s, 'integritystudio.hook.trigger', 'string');
 
       if (s.traceId) traceIds.add(s.traceId);
 
@@ -159,10 +159,10 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
 
       const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
-        || spanAttr(s, 'agent.has_error', 'boolean') === true
+        || spanAttr(s, 'integritystudio.agent.has_error', 'boolean') === true
         || s.status?.code === 'ERROR';
       if (hasError) {
-        const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'agent.type', 'string') ?? 'unknown';
+        const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
         const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
         incrementCount(errorsByCategory, `${tool} -> ${errType}`);
         errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr(s, 'builtin.file_path', 'string') });
@@ -172,16 +172,16 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
         const agentEntry = (agentAcc[name] ??= { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 });
         agentEntry.invocations++;
-        if (spanAttr(s, 'agent.has_error', 'boolean')) agentEntry.errors++;
-        if (spanAttr(s, 'agent.has_rate_limit', 'boolean')) agentEntry.hasRateLimit = true;
-        agentEntry.totalOutputSize += spanAttr(s, 'agent.output_size', 'number') ?? 0;
+        if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) agentEntry.errors++;
+        if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) agentEntry.hasRateLimit = true;
+        agentEntry.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
       }
 
       const fp = spanAttr(s, 'builtin.file_path', 'string');
       if (fp) incrementCount(fileCount, fp);
 
       if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
-        const raw = spanAttr(s, 'git.command', 'string') ?? '';
+        const raw = spanAttr(s, 'integritystudio.git.command', 'string') ?? '';
         const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
         const files = filesMatch ? (filesMatch[1] ?? '').trim() : '';
         const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
@@ -200,13 +200,13 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
       if (hookName === HOOK_NAME.CODE_STRUCTURE) {
         codeStructure.push({
-          file: spanAttr(s, 'code.structure.file', 'string') ?? '',
-          lines: spanAttr(s, 'code.structure.lines', 'number') ?? 0,
-          exports: spanAttr(s, 'code.structure.exports', 'number') ?? 0,
-          functions: spanAttr(s, 'code.structure.functions', 'number') ?? 0,
-          hasTypes: spanAttr(s, 'code.structure.has_types', 'boolean') ?? false,
-          score: spanAttr(s, 'code.structure.score', 'number') ?? 0,
-          tool: spanAttr(s, 'code.structure.tool', 'string') ?? '',
+          file: spanAttr(s, 'integritystudio.code.structure.file', 'string') ?? '',
+          lines: spanAttr(s, 'integritystudio.code.structure.lines', 'number') ?? 0,
+          exports: spanAttr(s, 'integritystudio.code.structure.exports', 'number') ?? 0,
+          functions: spanAttr(s, 'integritystudio.code.structure.functions', 'number') ?? 0,
+          hasTypes: spanAttr(s, 'integritystudio.code.structure.has_types', 'boolean') ?? false,
+          score: spanAttr(s, 'integritystudio.code.structure.score', 'number') ?? 0,
+          tool: spanAttr(s, 'integritystudio.code.structure.tool', 'string') ?? '',
         });
       }
 
@@ -259,15 +259,15 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const sessionInfo = firstSessionStart ? {
       projectName: spanAttr(firstSessionStart, 'project.name', 'string') ?? 'unknown',
       workingDirectory: spanAttr(firstSessionStart, 'working.directory', 'string') ?? '',
-      gitRepository: spanAttr(firstSessionStart, 'git.repository', 'string') ?? '',
-      gitBranch: spanAttr(firstSessionStart, 'git.branch', 'string') ?? '',
+      gitRepository: spanAttr(firstSessionStart, 'vcs.repository.name', 'string') ?? '',
+      gitBranch: spanAttr(firstSessionStart, 'vcs.ref.head.name', 'string') ?? '',
       nodeVersion: spanAttr(firstSessionStart, 'node.version', 'string') ?? '',
       resumeCount: sessionStartCount,
       initialMessageCount: spanAttr(firstSessionStart, 'context.message_count', 'number') ?? 0,
       initialContextTokens: spanAttr(firstSessionStart, 'context.estimated_tokens', 'number') ?? 0,
       finalMessageCount: spanAttr(lastSessionStart ?? firstSessionStart, 'context.message_count', 'number') ?? 0,
       taskCount: spanAttr(firstSessionStart, 'tasks.active', 'number') ?? 0,
-      uncommittedAtStart: spanAttr(firstSessionStart, 'git.uncommitted', 'number') ?? 0,
+      uncommittedAtStart: spanAttr(firstSessionStart, 'integritystudio.git.uncommitted', 'number') ?? 0,
     } : null;
 
     const tokenProgression = tokenProgressionRaw.slice().sort((a, b) => a.messages - b.messages);

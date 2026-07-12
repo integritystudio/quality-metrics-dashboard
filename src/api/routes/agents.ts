@@ -58,11 +58,29 @@ agentRoutes.get('/agents', async (c) => {
   const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
 
   try {
-    const result = await queryTraces({
-      attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
-      startDate,
-      endDate,
-      limit: LIMIT_AGENT_SPANS,
+    // OBP7b: server-side exact-match filtering cannot dual-read, so query both key
+    // eras — historical D1 spans carry only legacy 'hook.name', post-cutover spans only
+    // 'integritystudio.hook.name', dual-written spans both (deduped by spanId below).
+    // Collapse to a single canonical-key query once legacy-era data ages out.
+    const [canonicalResult, legacyResult] = await Promise.all([
+      queryTraces({
+        attributeFilter: { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },
+        startDate,
+        endDate,
+        limit: LIMIT_AGENT_SPANS,
+      }),
+      queryTraces({
+        attributeFilter: { 'hook.name': HOOK_NAME.AGENT_POST_TOOL },
+        startDate,
+        endDate,
+        limit: LIMIT_AGENT_SPANS,
+      }),
+    ]);
+    const seenSpanIds = new Set<string>();
+    const agentSpans = [...canonicalResult.traces, ...legacyResult.traces].filter(span => {
+      if (span.spanId && seenSpanIds.has(span.spanId)) return false;
+      if (span.spanId) seenSpanIds.add(span.spanId);
+      return true;
     });
 
     const dateBuckets: string[] = [];
@@ -77,7 +95,7 @@ agentRoutes.get('/agents', async (c) => {
 
     const traceToAgents = new Map<string, Set<string>>();
 
-    for (const span of result.traces) {
+    for (const span of agentSpans) {
       const name = attrStr(span, 'gen_ai.agent.name');
       const entry = (acc[name] ??= createAgentAccumulator(periodDays));
       entry.invocations++;
@@ -86,9 +104,9 @@ agentRoutes.get('/agents', async (c) => {
         const idx = bucketIndex.get(dayKey);
         if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
       }
-      if (spanAttr(span, 'agent.has_error', 'boolean')) entry.errors++;
-      if (spanAttr(span, 'agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
-      entry.totalOutputSize += attrNum(span, 'agent.output_size');
+      if (spanAttr(span, 'integritystudio.agent.has_error', 'boolean')) entry.errors++;
+      if (spanAttr(span, 'integritystudio.agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
+      entry.totalOutputSize += attrNum(span, 'integritystudio.agent.output_size');
       const sid = attrStr(span, 'session.id', '');
       if (sid) entry.sessions.add(sid);
       if (span.traceId) {
@@ -97,7 +115,7 @@ agentRoutes.get('/agents', async (c) => {
         if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
         agentSet.add(name);
       }
-      const rawSrc = attrStr(span, 'agent.source_type');
+      const rawSrc = attrStr(span, 'integritystudio.agent.source_type');
       const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
       incrementCount(entry.sourceTypes, src);
     }
