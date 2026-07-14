@@ -47,9 +47,9 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
     { label: 'Trajectory Length', value: row.trajectoryLength },
   ].filter(m => m.value != null);
 
-  const hasDetail = row.explanation || meta.length > 0 ||
-    (row.stepScores && row.stepScores.length > 0) ||
-    (row.toolVerifications && row.toolVerifications.length > 0);
+  const hasDetail = !!row.explanation || meta.length > 0 ||
+    (row.stepScores != null && row.stepScores.length > 0) ||
+    (row.toolVerifications != null && row.toolVerifications.length > 0);
 
   return (
     <div className="eval-expanded-content">
@@ -94,7 +94,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
       )}
 
       {/* back-link inline — uses mb-0 to reset default margin */}
-      {(row.traceId || row.sessionId) && (
+      {(!!row.traceId || !!row.sessionId) && (
         <div className="d-flex gap-4 mt-3 border-t pt-3">
           {row.traceId && (
             <Link href={routes.evaluationDetail(row.traceId)} className="back-link inline-flex-center mb-0">

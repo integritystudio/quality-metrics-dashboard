@@ -60,7 +60,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
 export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId, calibration: calibrationProp }: ScoreBadgeProps) {
   const contextCalibration = useMetricCalibration(metricName);
   const calibration = calibrationProp ?? contextCalibration;
-  const hasTooltip = evaluator || evaluatorType || explanation || traceId;
+  const hasTooltip = !!evaluator || !!evaluatorType || !!explanation || !!traceId;
 
   if (score === null) {
     return (

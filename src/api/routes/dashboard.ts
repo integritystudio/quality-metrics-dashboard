@@ -39,6 +39,7 @@ dashboardRoutes.get('/dashboard', async (c) => {
   if (!periodResult.success) {
     return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
   }
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string must map to undefined for optional schema
   const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
   if (!roleResult.success) {
     return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);

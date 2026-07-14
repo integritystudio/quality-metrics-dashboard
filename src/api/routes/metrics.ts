@@ -103,6 +103,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   if (!sortByResult.success) {
     return c.json({ error: ErrorMessage.InvalidSortBy }, HttpStatus.BadRequest);
   }
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string must map to undefined for optional schema
   const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
   if (!scoreLabelResult.success) {
     return c.json({ error: ErrorMessage.InvalidScoreLabel }, HttpStatus.BadRequest);

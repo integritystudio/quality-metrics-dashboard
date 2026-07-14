@@ -41,7 +41,7 @@ export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
             />
           </div>
 
-          {(leftMetric || rightMetric) && (
+          {(leftMetric != null || rightMetric != null) && (
             <ViewSection title="Compare Metrics">
               <div className="card">
                 <SplitPane

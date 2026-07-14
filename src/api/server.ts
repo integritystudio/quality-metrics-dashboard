@@ -17,7 +17,7 @@ import { API_HOST, API_PORT } from './config.js';
 
 const app = new Hono();
 
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
 if (!corsOrigin.startsWith('http://') && !corsOrigin.startsWith('https://')) {
   console.error('Invalid CORS_ORIGIN: must start with http:// or https://', { corsOrigin });
   throw new Error('Invalid CORS_ORIGIN: must start with http:// or https://');
