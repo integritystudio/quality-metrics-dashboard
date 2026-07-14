@@ -3,7 +3,7 @@
 **Version**: 1.1
 **Date**: 2026-02-27
 **Priority**: P3 | **Effort**: High
-**Source**: [known-gaps.md](../../../docs/roadmap/known-gaps.md) G5, white paper S7.3
+**Source**: [roadmap Known Gaps](../../../docs/roadmap/README.md#known-gaps) G5, white paper S7.3
 **Competitive bar**: Arize Phoenix auto-flowcharts (June 2025), Langfuse Agent Graphs (GA Nov 2025)
 **Research validated**: 2026-02-27 — cross-platform comparison (Phoenix, Datadog, LangSmith, Langfuse) + library evaluation
 
@@ -271,7 +271,7 @@ Data source: `TurnLevelResult[]` from `MultiAgentEvaluation.turns`, grouped by `
 - [x] Minimap shown for graphs with 5+ nodes
 - [x] Graph library lazy-loaded (no bundle size impact on other pages)
 - [x] Graph container has `aria-label`; score indicators include text labels (not color-only)
-- [ ] Interactive nodes are keyboard-focusable and operable via Enter
+- [x] Interactive nodes are keyboard-focusable and operable via Enter (and Space) — `role="button"` + `tabIndex=0` on node cards, `nodesFocusable={false}` on the wrapper so each node has a single tab stop; dimmed nodes stay out of the tab order
 
 ---
 
