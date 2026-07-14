@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
-import { RoleSchema } from '../constants.js';
+import { RoleSchema } from '../roles.js';
 
 /**
  * Auth0 JWT payload — result of jwtVerify() in the worker.
