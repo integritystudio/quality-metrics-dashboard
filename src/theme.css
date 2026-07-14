@@ -1439,6 +1439,17 @@ summary.section-rail {
   font-weight: var(--bold);
 }
 
+/* WorkflowGraph: keyboard focus ring for interactive nodes (role=button) */
+.workflow-node[role='button'],
+.workflow-cluster-node[role='button'] {
+  cursor: pointer;
+}
+.workflow-node:focus-visible,
+.workflow-cluster-node:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* WorkflowGraph: dimmed node when agent is filtered out */
 .workflow-node--dimmed {
   opacity: 0.25;

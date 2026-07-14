@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -70,6 +70,8 @@ interface WorkflowNodeWithMeta extends WorkflowNode {
   dimmed?: boolean;
   /** True when this node is on the highlighted critical path. */
   critical?: boolean;
+  /** Present when the node is interactive; invoked on click-equivalent keyboard activation. */
+  onActivate?: () => void;
 }
 
 /** Data shape for a collapsed cluster node. */
@@ -78,6 +80,23 @@ interface ClusterNodeData {
   memberCount: number;
   hasError: boolean;
   avgScore: number | null;
+  onActivate?: () => void;
+}
+
+/**
+ * Keyboard activation for node cards (WCAG 2.1.1). The xyflow node wrapper's
+ * built-in Enter/Space handling only toggles selection — it never fires
+ * onNodeClick — so interactive nodes expose their own button semantics and
+ * the wrapper tab stop is disabled via nodesFocusable={false}.
+ */
+function activationKeyHandler(onActivate: (() => void) | undefined) {
+  if (!onActivate) return undefined;
+  return (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onActivate();
+    }
+  };
 }
 
 function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
@@ -201,6 +220,7 @@ async function computeLayout(
   edges: WorkflowEdge[],
   selectedAgents?: ReadonlySet<string>,
   criticalPath?: ReadonlySet<string>,
+  onNodeActivate?: (nodeId: string) => void,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const nodeDataMap = buildNodeDataMap(nodes);
 
@@ -227,6 +247,7 @@ async function computeLayout(
       const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
       const critical = criticalPath?.has(elkNode.id) ?? false;
       const isCluster = isClusterNodeId(elkNode.id);
+      const onActivate = onNodeActivate ? () => onNodeActivate(elkNode.id) : undefined;
 
       if (isCluster) {
         const avgScore = workflowNode.evaluationScore;
@@ -235,6 +256,7 @@ async function computeLayout(
           memberCount: workflowNode.clusterMemberCount ?? 0,
           hasError: workflowNode.hasError,
           avgScore,
+          onActivate,
         };
         return {
           id: elkNode.id,
@@ -247,7 +269,7 @@ async function computeLayout(
       return {
         id: elkNode.id,
         position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-        data: { ...workflowNode, dimmed, critical },
+        data: { ...workflowNode, dimmed, critical, onActivate },
         type: 'agentNode',
       };
     });
@@ -266,6 +288,8 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
   if (!isWorkflowNode(data)) return null;
   const d = data;
   const band = getScoreBand(d.evaluationScore);
+  // Dimmed nodes are click-inert (pointer-events: none), so keep them out of the tab order too.
+  const onActivate = d.dimmed ? undefined : d.onActivate;
 
   const nodeClass = [
     'workflow-node',
@@ -277,7 +301,9 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
   return (
     <div
       className={nodeClass}
-      role="group"
+      role={onActivate ? 'button' : 'group'}
+      tabIndex={onActivate ? 0 : undefined}
+      onKeyDown={activationKeyHandler(onActivate)}
       aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
     >
       <div className="workflow-node__label">{d.label}</div>
@@ -314,7 +340,9 @@ const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodePr
   return (
     <div
       className={nodeClass}
-      role="group"
+      role={d.onActivate ? 'button' : 'group'}
+      tabIndex={d.onActivate ? 0 : undefined}
+      onKeyDown={activationKeyHandler(d.onActivate)}
       aria-label={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
     >
       <div className="workflow-cluster-node__label">{d.clusterId}</div>
@@ -352,6 +380,18 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<ReadonlySet<string>>(new Set());
 
+  // Stable identity for the keyboard-activation callback baked into node data,
+  // so layout does not recompute when the parent passes a new onNodeClick closure.
+  const onNodeClickRef = useRef(onNodeClick);
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+  }, [onNodeClick]);
+  const activateNode = useCallback((nodeId: string) => {
+    onNodeClickRef.current?.(nodeId);
+  }, []);
+
+  const hasNodeClick = onNodeClick != null;
+
   const clusterIds = extractClusterIds(graph.nodes);
 
   const toggleCluster = useCallback((clusterId: string) => {
@@ -374,7 +414,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
       graph.edges,
       collapsedClusters,
     );
-    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath)
+    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath, hasNodeClick ? activateNode : undefined)
       .then(({ nodes: rfNodes, edges: rfEdges }) => {
         if (!cancelled) {
           setLayoutError(null);
@@ -392,7 +432,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
     // were in the dep array, causing unnecessary ELK re-runs each render cycle.
     // Omitted here — layout should only recompute when graph data or filter actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph.nodes, graph.edges, selectedAgents, criticalPath, collapsedClusters]);
+  }, [graph.nodes, graph.edges, selectedAgents, criticalPath, collapsedClusters, hasNodeClick, activateNode]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onNodeClick?.(node.id);
@@ -478,6 +518,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
         nodeTypes={NODE_TYPES}
+        nodesFocusable={false}
         fitView
       >
         <Controls />

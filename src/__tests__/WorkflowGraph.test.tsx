@@ -384,6 +384,90 @@ describe('applyClusterCollapse', () => {
   });
 });
 
+describe('WorkflowGraphView keyboard accessibility', () => {
+  const graph = makeGraph({
+    nodes: [
+      makeNode({ id: 'node-1', label: 'planner' }),
+      makeNode({ id: 'node-2', label: 'executor' }),
+    ],
+    edges: [makeEdge({ id: 'edge-1', source: 'node-1', target: 'node-2' })],
+    rootNodeId: 'node-1',
+    workflowShape: 'linear',
+  });
+
+  async function renderInteractive() {
+    const onNodeClick = vi.fn();
+    render(<WorkflowGraphView graph={graph} onNodeClick={onNodeClick} />);
+    const node = await waitFor(() =>
+      screen.getByRole('button', { name: /Agent: planner/ })
+    );
+    return { onNodeClick, node };
+  }
+
+  it('renders interactive nodes as focusable buttons when onNodeClick is provided', async () => {
+    const { node } = await renderInteractive();
+    expect(node).toHaveAttribute('tabindex', '0');
+  });
+
+  it('fires onNodeClick with the node id on Enter', async () => {
+    const { onNodeClick, node } = await renderInteractive();
+    fireEvent.keyDown(node, { key: 'Enter' });
+    expect(onNodeClick).toHaveBeenCalledWith('node-1');
+  });
+
+  it('fires onNodeClick with the node id on Space', async () => {
+    const { onNodeClick, node } = await renderInteractive();
+    fireEvent.keyDown(node, { key: ' ' });
+    expect(onNodeClick).toHaveBeenCalledWith('node-1');
+  });
+
+  it('does not fire onNodeClick for other keys', async () => {
+    const { onNodeClick, node } = await renderInteractive();
+    fireEvent.keyDown(node, { key: 'Escape' });
+    fireEvent.keyDown(node, { key: 'a' });
+    expect(onNodeClick).not.toHaveBeenCalled();
+  });
+
+  it('renders nodes as non-focusable groups when onNodeClick is absent', async () => {
+    render(<WorkflowGraphView graph={graph} />);
+    const node = await waitFor(() =>
+      screen.getByRole('group', { name: /Agent: planner/ })
+    );
+    expect(node).not.toHaveAttribute('tabindex');
+    expect(screen.queryByRole('button', { name: /Agent: planner/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps dimmed (filtered-out) nodes out of the tab order', async () => {
+    const onNodeClick = vi.fn();
+    render(
+      <WorkflowGraphView
+        graph={graph}
+        onNodeClick={onNodeClick}
+        selectedAgents={new Set(['node-1'])}
+      />
+    );
+    await waitFor(() =>
+      screen.getByRole('button', { name: /Agent: planner/ })
+    );
+    // node-2 is dimmed: not a button, no tab stop
+    const dimmed = screen.getByRole('group', { name: /Agent: executor/ });
+    expect(dimmed).not.toHaveAttribute('tabindex');
+  });
+
+  it('fires onNodeClick with the synthetic cluster id on Enter for collapsed cluster nodes', async () => {
+    const clustered = makeClusteredGraph(['grp'], 2);
+    const onNodeClick = vi.fn();
+    render(<WorkflowGraphView graph={clustered} onNodeClick={onNodeClick} />);
+    await waitFor(() => screen.getByRole('button', { name: /▼ grp/ }));
+    fireEvent.click(screen.getByRole('button', { name: /▼ grp/ }));
+    const clusterNode = await waitFor(() =>
+      screen.getByRole('button', { name: /Cluster: grp/ })
+    );
+    fireEvent.keyDown(clusterNode, { key: 'Enter' });
+    expect(onNodeClick).toHaveBeenCalledWith(expect.stringContaining('grp'));
+  });
+});
+
 describe('WorkflowGraphView cluster toggle UI', () => {
   it('renders cluster toggle buttons when graph has clustered nodes', async () => {
     const graph = makeClusteredGraph(['alpha', 'beta'], 2);
