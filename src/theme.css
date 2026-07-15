@@ -195,7 +195,8 @@
 .cot-summary,
 .agreement-grid .ag-header,
 .stat-label,
-.field-label {
+.field-label,
+.uppercase {
   text-transform: uppercase;
   letter-spacing: var(--label-letter-spacing);
 }
@@ -350,7 +351,7 @@ body {
 }
 .alert-item {
   padding: var(--space-3) var(--space-4);
-  border-left: 3px solid;
+  border-left: var(--border-width-rail) solid;
   background: var(--bg-card);
   margin-bottom: var(--space-2);
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -505,7 +506,7 @@ body {
 .tab-btn {
   padding: var(--space-2) var(--space-4);
   font-size: var(--font-size-base);
-  border-bottom: 2px solid transparent;
+  border-bottom: var(--border-width-thick) solid transparent;
   margin-bottom: -1px;
   transition: color var(--transition-fast), border-color var(--transition-fast);
 }
@@ -826,12 +827,12 @@ details[open] > .cot-summary::before {
 }
 
 .eval-overlay-card {
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius);
 }
 .eval-summary-card {
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color var(--transition-fast);
 }
 .eval-summary-card.card:hover {
   border-color: var(--accent);
@@ -920,7 +921,8 @@ details[open] > .cot-summary::before {
 .score-band[data-band="failing"] { color: var(--score-failing); }
 
 /* Two-column equal grid */
-.grid-two-col {
+.grid-two-col,
+.agent-expanded-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
@@ -932,8 +934,6 @@ details[open] > .cot-summary::before {
 
 /* Agent expanded panel: sessions + traces two-column grid */
 .agent-expanded-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
   padding: var(--space-3) 0 var(--space-1);
 }
@@ -1011,7 +1011,7 @@ details[open] > .cot-summary::before {
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-2-5);
-  transition: width 0.3s ease;
+  transition: var(--transition-bar);
   min-width: 40px;
   height: 32px;
 }
@@ -1038,15 +1038,21 @@ details[open] > .cot-summary::before {
   font-weight: var(--light-bold);
 }
 
-/* Provenance panel */
+/* Provenance / confidence / agreement grids */
 .provenance-grid,
-.agreement-grid {
+.agreement-grid,
+.confidence-stats-grid {
   display: grid;
   gap: var(--space-1) var(--space-4);
+}
+.provenance-grid,
+.agreement-grid {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
 }
-.provenance-grid { grid-template-columns: auto 1fr; }
+.provenance-grid,
+.confidence-stats-grid { grid-template-columns: auto 1fr; }
+.agreement-grid { grid-template-columns: 1fr auto auto; }
 .provenance-grid .prov-label {
   color: var(--text-secondary);
   font-family: var(--font-body);
@@ -1080,11 +1086,6 @@ details[open] > .cot-summary::before {
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
-.confidence-stats-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--space-1) var(--space-4);
-}
 .confidence-level-indicator { color: var(--score-failing); }
 .confidence-level-indicator[data-level="high"] { color: var(--score-excellent); }
 .confidence-level-indicator[data-level="medium"] { color: var(--score-adequate); }
@@ -1096,7 +1097,6 @@ details[open] > .cot-summary::before {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
 }
-.agreement-grid { grid-template-columns: 1fr auto auto; }
 .agreement-grid .ag-header {
   color: var(--text-muted);
   font-size: var(--font-size-xs);
@@ -1111,27 +1111,19 @@ details[open] > .cot-summary::before {
 .variance-bar {
   gap: var(--space-2);
 }
-/* Reusable bar track (background rail for progress/duration bars) */
-.bar-track {
-  height: var(--space-1);
-  background: var(--bg-surface);
-  border-radius: var(--radius-xs);
-}
-.variance-bar-track {
-  flex: 1;
-  height: var(--space-1);
-  background: var(--bg-surface);
-  border-radius: var(--radius-xs);
-  overflow: hidden;
-}
-
-/* Mini progress bar — track + fill */
+/* Reusable bar track (progress / duration / mini bars) */
+.bar-track,
+.variance-bar-track,
 .mini-bar {
-  height: var(--bar-h, 4px);
+  height: var(--bar-h, var(--space-1));
   background: var(--bar-track-color, var(--bg-surface));
   border-radius: var(--radius-xs);
-  overflow: hidden;
 }
+.variance-bar-track,
+.mini-bar { overflow: hidden; }
+.variance-bar-track { flex: 1; }
+
+/* Mini progress bar fill */
 .mini-bar-fill {
   height: 100%;
   width: var(--bar-fill-width);
@@ -1182,8 +1174,7 @@ details[open] > .cot-summary::before {
 .flex-center    { display: flex; align-items: center; }
 .align-start    { align-items: flex-start; }
 
-/* Text transform */
-.uppercase { text-transform: uppercase; letter-spacing: var(--label-letter-spacing); }
+/* Font weight */
 .font-normal   { font-weight: 400; }
 .font-semibold { font-weight: var(--bold); }
 
@@ -1322,10 +1313,9 @@ details[open] > .cot-summary::before {
 .text-primary  { color: var(--text-primary); }
 
 /* Surface */
-.surface-elevated { background: var(--bg-elevated); border: 1px solid var(--border); }
+.surface-elevated,
+.surface-elevated-card { background: var(--bg-elevated); border: 1px solid var(--border); }
 .surface-elevated-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-lg);
 }
@@ -1385,7 +1375,7 @@ details[open] > .cot-summary::before {
 /* Compound: section rail panel (bg-card + left border rail) */
 .section-rail {
   background: var(--bg-card);
-  border-left: 3px solid var(--section-rail-color, var(--border-accent));
+  border-left: var(--border-width-rail) solid var(--section-rail-color, var(--border-accent));
 }
 summary.section-rail {
   padding: var(--space-3) var(--space-5);
@@ -1414,9 +1404,6 @@ summary.section-rail {
   padding: var(--space-3);
   font-size: var(--font-size-xs);
 }
-.workflow-node--score-high { border-color: #16a34a; background: #dcfce7; }
-.workflow-node--score-mid  { border-color: #ca8a04; background: #fef9c3; }
-.workflow-node--score-low  { border-color: #dc2626; background: #fee2e2; }
 .workflow-node--score-high .workflow-node__score { color: #15803d; }
 .workflow-node--score-mid  .workflow-node__score { color: #a16207; }
 .workflow-node--score-low  .workflow-node__score { color: #b91c1c; }
@@ -1424,18 +1411,14 @@ summary.section-rail {
   font-weight: var(--bold);
   margin-bottom: var(--space-1);
 }
-.workflow-node__score {
-  font-size: var(--font-size-xs);
-}
 .workflow-node__meta,
-.workflow-node__duration {
-  font-size: var(--font-size-xs);
+.workflow-node__duration,
+.workflow-cluster-node__meta {
   color: var(--status-no-data);
 }
 .workflow-node__meta { margin-top: var(--space-1); }
 .workflow-node__error {
   color: var(--status-critical);
-  font-size: var(--font-size-xs);
   font-weight: var(--bold);
 }
 
@@ -1475,29 +1458,32 @@ summary.section-rail {
   flex-direction: column;
   justify-content: center;
 }
-.workflow-cluster-node--score-high { border-color: #16a34a; background: #dcfce7; }
-.workflow-cluster-node--score-mid  { border-color: #ca8a04; background: #fef9c3; }
-.workflow-cluster-node--score-low  { border-color: #dc2626; background: #fee2e2; }
-.workflow-cluster-node--error      { border-color: var(--status-critical); }
+.workflow-node--score-high, .workflow-cluster-node--score-high { border-color: #16a34a; background: #dcfce7; }
+.workflow-node--score-mid,  .workflow-cluster-node--score-mid  { border-color: #ca8a04; background: #fef9c3; }
+.workflow-node--score-low,  .workflow-cluster-node--score-low  { border-color: #dc2626; background: #fee2e2; }
+.workflow-cluster-node--error { border-color: var(--status-critical); }
 .workflow-cluster-node__label {
   font-weight: var(--bold);
   margin-bottom: var(--space-1);
   color: #4338ca;
 }
-.workflow-cluster-node__meta {
-  font-size: var(--font-size-xs);
-  color: var(--status-no-data);
-}
 
-/* WorkflowGraph: cluster toggle controls bar */
-.workflow-cluster-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
+/* WorkflowGraph / AgentWorkflowView: control & divider bars */
+.workflow-cluster-controls,
+.workflow-filter,
+.workflow-filter__controls,
+.workflow-tabs {
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: var(--space-3);
 }
+.workflow-cluster-controls,
+.workflow-filter,
+.workflow-filter__controls {
+  display: flex;
+  flex-wrap: wrap;
+  padding: var(--space-2) 0;
+}
+.workflow-cluster-controls { gap: var(--space-2); }
 .workflow-cluster-toggle {
   font-size: var(--font-size-2xs);
   padding: var(--space-1) var(--space-2);
@@ -1549,13 +1535,8 @@ summary.section-rail {
 
 /* AgentWorkflowView: agent filter chip bar */
 .workflow-filter {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: var(--space-3);
 }
 .workflow-filter__chip {
   font-size: var(--font-size-2xs);
@@ -1569,13 +1550,8 @@ summary.section-rail {
 
 /* AgentWorkflowView: secondary controls bar (duration, error, critical path, export) */
 .workflow-filter__controls {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: var(--space-3);
 }
 .workflow-filter__label {
   display: flex;
@@ -1600,18 +1576,13 @@ summary.section-rail {
   margin-left: auto;
 }
 
-/* AgentWorkflowView: tab bar */
-.workflow-tabs {
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: var(--space-3);
-}
 /* AgentWorkflowView: tab button — active and inactive states via data attribute */
 .workflow-tab {
   padding: var(--space-2) var(--space-4);
   font-size: var(--font-size-xs);
   font-weight: var(--bold);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-bottom: var(--border-width-thick) solid transparent;
   color: var(--text-muted);
   transition: color var(--transition-fast), border-color var(--transition-fast);
 }
