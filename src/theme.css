@@ -127,6 +127,11 @@
   --critical-alpha-40: rgba(240, 68, 56, 0.4);
   --critical-alpha-60: rgba(240, 68, 56, 0.6);
 
+  /* Chip tints (color-mix weight over --chip-color / status colors) */
+  --chip-tint: 12%;
+  --chip-tint-strong: 19%;
+  --status-healthy-muted: color-mix(in srgb, var(--status-healthy) var(--chip-tint), transparent);
+
   /* Radii */
   --radius-xs: 2px;
   --radius-bar: 3px;
@@ -888,7 +893,7 @@ details[open] > .cot-summary::before {
   border-radius: var(--radius);
 }
 .quality-chip {
-  background: color-mix(in srgb, var(--chip-color) 10%, transparent);
+  background: color-mix(in srgb, var(--chip-color) var(--chip-tint), transparent);
   color: var(--chip-color);
 }
 .quality-chip .dot-xs { background: var(--chip-color); }
@@ -1201,7 +1206,7 @@ details[open] > .cot-summary::before {
 .chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
 .chip-colored {
   color: var(--chip-color);
-  background-color: color-mix(in srgb, var(--chip-color) 13%, transparent);
+  background-color: color-mix(in srgb, var(--chip-color) var(--chip-tint), transparent);
 }
 
 /* Gap */
@@ -1369,7 +1374,7 @@ details[open] > .cot-summary::before {
 }
 /* Chip with status-healthy tint (e.g. "MULTI-AGENT" badge) */
 .chip-healthy {
-  background: var(--status-healthy-muted, rgba(34, 197, 94, 0.12));
+  background: var(--status-healthy-muted);
   color: var(--status-healthy);
 }
 
@@ -1662,7 +1667,7 @@ summary.section-rail {
   transition: opacity var(--transition-fast), background-color var(--transition-fast);
 }
 .eval-filter-chip[data-active] {
-  background-color: color-mix(in srgb, var(--chip-color) 19%, transparent);
+  background-color: color-mix(in srgb, var(--chip-color) var(--chip-tint-strong), transparent);
   opacity: 1;
 }
 .eval-filter-chip--error { --chip-color: var(--status-critical); }
