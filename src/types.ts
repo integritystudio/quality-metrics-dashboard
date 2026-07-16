@@ -2,16 +2,11 @@ export type {
   QualityDashboardSummary,
   QualityMetricResult,
   QualityMetricConfig,
-  MetricDetailResult,
   TriggeredAlert,
   MetricTrend,
   ConfidenceIndicator,
   WorstExplanation,
   SLAComplianceResult,
-  ExecutiveView,
-  OperatorView,
-  AuditorView,
-  RoleView,
   AlertSeverity,
   TrendDirection,
   PipelineResult,
@@ -22,6 +17,16 @@ export type {
   CoverageGap,
   CoverageStatus,
 } from '../../dist/lib/quality/quality-metrics.js';
+
+// View types live in quality-views.js (not re-exported via quality-metrics.js;
+// see quality-metrics.ts — the re-export formed a load-order TDZ cycle).
+export type {
+  MetricDetailResult,
+  ExecutiveView,
+  OperatorView,
+  AuditorView,
+  RoleView,
+} from '../../dist/lib/quality/quality-views.js';
 
 export type { RoleType as RoleViewType } from '../../dist/lib/quality/quality-constants.js';
 

@@ -2,12 +2,12 @@ import pLimit from 'p-limit';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import {
-  computeMetricDetail,
   computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
   type MetricTrend,
 } from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDetail } from '../../../../dist/lib/quality/quality-views.js';
 import {
   computePercentileDistribution,
   computeMetricDynamics,

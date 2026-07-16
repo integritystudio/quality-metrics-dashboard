@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds } from 'date-fns';
 import {
-  computeMetricDetail,
   computeAggregations,
   getQualityMetric,
 } from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDetail } from '../../../../dist/lib/quality/quality-views.js';
 import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';

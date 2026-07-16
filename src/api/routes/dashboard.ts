@@ -1,9 +1,7 @@
 import { rollup, mean } from 'd3-array';
 import { Hono } from 'hono';
-import {
-  computeDashboardSummary,
-  computeRoleView,
-} from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeRoleView } from '../../../../dist/lib/quality/quality-views.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { computeCQI } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';

@@ -7,8 +7,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
   getQualityMetric: vi.fn(),
-  computeMetricDetail: vi.fn(),
   computeAggregations: vi.fn(),
+}));
+
+vi.mock('../../../dist/lib/quality/quality-views.js', () => ({
+  computeMetricDetail: vi.fn(),
 }));
 
 vi.mock('../../../dist/lib/quality/quality-feature-engineering.js', () => ({
@@ -34,7 +37,8 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { metricsRoutes } from '../api/routes/metrics.js';
-import { getQualityMetric, computeMetricDetail, computeAggregations } from '../../../dist/lib/quality/quality-metrics.js';
+import { getQualityMetric, computeAggregations } from '../../../dist/lib/quality/quality-metrics.js';
+import { computeMetricDetail } from '../../../dist/lib/quality/quality-views.js';
 import { computeMetricDynamics } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
 

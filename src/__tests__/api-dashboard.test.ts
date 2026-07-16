@@ -12,6 +12,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
   QUALITY_METRICS: {},
   computeDashboardSummary: vi.fn(),
+}));
+
+vi.mock('../../../dist/lib/quality/quality-views.js', () => ({
   computeRoleView: vi.fn(),
 }));
 
@@ -40,7 +43,8 @@ vi.mock('../api/data-loader.js', () => ({
 
 import { dashboardRoutes } from '../api/routes/dashboard.js';
 import { qualityRoutes } from '../api/routes/quality.js';
-import { computeDashboardSummary, computeRoleView } from '../../../dist/lib/quality/quality-metrics.js';
+import { computeDashboardSummary } from '../../../dist/lib/quality/quality-metrics.js';
+import { computeRoleView } from '../../../dist/lib/quality/quality-views.js';
 import { computeCQI } from '../../../dist/lib/quality/quality-feature-engineering.js';
 import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
 
