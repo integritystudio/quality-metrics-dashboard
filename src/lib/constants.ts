@@ -25,8 +25,20 @@ export const enum ErrorMessage {
   InvalidSessionIdFormat = 'Invalid sessionId format',
   InvalidTraceId = 'Invalid traceId',
 }
+/**
+ * Resolve the API base URL from a Vite-style env object. Uses VITE_API_URL when
+ * set, else localhost:3001 in dev and same-origin ('') in prod.
+ *
+ * `env` is nullable because `import.meta.env` is `undefined` under Node/tsx (the
+ * API-server runtime, `tsx src/api/server.ts`) — dereferencing it there threw at
+ * module load and stopped the Hono server from booting. See constants-api-base.test.ts.
+ */
+export function resolveApiBase(env: { VITE_API_URL?: unknown; DEV?: boolean } | undefined): string {
+  return (env?.VITE_API_URL as string | undefined) ?? (env?.DEV ? 'http://127.0.0.1:3001' : '');
+}
+
 /** Base URL for API requests. Uses VITE_API_URL env var, falls back to localhost:3001 in dev. */
-export const API_BASE = (import.meta.env?.VITE_API_URL as string | undefined) ?? (import.meta.env?.DEV ? 'http://127.0.0.1:3001' : '');
+export const API_BASE = resolveApiBase(import.meta.env);
 
 /** Zod schema for coverage input key param. Single source for type, values, and default. */
 export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
