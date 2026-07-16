@@ -1,6 +1,26 @@
+8011f1e 2026-07-14 refactor: refactor workflowgraph.test, workflowgraph, theme
+  src/theme.css
+
+dc644ac 2026-07-12 feat(otel): drop OBP7b legacy-fallback reads — canonical keys only
+  scripts/judge-evaluations.ts
+
+0730e13 2026-07-12 fix(scripts): restore let bindings broken by const refactor
+  scripts/sync-to-kv.ts
+
+e1cae78 2026-07-12 feat(otel): add attribute-aliases dual-read for OBP7b key reconcile
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+8aa7dea 2026-07-01 docs(repomix): regenerate artifacts + fix stale CloudBackend comments
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 6c79b3f 2026-06-30 chore(types): enable noUncheckedIndexedAccess and harden index access
   scripts/judge-evaluations.ts
   scripts/sync-to-kv.ts
+  src/__tests__/dr13-coverage.test.tsx
   worker/index.ts
 
 be35516 2026-04-21 docs(repomix): regenerate repomix artifacts after CloudBackend migration
@@ -47,6 +67,7 @@ c53c462 2026-03-31 chore(deps): update package-lock.json
 e5ffd1c 2026-03-31 feat(lint): enable recommendedTypeChecked ESLint rules and fix all violations
   scripts/judge-evaluations.ts
   scripts/sync-to-kv.ts
+  src/__tests__/dr13-coverage.test.tsx
   worker/index.ts
 
 d0eee21 2026-03-30 chore(deps): bump wrangler from 4.77.0 to 4.78.0
@@ -379,20 +400,3 @@ c07f7f3 2026-03-26 refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant
 
 c1ba1fc 2026-03-26 refactor(constants): extract inline error strings into ErrorMessage enum
   worker/index.ts
-
-7a046d1 2026-03-26 refactor(worker): split userId/roleId validation for precise error messages
-  worker/index.ts
-
-bb8d081 2026-03-26 refactor(worker): extract ERR_INVALID_USER_ID and ERR_INVALID_USER_OR_ROLE_ID constants
-  worker/index.ts
-
-d98d147 2026-03-26 refactor(worker): extract safeArray helper for Array.isArray KV guard pattern
-  worker/index.ts
-
-488b543 2026-03-26 fix(worker): replace unsafe KV payload casts with Array.isArray guards
-  worker/index.ts
-
-a3b4012 2026-03-26 chore: regenerate repomix docs
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
