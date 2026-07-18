@@ -9,6 +9,12 @@ enabled = true
 [vars]
 AUTH0_DOMAIN = "dev-68gg87ow4mg4kzyo.us.auth0.com"
 AUTH0_AUDIENCE = "https://api.integritystudio.dev"
+# Org-scoped multi-tenancy (docs/roadmap in parent repo: org-scoped-multi-tenancy.md).
+# HOME_ORG_ID: org owning all pre-multi-tenancy data. STAFF_USER_IDS: explicit
+# cross-org superuser allowlist (owner-approved 2026-07-18); JSON array of user UUIDs.
+# Consumed from P5 (worker org resolution) onward; inert until then.
+HOME_ORG_ID = "f4286657-da73-4174-9e49-937f1bb6097f"
+STAFF_USER_IDS = '["f7a787eb-b97f-4636-b68d-2a08c52ae13d","b178a643-7bde-44d9-b533-fd9c827786b3","f5e6d6e0-f618-46bb-9b17-477f0016148e","cc43086f-708f-467c-9483-666b1e294832","ed37810d-0792-47c6-9108-a3a1f62a8eaa","adff602e-1ac6-4f86-9ee3-2e880123f6dd","f78fdf56-6a7a-461b-8cfc-c80d1746d693","a752e2c0-136f-4dd7-b973-616d49053338","ce183805-4b76-454a-b198-7e12dbcd86c9","39557dad-3019-4fd1-a38d-4c99afa8307f"]'
 
 [[kv_namespaces]]
 binding = "DASHBOARD"
