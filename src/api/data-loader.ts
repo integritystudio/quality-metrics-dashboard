@@ -29,7 +29,11 @@ const LIMIT_HEALTH_PROBE = 1;
 let backend: CloudBackend | undefined;
 
 function getBackend(): CloudBackend {
-  backend ??= new CloudBackend();
+  // Org scope for the local dev server (org-scoped multi-tenancy P2): this
+  // server has no auth middleware, so it must never trust a client-supplied
+  // org — the scope is a fixed env value. Absent, obtool-api defaults the
+  // scope to its HOME_ORG_ID server-side.
+  backend ??= new CloudBackend({ orgId: process.env.DEV_ORG_ID });
   return backend;
 }
 
