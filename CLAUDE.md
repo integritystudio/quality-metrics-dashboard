@@ -23,6 +23,8 @@ doppler run --project integrity-studio --config dev -- npm run test:e2e:integrat
 - **API server**: `src/api/` — Hono server on :3001, reads from Cloudflare KV via worker
 - **Worker**: `worker/index.ts` — Auth0 JWKS JWT verification via `jose`, KV read-through cache, protected `/api/*` routes
 - **Auth**: Auth0 Universal Login + role-based permissions from Supabase `user_roles -> roles.permissions` (all DB access via service role key). See [docs/auth/user-authentication.md](docs/auth/user-authentication.md)
+  - **Default role = `provisioned-dashboard-viewer`** (all views, non-admin). Assigned two ways: the `on_user_created`/`assign_default_role()` DB trigger on signup, and `grantDashboardAccess` in the api-provisioning-receiver worker at API-key provisioning (insert-or-ignore dedupes). Replaced the former `read` role (PROV-RBAC, 2026-07-17).
+  - **Migration caveat**: the migration capturing this (`IntegrityLandingPage/supabase/migrations/20260717000000_provisioned_dashboard_viewer_default_role.sql`) was authored to mirror a state already applied directly to **prd**, so it has NOT been run through the migration tooling (it's a no-op on prd). Applying migrations to other environments (staging/fresh) will bring them into line there.
 - **Validation**: Zod schemas in `src/lib/validation/` for all auth and dashboard types
 - **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
 - **React Compiler**: `babel-plugin-react-compiler` is installed but NOT configured (not wired into vite.config.ts). The compiler is inactive. For TanStack Table incompatibilities, use `// eslint-disable-next-line react-hooks/incompatible-library -- <reason>` (see `EvaluationTable.tsx:188`).
