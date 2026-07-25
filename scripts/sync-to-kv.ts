@@ -32,15 +32,17 @@ import { computePipelineView } from '../../src/lib/quality/quality-visualization
 import type { MetricTrend } from '../../src/lib/quality/quality-metrics.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
 import {
-  computePercentileDistribution,
   computeMetricDynamics,
   computeCorrelationMatrix,
   computeRollingDegradationSignals,
   loadDegradationState,
   saveDegradationState,
-  loadCalibrationState,
 } from '../../src/lib/quality/quality-feature-engineering.js';
-import type { CalibrationState } from '../../src/lib/quality/quality-feature-engineering.js';
+import {
+  computePercentileDistribution,
+  loadCalibrationState,
+  type CalibrationState,
+} from '../../src/lib/quality/qfe-percentiles.js';
 import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
 import {

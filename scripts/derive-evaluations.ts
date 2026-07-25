@@ -13,7 +13,7 @@ import {
   loadCalibrationState,
   saveCalibrationState,
   shouldRecalibrate,
-} from '../../src/lib/quality/quality-feature-engineering.js';
+} from '../../src/lib/quality/qfe-percentiles.js';
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
 import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { TraceSpan };

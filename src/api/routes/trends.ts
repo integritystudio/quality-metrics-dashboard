@@ -8,10 +8,8 @@ import {
   type MetricTrend,
 } from '../../../../dist/lib/quality/quality-metrics.js';
 import { computeMetricDetail } from '../../../../dist/lib/quality/quality-views.js';
-import {
-  computePercentileDistribution,
-  computeMetricDynamics,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
+import { computePercentileDistribution } from '../../../../dist/lib/quality/qfe-percentiles.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
