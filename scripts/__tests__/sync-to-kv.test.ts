@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildCalibrationEntry } from '../sync-to-kv.js';
-import type { CalibrationState } from '../../../dist/lib/quality/quality-feature-engineering.js';
+import type { CalibrationState } from '../../../dist/lib/quality/qfe-percentiles.js';
 
 type KVEntry = { key: string; value: string };
 

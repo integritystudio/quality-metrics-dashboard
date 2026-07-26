@@ -22,22 +22,21 @@ import { tmpdir } from 'os';
 import { CloudBackend } from '../../src/backends/cloud.js';
 import {
   computeDashboardSummary,
-  computeRoleView,
-  computeMetricDetail,
   computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
+import { computeRoleView, computeMetricDetail } from '../../src/lib/quality/quality-views.js';
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
-import type { MetricTrend } from '../../src/lib/quality/quality-metrics.js';
+import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
+import { computeMetricDynamics } from '../../src/lib/quality/quality-feature-engineering.js';
+import { computeCorrelationMatrix } from '../../src/lib/quality/qfe-correlation.js';
 import {
-  computeMetricDynamics,
-  computeCorrelationMatrix,
   computeRollingDegradationSignals,
   loadDegradationState,
   saveDegradationState,
-} from '../../src/lib/quality/quality-feature-engineering.js';
+} from '../../src/lib/quality/qfe-backtest.js';
 import {
   computePercentileDistribution,
   loadCalibrationState,

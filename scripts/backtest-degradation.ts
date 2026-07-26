@@ -18,17 +18,17 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { z } from 'zod';
 import { CloudBackend } from '../../src/backends/cloud.js';
+import { computeStdDev } from '../../src/lib/quality/quality-constants.js';
 import {
-  computeStdDev,
   sweepDegradationParams,
   CURRENT_PRODUCTION_CONFIG,
   BACKTEST_SWEEP,
-} from '../../src/lib/quality/quality-feature-engineering.js';
+} from '../../src/lib/quality/qfe-backtest.js';
 import type {
   LabeledIncident,
   BacktestSweepResult,
   BacktestConfig,
-} from '../../src/lib/quality/quality-feature-engineering.js';
+} from '../../src/lib/quality/qfe-backtest.js';
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 
