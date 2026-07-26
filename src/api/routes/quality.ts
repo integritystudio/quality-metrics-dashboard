@@ -3,7 +3,7 @@ import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sani
 import {
   computeRollingDegradationSignals,
   type DegradationState,
-} from '../../../../dist/lib/quality/quality-feature-engineering.js';
+} from '../../../../dist/lib/quality/qfe-backtest.js';
 import {
   DEFAULT_BIN_COUNT,
 } from '../../../../dist/lib/quality/quality-constants.js';

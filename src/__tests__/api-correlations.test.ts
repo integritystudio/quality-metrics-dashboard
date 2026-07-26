@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality/quality-feature-engineering.js', () => ({
+vi.mock('../../../dist/lib/quality/qfe-correlation.js', () => ({
   computeCorrelationMatrix: vi.fn(),
 }));
 
@@ -27,7 +27,7 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { correlationRoutes } from '../api/routes/correlations.js';
-import { computeCorrelationMatrix } from '../../../dist/lib/quality/quality-feature-engineering.js';
+import { computeCorrelationMatrix } from '../../../dist/lib/quality/qfe-correlation.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);

@@ -500,8 +500,11 @@ vi.mock('../../../../dist/lib/quality/quality-metrics.js', () => ({
 }));
 
 vi.mock('../../../../dist/lib/quality/quality-feature-engineering.js', () => ({
-  computePercentileDistribution: vi.fn(() => null),
   computeMetricDynamics: vi.fn(() => null),
+}));
+
+vi.mock('../../../../dist/lib/quality/qfe-percentiles.js', () => ({
+  computePercentileDistribution: vi.fn(() => null),
 }));
 
 vi.mock('../../../../dist/lib/errors/error-sanitizer.js', () => ({

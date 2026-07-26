@@ -15,8 +15,10 @@ vi.mock('../../../dist/lib/quality/quality-views.js', () => ({
 }));
 
 vi.mock('../../../dist/lib/quality/quality-feature-engineering.js', () => ({
-  computePercentileDistribution: vi.fn(),
   computeMetricDynamics: vi.fn(),
+}));
+vi.mock('../../../dist/lib/quality/qfe-percentiles.js', () => ({
+  computePercentileDistribution: vi.fn(),
 }));
 
 vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
@@ -40,7 +42,8 @@ vi.mock('../api/data-loader.js', () => ({
 import { trendRoutes } from '../api/routes/trends.js';
 import { getQualityMetric, computeAggregations } from '../../../dist/lib/quality/quality-metrics.js';
 import { computeMetricDetail } from '../../../dist/lib/quality/quality-views.js';
-import { computePercentileDistribution, computeMetricDynamics } from '../../../dist/lib/quality/quality-feature-engineering.js';
+import { computeMetricDynamics } from '../../../dist/lib/quality/quality-feature-engineering.js';
+import { computePercentileDistribution } from '../../../dist/lib/quality/qfe-percentiles.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);
