@@ -5,8 +5,8 @@ import {
   computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
-  type MetricTrend,
 } from '../../../../dist/lib/quality/quality-metrics.js';
+import { type MetricTrend } from '../../../../dist/lib/quality/quality-constants.js';
 import { computeMetricDetail } from '../../../../dist/lib/quality/quality-views.js';
 import { computeMetricDynamics } from '../../../../dist/lib/quality/quality-feature-engineering.js';
 import { computePercentileDistribution } from '../../../../dist/lib/quality/qfe-percentiles.js';

@@ -4,8 +4,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-visualization.js', () => ({
   computePipelineView: vi.fn(),
+}));
+vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
   computeDashboardSummary: vi.fn(),
 }));
 
@@ -28,7 +30,8 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { pipelineRoutes } from '../api/routes/pipeline.js';
-import { computePipelineView, computeDashboardSummary } from '../../../dist/lib/quality/quality-metrics.js';
+import { computePipelineView } from '../../../dist/lib/quality/quality-visualization.js';
+import { computeDashboardSummary } from '../../../dist/lib/quality/quality-metrics.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);

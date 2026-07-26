@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-metrics.js';
+import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-visualization.js';
 import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
 import type { EvaluationResult } from '../../../../dist/backends/index.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
+vi.mock('../../../dist/lib/quality/quality-visualization.js', () => ({
   computeCoverageHeatmap: vi.fn(),
 }));
 
@@ -27,7 +27,7 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { coverageRoutes } from '../api/routes/coverage.js';
-import { computeCoverageHeatmap } from '../../../dist/lib/quality/quality-metrics.js';
+import { computeCoverageHeatmap } from '../../../dist/lib/quality/quality-visualization.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);

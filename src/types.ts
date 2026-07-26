@@ -3,12 +3,14 @@ export type {
   QualityMetricResult,
   QualityMetricConfig,
   TriggeredAlert,
-  MetricTrend,
   ConfidenceIndicator,
   WorstExplanation,
   SLAComplianceResult,
   AlertSeverity,
   TrendDirection,
+} from '../../dist/lib/quality/quality-metrics.js';
+export type { MetricTrend } from '../../dist/lib/quality/quality-constants.js';
+export type {
   PipelineResult,
   PipelineStage,
   PipelineDropoff,
@@ -16,7 +18,7 @@ export type {
   CoverageCell,
   CoverageGap,
   CoverageStatus,
-} from '../../dist/lib/quality/quality-metrics.js';
+} from '../../dist/lib/quality/quality-visualization.js';
 
 // View types live in quality-views.js (not re-exported via quality-metrics.js;
 // see quality-metrics.ts — the re-export formed a load-order TDZ cycle).
