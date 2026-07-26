@@ -18,7 +18,7 @@ vi.mock('../../../dist/lib/quality/quality-views.js', () => ({
   computeRoleView: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/quality/quality-feature-engineering.js', () => ({
+vi.mock('../../../dist/lib/quality/qfe-cqi.js', () => ({
   computeCQI: vi.fn(),
 }));
 
@@ -45,7 +45,7 @@ import { dashboardRoutes } from '../api/routes/dashboard.js';
 import { qualityRoutes } from '../api/routes/quality.js';
 import { computeDashboardSummary } from '../../../dist/lib/quality/quality-metrics.js';
 import { computeRoleView } from '../../../dist/lib/quality/quality-views.js';
-import { computeCQI } from '../../../dist/lib/quality/quality-feature-engineering.js';
+import { computeCQI } from '../../../dist/lib/quality/qfe-cqi.js';
 import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
 
 
