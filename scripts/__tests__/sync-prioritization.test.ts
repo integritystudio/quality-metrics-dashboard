@@ -27,12 +27,12 @@ function allocateBudget(
 }
 
 function makeEval(traceId: string, scoreValue: number, daysAgo = 1): EvaluationResult {
-  const ts = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+  const ms = Date.now() - daysAgo * 24 * 60 * 60 * 1000;
   return {
     traceId,
     evaluationName: 'relevance',
     scoreValue,
-    timestamp: ts,
+    timestamp: BigInt(ms) * 1_000_000n,
     sessionId: 'sess-x',
     evaluatorType: 'llm',
     id: `${traceId}-${scoreValue}`,

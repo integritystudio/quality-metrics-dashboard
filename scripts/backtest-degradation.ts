@@ -30,7 +30,7 @@ import type {
   BacktestConfig,
 } from '../../src/lib/quality/qfe-backtest.js';
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
+import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 
 const INCIDENTS_FILE = join(import.meta.dirname ?? process.cwd(), '.degradation-incidents.json');
 /** F1 improvement above which best config triggers graduation recommendation */
@@ -101,7 +101,7 @@ interface DailyBucket {
 }
 
 function buildDailyBuckets(
-  evaluations: Array<{ timestamp: string; scoreValue: number }>,
+  evaluations: Array<{ timestamp: bigint; scoreValue: number }>,
   startMs: number,
   bucketCount: number,
 ): DailyBucket[] {
@@ -110,7 +110,7 @@ function buildDailyBuckets(
     scores: [],
   }));
   for (const ev of evaluations) {
-    const ts = new Date(ev.timestamp).getTime();
+    const ts = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
     const idx = Math.floor((ts - startMs) / TIME_MS.DAY);
     if (idx >= 0 && idx < bucketCount) {
       buckets[idx].scores.push(ev.scoreValue);
@@ -252,8 +252,8 @@ async function main(): Promise<void> {
   const backend = new CloudBackend();
   const now = Date.now();
   const startMs = now - days * TIME_MS.DAY;
-  const startDate = new Date(startMs).toISOString();
-  const endDate = new Date(now).toISOString();
+  const startDate = BigInt(startMs) * NANOSECONDS_PER_MILLISECOND_BIGINT;
+  const endDate = BigInt(now) * NANOSECONDS_PER_MILLISECOND_BIGINT;
 
   const metricNames = metricFilter
     ? [metricFilter]

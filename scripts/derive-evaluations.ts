@@ -6,7 +6,7 @@
  * in the format expected by the observability-toolkit backend.
  */
 
-import { writeFileSync, readdirSync } from 'fs';
+import { writeFileSync, readdirSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,
@@ -15,7 +15,7 @@ import {
   shouldRecalibrate,
 } from '../../src/lib/quality/qfe-percentiles.js';
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
-import { traceSpanSchema, otelEvaluationRecordSchema, type TraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
+import { traceSpanSchema, type TraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { TraceSpan };
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA } from './judge-evaluations.js';
@@ -47,7 +47,9 @@ function toOTelRecord(ev: EvalRecord): object {
     timestamp: ev.timestamp,
     name: 'gen_ai.evaluation.result',
     attributes: attrs,
-    traceId: ev.traceId,
+    // Omit rather than emit '' — TraceIdSchema is optional but rejects an
+    // empty string, so a written '' is silently dropped on read.
+    ...(ev.traceId && { traceId: ev.traceId }),
   };
 }
 
@@ -334,9 +336,56 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   return evals;
 }
 
+/** `traces-YYYY-MM-DD.jsonl` / `evaluations-YYYY-MM-DD.jsonl` */
+const TRACE_FILE_PREFIX = 'traces-';
+const DATE_ONLY_LEN = 10; // YYYY-MM-DD
+const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_ARG = '--date=';
+const DAYS_ARG = '--days=';
+
+/**
+ * Restrict which date buckets are read and rewritten.
+ * Returns null for "all dates" (no flag), preserving prior behavior.
+ *
+ * Scoping matters for safety, not just speed: the write loop below replaces
+ * each `evaluations-<date>.jsonl` wholesale, and any record the reader fails
+ * to validate is dropped rather than preserved.
+ */
+export function resolveDateScope(args: string[], now: Date = new Date()): Set<string> | null {
+  const dateArg = args.find(a => a.startsWith(DATE_ARG));
+  if (dateArg) {
+    const date = dateArg.slice(DATE_ARG.length);
+    if (!ISO_DATE_ONLY_PATTERN.test(date)) {
+      throw new Error(`${DATE_ARG} must be YYYY-MM-DD, got "${date}"`);
+    }
+    return new Set([date]);
+  }
+
+  const daysArg = args.find(a => a.startsWith(DAYS_ARG));
+  if (daysArg) {
+    const days = parseInt(daysArg.slice(DAYS_ARG.length), 10);
+    if (!Number.isFinite(days) || days < 1) {
+      throw new Error(`${DAYS_ARG} must be a positive integer, got "${daysArg.slice(DAYS_ARG.length)}"`);
+    }
+    const dates = new Set<string>();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(now);
+      d.setUTCDate(d.getUTCDate() - i);
+      dates.add(toDateOnly(d));
+    }
+    return dates;
+  }
+
+  return null;
+}
+
 function main(): void {
+  const dateScope = resolveDateScope(process.argv.slice(2));
+
   const traceFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
+    .filter(f => f.startsWith(TRACE_FILE_PREFIX) && f.endsWith('.jsonl'))
+    .filter(f => !dateScope
+      || dateScope.has(f.slice(TRACE_FILE_PREFIX.length, TRACE_FILE_PREFIX.length + DATE_ONLY_LEN)))
     .sort();
 
   const allEvals: EvalRecord[] = [];
@@ -371,15 +420,32 @@ function main(): void {
 
   let preservedCount = 0;
   for (const [date, evals] of byDate) {
+    // A span in an in-scope trace file can carry an out-of-scope timestamp;
+    // never rewrite a date the caller did not ask for.
+    if (dateScope && !dateScope.has(date)) continue;
+
     const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
 
-    // Read existing evaluations and keep any that weren't produced by derive (e.g. LLM judge)
+    // Keep any existing evaluation this script did not produce (e.g. LLM judge).
+    //
+    // Carry the ORIGINAL line through verbatim rather than re-serializing a
+    // parsed record: the schema decodes `timestamp` from ISO to epoch-nanos
+    // BigInt, so JSON.stringify would both throw and rewrite the wire format.
+    // Reading raw also means a record we cannot fully validate is retained
+    // rather than silently dropped by the overwrite below.
     const preserved: string[] = [];
-    const existingRecs = readJsonlWithValidationSync(outFile, otelEvaluationRecordSchema);
-    for (const rec of existingRecs) {
-      const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
-      if (evaluator && evaluator !== RULE_EVALUATOR) {
-        preserved.push(JSON.stringify(rec));
+    if (existsSync(outFile)) {
+      for (const line of readFileSync(outFile, 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        let rec: { attributes?: Record<string, unknown> };
+        try {
+          rec = JSON.parse(line) as { attributes?: Record<string, unknown> };
+        } catch {
+          preserved.push(line); // unparseable: keep rather than destroy
+          continue;
+        }
+        const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
+        if (evaluator !== RULE_EVALUATOR) preserved.push(line);
       }
     }
 

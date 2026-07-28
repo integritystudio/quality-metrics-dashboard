@@ -56,7 +56,7 @@ import {
   loadJsonWithValidation,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
+import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import {
   OTEL_STATUS_ERROR_CODE,
   FILE_ACCESS_TOP_N,
@@ -296,7 +296,7 @@ export function prioritizeTraces(
       ? scores.reduce((min, v) => v < min ? v : min, Infinity)
       : 1.0; // unevaluated traces get lowest priority
 
-    const timestamps = evals.map(e => new Date(e.timestamp).getTime()).filter(Number.isFinite);
+    const timestamps = evals.map(e => Number(e.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT)).filter(Number.isFinite);
     const latestTimestamp = timestamps.length > 0
       ? timestamps.reduce((max, v) => v > max ? v : max, 0)
       : 0;
@@ -333,7 +333,7 @@ type SessionSpan = {
   name: string;
   traceId?: string;
   durationMs?: number;
-  status?: { code?: number };
+  status?: { code?: number | string };
   attributes?: Record<string, unknown>;
 };
 
@@ -371,7 +371,7 @@ function computeTimespan(evaluations: EvaluationResult[]) {
   let tsMin = Infinity;
   let tsMax = -Infinity;
   for (const ev of evaluations) {
-    const t = new Date(ev.timestamp).getTime();
+    const t = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
     if (t < tsMin) tsMin = t;
     if (t > tsMax) tsMax = t;
   }
@@ -478,7 +478,7 @@ function computeErrorSummary(spans: SessionSpan[]) {
   for (const s of spans) {
     const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
       || spanAttr(s, 'integritystudio.agent.has_error', 'boolean') === true
-      || s.status?.code === OTEL_STATUS_ERROR_CODE;
+      || s.status?.code === OTEL_STATUS_ERROR_CODE || s.status?.code === 'ERROR';
     if (!hasError) continue;
     const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
     const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
@@ -659,7 +659,7 @@ function computeSessionDetail(
   const stepScores: StepScore[] = spans.map((span, i) => ({
     step: i,
     score: spanAttr(span, 'evaluation.score', 'number')
-      ?? (span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1),
+      ?? (span.status?.code === OTEL_STATUS_ERROR_CODE || span.status?.code === 'ERROR' ? 0 : 1),
     explanation: span.name,
   }));
   const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
@@ -710,8 +710,8 @@ async function main(): Promise<void> {
       const start = new Date(now.getTime() - ms);
       const dates = { start: start.toISOString(), end: now.toISOString() };
       const evals = await backend.queryEvaluations({
-        startDate: dates.start,
-        endDate: dates.end,
+        startDate: BigInt(start.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+        endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
         limit: QUERY_LIMIT,
       });
       if (evals.length === QUERY_LIMIT) {
@@ -776,8 +776,8 @@ async function main(): Promise<void> {
       const config = getQualityMetric(name);
       if (!config) return null;
       const rawEvals = await backend.queryEvaluations({
-        startDate: weekAgo.toISOString(),
-        endDate: now.toISOString(),
+        startDate: BigInt(weekAgo.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+        endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
         evaluationName: name,
         limit: QUERY_LIMIT,
       });
@@ -785,8 +785,8 @@ async function main(): Promise<void> {
       if (evals.length === 0) return null;
 
       const prevRawEvals = await backend.queryEvaluations({
-        startDate: twoWeeksAgo.toISOString(),
-        endDate: weekAgo.toISOString(),
+        startDate: BigInt(twoWeeksAgo.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+        endDate: BigInt(weekAgo.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
         evaluationName: name,
         limit: QUERY_LIMIT,
       });
@@ -815,7 +815,7 @@ async function main(): Promise<void> {
     for (const name of metricNames) {
       const evals = grouped.get(name);
       if (!evals || evals.length === 0) continue;
-      const sorted = [...evals].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      const sorted = [...evals].sort((a, b) => (b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0));
       const rows = sorted.slice(0, MAX_EVAL_ROWS).map(e => ({
         score: e.scoreValue ?? 0,
         explanation: e.explanation,
@@ -873,7 +873,7 @@ async function main(): Promise<void> {
         timeBuckets.push({ startTime: bStart.toISOString(), endTime: bEnd.toISOString(), scores: [], evals: [] });
       }
       for (const ev of evaluations) {
-        const ts = new Date(ev.timestamp).getTime();
+        const ts = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
         const idx = Math.min(Math.floor((ts - start.getTime()) / bucketMs), TREND_BUCKETS - 1);
         if (idx >= 0 && isValidScore(ev.scoreValue)) {
           timeBuckets[idx].scores.push(ev.scoreValue);
@@ -963,8 +963,8 @@ async function main(): Promise<void> {
 
   const thirtyDaysAgo = new Date(now.getTime() - MAX_DAYS_MS);
   const allEvals = await backend.queryEvaluations({
-    startDate: thirtyDaysAgo.toISOString(),
-    endDate: now.toISOString(),
+    startDate: BigInt(thirtyDaysAgo.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+    endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     limit: QUERY_LIMIT,
   });
   const evalsByTrace = new Map<string, EvaluationResult[]>();
@@ -975,8 +975,8 @@ async function main(): Promise<void> {
   const traceIds = [...evalsByTrace.keys()];
 
   const allSpans = await backend.queryTraces({
-    startDate: thirtyDaysAgo.toISOString(),
-    endDate: now.toISOString(),
+    startDate: BigInt(thirtyDaysAgo.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+    endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     limit: SPAN_QUERY_LIMIT,
   });
   const spansByTrace = new Map<string, typeof allSpans>();

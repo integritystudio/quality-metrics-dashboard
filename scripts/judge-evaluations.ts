@@ -65,7 +65,8 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
 };
 
 const HOME = process.env.HOME ?? '';
-export const TELEMETRY_DIR = join(HOME, '.claude', 'telemetry');
+// Must match the producer: hooks/lib/constants.ts writes telemetry here.
+export const TELEMETRY_DIR = join(HOME, '.claude-history', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
 export const SEED_EVALUATOR: EvaluatorType = 'seed';
@@ -101,7 +102,7 @@ function createEvalRecord(
   evaluationName: string,
   scoreValue: number,
   explanation: string,
-  evaluator: EvaluatorType,
+  evaluator: string,
   evaluatorType: EvaluatorType,
 ): EvalRecord {
   return {
@@ -136,7 +137,7 @@ export interface EvalRecord {
   evaluationName: string;
   scoreValue: number;
   explanation: string;
-  evaluator: EvaluatorType;
+  evaluator: string;
   evaluatorType: EvaluatorType;
   traceId: string;
   sessionId: string;
@@ -745,7 +746,9 @@ export function toOTelRecord(ev: EvalRecord): object {
     timestamp: ev.timestamp,
     name: 'gen_ai.evaluation.result',
     attributes: attrs,
-    traceId: ev.traceId,
+    // Omit rather than emit '' — TraceIdSchema is optional but rejects an
+    // empty string, so a written '' is silently dropped on read.
+    ...(ev.traceId && { traceId: ev.traceId }),
   };
 }
 
