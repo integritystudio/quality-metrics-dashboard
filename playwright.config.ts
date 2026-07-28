@@ -1,7 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { API_HOST, API_PORT } from './src/api/config.js';
+
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:5173';
+const API_HEALTH_URL = `http://${API_HOST}:${API_PORT}/api/health`;
 const isIntegration = process.env.INTEGRATION === '1';
+const SERVER_TIMEOUT_MS = 30_000;
 
 export default defineConfig({
   testDir: './e2e',
@@ -46,14 +50,29 @@ export default defineConfig({
     },
   ],
 
-  webServer: isIntegration ? undefined : {
-    command: 'npm run dev',
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-    env: {
-      ...process.env,
-      VITE_E2E: '1',
+  // Two entries, not one `npm run dev`: Playwright gates readiness per entry, so
+  // the API gets its own health check. Under a single concurrently-run command it
+  // waited on Vite alone and tests started against a dead /api proxy (502s).
+  webServer: isIntegration ? undefined : [
+    {
+      command: 'tsx src/api/server.ts',
+      url: API_HEALTH_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: SERVER_TIMEOUT_MS,
+      env: {
+        ...process.env,
+        VITE_E2E: '1',
+      },
     },
-  },
+    {
+      command: 'vite',
+      url: BASE_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: SERVER_TIMEOUT_MS,
+      env: {
+        ...process.env,
+        VITE_E2E: '1',
+      },
+    },
+  ],
 });
