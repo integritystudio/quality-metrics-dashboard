@@ -19,6 +19,7 @@
     "test:e2e:integration": "INTEGRATION=1 playwright test --project integration",
     "lint": "eslint -c eslint.config.mjs src/ scripts/ worker/",
     "typecheck": "tsc --noEmit",
+    "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "populate": "tsx scripts/populate-dashboard.ts",
     "derive": "tsx scripts/derive-evaluations.ts",
     "sync": "tsx scripts/sync-to-kv.ts",
