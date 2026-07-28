@@ -30,7 +30,7 @@ import { computeRoleView, computeMetricDetail } from '../../src/lib/quality/qual
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
 import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
-import { computeMetricDynamics } from '../../src/lib/quality/quality-feature-engineering.js';
+import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/quality-feature-engineering.js';
 import { computeCorrelationMatrix } from '../../src/lib/quality/qfe-correlation.js';
 import {
   computeRollingDegradationSignals,
@@ -368,8 +368,8 @@ function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[
 }
 
 function computeTimespan(evaluations: EvaluationResult[]) {
-  const tsMin = Infinity;
-  const tsMax = -Infinity;
+  let tsMin = Infinity;
+  let tsMax = -Infinity;
   for (const ev of evaluations) {
     const t = new Date(ev.timestamp).getTime();
     if (t < tsMin) tsMin = t;
@@ -902,7 +902,7 @@ async function main(): Promise<void> {
         const detail = scores.length > 0
           ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
           : undefined;
-        const dynamics = undefined;
+        let dynamics: MetricDynamics | undefined;
         if (detail?.trend) {
           dynamics = computeMetricDynamics(detail.trend, previousTrend, periodHours);
           previousTrend = detail.trend;
@@ -1033,7 +1033,7 @@ async function main(): Promise<void> {
     });
 
     for (const ag of detail.agentActivity) {
-      const acc = agentCrossSession.get(ag.agentName);
+      let acc = agentCrossSession.get(ag.agentName);
       if (!acc) {
         acc = {
           totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
@@ -1077,7 +1077,7 @@ async function main(): Promise<void> {
       } else if (sessionDate) {
         // Evict oldest to keep the most recent sessions in the buffer
         let oldestIdx = 0;
-        for (const i = 1; i < acc.sessions.length; i++) {
+        for (let i = 1; i < acc.sessions.length; i++) {
           const d = acc.sessions[i].date;
           const oldest = acc.sessions[oldestIdx].date;
           if (!oldest || (d && d < oldest)) oldestIdx = i;
