@@ -1,7 +1,6 @@
 /**
  * Worker route tests: GET /api/calibration.
  */
-/// <reference types="@cloudflare/workers-types" />
 
 import { describe, it, expect } from 'vitest';
 import app from '../../worker/index.js';
