@@ -7,7 +7,7 @@ React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displa
 ```bash
 npm run dev          # Vite + Hono API on :3001
 npm run dev:worker   # wrangler dev (local Worker)
-npm test             # Vitest
+npm test             # Vitest — src/__tests__ + worker/__tests__
 npm run test:scripts # Vitest for scripts/ (separate config)
 npm run typecheck    # TS 7 — use this, NOT bare `npx tsc` (see TypeScript versions)
 npm run typecheck:scripts    # TS 7 against scripts/ (tsconfig.scripts.json)
@@ -71,7 +71,7 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 
 Requires parent `dist/` — run `npm run build` in observability-toolkit first.
 
-**Test note**: `npm test` runs `src/__tests__` only (Vite context). Script tests (`scripts/*.test.ts`) require parent `dist/` and are run separately with `npm run test:scripts`. CI runs `npm test src/` to avoid script-test failures on parent build dependency.
+**Test note**: `npm test` runs `src/__tests__` **and** `worker/__tests__` (Vite context). Script tests (`scripts/*.test.ts`) require parent `dist/` and are run separately with `npm run test:scripts`. CI narrows to `npm test src/` (`.github/workflows/ci.yml`, `deploy.yml`) to avoid script-test failures on the parent build dependency — so `worker/__tests__` runs locally but **not** in CI.
 
 ## Integration Tests (`e2e/integration/`)
 
