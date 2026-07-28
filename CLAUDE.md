@@ -9,13 +9,24 @@ npm run dev          # Vite + Hono API on :3001
 npm run dev:worker   # wrangler dev (local Worker)
 npm test             # Vitest
 npm run test:scripts # Vitest for scripts/ (separate config)
-npm run typecheck    # tsc --noEmit
+npm run typecheck    # TS 7 — use this, NOT bare `npx tsc` (see TypeScript versions)
+npm run typecheck:scripts    # TS 7 against scripts/ (tsconfig.scripts.json)
 npm run lint         # ESLint (src/, scripts/, worker/)
 npm run build        # Production build
 npm run populate -- --seed   # Data pipeline (offline)
 npm run deploy:worker        # Deploy Cloudflare Worker
 doppler run --project integrity-studio --config dev -- npm run test:e2e:integration  # Auth0 integration tests
 ```
+
+## TypeScript versions (7 + 6 side-by-side)
+
+Two TypeScripts are installed because typescript-eslint throws at import on TS >= 7 ([#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)):
+- `typescript7` (`npm:typescript@^7.0.2`) — compiles; used by the `typecheck` scripts
+- `typescript` (`npm:@typescript/typescript6@^6.0.2`) — TS 6 API re-export; what `require('typescript')` gives typescript-eslint
+
+**`npx tsc` is TS 6, not 7** — npm gave the `tsc` bin to the TS 6 package. Run `npm run typecheck`, which calls `node node_modules/typescript7/bin/tsc` explicitly. (`npx tsc6` is also TS 6.) Collapse back to one `typescript` dep once typescript-eslint supports TS 7.
+
+The parent observability-toolkit is unaffected — it has its own `node_modules` on TS 6 and builds independently.
 
 ## Architecture
 
