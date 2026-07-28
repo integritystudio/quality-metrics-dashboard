@@ -132,10 +132,13 @@ export interface Turn {
   toolResults: string[];
 }
 
+/** Canonical evaluation record. Also used by derive-evaluations.ts. */
 export interface EvalRecord {
   timestamp: string;
   evaluationName: string;
   scoreValue: number;
+  /** e.g. 'seconds', 'ratio_0_1'; omitted when the score is unitless. */
+  scoreUnit?: string;
   explanation: string;
   evaluator: string;
   evaluatorType: EvaluatorType;
@@ -741,6 +744,7 @@ export function toOTelRecord(ev: EvalRecord): object {
     'gen_ai.evaluation.evaluator': ev.evaluator,
     'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
   };
+  if (ev.scoreUnit) attrs['gen_ai.evaluation.score.unit'] = ev.scoreUnit;
   if (ev.sessionId) attrs['session.id'] = ev.sessionId;
   return {
     timestamp: ev.timestamp,

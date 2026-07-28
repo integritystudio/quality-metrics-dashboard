@@ -4,6 +4,13 @@
  *
  * Reads traces-*.jsonl, extracts quality signals, writes evaluations-*.jsonl
  * in the format expected by the observability-toolkit backend.
+ *
+ * Each target evaluations-<date>.jsonl is REPLACED, not appended to, so scope
+ * the run and preview it before writing:
+ *
+ *   tsx scripts/derive-evaluations.ts --date=2026-07-27 --dry-run
+ *   tsx scripts/derive-evaluations.ts --days=7
+ *   tsx scripts/derive-evaluations.ts              # all dates
  */
 
 import { writeFileSync, readdirSync, readFileSync, existsSync } from 'fs';
@@ -18,40 +25,13 @@ import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constan
 import { traceSpanSchema, type TraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { TraceSpan };
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
 
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  scoreUnit?: string;
-  explanation: string;
-  evaluator: EvaluatorType;
-  evaluatorType: EvaluatorType;
-  traceId: string;
-  sessionId: string;
-}
-
-function toOTelRecord(ev: EvalRecord): object {
-  const attrs: Record<string, unknown> = {
-    'gen_ai.evaluation.name': ev.evaluationName,
-    'gen_ai.evaluation.score.value': ev.scoreValue,
-    'gen_ai.evaluation.explanation': ev.explanation,
-    'gen_ai.evaluation.evaluator': ev.evaluator,
-    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
-  };
-  if (ev.scoreUnit) attrs['gen_ai.evaluation.score.unit'] = ev.scoreUnit;
-  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
-  return {
-    timestamp: ev.timestamp,
-    name: 'gen_ai.evaluation.result',
-    attributes: attrs,
-    // Omit rather than emit '' — TraceIdSchema is optional but rejects an
-    // empty string, so a written '' is silently dropped on read.
-    ...(ev.traceId && { traceId: ev.traceId }),
-  };
-}
+// EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
+// the same wire format, and keeping two copies is how the empty-traceId bug
+// ended up needing the same fix twice. Re-exported for existing importers.
+export type { EvalRecord } from './judge-evaluations.js';
 
 function hrtToSeconds(hrt: [number, number]): number {
   return hrt[0] + hrt[1] / 1e9;
@@ -342,6 +322,7 @@ const DATE_ONLY_LEN = 10; // YYYY-MM-DD
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
 const DAYS_ARG = '--days=';
+const DRY_RUN_ARG = '--dry-run';
 
 /**
  * Restrict which date buckets are read and rewritten.
@@ -380,7 +361,9 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
 }
 
 function main(): void {
-  const dateScope = resolveDateScope(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const dateScope = resolveDateScope(argv);
+  const dryRun = argv.includes(DRY_RUN_ARG);
 
   const traceFiles = readdirSync(TELEMETRY_DIR)
     .filter(f => f.startsWith(TRACE_FILE_PREFIX) && f.endsWith('.jsonl'))
@@ -419,6 +402,7 @@ function main(): void {
   }
 
   let preservedCount = 0;
+  let filesToWrite = 0;
   for (const [date, evals] of byDate) {
     // A span in an in-scope trace file can carry an out-of-scope timestamp;
     // never rewrite a date the caller did not ask for.
@@ -451,8 +435,20 @@ function main(): void {
 
     const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
     const content = [...ruleLines, ...preserved].join('\n') + '\n';
-    writeFileSync(outFile, content);
+    if (dryRun) {
+      const existing = existsSync(outFile)
+        ? readFileSync(outFile, 'utf8').split('\n').filter(l => l.trim()).length
+        : 0;
+      const total = ruleLines.length + preserved.length;
+      console.log(
+        `[dry-run] evaluations-${date}.jsonl: ${ruleLines.length} rule + ${preserved.length} preserved`
+        + ` = ${total} lines (currently ${existing}, net ${total - existing >= 0 ? '+' : ''}${total - existing})`,
+      );
+    } else {
+      writeFileSync(outFile, content);
+    }
     preservedCount += preserved.length;
+    filesToWrite++;
   }
 
   // Calibration step: compute per-metric percentile distributions
@@ -469,7 +465,9 @@ function main(): void {
     const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
     // psiValues reflects PSI at the time of last write (when shouldWrite: true),
     // not from every check — stable runs don't update the file.
-    if (shouldWrite) {
+    if (shouldWrite && dryRun) {
+      console.log('[dry-run] would update .calibration-state.json');
+    } else if (shouldWrite) {
       saveCalibrationState(TELEMETRY_DIR, {
         lastCalibrated: new Date().toISOString(),
         distributions: newDistributions,
@@ -479,6 +477,10 @@ function main(): void {
         ),
       });
     }
+  }
+
+  if (dryRun) {
+    console.log(`[dry-run] ${filesToWrite} file(s) would be written; nothing changed on disk.`);
   }
 
   const byCat = new Map<string, number>();

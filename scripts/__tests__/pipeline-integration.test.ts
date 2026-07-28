@@ -19,7 +19,6 @@ import {
   deriveTaskCompletionPerSession,
   sessionTasks,
   type TraceSpan,
-  type EvalRecord as DeriveEvalRecord,
 } from '../derive-evaluations.js';
 
 // judge-evaluations exports
@@ -27,7 +26,7 @@ import {
   seedEvaluations,
   toOTelRecord,
   type Turn,
-  type EvalRecord as JudgeEvalRecord,
+  type EvalRecord,
 } from '../judge-evaluations.js';
 import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 
@@ -380,7 +379,7 @@ describe('full pipeline: derive + judge write/read cycle', () => {
     expect(judgeEvals.length).toBeGreaterThan(0);
 
     // Step 3: Combine and write to JSONL (as populate-dashboard.ts would do)
-    const allEvals: (DeriveEvalRecord | JudgeEvalRecord)[] = [...deriveEvals, ...judgeEvals];
+    const allEvals: EvalRecord[] = [...deriveEvals, ...judgeEvals];
     const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
     const content = allEvals.map(ev => JSON.stringify(toOTelRecord(ev))).join('\n') + '\n';
     writeFileSync(outFile, content);
