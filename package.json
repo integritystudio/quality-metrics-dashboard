@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.22.2"
+  },
   "scripts": {
     "dev": "concurrently -n api,vite -c blue,green \"tsx src/api/server.ts\" \"vite\"",
     "dev:api": "tsx src/api/server.ts",
@@ -35,7 +38,7 @@
     "d3-scale": "^4.0.2",
     "d3-scale-chromatic": "^3.1.0",
     "date-fns": "^4.1.0",
-    "elkjs": "^0.11.1",
+    "elkjs": "^0.12.0",
     "hono": "^4.12.9",
     "html-to-image": "^1.11.13",
     "jose": "^6.2.2",
@@ -51,13 +54,13 @@
     "undici": "^7.24.4"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.90.0",
+    "@anthropic-ai/sdk": "^0.115.0",
     "@cloudflare/workers-types": "^4.20260317.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
     "@sentry/node": "^10.46.0",
     "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/d3-array": "^3.2.2",
     "@types/d3-scale": "^4.0.9",
@@ -66,11 +69,11 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.4",
     "eslint": "^10.1.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "jsdom": "^29.0.1",
+    "jsdom": "^30.0.0",
     "repomix": "^1.13.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
