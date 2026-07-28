@@ -979,6 +979,9 @@ async function main(): Promise<void> {
     endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     limit: SPAN_QUERY_LIMIT,
   });
+  if (allSpans.length === SPAN_QUERY_LIMIT) {
+    console.warn(`[sync-to-kv] Span query returned ${SPAN_QUERY_LIMIT} results — data may be truncated`);
+  }
   const spansByTrace = new Map<string, typeof allSpans>();
   for (const span of allSpans) {
     if (!span.traceId) continue;
