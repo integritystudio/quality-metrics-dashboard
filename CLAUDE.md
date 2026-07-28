@@ -71,7 +71,29 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 
 Requires parent `dist/` — run `npm run build` in observability-toolkit first.
 
+**`sync-to-kv.ts` gotchas** (all tracked in the parent's [BACKLOG](../docs/BACKLOG.md)):
+- It reads the **cloud API**, not local files — `new CloudBackend()` → `/v1/traces` + `/v1/logs`. Needs `OBTOOL_API_URL`/`OBTOOL_API_KEY` or it exits 1.
+- Every cloud read is capped at **1000 rows** server-side and `CloudBackend` never follows the cursor, so aggregates cover ≤1000 rows. Its own truncation warning (`=== QUERY_LIMIT`, 200,000) can never fire (`CLOUD-PAGE-CAP`).
+- It prints **nothing** — zero `console.log`. Success, no-op, and empty-result runs are indistinguishable (`SYNC-SILENT`).
+- **`--dry-run` is not dry**: it rewrites `scripts/.kv-sync-state.json` (and the git-tracked `.kv-sync-coverage.json`), which makes a later real run skip those writes (`SYNC-DRYRUN-STATE`).
+
+A Workflow alternative lives at `services/kv-sync-workflow/` in the parent repo — partial coverage, not deployed.
+
 **Test note**: `npm test` runs `src/__tests__` **and** `worker/__tests__` (Vite context). Script tests (`scripts/*.test.ts`) require parent `dist/` and are run separately with `npm run test:scripts`. CI narrows to `npm test src/` (`.github/workflows/ci.yml`, `deploy.yml`) to avoid script-test failures on the parent build dependency — so `worker/__tests__` runs locally but **not** in CI.
+
+## Worker types
+
+`@cloudflare/workers-types` is declared once, in root `tsconfig.json` `compilerOptions.types`. Do not re-add `/// <reference types="@cloudflare/workers-types" />` to individual files. Before 2026-07-28 there was no tsconfig declaration at all and coverage came from two stray triple-slash references — one of them in `src/__tests__/api-calibration.test.ts`, meaning production worker types were underwritten by a test file. `worker/tsconfig.json` was deleted in the same change (nothing invoked it; eslint and typecheck both use root `tsconfig.json`, and wrangler only reads `main` from `wrangler.toml`).
+
+To verify the declaration is load-bearing: remove it from `tsconfig.json` and `npm run typecheck` should report ~14 errors (`Cannot find name 'KVNamespace'` / `'ExecutionContext'`).
+
+## E2E (`e2e/`, chromium project)
+
+`playwright.config.ts` starts **two** webServers — `tsx src/api/server.ts` gated on `/api/health`, and `vite` gated on the page URL. It previously ran a single `npm run dev` and waited only on vite, so specs started against a dead `/api` proxy and failed with 502s. The API port comes from `src/api/config.ts`, not a literal.
+
+- `vite.config.ts:48` still hardcodes the proxy target `http://127.0.0.1:3001`, so setting `API_PORT` desyncs the gate from the proxy.
+- Most e2e specs still fail for a **different** reason: the local API reports `hasData: false` (all 9 metrics `no_data`), so anything asserting on rendered metric content cannot pass. Seed with `npm run populate -- --seed`.
+- `GET /api/agents` returns 500 locally — a real bug the readiness fix uncovered, previously masked as a 502.
 
 ## Integration Tests (`e2e/integration/`)
 
