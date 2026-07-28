@@ -35,7 +35,7 @@ import {
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
+import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import pLimit from 'p-limit';
 
@@ -766,8 +766,10 @@ function _loadExistingKeys(): Set<string> {
 
       const sessionId = attrs['session.id'] as string || '';
       const metricName = attrs['gen_ai.evaluation.name'] as string || '';
-      const timestamp = record.timestamp || '';
-      const turnKey = timestamp.slice(0, 19);
+      // record.timestamp is epoch nanos (bigint) — the schema decodes ISO to nanos.
+      // Turn keys are compared against ISO-prefix keys, so convert back.
+      const ms = Number(record.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
+      const turnKey = new Date(ms).toISOString().slice(0, TIMESTAMP_TURN_KEY_LEN);
 
       keys.add(`${sessionId}:${metricName}:${turnKey}`);
     }
@@ -806,7 +808,7 @@ function acquireLock(): boolean {
     }
 
     // Also check lock age — stale if older than 1 hour regardless of PID
-    const stale = false;
+    let stale = false;
     {
       try {
         const lockStat = statSync(LOCK_FILE);
@@ -876,7 +878,7 @@ async function main() {
   const seed = args.includes('--seed');
   const backfill = args.includes('--backfill');
   const limitIdx = args.indexOf('--limit');
-  const limit = Infinity;
+  let limit = Infinity;
   if (limitIdx !== -1) {
     const parsed = parseInt(args[limitIdx + 1], 10);
     if (isNaN(parsed) || parsed < 1) {
@@ -906,7 +908,7 @@ async function main() {
       // Checking only hallucination would skip sessions with partial coverage.
       const SEED_METRICS = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, HALLUCINATION_EVAL_NAME] as const;
       const newTurns = traceTurns.filter(t => {
-        const turnKey = t.timestamp.slice(0, 19);
+        const turnKey = t.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
         return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
       });
       console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
