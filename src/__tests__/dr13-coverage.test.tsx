@@ -499,7 +499,7 @@ vi.mock('../../../../dist/lib/quality/quality-metrics.js', () => ({
   QUALITY_METRICS: { relevance: { aggregations: ['avg'] } },
 }));
 
-vi.mock('../../../../dist/lib/quality/quality-feature-engineering.js', () => ({
+vi.mock('../../../../dist/lib/quality/qfe-dynamics.js', () => ({
   computeMetricDynamics: vi.fn(() => null),
 }));
 
