@@ -56,7 +56,7 @@ import {
   loadJsonWithValidation,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
-import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
+import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, SECONDS } from '../../src/lib/core/units.js';
 import {
   OTEL_STATUS_ERROR_CODE,
   FILE_ACCESS_TOP_N,
@@ -108,7 +108,7 @@ const MAX_RECENT_SESSIONS = 20;
 const META_LAST_SYNC_KEY = 'meta:lastSync';
 const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
 
-type KVEntry = { key: string; value: string };
+type KVEntry = { key: string; value: string; expirationTtl?: number };
 
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
@@ -121,6 +121,14 @@ const COVERAGE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-coverage.json')
 const QUERY_LIMIT = 200_000;
 /** Span queries need a higher limit than evaluation queries to capture all sessions. */
 const SPAN_QUERY_LIMIT = 1_000_000;
+
+/**
+ * TTL for per-trace and per-session KV entries (seconds).
+ * Must exceed the longest `--days` query window so entries are not prematurely expired.
+ * 90 days is ~3x the default 30-day window and prevents unbounded key accumulation.
+ */
+export const TRACE_KEY_TTL_SECONDS = SECONDS.DAY * 90;
+export const SESSION_KEY_TTL_SECONDS = SECONDS.DAY * 90;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
@@ -216,6 +224,7 @@ function kvBulkPut(entries: KVEntry[]): number {
       const enveloped = batch.map(e => ({
         key: e.key,
         value: JSON.stringify({ v: KV_SCHEMA_VERSION, data: JSON.parse(e.value) }),
+        ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
       }));
       writeFileSync(tmpFile, JSON.stringify(enveloped));
       if (dryRun) {
@@ -247,6 +256,40 @@ function kvBulkPut(entries: KVEntry[]): number {
   return written;
 }
 
+/**
+ * Delete a batch of KV keys via `wrangler kv bulk delete`.
+ * Warns on failure but does not throw — prune passes are best-effort.
+ */
+function kvBulkDelete(keys: string[]): void {
+  if (keys.length === 0) return;
+  for (let i = 0; i < keys.length; i += KV_BATCH_SIZE) {
+    const batch = keys.slice(i, i + KV_BATCH_SIZE);
+    const tmpFile = join(tmpdir(), `kv-delete-${Date.now()}-${randomBytes(4).toString('hex')}-${i}.json`);
+    try {
+      writeFileSync(tmpFile, JSON.stringify(batch));
+      if (dryRun) {
+        console.log(`[sync-to-kv] dry-run: would delete ${batch.length} stale KV key(s)`);
+        continue;
+      }
+      try {
+        execFileSync(
+          'npx',
+          ['wrangler', 'kv', 'bulk', 'delete', tmpFile, '--namespace-id', NAMESPACE_ID, '--remote', '--force'],
+          { stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+      } catch (err) {
+        const stderr = (err as { stderr?: Buffer })?.stderr?.toString() ?? '';
+        console.warn(
+          `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
+          `${err instanceof Error ? err.message : String(err)}` +
+          (stderr ? ` — stderr: ${stderr.slice(0, 300)}` : ''),
+        );
+      }
+    } finally {
+      try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
+    }
+  }
+}
 
 function extractTraceId(key: string): string | null {
   if (key.startsWith('evaluations:trace:')) return key.slice('evaluations:trace:'.length);
@@ -996,10 +1039,12 @@ async function main(): Promise<void> {
     traceEntries.push({
       key: `evaluations:trace:${traceId}`,
       value: JSON.stringify({ evaluations: traceEvals }),
+      expirationTtl: TRACE_KEY_TTL_SECONDS,
     });
     traceEntries.push({
       key: `trace:${traceId}`,
       value: JSON.stringify({ traceId, spans, evaluations: traceEvals }),
+      expirationTtl: TRACE_KEY_TTL_SECONDS,
     });
   }
 
@@ -1034,6 +1079,7 @@ async function main(): Promise<void> {
           ({ totalOutputSize: _, ...rest }) => rest,
         ),
       }),
+      expirationTtl: SESSION_KEY_TTL_SECONDS,
     });
 
     for (const ag of detail.agentActivity) {
@@ -1200,6 +1246,15 @@ async function main(): Promise<void> {
   const computedKeys = new Set(allEntries.map(e => e.key));
   computedKeys.add(META_LAST_SYNC_KEY);
   computedKeys.add(META_SYNC_COVERAGE_KEY);
+
+  // Delete KV keys that were tracked in local state but are no longer computed.
+  // This covers entries whose trace/session was pruned from the query window on this run.
+  const staleKeys = Object.keys(newState).filter(k => !computedKeys.has(k));
+  if (staleKeys.length > 0) {
+    console.log(`[sync-to-kv] Pruning ${staleKeys.length} stale KV key(s) dropped from local state`);
+    kvBulkDelete(staleKeys);
+  }
+
   for (const key of Object.keys(newState)) {
     if (!computedKeys.has(key)) delete newState[key];
   }

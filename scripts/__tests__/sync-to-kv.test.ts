@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildCalibrationEntry } from '../sync-to-kv.js';
+import { buildCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
 import type { CalibrationState } from '../../../dist/lib/quality/qfe-percentiles.js';
+
+const SECONDS_PER_DAY = 86_400;
 
 type KVEntry = { key: string; value: string };
 
@@ -149,5 +151,33 @@ describe('buildCalibrationEntry: graceful skip on missing or invalid state', () 
     const result = buildCalibrationEntry(state);
 
     expect(result).toBeNull();
+  });
+});
+
+describe('KV trace/session TTL constants', () => {
+  it('TRACE_KEY_TTL_SECONDS is a positive integer (required by Cloudflare KV)', () => {
+    expect(Number.isInteger(TRACE_KEY_TTL_SECONDS)).toBe(true);
+    expect(TRACE_KEY_TTL_SECONDS).toBeGreaterThan(0);
+  });
+
+  it('SESSION_KEY_TTL_SECONDS is a positive integer (required by Cloudflare KV)', () => {
+    expect(Number.isInteger(SESSION_KEY_TTL_SECONDS)).toBe(true);
+    expect(SESSION_KEY_TTL_SECONDS).toBeGreaterThan(0);
+  });
+
+  it('TRACE_KEY_TTL_SECONDS exceeds the default 30-day query window', () => {
+    // Default --days=30 window; TTL must be longer than the query window so entries
+    // are not expired before the next sync rewrites them.
+    const DEFAULT_QUERY_WINDOW_DAYS = 30;
+    expect(TRACE_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS_PER_DAY);
+  });
+
+  it('SESSION_KEY_TTL_SECONDS exceeds the default 30-day query window', () => {
+    const DEFAULT_QUERY_WINDOW_DAYS = 30;
+    expect(SESSION_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS_PER_DAY);
+  });
+
+  it('TRACE_KEY_TTL_SECONDS is exactly 90 days in seconds', () => {
+    expect(TRACE_KEY_TTL_SECONDS).toBe(90 * SECONDS_PER_DAY);
   });
 });
