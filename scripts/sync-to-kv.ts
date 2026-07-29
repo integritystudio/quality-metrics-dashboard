@@ -697,6 +697,7 @@ async function main(): Promise<void> {
   if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
     console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${MIN_TRACE_BUDGET + 10}); high-priority entries may be skipped`);
   }
+  console.log(`[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}`);
 
   const now = new Date();
   const entries: KVEntry[] = [];
@@ -1149,6 +1150,7 @@ async function main(): Promise<void> {
   const changed = filterChanged(allEntries, prevState);
 
   if (changed.length === 0) {
+    console.log(`[sync-to-kv] No-op: computed=${allEntries.length} unchanged=${allEntries.length} changed=0 written=0 deferred=0`);
     // Still update lastSync timestamp
     const metaEntry: KVEntry = { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) };
     if (prevState[META_LAST_SYNC_KEY]?.hash !== hashValue(metaEntry.value)) {
@@ -1242,7 +1244,19 @@ async function main(): Promise<void> {
   if (!dryRun) saveLastCoverage(coverage);
 
   const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
-  const _actualDeferred = deferred + limitDeferred;
+  const actualDeferred = deferred + limitDeferred;
+
+  const evalRowCounts = periodQueryResults.map(r => `${r.period}:${r.evals.length}`).join(' ');
+  const hitCap = periodQueryResults.some(r => r.evals.length >= QUERY_LIMIT) ||
+    allEvals.length >= QUERY_LIMIT ||
+    allSpans.length >= SPAN_QUERY_LIMIT;
+  console.log(
+    `[sync-to-kv] Done: computed=${allEntries.length} changed=${changed.length} ` +
+    `unchanged=${allEntries.length - changed.length} written=${written} deferred=${actualDeferred}` +
+    (dryRun ? ' (dry-run, no KV writes)' : '') +
+    ` | evals=${allEvals.length} spans=${allSpans.length} traces=${traceIds.length} periods=[${evalRowCounts}]` +
+    (hitCap ? ' | WARNING: query hit page cap — results may be truncated' : ''),
+  );
 }
 
 const isDirectRun = process.argv[1]?.endsWith('sync-to-kv.ts') ||
