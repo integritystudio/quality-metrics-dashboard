@@ -7,6 +7,8 @@ repomix-output.xml
 docs/repomix/docs.xml
 docs/repomix/docs-compressed.xml
 .kv-sync-state.json
+scripts/.kv-sync-coverage.json
+scripts/.degradation-incidents.json
 worker-configuration.d.ts
 playwright-report/
 test-results/

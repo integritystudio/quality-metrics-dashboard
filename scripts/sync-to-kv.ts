@@ -955,7 +955,7 @@ async function main(): Promise<void> {
     });
   }
   degradationState.lastRun = now.toISOString();
-  if (stateDir) saveDegradationState(stateDir, degradationState);
+  if (stateDir && !dryRun) saveDegradationState(stateDir, degradationState);
 
   const calibrationState = stateDir ? loadCalibrationState(stateDir) : null;
   const calibrationEntry = buildCalibrationEntry(calibrationState);
@@ -1154,13 +1154,13 @@ async function main(): Promise<void> {
     if (prevState[META_LAST_SYNC_KEY]?.hash !== hashValue(metaEntry.value)) {
       kvBulkPut([metaEntry]);
       prevState[META_LAST_SYNC_KEY] = { hash: hashValue(metaEntry.value) };
-      saveSyncState(prevState);
+      if (!dryRun) saveSyncState(prevState);
     }
     // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
     // KV consumers can use meta:lastSync (written above) to see when sync last ran; updating
     // meta:syncCoverage in KV here would burn 1 write per no-op run without changing stable data.
     const prevCoverage = loadLastCoverage();
-    if (prevCoverage) {
+    if (prevCoverage && !dryRun) {
       saveLastCoverage({ ...prevCoverage, lastChecked: now.toISOString() });
     }
     return;
@@ -1201,7 +1201,7 @@ async function main(): Promise<void> {
   for (const key of Object.keys(newState)) {
     if (!computedKeys.has(key)) delete newState[key];
   }
-  saveSyncState(newState);
+  if (!dryRun) saveSyncState(newState);
 
   // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
   // It may over-count if a prior wrangler write failed silently.
@@ -1235,11 +1235,11 @@ async function main(): Promise<void> {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
       newState[META_SYNC_COVERAGE_KEY] = { hash: coverageHash };
-      saveSyncState(newState);
+      if (!dryRun) saveSyncState(newState);
     }
   }
   // Persist coverage data so the early-return path can refresh lastChecked without recomputing.
-  saveLastCoverage(coverage);
+  if (!dryRun) saveLastCoverage(coverage);
 
   const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
   const _actualDeferred = deferred + limitDeferred;
