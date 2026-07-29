@@ -30,7 +30,7 @@ import { computeRoleView, computeMetricDetail } from '../../src/lib/quality/qual
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
 import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
 import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
-import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/quality-feature-engineering.js';
+import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/qfe-dynamics.js';
 import { computeCorrelationMatrix } from '../../src/lib/quality/qfe-correlation.js';
 import {
   computeRollingDegradationSignals,

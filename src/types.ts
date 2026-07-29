@@ -33,7 +33,7 @@ export type {
 export type { RoleType as RoleViewType } from '../../dist/lib/quality/quality-constants.js';
 
 export type { EvaluationResult, TraceSpan } from '../../dist/backends/index.js';
-export type { MetricDynamics } from '../../dist/lib/quality/quality-feature-engineering.js';
+export type { MetricDynamics } from '../../dist/lib/quality/qfe-dynamics.js';
 export type { CompositeQualityIndex, CQIContribution } from '../../dist/lib/quality/qfe-cqi.js';
 export type { CorrelationFeature } from '../../dist/lib/quality/qfe-correlation.js';
 export type { HandoffEvaluation, TurnLevelResult, MultiAgentEvaluation } from '../../dist/lib/quality/quality-multi-agent.js';
