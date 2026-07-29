@@ -114,7 +114,7 @@ function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
 }
 
-const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
+export const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
 const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
 /** Stores last computed coverage object so early-return path can refresh lastChecked. */
 const COVERAGE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-coverage.json');
@@ -259,15 +259,19 @@ function kvBulkPut(entries: KVEntry[]): number {
 /**
  * Delete a batch of KV keys via `wrangler kv bulk delete`.
  * Warns on failure but does not throw — prune passes are best-effort.
+ *
+ * @param keys - KV keys to delete
+ * @param opts.dryRun - when true, logs instead of calling wrangler; defaults to the module-level dryRun flag
  */
-function kvBulkDelete(keys: string[]): void {
+export function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): void {
+  const isDryRun = opts?.dryRun ?? dryRun;
   if (keys.length === 0) return;
   for (let i = 0; i < keys.length; i += KV_BATCH_SIZE) {
     const batch = keys.slice(i, i + KV_BATCH_SIZE);
     const tmpFile = join(tmpdir(), `kv-delete-${Date.now()}-${randomBytes(4).toString('hex')}-${i}.json`);
     try {
       writeFileSync(tmpFile, JSON.stringify(batch));
-      if (dryRun) {
+      if (isDryRun) {
         console.log(`[sync-to-kv] dry-run: would delete ${batch.length} stale KV key(s)`);
         continue;
       }
