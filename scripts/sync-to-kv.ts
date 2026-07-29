@@ -125,7 +125,7 @@ const SPAN_QUERY_LIMIT = 1_000_000;
 /**
  * TTL for per-trace and per-session KV entries (seconds).
  * Must exceed the longest `--days` query window so entries are not prematurely expired.
- * 90 days is ~3x the default 30-day window and prevents unbounded key accumulation.
+ * 90 days is 3x the default 30-day window and prevents unbounded key accumulation.
  */
 export const TRACE_KEY_TTL_SECONDS = SECONDS.DAY * 90;
 export const SESSION_KEY_TTL_SECONDS = SECONDS.DAY * 90;

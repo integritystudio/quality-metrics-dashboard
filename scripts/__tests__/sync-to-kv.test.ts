@@ -180,4 +180,8 @@ describe('KV trace/session TTL constants', () => {
   it('TRACE_KEY_TTL_SECONDS is exactly 90 days in seconds', () => {
     expect(TRACE_KEY_TTL_SECONDS).toBe(90 * SECONDS_PER_DAY);
   });
+
+  it('SESSION_KEY_TTL_SECONDS is exactly 90 days in seconds', () => {
+    expect(SESSION_KEY_TTL_SECONDS).toBe(90 * SECONDS_PER_DAY);
+  });
 });
