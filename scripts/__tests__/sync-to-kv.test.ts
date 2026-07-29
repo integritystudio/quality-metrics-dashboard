@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
 import type { CalibrationState } from '../../../dist/lib/quality/qfe-percentiles.js';
-
-const SECONDS_PER_DAY = 86_400;
+import { SECONDS } from '../../../src/lib/core/units.js';
 
 type KVEntry = { key: string; value: string };
 
@@ -169,19 +168,19 @@ describe('KV trace/session TTL constants', () => {
     // Default --days=30 window; TTL must be longer than the query window so entries
     // are not expired before the next sync rewrites them.
     const DEFAULT_QUERY_WINDOW_DAYS = 30;
-    expect(TRACE_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS_PER_DAY);
+    expect(TRACE_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS.DAY);
   });
 
   it('SESSION_KEY_TTL_SECONDS exceeds the default 30-day query window', () => {
     const DEFAULT_QUERY_WINDOW_DAYS = 30;
-    expect(SESSION_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS_PER_DAY);
+    expect(SESSION_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS.DAY);
   });
 
   it('TRACE_KEY_TTL_SECONDS is exactly 90 days in seconds', () => {
-    expect(TRACE_KEY_TTL_SECONDS).toBe(90 * SECONDS_PER_DAY);
+    expect(TRACE_KEY_TTL_SECONDS).toBe(90 * SECONDS.DAY);
   });
 
   it('SESSION_KEY_TTL_SECONDS is exactly 90 days in seconds', () => {
-    expect(SESSION_KEY_TTL_SECONDS).toBe(90 * SECONDS_PER_DAY);
+    expect(SESSION_KEY_TTL_SECONDS).toBe(90 * SECONDS.DAY);
   });
 });
