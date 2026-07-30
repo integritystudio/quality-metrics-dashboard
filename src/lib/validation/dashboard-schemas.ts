@@ -13,6 +13,9 @@ import { z } from 'zod';
 // TraceIdSchema/SpanIdSchema live in shared-schemas; the rest in dashboard-schemas.
 export { TraceIdSchema, SpanIdSchema, evaluatorTypeSchema, type EvaluatorType } from '@parent/lib/core/shared-schemas.js';
 
+/** Normalized score value: 0–1 inclusive (mirrors parent shared-schemas.ts) */
+const normalizedScoreSchema = z.number().min(0).max(1);
+
 export {
   HALLUCINATION_EVAL_NAME_SCHEMA,
   HALLUCINATION_EVAL_NAME,
@@ -46,7 +49,7 @@ export type {
 
 const routingTelemetrySummarySchema = z.object({
   routedSpans: z.int().min(0),
-  fallbackRate: z.number().min(0).max(1),
+  fallbackRate: normalizedScoreSchema,
 });
 
 const routingTelemetryModelPairGroupSchema = z.object({
@@ -61,7 +64,7 @@ const routingTelemetryStrategyGroupSchema = z.object({
   strategy: z.string(),
   count: z.int().min(0),
   fallbackCount: z.int().min(0),
-  fallbackRate: z.number().min(0).max(1),
+  fallbackRate: normalizedScoreSchema,
 });
 
 const routingTelemetryGroupSchema = z.union([
