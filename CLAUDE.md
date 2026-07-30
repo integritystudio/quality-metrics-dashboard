@@ -71,11 +71,11 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 
 Requires parent `dist/` — run `npm run build` in observability-toolkit first.
 
-**`sync-to-kv.ts` gotchas** (all tracked in the parent's [BACKLOG](../docs/BACKLOG.md)):
-- It reads the **cloud API**, not local files — `new CloudBackend()` → `/v1/traces` + `/v1/logs`. Needs `OBTOOL_API_URL`/`OBTOOL_API_KEY` or it exits 1.
-- Every cloud read is capped at **1000 rows** server-side and `CloudBackend` never follows the cursor, so aggregates cover ≤1000 rows. Its own truncation warning (`=== QUERY_LIMIT`, 200,000) can never fire (`CLOUD-PAGE-CAP`).
-- It prints **nothing** — zero `console.log`. Success, no-op, and empty-result runs are indistinguishable (`SYNC-SILENT`).
-- **`--dry-run` is not dry**: it rewrites `scripts/.kv-sync-state.json` (and the git-tracked `.kv-sync-coverage.json`), which makes a later real run skip those writes (`SYNC-DRYRUN-STATE`).
+**`sync-to-kv.ts` notes** (the three former gotchas were fixed 2026-07-28/29 — see the parent's [v3.1.5 changelog](../docs/changelog/3.1.5/CHANGELOG.md), not BACKLOG):
+- It reads the **cloud API**, not local files — `new CloudBackend()` → `/v1/traces` + `/v1/logs`. Needs `OBTOOL_API_URL`/`OBTOOL_API_KEY` or it exits 1. (Still true.)
+- Reads auto-paginate past the 1000-row server cap — `CloudBackend.fetchAllPages` follows cursors until exhausted or the caller's `limit` is hit, so aggregates are **not** capped at 1000 (`CLOUD-PAGE-CAP`). Consequence: a `count >= 1000` means "more than one page", **not** "rows were dropped" — test truncation against the `limit` you passed.
+- Logs a run summary (computed/changed/unchanged/written/deferred, per-signal row counts, page-cap warning) (`SYNC-SILENT`).
+- `--dry-run` no longer mutates state: `saveSyncState`, `saveLastCoverage`, and degradation writes are gated on `!dryRun`, and all three sidecars are gitignored (`SYNC-DRYRUN-STATE`).
 
 A Workflow alternative lives at `services/kv-sync-workflow/` in the parent repo — partial coverage, not deployed.
 
