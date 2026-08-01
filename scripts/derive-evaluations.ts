@@ -22,8 +22,8 @@ import {
   shouldRecalibrate,
 } from '../../src/lib/quality/qfe-percentiles.js';
 import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
-import { traceSpanSchema, type TraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
-export type { TraceSpan };
+import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
+export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
@@ -41,7 +41,7 @@ function hrtToISO(hrt: [number, number]): string {
   return new Date(hrt[0] * 1000 + hrt[1] / 1e6).toISOString();
 }
 
-function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
+function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   const attrs = span.attributes;
   const isBuiltin = span.name === 'hook:builtin-post-tool';
   const isMcp = span.name === 'hook:mcp-post-tool';
@@ -74,7 +74,7 @@ function deriveToolCorrectness(span: TraceSpan): EvalRecord | null {
   };
 }
 
-function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
+function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
   const measurable = [
     'hook:builtin-post-tool',
     'hook:mcp-post-tool',
@@ -108,14 +108,14 @@ function deriveEvaluationLatency(span: TraceSpan): EvalRecord | null {
 
 interface TaskState {
   statuses: Set<string>;
-  lastSpan: TraceSpan;
+  lastSpan: LocalTraceSpan;
 }
 
 interface SessionTaskData {
   tasks: Map<string, TaskState>;  // taskId -> state
   creates: number;   // fallback counters for old trace data
   updates: number;
-  lastSpan: TraceSpan | null;
+  lastSpan: LocalTraceSpan | null;
 }
 
 const sessionTasks = new Map<string, SessionTaskData>();
@@ -131,7 +131,7 @@ export const STATUS_SCORES: Record<string, number> = {
 
 export { sessionTasks };
 
-export function trackTaskActivity(span: TraceSpan): void {
+export function trackTaskActivity(span: LocalTraceSpan): void {
   if (span.name !== 'hook:builtin-post-tool') return;
   const tool = span.attributes['builtin.tool'];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
@@ -218,13 +218,13 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
 interface AgentSessionData {
   pre: number;
   post: number;
-  spans: TraceSpan[];
+  spans: LocalTraceSpan[];
   /** Ordered agent names per post-tool span, used for handoff detection */
-  agentSequence: { agentName: string; score: number; span: TraceSpan }[];
+  agentSequence: { agentName: string; score: number; span: LocalTraceSpan }[];
 }
 const sessionAgents = new Map<string, AgentSessionData>();
 
-function trackAgentActivity(span: TraceSpan): void {
+function trackAgentActivity(span: LocalTraceSpan): void {
   const isPre = span.name === 'hook:agent-pre-tool';
   const isPost = span.name === 'hook:agent-post-tool';
   if (!isPre && !isPost) return;
@@ -375,7 +375,7 @@ function main(): void {
 
   for (const file of traceFiles) {
     const filePath = join(TELEMETRY_DIR, file);
-    const spans = readJsonlWithValidationSync(filePath, traceSpanSchema);
+    const spans = readJsonlWithValidationSync(filePath, localTraceSpanSchema);
 
     for (const span of spans) {
       const toolCorr = deriveToolCorrectness(span);
