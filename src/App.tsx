@@ -125,10 +125,12 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
   }
 }
 
-const NS_PER_MS = 1_000_000n;
-
 function snapshotToEvalRow(s: {
-  timestamp: bigint;
+  // ISO string, not bigint: these arrive via JSON from KV, which cannot carry
+  // a bigint at all. sync-to-kv now converts at write time (see
+  // evaluationSnapshotSchema); this used to declare bigint and re-divide,
+  // which could never have run against real KV data.
+  timestamp: string;
   scoreValue: number;
   evaluator?: string;
   sessionId?: string;
@@ -137,7 +139,7 @@ function snapshotToEvalRow(s: {
 }): EvalRow {
   return {
     score: s.scoreValue,
-    timestamp: new Date(Number(s.timestamp / NS_PER_MS)).toISOString(),
+    timestamp: s.timestamp,
     evaluator: s.evaluator,
     sessionId: s.sessionId,
     traceId: s.traceId,
