@@ -22,7 +22,7 @@ export {
   LLM_EVALUATOR_TYPE_SCHEMA,
   LLM_EVALUATOR_TYPE,
   hrtSchema,
-  traceSpanSchema,
+  localTraceSpanSchema,
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
@@ -35,7 +35,7 @@ export {
 export type {
   HallucinationEvalName,
   LlmEvaluatorType,
-  TraceSpan,
+  LocalTraceSpan,
   OTelLogEntry,
   TranscriptEntry,
   OTelEvaluationRecord,

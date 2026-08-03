@@ -25,7 +25,10 @@ import {
   COHERENCE_CRITERIA,
 } from '../../src/lib/judge/llm-judge-config.js';
 import {
-  traceSpanSchema,
+  // Local hook JSONL uses HRT tuples, not the backend's epoch-nanos fields.
+  // `backend-schemas.ts` exports a `traceSpanSchema` for the latter; importing
+  // that one here would reject every line. See the note on LocalTraceSpan.
+  localTraceSpanSchema,
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
@@ -255,7 +258,7 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
   for (const file of traceFiles) {
     const filepath = join(TELEMETRY_DIR, file);
 
-    for await (const span of streamJsonlWithValidation(filepath, traceSpanSchema)) {
+    for await (const span of streamJsonlWithValidation(filepath, localTraceSpanSchema)) {
       const attrs = span.attributes;
       if (!attrs) continue;
 
