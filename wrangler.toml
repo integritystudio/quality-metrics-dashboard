@@ -3,6 +3,14 @@ main = "worker/index.ts"
 compatibility_date = "2025-01-01"
 account_id = "b3868dd0fd5c0faa7d98aa325a9c2377"
 
+# Do not remove. Default is ON, which publishes every *retained* version at
+# <8-hex-version-prefix>-<script>.<subdomain>.workers.dev. A version is an immutable
+# snapshot of code AND bindings, so each old preview keeps serving the
+# SUPABASE_SERVICE_ROLE_KEY it was uploaded with — a rotation never reaches backwards.
+# Measured 2026-08-07 before this line: 4 of 4 probed versions live on both Workers.
+# Independent of workers_dev (main URL and routes unaffected); inheritable by named envs.
+preview_urls = false
+
 [observability]
 enabled = true
 
