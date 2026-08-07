@@ -108,7 +108,7 @@ Run against the deployed worker with a real Auth0 JWT. Requires Doppler dev conf
 
 All parent observability-toolkit code enters through three sanctioned surfaces — everything else is an eslint `no-restricted-imports` **error** (relative `dist/` paths banned everywhere; `@parent` banned outside these files):
 
-- **`src/api/parent/*.ts`** — one-line runtime barrels (Node-only), one per parent module, named after it (`quality-metrics.ts`, `error-sanitizer.ts`, `query-traces.ts`, …). Routes and `data-loader.ts` import from these, never from `@parent` directly. Tests mock the barrel path (`vi.mock('../api/parent/quality-metrics.js', …)`) — no vite virtual-module tricks needed.
+- **`src/api/parent/*.ts`** — re-export-only runtime barrels (Node-only), one per parent module, named after it (`quality-metrics.ts`, `error-sanitizer.ts`, `query-traces.ts`, …). Routes and `data-loader.ts` import from these, never from `@parent` directly. Tests mock the barrel path (`vi.mock('../api/parent/quality-metrics.js', …)`) — no vite virtual-module tricks needed.
 - **`src/types.ts`** — the type facade. All parent *types* re-export here (`EvaluationResult`, `TraceSpan`, `LogRecord`, `StepScore`, `MetricTrend`, …); frontend and API code import types from it, keeping type-only deps out of the runtime barrels.
 - **`src/lib/validation/dashboard-schemas.ts`** — the Zod schema boundary (pre-existing).
 
