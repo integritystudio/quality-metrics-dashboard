@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { computePipelineView } from '../../../../dist/lib/quality/quality-visualization.js';
-import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { computePipelineView } from '../parent/quality-visualization.js';
+import { computeDashboardSummary } from '../parent/quality-metrics.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { HttpStatus, ErrorMessage } from '../../lib/constants.js';
 import { PARAM_ID_RE, isValidParam } from '../api-constants.js';
 import { loadEvaluationsByTraceId } from '../data-loader.js';

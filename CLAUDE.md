@@ -104,9 +104,19 @@ Run against the deployed worker with a real Auth0 JWT. Requires Doppler dev conf
 - **Sentry** (`sentry-reporter.ts`): captures `failed`/`timedOut` tests to Sentry (`SENTRY_DSN` from Doppler); no-ops if unset
 - Auth0 tenant: `dev-68gg87ow4mg4kzyo.us.auth0.com`, `password` grant enabled on `integritystudio-dashboard` SPA (`CNfd6xPPr2aLmvNyiearhmaLknAYvtnq`); default directory set to `Username-Password-Authentication`
 
+## Parent boundary (`src/api/parent/`)
+
+All parent observability-toolkit code enters through three sanctioned surfaces — everything else is an eslint `no-restricted-imports` **error** (relative `dist/` paths banned everywhere; `@parent` banned outside these files):
+
+- **`src/api/parent/*.ts`** — one-line runtime barrels (Node-only), one per parent module, named after it (`quality-metrics.ts`, `error-sanitizer.ts`, `query-traces.ts`, …). Routes and `data-loader.ts` import from these, never from `@parent` directly. Tests mock the barrel path (`vi.mock('../api/parent/quality-metrics.js', …)`) — no vite virtual-module tricks needed.
+- **`src/types.ts`** — the type facade. All parent *types* re-export here (`EvaluationResult`, `TraceSpan`, `LogRecord`, `StepScore`, `MetricTrend`, …); frontend and API code import types from it, keeping type-only deps out of the runtime barrels.
+- **`src/lib/validation/dashboard-schemas.ts`** — the Zod schema boundary (pre-existing).
+
+`scripts/` are excepted: they may use `@parent` directly (their tsconfig/vitest configs alias it), but relative `dist/` paths are banned there too. Package deep-imports like `@xyflow/react/dist/style.css` are unaffected. Adding a new parent dependency = add one line to the matching barrel (or a new barrel named after the parent module) or to `types.ts` — the whole parent surface is greppable in one directory.
+
 ## Aliases & Stubs (`src/stubs/`)
 
-- **`@parent`** → `../dist` — imports from the parent observability-toolkit build. Run `npm run build` in `..` first or tests will fail without the `parentDistStub` vite plugin (active in Vitest only).
+- **`@parent`** → `../dist` — imports from the parent observability-toolkit build, allowed only in the boundary files above. Run `npm run build` in `..` first or tests will fail without the `parentDistStub` vite plugin (active in Vitest only), which stubs `@parent` to empty modules when `../dist` is absent (standalone CI).
 - **`web-worker`** → `src/stubs/web-worker.ts` — always aliased; prevents bundler errors for worker imports.
 - **`VITE_E2E=1`** → stubs `@auth0/auth0-react` with `src/stubs/auth0-e2e.ts` for Playwright E2E runs.
 - **Vite proxy**: `/api/*` → `http://127.0.0.1:3001` — local dev auto-forwards API requests to the Hono server; no CORS config needed.

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { computeCoverageHeatmap } from '../../../../dist/lib/quality/quality-visualization.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
+import { computeCoverageHeatmap } from '../parent/quality-visualization.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
+import type { EvaluationResult } from '../../types.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { PeriodSchema, InputKeySchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 

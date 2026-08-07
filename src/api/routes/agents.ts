@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
+import { queryTraces } from '../parent/query-traces.js';
+import type { StepScore } from '../../types.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';

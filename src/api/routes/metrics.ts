@@ -4,10 +4,10 @@ import { subMilliseconds } from 'date-fns';
 import {
   computeAggregations,
   getQualityMetric,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { computeMetricDetail } from '../../../../dist/lib/quality/quality-views.js';
-import { computeMetricDynamics } from '../../../../dist/lib/quality/qfe-dynamics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+} from '../parent/quality-metrics.js';
+import { computeMetricDetail } from '../parent/quality-views.js';
+import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';

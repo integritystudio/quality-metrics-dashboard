@@ -4,11 +4,11 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality/qfe-correlation.js', () => ({
+vi.mock('../api/parent/qfe-correlation.js', () => ({
   computeCorrelationMatrix: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+vi.mock('../api/parent/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
@@ -27,7 +27,7 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { correlationRoutes } from '../api/routes/correlations.js';
-import { computeCorrelationMatrix } from '../../../dist/lib/quality/qfe-correlation.js';
+import { computeCorrelationMatrix } from '../api/parent/qfe-correlation.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);

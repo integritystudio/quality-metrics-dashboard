@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import {
   computeRollingDegradationSignals,
   type DegradationState,
-} from '../../../../dist/lib/quality/qfe-backtest.js';
+} from '../parent/qfe-backtest.js';
 import {
   DEFAULT_BIN_COUNT,
-} from '../../../../dist/lib/quality/quality-constants.js';
+} from '../parent/quality-constants.js';
 import {
   buildEvenBucketBoundaries,
   getEvenBucketIndex,
-} from '../../../../dist/lib/quality/bucket-utils.js';
+} from '../parent/bucket-utils.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { LIVE_WINDOW_MS, EVAL_LIMIT, HttpStatus, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
 import type { LiveMetric, QualityLiveData } from '../../types.js';

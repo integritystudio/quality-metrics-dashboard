@@ -4,24 +4,24 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
+vi.mock('../api/parent/quality-metrics.js', () => ({
   getQualityMetric: vi.fn(),
   computeAggregations: vi.fn(),
   QUALITY_METRICS: { relevance: { name: 'relevance' }, coherence: { name: 'coherence' } },
 }));
 
-vi.mock('../../../dist/lib/quality/quality-views.js', () => ({
+vi.mock('../api/parent/quality-views.js', () => ({
   computeMetricDetail: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/quality/qfe-dynamics.js', () => ({
+vi.mock('../api/parent/qfe-dynamics.js', () => ({
   computeMetricDynamics: vi.fn(),
 }));
-vi.mock('../../../dist/lib/quality/qfe-percentiles.js', () => ({
+vi.mock('../api/parent/qfe-percentiles.js', () => ({
   computePercentileDistribution: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+vi.mock('../api/parent/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
@@ -40,10 +40,10 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { trendRoutes } from '../api/routes/trends.js';
-import { getQualityMetric, computeAggregations } from '../../../dist/lib/quality/quality-metrics.js';
-import { computeMetricDetail } from '../../../dist/lib/quality/quality-views.js';
-import { computeMetricDynamics } from '../../../dist/lib/quality/qfe-dynamics.js';
-import { computePercentileDistribution } from '../../../dist/lib/quality/qfe-percentiles.js';
+import { getQualityMetric, computeAggregations } from '../api/parent/quality-metrics.js';
+import { computeMetricDetail } from '../api/parent/quality-views.js';
+import { computeMetricDynamics } from '../api/parent/qfe-dynamics.js';
+import { computePercentileDistribution } from '../api/parent/qfe-percentiles.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);

@@ -1,22 +1,22 @@
 /**
  * API route tests: /api/agents and /api/agents/:sessionId.
- * Approach A — Node routes with mocked data-loader and dist dependencies.
+ * Approach A — Node routes with mocked data-loader and parent-boundary modules.
  *
- * Mock return values use `as any` since the dist types (TraceSpan, EvaluationResult,
- * MultiAgentEvaluation) are complex and come from virtual modules via parentDistStub.
+ * Mock return values use `as any` since the parent types (TraceSpan, EvaluationResult,
+ * MultiAgentEvaluation) are complex.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
+vi.mock('../api/parent/quality-multi-agent.js', () => ({
   computeMultiAgentEvaluation: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+vi.mock('../api/parent/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
-vi.mock('../../../dist/tools/query-traces.js', () => ({
+vi.mock('../api/parent/query-traces.js', () => ({
   queryTraces: vi.fn(),
 }));
 
@@ -39,8 +39,8 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { agentRoutes } from '../api/routes/agents.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { queryTraces } from '../api/parent/query-traces.js';
+import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
 import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
 import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 

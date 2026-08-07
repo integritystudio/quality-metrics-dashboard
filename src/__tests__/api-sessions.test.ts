@@ -8,15 +8,15 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../dist/lib/quality/quality-multi-agent.js', () => ({
+vi.mock('../api/parent/quality-multi-agent.js', () => ({
   computeMultiAgentEvaluation: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+vi.mock('../api/parent/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
-vi.mock('../../../dist/tools/query-traces.js', () => ({
+vi.mock('../api/parent/query-traces.js', () => ({
   queryTraces: vi.fn(),
 }));
 
@@ -35,8 +35,8 @@ vi.mock('../api/data-loader.js', () => ({
 }));
 
 import { sessionRoutes } from '../api/routes/sessions.js';
-import { queryTraces } from '../../../dist/tools/query-traces.js';
-import { computeMultiAgentEvaluation } from '../../../dist/lib/quality/quality-multi-agent.js';
+import { queryTraces } from '../api/parent/query-traces.js';
+import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
 import { loadEvaluationsBySessionId, loadLogsBySessionId } from '../api/data-loader.js';
 
 beforeEach(vi.clearAllMocks);

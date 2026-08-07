@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { computeDashboardSummary } from '../parent/quality-metrics.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
 import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
 

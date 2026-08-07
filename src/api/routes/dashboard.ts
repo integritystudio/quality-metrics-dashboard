@@ -1,10 +1,10 @@
 import { rollup, mean } from 'd3-array';
 import { Hono } from 'hono';
-import { computeDashboardSummary } from '../../../../dist/lib/quality/quality-metrics.js';
-import { computeRoleView } from '../../../../dist/lib/quality/quality-views.js';
-import type { EvaluationResult } from '../../../../dist/backends/index.js';
-import { computeCQI } from '../../../../dist/lib/quality/qfe-cqi.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { computeDashboardSummary } from '../parent/quality-metrics.js';
+import { computeRoleView } from '../parent/quality-views.js';
+import type { EvaluationResult } from '../../types.js';
+import { computeCQI } from '../parent/qfe-cqi.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
 import { NANOS_TO_MS } from '../api-constants.js';
 import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';

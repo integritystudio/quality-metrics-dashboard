@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
-import type { CalibrationState } from '../../../dist/lib/quality/qfe-percentiles.js';
+import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
 
 type KVEntry = { key: string; value: string };

@@ -1,8 +1,8 @@
 import { min, max, mean, quantileSorted } from 'd3-array';
 import { Hono } from 'hono';
 import { subMilliseconds, formatISO } from 'date-fns';
-import { computeMultiAgentEvaluation } from '../../../../dist/lib/quality/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import {
   COMMIT_BODY_START_LINE_INDEX,
@@ -25,8 +25,8 @@ import {
   loadEvaluationsBySessionId,
   loadLogsBySessionId,
 } from '../data-loader.js';
-import { queryTraces } from '../../../../dist/tools/query-traces.js';
-import type { StepScore } from '../../../../dist/backends/index.js';
+import { queryTraces } from '../parent/query-traces.js';
+import type { StepScore } from '../../types.js';
 
 export const sessionRoutes = new Hono();
 

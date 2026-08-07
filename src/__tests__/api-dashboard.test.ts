@@ -1,28 +1,26 @@
 /**
  * API route tests: /api/dashboard and /api/quality/live (Approach A — Node routes, mocked data-loader).
  *
- * Mock paths use 3 levels (../../../dist/) which the parentDistStub Vite plugin
- * resolves to the same virtual ID (\0dist/...) as the routes' 4-level imports.
+ * Parent code is mocked at the src/api/parent/ boundary modules — the only
+ * sanctioned import path for parent runtime code (see CLAUDE.md § Parent boundary).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock dist modules via their virtual IDs (parentDistStub intercepts both 3-level
-// and 4-level relative dist imports into the same \0dist/... virtual module).
-vi.mock('../../../dist/lib/quality/quality-metrics.js', () => ({
+vi.mock('../api/parent/quality-metrics.js', () => ({
   QUALITY_METRICS: {},
   computeDashboardSummary: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/quality/quality-views.js', () => ({
+vi.mock('../api/parent/quality-views.js', () => ({
   computeRoleView: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/quality/qfe-cqi.js', () => ({
+vi.mock('../api/parent/qfe-cqi.js', () => ({
   computeCQI: vi.fn(),
 }));
 
-vi.mock('../../../dist/lib/errors/error-sanitizer.js', () => ({
+vi.mock('../api/parent/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: (err: unknown) => String(err),
 }));
 
@@ -43,9 +41,9 @@ vi.mock('../api/data-loader.js', () => ({
 
 import { dashboardRoutes } from '../api/routes/dashboard.js';
 import { qualityRoutes } from '../api/routes/quality.js';
-import { computeDashboardSummary } from '../../../dist/lib/quality/quality-metrics.js';
-import { computeRoleView } from '../../../dist/lib/quality/quality-views.js';
-import { computeCQI } from '../../../dist/lib/quality/qfe-cqi.js';
+import { computeDashboardSummary } from '../api/parent/quality-metrics.js';
+import { computeRoleView } from '../api/parent/quality-views.js';
+import { computeCQI } from '../api/parent/qfe-cqi.js';
 import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
 
 

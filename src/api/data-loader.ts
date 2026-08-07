@@ -1,10 +1,10 @@
 import pLimit from 'p-limit';
 import { group } from 'd3-array';
-import { CloudBackend } from '../../../dist/backends/cloud.js';
-import type { EvaluationResult } from '../../../dist/backends/index.js';
-import { queryVerifications as queryVerificationsLib, type HumanVerificationEvent } from '../../../dist/lib/audit/verification-events.js';
-import { queryTraces as queryTracesTool } from '../../../dist/tools/query-traces.js';
-import { queryLogs } from '../../../dist/tools/query-logs.js';
+import { CloudBackend } from './parent/backends.js';
+import type { EvaluationResult, HumanVerificationEvent } from '../types.js';
+import { queryVerifications as queryVerificationsLib } from './parent/verification-events.js';
+import { queryTraces as queryTracesTool } from './parent/query-traces.js';
+import { queryLogs } from './parent/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toDateOnly, NANOS_TO_MS } from './api-constants.js';
 

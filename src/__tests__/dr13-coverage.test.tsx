@@ -492,22 +492,22 @@ describe('OperatorView', () => {
 });
 
 
-vi.mock('../../../../dist/lib/quality/quality-metrics.js', () => ({
+vi.mock('../api/parent/quality-metrics.js', () => ({
   getQualityMetric: vi.fn((name: string) => name === 'relevance' ? { aggregations: ['avg'] } : null),
   computeMetricDetail: vi.fn(() => null),
   computeAggregations: vi.fn(() => ({})),
   QUALITY_METRICS: { relevance: { aggregations: ['avg'] } },
 }));
 
-vi.mock('../../../../dist/lib/quality/qfe-dynamics.js', () => ({
+vi.mock('../api/parent/qfe-dynamics.js', () => ({
   computeMetricDynamics: vi.fn(() => null),
 }));
 
-vi.mock('../../../../dist/lib/quality/qfe-percentiles.js', () => ({
+vi.mock('../api/parent/qfe-percentiles.js', () => ({
   computePercentileDistribution: vi.fn(() => null),
 }));
 
-vi.mock('../../../../dist/lib/errors/error-sanitizer.js', () => ({
+vi.mock('../api/parent/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: vi.fn((e: unknown) => String(e)),
 }));
 

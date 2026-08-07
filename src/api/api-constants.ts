@@ -1,4 +1,4 @@
-import type { LogRecord } from '../../../dist/backends/index.js';
+import type { LogRecord } from '../types.js';
 import { z } from 'zod';
 
 export const PERCENT_BASE = 100;

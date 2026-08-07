@@ -5,12 +5,12 @@ import {
   computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
-} from '../../../../dist/lib/quality/quality-metrics.js';
-import { type MetricTrend } from '../../../../dist/lib/quality/quality-constants.js';
-import { computeMetricDetail } from '../../../../dist/lib/quality/quality-views.js';
-import { computeMetricDynamics } from '../../../../dist/lib/quality/qfe-dynamics.js';
-import { computePercentileDistribution } from '../../../../dist/lib/quality/qfe-percentiles.js';
-import { sanitizeErrorForResponse } from '../../../../dist/lib/errors/error-sanitizer.js';
+} from '../parent/quality-metrics.js';
+import { type MetricTrend } from '../../types.js';
+import { computeMetricDetail } from '../parent/quality-views.js';
+import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
+import { computePercentileDistribution } from '../parent/qfe-percentiles.js';
+import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam, timestampToMs } from '../api-constants.js';

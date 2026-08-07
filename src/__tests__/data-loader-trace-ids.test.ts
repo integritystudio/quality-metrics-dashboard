@@ -10,21 +10,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockQueryEvaluations = vi.fn();
 
-vi.mock('../../../dist/backends/cloud.js', () => {
+vi.mock('../api/parent/backends.js', () => {
   class MockCloudBackend {
     queryEvaluations = mockQueryEvaluations;
   }
   return { CloudBackend: MockCloudBackend };
 });
 
-vi.mock('../../../dist/backends/index.js', () => ({}));
-vi.mock('../../../dist/tools/query-logs.js', () => ({
+vi.mock('../api/parent/query-logs.js', () => ({
   queryLogs: vi.fn(),
 }));
-vi.mock('../../../dist/lib/audit/verification-events.js', () => ({
+vi.mock('../api/parent/verification-events.js', () => ({
   queryVerifications: vi.fn(),
 }));
-vi.mock('../../../dist/tools/query-traces.js', () => ({
+vi.mock('../api/parent/query-traces.js', () => ({
   queryTraces: vi.fn(),
 }));
 

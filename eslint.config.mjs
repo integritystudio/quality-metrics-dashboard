@@ -110,6 +110,48 @@ export default tseslint.config(
       '@typescript-eslint/no-invalid-void-type': 'warn',
     },
   },
+  // Parent-boundary enforcement (DASH-DIST-IMPORT). The parent
+  // observability-toolkit's build output must never be imported by relative
+  // dist/ path, and @parent (the sanctioned alias) is confined to the
+  // boundary modules so every parent dependency is visible in one place.
+  {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            // Relative reach-ins to the parent build output, any plausible depth.
+            // Package deep-imports (e.g. @xyflow/react/dist/style.css) stay legal.
+            group: ['./dist/**', '../dist/**', '../../dist/**', '../../../dist/**', '../../../../dist/**', '../../../../../dist/**'],
+            message: 'Do not import the parent build output by relative path. Use src/api/parent/* (runtime code) or src/types.ts (types); scripts may use @parent directly.',
+          },
+          {
+            group: ['@parent/*'],
+            message: '@parent is confined to the boundary modules: src/api/parent/*, src/types.ts, src/lib/validation/dashboard-schemas.ts (scripts/ excepted).',
+          },
+        ],
+      }],
+    },
+  },
+  // Boundary modules and scripts/: @parent allowed, relative dist/ still banned.
+  {
+    files: [
+      'src/api/parent/**/*.ts',
+      'src/types.ts',
+      'src/lib/validation/dashboard-schemas.ts',
+      'scripts/**/*.ts',
+    ],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['./dist/**', '../dist/**', '../../dist/**', '../../../dist/**', '../../../../dist/**', '../../../../../dist/**'],
+            message: 'Do not import the parent build output by relative path — use the @parent alias.',
+          },
+        ],
+      }],
+    },
+  },
   {
     ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/', 'scripts/*.js'],
   },
