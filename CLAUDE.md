@@ -131,12 +131,16 @@ Run `npm run lint` to check `src/`, `scripts/`, and `worker/`. TypeScript type-a
 
 ## Deployment
 
-Two Cloudflare Workers serve the dashboard API (same KV namespace):
+Three Cloudflare Workers serve the dashboard API. The two production ones share a KV namespace:
 - `quality-metrics-api` — production
 - `obs-toolkit-quality-metrics-api` — wrangler.toml default
+- `quality-metrics-api-dev` — dev, from the `[env.dev]` block; own KV namespace and the **dev** Auth0 tenant (`dev-njjmghdzm23uy0p7`)
 
-Deploy both after worker changes:
+Deploy all three after worker changes:
 ```bash
 npx wrangler deploy
 npx wrangler deploy --name quality-metrics-api
+doppler run --project integrity-studio --config dev -- npx wrangler deploy --env dev
 ```
+
+`AUTH0_DOMAIN` is a plaintext var, so it does **not** follow `--config dev` — that is the entire reason `[env.dev]` exists. See the parent repo's CLAUDE.md § Deployment — Dashboard Workers.
