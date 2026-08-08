@@ -33,6 +33,63 @@ preview_id = "0f4d40dd84b14e038024a9775b9be4f7"
 directory = "./dist"
 binding = "ASSETS"
 
+# ---------------------------------------------------------------------------
+# Dev environment — `quality-metrics-api-dev`
+#
+# THE reason this block has to exist: AUTH0_DOMAIN is a plaintext var, so it does
+# NOT follow `--config dev`. Before this, Doppler dev's DEV_WORKER_URL pointed at
+# the PRODUCTION worker, which verifies JWTs against the PRODUCTION Auth0 tenant
+# (dev-68gg87ow4mg4kzyo) — while the e2e suite mints its test user through
+# sender-worker-dev against the DEV tenant (dev-njjmghdzm23uy0p7). A dev-tenant
+# JWT met a production-tenant JWKS and 401'd before reaching the role check, so
+# the two tests expecting 403 received 401 and read as a permissions bug.
+# Measured, not inferred: the signup JWT carries
+# iss=https://dev-njjmghdzm23uy0p7.us.auth0.com/ and aud=https://api.integritystudio.dev.
+#
+# A named environment REPLACES the parent block rather than merging with it, so
+# every non-inheritable key below is repeated deliberately.
+[env.dev]
+name = "quality-metrics-api-dev"
+
+[env.dev.vars]
+# The dev Auth0 tenant. This one line is the fix.
+AUTH0_DOMAIN = "dev-njjmghdzm23uy0p7.us.auth0.com"
+# Identical string in both tenants by design — an Auth0 API identifier is just a
+# name, and each tenant registers its own API under it. The audience was never
+# the mismatch; only the issuer/JWKS was.
+AUTH0_AUDIENCE = "https://api.integritystudio.dev"
+# Deliberately empty, not copied. Both hold PRODUCTION identifiers — an org uuid
+# and ten staff user uuids that exist only in project cfrbahzzklwrnmbtqojl. Dev
+# has no equivalent rows, and carrying production uuids into a dev Worker is the
+# exact shape of the `createTestUser` hardcoded-prod-org defect. Nothing reads
+# either var yet (P5 org resolution is unbuilt); when P5 lands, an empty value
+# must fail loudly in dev rather than silently resolve a production org.
+HOME_ORG_ID = ""
+STAFF_USER_IDS = "[]"
+
+[env.dev.observability]
+enabled = true
+
+# Its OWN namespace, not production's `902fc8a4…`. The Worker only ever reads KV
+# (no `.put` anywhere in worker/index.ts), so sharing would not corrupt anything —
+# it would just mean a dev Worker serving production telemetry, which is the thing
+# this whole environment split exists to prevent. Seeded by
+# `services/e2e/scripts/seed-dev.ts`; without a `dashboard:7d` key `/api/dashboard`
+# answers 404 by design (ERR_NO_DATA), so the seed is a test prerequisite.
+# No `preview_id`: `wrangler dev` is not used against this environment.
+[[env.dev.kv_namespaces]]
+binding = "DASHBOARD"
+id = "fc5bbe4889a645a4b7744ce236b563be"
+
+# Repeated because `assets` is not inherited into a named environment, and the
+# ASSETS binding is what the SPA fallback route calls.
+[env.dev.assets]
+directory = "./dist"
+binding = "ASSETS"
+
+# NOTE: ALLOW_TEST_BYPASS is absent here on purpose. The dev Worker authenticates
+# real dev-tenant JWTs; a bypass would make every dashboard-auth assertion vacuous.
+
 # The worker imports a dashboard-schemas module that re-exports from @parent
 # (the parent observability-toolkit dist/). CI builds the dashboard standalone
 # without the parent package, so redirect @parent/ lookups to a local stub.
