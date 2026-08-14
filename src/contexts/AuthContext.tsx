@@ -30,6 +30,12 @@ async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSe
       roles: me.roles,
       permissions: me.permissions,
       allowedViews: me.allowedViews,
+      // Org-scoping fields (P6) — present only once the worker serves
+      // org-scoped sessions (ORG_SCOPING_ENABLED=true).
+      ...(me.activeOrg !== undefined && { activeOrgId: me.activeOrg }),
+      ...(me.memberships !== undefined && { memberships: me.memberships }),
+      ...(me.role !== undefined && { role: me.role }),
+      ...(me.isStaff !== undefined && { isStaff: me.isStaff }),
     };
   } catch {
     return null;

@@ -1707,3 +1707,11 @@ summary.section-rail {
 .metric-grid .skeleton {
   height: 180px;
 }
+
+/* Org switcher (P6) — sits in the header row next to the role selector. */
+.org-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.75rem;
+}

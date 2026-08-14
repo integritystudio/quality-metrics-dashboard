@@ -5,6 +5,8 @@ import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
 import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
+import { OrgProvider } from './contexts/OrgContext.js';
+import { OrgSwitcher } from './components/OrgSwitcher.js';
 import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE, AUTH0_CALLBACK_URI, AUTH0_LOGIN_PARAMS } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
@@ -339,6 +341,7 @@ export function App() {
         }}
       >
       <AuthProvider>
+        <OrgProvider>
         <KeyboardNavProvider>
           <RoleProvider>
             <CalibrationProvider>
@@ -353,6 +356,7 @@ export function App() {
                 <RequireAuth>
                   <Layout period={period} onPeriodChange={setPeriod}>
                     <RoleSelector />
+                    <OrgSwitcher />
                     <AdminLink />
                     <Switch>
                       <Route path="/">
@@ -466,6 +470,7 @@ export function App() {
             </CalibrationProvider>
           </RoleProvider>
         </KeyboardNavProvider>
+        </OrgProvider>
       </AuthProvider>
       </Auth0Provider>
     </Router>
