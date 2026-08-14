@@ -10,9 +10,15 @@
 
 const ORG_STORAGE_KEY = 'obs.activeOrgId';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function getStoredOrgId(): string | null {
   try {
-    return window.localStorage.getItem(ORG_STORAGE_KEY);
+    const stored = window.localStorage.getItem(ORG_STORAGE_KEY);
+    // Defense-in-depth: a corrupted/hand-edited entry must not become an
+    // X-Org-Id header value. The worker rejects non-UUIDs anyway (403), but a
+    // garbage value here would 403 every request until storage is cleared.
+    return stored && UUID_RE.test(stored) ? stored : null;
   } catch {
     return null;
   }

@@ -50,6 +50,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const switchOrg = useCallback(async (orgId: string): Promise<boolean> => {
     try {
       const token = await getAccessToken();
+      // Deliberately the TARGET org in X-Org-Id, not the current one: the
+      // middleware validates it against memberships either way, and using the
+      // target keeps the switch working when the current org just became
+      // invalid (e.g. the user was removed from it) — passing the stale org
+      // would 403 the very request that escapes it.
       const res = await apiFetch(`${API_BASE}/api/org/switch`, token, orgId, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
