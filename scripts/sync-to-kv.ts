@@ -19,7 +19,7 @@ import { createHash, randomBytes } from 'crypto';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { CloudBackend } from '../../src/backends/cloud.js';
+import { CloudBackend, ALL_ORGS_SCOPE } from '../../src/backends/cloud.js';
 import {
   computeDashboardSummary,
   computeAggregations,
@@ -98,6 +98,9 @@ const dryRun = args.includes('--dry-run');
 const maxDays = parseIntArg(args, 'days', 30);
 const MAX_DAYS_MS = maxDays * TIME_MS.DAY;
 const WRITE_BUDGET = parseIntArg(args, 'budget', 450);
+// Per-run write warning threshold: half the ~1000/day free-tier cap, matching
+// the twice-daily AlephAuto cron (P4 write-budget instrumentation).
+const MAX_WRITES_PER_RUN = parseIntArg(args, 'max-writes', 500);
 
 const PERIODS = ['24h', '7d', '30d'] as const;
 
@@ -107,6 +110,28 @@ const MAX_RECENT_SESSIONS = 20;
 
 const META_LAST_SYNC_KEY = 'meta:lastSync';
 const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
+/** Global (never org-prefixed) heartbeat for the session-less /api/health route (P4/P5). */
+export const SYSTEM_LAST_SYNC_KEY = 'system:lastSync';
+
+/**
+ * Org-scoping P4 (docs/roadmap/org-scoped-multi-tenancy.md). When HOME_ORG_ID
+ * is set, the sync runs once per discovered org, prefixes every key with
+ * `org:<orgId>:`, and DUAL-WRITES the legacy bare keys for the home org so the
+ * read cutover (P7) can flip without a data migration. When unset, behavior is
+ * byte-identical to the pre-tenancy sync (bare keys only) — the AlephAuto cron
+ * keeps working unchanged until the env lands.
+ */
+const HOME_ORG_ID = process.env.HOME_ORG_ID ?? '';
+export const ORG_KEY_PREFIX_RE = /^org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
+
+export function orgPrefixedKey(orgId: string, key: string): string {
+  return `org:${orgId}:${key}`;
+}
+
+/** Strip an `org:<uuid>:` prefix so key-class checks see the logical key. */
+export function stripOrgPrefix(key: string): string {
+  return key.replace(ORG_KEY_PREFIX_RE, '');
+}
 
 type KVEntry = { key: string; value: string; expirationTtl?: number };
 
@@ -296,8 +321,11 @@ export function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): void 
 }
 
 function extractTraceId(key: string): string | null {
-  if (key.startsWith('evaluations:trace:')) return key.slice('evaluations:trace:'.length);
-  if (key.startsWith('trace:')) return key.slice('trace:'.length);
+  // Org-prefixed and bare trace keys group under the same traceId, so a home-org
+  // dual-written trace moves through the priority budget as one unit.
+  const bare = stripOrgPrefix(key);
+  if (bare.startsWith('evaluations:trace:')) return bare.slice('evaluations:trace:'.length);
+  if (bare.startsWith('trace:')) return bare.slice('trace:'.length);
   return null;
 }
 
@@ -735,18 +763,54 @@ function computeSessionDetail(
   };
 }
 
-async function main(): Promise<void> {
-  if (!CloudBackend.isConfigured()) {
-    console.error('[sync-to-kv] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
-    process.exit(1);
+/**
+ * Enumerate org ids with cloud rows in the query window (P4). Uses the
+ * env-gated all-orgs scope; when the deployed obtool-api rejects it
+ * (ALLOW_ALL_ORGS_SCOPE unset → 403), falls back to the home org alone so the
+ * sync keeps working before that env flip lands. An org with zero evaluations
+ * gets no KV keys — its dashboard correctly serves no_data.
+ */
+async function discoverOrgIds(now: Date): Promise<string[]> {
+  const ids = new Set<string>([HOME_ORG_ID]);
+  try {
+    const probe = new CloudBackend({ orgId: ALL_ORGS_SCOPE });
+    const start = new Date(now.getTime() - MAX_DAYS_MS);
+    const evals = await probe.queryEvaluations({
+      startDate: BigInt(start.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+      endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+      limit: QUERY_LIMIT,
+    });
+    for (const ev of evals) {
+      if (ev.orgId) ids.add(ev.orgId);
+    }
+  } catch (err) {
+    console.warn(
+      '[sync-to-kv] all-orgs enumeration unavailable — syncing HOME org only. ' +
+      `(${err instanceof Error ? err.message : String(err)})`,
+    );
   }
-  const backend = new CloudBackend();
-  if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
-    console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${MIN_TRACE_BUDGET + 10}); high-priority entries may be skipped`);
-  }
-  console.log(`[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}`);
+  return [...ids];
+}
 
-  const now = new Date();
+interface OrgComputation {
+  /** All computed entries under their BARE (unprefixed) keys. */
+  allEntries: KVEntry[];
+  evalsByTrace: Map<string, EvaluationResult[]>;
+  referencedTraceIds: Set<string>;
+  traceIds: string[];
+  evalCount: number;
+  spanCount: number;
+  periodCounts: string;
+  hitCap: boolean;
+}
+
+/**
+ * Run the full aggregation for one org's cloud rows. Extracted verbatim from
+ * the pre-P4 single-tenant main(); the only org-aware behavior is that the
+ * local sidecar state (degradation breaches, calibration) is owner-local and
+ * therefore read/written for the home org alone.
+ */
+async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
   const entries: KVEntry[] = [];
 
   const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
@@ -986,7 +1050,9 @@ async function main(): Promise<void> {
 
   // Compute degradation signals for all periods
   // Cloud backend has no local state dir; use the scripts directory for degradation/calibration state files.
-  const stateDir = import.meta.dirname ?? '';
+  // The sidecar state is the owner's own (single-tenant history) — non-home orgs compute
+  // signals statelessly (no cross-run breach continuity) and skip calibration.
+  const stateDir = isHome ? (import.meta.dirname ?? '') : '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
     const ms = PERIOD_MS[period];
@@ -1193,19 +1259,95 @@ async function main(): Promise<void> {
   agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
   agentEntries.push({ key: 'meta:agents', value: JSON.stringify(agentSummaryList) });
 
-  const allEntries = [...entries, ...sessionEntries, ...traceEntries, ...agentEntries];
-  const _totalComputed = allEntries.length;
+  return {
+    allEntries: [...entries, ...sessionEntries, ...traceEntries, ...agentEntries],
+    evalsByTrace,
+    referencedTraceIds,
+    traceIds,
+    evalCount: allEvals.length,
+    spanCount: allSpans.length,
+    periodCounts: periodQueryResults.map(r => `${r.period}:${r.evals.length}`).join(' '),
+    hitCap: periodQueryResults.some(r => r.evals.length >= QUERY_LIMIT) ||
+      allEvals.length >= QUERY_LIMIT ||
+      allSpans.length >= SPAN_QUERY_LIMIT,
+  };
+}
+
+async function main(): Promise<void> {
+  if (!CloudBackend.isConfigured()) {
+    console.error('[sync-to-kv] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
+    process.exit(1);
+  }
+  if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
+    console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${MIN_TRACE_BUDGET + 10}); high-priority entries may be skipped`);
+  }
+  console.log(
+    `[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}` +
+    (HOME_ORG_ID ? ` orgScoping=on home=${HOME_ORG_ID}` : ' orgScoping=off (HOME_ORG_ID unset — legacy bare keys only)'),
+  );
+
+  const now = new Date();
+
+  // Org-scoping P4: null = pre-tenancy legacy mode (bare keys, single default-scope
+  // query). With HOME_ORG_ID set, each discovered org is computed under its own
+  // server-side scope; the home org's entries are dual-written (bare + prefixed).
+  const orgIds: Array<string | null> = HOME_ORG_ID ? await discoverOrgIds(now) : [null];
+
+  const allEntries: KVEntry[] = [];
+  const evalsByTrace = new Map<string, EvaluationResult[]>();
+  const referencedTraceIds = new Set<string>();
+  let homeComputation: OrgComputation | null = null;
+  const perOrgSummaries: string[] = [];
+
+  for (const orgId of orgIds) {
+    const backend = orgId ? new CloudBackend({ orgId }) : new CloudBackend();
+    const isHome = orgId === null || orgId === HOME_ORG_ID;
+    const res = await computeOrgEntries(backend, now, isHome);
+    if (isHome) homeComputation = res;
+    perOrgSummaries.push(
+      `${orgId ?? 'legacy'}: entries=${res.allEntries.length} evals=${res.evalCount} spans=${res.spanCount} periods=[${res.periodCounts}]` +
+      (res.hitCap ? ' CAP-HIT' : ''),
+    );
+
+    for (const e of res.allEntries) {
+      if (orgId) allEntries.push({ ...e, key: orgPrefixedKey(orgId, e.key) });
+      // Dual-write: the home org (and legacy mode) also emits the bare key so
+      // pre-cutover readers keep serving identical content. P8 removes this arm.
+      if (isHome) allEntries.push(e);
+    }
+    for (const [traceId, evals] of res.evalsByTrace) {
+      const existing = evalsByTrace.get(traceId);
+      if (existing) existing.push(...evals);
+      else evalsByTrace.set(traceId, evals);
+    }
+    for (const id of res.referencedTraceIds) referencedTraceIds.add(id);
+  }
+
+  const traceIds = homeComputation?.traceIds ?? [];
+  const hitCap = perOrgSummaries.some(s => s.endsWith('CAP-HIT'));
 
   const prevState = loadSyncState();
   const changed = filterChanged(allEntries, prevState);
 
+  // Every-run bookkeeping keys: the legacy bare heartbeat, the org-prefixed
+  // per-org heartbeats, and the global system heartbeat for /api/health (P5).
+  const metaEntries: KVEntry[] = [
+    { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) },
+  ];
+  if (HOME_ORG_ID) {
+    for (const orgId of orgIds) {
+      if (orgId) metaEntries.push({ key: orgPrefixedKey(orgId, META_LAST_SYNC_KEY), value: JSON.stringify(now.toISOString()) });
+    }
+    metaEntries.push({ key: SYSTEM_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) });
+  }
+
   if (changed.length === 0) {
     console.log(`[sync-to-kv] No-op: computed=${allEntries.length} unchanged=${allEntries.length} changed=0 written=0 deferred=0`);
-    // Still update lastSync timestamp
-    const metaEntry: KVEntry = { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) };
-    if (prevState[META_LAST_SYNC_KEY]?.hash !== hashValue(metaEntry.value)) {
-      kvBulkPut([metaEntry]);
-      prevState[META_LAST_SYNC_KEY] = { hash: hashValue(metaEntry.value) };
+    // Still update the heartbeat keys (legacy, per-org, and global system)
+    const staleMeta = metaEntries.filter(e => prevState[e.key]?.hash !== hashValue(e.value));
+    if (staleMeta.length > 0) {
+      kvBulkPut(staleMeta);
+      for (const e of staleMeta) prevState[e.key] = { hash: hashValue(e.value) };
       if (!dryRun) saveSyncState(prevState);
     }
     // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
@@ -1218,8 +1360,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const isTraceKey = (e: KVEntry) =>
-    e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:');
+  const isTraceKey = (e: KVEntry) => {
+    const bare = stripOrgPrefix(e.key);
+    return bare.startsWith('trace:') || bare.startsWith('evaluations:trace:');
+  };
   const highPriority = changed.filter(e => !isTraceKey(e));
   const traceChanged = changed.filter(isTraceKey);
   const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, WRITE_BUDGET);
@@ -1229,9 +1373,9 @@ async function main(): Promise<void> {
   const toWrite: KVEntry[] = [
     ...highPriority.slice(0, highPriorityBudget),
     ...prioritizedTraces.slice(0, traceBudget),
-    { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) },
+    ...metaEntries,
   ];
-  const deferred = changed.length - (toWrite.length - 1); // -1 excludes meta:lastSync
+  const deferred = changed.length - (toWrite.length - metaEntries.length);
 
   const _referencedInBatch = new Set(
     toWrite
@@ -1248,6 +1392,7 @@ async function main(): Promise<void> {
     newState[e.key] = { hash: hashValue(e.value) };
   }
   const computedKeys = new Set(allEntries.map(e => e.key));
+  for (const e of metaEntries) computedKeys.add(e.key);
   computedKeys.add(META_LAST_SYNC_KEY);
   computedKeys.add(META_SYNC_COVERAGE_KEY);
 
@@ -1302,18 +1447,35 @@ async function main(): Promise<void> {
   // Persist coverage data so the early-return path can refresh lastChecked without recomputing.
   if (!dryRun) saveLastCoverage(coverage);
 
-  const limitDeferred = Math.max(0, toWrite.length - 1 - written); // -1 excludes meta:lastSync
+  const limitDeferred = Math.max(0, toWrite.length - metaEntries.length - written);
   const actualDeferred = deferred + limitDeferred;
 
-  const evalRowCounts = periodQueryResults.map(r => `${r.period}:${r.evals.length}`).join(' ');
-  const hitCap = periodQueryResults.some(r => r.evals.length >= QUERY_LIMIT) ||
-    allEvals.length >= QUERY_LIMIT ||
-    allSpans.length >= SPAN_QUERY_LIMIT;
+  // KV write-budget instrumentation (P4): total and per-scope counts, so the
+  // free-tier ~1000/day cap can be checked against a concrete number
+  // (this counter × daily cron runs). Warns when a single run exceeds
+  // --max-writes; the cap itself is enforced upstream by --budget.
+  const writesByScope = new Map<string, number>();
+  for (const e of toWrite.slice(0, written)) {
+    const orgMatch = ORG_KEY_PREFIX_RE.exec(e.key);
+    const scope = orgMatch
+      ? `org:${orgMatch[0].slice('org:'.length, -1)}`
+      : (e.key === SYSTEM_LAST_SYNC_KEY ? 'system' : 'legacy');
+    writesByScope.set(scope, (writesByScope.get(scope) ?? 0) + 1);
+  }
+  const writeCounter = [...writesByScope.entries()].map(([scope, n]) => `${scope}=${n}`).join(' ');
+  if (written > MAX_WRITES_PER_RUN) {
+    console.warn(
+      `[sync-to-kv] WRITE BUDGET WARNING: ${written} KV writes this run exceeds --max-writes=${MAX_WRITES_PER_RUN} ` +
+      '(free tier is ~1000/day across all runs)',
+    );
+  }
+
   console.log(
     `[sync-to-kv] Done: computed=${allEntries.length} changed=${changed.length} ` +
     `unchanged=${allEntries.length - changed.length} written=${written} deferred=${actualDeferred}` +
     (dryRun ? ' (dry-run, no KV writes)' : '') +
-    ` | evals=${allEvals.length} spans=${allSpans.length} traces=${traceIds.length} periods=[${evalRowCounts}]` +
+    ` | kvWrites[${writeCounter}]` +
+    ` | traces=${traceIds.length} | per-org: ${perOrgSummaries.join(' · ')}` +
     (hitCap ? ' | WARNING: query hit page cap — results may be truncated' : ''),
   );
 }

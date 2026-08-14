@@ -756,6 +756,12 @@ export function toOTelRecord(ev: EvalRecord): object {
     // Omit rather than emit '' — TraceIdSchema is optional but rejects an
     // empty string, so a written '' is silently dropped on read.
     ...(ev.traceId && { traceId: ev.traceId }),
+    // Org-scoping P4: local derive/judge read the owner's own telemetry JSONL,
+    // which carries no org dimension — everything they emit is by definition
+    // the home org's data, so stamp the constant rather than "group by org"
+    // (docs/roadmap/org-scoped-multi-tenancy.md, Phase 4). Omitted when the
+    // env is unset so pre-tenancy behavior is byte-identical.
+    ...(process.env.HOME_ORG_ID && { org_id: process.env.HOME_ORG_ID }),
   };
 }
 

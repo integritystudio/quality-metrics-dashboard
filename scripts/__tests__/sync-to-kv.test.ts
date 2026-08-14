@@ -184,3 +184,43 @@ describe('KV trace/session TTL constants', () => {
     expect(SESSION_KEY_TTL_SECONDS).toBe(90 * SECONDS.DAY);
   });
 });
+
+describe('org-scoped key helpers (P4)', () => {
+  const ORG = 'f4286657-da73-4174-9e49-937f1bb6097f';
+
+  it('orgPrefixedKey builds org:<uuid>:<key>', async () => {
+    const { orgPrefixedKey } = await import('../sync-to-kv.js');
+    expect(orgPrefixedKey(ORG, 'dashboard:7d')).toBe(`org:${ORG}:dashboard:7d`);
+  });
+
+  it('stripOrgPrefix removes exactly one org prefix and leaves bare keys alone', async () => {
+    const { orgPrefixedKey, stripOrgPrefix } = await import('../sync-to-kv.js');
+    expect(stripOrgPrefix(orgPrefixedKey(ORG, 'trend:relevance:7d'))).toBe('trend:relevance:7d');
+    expect(stripOrgPrefix('dashboard:7d')).toBe('dashboard:7d');
+    // A non-uuid "org:" segment is data, not a scope prefix — must not be stripped.
+    expect(stripOrgPrefix('org:not-a-uuid:dashboard:7d')).toBe('org:not-a-uuid:dashboard:7d');
+  });
+
+  it('system:lastSync is a bare global key, never org-prefixed', async () => {
+    const { SYSTEM_LAST_SYNC_KEY, ORG_KEY_PREFIX_RE } = await import('../sync-to-kv.js');
+    expect(ORG_KEY_PREFIX_RE.test(SYSTEM_LAST_SYNC_KEY)).toBe(false);
+  });
+});
+
+describe('prioritizeTraces with org-prefixed keys (P4)', () => {
+  const ORG = 'f4286657-da73-4174-9e49-937f1bb6097f';
+
+  it('groups the org-prefixed and bare entries of one trace as a single unit', async () => {
+    const { prioritizeTraces } = await import('../sync-to-kv.js');
+    const entries = [
+      { key: `org:${ORG}:evaluations:trace:t1`, value: '{}' },
+      { key: `org:${ORG}:trace:t1`, value: '{}' },
+      { key: 'evaluations:trace:t1', value: '{}' },
+      { key: 'trace:t1', value: '{}' },
+    ];
+    const result = prioritizeTraces(entries, new Map(), new Set());
+    // All four entries survive, contiguously — one trace, one priority group.
+    expect(result).toHaveLength(4);
+    expect(new Set(result.map(e => e.key))).toEqual(new Set(entries.map(e => e.key)));
+  });
+});
