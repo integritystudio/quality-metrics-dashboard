@@ -10,7 +10,7 @@ import { TrendSeries } from '../components/TrendSeries.js';
 import { AuditorView } from '../components/views/AuditorView.js';
 import { ExecutiveView } from '../components/views/ExecutiveView.js';
 import { OperatorView } from '../components/views/OperatorView.js';
-import type { MetricTrend, MetricDynamics } from '../types.js';
+import type { MetricTrend, MetricDynamics, ExecutiveView as ExecutiveViewType } from '../types.js';
 import type { TrendBucket } from '../hooks/useTrend.js';
 
 // Note: ResizeObserver stub is installed globally in setup.ts
@@ -365,10 +365,10 @@ describe('AuditorView', () => {
 });
 
 describe('ExecutiveView', () => {
-  function makeExecutiveData() {
+  function makeExecutiveData(): ExecutiveViewType {
     return {
-      role: 'executive' as const,
-      overallStatus: 'healthy' as const,
+      role: 'executive',
+      overallStatus: 'healthy',
       summary: { totalMetrics: 7, healthyMetrics: 6, warningMetrics: 1, criticalMetrics: 0, noDataMetrics: 0 },
       topIssues: [
         { name: 'hallucination', displayName: 'Hallucination Rate', status: 'warning', alertCount: 2 },
@@ -511,8 +511,8 @@ vi.mock('../api/parent/error-sanitizer.js', () => ({
   sanitizeErrorForResponse: vi.fn((e: unknown) => String(e)),
 }));
 
-vi.mock('../api/data-loader.js', async () => ({
-  loadEvaluationsForMetric: vi.fn(async () => []),
+vi.mock('../api/data-loader.js', () => ({
+  loadEvaluationsForMetric: vi.fn(() => Promise.resolve([])),
 }));
 
 describe('trends API route validation', () => {

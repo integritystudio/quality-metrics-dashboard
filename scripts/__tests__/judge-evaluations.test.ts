@@ -650,20 +650,20 @@ describe('toOTelRecord', () => {
 describe('processBatch', () => {
   it('processes all items', async () => {
     const items = [1, 2, 3, 4, 5];
-    const results = await processBatch(items, 2, 0, async (n) => n * 2);
+    const results = await processBatch(items, 2, 0, (n) => Promise.resolve(n * 2));
     expect(results).toEqual([2, 4, 6, 8, 10]);
   });
 
   it('handles empty array', async () => {
-    const results = await processBatch([], 3, 0, async (n: number) => n);
+    const results = await processBatch([], 3, 0, (n: number) => Promise.resolve(n));
     expect(results).toEqual([]);
   });
 
   it('continues on individual failures', async () => {
     const items = [1, 2, 3];
-    const results = await processBatch(items, 3, 0, async (n) => {
+    const results = await processBatch(items, 3, 0, (n) => {
       if (n === 2) throw new Error('fail');
-      return n;
+      return Promise.resolve(n);
     });
     expect(results).toEqual([1, 3]);
   });
@@ -708,19 +708,19 @@ function mockResponse(prompt: string, gEvalScore = 4): { text: string } {
 
 function createMockLLM(gEvalScore = 4): LLMProvider {
   return {
-    async generate(prompt: string) {
-      return mockResponse(prompt, gEvalScore);
+    generate(prompt: string) {
+      return Promise.resolve(mockResponse(prompt, gEvalScore));
     },
   };
 }
 
 function createFailingLLM(failKeyword: string): LLMProvider {
   return {
-    async generate(prompt: string) {
+    generate(prompt: string) {
       if (prompt.toLowerCase().includes(failKeyword.toLowerCase())) {
-        throw new Error(`Mock ${failKeyword} failure`);
+        return Promise.reject(new Error(`Mock ${failKeyword} failure`));
       }
-      return mockResponse(prompt);
+      return Promise.resolve(mockResponse(prompt));
     },
   };
 }

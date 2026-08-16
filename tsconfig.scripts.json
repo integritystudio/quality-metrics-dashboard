@@ -17,5 +17,5 @@
     }
   },
   "include": ["scripts", "src/lib", "src/api/api-constants.ts", "../dist"],
-  "exclude": ["src/lib/auth0.ts"]
+  "exclude": ["src/lib/auth0.ts", "src/lib/api-client.ts"]
 }

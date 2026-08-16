@@ -206,7 +206,7 @@ describe('WorkflowGraphView', () => {
     expect(onNodeClick).toHaveBeenCalledWith('node-1');
   });
 
-  it('renders without error when graph has 0 nodes and 0 edges', async () => {
+  it('renders without error when graph has 0 nodes and 0 edges', () => {
     const graph = makeGraph({ nodes: [], edges: [], rootNodeId: null });
     expect(() => render(<WorkflowGraphView graph={graph} />)).not.toThrow();
   });

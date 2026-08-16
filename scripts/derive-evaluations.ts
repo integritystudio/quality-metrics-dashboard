@@ -21,7 +21,6 @@ import {
   saveCalibrationState,
   shouldRecalibrate,
 } from '../../src/lib/quality/qfe-percentiles.js';
-import { MAX_RAW_SCORES_PER_METRIC } from '../../src/lib/quality/quality-constants.js';
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
@@ -40,6 +39,12 @@ function hrtToSeconds(hrt: [number, number]): number {
 function hrtToISO(hrt: [number, number]): string {
   return new Date(hrt[0] * 1000 + hrt[1] / 1e6).toISOString();
 }
+
+// Used to be exported as MAX_RAW_SCORES_PER_METRIC from ../../src/lib/quality/quality-constants.ts,
+// deleted there as a "dead export" (parent commit f518715) — the dashboard, a separate git repo,
+// was the only consumer and wasn't swept by that change.
+/** Maximum raw scores to persist per metric in calibration state (bounds file size) */
+const MAX_RAW_SCORES_PER_METRIC = 500;
 
 function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   const attrs = span.attributes;
@@ -455,7 +460,7 @@ function main(): void {
   // and persist to .calibration-state.json for the dashboard API to consume.
   const scoresByMetric: Record<string, number[]> = {};
   for (const ev of allEvals) {
-    if (!scoresByMetric[ev.evaluationName]) scoresByMetric[ev.evaluationName] = [];
+    scoresByMetric[ev.evaluationName] ??= [];
     if (Number.isFinite(ev.scoreValue)) scoresByMetric[ev.evaluationName].push(ev.scoreValue);
   }
 

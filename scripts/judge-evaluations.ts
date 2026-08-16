@@ -260,7 +260,6 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
 
     for await (const span of streamJsonlWithValidation(filepath, localTraceSpanSchema)) {
       const attrs = span.attributes;
-      if (!attrs) continue;
 
       const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
       if (!sessionId) continue;
@@ -776,7 +775,6 @@ function _loadExistingKeys(): Set<string> {
 
     for (const record of records) {
       const attrs = record.attributes;
-      if (!attrs) continue;
       const evalType = attrs['gen_ai.evaluation.evaluator.type'];
       if (evalType !== LLM_EVALUATOR_TYPE && evalType !== SEED_EVALUATOR_TYPE && evalType !== TRACE_BACKFILL_EVALUATOR_TYPE) continue;
 

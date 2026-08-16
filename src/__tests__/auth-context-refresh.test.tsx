@@ -110,7 +110,7 @@ describe('AuthContext: authenticated state', () => {
     });
   });
 
-  it('shows loading while auth0 is initializing', async () => {
+  it('shows loading while auth0 is initializing', () => {
     mockIsLoading = true;
     vi.stubGlobal('fetch', vi.fn());
 

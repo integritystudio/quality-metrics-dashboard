@@ -18,7 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { z } from 'zod';
 import { CloudBackend } from '../../src/backends/cloud.js';
-import { computeStdDev } from '../../src/lib/quality/quality-constants.js';
+import { computeStdDev } from '../../src/lib/quality/quality-stats.js';
 import {
   sweepDegradationParams,
   CURRENT_PRODUCTION_CONFIG,
@@ -32,7 +32,7 @@ import type {
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 
-const INCIDENTS_FILE = join(import.meta.dirname ?? process.cwd(), '.degradation-incidents.json');
+const INCIDENTS_FILE = join(import.meta.dirname, '.degradation-incidents.json');
 /** F1 improvement above which best config triggers graduation recommendation */
 const F1_GRADUATION_THRESHOLD = 0.05;
 /** Minimum incidents for a meaningful backtest (warns if below) */

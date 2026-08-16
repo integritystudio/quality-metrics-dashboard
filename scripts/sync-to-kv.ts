@@ -42,7 +42,6 @@ import {
   loadCalibrationState,
   type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
-import { DEGRADATION_KV_KEY } from '../../src/lib/quality/quality-constants.js';
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
 import {
   kvSyncStateSchema,
@@ -74,10 +73,16 @@ import {
 import { CANARY_EVALUATOR_TYPE } from './judge-evaluations.js';
 import { mean, quantileSorted } from 'd3-array';
 
+// Used to be exported as DEGRADATION_KV_KEY from ../../src/lib/quality/quality-constants.ts,
+// deleted there as a "dead export" (parent commit f518715) — the dashboard, a separate git
+// repo, was the only consumer and wasn't swept by that change. Value matches the literal
+// `worker/index.ts` still reads at GET /api/degradation-signals.
+const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
+
 function resolveNamespaceId(): string {
   if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
   // Fall back to wrangler.toml kv_namespaces[0].id
-  const tomlPath = join(import.meta.dirname ?? '.', '..', 'wrangler.toml');
+  const tomlPath = join(import.meta.dirname, '..', 'wrangler.toml');
   if (existsSync(tomlPath)) {
     const toml = readFileSync(tomlPath, 'utf8');
     const match = toml.match(/\[\[kv_namespaces\]\][\s\S]*?^id\s*=\s*"([^"]+)"/m);
