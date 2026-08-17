@@ -1,9 +1,19 @@
 /**
- * Subset of quality-feature-engineering utilities needed by the frontend.
- * Extracted from parent src/lib/quality-feature-engineering.ts to allow
- * standalone Vite builds (CI) without the parent dist/ directory.
+ * Subset of the parent's quality utilities needed by the frontend.
+ * Duplicated rather than imported so Vite can build standalone (CI) without the
+ * parent `dist/` directory — the parent's runtime values cannot reach frontend
+ * code in any case (`src/api/parent/*` barrels are Node-only).
  *
- * Keep in sync with the parent when these definitions change.
+ * Keep in sync with the parent when these definitions change. The parent module
+ * that was the single source, `src/lib/quality/quality-feature-engineering.ts`,
+ * no longer exists — it was split into `src/lib/quality/qfe-*.ts`, so the
+ * counterparts now live in several files:
+ *   - ROLE_DISPLAY_LIMITS, ROLE_FEATURE_CONFIG        → `qfe-role-config.ts`
+ *   - scoreColorBand, labelToOrdinal, ordinalToCategory → `qfe-label-ordinals.ts`
+ *
+ * ⚠️ Nothing enforces this sync. `src/__tests__/quality-utils-drift.test.ts`
+ * pins these values against literals in its own file, not against the parent,
+ * so it catches an edit to THIS file and cannot catch parent drift.
  */
 
 export type ScoreDirection = 'maximize' | 'minimize';
@@ -144,12 +154,34 @@ export function ordinalToCategory(ordinal: number): LabelFilterCategory {
   return 'Fail';
 }
 
-const EXECUTIVE_EXPLANATION_TRUNCATION = 80;
-const OPERATOR_EXPLANATION_TRUNCATION = 500;
-const AUDITOR_EXPLANATION_TRUNCATION = 2000;
-const EXECUTIVE_MAX_WORST_EVALUATIONS = 1;
-const OPERATOR_MAX_WORST_EVALUATIONS = 5;
-const AUDITOR_MAX_WORST_EVALUATIONS = 10;
+/** The display-limit half of {@link RoleFeatureConfig} — the numeric fields only */
+export type RoleDisplayLimits = Pick<
+  RoleFeatureConfig,
+  'explanationTruncation' | 'maxWorstEvaluations'
+>;
+
+/**
+ * Per-role display limits — mirrors ROLE_DISPLAY_LIMITS in the parent's
+ * `src/lib/quality/qfe-role-config.ts`, same shape and same values.
+ *
+ * This is a hand-maintained copy, not an import: the parent's runtime values
+ * cannot reach frontend code (the `src/api/parent/*` barrels are Node-only, and
+ * `@parent` resolves to `../dist`, which standalone CI builds without). Keeping
+ * the same shape on both sides is what makes a sync a one-table diff.
+ *
+ * Was six loose constants until 2026-08-17 (parent QSD-6). Note the parent has
+ * no OPERATOR_EXPLANATION_TRUNCATION to match: its operator truncation used to
+ * come from TEXT_PREVIEW_LIMIT, which this file never mirrored — the asymmetry
+ * QSD-6 removed existed only on the parent side.
+ */
+export const ROLE_DISPLAY_LIMITS = {
+  /** Headline view: one worst evaluation, one line of explanation */
+  executive: { explanationTruncation: 80, maxWorstEvaluations: 1 },
+  /** Triage view */
+  operator: { explanationTruncation: 500, maxWorstEvaluations: 5 },
+  /** Evidence view: full judge rationale, deepest worst-list */
+  auditor: { explanationTruncation: 2000, maxWorstEvaluations: 10 },
+} as const satisfies Record<FeatureRoleType, RoleDisplayLimits>;
 
 export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
   executive: {
@@ -163,8 +195,7 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
     showPipelineFunnel: false,
     showProvenance: false,
     showRawExport: false,
-    explanationTruncation: EXECUTIVE_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: EXECUTIVE_MAX_WORST_EVALUATIONS,
+    ...ROLE_DISPLAY_LIMITS.executive,
   },
   operator: {
     showCQI: false,
@@ -177,8 +208,7 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
     showPipelineFunnel: true,
     showProvenance: false,
     showRawExport: false,
-    explanationTruncation: OPERATOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: OPERATOR_MAX_WORST_EVALUATIONS,
+    ...ROLE_DISPLAY_LIMITS.operator,
   },
   auditor: {
     showCQI: true,
@@ -191,8 +221,7 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
     showPipelineFunnel: true,
     showProvenance: true,
     showRawExport: true,
-    explanationTruncation: AUDITOR_EXPLANATION_TRUNCATION,
-    maxWorstEvaluations: AUDITOR_MAX_WORST_EVALUATIONS,
+    ...ROLE_DISPLAY_LIMITS.auditor,
   },
 };
 

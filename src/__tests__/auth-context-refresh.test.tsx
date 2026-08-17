@@ -169,8 +169,9 @@ describe('AuthContext: signOut', () => {
       expect(scope.getByTestId('email').textContent).toBe('user@test.com');
     });
 
-    await act(async () => {
+    await act(() => {
       scope.getByTestId('sign-out').click();
+      return Promise.resolve();
     });
 
     expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });

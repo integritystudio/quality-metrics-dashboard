@@ -2,9 +2,21 @@
  * Drift detection for dashboard/src/lib/quality-utils.ts (DR12).
  *
  * These tests pin the exact output of every exported function and constant
- * against reference values derived from src/lib/quality-feature-engineering.ts.
- * If the parent changes a threshold or mapping and quality-utils.ts is not
- * updated, at least one assertion here will fail.
+ * against reference values transcribed from the parent at the time of writing.
+ *
+ * ⚠️ Scope correction (2026-08-17): the original header claimed "if the parent
+ * changes a threshold or mapping and quality-utils.ts is not updated, at least
+ * one assertion here will fail." That is not what this file does. It imports
+ * only from `../lib/quality-utils.js` and compares against literals written
+ * here, so parent and test drift together silently — change 2000 to 3000 in the
+ * parent and every assertion below still passes. What it actually catches is an
+ * *unreviewed edit to quality-utils.ts*, which is worth having, but it is a
+ * change-detector, not a parity check.
+ *
+ * A real parity check has to import the parent, which needs a Node context and
+ * the parent `dist/` — i.e. `scripts/` + `npm run test:scripts`, which CI does
+ * not run (see dashboard CLAUDE.md § Test note). Not built; do not assume the
+ * copies are verified equal.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -14,6 +26,7 @@ import {
   labelToOrdinal,
   ordinalToCategory,
   truncateText,
+  ROLE_DISPLAY_LIMITS,
   ROLE_FEATURE_CONFIG,
   SCORE_COLORS,
 } from '../lib/quality-utils.js';
@@ -181,6 +194,38 @@ describe('ROLE_FEATURE_CONFIG', () => {
     expect(ROLE_FEATURE_CONFIG.auditor.showRawExport).toBe(true);
     expect(ROLE_FEATURE_CONFIG.auditor.maxWorstEvaluations).toBe(10);
     expect(ROLE_FEATURE_CONFIG.auditor.explanationTruncation).toBe(2000);
+  });
+});
+
+describe('ROLE_DISPLAY_LIMITS', () => {
+  // The assertions above pin maxWorstEvaluations for all three roles but
+  // explanationTruncation for the auditor only, so executive (80) and operator
+  // (500) could drift unnoticed. These pin the whole table, and mirror the
+  // parent's own ROLE_DISPLAY_LIMITS test (qfe-roles-detail.test.ts) so the two
+  // sides can be diffed by eye.
+  const EXPECTED = {
+    executive: { explanationTruncation: 80, maxWorstEvaluations: 1 },
+    operator: { explanationTruncation: 500, maxWorstEvaluations: 5 },
+    auditor: { explanationTruncation: 2000, maxWorstEvaluations: 10 },
+  };
+
+  for (const role of ['executive', 'operator', 'auditor'] as const) {
+    it(`${role} limits match the parent`, () => {
+      expect(ROLE_DISPLAY_LIMITS[role]).toEqual(EXPECTED[role]);
+    });
+
+    it(`${role} config surfaces the limits from ROLE_DISPLAY_LIMITS`, () => {
+      expect(ROLE_FEATURE_CONFIG[role].explanationTruncation).toBe(
+        EXPECTED[role].explanationTruncation,
+      );
+      expect(ROLE_FEATURE_CONFIG[role].maxWorstEvaluations).toBe(
+        EXPECTED[role].maxWorstEvaluations,
+      );
+    });
+  }
+
+  it('covers every role exactly once', () => {
+    expect(Object.keys(ROLE_DISPLAY_LIMITS)).toEqual(['executive', 'operator', 'auditor']);
   });
 });
 

@@ -15,16 +15,16 @@ const HTTP_OK = 200;
 
 function makeKV(store: Record<string, unknown> = {}): KVNamespace {
   return {
-    get: async (key: string, type?: string) => {
+    get: (key: string, type?: string) => {
       const value = store[key];
-      if (value === undefined) return null;
-      if (type === 'json') return value;
-      return JSON.stringify(value);
+      if (value === undefined) return Promise.resolve(null);
+      if (type === 'json') return Promise.resolve(value);
+      return Promise.resolve(JSON.stringify(value));
     },
     put: async () => {},
     delete: async () => {},
-    list: async () => ({ keys: [], list_complete: true, cursor: '' }),
-    getWithMetadata: async () => ({ value: null, metadata: null }),
+    list: () => Promise.resolve({ keys: [], list_complete: true, cursor: '' }),
+    getWithMetadata: () => Promise.resolve({ value: null, metadata: null }),
   } as unknown as KVNamespace;
 }
 
