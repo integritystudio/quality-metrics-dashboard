@@ -301,7 +301,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const outputPath = join(import.meta.dirname ?? process.cwd(), outputFile);
+  const scriptDir = import.meta.dirname as string | undefined;
+  const outputPath = join(scriptDir ?? process.cwd(), outputFile);
   const totalSweepGrid = Object.values(BACKTEST_SWEEP).reduce((acc, arr) => acc * arr.length, 1);
 
   writeFileSync(outputPath, JSON.stringify({
