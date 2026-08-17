@@ -6,7 +6,7 @@
  * Requires Doppler env vars:
  *   VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID, VITE_AUTH0_AUDIENCE
  *   AUTH0_TEST_EMAIL, AUTH0_TEST_PASSWORD, AUTH0_TEST_USER_ID
- *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEV_WORKER_URL
+ *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, METRICS_API_URL
  *
  * Run: doppler run --project integrity-studio --config dev -- npx playwright test --project integration
  */
@@ -169,7 +169,7 @@ async function setup(): Promise<void> {
   const testAuth0Id = requireEnv('AUTH0_TEST_USER_ID');
   const supabaseUrl = requireEnv('SUPABASE_URL');
   const serviceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const workerUrl = requireEnv('DEV_WORKER_URL');
+  const workerUrl = requireEnv('METRICS_API_URL');
 
   const serviceHeaders = {
     'apikey': serviceKey,

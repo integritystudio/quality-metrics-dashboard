@@ -7,6 +7,28 @@ const API_HEALTH_URL = `http://${API_HOST}:${API_PORT}/api/health`;
 const isIntegration = process.env.INTEGRATION === '1';
 const SERVER_TIMEOUT_MS = 30_000;
 
+/**
+ * The deployed dashboard Worker the integration project runs against.
+ *
+ * Fail-fast, never defaulted: this used to fall back to the PRODUCTION Worker,
+ * and `e2e/integration/setup.ts` upserts a test user into `public.users` and
+ * assigns it a role — so one unset variable turned a dev test run into a
+ * production write. `setup.ts` already `requireEnv`s the same name; this
+ * matches it so the config cannot resolve to a target the setup would reject.
+ *
+ * Resolved only for the integration project — the chromium project runs against
+ * a local server and must keep working without any Doppler context.
+ */
+function requireMetricsApiUrl(): string {
+  const url = process.env.METRICS_API_URL;
+  if (!url) {
+    throw new Error(
+      'Missing env var: METRICS_API_URL. Run with: doppler run --project integrity-studio --config dev -- npm run test:e2e:integration',
+    );
+  }
+  return url;
+}
+
 export default defineConfig({
   testDir: './e2e',
   // API-backed tests contend on local telemetry reads; serial execution is more stable.
@@ -16,7 +38,14 @@ export default defineConfig({
   workers: 1,
   reporter: [
     ['html', { open: 'never' }],
-    ...(isIntegration ? [['./e2e/integration/sentry-reporter.ts'] as const] : []),
+    // `list` is explicit because sentry-reporter.ts is a side channel that
+    // prints nothing: registering ANY custom reporter stops Playwright from
+    // supplying a console one, so integration runs reported pass/fail only to
+    // Sentry and the HTML file — CI logs and `--list` were silent. Verified:
+    // `--reporter=html,<sentry>` lists 0 tests, `--reporter=list,<sentry>` lists 39.
+    ...(isIntegration
+      ? [['list'] as const, ['./e2e/integration/sentry-reporter.ts'] as const]
+      : []),
   ],
   timeout: 30_000,
   expect: { timeout: 5_000 },
@@ -44,8 +73,9 @@ export default defineConfig({
       name: 'integration',
       testDir: './e2e/integration',
       use: {
-        // Integration tests hit deployed worker directly — no browser needed
-        baseURL: process.env.DEV_WORKER_URL ?? 'https://quality-metrics-api.alyshia-b38.workers.dev',
+        // Integration tests hit the deployed Worker directly — no browser needed.
+        // Resolved lazily so only an actual integration run requires the var.
+        ...(isIntegration ? { baseURL: requireMetricsApiUrl() } : {}),
       },
     },
   ],

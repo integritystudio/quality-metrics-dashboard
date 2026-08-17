@@ -41,7 +41,8 @@ binding = "ASSETS"
 # Dev environment — `quality-metrics-api-dev`
 #
 # THE reason this block has to exist: AUTH0_DOMAIN is a plaintext var, so it does
-# NOT follow `--config dev`. Before this, Doppler dev's DEV_WORKER_URL pointed at
+# NOT follow `--config dev`. Before this, Doppler dev's METRICS_API_URL (then named
+# DEV_WORKER_URL, renamed 2026-08-17) pointed at
 # the PRODUCTION worker, which verifies JWTs against the PRODUCTION Auth0 tenant
 # (dev-68gg87ow4mg4kzyo) — while the e2e suite mints its test user through
 # sender-worker-dev against the DEV tenant (dev-njjmghdzm23uy0p7). A dev-tenant
