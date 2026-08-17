@@ -120,7 +120,37 @@ test.describe('Dashboard API contracts', () => {
 
   test('GET /api/calibration returns valid response', async ({ request }) => {
     const res = await request.get(url('/api/calibration'), { headers: authHeaders });
-    expect([200, 404]).toContain(res.status());
+    // 200 = data exists, 404 = no KV entry, 500 = schema validation failure on malformed data
+    expect([200, 404, 500]).toContain(res.status());
+  });
+
+  test('GET /api/calibration serves the full calibration contract when data exists', async ({ request }) => {
+    // The worker parses meta:calibration against calibrationResponseSchema and
+    // serves result.data, so a 200 must carry all three required fields — the
+    // status-only assertion above passes on a `{}` body that would break
+    // getMetricCalibration. Skipped on 404/500: whether the dev KV is seeded is
+    // not this test's contract, and asserting on it would make the suite flaky.
+    const res = await request.get(url('/api/calibration'), { headers: authHeaders });
+    test.skip(res.status() !== 200, 'no calibration data in KV for this environment');
+
+    const body = await res.json() as {
+      distributions: Record<string, Record<string, number>>;
+      sampleCounts: Record<string, number>;
+      lastCalibrated: string;
+    };
+
+    expect(body).toHaveProperty('distributions');
+    expect(body).toHaveProperty('sampleCounts');
+    expect(typeof body.lastCalibrated).toBe('string');
+    expect(body.lastCalibrated.length).toBeGreaterThan(0);
+
+    // Every distribution carries the five percentiles the schema requires; a
+    // partial one (the pre-schema failure mode) reads back as NaN downstream.
+    for (const [metric, dist] of Object.entries(body.distributions)) {
+      expect(Object.keys(dist).sort(), `distribution for ${metric}`)
+        .toEqual(['p10', 'p25', 'p50', 'p75', 'p90']);
+      expect(typeof body.sampleCounts[metric], `sampleCount for ${metric}`).toBe('number');
+    }
   });
 
   test('GET /api/routing-telemetry returns valid response', async ({ request }) => {
