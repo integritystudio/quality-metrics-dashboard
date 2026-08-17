@@ -9,7 +9,7 @@ import { computeMetricDetail } from '../parent/quality-views.js';
 import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
 import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam } from '../api-constants.js';
+import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam, jsonSafe } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 
 const DYNAMICS_BUCKET_HOURS_HOURLY = 1;
@@ -71,7 +71,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
       ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
       : undefined;
 
-    return c.json({ ...detail, dynamics });
+    return c.json(jsonSafe({ ...detail, dynamics }));
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
@@ -151,7 +151,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
       toolVerifications: e.toolVerifications,
     }));
 
-    return c.json({ rows, total, limit, offset, hasMore: offset + limit < total });
+    return c.json(jsonSafe({ rows, total, limit, offset, hasMore: offset + limit < total }));
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }

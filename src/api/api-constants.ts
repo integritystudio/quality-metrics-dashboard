@@ -67,6 +67,53 @@ export function timestampToMs(ts: string | number | bigint | null | undefined): 
   return new Date(ts).getTime();
 }
 
+/** Structural result of {@link jsonSafe}: every `bigint` becomes a decimal `string`. */
+export type JsonSafe<T> =
+  T extends bigint ? string
+  : T extends (infer U)[] ? JsonSafe<U>[]
+  : T extends Date ? T
+  : T extends object ? { [K in keyof T]: JsonSafe<T[K]> }
+  : T;
+
+/** Plain objects are walked; class instances (Date, Map, …) are passed through untouched. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function convert(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return value.map(convert);
+  if (isPlainObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, convert(v)]));
+  }
+  return value;
+}
+
+/**
+ * Recursively replace `bigint` with its decimal-string form so a response body
+ * survives `JSON.stringify`.
+ *
+ * The backends decode OTLP `fixed64` timestamps to `bigint` — spans via the
+ * parent `numericNanosToEpochNanos` codec (`startTimeUnixNano`,
+ * `endTimeUnixNano`) and evaluations via `isoDatetimeToEpochNanos`
+ * (`timestamp`), with `CloudBackend` building both with `BigInt(...)` directly.
+ * `JSON.stringify` throws outright on `bigint`, so **any** route returning that
+ * data unconverted 500s on real input — including routes that only embed it
+ * indirectly, such as `/metrics/:name` spreading `computeMetricDetail`'s
+ * `evaluations` and `worstEvaluations`.
+ *
+ * A decimal string is the on-the-wire OTLP-JSON representation these values were
+ * decoded from, and `timestampToMs` already accepts it, so this restores the
+ * wire shape rather than inventing one. Applied at the response boundary rather
+ * than per field: the bigint-bearing types are nested at varying depth, and a
+ * field-by-field helper silently misses each new one.
+ */
+export function jsonSafe<T>(value: T): JsonSafe<T> {
+  return convert(value) as JsonSafe<T>;
+}
+
 export function incrementCount(map: Record<string, number>, key: string): void {
   map[key] = (map[key] ?? 0) + 1;
 }

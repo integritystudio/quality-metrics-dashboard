@@ -20,6 +20,7 @@ import {
   PERCENT_BASE,
   LATENCY_DISPLAY_PRECISION,
   spanAttr,
+  jsonSafe,
 } from '../api-constants.js';
 import {
   loadEvaluationsBySessionId,
@@ -311,7 +312,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
 
-    return c.json({
+    return c.json(jsonSafe({
       sessionId,
       dataSources,
       timespan,
@@ -342,7 +343,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       },
       multiAgentEvaluation,
       evaluations,
-    });
+    }));
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }

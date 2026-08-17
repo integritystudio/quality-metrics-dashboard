@@ -5,7 +5,7 @@ import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader
 import { queryTraces } from '../parent/query-traces.js';
 import type { StepScore } from '../../types.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs } from '../api-constants.js';
+import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs, jsonSafe } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { mean } from 'd3-array';
 
@@ -194,14 +194,14 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     const serializedAgentMap = Object.fromEntries(agentMap);
     const graph = buildWorkflowGraph(evaluation, spans);
 
-    return c.json({
+    return c.json(jsonSafe({
       sessionId,
       spans,
       evaluation,
       evaluations,
       agentMap: serializedAgentMap,
       graph,
-    });
+    }));
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
