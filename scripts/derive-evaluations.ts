@@ -32,6 +32,13 @@ import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js'
 // ended up needing the same fix twice. Re-exported for existing importers.
 export type { EvalRecord } from './judge-evaluations.js';
 
+/** Span attributes are `unknown`-valued; render primitives, never objects. */
+function attrString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
 function hrtToSeconds(hrt: [number, number]): number {
   return hrt[0] + hrt[1] / 1e9;
 }
@@ -53,12 +60,12 @@ function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   if (!isBuiltin && !isMcp) return null;
 
   const success = isBuiltin ? attrs['builtin.success'] : attrs['mcp.success'];
-  const tool = isBuiltin ? attrs['builtin.tool'] : attrs['mcp.tool'];
-  const errorType = isBuiltin ? attrs['builtin.error_type'] : attrs['mcp.error_type'];
-  const server = isMcp ? attrs['mcp.server'] : undefined;
+  const tool = attrString(isBuiltin ? attrs['builtin.tool'] : attrs['mcp.tool'], 'unknown');
+  const errorType = attrString(isBuiltin ? attrs['builtin.error_type'] : attrs['mcp.error_type']);
+  const server = isMcp ? attrString(attrs['mcp.server']) : '';
 
   const score = success === true ? 1.0 : 0.0;
-  const toolLabel = server ? `${server}/${tool}` : String(tool);
+  const toolLabel = server ? `${server}/${tool}` : tool;
 
   let explanation: string;
   if (success) {
@@ -75,7 +82,7 @@ function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
     evaluator: RULE_EVALUATOR,
     evaluatorType: RULE_EVALUATOR_TYPE,
     traceId: span.traceId,
-    sessionId: String(attrs['session.id'] ?? ''),
+    sessionId: attrString(attrs['session.id']),
   };
 }
 
@@ -93,9 +100,9 @@ function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
   const attrs = span.attributes;
 
   let hookType: string;
-  if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrs['builtin.tool']}`;
-  else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrs['mcp.tool']}`;
-  else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrs['integritystudio.agent.type']}`;
+  if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrString(attrs['builtin.tool'], 'unknown')}`;
+  else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrString(attrs['mcp.tool'], 'unknown')}`;
+  else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
   else hookType = span.name.replace('hook:', '');
 
   return {
@@ -107,7 +114,7 @@ function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
     evaluator: RULE_EVALUATOR,
     evaluatorType: RULE_EVALUATOR_TYPE,
     traceId: span.traceId,
-    sessionId: String(attrs['session.id'] ?? ''),
+    sessionId: attrString(attrs['session.id']),
   };
 }
 
@@ -141,7 +148,7 @@ export function trackTaskActivity(span: LocalTraceSpan): void {
   const tool = span.attributes['builtin.tool'];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
 
-  const sessionId = String(span.attributes['session.id'] ?? 'unknown');
+  const sessionId = attrString(span.attributes['session.id'], 'unknown');
   let entry = sessionTasks.get(sessionId);
   if (!entry) sessionTasks.set(sessionId, entry = { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
   entry.lastSpan = span;
@@ -234,13 +241,13 @@ function trackAgentActivity(span: LocalTraceSpan): void {
   const isPost = span.name === 'hook:agent-post-tool';
   if (!isPre && !isPost) return;
 
-  const sessionId = String(span.attributes['session.id'] ?? 'unknown');
+  const sessionId = attrString(span.attributes['session.id'], 'unknown');
   let entry = sessionAgents.get(sessionId);
   if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });
   if (isPre) entry.pre++;
   if (isPost) {
     entry.post++;
-    const agentName = String(span.attributes['gen_ai.agent.name'] ?? 'unknown');
+    const agentName = attrString(span.attributes['gen_ai.agent.name'], 'unknown');
     const score = span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1;
     entry.agentSequence.push({ agentName, score, span });
   }
