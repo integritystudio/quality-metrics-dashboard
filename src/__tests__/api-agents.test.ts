@@ -5,6 +5,13 @@
  * Fixtures are typed against the real parent types (via `../types.js`, which is
  * type-only and so erased — safe under `parentDistStub` in standalone CI), which
  * makes them drift-detecting rather than merely plausible.
+ *
+ * `buildWorkflowGraph` is deliberately NOT mocked. It is a local module whose only
+ * imports are types plus `constants.ts`/`quality-utils.ts`, so nothing in it reaches
+ * `@parent` at runtime and the standalone-CI stub does not apply — the reason the
+ * parent-boundary modules below must stay mocked does not extend to it. Mocking it
+ * made the graph assertions tautological (return X, assert X) while the real
+ * construction never ran.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -19,10 +26,6 @@ vi.mock('../api/parent/error-sanitizer.js', () => ({
 
 vi.mock('../api/parent/query-traces.js', () => ({
   queryTraces: vi.fn(),
-}));
-
-vi.mock('../lib/workflow-graph.js', () => ({
-  buildWorkflowGraph: vi.fn(),
 }));
 
 vi.mock('../api/data-loader.js', () => ({
@@ -43,10 +46,8 @@ import { agentRoutes } from '../api/routes/agents.js';
 import { queryTraces } from '../api/parent/query-traces.js';
 import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
 import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 import type { AgentDetailResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
 import type { EvaluationResult, MultiAgentEvaluation } from '../types.js';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
 import { EVAL_NANOS, makeEvaluation } from './support/fixtures.js';
 
 
@@ -93,14 +94,6 @@ const MOCK_MULTI_AGENT: MultiAgentEvaluation = {
   conversationCompleteness: null,
   totalTurns: 0,
   errorPropagationTurns: 0,
-};
-
-const MOCK_GRAPH: WorkflowGraph = {
-  nodes: [],
-  edges: [],
-  rootNodeId: null,
-  workflowShape: 'single_agent',
-  droppedTurns: 0,
 };
 
 function makeMockEval(traceId = 'trace-001'): EvaluationResult {
@@ -221,7 +214,6 @@ describe('GET /agents/:sessionId', () => {
     vi.mocked(loadTracesBySessionId).mockResolvedValue([]);
     vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
     vi.mocked(computeMultiAgentEvaluation).mockReturnValue(MOCK_MULTI_AGENT);
-    vi.mocked(buildWorkflowGraph).mockReturnValue(MOCK_GRAPH);
   });
 
   it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
@@ -266,27 +258,94 @@ describe('GET /agents/:sessionId', () => {
     expect(res.status).toBe(500);
   });
 
-  it('returns graph field from buildWorkflowGraph', async () => {
-    const mockGraph: WorkflowGraph = {
-      ...MOCK_GRAPH,
-      nodes: [{
-        id: 'a',
-        label: 'general-purpose',
-        evaluationScore: null,
-        toolCallCount: 0,
-        totalTokens: null,
-        durationMs: 0,
-        turnCount: 1,
-        hasError: false,
-      }],
-      rootNodeId: 'a',
-    };
-    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph);
+  /**
+   * Exercises the real `buildWorkflowGraph`. With turns present the evaluation path
+   * runs, so nodes come from `evaluation.turns` and their metrics are joined from the
+   * spans by `gen_ai.agent.name`.
+   */
+  it('builds graph nodes from the evaluation turns', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([
+      makeSpan('trace-001', 'span-001', 'planner'),
+      makeSpan('trace-001', 'span-002', 'writer'),
+    ]);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({
+      ...MOCK_MULTI_AGENT,
+      totalTurns: 2,
+      turns: [
+        { turnIndex: 0, agentName: 'planner', relevance: 0.9, taskProgress: 0.5, hasError: false },
+        { turnIndex: 1, agentName: 'writer', relevance: 0.7, taskProgress: 1, hasError: false },
+      ],
+    });
 
     const res = await agentRoutes.request('/agents/sess-abc');
+
     expect(res.status).toBe(200);
     const body = (await res.json()) as AgentDetailResponse;
-    expect(body).toHaveProperty('graph');
-    expect(body.graph).toEqual(mockGraph);
+    expect(body.graph.nodes.map((n) => n.id).sort()).toEqual(['planner', 'writer']);
+    // Root is the agent holding the lowest turnIndex, not merely the first seen.
+    expect(body.graph.rootNodeId).toBe('planner');
+    expect(body.graph.nodes.find((n) => n.id === 'planner')?.evaluationScore).toBeCloseTo(0.9, 3);
+    expect(body.graph.droppedTurns).toBe(0);
+  });
+
+  /** A turn with no agent cannot become a node, and the graph reports that it lost one. */
+  it('counts turns dropped for having no agent name', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()]);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({
+      ...MOCK_MULTI_AGENT,
+      totalTurns: 2,
+      turns: [
+        { turnIndex: 0, agentName: 'planner', relevance: 0.9, taskProgress: 0.5, hasError: false },
+        { turnIndex: 1, relevance: 0.4, taskProgress: 0, hasError: true },
+      ],
+    });
+
+    const res = await agentRoutes.request('/agents/sess-abc');
+
+    const body = (await res.json()) as AgentDetailResponse;
+    expect(body.graph.nodes).toHaveLength(1);
+    expect(body.graph.droppedTurns).toBe(1);
+  });
+
+  /**
+   * With no evaluation the builder falls back to inferring the workflow from span
+   * timings alone — a sequential pair yields an edge between them, which the mocked
+   * version could never have shown.
+   *
+   * Note the two paths key on different attributes: the evaluation path joins spans by
+   * `gen_ai.agent.name`, while inference groups by `gen_ai.agent.id`, so node identity
+   * here is the agent *id*. Both are emitted by the hooks (`pre-tool.ts`,
+   * `post-tool.ts`), but `gen_ai.agent.id` only when the invocation carries one — a
+   * span without it contributes nothing to an inferred graph.
+   */
+  it('infers a sequential edge from span timings when there is no evaluation', async () => {
+    const first = makeSpan('trace-001', 'span-001', 'planner', { 'gen_ai.agent.id': 'planner-1' });
+    const second = makeSpan('trace-001', 'span-002', 'writer', { 'gen_ai.agent.id': 'writer-1' });
+    second.startTimeUnixNano = first.endTimeUnixNano! + 5_000_000n;
+    second.endTimeUnixNano = second.startTimeUnixNano + 1_000_000_000n;
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([first, second]);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue(null as unknown as MultiAgentEvaluation);
+
+    const res = await agentRoutes.request('/agents/sess-abc');
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as AgentDetailResponse;
+    expect(body.graph.rootNodeId).toBe('planner-1');
+    expect(body.graph.edges).toHaveLength(1);
+    expect(body.graph.edges[0]).toMatchObject({ source: 'planner-1', target: 'writer-1' });
+    // `null` marks an inferred edge, distinguishing it from a real handoff score of 0.
+    expect(body.graph.edges[0]!.handoffScore).toBeNull();
+  });
+
+  /** A span with no `gen_ai.agent.id` cannot be grouped, so inference yields nothing. */
+  it('returns an empty inferred graph when spans carry no agent id', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()]);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue(null as unknown as MultiAgentEvaluation);
+
+    const res = await agentRoutes.request('/agents/sess-abc');
+
+    const body = (await res.json()) as AgentDetailResponse;
+    expect(body.graph.nodes).toHaveLength(0);
+    expect(body.graph.rootNodeId).toBeNull();
   });
 });

@@ -17,6 +17,7 @@
  */
 
 import type { JsonSafe } from '../../api/api-constants.js';
+import type { WorkflowGraph } from '../../types/workflow-graph.js';
 import type {
   CompositeQualityIndex,
   CoverageHeatmap,
@@ -24,6 +25,7 @@ import type {
   HumanVerificationEvent,
   MetricDetailResult,
   MetricDynamics,
+  MultiAgentEvaluation,
   PercentileDistribution,
   QualityDashboardSummary,
   RoleView,
@@ -173,10 +175,10 @@ export interface AgentListResponse {
 export interface AgentDetailResponse {
   sessionId: string;
   spans: WireSpan[];
-  evaluation: unknown;
+  evaluation: JsonSafe<MultiAgentEvaluation> | null;
   evaluations: WireEvaluation[];
   agentMap: Record<string, string>;
-  graph: unknown;
+  graph: JsonSafe<WorkflowGraph>;
 }
 
 /** `GET /sessions/:sessionId` — only the fields the route tests assert on are named. */
