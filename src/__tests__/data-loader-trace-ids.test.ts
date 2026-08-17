@@ -7,8 +7,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { CloudBackend } from '../api/parent/backends.js';
+import type { EvaluationResult } from '../types.js';
 
-const mockQueryEvaluations = vi.fn();
+/**
+ * Typed off the real `CloudBackend.queryEvaluations` so the stub cannot return
+ * rows the backend could not. It forces the required `timestamp` — a `bigint`
+ * of epoch nanos — onto every fixture row; the previous untyped `vi.fn()` let
+ * them omit it, which is the shape that hid the BigInt serialization bugs.
+ */
+type QueryEvaluations = CloudBackend['queryEvaluations'];
+
+const mockQueryEvaluations = vi.fn<QueryEvaluations>();
 
 vi.mock('../api/parent/backends.js', () => {
   class MockCloudBackend {
@@ -30,6 +40,17 @@ vi.mock('../api/parent/query-traces.js', () => ({
 // Import AFTER mocks are registered
 const { loadEvaluationsByTraceIds } = await import('../api/data-loader.js');
 
+/** Epoch nanos, as the backend returns them — bigint, never a number. */
+const FIXTURE_TIMESTAMP_NANOS = 1_766_000_000_000_000_000n;
+
+function makeEvaluation(
+  traceId: string | undefined,
+  evaluationName: string,
+  scoreValue: number,
+): EvaluationResult {
+  return { traceId, evaluationName, scoreValue, timestamp: FIXTURE_TIMESTAMP_NANOS };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -44,7 +65,7 @@ describe('loadEvaluationsByTraceIds', () => {
   it('returns evaluations matching requested traceIds', async () => {
     const targetTraceId = 'trace-target-001';
     mockQueryEvaluations.mockResolvedValue([
-      { traceId: targetTraceId, evaluationName: 'relevance', scoreValue: 0.9 },
+      makeEvaluation(targetTraceId, 'relevance', 0.9),
     ]);
 
     const result = await loadEvaluationsByTraceIds([targetTraceId]);
@@ -62,16 +83,12 @@ describe('loadEvaluationsByTraceIds', () => {
 
     // Backend returns results only when queried with the specific traceId filter.
     // A bulk fetch (no traceId) returns nothing (simulating truncation at limit).
-    mockQueryEvaluations.mockImplementation((opts: { traceId?: string }) => {
+    mockQueryEvaluations.mockImplementation(opts => {
       if (opts.traceId === traceIdA) {
-        return Promise.resolve([
-          { traceId: traceIdA, evaluationName: 'coherence', scoreValue: 0.8 },
-        ]);
+        return Promise.resolve([makeEvaluation(traceIdA, 'coherence', 0.8)]);
       }
       if (opts.traceId === traceIdB) {
-        return Promise.resolve([
-          { traceId: traceIdB, evaluationName: 'coherence', scoreValue: 0.75 },
-        ]);
+        return Promise.resolve([makeEvaluation(traceIdB, 'coherence', 0.75)]);
       }
       // Bulk fetch without traceId returns empty (simulates 10K truncation missing these)
       return Promise.resolve([]);
@@ -111,19 +128,17 @@ describe('loadEvaluationsByTraceIds', () => {
 
     await loadEvaluationsByTraceIds(['trace-x', 'trace-y']);
 
-    for (const call of mockQueryEvaluations.mock.calls) {
-      expect(call[0]).toHaveProperty('traceId');
-      expect(typeof call[0].traceId).toBe('string');
+    for (const [options] of mockQueryEvaluations.mock.calls) {
+      expect(options).toHaveProperty('traceId');
+      expect(typeof options.traceId).toBe('string');
     }
   });
 
   it('aggregates results from all per-traceId queries into a single flat array', async () => {
-    mockQueryEvaluations.mockImplementation((opts: { traceId?: string }) => {
-      return Promise.resolve([
-        { traceId: opts.traceId, evaluationName: 'relevance', scoreValue: 0.9 },
-        { traceId: opts.traceId, evaluationName: 'coherence', scoreValue: 0.8 },
-      ]);
-    });
+    mockQueryEvaluations.mockImplementation(opts => Promise.resolve([
+      makeEvaluation(opts.traceId, 'relevance', 0.9),
+      makeEvaluation(opts.traceId, 'coherence', 0.8),
+    ]));
 
     const result = await loadEvaluationsByTraceIds(['trace-a', 'trace-b']);
 
@@ -154,13 +169,11 @@ describe('loadEvaluationsByTraceIds', () => {
   });
 
   it('returns partial results when some per-traceId queries fail', async () => {
-    mockQueryEvaluations.mockImplementation((opts: { traceId?: string }) => {
+    mockQueryEvaluations.mockImplementation(opts => {
       if (opts.traceId === 'trace-bad') {
         return Promise.reject(new Error('I/O error'));
       }
-      return Promise.resolve([
-        { traceId: opts.traceId, evaluationName: 'relevance', scoreValue: 0.9 },
-      ]);
+      return Promise.resolve([makeEvaluation(opts.traceId, 'relevance', 0.9)]);
     });
 
     const result = await loadEvaluationsByTraceIds(['trace-ok', 'trace-bad', 'trace-also-ok']);

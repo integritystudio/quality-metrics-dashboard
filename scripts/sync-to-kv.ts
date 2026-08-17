@@ -55,6 +55,7 @@ import {
   loadJsonWithValidation,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
+import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, SECONDS } from '../../src/lib/core/units.js';
 import {
   OTEL_STATUS_ERROR_CODE,
@@ -138,7 +139,7 @@ export function stripOrgPrefix(key: string): string {
   return key.replace(ORG_KEY_PREFIX_RE, '');
 }
 
-type KVEntry = { key: string; value: string; expirationTtl?: number };
+export type KVEntry = { key: string; value: string; expirationTtl?: number };
 
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
@@ -173,16 +174,20 @@ export function buildCalibrationEntry(
   if (!state?.distributions || Object.keys(state.distributions).length === 0) {
     return null;
   }
-  const distributions: Record<string, object> = {};
-  const sampleCounts: Record<string, number> = {};
+  const distributions: CalibrationResponse['distributions'] = {};
+  const sampleCounts: CalibrationResponse['sampleCounts'] = {};
   for (const [metric, entry] of Object.entries(state.distributions)) {
     distributions[metric] = entry.distribution;
     sampleCounts[metric] = entry.sampleSize;
   }
-  return {
-    key: 'meta:calibration',
-    value: JSON.stringify({ distributions, sampleCounts, lastCalibrated: state.lastCalibrated }),
+  // Typed as the shared contract so a drift between what this writes and what
+  // `useCalibration` reads is a typecheck failure, not a runtime surprise.
+  const payload: CalibrationResponse = {
+    distributions,
+    sampleCounts,
+    lastCalibrated: state.lastCalibrated,
   };
+  return { key: 'meta:calibration', value: JSON.stringify(payload) };
 }
 
 const TRACE_PRIORITY_WEIGHTS = {
@@ -253,7 +258,9 @@ function kvBulkPut(entries: KVEntry[]): number {
     try {
       const enveloped = batch.map(e => ({
         key: e.key,
-        value: JSON.stringify({ v: KV_SCHEMA_VERSION, data: JSON.parse(e.value) }),
+        // The payload is opaque here — this only re-wraps it in a version
+        // envelope, so `unknown` is the accurate type, not `any`.
+        value: JSON.stringify({ v: KV_SCHEMA_VERSION, data: JSON.parse(e.value) as unknown }),
         ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
       }));
       writeFileSync(tmpFile, JSON.stringify(enveloped));
@@ -959,7 +966,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   for (const entry of entries) {
     if (!entry.key.startsWith('metric:')) continue;
     try {
-      const parsed = JSON.parse(entry.value);
+      const parsed: unknown = JSON.parse(entry.value);
       const detail = metricDetailValueSchema.safeParse(parsed);
       if (detail.success) {
         for (const w of detail.data.worstEvaluations ?? []) {

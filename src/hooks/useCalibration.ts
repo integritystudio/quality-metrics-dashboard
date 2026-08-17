@@ -1,12 +1,7 @@
 import type { PercentileDistribution } from '../lib/quality-utils.js';
+import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 import { API_BASE, STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
-
-export interface CalibrationResponse {
-  distributions: Record<string, PercentileDistribution>;
-  sampleCounts: Record<string, number>;
-  lastCalibrated: string;
-}
 
 export interface MetricCalibration {
   distribution: PercentileDistribution;

@@ -3,9 +3,20 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 
 
-const mockUseAgentSession = vi.fn();
+/**
+ * Only the three fields WorkflowPage/AgentSessionPage destructure off the query
+ * result — typed so the mock cannot hand the pages a `data` shape the real
+ * `useAgentSession` could never return.
+ */
+interface AgentSessionQueryResult {
+  data: AgentSessionFixture | undefined;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+const mockUseAgentSession = vi.fn<(sessionId: string) => AgentSessionQueryResult>();
 vi.mock('../hooks/useAgentSession.js', () => ({
-  useAgentSession: (...args: unknown[]) => mockUseAgentSession(...args),
+  useAgentSession: (sessionId: string) => mockUseAgentSession(sessionId),
 }));
 
 // Mock wouter — capture navigate calls
@@ -65,25 +76,49 @@ import { WorkflowPage } from '../pages/WorkflowPage.js';
 import { AgentSessionPage } from '../pages/AgentSessionPage.js';
 import { makeNode, makeGraph } from './workflow-fixtures.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
+import type { AgentSessionResponse } from '../hooks/useAgentSession.js';
+import type { MultiAgentEvaluation } from '../types.js';
+
+/**
+ * `GET /api/agents/:sessionId` as the pages consume it, with `graph` widened.
+ *
+ * `AgentSessionResponse.graph` is declared non-nullable, but both pages guard
+ * `data?.graph` and WorkflowPage renders "No workflow graph available" when it
+ * is absent — so the type and the components disagree. The widening states that
+ * divergence rather than hiding it behind an untyped fixture. `buildWorkflowGraph`
+ * always returns an object, so if the route can genuinely never omit `graph`,
+ * the empty-state branch is dead code and should be removed along with this.
+ */
+type AgentSessionFixture = Omit<AgentSessionResponse, 'graph'> & {
+  graph: WorkflowGraph | null | undefined;
+};
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-function makeAgentSessionData(graph: WorkflowGraph | null | undefined = makeGraph()) {
+function makeEvaluation(overrides: Partial<MultiAgentEvaluation> = {}): MultiAgentEvaluation {
   return {
-    sessionId: 'session-abc',
+    totalTurns: 3,
+    handoffs: [],
+    turns: [],
+    handoffScore: 0.9,
+    avgTurnRelevance: 0.8,
+    conversationCompleteness: 0.75,
+    errorPropagationTurns: 0,
+    ...overrides,
+  };
+}
+
+function makeAgentSessionData(
+  graph: WorkflowGraph | null | undefined = makeGraph(),
+  sessionId = 'session-abc',
+): AgentSessionFixture {
+  return {
+    sessionId,
     spans: [],
-    evaluation: {
-      totalTurns: 3,
-      handoffs: [],
-      turns: [],
-      handoffScore: 0.9,
-      avgTurnRelevance: 0.8,
-      conversationCompleteness: 0.75,
-      errorPropagationTurns: 0,
-    },
+    evaluation: makeEvaluation(),
     evaluations: [],
     agentMap: {},
     graph,
@@ -228,28 +263,26 @@ describe('WorkflowPage', () => {
 describe('AgentSessionPage', () => {
   const SESSION_ID = 'session-xyz';
 
-  function makeEvaluation(overrides: Record<string, unknown> = {}) {
-    return {
-      totalTurns: 2,
-      handoffs: [],
-      turns: [{ agentName: 'agent-1', turnIndex: 0 }],
-      handoffScore: 0.8,
-      avgTurnRelevance: 0.7,
-      conversationCompleteness: 0.9,
-      errorPropagationTurns: 0,
-      ...overrides,
-    };
-  }
-
   beforeEach(() => {
     mockUseAgentSession.mockReturnValue({
       data: {
-        sessionId: SESSION_ID,
-        spans: [],
-        evaluation: makeEvaluation(),
-        evaluations: [],
-        agentMap: {},
-        graph: makeGraph(),
+        ...makeAgentSessionData(makeGraph(), SESSION_ID),
+        evaluation: makeEvaluation({
+          totalTurns: 2,
+          // TurnLevelResult requires relevance/taskProgress/hasError; the
+          // untyped fixture this replaces supplied only agentName + turnIndex,
+          // a turn shape the evaluation pipeline never produces.
+          turns: [{
+            agentName: 'agent-1',
+            turnIndex: 0,
+            relevance: 0.7,
+            taskProgress: 0.5,
+            hasError: false,
+          }],
+          handoffScore: 0.8,
+          avgTurnRelevance: 0.7,
+          conversationCompleteness: 0.9,
+        }),
       },
       isLoading: false,
       error: null,

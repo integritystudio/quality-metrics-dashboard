@@ -6,7 +6,7 @@ import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSumma
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
-import { routingTelemetryKvSchema } from '../src/lib/validation/dashboard-schemas.js';
+import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { supabasePost } from '../src/lib/supabase-rest.js';
 
 export type { DashboardPermission, AppSession };
@@ -53,6 +53,7 @@ const ERR_NO_ORG = 'No organization membership';
 const ERR_NO_DATA = 'No data available';
 const ERR_NO_CALIBRATION_DATA = 'No calibration data available';
 const ERR_ROUTING_TELEMETRY_MALFORMED = 'Routing telemetry data is malformed';
+const ERR_CALIBRATION_MALFORMED = 'Calibration data is malformed';
 const ERR_FAILED_LOAD_USER_ROLES = 'Failed to load user roles';
 
 const KV_SCHEMA_VERSION = 1;
@@ -811,9 +812,16 @@ app.get('/api/compliance/verifications', (c) => {
 
 app.get('/api/calibration', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const data = await getSessionKv<unknown>(c,'meta:calibration');
-  if (!data) return c.json({ error: ERR_NO_CALIBRATION_DATA }, Http.NotFound);
-  return c.json(data);
+  const raw = await getSessionKv<unknown>(c,'meta:calibration');
+  if (!raw) return c.json({ error: ERR_NO_CALIBRATION_DATA }, Http.NotFound);
+  // KV can still hold a payload written by an older sync-to-kv; parse rather
+  // than pass through, so drift surfaces here instead of in the frontend.
+  const result = calibrationResponseSchema.safeParse(raw);
+  if (!result.success) {
+    console.error('[/api/calibration] schema validation failed:', result.error.issues);
+    return c.json({ error: ERR_CALIBRATION_MALFORMED }, Http.InternalServerError);
+  }
+  return c.json(result.data);
 });
 
 app.get('/api/routing-telemetry', async (c) => {

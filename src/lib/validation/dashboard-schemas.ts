@@ -88,3 +88,49 @@ export const routingTelemetryKvSchema = z.object({
 });
 
 export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
+
+// ---------- Calibration KV contract ----------
+
+/**
+ * Percentiles of one metric's score distribution.
+ *
+ * Deliberately NOT the parent's `percentileDistributionSchema`, which is built
+ * on `normalizedScoreSchema` (0–1). Calibration is computed in
+ * `derive-evaluations.ts` over every `evaluationName`'s raw `scoreValue`, and
+ * `scoreValueSchema` is `z.number().finite()` — unbounded. Bounding these to
+ * 0–1 would reject a legitimate distribution for any unbounded metric and turn
+ * a working route into a 500.
+ */
+const calibrationPercentilesSchema = z.object({
+  p10: z.number().finite(),
+  p25: z.number().finite(),
+  p50: z.number().finite(),
+  p75: z.number().finite(),
+  p90: z.number().finite(),
+});
+
+/**
+ * KV `meta:calibration` — the single contract for its whole pipeline.
+ *
+ * `buildCalibrationEntry` (scripts/sync-to-kv.ts) writes this payload, the
+ * worker's `GET /api/calibration` parses it here and serves it verbatim, and
+ * `useCalibration` consumes it. Every stage types against `CalibrationResponse`
+ * below, so producer/consumer drift is a typecheck failure and a stale KV value
+ * written by an older sync is a caught 500 rather than a frontend crash.
+ *
+ * Not `.strict()`: the sync script deploys independently of the worker, so a
+ * newer producer must not 500 an older worker. Unknown keys are stripped, which
+ * means a newly added field does not reach the frontend until the worker's
+ * schema catches up — the safe direction of that tradeoff.
+ *
+ * `lastCalibrated` is an ISO string in practice but is validated only as
+ * non-empty: it is displayed, never parsed, and a format check would 500 on
+ * legacy state files for no gain.
+ */
+export const calibrationResponseSchema = z.object({
+  distributions: z.record(z.string(), calibrationPercentilesSchema),
+  sampleCounts: z.record(z.string(), z.int().min(0)),
+  lastCalibrated: z.string().min(1),
+});
+
+export type CalibrationResponse = z.infer<typeof calibrationResponseSchema>;

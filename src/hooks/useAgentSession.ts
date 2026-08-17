@@ -3,7 +3,7 @@ import type { WorkflowGraph } from '../types/workflow-graph.js';
 import { API_BASE, STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-interface AgentSessionResponse {
+export interface AgentSessionResponse {
   sessionId: string;
   spans: Array<{
     traceId: string;

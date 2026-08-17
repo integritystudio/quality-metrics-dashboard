@@ -236,9 +236,10 @@ export interface CorrelationsResponse {
   metrics: string[];
 }
 
-/** `GET /api/calibration` (worker route, served from KV). */
-export interface CalibrationResponse {
-  distributions: Record<string, Record<string, number>>;
-  sampleCounts?: Record<string, number>;
-  lastCalibrated: string;
-}
+/*
+ * `GET /api/calibration` (worker route, served from KV) — `CalibrationResponse`
+ * in `src/lib/kv-contracts.ts`. Deliberately not re-exported here: the worker
+ * serves the `meta:calibration` value byte-for-byte, so the producer and the
+ * route share one declaration, and a second import path for it is exactly the
+ * drift this file's rules exist to prevent. Import it from `kv-contracts`.
+ */

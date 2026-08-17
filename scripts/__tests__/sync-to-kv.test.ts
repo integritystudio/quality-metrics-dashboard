@@ -1,9 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import { buildCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
+import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
 
-type KVEntry = { key: string; value: string };
+/**
+ * Parse the entry's value as the type `useCalibration` actually receives.
+ *
+ * The dashboard is the only consumer of `meta:calibration`, so asserting
+ * against its `CalibrationResponse` — rather than the `any` that `JSON.parse`
+ * hands back — makes these producer↔consumer contract tests: adding a required
+ * field on the consumer side without emitting it here fails the typecheck.
+ *
+ * The intersection keeps `rawScores`/`psiValues` addressable so the "these are
+ * dropped" cases can still assert on keys absent from the contract.
+ */
+function parseCalibrationPayload(
+  state: CalibrationState | null,
+): CalibrationResponse & Record<string, unknown> {
+  const entry = buildCalibrationEntry(state);
+  if (!entry) throw new Error('expected buildCalibrationEntry to produce an entry');
+  return JSON.parse(entry.value) as CalibrationResponse & Record<string, unknown>;
+}
 
 
 function makeCalibrationState(overrides: Partial<CalibrationState> = {}): CalibrationState {
@@ -35,14 +53,13 @@ describe('buildCalibrationEntry', () => {
     const entry = buildCalibrationEntry(state);
 
     expect(entry).not.toBeNull();
-    expect((entry as KVEntry).key).toBe('meta:calibration');
+    expect(entry?.key).toBe('meta:calibration');
   });
 
   it('entry value is valid JSON', () => {
     const state = makeCalibrationState();
 
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const parsed = JSON.parse(entry.value);
+    const parsed = parseCalibrationPayload(state);
 
     expect(parsed).toBeDefined();
   });
@@ -50,8 +67,7 @@ describe('buildCalibrationEntry', () => {
   it('transforms distributions to flat PercentileDistribution records (drops window metadata)', () => {
     const state = makeCalibrationState();
 
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
+    const response = parseCalibrationPayload(state);
 
     // distributions should map metricName → PercentileDistribution (no sampleSize/windowStart/windowEnd)
     expect(response.distributions).toBeDefined();
@@ -61,16 +77,17 @@ describe('buildCalibrationEntry', () => {
     expect(response.distributions.faithfulness).toEqual({
       p10: 0.4, p25: 0.6, p50: 0.75, p75: 0.88, p90: 0.96,
     });
-    // sampleSize and window metadata must NOT be on the distribution objects
-    expect((response.distributions.relevance as Record<string, unknown>).sampleSize).toBeUndefined();
-    expect((response.distributions.relevance as Record<string, unknown>).windowStart).toBeUndefined();
+    // sampleSize and window metadata must NOT be on the distribution objects.
+    // Asserting the exact key set rather than probing two names: it also catches
+    // any other CalibrationState field that starts leaking through.
+    expect(Object.keys(response.distributions.relevance ?? {}).sort())
+      .toEqual(['p10', 'p25', 'p50', 'p75', 'p90']);
   });
 
   it('extracts sampleCounts as a flat Record<string, number>', () => {
     const state = makeCalibrationState();
 
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
+    const response = parseCalibrationPayload(state);
 
     expect(response.sampleCounts).toBeDefined();
     expect(response.sampleCounts.relevance).toBe(120);
@@ -82,8 +99,7 @@ describe('buildCalibrationEntry', () => {
       lastCalibrated: '2026-03-10T08:30:00.000Z',
     });
 
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
+    const response = parseCalibrationPayload(state);
 
     expect(response.lastCalibrated).toBe('2026-03-10T08:30:00.000Z');
   });
@@ -93,8 +109,7 @@ describe('buildCalibrationEntry', () => {
       rawScores: { relevance: [0.5, 0.7, 0.8] },
     });
 
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
+    const response = parseCalibrationPayload(state);
 
     expect(response.rawScores).toBeUndefined();
   });
@@ -104,8 +119,7 @@ describe('buildCalibrationEntry', () => {
       psiValues: { relevance: 0.04 },
     });
 
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
+    const response = parseCalibrationPayload(state);
 
     expect(response.psiValues).toBeUndefined();
   });
@@ -123,8 +137,7 @@ describe('buildCalibrationEntry', () => {
       },
     };
 
-    const entry = buildCalibrationEntry(state) as KVEntry;
-    const response = JSON.parse(entry.value);
+    const response = parseCalibrationPayload(state);
 
     expect(Object.keys(response.distributions)).toHaveLength(1);
     expect(response.sampleCounts.coherence).toBe(50);
