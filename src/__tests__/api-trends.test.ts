@@ -45,21 +45,43 @@ import { computeMetricDetail } from '../api/parent/quality-views.js';
 import { computeMetricDynamics } from '../api/parent/qfe-dynamics.js';
 import { computePercentileDistribution } from '../api/parent/qfe-percentiles.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
+import type { TrendDetailResponse, TrendSummaryResponse } from './support/api-responses.js';
+import type {
+  EvaluationResult,
+  MetricDetailResult,
+  MetricDynamics,
+  MetricTrend,
+  QualityMetricConfig,
+} from '../types.js';
 
 beforeEach(vi.clearAllMocks);
 
 
-function makeMockConfig() {
+/**
+ * Fixtures are typed off the real signatures — `NonNullable<ReturnType<...>>`
+ * for mock return values, so each one is exactly what the route consumes and a
+ * parent shape change fails `npm run typecheck` here. Previously `as any`, and
+ * drifted: `makeMockConfig` had `direction`/`threshold` (not on
+ * `QualityMetricConfig`) and the `computeMetricDetail` stub returned
+ * `{ trend: [...], aggregations }`, a shape `MetricDetailResult` never had.
+ */
+type Percentiles = NonNullable<ReturnType<typeof computePercentileDistribution>>;
+
+const EVAL_NANOS = 1737000000000000000n;
+
+function makeMockConfig(): QualityMetricConfig {
   return {
     name: 'relevance',
     displayName: 'Relevance',
-    direction: 'above' as const,
-    aggregations: ['avg'] as const,
-    threshold: 0.7,
+    description: 'How relevant the response is',
+    aggregations: ['avg'],
+    alerts: [],
+    range: { min: 0, max: 1 },
+    unit: 'score',
   };
 }
 
-function makeMockEval(timestamp = '2026-01-15T12:00:00.000Z', score = 0.85) {
+function makeMockEval(timestamp = EVAL_NANOS, score = 0.85): EvaluationResult {
   return {
     evaluationName: 'relevance',
     scoreValue: score,
@@ -69,23 +91,55 @@ function makeMockEval(timestamp = '2026-01-15T12:00:00.000Z', score = 0.85) {
   };
 }
 
+const MOCK_PERCENTILES: Percentiles = { p10: 0.7, p25: 0.8, p50: 0.85, p75: 0.9, p90: 0.95 };
+
+const MOCK_TREND: MetricTrend = {
+  direction: 'stable',
+  delta: 0,
+  percentChange: 0,
+  previousValue: 0.85,
+  currentValue: 0.85,
+  aggregation: 'avg',
+};
+
+function makeMockDetail(): MetricDetailResult {
+  return {
+    name: 'relevance',
+    displayName: 'Relevance',
+    values: { avg: 0.85, min: null, max: null, count: 1, p50: null, p95: null, p99: null },
+    sampleCount: 1,
+    alerts: [],
+    status: 'healthy',
+    trend: MOCK_TREND,
+    scoreDistribution: [],
+    worstEvaluations: [],
+    bestEvaluations: [],
+  };
+}
+
+const MOCK_DYNAMICS: MetricDynamics = {
+  featureVersion: 'test',
+  velocity: 0,
+  acceleration: 0,
+  inflectionDetected: false,
+  projectedStatus: 'healthy',
+  confidence: 0.5,
+};
+
 // /trends/:name
 
 describe('GET /trends/:name', () => {
   beforeEach(() => {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig() as any);
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()] as any);
-    vi.mocked(computePercentileDistribution).mockReturnValue({ p50: 0.85, p90: 0.95 } as any);
-    vi.mocked(computeMetricDetail).mockReturnValue({ trend: [{ bucket: 0 }], aggregations: { avg: 0.85 } } as any);
-    vi.mocked(computeAggregations).mockReturnValue({ avg: 0.85 } as any);
-    vi.mocked(computeMetricDynamics).mockReturnValue({ velocity: 0 } as any);
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
+    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()]);
+    vi.mocked(computePercentileDistribution).mockReturnValue(MOCK_PERCENTILES);
+    vi.mocked(computeMetricDetail).mockReturnValue(makeMockDetail());
+    vi.mocked(computeAggregations).mockReturnValue(makeMockDetail().values);
+    vi.mocked(computeMetricDynamics).mockReturnValue(MOCK_DYNAMICS);
   });
 
   it('returns 404 for unknown metric', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(getQualityMetric).mockReturnValue(undefined as any);
+    vi.mocked(getQualityMetric).mockReturnValue(undefined);
     const res = await trendRoutes.request('/trends/nonexistent?period=7d');
     expect(res.status).toBe(404);
   });
@@ -108,7 +162,7 @@ describe('GET /trends/:name', () => {
   it('returns 200 with expected response shape', async () => {
     const res = await trendRoutes.request('/trends/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as TrendDetailResponse;
     expect(body).toHaveProperty('metric', 'relevance');
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('bucketCount');
@@ -135,10 +189,8 @@ describe('GET /trends/:name', () => {
 
 describe('GET /trends', () => {
   beforeEach(() => {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()] as any);
-    vi.mocked(computePercentileDistribution).mockReturnValue({ p50: 0.85 } as any);
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()]);
+    vi.mocked(computePercentileDistribution).mockReturnValue(MOCK_PERCENTILES);
   });
 
   it('returns 400 for invalid period', async () => {
@@ -149,7 +201,7 @@ describe('GET /trends', () => {
   it('returns 200 with period and metrics array', async () => {
     const res = await trendRoutes.request('/trends?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as TrendSummaryResponse;
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('metrics');
     expect(Array.isArray(body.metrics)).toBe(true);
@@ -157,7 +209,7 @@ describe('GET /trends', () => {
 
   it('each metric entry has name, count, percentiles', async () => {
     const res = await trendRoutes.request('/trends?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as TrendSummaryResponse;
     for (const m of body.metrics) {
       expect(m).toHaveProperty('metric');
       expect(m).toHaveProperty('count');

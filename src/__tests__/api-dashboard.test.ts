@@ -45,31 +45,25 @@ import { computeDashboardSummary } from '../api/parent/quality-metrics.js';
 import { computeRoleView } from '../api/parent/quality-views.js';
 import { computeCQI } from '../api/parent/qfe-cqi.js';
 import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
+import type {
+  DashboardResponse,
+  ErrorResponse,
+  HealthResponse,
+  QualityLiveResponse,
+  RoleViewResponse,
+} from './support/api-responses.js';
+import {
+  EVAL_NANOS,
+  makeCQI,
+  makeDashboardSummary,
+  makeEvaluation,
+  makeExecutiveView,
+  makeOperatorView,
+} from './support/fixtures.js';
 
 
-function makeMockEval(name = 'relevance', score = 0.85, timestamp = '2026-01-15T12:00:00.000Z') {
-  return {
-    evaluationName: name,
-    scoreValue: score,
-    timestamp,
-    traceId: 'trace-001',
-    evaluatorType: 'seed',
-    scoreLabel: 'relevant',
-    explanation: 'Response is relevant.',
-    evaluator: 'seed-hash',
-  };
-}
-
-function makeMockDashboard() {
-  return {
-    overallStatus: 'healthy',
-    metrics: [
-      { name: 'relevance', status: 'healthy', currentValue: 0.85, threshold: 0.7, direction: 'above', alerts: [], trends: null },
-    ],
-    alerts: [],
-    summary: { totalMetrics: 1, healthyMetrics: 1, warningMetrics: 0, criticalMetrics: 0, noDataMetrics: 0 },
-    timestamp: '2026-01-15T12:00:00.000Z',
-  };
+function makeMockEval(name = 'relevance', score = 0.85, timestamp = EVAL_NANOS) {
+  return makeEvaluation({ evaluationName: name, scoreValue: score, timestamp });
 }
 
 // Clear all mocks between every test to prevent call-count accumulation
@@ -80,36 +74,37 @@ beforeEach(vi.clearAllMocks);
 
 describe('GET /dashboard', () => {
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([['relevance', [makeMockEval()]]]) as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeDashboardSummary).mockReturnValue(makeMockDashboard() as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeCQI).mockReturnValue(0.82 as any);
+    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([['relevance', [makeMockEval()]]]));
+    vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary());
+    vi.mocked(computeCQI).mockReturnValue(makeCQI());
   });
 
   it('rejects invalid period with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=99d');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('rejects invalid role with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=superadmin');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with metrics, cqi, sparklines for valid period', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as DashboardResponse;
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('cqi');
     expect(body).toHaveProperty('sparklines');
-    expect(typeof body.cqi).toBe('number');
+    // `computeCQI` returns a `CompositeQualityIndex` object and the route passes
+    // it through untouched. This asserted `typeof body.cqi === 'number'`, which
+    // only held because the mock returned a bare `0.82`.
+    expect(body.cqi?.value).toBeCloseTo(0.82, 3);
+    expect(body.cqi).toHaveProperty('contributions');
   });
 
   it('accepts 24h period', async () => {
@@ -123,33 +118,29 @@ describe('GET /dashboard', () => {
   });
 
   it('calls computeRoleView for executive role and includes cqi', async () => {
-    const mockView = { ...makeMockDashboard(), role: 'executive' };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeRoleView).mockReturnValue(mockView as any);
+    vi.mocked(computeRoleView).mockReturnValue(makeExecutiveView());
 
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=executive');
     expect(res.status).toBe(200);
     expect(vi.mocked(computeRoleView)).toHaveBeenCalled();
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as RoleViewResponse;
     expect(body).toHaveProperty('cqi');
   });
 
   it('calls computeRoleView for operator role without cqi', async () => {
-    const mockView = { ...makeMockDashboard(), role: 'operator' };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeRoleView).mockReturnValue(mockView as any);
+    vi.mocked(computeRoleView).mockReturnValue(makeOperatorView());
 
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=operator');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as RoleViewResponse;
     // operator role does not include cqi at top level (only executive)
     expect(body).not.toHaveProperty('cqi');
   });
 
   it('returns sparklines as object keyed by metric name', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d');
-    const body = await res.json() as Record<string, any>;
-    const sparklines = body.sparklines as Record<string, unknown>;
+    const body = await res.json() as DashboardResponse;
+    const sparklines = body.sparklines;
     expect(typeof sparklines).toBe('object');
     expect(sparklines).toHaveProperty('relevance');
     const vals = sparklines['relevance'] as (number | null)[];
@@ -172,7 +163,7 @@ describe('GET /health', () => {
     vi.mocked(checkHealth).mockResolvedValue({ status: 'healthy', hasData: true });
     const res = await dashboardRoutes.request('/health');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as HealthResponse;
     expect(body).toHaveProperty('status');
     expect(body).toHaveProperty('hasData');
   });
@@ -188,21 +179,17 @@ describe('GET /health', () => {
 
 describe('GET /quality/live', () => {
   beforeEach(() => {
-    const evals = [
-      makeMockEval('relevance', 0.85, '2026-01-15T23:00:00.000Z'),
-      makeMockEval('coherence', 0.9, '2026-01-15T22:00:00.000Z'),
-    ];
+    const ONE_HOUR_NANOS = 3_600_000_000_000n;
     vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([
-      ['relevance', [evals[0]]],
-      ['coherence', [evals[1]]],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]) as any);
+      ['relevance', [makeMockEval('relevance', 0.85, EVAL_NANOS + ONE_HOUR_NANOS)]],
+      ['coherence', [makeMockEval('coherence', 0.9, EVAL_NANOS)]],
+    ]));
   });
 
   it('returns 200 with metrics, sessionCount, lastUpdated', async () => {
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as QualityLiveResponse;
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('sessionCount');
     expect(body).toHaveProperty('lastUpdated');
@@ -210,14 +197,14 @@ describe('GET /quality/live', () => {
 
   it('returns metrics sorted by name', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as Record<string, any>;
-    const names = body.metrics.map((m: Record<string, unknown>) => m.name);
+    const body = await res.json() as QualityLiveResponse;
+    const names = body.metrics.map((m) => m.name);
     expect(names).toEqual([...names].sort());
   });
 
   it('each metric has name, score, evaluatorType, timestamp', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as QualityLiveResponse;
     for (const m of body.metrics) {
       expect(m).toHaveProperty('name');
       expect(m).toHaveProperty('score');
@@ -227,11 +214,10 @@ describe('GET /quality/live', () => {
   });
 
   it('handles empty evaluation map gracefully', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map() as any);
+    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map());
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as QualityLiveResponse;
     expect(body.metrics).toHaveLength(0);
   });
 

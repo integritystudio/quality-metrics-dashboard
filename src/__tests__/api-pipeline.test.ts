@@ -33,21 +33,20 @@ import { pipelineRoutes } from '../api/routes/pipeline.js';
 import { computePipelineView } from '../api/parent/quality-visualization.js';
 import { computeDashboardSummary } from '../api/parent/quality-metrics.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
+import type { PipelineResult } from '../types.js';
+import { makeDashboardSummary } from './support/fixtures.js';
+
+function makePipelineResult(): PipelineResult {
+  return { stages: [], dropoffs: [], overallConversionPercent: 0 };
+}
 
 beforeEach(vi.clearAllMocks);
 
 describe('GET /pipeline', () => {
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map() as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeDashboardSummary).mockReturnValue({ metrics: [], overallStatus: 'healthy' } as any);
-    vi.mocked(computePipelineView).mockReturnValue({
-      stages: [],
-      totalInput: 0,
-      totalOutput: 0,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map());
+    vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary({ metrics: [] }));
+    vi.mocked(computePipelineView).mockReturnValue(makePipelineResult());
   });
 
   it('rejects invalid period with 400', async () => {
@@ -72,12 +71,9 @@ describe('GET /pipeline', () => {
   it('accepts all valid periods', async () => {
     for (const period of ['24h', '7d', '30d']) {
       vi.clearAllMocks();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map() as any);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(computeDashboardSummary).mockReturnValue({ metrics: [] } as any);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      vi.mocked(computePipelineView).mockReturnValue({ stages: [] } as any);
+      vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map());
+      vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary({ metrics: [] }));
+      vi.mocked(computePipelineView).mockReturnValue(makePipelineResult());
       const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
       expect(res.status).toBe(200);
     }

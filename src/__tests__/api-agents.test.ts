@@ -2,8 +2,9 @@
  * API route tests: /api/agents and /api/agents/:sessionId.
  * Approach A — Node routes with mocked data-loader and parent-boundary modules.
  *
- * Mock return values use `as any` since the parent types (TraceSpan, EvaluationResult,
- * MultiAgentEvaluation) are complex.
+ * Fixtures are typed against the real parent types (via `../types.js`, which is
+ * type-only and so erased — safe under `parentDistStub` in standalone CI), which
+ * makes them drift-detecting rather than merely plausible.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -43,15 +44,31 @@ import { queryTraces } from '../api/parent/query-traces.js';
 import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
 import { loadEvaluationsByTraceIds, loadTracesBySessionId } from '../api/data-loader.js';
 import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import type { AgentDetailResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
+import type { EvaluationResult, MultiAgentEvaluation } from '../types.js';
+import type { WorkflowGraph } from '../types/workflow-graph.js';
+import { EVAL_NANOS, makeEvaluation } from './support/fixtures.js';
 
 
-function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}) {
+/**
+ * `queryTraces` decodes OTLP `fixed64` timestamps to `bigint` (parent
+ * `numericNanosToEpochNanos` codec), so fixtures must too — a plain number here
+ * hides BigInt serialization failures in routes that return raw spans.
+ */
+/** The loader's own projection — see the same pattern in `api-traces.test.ts`. */
+type LoadedSpan = Awaited<ReturnType<typeof loadTracesBySessionId>>[number];
+
+function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'general-purpose', attrs: Record<string, unknown> = {}): LoadedSpan {
   return {
     traceId,
     spanId,
     name: 'hook:agent-post-tool',
-    startTimeUnixNano: 1737000000_000_000_000,
-    status: { code: 0 },
+    kind: 'INTERNAL',
+    startTimeUnixNano: 1737000000_000_000_000n,
+    endTimeUnixNano: 1737000001_000_000_000n,
+    durationMs: 1000,
+    // `status.code` is an OTLP enum name, not the numeric `0` this used to pass.
+    status: { code: 'OK' },
     attributes: {
       'gen_ai.agent.name': agentName,
       'integritystudio.agent.has_error': false,
@@ -64,23 +81,30 @@ function makeSpan(traceId = 'trace-001', spanId = 'span-001', agentName = 'gener
   };
 }
 
-function makeMockQueryResult(spans: ReturnType<typeof makeSpan>[] = []) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { traces: spans } as any;
+function makeMockQueryResult(spans: LoadedSpan[] = []): Awaited<ReturnType<typeof queryTraces>> {
+  return { count: spans.length, traces: spans };
 }
 
-function makeMockEval(traceId = 'trace-001') {
-  return {
-    evaluationName: 'relevance',
-    scoreValue: 0.9,
-    traceId,
-    timestamp: '2026-01-15T12:00:00.000Z',
-    evaluatorType: 'seed',
-    scoreLabel: 'relevant',
-    explanation: '',
-    evaluator: 'seed-hash',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+const MOCK_MULTI_AGENT: MultiAgentEvaluation = {
+  handoffs: [],
+  turns: [],
+  handoffScore: null,
+  avgTurnRelevance: null,
+  conversationCompleteness: null,
+  totalTurns: 0,
+  errorPropagationTurns: 0,
+};
+
+const MOCK_GRAPH: WorkflowGraph = {
+  nodes: [],
+  edges: [],
+  rootNodeId: null,
+  workflowShape: 'single_agent',
+  droppedTurns: 0,
+};
+
+function makeMockEval(traceId = 'trace-001'): EvaluationResult {
+  return makeEvaluation({ traceId, scoreValue: 0.9, explanation: '', timestamp: EVAL_NANOS });
 }
 
 
@@ -94,16 +118,14 @@ describe('GET /agents', () => {
   it('returns 400 for invalid period', async () => {
     const res = await agentRoutes.request('/agents?period=99d');
     expect(res.status).toBe(400);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with empty agents array when no spans', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
     expect(res.status).toBe(200);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as AgentListResponse;
     expect(Array.isArray(body.agents)).toBe(true);
     expect(body.agents).toHaveLength(0);
     expect(body.period).toBe('7d');
@@ -111,8 +133,7 @@ describe('GET /agents', () => {
 
   it('returns period, startDate, endDate in response', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as AgentListResponse;
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('startDate');
     expect(body).toHaveProperty('endDate');
@@ -126,11 +147,10 @@ describe('GET /agents', () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as AgentListResponse;
     expect(body.agents).toHaveLength(1);
-    expect(body.agents[0].agentName).toBe('general-purpose');
-    expect(body.agents[0].invocations).toBe(2);
+    expect(body.agents[0]!.agentName).toBe('general-purpose');
+    expect(body.agents[0]!.invocations).toBe(2);
   });
 
   it('computes errorRate correctly', async () => {
@@ -141,17 +161,15 @@ describe('GET /agents', () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
-    expect(body.agents[0].errorRate).toBeCloseTo(0.5, 3);
+    const body = (await res.json()) as AgentListResponse;
+    expect(body.agents[0]!.errorRate).toBeCloseTo(0.5, 3);
   });
 
   it('agent record has required fields', async () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult([makeSpan()]));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as AgentListResponse;
     const agent = body.agents[0];
     expect(agent).toHaveProperty('agentName');
     expect(agent).toHaveProperty('invocations');
@@ -172,11 +190,10 @@ describe('GET /agents', () => {
     vi.mocked(queryTraces).mockResolvedValue(makeMockQueryResult(spans));
 
     const res = await agentRoutes.request('/agents?period=7d');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
-    expect(body.agents[0].agentName).toBe('busy-agent');
-    expect(body.agents[0].invocations).toBe(2);
-    expect(body.agents[1].invocations).toBe(1);
+    const body = (await res.json()) as AgentListResponse;
+    expect(body.agents[0]!.agentName).toBe('busy-agent');
+    expect(body.agents[0]!.invocations).toBe(2);
+    expect(body.agents[1]!.invocations).toBe(1);
   });
 
   it('joins evaluation scores to agents via traceId', async () => {
@@ -184,11 +201,10 @@ describe('GET /agents', () => {
     vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([makeMockEval('trace-eval-001')]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
-    expect(body.agents[0].evalSummary).toHaveProperty('relevance');
-    expect(body.agents[0].evalSummary.relevance.avg).toBeCloseTo(0.9, 3);
-    expect(body.agents[0].evalSummary.relevance.count).toBe(1);
+    const body = (await res.json()) as AgentListResponse;
+    expect(body.agents[0]!.evalSummary).toHaveProperty('relevance');
+    expect(body.agents[0]!.evalSummary.relevance!.avg).toBeCloseTo(0.9, 3);
+    expect(body.agents[0]!.evalSummary.relevance!.count).toBe(1);
   });
 
   it('returns 500 when queryTraces throws', async () => {
@@ -204,17 +220,14 @@ describe('GET /agents/:sessionId', () => {
     vi.clearAllMocks();
     vi.mocked(loadTracesBySessionId).mockResolvedValue([]);
     vi.mocked(loadEvaluationsByTraceIds).mockResolvedValue([]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeMultiAgentEvaluation).mockReturnValue({ overallScore: 1, agentScores: {}, trajectory: [] } as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(buildWorkflowGraph).mockReturnValue({ nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent' } as any);
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue(MOCK_MULTI_AGENT);
+    vi.mocked(buildWorkflowGraph).mockReturnValue(MOCK_GRAPH);
   });
 
   it('returns 200 with sessionId, spans, evaluation, evaluations', async () => {
     const res = await agentRoutes.request('/agents/sess-abc');
     expect(res.status).toBe(200);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as AgentDetailResponse;
     expect(body).toHaveProperty('sessionId', 'sess-abc');
     expect(body).toHaveProperty('spans');
     expect(body).toHaveProperty('evaluation');
@@ -223,18 +236,25 @@ describe('GET /agents/:sessionId', () => {
   });
 
   it('returns spans from data-loader', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()]);
 
     const res = await agentRoutes.request('/agents/sess-abc');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as AgentDetailResponse;
     expect(body.spans).toHaveLength(1);
   });
 
+  it('serializes bigint nanosecond timestamps instead of throwing', async () => {
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()]);
+
+    const res = await agentRoutes.request('/agents/sess-abc');
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { spans: { startTimeUnixNano: string }[] };
+    expect(body.spans[0]!.startTimeUnixNano).toBe('1737000000000000000');
+  });
+
   it('calls computeMultiAgentEvaluation with step scores', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()] as any);
+    vi.mocked(loadTracesBySessionId).mockResolvedValue([makeSpan()]);
 
     await agentRoutes.request('/agents/sess-abc');
     expect(vi.mocked(computeMultiAgentEvaluation)).toHaveBeenCalled();
@@ -247,14 +267,25 @@ describe('GET /agents/:sessionId', () => {
   });
 
   it('returns graph field from buildWorkflowGraph', async () => {
-    const mockGraph = { nodes: [{ id: 'a' }], edges: [], rootNodeId: 'a', workflowShape: 'single_agent' };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph as any);
+    const mockGraph: WorkflowGraph = {
+      ...MOCK_GRAPH,
+      nodes: [{
+        id: 'a',
+        label: 'general-purpose',
+        evaluationScore: null,
+        toolCallCount: 0,
+        totalTokens: null,
+        durationMs: 0,
+        turnCount: 1,
+        hasError: false,
+      }],
+      rootNodeId: 'a',
+    };
+    vi.mocked(buildWorkflowGraph).mockReturnValue(mockGraph);
 
     const res = await agentRoutes.request('/agents/sess-abc');
     expect(res.status).toBe(200);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as AgentDetailResponse;
     expect(body).toHaveProperty('graph');
     expect(body.graph).toEqual(mockGraph);
   });

@@ -41,24 +41,53 @@ import { getQualityMetric, computeAggregations } from '../api/parent/quality-met
 import { computeMetricDetail } from '../api/parent/quality-views.js';
 import { computeMetricDynamics } from '../api/parent/qfe-dynamics.js';
 import { loadEvaluationsForMetric } from '../api/data-loader.js';
+import type { ErrorResponse, MetricDetailResponse, MetricEvaluationsResponse } from './support/api-responses.js';
+import type {
+  EvaluationResult,
+  MetricDetailResult,
+  MetricDynamics,
+  MetricTrend,
+  QualityMetricConfig,
+} from '../types.js';
 
 
-function makeMockConfig() {
+/**
+ * Fixtures are typed against the real parent types (via `../types.js`, which is
+ * type-only and therefore safe under `parentDistStub` in standalone CI). That
+ * makes them drift-detecting: a parent shape change fails `npm run typecheck`
+ * here instead of silently producing a fixture that models nothing.
+ *
+ * These previously carried `as any` and had drifted badly — `makeMockConfig`
+ * declared `direction`/`threshold` (not fields on `QualityMetricConfig`) and a
+ * `p10` aggregation (not in the enum), and `makeMockDetail` returned
+ * `config`/`evaluations`/`aggregations`/`distribution`, none of which exist on
+ * `MetricDetailResult`.
+ */
+const EVAL_NANOS = 1737000000000000000n;
+
+function makeMockConfig(): QualityMetricConfig {
   return {
     name: 'relevance',
     displayName: 'Relevance',
     description: 'How relevant the response is',
-    direction: 'above' as const,
-    aggregations: ['avg', 'min', 'p10'] as const,
-    threshold: 0.7,
+    aggregations: ['avg', 'min', 'p50'],
+    alerts: [{
+      aggregation: 'p50',
+      value: 0.7,
+      direction: 'below',
+      severity: 'warning',
+      message: 'Relevance below threshold',
+    }],
+    range: { min: 0, max: 1 },
+    unit: 'score',
   };
 }
 
-function makeMockEval(overrides: Partial<Record<string, unknown>> = {}) {
+function makeMockEval(overrides: Partial<EvaluationResult> = {}): EvaluationResult {
   return {
     evaluationName: 'relevance',
     scoreValue: 0.85,
-    timestamp: '2026-01-15T12:00:00.000Z',
+    timestamp: EVAL_NANOS,
     traceId: 'trace-001',
     evaluatorType: 'seed',
     scoreLabel: 'relevant',
@@ -68,50 +97,67 @@ function makeMockEval(overrides: Partial<Record<string, unknown>> = {}) {
     sessionId: 'sess-001',
     agentName: 'general-purpose',
     trajectoryLength: 3,
-    stepScores: null,
-    toolVerifications: null,
     ...overrides,
   };
 }
 
-function makeMockDetail() {
+const MOCK_TREND: MetricTrend = {
+  direction: 'stable',
+  delta: 0,
+  percentChange: 0,
+  previousValue: 0.85,
+  currentValue: 0.85,
+  aggregation: 'avg',
+};
+
+function makeMockDetail(): MetricDetailResult {
   return {
-    config: makeMockConfig(),
-    evaluations: [makeMockEval()],
-    aggregations: { avg: 0.85, min: 0.7, p10: 0.72 },
-    distribution: [],
-    trend: [{ bucket: 0, avg: 0.85, count: 1 }],
+    name: 'relevance',
+    displayName: 'Relevance',
+    values: { avg: 0.85, min: 0.7, p50: 0.85, max: null, count: 1, p95: null, p99: null },
+    sampleCount: 1,
+    alerts: [],
+    status: 'healthy',
+    trend: MOCK_TREND,
+    scoreDistribution: [{ bucket: '0.8-0.9', count: 1 }],
     worstEvaluations: [],
+    bestEvaluations: [],
   };
 }
+
+const MOCK_DYNAMICS: MetricDynamics = {
+  featureVersion: 'test',
+  velocity: 0,
+  acceleration: 0,
+  inflectionDetected: false,
+  projectedStatus: 'healthy',
+  confidence: 0.5,
+};
 
 // /metrics/:name route
 
 describe('GET /metrics/:name', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig() as any);
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()] as any);
-    vi.mocked(computeAggregations).mockReturnValue({ avg: 0.85 } as any);
-    vi.mocked(computeMetricDetail).mockReturnValue(makeMockDetail() as any);
-    vi.mocked(computeMetricDynamics).mockReturnValue({ velocity: 0, acceleration: 0, variance: 0.01 } as any);
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
+    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()]);
+    vi.mocked(computeAggregations).mockReturnValue(makeMockDetail().values);
+    vi.mocked(computeMetricDetail).mockReturnValue(makeMockDetail());
+    vi.mocked(computeMetricDynamics).mockReturnValue(MOCK_DYNAMICS);
   });
 
   it('returns 404 for unknown metric', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(getQualityMetric).mockReturnValue(undefined as any);
+    vi.mocked(getQualityMetric).mockReturnValue(undefined);
     const res = await metricsRoutes.request('/metrics/nonexistent?period=7d');
     expect(res.status).toBe(404);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 400 for invalid period', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=99d');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
@@ -128,9 +174,14 @@ describe('GET /metrics/:name', () => {
   it('returns 200 with metric detail for valid request', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
-    expect(body).toHaveProperty('config');
-    expect(body).toHaveProperty('aggregations');
+    const body = await res.json() as MetricDetailResponse;
+    // `MetricDetailResult` fields — the route spreads `...detail`. This used to
+    // assert `config`/`aggregations`, which the type has never had; the test
+    // passed only because the fixture invented them.
+    expect(body).toHaveProperty('name', 'relevance');
+    expect(body).toHaveProperty('values');
+    expect(body).toHaveProperty('sampleCount');
+    expect(body).toHaveProperty('scoreDistribution');
     expect(body).toHaveProperty('trend');
   });
 
@@ -142,17 +193,16 @@ describe('GET /metrics/:name', () => {
   it('includes dynamics when trend is present', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricDetailResponse;
     expect(body).toHaveProperty('dynamics');
   });
 
   it('omits dynamics when trend is absent', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeMetricDetail).mockReturnValue({ ...makeMockDetail(), trend: undefined } as any);
+    vi.mocked(computeMetricDetail).mockReturnValue({ ...makeMockDetail(), trend: undefined });
 
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricDetailResponse;
     expect(body.dynamics).toBeUndefined();
   });
 
@@ -166,23 +216,23 @@ describe('GET /metrics/:name', () => {
 // /metrics/:name/evaluations route
 
 describe('GET /metrics/:name/evaluations', () => {
+  // Descending timestamps, one hour apart. Epoch nanos, not ISO strings —
+  // `EvaluationResult.timestamp` is a bigint (`isoDatetimeToEpochNanos` codec).
+  const ONE_HOUR_NANOS = 3_600_000_000_000n;
   const evals = [
-    makeMockEval({ scoreValue: 0.9, timestamp: '2026-01-15T23:00:00.000Z', scoreLabel: 'relevant' }),
-    makeMockEval({ scoreValue: 0.6, timestamp: '2026-01-15T22:00:00.000Z', scoreLabel: 'partial' }),
-    makeMockEval({ scoreValue: 0.3, timestamp: '2026-01-15T21:00:00.000Z', scoreLabel: 'irrelevant' }),
+    makeMockEval({ scoreValue: 0.9, timestamp: EVAL_NANOS + ONE_HOUR_NANOS * 2n, scoreLabel: 'relevant' }),
+    makeMockEval({ scoreValue: 0.6, timestamp: EVAL_NANOS + ONE_HOUR_NANOS, scoreLabel: 'partial' }),
+    makeMockEval({ scoreValue: 0.3, timestamp: EVAL_NANOS, scoreLabel: 'irrelevant' }),
   ];
 
   beforeEach(() => {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig() as any);
+    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
     // Spread to prevent route's in-place sort from mutating the shared array
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([...evals] as any);
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([...evals]);
   });
 
   it('returns 404 for unknown metric', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(getQualityMetric).mockReturnValue(undefined as any);
+    vi.mocked(getQualityMetric).mockReturnValue(undefined);
     const res = await metricsRoutes.request('/metrics/nonexistent/evaluations?period=7d');
     expect(res.status).toBe(404);
   });
@@ -195,7 +245,7 @@ describe('GET /metrics/:name/evaluations', () => {
   it('returns 200 with rows, total, hasMore', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricEvaluationsResponse;
     expect(body).toHaveProperty('rows');
     expect(body).toHaveProperty('total');
     expect(body).toHaveProperty('hasMore');
@@ -205,34 +255,34 @@ describe('GET /metrics/:name/evaluations', () => {
 
   it('total matches evaluation count', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricEvaluationsResponse;
     expect(body.total).toBe(3);
   });
 
   it('filters by scoreLabel', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&scoreLabel=relevant');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricEvaluationsResponse;
     expect(body.total).toBe(1);
-    expect(body.rows[0].label).toBe('relevant');
+    expect(body.rows[0]!.label).toBe('relevant');
   });
 
   it('sorts score_asc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_asc');
-    const body = await res.json() as Record<string, any>;
-    const scores = body.rows.map((r: Record<string, unknown>) => r.score);
-    expect(scores[0]).toBeLessThanOrEqual(scores[scores.length - 1]);
+    const body = await res.json() as MetricEvaluationsResponse;
+    const scores = body.rows.map((r) => r.score);
+    expect(scores[0]!).toBeLessThanOrEqual(scores[scores.length - 1]!);
   });
 
   it('sorts score_desc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_desc');
-    const body = await res.json() as Record<string, any>;
-    const scores = body.rows.map((r: Record<string, unknown>) => r.score);
-    expect(scores[0]).toBeGreaterThanOrEqual(scores[scores.length - 1]);
+    const body = await res.json() as MetricEvaluationsResponse;
+    const scores = body.rows.map((r) => r.score);
+    expect(scores[0]!).toBeGreaterThanOrEqual(scores[scores.length - 1]!);
   });
 
   it('pagination with limit and offset', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=2&offset=1');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricEvaluationsResponse;
     expect(body.rows).toHaveLength(2);
     expect(body.total).toBe(3);
     expect(body.hasMore).toBe(false);
@@ -240,13 +290,13 @@ describe('GET /metrics/:name/evaluations', () => {
 
   it('hasMore is true when offset+limit < total', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=1&offset=0');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricEvaluationsResponse;
     expect(body.hasMore).toBe(true);
   });
 
   it('row shape has required fields', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=1');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as MetricEvaluationsResponse;
     const row = body.rows[0];
     expect(row).toHaveProperty('score');
     expect(row).toHaveProperty('timestamp');

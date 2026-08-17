@@ -24,6 +24,8 @@ vi.mock('../api/data-loader.js', () => ({
 
 import { evaluationRoutes } from '../api/routes/evaluations.js';
 import { loadEvaluationsByTraceId } from '../api/data-loader.js';
+import type { TraceEvaluationsResponse } from './support/api-responses.js';
+import { makeEvaluation } from './support/fixtures.js';
 
 beforeEach(vi.clearAllMocks);
 
@@ -35,20 +37,18 @@ describe('GET /evaluations/trace/:traceId', () => {
   it('returns 200 with evaluations array for valid traceId', async () => {
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as TraceEvaluationsResponse;
     expect(body).toHaveProperty('evaluations');
     expect(Array.isArray(body.evaluations)).toBe(true);
   });
 
   it('returns evaluations from data-loader', async () => {
-    const mockEvals = [
-      { evaluationName: 'relevance', scoreValue: 0.85, traceId: 'abc-123' },
-    ];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadEvaluationsByTraceId).mockResolvedValue(mockEvals as any);
+    vi.mocked(loadEvaluationsByTraceId).mockResolvedValue([
+      makeEvaluation({ scoreValue: 0.85, traceId: 'abc-123' }),
+    ]);
 
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as TraceEvaluationsResponse;
     expect(body.evaluations).toHaveLength(1);
   });
 

@@ -29,18 +29,40 @@ vi.mock('../api/data-loader.js', () => ({
 import { correlationRoutes } from '../api/routes/correlations.js';
 import { computeCorrelationMatrix } from '../api/parent/qfe-correlation.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
+import type { CorrelationFeature } from '../types.js';
+import { makeEvaluation } from './support/fixtures.js';
+import type { CorrelationsResponse } from './support/api-responses.js';
+
+function makeCorrelation(overrides: Partial<CorrelationFeature> = {}): CorrelationFeature {
+  return {
+    featureVersion: '3.1',
+    metricA: 'coherence',
+    metricB: 'relevance',
+    pearsonR: 0.5,
+    spearmanR: 0.5,
+    effectSize: 0.2,
+    lagHours: 0,
+    significant: false,
+    pValue: null,
+    causalConfidence: 'correlation',
+    coOccurrenceRate: 0,
+    isKnownToxicCombo: false,
+    ...overrides,
+  };
+}
 
 beforeEach(vi.clearAllMocks);
 
 describe('GET /correlations', () => {
   beforeEach(() => {
     vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([
-      ['relevance', [{ scoreValue: 0.8, timestamp: '2026-01-15T12:00:00Z', traceId: 't1' }]],
-      ['coherence', [{ scoreValue: 0.9, timestamp: '2026-01-15T12:00:00Z', traceId: 't1' }]],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]) as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeCorrelationMatrix).mockReturnValue([[1, 0.5], [0.5, 1]] as any);
+      ['relevance', [makeEvaluation({ scoreValue: 0.8, traceId: 't1' })]],
+      ['coherence', [makeEvaluation({ evaluationName: 'coherence', scoreValue: 0.9, traceId: 't1' })]],
+    ]));
+    // `computeCorrelationMatrix` returns `CorrelationFeature[]`, not a numeric
+    // matrix — the previous `[[1, 0.5], [0.5, 1]]` stub was the wrong shape
+    // entirely, and `as any` was the only thing making it fit.
+    vi.mocked(computeCorrelationMatrix).mockReturnValue([makeCorrelation()]);
   });
 
   it('rejects invalid period with 400', async () => {
@@ -51,14 +73,14 @@ describe('GET /correlations', () => {
   it('returns 200 with correlations and metrics', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as CorrelationsResponse;
     expect(body).toHaveProperty('correlations');
     expect(body).toHaveProperty('metrics');
   });
 
   it('metrics array contains metric names from data', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as CorrelationsResponse;
     expect(Array.isArray(body.metrics)).toBe(true);
   });
 

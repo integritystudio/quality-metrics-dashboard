@@ -34,6 +34,7 @@ export type { RoleType as RoleViewType } from '@parent/lib/quality/quality-const
 
 export type { EvaluationResult, TraceSpan, LogRecord, StepScore } from '@parent/backends/index.js';
 export type { MetricDynamics } from '@parent/lib/quality/qfe-dynamics.js';
+export type { PercentileDistribution } from '@parent/lib/quality/qfe-label-ordinals.js';
 export type { CompositeQualityIndex, CQIContribution } from '@parent/lib/quality/qfe-cqi.js';
 export type { CorrelationFeature } from '@parent/lib/quality/qfe-correlation.js';
 export type { HandoffEvaluation, TurnLevelResult, MultiAgentEvaluation } from '@parent/lib/quality/quality-multi-agent.js';

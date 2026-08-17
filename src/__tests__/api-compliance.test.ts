@@ -29,6 +29,19 @@ vi.mock('../api/data-loader.js', () => ({
 import { complianceRoutes } from '../api/routes/compliance.js';
 import { computeDashboardSummary } from '../api/parent/quality-metrics.js';
 import { loadEvaluationsByMetric, loadVerifications } from '../api/data-loader.js';
+import type { SlaComplianceResponse, VerificationsResponse } from './support/api-responses.js';
+import type { HumanVerificationEvent } from '../types.js';
+import { makeDashboardSummary } from './support/fixtures.js';
+
+// `HumanVerificationEvent` has no `id` field — the previous `[{ id: 'v1' }]`
+// stub was pure invention held up by `as any`.
+function makeVerification(sessionId: string): HumanVerificationEvent {
+  return {
+    timestamp: '2026-01-15T12:00:00.000Z',
+    sessionId,
+    verificationType: 'approval',
+  };
+}
 
 beforeEach(vi.clearAllMocks);
 
@@ -36,10 +49,8 @@ beforeEach(vi.clearAllMocks);
 
 describe('GET /compliance/sla', () => {
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map() as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(computeDashboardSummary).mockReturnValue({ metrics: [], alerts: [], overallStatus: 'healthy', summary: {}, timestamp: '' } as any);
+    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map());
+    vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary({ metrics: [] }));
   });
 
   it('rejects invalid period with 400', async () => {
@@ -50,7 +61,7 @@ describe('GET /compliance/sla', () => {
   it('returns 200 with period, results, noSLAsConfigured', async () => {
     const res = await complianceRoutes.request('/compliance/sla?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as SlaComplianceResponse;
     expect(body).toHaveProperty('period');
     expect(body).toHaveProperty('results');
     expect(body).toHaveProperty('noSLAsConfigured');
@@ -78,17 +89,16 @@ describe('GET /compliance/verifications', () => {
   it('returns 200 with period, count, verifications', async () => {
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as VerificationsResponse;
     expect(body).toHaveProperty('period');
     expect(body).toHaveProperty('count');
     expect(body).toHaveProperty('verifications');
   });
 
   it('returns correct count for non-empty verifications', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadVerifications).mockResolvedValue([{ id: 'v1' }, { id: 'v2' }] as any);
+    vi.mocked(loadVerifications).mockResolvedValue([makeVerification('sess-1'), makeVerification('sess-2')]);
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as VerificationsResponse;
     expect(body.count).toBe(2);
   });
 

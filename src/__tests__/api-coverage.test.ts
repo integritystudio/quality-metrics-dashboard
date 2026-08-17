@@ -29,19 +29,20 @@ vi.mock('../api/data-loader.js', () => ({
 import { coverageRoutes } from '../api/routes/coverage.js';
 import { computeCoverageHeatmap } from '../api/parent/quality-visualization.js';
 import { loadEvaluationsByMetric } from '../api/data-loader.js';
+import type { CoverageResponse, ErrorResponse } from './support/api-responses.js';
 
 beforeEach(vi.clearAllMocks);
 
 describe('GET /coverage', () => {
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map() as any);
+    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map());
     vi.mocked(computeCoverageHeatmap).mockReturnValue({
       metrics: [],
+      inputs: [],
+      cells: [],
+      gaps: [],
       overallCoveragePercent: 0,
-      totalInputs: 0,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    });
   });
 
   it('rejects invalid period with 400', async () => {
@@ -52,14 +53,14 @@ describe('GET /coverage', () => {
   it('rejects invalid inputKey with 400', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d&inputKey=invalid');
     expect(res.status).toBe(400);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as ErrorResponse;
     expect(body.error).toContain('inputKey');
   });
 
   it('returns 200 with period and heatmap data', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as CoverageResponse;
     expect(body).toHaveProperty('period');
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('overallCoveragePercent');
