@@ -80,7 +80,7 @@ describe('buildCalibrationEntry', () => {
     // sampleSize and window metadata must NOT be on the distribution objects.
     // Asserting the exact key set rather than probing two names: it also catches
     // any other CalibrationState field that starts leaking through.
-    expect(Object.keys(response.distributions.relevance ?? {}).sort())
+    expect(Object.keys(response.distributions.relevance).sort())
       .toEqual(['p10', 'p25', 'p50', 'p75', 'p90']);
   });
 

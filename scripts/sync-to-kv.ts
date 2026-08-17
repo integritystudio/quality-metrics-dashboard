@@ -146,9 +146,18 @@ function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
 }
 
 export const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
-const STATE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-state.json');
+/** Undefined under runners that don't provide import.meta.dirname (e.g. vitest transforms). */
+const SCRIPT_DIR = import.meta.dirname as string | undefined;
+/**
+ * tsconfig.scripts.json lacks noUncheckedIndexedAccess, so bare index reads
+ * type as always-present; this keeps lookup sites honest about missing keys.
+ */
+function lookup<V>(rec: Record<string, V>, key: string): V | undefined {
+  return rec[key];
+}
+const STATE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-state.json');
 /** Stores last computed coverage object so early-return path can refresh lastChecked. */
-const COVERAGE_FILE = join(import.meta.dirname ?? '.', '.kv-sync-coverage.json');
+const COVERAGE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-coverage.json');
 const QUERY_LIMIT = 200_000;
 /** Span queries need a higher limit than evaluation queries to capture all sessions. */
 const SPAN_QUERY_LIMIT = 1_000_000;
@@ -241,7 +250,7 @@ function hashValue(value: string): string {
 function filterChanged(entries: KVEntry[], state: KvSyncState): KVEntry[] {
   return entries.filter(e => {
     const hash = hashValue(e.value);
-    return state[e.key]?.hash !== hash;
+    return lookup(state, e.key)?.hash !== hash;
   });
 }
 
@@ -273,8 +282,8 @@ function kvBulkPut(entries: KVEntry[]): number {
           stdio: ['ignore', 'pipe', 'pipe'],
         });
       } catch (err) {
-        const stderr = (err as { stderr?: Buffer })?.stderr?.toString() ?? '';
-        const stdout = (err as { stdout?: Buffer })?.stdout?.toString() ?? '';
+        const stderr = (err as { stderr?: Buffer } | null)?.stderr?.toString() ?? '';
+        const stdout = (err as { stdout?: Buffer } | null)?.stdout?.toString() ?? '';
         if (stderr.includes('free usage limit') || stderr.includes('code: 10048')) {
           console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred. stderr: ${stderr.slice(0, 300)}`);
           return written;
@@ -319,7 +328,7 @@ export function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): void 
           { stdio: ['ignore', 'pipe', 'pipe'] },
         );
       } catch (err) {
-        const stderr = (err as { stderr?: Buffer })?.stderr?.toString() ?? '';
+        const stderr = (err as { stderr?: Buffer } | null)?.stderr?.toString() ?? '';
         console.warn(
           `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
           `${err instanceof Error ? err.message : String(err)}` +
@@ -471,9 +480,10 @@ function computeTimespan(evaluations: EvaluationResult[]) {
 
 function computeSessionInfo(spans: SessionSpan[]) {
   const sessionStarts = spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.SESSION_START);
-  const first = sessionStarts[0];
-  const last = sessionStarts[sessionStarts.length - 1] ?? first;
-  return first ? {
+  const first = sessionStarts.at(0);
+  if (!first) return null;
+  const last = sessionStarts.at(-1) ?? first;
+  return {
     projectName: spanAttr(first, 'project.name', 'string') ?? 'unknown',
     workingDirectory: spanAttr(first, 'working.directory', 'string') ?? '',
     gitRepository: spanAttr(first, 'vcs.repository.name', 'string') ?? '',
@@ -485,7 +495,7 @@ function computeSessionInfo(spans: SessionSpan[]) {
     finalMessageCount: spanAttr(last, 'context.message_count', 'number') ?? 0,
     taskCount: spanAttr(first, 'tasks.active', 'number') ?? 0,
     uncommittedAtStart: spanAttr(first, 'integritystudio.git.uncommitted', 'number') ?? 0,
-  } : null;
+  };
 }
 
 function computeTokenMetrics(spans: SessionSpan[]) {
@@ -538,10 +548,10 @@ function computeSpanLatency(spans: SessionSpan[]) {
   const spanBreakdown: Record<string, number> = {};
   const hookDurations: Record<string, number[]> = {};
   for (const s of spans) {
-    spanBreakdown[s.name] = (spanBreakdown[s.name] ?? 0) + 1;
+    spanBreakdown[s.name] = (lookup(spanBreakdown, s.name) ?? 0) + 1;
     const ms = s.durationMs ?? 0;
     if (ms > 0) {
-      if (!hookDurations[s.name]) hookDurations[s.name] = [];
+      if (!lookup(hookDurations, s.name)) hookDurations[s.name] = [];
       hookDurations[s.name].push(ms);
     }
   }
@@ -626,7 +636,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
   for (const s of spans) {
     if (spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.AGENT_POST_TOOL) {
       const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
-      if (!acc[name]) acc[name] = {
+      if (!lookup(acc, name)) acc[name] = {
         invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
         totalOutputSize: 0, durationSum: 0, durationCount: 0,
         truncatedCount: 0, emptyCount: 0,
@@ -663,7 +673,7 @@ function computeEvalBreakdown(evaluations: EvaluationResult[]) {
   const evalByName: Record<string, { count: number; scores: number[] }> = {};
   for (const ev of evaluations) {
     const name = ev.evaluationName;
-    if (!evalByName[name]) evalByName[name] = { count: 0, scores: [] };
+    if (!lookup(evalByName, name)) evalByName[name] = { count: 0, scores: [] };
     evalByName[name].count++;
     if (isValidScore(ev.scoreValue)) {
       evalByName[name].scores.push(ev.scoreValue);
@@ -1064,7 +1074,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   // Cloud backend has no local state dir; use the scripts directory for degradation/calibration state files.
   // The sidecar state is the owner's own (single-tenant history) — non-home orgs compute
   // signals statelessly (no cross-run breach continuity) and skip calibration.
-  const stateDir = isHome ? (import.meta.dirname ?? '') : '';
+  const stateDir = isHome ? (SCRIPT_DIR ?? '') : '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
     const ms = PERIOD_MS[period];
@@ -1356,7 +1366,7 @@ async function main(): Promise<void> {
   if (changed.length === 0) {
     console.log(`[sync-to-kv] No-op: computed=${allEntries.length} unchanged=${allEntries.length} changed=0 written=0 deferred=0`);
     // Still update the heartbeat keys (legacy, per-org, and global system)
-    const staleMeta = metaEntries.filter(e => prevState[e.key]?.hash !== hashValue(e.value));
+    const staleMeta = metaEntries.filter(e => lookup(prevState, e.key)?.hash !== hashValue(e.value));
     if (staleMeta.length > 0) {
       kvBulkPut(staleMeta);
       for (const e of staleMeta) prevState[e.key] = { hash: hashValue(e.value) };
@@ -1449,7 +1459,7 @@ async function main(): Promise<void> {
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
   const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: JSON.stringify(coverage) };
-  if (newState[META_SYNC_COVERAGE_KEY]?.hash !== coverageHash) {
+  if (lookup(newState, META_SYNC_COVERAGE_KEY)?.hash !== coverageHash) {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
       newState[META_SYNC_COVERAGE_KEY] = { hash: coverageHash };
