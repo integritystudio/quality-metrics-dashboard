@@ -5,8 +5,11 @@
  * and that activity logging failures do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
+
+type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
@@ -44,7 +47,7 @@ function authHeaders() {
   return { Authorization: 'Bearer mock-jwt' };
 }
 
-function mockAuthSequence(fetchMock: ReturnType<typeof vi.fn>, options?: { rejectActivity?: boolean }) {
+function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boolean }) {
   const callCount = new Map<string, number>();
 
   fetchMock.mockImplementation((url: string) => {
@@ -77,13 +80,13 @@ vi.mock('jose', () => ({
   jwtVerify: vi.fn(),
 }));
 
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: FetchMock;
 
 beforeEach(async () => {
   vi.clearAllMocks();
   const jose = vi.mocked(await import('jose'));
   jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
-  fetchMock = vi.fn();
+  fetchMock = vi.fn<FetchLike>();
   vi.stubGlobal('fetch', fetchMock);
 });
 

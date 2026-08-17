@@ -7,8 +7,11 @@
  * Non-admin tests use mockAuditorAuthSequence (auditor permissions, no dashboard.admin).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
+
+type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
@@ -73,7 +76,7 @@ function withAdminAuth(
 }
 
 /** Mock a non-admin auth sequence (auditor permissions, no dashboard.admin). */
-function mockAuditorAuthSequence(fetchMock: ReturnType<typeof vi.fn>) {
+function mockAuditorAuthSequence(fetchMock: FetchMock) {
   fetchMock.mockImplementation((url: string) => {
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=')) {
       return Promise.resolve(
@@ -89,7 +92,7 @@ function mockAuditorAuthSequence(fetchMock: ReturnType<typeof vi.fn>) {
   });
 }
 
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: FetchMock;
 
 function makeCtx(): ExecutionContext {
   return { waitUntil: vi.fn((p: Promise<unknown>) => { void p; }), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
@@ -104,7 +107,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   const jose = vi.mocked(await import('jose'));
   jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
-  fetchMock = vi.fn();
+  fetchMock = vi.fn<FetchLike>();
   vi.stubGlobal('fetch', fetchMock);
   // Default: admin auth succeeds; route handler returns 200 for unmatched calls.
   fetchMock.mockImplementation(withAdminAuth(() => Promise.resolve(new Response(null, { status: 200 }))));

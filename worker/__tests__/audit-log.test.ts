@@ -6,8 +6,11 @@
  * do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
+
+type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
@@ -60,14 +63,14 @@ function withAdminAuth(
   };
 }
 
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: FetchMock;
 let mockExecutionCtx: { waitUntil: ReturnType<typeof vi.fn>; passThroughOnException: ReturnType<typeof vi.fn> };
 
 beforeEach(async () => {
   vi.clearAllMocks();
   const jose = vi.mocked(await import('jose'));
   jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
-  fetchMock = vi.fn();
+  fetchMock = vi.fn<FetchLike>();
   vi.stubGlobal('fetch', fetchMock);
   mockExecutionCtx = {
     waitUntil: vi.fn((p: Promise<unknown>) => { void p; }),
