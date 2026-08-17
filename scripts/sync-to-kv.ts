@@ -29,7 +29,7 @@ import {
 import { computeRoleView, computeMetricDetail } from '../../src/lib/quality/quality-views.js';
 import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
 import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
-import type { EvaluationResult, StepScore } from '../../src/backends/index.js';
+import type { EvaluationResult, StepScore, TraceSpan } from '../../src/backends/index.js';
 import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/qfe-dynamics.js';
 import { computeCorrelationMatrix } from '../../src/lib/quality/qfe-correlation.js';
 import {
@@ -69,6 +69,7 @@ import {
   RATE_DISPLAY_PRECISION,
   HOOK_NAME,
   spanAttr,
+  jsonSafe,
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE } from './judge-evaluations.js';
@@ -141,6 +142,18 @@ export function stripOrgPrefix(key: string): string {
 
 export type KVEntry = { key: string; value: string; expirationTtl?: number };
 
+/**
+ * Serialize a KV entry value. Backend spans and evaluations carry `bigint`
+ * timestamps (`startTimeUnixNano`, `endTimeUnixNano`, `timestamp`) that
+ * `JSON.stringify` throws on; `jsonSafe` converts them to their decimal-string
+ * wire form, which `timestampToMs` on the read side already accepts. Every KV
+ * entry value must be built through this, never bare `JSON.stringify` — the
+ * bigint-bearing types nest at varying depth (SYNC-KV-BIGINT).
+ */
+export function toKVValue(value: unknown): string {
+  return JSON.stringify(jsonSafe(value));
+}
+
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
 }
@@ -196,7 +209,7 @@ export function buildCalibrationEntry(
     sampleCounts,
     lastCalibrated: state.lastCalibrated,
   };
-  return { key: 'meta:calibration', value: JSON.stringify(payload) };
+  return { key: 'meta:calibration', value: toKVValue(payload) };
 }
 
 const TRACE_PRIORITY_WEIGHTS = {
@@ -832,6 +845,30 @@ interface OrgComputation {
  * local sidecar state (degradation breaches, calibration) is owner-local and
  * therefore read/written for the home org alone.
  */
+/** Per-trace KV entries; spans/evaluations carry bigint timestamps, hence toKVValue. */
+export function buildTraceEntries(
+  traceIds: string[],
+  evalsByTrace: Map<string, EvaluationResult[]>,
+  spansByTrace: Map<string, TraceSpan[]>,
+): KVEntry[] {
+  const traceEntries: KVEntry[] = [];
+  for (const traceId of traceIds) {
+    const traceEvals = evalsByTrace.get(traceId) ?? [];
+    const spans = spansByTrace.get(traceId) ?? [];
+    traceEntries.push({
+      key: `evaluations:trace:${traceId}`,
+      value: toKVValue({ evaluations: traceEvals }),
+      expirationTtl: TRACE_KEY_TTL_SECONDS,
+    });
+    traceEntries.push({
+      key: `trace:${traceId}`,
+      value: toKVValue({ traceId, spans, evaluations: traceEvals }),
+      expirationTtl: TRACE_KEY_TTL_SECONDS,
+    });
+  }
+  return traceEntries;
+}
+
 async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
   const entries: KVEntry[] = [];
 
@@ -866,11 +903,11 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     groupedByPeriod.set(period, grouped);
 
     const dashboard = computeDashboardSummary(grouped, undefined, dates);
-    entries.push({ key: `dashboard:${period}`, value: JSON.stringify(dashboard) });
+    entries.push({ key: `dashboard:${period}`, value: toKVValue(dashboard) });
 
     for (const role of ROLES) {
       const view = computeRoleView(dashboard, role);
-      entries.push({ key: `dashboard:${period}:${role}`, value: JSON.stringify(view) });
+      entries.push({ key: `dashboard:${period}:${role}`, value: toKVValue(view) });
     }
 
     const metricTimeSeries = new Map<string, number[]>();
@@ -882,7 +919,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     const correlations = computeCorrelationMatrix(metricTimeSeries);
     entries.push({
       key: `correlations:${period}`,
-      value: JSON.stringify({ correlations, metrics: corrMetricNames }),
+      value: toKVValue({ correlations, metrics: corrMetricNames }),
     });
 
     // TODO: Re-enable coverage heatmaps once values are capped to stay under KV 25 MB limit
@@ -897,7 +934,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     const pipeline = computePipelineView(grouped, dashboard);
     entries.push({
       key: `pipeline:${period}`,
-      value: JSON.stringify({ period, ...pipeline }),
+      value: toKVValue({ period, ...pipeline }),
     });
   }
 
@@ -938,7 +975,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
         bucketCount: DEFAULT_BUCKET_COUNT,
         previousValues,
       });
-      return { key: `metric:${name}`, value: JSON.stringify(detail) };
+      return { key: `metric:${name}`, value: toKVValue(detail) };
     })
   )).filter((e): e is NonNullable<typeof e> => e !== null);
   entries.push(...metricDetailEntries);
@@ -967,7 +1004,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       }));
       entries.push({
         key: `metric:evaluations:${name}:${period}`,
-        value: JSON.stringify({ rows }),
+        value: toKVValue({ rows }),
       });
     }
   }
@@ -1058,7 +1095,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
 
       entries.push({
         key: `trend:${name}:${period}`,
-        value: JSON.stringify({
+        value: toKVValue({
           metric: name,
           period,
           bucketCount: TREND_BUCKETS,
@@ -1087,7 +1124,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     }
     entries.push({
       key: `${DEGRADATION_KV_KEY}:${period}`,
-      value: JSON.stringify({ period, reports, computedAt: now.toISOString() }),
+      value: toKVValue({ period, reports, computedAt: now.toISOString() }),
     });
   }
   degradationState.lastRun = now.toISOString();
@@ -1124,21 +1161,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     pushToGroup(spansByTrace, span.traceId, span);
   }
 
-  const traceEntries: KVEntry[] = [];
-  for (const traceId of traceIds) {
-    const traceEvals = evalsByTrace.get(traceId) ?? [];
-    const spans = spansByTrace.get(traceId) ?? [];
-    traceEntries.push({
-      key: `evaluations:trace:${traceId}`,
-      value: JSON.stringify({ evaluations: traceEvals }),
-      expirationTtl: TRACE_KEY_TTL_SECONDS,
-    });
-    traceEntries.push({
-      key: `trace:${traceId}`,
-      value: JSON.stringify({ traceId, spans, evaluations: traceEvals }),
-      expirationTtl: TRACE_KEY_TTL_SECONDS,
-    });
-  }
+  const traceEntries = buildTraceEntries(traceIds, evalsByTrace, spansByTrace);
 
   type Span = (typeof allSpans)[number];
   const spansBySession = new Map<string, Span[]>();
@@ -1165,7 +1188,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     const detail = computeSessionDetail(sessionId, sessionSpans, evaluations);
     sessionEntries.push({
       key: `session:${sessionId}`,
-      value: JSON.stringify({
+      value: toKVValue({
         ...detail,
         agentActivity: detail.agentActivity.map(
           ({ totalOutputSize: _, ...rest }) => rest,
@@ -1268,7 +1291,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       sessions,
     };
 
-    agentEntries.push({ key: `agent:${agentName}`, value: JSON.stringify(detail) });
+    agentEntries.push({ key: `agent:${agentName}`, value: toKVValue(detail) });
     agentSummaryList.push({
       agentName,
       totalSessions,
@@ -1279,7 +1302,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   }
 
   agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
-  agentEntries.push({ key: 'meta:agents', value: JSON.stringify(agentSummaryList) });
+  agentEntries.push({ key: 'meta:agents', value: toKVValue(agentSummaryList) });
 
   return {
     allEntries: [...entries, ...sessionEntries, ...traceEntries, ...agentEntries],
@@ -1354,13 +1377,13 @@ async function main(): Promise<void> {
   // Every-run bookkeeping keys: the legacy bare heartbeat, the org-prefixed
   // per-org heartbeats, and the global system heartbeat for /api/health (P5).
   const metaEntries: KVEntry[] = [
-    { key: META_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) },
+    { key: META_LAST_SYNC_KEY, value: toKVValue(now.toISOString()) },
   ];
   if (HOME_ORG_ID) {
     for (const orgId of orgIds) {
-      if (orgId) metaEntries.push({ key: orgPrefixedKey(orgId, META_LAST_SYNC_KEY), value: JSON.stringify(now.toISOString()) });
+      if (orgId) metaEntries.push({ key: orgPrefixedKey(orgId, META_LAST_SYNC_KEY), value: toKVValue(now.toISOString()) });
     }
-    metaEntries.push({ key: SYSTEM_LAST_SYNC_KEY, value: JSON.stringify(now.toISOString()) });
+    metaEntries.push({ key: SYSTEM_LAST_SYNC_KEY, value: toKVValue(now.toISOString()) });
   }
 
   if (changed.length === 0) {
@@ -1458,7 +1481,7 @@ async function main(): Promise<void> {
   // does not burn a KV write every run. Only the stable numeric fields gate whether we write.
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
-  const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: JSON.stringify(coverage) };
+  const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: toKVValue(coverage) };
   if (lookup(newState, META_SYNC_COVERAGE_KEY)?.hash !== coverageHash) {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {

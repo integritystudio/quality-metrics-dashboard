@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
+import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
 
@@ -235,5 +236,59 @@ describe('prioritizeTraces with org-prefixed keys (P4)', () => {
     // All four entries survive, contiguously — one trace, one priority group.
     expect(result).toHaveLength(4);
     expect(new Set(result.map(e => e.key))).toEqual(new Set(entries.map(e => e.key)));
+  });
+});
+
+describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
+  const TRACE_ID = 'a1b2c3d4e5f60718a1b2c3d4e5f60718';
+
+  // Typed off the backend contract: CloudBackend builds these fields with
+  // BigInt(...) — plain-number fixtures are exactly how this bug stayed hidden.
+  const span: TraceSpan = {
+    traceId: TRACE_ID,
+    spanId: 'a1b2c3d4e5f60718',
+    name: 'test-span',
+    kind: 'INTERNAL',
+    startTimeUnixNano: 1755450000000000000n,
+    endTimeUnixNano: 1755450001000000000n,
+  };
+  const evaluation: EvaluationResult = {
+    timestamp: 1755450000500000000n,
+    evaluationName: 'relevance',
+    scoreValue: 0.9,
+    traceId: TRACE_ID,
+  };
+
+  it('serializes spans and evaluations without throwing', async () => {
+    const { buildTraceEntries } = await import('../sync-to-kv.js');
+    const entries = buildTraceEntries(
+      [TRACE_ID],
+      new Map([[TRACE_ID, [evaluation]]]),
+      new Map([[TRACE_ID, [span]]]),
+    );
+
+    expect(entries.map(e => e.key)).toEqual([
+      `evaluations:trace:${TRACE_ID}`,
+      `trace:${TRACE_ID}`,
+    ]);
+    const trace = JSON.parse(entries[1].value) as {
+      traceId: string;
+      spans: Array<{ startTimeUnixNano: string; endTimeUnixNano: string }>;
+      evaluations: Array<{ timestamp: string }>;
+    };
+    // bigints land as their decimal-string wire form, which timestampToMs accepts
+    expect(trace.spans[0].startTimeUnixNano).toBe('1755450000000000000');
+    expect(trace.spans[0].endTimeUnixNano).toBe('1755450001000000000');
+    expect(trace.evaluations[0].timestamp).toBe('1755450000500000000');
+
+    const evalsOnly = JSON.parse(entries[0].value) as { evaluations: Array<{ timestamp: string }> };
+    expect(evalsOnly.evaluations[0].timestamp).toBe('1755450000500000000');
+  });
+
+  it('toKVValue converts nested bigints anywhere in an entry value', async () => {
+    const { toKVValue } = await import('../sync-to-kv.js');
+    expect(JSON.parse(toKVValue({ rows: [{ timestamp: 42n }] }))).toEqual({
+      rows: [{ timestamp: '42' }],
+    });
   });
 });
