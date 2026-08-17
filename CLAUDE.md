@@ -102,7 +102,7 @@ Run against the deployed worker with a real Auth0 JWT. Requires Doppler dev conf
 - **Setup** (`setup.ts`): acquires Auth0 JWT via ROPC (`VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `AUTH0_TEST_EMAIL/PASSWORD`), upserts `public.users`, assigns `e2e-dashboard-reader` role
 - **Teardown** (`teardown.ts`): removes `user_roles`, `user_activity`, `public.users` row — Auth0 user is permanent, never deleted
 - **Sentry** (`sentry-reporter.ts`): captures `failed`/`timedOut` tests to Sentry (`SENTRY_DSN` from Doppler); no-ops if unset
-- Auth0 tenant: `dev-68gg87ow4mg4kzyo.us.auth0.com`, `password` grant enabled on `integritystudio-dashboard` SPA (`CNfd6xPPr2aLmvNyiearhmaLknAYvtnq`); default directory set to `Username-Password-Authentication`
+- Auth0 tenant: **dev** (`dev-njjmghdzm23uy0p7.us.auth0.com`), SPA `integritystudio-dashboard-dev` (`w4KMCpBAhSCnKjRlF7bWAycefJGwetya`). ROPC needs ALL of: `password` in `grant_types`, **`token_endpoint_auth_method: "none"`** (a `null` value makes the token endpoint demand client auth and every secret-less exchange fails `access_denied — Unauthorized` with an EMPTY `user_id` in the `fepft` log — the same generic error this tenant returns for a wrong password, so it is undiagnosable from the error body alone), `skip_consent_for_verifiable_first_party_clients: true` on the API, tenant default directory `Username-Password-Authentication`, and the connection enabled for the client. All set 2026-08-17; before that this suite had never run against the dev tenant. *The prior claim here — ROPC enabled on the production SPA `CNfd6xPPr2aLmvNyiearhmaLknAYvtnq` — is stale: that client has no `password` grant today.*
 
 ## Parent boundary (`src/api/parent/`)
 
