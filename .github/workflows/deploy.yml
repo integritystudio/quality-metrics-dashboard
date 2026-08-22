@@ -1,4 +1,10 @@
-name: Deploy to GitHub Pages
+name: Deploy Workers
+
+# integritystudio.dev is a Workers custom domain on quality-metrics-api
+# (migrated off GitHub Pages 2026-08-22). The SPA is served by the Workers
+# asset layer, so the build uses a same-origin API base: VITE_API_URL is
+# deliberately NOT exported here — resolveApiBase falls back to '' in prod
+# builds, and the worker serves /api/* on the same origin.
 
 on:
   push:
@@ -7,11 +13,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: deploy
   cancel-in-progress: true
 
 jobs:
@@ -27,41 +31,6 @@ jobs:
       - name: Run src tests (script tests require parent dist from observability-toolkit)
         run: npm test src/
 
-  build:
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install Doppler CLI
-        uses: dopplerhq/cli-action@v3
-      - run: npm ci
-      - name: Build with env vars from Doppler
-        run: |
-          export VITE_API_URL=$(doppler secrets get METRICS_API_URL --project integrity-studio --config prd --plain)
-          export VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --project integrity-studio --config prd --plain)
-          export VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --project integrity-studio --config prd --plain)
-          export VITE_AUTH0_AUDIENCE=$(doppler secrets get VITE_AUTH0_AUDIENCE --project integrity-studio --config prd --plain)
-          npm run build
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy-pages:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-
   deploy-worker:
     needs: check
     runs-on: ubuntu-latest
@@ -74,9 +43,8 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
       - run: npm ci
-      - name: Build with env vars from Doppler
+      - name: Build with env vars from Doppler (same-origin API — no VITE_API_URL)
         run: |
-          export VITE_API_URL=$(doppler secrets get METRICS_API_URL --project integrity-studio --config prd --plain)
           export VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --project integrity-studio --config prd --plain)
           export VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --project integrity-studio --config prd --plain)
           export VITE_AUTH0_AUDIENCE=$(doppler secrets get VITE_AUTH0_AUDIENCE --project integrity-studio --config prd --plain)
