@@ -31,6 +31,7 @@ import type {
 } from '../../src/lib/quality/qfe-backtest.js';
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
+import { importMetaDirname } from '../src/lib/dashboard-file-utils.js';
 
 const INCIDENTS_FILE = join(import.meta.dirname, '.degradation-incidents.json');
 /** F1 improvement above which best config triggers graduation recommendation */
@@ -301,8 +302,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const scriptDir = import.meta.dirname as string | undefined;
-  const outputPath = join(scriptDir ?? process.cwd(), outputFile);
+  const outputPath = join(importMetaDirname(import.meta) ?? process.cwd(), outputFile);
   const totalSweepGrid = Object.values(BACKTEST_SWEEP).reduce((acc, arr) => acc * arr.length, 1);
 
   writeFileSync(outputPath, JSON.stringify({

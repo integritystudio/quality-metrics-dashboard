@@ -175,3 +175,13 @@ export function loadJsonWithValidationSafe<T>(
     return fallback;
   }
 }
+
+/**
+ * `import.meta.dirname` is typed `string` by @types/node but is undefined under
+ * runners that transform modules without a file URL (e.g. vitest). Check it at
+ * runtime so the result is honestly `string | undefined` — a plain annotation
+ * gets flow-narrowed back to `string` and an assertion hides the check.
+ */
+export function importMetaDirname(meta: { dirname?: unknown }): string | undefined {
+  return typeof meta.dirname === 'string' ? meta.dirname : undefined;
+}

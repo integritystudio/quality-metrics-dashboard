@@ -47,12 +47,13 @@ import {
   kvSyncStateSchema,
   metricDetailValueSchema,
   coverageHeatmapSchema,
-  type KvSyncState,
+  type KvSyncEntry,
   type CoverageHeatmap,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import {
   loadJsonWithValidationSafe,
   loadJsonWithValidation,
+  importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
@@ -73,7 +74,7 @@ import {
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE } from './judge-evaluations.js';
-import { mean, quantileSorted } from 'd3-array';
+import { ascending, mean, quantileSorted, rollup } from 'd3-array';
 
 // Used to be exported as DEGRADATION_KV_KEY from ../../src/lib/quality/quality-constants.ts,
 // deleted there as a "dead export" (parent commit f518715) — the dashboard, a separate git
@@ -160,14 +161,7 @@ function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
 
 export const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
 /** Undefined under runners that don't provide import.meta.dirname (e.g. vitest transforms). */
-const SCRIPT_DIR = import.meta.dirname as string | undefined;
-/**
- * tsconfig.scripts.json lacks noUncheckedIndexedAccess, so bare index reads
- * type as always-present; this keeps lookup sites honest about missing keys.
- */
-function lookup<V>(rec: Record<string, V>, key: string): V | undefined {
-  return rec[key];
-}
+const SCRIPT_DIR = importMetaDirname(import.meta);
 const STATE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-state.json');
 /** Stores last computed coverage object so early-return path can refresh lastChecked. */
 const COVERAGE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-coverage.json');
@@ -236,12 +230,19 @@ export function computeBudgetAllocation(
 }
 
 
-function loadSyncState(): KvSyncState {
-  return loadJsonWithValidationSafe(STATE_FILE, kvSyncStateSchema, {});
+/**
+ * In-memory form of the persisted `KvSyncState` record. A Map so that reads are
+ * honestly `KvSyncEntry | undefined` (tsconfig.scripts.json lacks
+ * noUncheckedIndexedAccess, under which a bare index read types as always-present).
+ */
+type SyncState = Map<string, KvSyncEntry>;
+
+function loadSyncState(): SyncState {
+  return new Map(Object.entries(loadJsonWithValidationSafe(STATE_FILE, kvSyncStateSchema, {})));
 }
 
-function saveSyncState(state: KvSyncState): void {
-  writeFileSync(STATE_FILE, JSON.stringify(state));
+function saveSyncState(state: SyncState): void {
+  writeFileSync(STATE_FILE, JSON.stringify(Object.fromEntries(state)));
 }
 
 function loadLastCoverage(): CoverageHeatmap | null {
@@ -260,11 +261,8 @@ function hashValue(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
 
-function filterChanged(entries: KVEntry[], state: KvSyncState): KVEntry[] {
-  return entries.filter(e => {
-    const hash = hashValue(e.value);
-    return lookup(state, e.key)?.hash !== hash;
-  });
+function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
+  return entries.filter(e => state.get(e.key)?.hash !== hashValue(e.value));
 }
 
 
@@ -558,19 +556,14 @@ function computeUsageCounts(spans: SessionSpan[]) {
 }
 
 function computeSpanLatency(spans: SessionSpan[]) {
-  const spanBreakdown: Record<string, number> = {};
-  const hookDurations: Record<string, number[]> = {};
-  for (const s of spans) {
-    spanBreakdown[s.name] = (lookup(spanBreakdown, s.name) ?? 0) + 1;
-    const ms = s.durationMs ?? 0;
-    if (ms > 0) {
-      if (!lookup(hookDurations, s.name)) hookDurations[s.name] = [];
-      hookDurations[s.name].push(ms);
-    }
-  }
+  const spanBreakdown = Object.fromEntries(rollup(spans, group => group.length, s => s.name));
+  const hookDurations = rollup(
+    spans.filter(s => (s.durationMs ?? 0) > 0),
+    group => group.map(s => s.durationMs ?? 0).sort(ascending),
+    s => s.name,
+  );
   const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
-  for (const [name, durations] of Object.entries(hookDurations)) {
-    const sorted = durations.sort((a, b) => a - b);
+  for (const [name, sorted] of hookDurations) {
     hookLatency[name] = {
       count: sorted.length,
       avg: +(mean(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
@@ -640,35 +633,35 @@ interface AgentAccumulator {
   }>;
 }
 
-function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
-  const acc: Record<string, {
-    invocations: number; errors: number; hasRateLimit: boolean; rateLimitEvents: number;
-    totalOutputSize: number; durationSum: number; durationCount: number;
-    truncatedCount: number; emptyCount: number;
-  }> = {};
-  for (const s of spans) {
-    if (spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.AGENT_POST_TOOL) {
-      const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
-      if (!lookup(acc, name)) acc[name] = {
-        invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
-        totalOutputSize: 0, durationSum: 0, durationCount: 0,
-        truncatedCount: 0, emptyCount: 0,
-      };
-      const a = acc[name];
-      a.invocations++;
-      if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) a.errors++;
-      if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
-        a.hasRateLimit = true;
-        a.rateLimitEvents++;
-      }
-      a.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
-      const dur = s.durationMs ?? 0;
-      if (dur > 0) { a.durationSum += dur; a.durationCount++; }
-      if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) a.truncatedCount++;
-      if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) a.emptyCount++;
+function summarizeAgentSpans(group: SessionSpan[]) {
+  const a = {
+    invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
+    totalOutputSize: 0, durationSum: 0, durationCount: 0,
+    truncatedCount: 0, emptyCount: 0,
+  };
+  for (const s of group) {
+    a.invocations++;
+    if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) a.errors++;
+    if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
+      a.hasRateLimit = true;
+      a.rateLimitEvents++;
     }
+    a.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
+    const dur = s.durationMs ?? 0;
+    if (dur > 0) { a.durationSum += dur; a.durationCount++; }
+    if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) a.truncatedCount++;
+    if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) a.emptyCount++;
   }
-  return Object.entries(acc).map(([agentName, d]) => ({
+  return a;
+}
+
+function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
+  const byAgent = rollup(
+    spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.AGENT_POST_TOOL),
+    summarizeAgentSpans,
+    s => spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown',
+  );
+  return Array.from(byAgent, ([agentName, d]) => ({
     agentName,
     invocations: d.invocations,
     errors: d.errors,
@@ -683,16 +676,12 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
 }
 
 function computeEvalBreakdown(evaluations: EvaluationResult[]) {
-  const evalByName: Record<string, { count: number; scores: number[] }> = {};
-  for (const ev of evaluations) {
-    const name = ev.evaluationName;
-    if (!lookup(evalByName, name)) evalByName[name] = { count: 0, scores: [] };
-    evalByName[name].count++;
-    if (isValidScore(ev.scoreValue)) {
-      evalByName[name].scores.push(ev.scoreValue);
-    }
-  }
-  return Object.entries(evalByName).map(([name, d]) => {
+  const evalByName = rollup(
+    evaluations,
+    group => ({ count: group.length, scores: group.map(ev => ev.scoreValue).filter(isValidScore) }),
+    ev => ev.evaluationName,
+  );
+  return Array.from(evalByName, ([name, d]) => {
     const sorted = d.scores.sort((a, b) => a - b);
     const avg = mean(sorted);
     return {
@@ -1389,10 +1378,10 @@ async function main(): Promise<void> {
   if (changed.length === 0) {
     console.log(`[sync-to-kv] No-op: computed=${allEntries.length} unchanged=${allEntries.length} changed=0 written=0 deferred=0`);
     // Still update the heartbeat keys (legacy, per-org, and global system)
-    const staleMeta = metaEntries.filter(e => lookup(prevState, e.key)?.hash !== hashValue(e.value));
+    const staleMeta = filterChanged(metaEntries, prevState);
     if (staleMeta.length > 0) {
       kvBulkPut(staleMeta);
-      for (const e of staleMeta) prevState[e.key] = { hash: hashValue(e.value) };
+      for (const e of staleMeta) prevState.set(e.key, { hash: hashValue(e.value) });
       if (!dryRun) saveSyncState(prevState);
     }
     // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
@@ -1432,9 +1421,9 @@ async function main(): Promise<void> {
 
   const written = kvBulkPut(toWrite);
 
-  const newState = { ...prevState };
+  const newState = new Map(prevState);
   for (const e of toWrite.slice(0, written)) {
-    newState[e.key] = { hash: hashValue(e.value) };
+    newState.set(e.key, { hash: hashValue(e.value) });
   }
   const computedKeys = new Set(allEntries.map(e => e.key));
   for (const e of metaEntries) computedKeys.add(e.key);
@@ -1443,20 +1432,18 @@ async function main(): Promise<void> {
 
   // Delete KV keys that were tracked in local state but are no longer computed.
   // This covers entries whose trace/session was pruned from the query window on this run.
-  const staleKeys = Object.keys(newState).filter(k => !computedKeys.has(k));
+  const staleKeys = [...newState.keys()].filter(k => !computedKeys.has(k));
   if (staleKeys.length > 0) {
     console.log(`[sync-to-kv] Pruning ${staleKeys.length} stale KV key(s) dropped from local state`);
     kvBulkDelete(staleKeys);
   }
 
-  for (const key of Object.keys(newState)) {
-    if (!computedKeys.has(key)) delete newState[key];
-  }
+  for (const key of staleKeys) newState.delete(key);
   if (!dryRun) saveSyncState(newState);
 
   // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
   // It may over-count if a prior wrangler write failed silently.
-  const syncedTraceKeys = Object.keys(newState).filter(k => k.startsWith('trace:'));
+  const syncedTraceKeys = [...newState.keys()].filter(k => k.startsWith('trace:'));
   const syncedReferencedCount = syncedTraceKeys
     .filter(k => referencedTraceIds.has(k.slice('trace:'.length))).length;
   const coverage = {
@@ -1482,10 +1469,10 @@ async function main(): Promise<void> {
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
   const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: toKVValue(coverage) };
-  if (lookup(newState, META_SYNC_COVERAGE_KEY)?.hash !== coverageHash) {
+  if (newState.get(META_SYNC_COVERAGE_KEY)?.hash !== coverageHash) {
     const coverageWritten = kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
-      newState[META_SYNC_COVERAGE_KEY] = { hash: coverageHash };
+      newState.set(META_SYNC_COVERAGE_KEY, { hash: coverageHash });
       if (!dryRun) saveSyncState(newState);
     }
   }
