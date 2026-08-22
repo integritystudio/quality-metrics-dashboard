@@ -36,6 +36,9 @@ preview_id = "0f4d40dd84b14e038024a9775b9be4f7"
 [assets]
 directory = "./dist"
 binding = "ASSETS"
+# SPA deep links (/login, /callback, route URLs) match no asset file; without
+# this, ASSETS.fetch 404s them and an Auth0 redirect to /callback dead-ends.
+not_found_handling = "single-page-application"
 
 # ---------------------------------------------------------------------------
 # Dev environment — `quality-metrics-api-dev`
@@ -95,6 +98,7 @@ id = "fc5bbe4889a645a4b7744ce236b563be"
 [env.dev.assets]
 directory = "./dist"
 binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 # NOTE: ALLOW_TEST_BYPASS is absent here on purpose. The dev Worker authenticates
 # real dev-tenant JWTs; a bypass would make every dashboard-auth assertion vacuous.
