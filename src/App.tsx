@@ -339,6 +339,16 @@ export function App() {
           redirect_uri: AUTH0_CALLBACK_URI,
           audience: AUTH0_AUDIENCE,
         }}
+        // Rotating refresh tokens persisted across reloads. Without these the
+        // SDK's memory cache is wiped on every hard reload and recovery is
+        // iframe silent auth against the third-party Auth0 domain — which
+        // fails wherever third-party cookies are blocked, forcing a full
+        // login→callback redirect cycle per reload and per 2h token expiry.
+        // Requires allow_offline_access on the Auth0 resource server (set on
+        // both tenants 2026-08-22) and rotating refresh tokens on the SPA
+        // client (already the config in both tenants).
+        useRefreshTokens
+        cacheLocation="localstorage"
       >
       <AuthProvider>
         <OrgProvider>
