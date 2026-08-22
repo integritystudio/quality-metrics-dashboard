@@ -14,3 +14,12 @@ export const AUTH0_LOGIN_PARAMS = {
   audience: AUTH0_AUDIENCE,
   redirect_uri: AUTH0_CALLBACK_URI,
 } as const;
+
+/**
+ * Validate a post-login return path. Only same-origin relative paths pass;
+ * anything else ('//host', 'https://…', empty) falls back to '/' so a
+ * crafted ?redirect= or appState.returnTo can never send the user off-site.
+ */
+export function safeReturnTo(path: string | null | undefined): string {
+  return path && path.startsWith('/') && !path.startsWith('//') ? path : '/';
+}

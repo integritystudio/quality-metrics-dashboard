@@ -7,7 +7,7 @@ import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { OrgProvider } from './contexts/OrgContext.js';
 import { OrgSwitcher } from './components/OrgSwitcher.js';
-import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE, AUTH0_CALLBACK_URI, AUTH0_LOGIN_PARAMS } from './lib/auth0.js';
+import { Auth0Provider, useAuth0, AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_AUDIENCE, AUTH0_CALLBACK_URI, AUTH0_LOGIN_PARAMS, safeReturnTo } from './lib/auth0.js';
 import { RequireAuth } from './components/RequireAuth.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { HealthOverview } from './components/HealthOverview.js';
@@ -309,17 +309,40 @@ function GlobalShortcuts({ setPeriod, navigate }: {
 }
 
 function CallbackHandler() {
-  const { isLoading, isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isLoading, isAuthenticated, loginWithRedirect, error } = useAuth0();
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (isLoading) return;
+    // An Auth0 error (access_denied, user cancelled, …) leaves
+    // isAuthenticated false; auto-retrying here bounced the browser between
+    // /callback and Auth0 forever. Errors render the retry UI below instead.
+    if (isLoading || error) return;
     if (isAuthenticated) {
+      // Fallback for direct /callback visits; the post-login deep-link
+      // restore happens in Auth0Provider's onRedirectCallback.
       navigate('/');
     } else {
       void loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS });
     }
-  }, [isLoading, isAuthenticated, loginWithRedirect, navigate]);
+  }, [isLoading, isAuthenticated, error, loginWithRedirect, navigate]);
+
+  if (error) {
+    return (
+      <div className="empty-state">
+        <h2>Sign-in failed</h2>
+        <p>{error.message}</p>
+        <p>
+          <button
+            type="button"
+            className="btn-xs"
+            onClick={() => void loginWithRedirect({ authorizationParams: AUTH0_LOGIN_PARAMS })}
+          >
+            Try again
+          </button>
+        </p>
+      </div>
+    );
+  }
 
   return <div className="auth-loading" role="status" aria-label="Loading" />;
 }
@@ -330,9 +353,17 @@ export function App() {
   const [period, setPeriod] = useState<Period>('30d');
   const [location, navigate] = useLocation();
 
+  // Restore the deep link LoginPage carried through Auth0 as
+  // appState.returnTo; without this the code exchange always landed on '/'.
+  const onRedirectCallback = useCallback(
+    (appState?: { returnTo?: string }) => navigate(safeReturnTo(appState?.returnTo)),
+    [navigate],
+  );
+
   return (
     <Router base={BASE_PATH}>
       <Auth0Provider
+        onRedirectCallback={onRedirectCallback}
         domain={AUTH0_DOMAIN}
         clientId={AUTH0_CLIENT_ID}
         authorizationParams={{
