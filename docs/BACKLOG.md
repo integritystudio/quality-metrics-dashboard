@@ -33,18 +33,4 @@ To fix:
 3. Remove the `lookup()` helper and the `as string | undefined` assertions — they become
    redundant once index reads type honestly.
 
-## Resolved (pending changelog migration)
-
-- **SYNC-KV-BIGINT** (P2, resolved 2026-08-17): every KV entry value in
-  `scripts/sync-to-kv.ts` now serializes through `toKVValue` (`JSON.stringify(jsonSafe(...))`),
-  converting the backend's `bigint` timestamps (`startTimeUnixNano`, `endTimeUnixNano`,
-  `EvaluationResult.timestamp`) to their decimal-string wire form — the same conversion the
-  API routes apply, and one `timestampToMs` accepts on the read side. `CloudBackend` was left
-  untouched (its `bigint` fields are a typed contract with other consumers). The trace-entry
-  loop is extracted as `buildTraceEntries` and covered by bigint-fixture tests in
-  `scripts/__tests__/sync-to-kv.test.ts`.
-- **DERIVE-EVAL-LINT-STRINGIFY** (P4, resolved 2026-08-17): fixed by commit `7eac08f`
-  ("refactor(scripts): refactor derive-evaluations") — attribute reads narrowed through a
-  typed accessor; `npm run lint` is clean.
-
-Completed items migrated to [docs/changelog/](changelog/) — most recently [v3.0.6](changelog/3.0.6/CHANGELOG.md) (2026-07-13).
+Completed items migrated to [docs/changelog/](changelog/) — most recently [v3.0.7](changelog/3.0.7/CHANGELOG.md) (2026-08-17).
