@@ -27,7 +27,11 @@ export default defineConfig(({ command, mode }) => {
           manualChunks: (id) => {
             if (id.includes('react') && id.includes('react-dom')) return 'react';
             if (id.includes('@tanstack/react-query')) return 'query';
-            if (id.includes('@xyflow') || id.includes('elkjs')) return 'workflow-viz';
+            // No forced chunk for @xyflow/elkjs: WorkflowPage is the sole
+            // consumer and is lazy, so they land in its async chunk. Forcing
+            // them into a named chunk pulled shared modules in with them,
+            // which made the entry import the chunk statically — 1.6 MB of
+            // modulepreload plus a render-blocking stylesheet on first paint.
           },
         },
       },
