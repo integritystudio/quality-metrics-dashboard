@@ -19,18 +19,19 @@ reaches `../dist`, and errors surfaced in parent quality/judge/audit modules —
 `qfe-correlation.ts` alone had 27). Fixing those belongs to the parent observability-toolkit,
 not this repo, so parity is a cross-repo pass, not a one-line config change.
 
-Interim state (2026-08-17): `scripts/sync-to-kv.ts` carries a local
-`lookup<V>(rec, key): V | undefined` helper routing the previously-flagged index reads
-(`filterChanged`, `computeSpanLatency`, agent/eval accumulators, meta-key hash checks) so the
-guards are justified by honest types. `import.meta.dirname` uses are asserted
-`as string | undefined` (`SCRIPT_DIR` in sync-to-kv, local const in `backtest-degradation.ts`)
-because a plain annotation gets flow-narrowed back to `string`.
+Interim state (2026-08-22): the previously-flagged index reads in `scripts/sync-to-kv.ts` no
+longer go through `Record` indexing at all — the sync state is a `Map<string, KvSyncEntry>`
+(`loadSyncState`/`saveSyncState` convert at the file boundary) and the span/agent/eval
+accumulators use `d3-array` `rollup`, so reads are honestly `V | undefined` without a
+helper. `import.meta.dirname` goes through `importMetaDirname()`
+(`src/lib/dashboard-file-utils.ts`), a runtime `typeof` check rather than an
+`as string | undefined` assertion. Neither change depends on the flag, so nothing here needs
+unwinding when parity lands.
 
 To fix:
 1. Bring the parent repo's `src/lib/**` clean under `noUncheckedIndexedAccess` (its own pass).
 2. Add the flag to `tsconfig.scripts.json`; fix the remaining `scripts/**` errors
-   (~25 in `sync-to-kv.ts`, ~12 in `derive-evaluations.ts`, plus script tests at the time).
-3. Remove the `lookup()` helper and the `as string | undefined` assertions — they become
-   redundant once index reads type honestly.
+   (`derive-evaluations.ts` and script tests at the time; `sync-to-kv.ts`'s count will be
+   lower than the ~25 originally measured after the 2026-08-22 change).
 
 Completed items migrated to [docs/changelog/](changelog/) — most recently [v3.0.7](changelog/3.0.7/CHANGELOG.md) (2026-08-17).
