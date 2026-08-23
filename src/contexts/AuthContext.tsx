@@ -96,15 +96,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const jwt = await getAccessToken().catch(() => null);
       if (jwt) void fetch(`${API_BASE}/api/logout`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}` } }).catch(() => undefined);
     }
-    // Clear the local session whether or not Auth0 logout succeeds — a
-    // failed redirect must not leave the UI acting signed-in. On success the
-    // page navigates away; on failure the rejection propagates to the caller
-    // (Layout re-enables its button) after the session is already cleared.
-    try {
-      await logout({ logoutParams: { returnTo: window.location.origin } });
-    } finally {
-      setSession(null);
-    }
+    // Deliberately NO setSession(null) here. logout() resolves after CALLING
+    // window.location.assign, while the page is still alive — clearing the
+    // session at that point re-renders RequireAuth → /login, whose auto
+    // loginWithRedirect issues a second navigation that stomps the pending
+    // /v2/logout one; Auth0's still-live session then silently re-authenticates
+    // and the user lands back signed-in. On success the page unloads and takes
+    // all local state with it; on failure the rejection propagates so Layout
+    // can re-enable its button and the user retries.
+    await logout({ logoutParams: { returnTo: window.location.origin } });
   }, [session, logout, getAccessToken]);
 
   return (

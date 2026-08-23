@@ -175,5 +175,11 @@ describe('AuthContext: signOut', () => {
     });
 
     expect(mockLogout).toHaveBeenCalledWith({ logoutParams: { returnTo: window.location.origin } });
+    // Regression: the local session must NOT be cleared while the /v2/logout
+    // navigation is pending — clearing it re-renders RequireAuth → /login,
+    // whose auto loginWithRedirect stomps the logout navigation and Auth0's
+    // still-live session silently signs the user back in. The real page
+    // unload is what discards local state on success.
+    expect(scope.getByTestId('email').textContent).toBe('user@test.com');
   });
 });
