@@ -572,6 +572,17 @@ body {
   justify-content: space-between;
   margin-bottom: var(--space-6);
 }
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.logout-btn {
+  color: var(--text-secondary);
+}
+.logout-btn:hover {
+  color: var(--text-primary);
+}
 .header h1 {
   font-size: var(--font-size-xl);
   font-weight: var(--bold);
