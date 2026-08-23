@@ -583,6 +583,10 @@ body {
 .logout-btn:hover {
   color: var(--text-primary);
 }
+.logout-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .header h1 {
   font-size: var(--font-size-xl);
   font-weight: var(--bold);

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import type { Period } from '../types.js';
 import { ShortcutOverlay } from './ShortcutOverlay.js';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -15,6 +15,13 @@ export function Layout({
   children: ReactNode;
 }) {
   const { signOut } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  // On success Auth0 redirects away, so the flag only needs resetting on
+  // failure — otherwise the button would re-enable mid-redirect.
+  const handleLogout = useCallback(() => {
+    setIsLoggingOut(true);
+    void signOut().catch(() => setIsLoggingOut(false));
+  }, [signOut]);
   return (
     <div className="dashboard-container">
       <div className="header flex-center">
@@ -31,8 +38,8 @@ export function Layout({
               </button>
             ))}
           </div>
-          <button className="btn-xs logout-btn" onClick={() => void signOut()}>
-            Log out
+          <button className="btn-xs logout-btn" disabled={isLoggingOut} onClick={handleLogout}>
+            {isLoggingOut ? 'Logging out…' : 'Log out'}
           </button>
         </div>
       </div>
