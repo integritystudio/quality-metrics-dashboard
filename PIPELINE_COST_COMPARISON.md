@@ -109,6 +109,57 @@ D1 `evaluations`.
   machine; a Workers invocation is capped at 1000 subrequests and 30 s CPU
   (configurable to 5 min), so batching through Queues is required, not optional.
 
+### E. B + Agent-as-Judge instead of LLM-as-Judge, as a Worker job
+
+`src/lib/agent-judge/` (`agent-as-judge.ts`, `agent-judge-classes.ts`,
+`agent-judge-consensus.ts`, `agent-judge-verification.ts`) is a separate
+evaluation framework from `llm-as-judge.ts`. It is pure TS with no Node-only
+imports (`fast-deep-equal` is the only non-relative dependency), so it runs in
+a Worker with no porting work — unlike `derive-evaluations.ts` and
+`judge-evaluations.ts`, it needs no rewrite, only wiring. It is not currently
+called from anywhere (`src/server.ts`, `src/tools/`, and the dashboard scripts
+have no references) — the estimate below is for building the wiring, not
+replacing an existing call site.
+
+**What actually costs money is the wiring, not the framework.** The
+scaffolding functions (`scoreStep`, `verifyToolCalls`, `analyzeTrajectory`,
+`aggregateStepScores`, `calculateVariance`/`calculateMedian`) are pure
+rule-based code — free, same as `derive-evaluations.ts` today. Every LLM call
+comes from a function the caller injects: `ProceduralJudge`'s per-stage
+`evaluate`, `ReactiveJudge`'s `specialists`/`deepDiveSpecialists`, or
+`collectiveConsensus`'s `judges[].evaluate`. Cost depends entirely on which of
+these three shapes replaces `judge-evaluations.ts`'s one-G-Eval-call-per-metric
+pattern:
+
+| Shape | LLM calls per turn vs. today | 30-day Anthropic cost (full coverage, Haiku) |
+|---|---|---|
+| `ProceduralJudge`, one stage per metric (closest parity to today) | ~1× — same call count, +10–20% input tokens for the accumulating `context` object passed into later stages | **~$220–230/mo** (vs. $199 today) |
+| `ReactiveJudge` (router + specialists, no deep dive) | ~1–2× — a router call per turn plus one call per routed specialist | **~$250–400/mo** |
+| `collectiveConsensus`, N judges × R rounds per metric — the reason to pick this framework over a single G-Eval call | N×R — capped at `MAX_CONCURRENT_EVALUATORS=10` × `MAX_CONSENSUS_ROUNDS=5` = 50×, but a workable deployment (3 judges, 2 rounds to check `DEFAULT_CONVERGENCE_THRESHOLD=0.1`) is ~6× | **~$1,200/mo** at 3×2; **~$3,000/mo** at 5×3; **~$9,950/mo** at the 10×5 ceiling |
+
+Rounds run concurrently within a round (`Promise.allSettled`) but sequentially
+across rounds, so consensus also multiplies latency, not just cost: 2–3
+sequential rounds of Haiku calls is several seconds per metric per turn. That
+rules out running consensus synchronously inside a request-handling Worker —
+it has to be a Queue consumer or Workflow step, same shape as approach D's
+judge, since Cloudflare bills Worker CPU time, not wall-clock time spent
+waiting on the Anthropic API, but a single invocation is still capped at 1000
+subrequests and a bounded wall-clock duration.
+
+- Engineering: B + wiring one shape into a Worker/Queue consumer — **3–5 d**
+  for `ProceduralJudge` parity (same call graph as today, new host), **5–8 d**
+  for consensus (needs the sequential-round Queue/Workflow shape, plus
+  double the D1 write volume from per-judge-per-round score records if those
+  are persisted individually)
+- Recurring: Cloudflare unchanged from B (~$5/mo — LLM calls are I/O, not
+  CPU, regardless of shape); Anthropic per the table above
+- The only shape worth the switch is consensus (parity mode is llm-as-judge
+  with extra steps, at extra cost); consensus buys score reliability
+  (variance-based convergence) at a **6–50×** multiple of the $199/mo LLM-as-
+  Judge baseline, entirely independent of whether it runs on a Worker or a
+  laptop — moving it to a Worker changes engineering effort and content
+  exposure, not the per-evaluation Anthropic bill.
+
 ## LLM spend (the only material dollar cost)
 
 `judge-evaluations.ts --dry-run` (2026-08-22): 11,639 turns → 51,589 evals,
@@ -124,7 +175,9 @@ optional — nothing in the cloud path requires past LLM scores.
 | A. Local job + bridge | 2.5–3.5 d | $0–200/mo | 3–7 / 7 | Yes — cron on laptop | No |
 | B. Derive Worker + Workflow | 6–9 d | ~$5/mo | 3 / 7 | None | No |
 | C. B + ship Stop-hook judge | 7–11 d | ~$5 + ≤$15/mo | 7 / 7 (sampled) | Hook only | No |
-| D. B + cloud judge | 10–15 d | ~$5 + $15–200/mo | 7 / 7 | None | Yes (truncated, redacted) |
+| D. B + cloud judge (LLM-as-Judge) | 10–15 d | ~$5 + $15–200/mo | 7 / 7 | None | Yes (truncated, redacted) |
+| E. B + Agent-as-Judge Worker (parity mode) | 9–14 d | ~$5 + $220–400/mo | 7 / 7 | None | Yes (same as D) |
+| E. B + Agent-as-Judge Worker (consensus mode) | 11–17 d | ~$5 + $1,200–9,950/mo | 7 / 7, higher confidence | None | Yes (same as D) |
 
 All rows include the 1-day shipping-recovery prerequisite.
 
@@ -134,7 +187,12 @@ C, built in the order 0 → derive Worker → Workflow port → shipper `evaluat
 signal. B on its own gets 3 metrics live with no LLM spend; the final step adds
 the LLM metrics at a code-bounded cost. Choose D only if "no local component"
 is a hard requirement, since it costs ~4 extra days and a new privacy surface
-for the same scores.
+for the same scores. Agent-as-Judge (E) is not a cheaper or simpler path to
+"in the cloud" — it costs the same engineering as D plus wiring effort, and in
+parity mode is strictly more expensive than D for the same seven metrics.
+It is worth choosing only for its actual value proposition, consensus-based
+score reliability, and only if that reliability is worth 6–50× today's LLM
+spend.
 
 ## Cloudflare pricing assumptions
 
