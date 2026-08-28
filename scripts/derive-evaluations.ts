@@ -135,7 +135,7 @@ const sessionTasks = new Map<string, SessionTaskData>();
 export const RULE_EVALUATOR: EvaluatorType = 'rule';
 export const TASK_COMPLETION_EVAL_NAME = 'task_completion';
 
-export const STATUS_SCORES: Record<string, number> = {
+export const STATUS_SCORES: { pending: number; in_progress: number; completed: number } = {
   pending: 0.0,
   in_progress: 0.5,
   completed: 1.0,
@@ -261,6 +261,7 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
     if (data.pre === 0) continue;
     const rate = Math.min(data.post / data.pre, 1.0);
     const lastSpan = data.spans[data.spans.length - 1];
+    if (!lastSpan) continue;
     const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
     evals.push({
@@ -298,6 +299,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     for (let i = 1; i < data.agentSequence.length; i++) {
       const prev = data.agentSequence[i - 1];
       const curr = data.agentSequence[i];
+      if (!curr || !prev) continue;
       if (curr.agentName !== prev.agentName) {
         sum += curr.score;
         count++;
@@ -309,7 +311,9 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     if (count === 0) continue;
 
     const avgScore = sum / count;
-    const lastSpan = data.agentSequence[data.agentSequence.length - 1].span;
+    const lastSequenceEntry = data.agentSequence[data.agentSequence.length - 1];
+    if (!lastSequenceEntry) continue;
+    const lastSpan = lastSequenceEntry.span;
     const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
     evals.push({
@@ -467,8 +471,8 @@ function main(): void {
   // and persist to .calibration-state.json for the dashboard API to consume.
   const scoresByMetric: Record<string, number[]> = {};
   for (const ev of allEvals) {
-    scoresByMetric[ev.evaluationName] ??= [];
-    if (Number.isFinite(ev.scoreValue)) scoresByMetric[ev.evaluationName].push(ev.scoreValue);
+    const metricScores = scoresByMetric[ev.evaluationName] ??= [];
+    if (Number.isFinite(ev.scoreValue)) metricScores.push(ev.scoreValue);
   }
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
