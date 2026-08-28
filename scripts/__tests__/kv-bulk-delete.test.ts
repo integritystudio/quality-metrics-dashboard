@@ -51,7 +51,7 @@ describe('kvBulkDelete: batch file content', () => {
     kvBulkDelete(keys, { dryRun: true });
 
     expect(vi.mocked(writeFileSync)).toHaveBeenCalledOnce();
-    const writtenContent = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    const writtenContent = vi.mocked(writeFileSync).mock.calls[0]![1] as string;
     expect(JSON.parse(writtenContent)).toEqual(keys);
   });
 });
@@ -76,8 +76,8 @@ describe('kvBulkDelete: wrangler argv', () => {
   it('passes the temp file path as argv[4]', () => {
     kvBulkDelete(['trace:abc']);
 
-    const writtenPath = vi.mocked(writeFileSync).mock.calls[0][0] as string;
-    const argv = vi.mocked(execFileSync).mock.calls[0][1] as string[];
+    const writtenPath = vi.mocked(writeFileSync).mock.calls[0]![0] as string;
+    const argv = vi.mocked(execFileSync).mock.calls[0]![1] as string[];
     expect(argv[4]).toBe(writtenPath);
   });
 });
@@ -164,8 +164,8 @@ describe('kvBulkDelete: batching', () => {
     const keys = Array.from({ length: KV_BATCH_SIZE + remainder }, (_, i) => `trace:${i}`);
     kvBulkDelete(keys);
 
-    const batch1 = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string) as unknown[];
-    const batch2 = JSON.parse(vi.mocked(writeFileSync).mock.calls[1][1] as string) as unknown[];
+    const batch1 = JSON.parse(vi.mocked(writeFileSync).mock.calls[0]![1] as string) as unknown[];
+    const batch2 = JSON.parse(vi.mocked(writeFileSync).mock.calls[1]![1] as string) as unknown[];
     expect(batch1).toHaveLength(KV_BATCH_SIZE);
     expect(batch2).toHaveLength(remainder);
   });
