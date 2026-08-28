@@ -81,7 +81,7 @@ describe('buildCalibrationEntry', () => {
     // sampleSize and window metadata must NOT be on the distribution objects.
     // Asserting the exact key set rather than probing two names: it also catches
     // any other CalibrationState field that starts leaking through.
-    expect(Object.keys(response.distributions.relevance).sort())
+    expect(Object.keys(response.distributions.relevance!).sort())
       .toEqual(['p10', 'p25', 'p50', 'p75', 'p90']);
   });
 
@@ -271,18 +271,18 @@ describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
       `evaluations:trace:${TRACE_ID}`,
       `trace:${TRACE_ID}`,
     ]);
-    const trace = JSON.parse(entries[1].value) as {
+    const trace = JSON.parse(entries[1]!.value) as {
       traceId: string;
       spans: Array<{ startTimeUnixNano: string; endTimeUnixNano: string }>;
       evaluations: Array<{ timestamp: string }>;
     };
     // bigints land as their decimal-string wire form, which timestampToMs accepts
-    expect(trace.spans[0].startTimeUnixNano).toBe('1755450000000000000');
-    expect(trace.spans[0].endTimeUnixNano).toBe('1755450001000000000');
-    expect(trace.evaluations[0].timestamp).toBe('1755450000500000000');
+    expect(trace.spans[0]!.startTimeUnixNano).toBe('1755450000000000000');
+    expect(trace.spans[0]!.endTimeUnixNano).toBe('1755450001000000000');
+    expect(trace.evaluations[0]!.timestamp).toBe('1755450000500000000');
 
-    const evalsOnly = JSON.parse(entries[0].value) as { evaluations: Array<{ timestamp: string }> };
-    expect(evalsOnly.evaluations[0].timestamp).toBe('1755450000500000000');
+    const evalsOnly = JSON.parse(entries[0]!.value) as { evaluations: Array<{ timestamp: string }> };
+    expect(evalsOnly.evaluations[0]!.timestamp).toBe('1755450000500000000');
   });
 
   it('toKVValue converts nested bigints anywhere in an entry value', async () => {
