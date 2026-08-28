@@ -3,48 +3,56 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import react from 'eslint-plugin-react';
 
+const noUnusedVarsRule = ['error', {
+  argsIgnorePattern: '^_',
+  varsIgnorePattern: '^_',
+  destructuredArrayIgnorePattern: '^_',
+  caughtErrorsIgnorePattern: '^_',
+}];
+
+// Type-safety rules enforced at error level for both src/worker and scripts/.
+const typeSafetyRules = {
+  '@typescript-eslint/no-unused-vars': noUnusedVarsRule,
+  '@typescript-eslint/no-explicit-any': 'error',
+  '@typescript-eslint/no-unsafe-assignment': 'error',
+  '@typescript-eslint/no-unsafe-argument': 'error',
+  '@typescript-eslint/no-unsafe-return': 'error',
+  '@typescript-eslint/no-unsafe-call': 'error',
+  '@typescript-eslint/no-floating-promises': 'error',
+  '@typescript-eslint/restrict-template-expressions': 'error',
+  '@typescript-eslint/no-misused-promises': 'error',
+  '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+  '@typescript-eslint/prefer-nullish-coalescing': 'error',
+  '@typescript-eslint/prefer-optional-chain': 'error',
+  '@typescript-eslint/no-unnecessary-condition': 'error',
+  '@typescript-eslint/prefer-promise-reject-errors': 'error',
+  '@typescript-eslint/no-invalid-void-type': 'error',
+};
+
+// Relative reach-ins to the parent build output, any plausible depth.
+// Package deep-imports (e.g. @xyflow/react/dist/style.css) stay legal.
+const parentDistGlobs = ['./dist/**', '../dist/**', '../../dist/**', '../../../dist/**', '../../../../dist/**', '../../../../../dist/**'];
+
 export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   // src/ and worker/ files - uses tsconfig.json
   {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts'],
+    plugins: { 'react-hooks': reactHooks, 'react': react },
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts'],
-  },
-  {
-    plugins: { 'react-hooks': reactHooks, 'react': react },
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts'],
     rules: {
       ...reactHooks.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': ['error', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        destructuredArrayIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-      }],
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unsafe-assignment': 'error',
-      '@typescript-eslint/no-unsafe-return': 'error',
-      '@typescript-eslint/no-unsafe-argument': 'error',
-      '@typescript-eslint/no-unsafe-call': 'error',
-      '@typescript-eslint/restrict-template-expressions': 'error',
+      ...typeSafetyRules,
       '@typescript-eslint/restrict-plus-operands': 'error',
-      '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
-      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
-      '@typescript-eslint/prefer-nullish-coalescing': 'error',
-      '@typescript-eslint/prefer-optional-chain': 'error',
-      '@typescript-eslint/no-unnecessary-condition': 'error',
-      '@typescript-eslint/prefer-promise-reject-errors': 'error',
-      '@typescript-eslint/no-invalid-void-type': 'error',
       'react/jsx-no-comment-textnodes': 'error',
       'react/no-array-index-key': 'error',
       'react/no-children-prop': 'error',
@@ -73,36 +81,18 @@ export default tseslint.config(
   },
   // scripts/ files - uses tsconfig.scripts.json
   {
+    files: ['scripts/**/*.ts'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.scripts.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    files: ['scripts/**/*.ts'],
-  },
-  {
-    plugins: { 'react-hooks': reactHooks },
-    files: ['scripts/**/*.ts'],
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        destructuredArrayIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-      }],
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unsafe-assignment': 'error',
-      '@typescript-eslint/no-unsafe-argument': 'error',
+      ...typeSafetyRules,
       '@typescript-eslint/no-unsafe-member-access': 'error',
-      '@typescript-eslint/no-unsafe-return': 'error',
-      '@typescript-eslint/no-unsafe-call': 'error',
-      '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-base-to-string': 'error',
-      '@typescript-eslint/restrict-template-expressions': 'error',
       '@typescript-eslint/require-await': 'error',
-      '@typescript-eslint/no-misused-promises': 'error',
-      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
       '@typescript-eslint/prefer-nullish-coalescing': ['error', {
         // `foo?.endsWith(x) || foo?.endsWith(y)` is boolean | undefined — a
         // `??` fix would stop at a valid `false` instead of checking the
@@ -110,10 +100,6 @@ export default tseslint.config(
         // scripts/{backtest-degradation,derive-evaluations,judge-evaluations,sync-to-kv}.ts.
         ignorePrimitives: { boolean: true },
       }],
-      '@typescript-eslint/prefer-optional-chain': 'error',
-      '@typescript-eslint/no-unnecessary-condition': 'error',
-      '@typescript-eslint/prefer-promise-reject-errors': 'error',
-      '@typescript-eslint/no-invalid-void-type': 'error',
     },
   },
   // Parent-boundary enforcement (DASH-DIST-IMPORT). The parent
@@ -126,9 +112,7 @@ export default tseslint.config(
       'no-restricted-imports': ['error', {
         patterns: [
           {
-            // Relative reach-ins to the parent build output, any plausible depth.
-            // Package deep-imports (e.g. @xyflow/react/dist/style.css) stay legal.
-            group: ['./dist/**', '../dist/**', '../../dist/**', '../../../dist/**', '../../../../dist/**', '../../../../../dist/**'],
+            group: parentDistGlobs,
             message: 'Do not import the parent build output by relative path. Use src/api/parent/* (runtime code) or src/types.ts (types); scripts may use @parent directly.',
           },
           {
@@ -151,7 +135,7 @@ export default tseslint.config(
       'no-restricted-imports': ['error', {
         patterns: [
           {
-            group: ['./dist/**', '../dist/**', '../../dist/**', '../../../dist/**', '../../../../dist/**', '../../../../../dist/**'],
+            group: parentDistGlobs,
             message: 'Do not import the parent build output by relative path — use the @parent alias.',
           },
         ],
