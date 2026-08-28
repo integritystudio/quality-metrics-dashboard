@@ -96,7 +96,7 @@ describe('pipeline contract: derive → judge', () => {
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
 
-    const [ev] = evals;
+    const ev = evals[0]!;
     // Convert to OTel format (same function used by derive-evaluations main)
     const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
 
@@ -121,7 +121,7 @@ describe('pipeline contract: derive → judge', () => {
     }));
 
     const evals = deriveTaskCompletionPerSession();
-    const [ev] = evals;
+    const ev = evals[0]!;
 
     // Judge dedup key format: `${sessionId}:${evaluationName}:${turnKey}`
     // Verify all fields needed to construct dedup keys are present
@@ -321,8 +321,8 @@ describe('pipeline contract: judge → sync-to-kv', () => {
 
     expect(run1.length).toBe(run2.length);
     for (let i = 0; i < run1.length; i++) {
-      expect(run1[i].scoreValue).toBe(run2[i].scoreValue);
-      expect(run1[i].evaluationName).toBe(run2[i].evaluationName);
+      expect(run1[i]!.scoreValue).toBe(run2[i]!.scoreValue);
+      expect(run1[i]!.evaluationName).toBe(run2[i]!.evaluationName);
     }
   });
 });
@@ -405,7 +405,7 @@ describe('full pipeline: derive + judge write/read cycle', () => {
       return attrs['gen_ai.evaluation.name'] === 'task_completion';
     });
     expect(taskCompletionRecords).toHaveLength(1);
-    const tcAttrs = taskCompletionRecords[0].attributes as Record<string, unknown>;
+    const tcAttrs = taskCompletionRecords[0]!.attributes as Record<string, unknown>;
     expect(tcAttrs['gen_ai.evaluation.score.value']).toBe(1.0);
 
     // Verify LLM judge evals are in the combined output
