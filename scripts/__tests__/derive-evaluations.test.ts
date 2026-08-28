@@ -106,7 +106,7 @@ describe('trackTaskActivity', () => {
     const data = sessionTasks.get('sess-abc')!;
     expect(data.creates).toBe(1);
     expect(data.tasks.size).toBe(1);
-    const task = [...data.tasks.values()][0];
+    const task = [...data.tasks.values()][0]!;
     expect(task.statuses.has('pending')).toBe(true);
   });
 
@@ -264,9 +264,9 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0].scoreValue).toBe(1.0);
-    expect(evals[0].evaluationName).toBe('task_completion');
-    expect(evals[0].explanation).toContain('1 completed');
+    expect(evals[0]!.scoreValue).toBe(1.0);
+    expect(evals[0]!.evaluationName).toBe('task_completion');
+    expect(evals[0]!.explanation).toContain('1 completed');
   });
 
   it('scores mixed session as average', () => {
@@ -288,7 +288,7 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0].scoreValue).toBe(0.75); // (1.0 + 0.5) / 2
+    expect(evals[0]!.scoreValue).toBe(0.75); // (1.0 + 0.5) / 2
   });
 
   it('uses ratio fallback for old data without status attributes', () => {
@@ -305,8 +305,8 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0].scoreValue).toBe(1.0); // 2 updates / (1 create * 2) = 1.0
-    expect(evals[0].explanation).toContain('ratio fallback');
+    expect(evals[0]!.scoreValue).toBe(1.0); // 2 updates / (1 create * 2) = 1.0
+    expect(evals[0]!.explanation).toContain('ratio fallback');
   });
 
   it('skips sessions with no creates and no tasks', () => {
@@ -329,8 +329,8 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0].scoreValue).toBe(0.0);
-    expect(evals[0].explanation).toContain('1 pending');
+    expect(evals[0]!.scoreValue).toBe(0.0);
+    expect(evals[0]!.explanation).toContain('1 pending');
   });
 
   it('handles multiple sessions independently', () => {
