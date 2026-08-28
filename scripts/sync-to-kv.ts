@@ -89,7 +89,10 @@ function resolveNamespaceId(): string {
   if (existsSync(tomlPath)) {
     const toml = readFileSync(tomlPath, 'utf8');
     const match = toml.match(/\[\[kv_namespaces\]\][\s\S]*?^id\s*=\s*"([^"]+)"/m);
-    if (match) return match[1];
+    if (match) {
+      const id = match[1];
+      if (id) return id;
+    }
   }
   throw new Error('KV_NAMESPACE_ID env var not set and could not resolve from wrangler.toml');
 }
@@ -97,7 +100,7 @@ const NAMESPACE_ID = resolveNamespaceId();
 
 function parseIntArg(args: string[], flag: string, defaultValue: number): number {
   const match = args.find(a => a.startsWith(`--${flag}=`));
-  const parsed = match ? parseInt(match.split('=')[1], 10) : defaultValue;
+  const parsed = match ? parseInt(match.split('=')[1] ?? '', 10) : defaultValue;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
@@ -376,6 +379,7 @@ export function prioritizeTraces(
 ): KVEntry[] {
   const now = Date.now();
   const thirtyDaysMs = PERIOD_MS['30d'];
+  if (!thirtyDaysMs) throw new Error('Missing PERIOD_MS entry for 30d');
 
   // each trace has 2 entries: evaluations:trace:X and trace:X
   const traceGroups = new Map<string, KVEntry[]>();
@@ -569,7 +573,7 @@ function computeSpanLatency(spans: SessionSpan[]) {
       avg: +(mean(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
       p50: +(quantileSorted(sorted, LATENCY_P50 / 100) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
       p95: +(quantileSorted(sorted, LATENCY_P95 / 100) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      max: +sorted[sorted.length - 1].toFixed(LATENCY_DISPLAY_PRECISION),
+      max: +(sorted[sorted.length - 1] ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
     };
   }
   return { spanBreakdown, hookLatency };
@@ -688,8 +692,8 @@ function computeEvalBreakdown(evaluations: EvaluationResult[]) {
       name,
       count: d.count,
       avg: avg != null ? +avg.toFixed(SCORE_DISPLAY_PRECISION) : null,
-      min: sorted.length > 0 ? +sorted[0].toFixed(SCORE_DISPLAY_PRECISION) : null,
-      max: sorted.length > 0 ? +sorted[sorted.length - 1].toFixed(SCORE_DISPLAY_PRECISION) : null,
+      min: sorted.length > 0 ? +(sorted[0] ?? 0).toFixed(SCORE_DISPLAY_PRECISION) : null,
+      max: sorted.length > 0 ? +(sorted[sorted.length - 1] ?? 0).toFixed(SCORE_DISPLAY_PRECISION) : null,
     };
   });
 }
@@ -724,10 +728,10 @@ function computeSessionDetail(
     .map(s => {
       const raw = spanAttr(s, 'integritystudio.git.command', 'string') ?? '';
       const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
-      const files = filesMatch ? filesMatch[1].trim() : '';
+      const files = filesMatch ? (filesMatch[1] ?? '').trim() : '';
       const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
-      const fullMessage = msgMatch ? msgMatch[1] : '';
-      const subject = fullMessage ? fullMessage.split('\n')[0].trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
+      const fullMessage = msgMatch ? msgMatch[1] ?? '' : '';
+      const subject = fullMessage ? (fullMessage.split('\n')[0] ?? '').trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS);
       const body = fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '';
       return { subject, body, files };
     });
@@ -863,10 +867,11 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
 
   const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
 
-  const activePeriods = PERIODS.filter(p => PERIOD_MS[p] <= MAX_DAYS_MS);
+  const activePeriods = PERIODS.filter(p => (PERIOD_MS[p] ?? Infinity) <= MAX_DAYS_MS);
   const periodQueryResults = await Promise.all(
     activePeriods.map(async period => {
       const ms = PERIOD_MS[period];
+      if (ms === undefined) throw new Error(`Missing PERIOD_MS entry for ${period}`);
       const start = new Date(now.getTime() - ms);
       const dates = { start: start.toISOString(), end: now.toISOString() };
       const evals = await backend.queryEvaluations({
@@ -927,8 +932,10 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     });
   }
 
-  const weekAgo = new Date(now.getTime() - PERIOD_MS['7d']);
-  const twoWeeksAgo = new Date(now.getTime() - 2 * PERIOD_MS['7d']);
+  const sevenDayMs = PERIOD_MS['7d'];
+  if (!sevenDayMs) throw new Error('Missing PERIOD_MS entry for 7d');
+  const weekAgo = new Date(now.getTime() - sevenDayMs);
+  const twoWeeksAgo = new Date(now.getTime() - 2 * sevenDayMs);
   const metricNames = Object.keys(QUALITY_METRICS);
 
   const metricDetailEntries = (await Promise.all(
@@ -1016,6 +1023,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   const degradationBuckets = new Map<string, Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>>>();
   for (const period of activePeriods) {
     const ms = PERIOD_MS[period];
+    if (ms === undefined) continue;
     const cached = groupedByPeriod.get(period);
     if (!cached) continue;
     const start = new Date(now.getTime() - ms);
@@ -1035,9 +1043,10 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       for (const ev of evaluations) {
         const ts = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
         const idx = Math.min(Math.floor((ts - start.getTime()) / bucketMs), TREND_BUCKETS - 1);
-        if (idx >= 0 && isValidScore(ev.scoreValue)) {
-          timeBuckets[idx].scores.push(ev.scoreValue);
-          timeBuckets[idx].evals.push(ev);
+        const tb = timeBuckets[idx];
+        if (idx >= 0 && tb && isValidScore(ev.scoreValue)) {
+          tb.scores.push(ev.scoreValue);
+          tb.evals.push(ev);
         }
       }
 
@@ -1056,8 +1065,9 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
         const { scores } = bucket;
         const percentiles = computePercentileDistribution(scores);
         const avg = mean(scores);
-        const previousValues = (idx > 0 && timeBuckets[idx - 1].scores.length > 0)
-          ? computeAggregations(timeBuckets[idx - 1].scores, config.aggregations)
+        const prevBucket = idx > 0 ? timeBuckets[idx - 1] : undefined;
+        const previousValues = (prevBucket && prevBucket.scores.length > 0)
+          ? computeAggregations(prevBucket.scores, config.aggregations)
           : undefined;
         const detail = scores.length > 0
           ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
@@ -1104,6 +1114,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
     const ms = PERIOD_MS[period];
+    if (ms === undefined) continue;
     const windowStart = new Date(now.getTime() - ms);
     const window = { startDate: windowStart.toISOString(), endDate: now.toISOString() };
     const reports = computeRollingDegradationSignals(metricBuckets, metricNames, degradationState, window);
@@ -1232,11 +1243,11 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
         // Evict oldest to keep the most recent sessions in the buffer
         let oldestIdx = 0;
         for (let i = 1; i < acc.sessions.length; i++) {
-          const d = acc.sessions[i].date;
-          const oldest = acc.sessions[oldestIdx].date;
+          const d = acc.sessions[i]?.date;
+          const oldest = acc.sessions[oldestIdx]?.date;
           if (!oldest || (d && d < oldest)) oldestIdx = i;
         }
-        const oldestDate = acc.sessions[oldestIdx].date;
+        const oldestDate = acc.sessions[oldestIdx]?.date;
         if (!oldestDate || sessionDate > oldestDate) {
           acc.sessions[oldestIdx] = entry;
         }
