@@ -894,7 +894,7 @@ async function main() {
   const limitIdx = args.indexOf('--limit');
   let limit = Infinity;
   if (limitIdx !== -1) {
-    const parsed = parseInt(args[limitIdx + 1], 10);
+    const parsed = parseInt(args[limitIdx + 1] ?? '', 10);
     if (isNaN(parsed) || parsed < 1) {
       console.error('Error: --limit must be a positive integer');
       process.exit(1);
@@ -973,6 +973,7 @@ async function main() {
     }, 0);
     const estOutputTokens = estEvals * 200;
     const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
+    if (!haikuPricing) throw new Error(`No pricing data for model ${HAIKU_MODEL}`);
     const estCost = (estInputTokens / TOKENS_PER_MILLION) * haikuPricing.input
       + (estOutputTokens / TOKENS_PER_MILLION) * haikuPricing.output;
 
