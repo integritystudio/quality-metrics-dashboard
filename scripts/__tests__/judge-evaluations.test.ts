@@ -249,9 +249,9 @@ describe('extractTurns', () => {
     const turns = await extractTurns(info);
 
     expect(turns).toHaveLength(1);
-    expect(turns[0].userText).toBe('Fix the bug');
-    expect(turns[0].assistantText).toBe('I fixed it in auth.ts');
-    expect(turns[0].sessionId).toBe('sess-1');
+    expect(turns[0]!.userText).toBe('Fix the bug');
+    expect(turns[0]!.assistantText).toBe('I fixed it in auth.ts');
+    expect(turns[0]!.sessionId).toBe('sess-1');
   });
 
   it('skips system prompts', async () => {
@@ -318,7 +318,7 @@ describe('extractTurns', () => {
 
     const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(1);
-    expect(turns[0].toolResults).toContain('tool output 1');
+    expect(turns[0]!.toolResults).toContain('tool output 1');
   });
 
   it('clears tool results between turns (M4)', async () => {
@@ -357,8 +357,8 @@ describe('extractTurns', () => {
 
     const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(2);
-    expect(turns[0].toolResults).toContain('tool output from turn 1');
-    expect(turns[1].toolResults).toHaveLength(0); // Should not leak from turn 1
+    expect(turns[0]!.toolResults).toContain('tool output from turn 1');
+    expect(turns[1]!.toolResults).toHaveLength(0); // Should not leak from turn 1
   });
 
   it('skips progress and file-history-snapshot entries', async () => {
@@ -401,8 +401,8 @@ describe('extractTurns', () => {
     ]);
 
     const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns[0].userText.length).toBe(8000);
-    expect(turns[0].assistantText.length).toBe(8000);
+    expect(turns[0]!.userText.length).toBe(8000);
+    expect(turns[0]!.assistantText.length).toBe(8000);
   });
 
   it('handles malformed JSON lines gracefully', async () => {
