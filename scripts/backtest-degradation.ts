@@ -113,8 +113,9 @@ function buildDailyBuckets(
   for (const ev of evaluations) {
     const ts = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
     const idx = Math.floor((ts - startMs) / TIME_MS.DAY);
-    if (idx >= 0 && idx < bucketCount) {
-      buckets[idx].scores.push(ev.scoreValue);
+    const bucket = buckets[idx];
+    if (idx >= 0 && idx < bucketCount && bucket) {
+      bucket.scores.push(ev.scoreValue);
     }
   }
   return buckets;
@@ -126,8 +127,8 @@ type TimeSeriesPoint = {
   baselineStdDev: number;
   coverageGapCount: number;
   totalCoverageCells: number;
-  latencyP95: number;
-  latencyP50: number;
+  latencyP95Seconds: number;
+  latencyP50Seconds: number;
   historicalValues: number[];
 };
 
@@ -157,7 +158,8 @@ function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
     // Extend baseline incrementally: baseline covers first 70% of [0..i]
     const newBaselineEnd = Math.max(1, Math.floor((i + 1) * 0.7));
     while (baselineEnd < newBaselineEnd) {
-      baselineScores.push(...buckets[baselineEnd].scores);
+      const bb = buckets[baselineEnd];
+      if (bb) baselineScores.push(...bb.scores);
       baselineEnd++;
     }
 
@@ -167,8 +169,8 @@ function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
       baselineStdDev: computeStdDev(baselineScores) ?? 0,
       coverageGapCount,
       totalCoverageCells: i + 1,
-      latencyP95: 0,
-      latencyP50: 0,
+      latencyP95Seconds: 0,
+      latencyP50Seconds: 0,
       historicalValues: [...cumulativeScores],
     };
   });
@@ -202,6 +204,7 @@ function printSummaryTable(metricName: string, result: BacktestSweepResult, eval
 
   for (let rank = 0; rank < top5.length; rank++) {
     const r = top5[rank];
+    if (!r) continue;
     const tag = r === currentConfigResult ? ' [prod]' : '';
     console.log(
       `${String(rank + 1).padStart(4)} | ${formatConfig(r.config).padEnd(43)} | ` +
