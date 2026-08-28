@@ -32,7 +32,7 @@ const limitIdx = args.indexOf('--limit');
 let limit: string | undefined;
 if (limitIdx !== -1) {
   const raw = args[limitIdx + 1];
-  const parsed = parseInt(raw, 10);
+  const parsed = parseInt(raw ?? '', 10);
   if (!raw || isNaN(parsed) || parsed < 1) {
     console.error('[populate] Error: --limit requires a positive integer');
     process.exit(1);
