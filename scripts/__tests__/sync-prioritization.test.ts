@@ -58,7 +58,7 @@ describe('prioritizeTraces', () => {
     ]);
 
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
-    const firstId = result[0].key.includes(traceA) ? traceA : traceB;
+    const firstId = result[0]!.key.includes(traceA) ? traceA : traceB;
     expect(firstId).toBe(traceA);
   });
 
@@ -73,7 +73,7 @@ describe('prioritizeTraces', () => {
     ]);
 
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
-    const firstId = result[0].key.includes(traceA) ? traceA : traceB;
+    const firstId = result[0]!.key.includes(traceA) ? traceA : traceB;
     expect(firstId).toBe(traceA);
   });
 
@@ -88,7 +88,7 @@ describe('prioritizeTraces', () => {
     ]);
     // referencedByWorst weight (0.2) pushes traceB above traceA despite lower score priority
     const result = prioritizeTraces(entries, evalsByTrace, new Set([traceB]));
-    const firstId = result[0].key.includes(traceB) ? traceB : traceA;
+    const firstId = result[0]!.key.includes(traceB) ? traceB : traceA;
     expect(firstId).toBe(traceB);
   });
 
@@ -111,7 +111,7 @@ describe('prioritizeTraces', () => {
     // traceA should come first — verify both its entries are consecutive
     const traceAIndices = result.map((e, i) => e.key.includes(traceA) ? i : -1).filter(i => i >= 0);
     expect(traceAIndices).toHaveLength(2);
-    expect(traceAIndices[1] - traceAIndices[0]).toBe(1);
+    expect(traceAIndices[1]! - traceAIndices[0]!).toBe(1);
   });
 
   it('assigns 1.0 worstScore (lowest priority) to traces with no evaluations', () => {
@@ -123,7 +123,7 @@ describe('prioritizeTraces', () => {
     // traceB not in evalsByTrace
 
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
-    const firstId = result[0].key.includes(traceA) ? traceA : traceB;
+    const firstId = result[0]!.key.includes(traceA) ? traceA : traceB;
     expect(firstId).toBe(traceA);
   });
 
