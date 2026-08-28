@@ -4,11 +4,11 @@ Open items from code reviews and deferred work.
 
 ## Open Items
 
-### ✅ `tsconfig.scripts.json` lacks `noUncheckedIndexedAccess` parity with root (SCRIPTS-TSCONFIG-NUIA)
+### ✅ DONE — `tsconfig.scripts.json` lacks `noUncheckedIndexedAccess` parity with root (SCRIPTS-TSCONFIG-NUIA)
 
 **Priority**: P3 | **Source**: session 2026-08-17 (lint cleanup of `no-unnecessary-condition`)
 
-**Status 2026-08-27 — step 1 done, step 2 (this repo) still open.** Root `tsconfig.json` has
+**Status 2026-08-28 — both steps done.** Step 2 (this repo) landed in `733402d` (`noUncheckedIndexedAccess: true` added to `tsconfig.scripts.json`) and `a76f475` (scripts/ type-safety rules promoted from warn to error); `01f1294` followed up deduping shared rules in `eslint.config.mjs`. All 93 errors from the 2026-08-27 re-measurement below are resolved. Root `tsconfig.json` has
 `noUncheckedIndexedAccess: true`; `tsconfig.scripts.json` does not. So under the scripts
 config, record lookups like `state[key]` falsely type as always-present, which made eslint's
 `no-unnecessary-condition` flag **load-bearing runtime guards** as dead code — deleting them
@@ -44,12 +44,13 @@ parent now** — confirms the cross-repo half of the blocker is actually gone, n
 plausibly gone. The `~25` estimate for `sync-to-kv.ts` from the 2026-08-22 interim-state note
 below undercounted; it's 24 in the file itself plus 7 more in its own test file.
 
-To fix (only step 2 remains):
+Both steps now done:
 1. ~~Bring the parent repo's `src/lib/**` clean under `noUncheckedIndexedAccess` (its own
    pass).~~ ✅ done 2026-08-27, see above.
-2. Add the flag to `tsconfig.scripts.json`; fix the remaining `scripts/**` errors (93 across
+2. ~~Add the flag to `tsconfig.scripts.json`; fix the remaining `scripts/**` errors (93 across
    11 files, per the 2026-08-27 re-measurement above — mostly `TS2532`/`TS18048` "possibly
-   undefined", plus a handful of `TS2322`/`TS2345` assignment/argument mismatches).
+   undefined", plus a handful of `TS2322`/`TS2345` assignment/argument mismatches).~~ ✅ done
+   2026-08-28, see status note above.
 
 Interim state (2026-08-22): the previously-flagged index reads in `scripts/sync-to-kv.ts` no
 longer go through `Record` indexing at all — the sync state is a `Map<string, KvSyncEntry>`
