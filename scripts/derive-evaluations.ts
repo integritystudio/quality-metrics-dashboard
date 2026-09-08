@@ -39,7 +39,13 @@ function attrString(value: unknown, fallback = ''): string {
   return fallback;
 }
 
+// Returns NaN rather than throwing on a malformed tuple, so the single caller's
+// Number.isFinite guard (OBP15) is the one place a bad duration is handled. Spans read
+// through localTraceSpanSchema cannot arrive malformed — zod rejects both NaN and a
+// missing tuple — but deriveEvaluationLatency is exported and directly callable, and its
+// contract is to return null on malformed input, never to throw.
 function hrtToSeconds(hrt: [number, number]): number {
+  if (!Array.isArray(hrt)) return NaN;
   return hrt[0] + hrt[1] / 1e9;
 }
 
@@ -86,7 +92,7 @@ function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   };
 }
 
-function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
+export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
   const measurable = [
     'hook:builtin-post-tool',
     'hook:mcp-post-tool',

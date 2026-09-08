@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   trackTaskActivity,
   deriveTaskCompletionPerSession,
+  deriveEvaluationLatency,
   scoreTask,
   sessionTasks,
   STATUS_SCORES,
@@ -353,5 +354,59 @@ describe('deriveTaskCompletionPerSession', () => {
     const sess2 = evals.find(e => e.sessionId === 'sess-2')!;
     expect(sess1.scoreValue).toBe(1.0);
     expect(sess2.scoreValue).toBe(0.0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveEvaluationLatency
+// ---------------------------------------------------------------------------
+
+describe('deriveEvaluationLatency', () => {
+  it('derives a latency record from a well-formed measurable span', () => {
+    const record = deriveEvaluationLatency(makeSpan({
+      name: 'hook:session-start',
+      startTime: [1707400000, 0],
+      duration: [2, 500_000_000],
+    }));
+
+    expect(record).not.toBeNull();
+    expect(record!.evaluationName).toBe('evaluation_latency');
+    expect(record!.scoreValue).toBe(2.5);
+    expect(record!.scoreUnit).toBe('seconds');
+    expect(record!.explanation).toContain('2.5');
+    expect(record!.timestamp).toBe('2024-02-08T13:46:40.000Z');
+  });
+
+  it('returns null for a span whose name is not measurable', () => {
+    expect(deriveEvaluationLatency(makeSpan({ name: 'hook:user-prompt' }))).toBeNull();
+  });
+
+  // OBP15: a malformed span must be skipped, not turned into a record. The three
+  // records this guards against were all hook:session-start with NaN duration, and
+  // were invalid three ways at once — null score, the literal "NaN" in user-facing
+  // explanation text, and a 1970 timestamp.
+  it('returns null when the duration is not finite', () => {
+    expect(deriveEvaluationLatency(makeSpan({
+      name: 'hook:session-start',
+      duration: [NaN, 0],
+    }))).toBeNull();
+  });
+
+  it('returns null when the span carries no duration at all', () => {
+    // A span empty beyond its name. localTraceSpanSchema rejects this shape, so main()
+    // never passes one through — but the function is exported, and returning null is a
+    // better contract for a direct caller than throwing inside hrtToSeconds.
+    const span = makeSpan({ name: 'hook:session-start' });
+    delete (span as Partial<TraceSpan>).duration;
+
+    expect(deriveEvaluationLatency(span)).toBeNull();
+  });
+
+  it('returns null for an epoch-ish startTime rather than dating the record to 1970', () => {
+    expect(deriveEvaluationLatency(makeSpan({
+      name: 'hook:session-start',
+      startTime: [2, 0],
+      duration: [1, 0],
+    }))).toBeNull();
   });
 });
