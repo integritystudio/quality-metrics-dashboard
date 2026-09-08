@@ -97,6 +97,13 @@ function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
   if (!measurable.includes(span.name)) return null;
 
   const durationSec = hrtToSeconds(span.duration);
+  if (!Number.isFinite(durationSec)) return null;
+
+  // Guard malformed startTime — a valid Unix timestamp has seconds > 1e9 (after 2001).
+  // Spans with epoch-ish startTime (e.g. [2, 0]) are empty input spans, not hook runs.
+  const [startSec] = span.startTime;
+  if (startSec < 1_000_000_000) return null;
+
   const attrs = span.attributes;
 
   let hookType: string;
