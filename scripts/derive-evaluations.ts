@@ -24,7 +24,7 @@ import {
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
@@ -87,6 +87,8 @@ function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
     explanation,
     evaluator: RULE_EVALUATOR,
     evaluatorType: RULE_EVALUATOR_TYPE,
+    evaluatorKind: RULE_EVALUATOR_KIND,
+    cohort: NORMAL_COHORT,
     traceId: span.traceId,
     sessionId: attrString(attrs['session.id']),
   };
@@ -126,6 +128,8 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
     explanation: `Hook ${hookType} executed in ${durationSec.toFixed(EVAL_SCORE_PRECISION)}s`,
     evaluator: RULE_EVALUATOR,
     evaluatorType: RULE_EVALUATOR_TYPE,
+    evaluatorKind: RULE_EVALUATOR_KIND,
+    cohort: NORMAL_COHORT,
     traceId: span.traceId,
     sessionId: attrString(attrs['session.id']),
   };
@@ -216,6 +220,8 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         explanation: `Session ${sessionPreview}: ${data.tasks.size} tasks (${parts.join(', ')})`,
         evaluator: RULE_EVALUATOR,
         evaluatorType: RULE_EVALUATOR_TYPE,
+        evaluatorKind: RULE_EVALUATOR_KIND,
+        cohort: NORMAL_COHORT,
         traceId: lastSpan.traceId,
         sessionId,
       });
@@ -231,6 +237,8 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         explanation: `Session ${sessionPreview}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
         evaluator: RULE_EVALUATOR,
         evaluatorType: RULE_EVALUATOR_TYPE,
+        evaluatorKind: RULE_EVALUATOR_KIND,
+        cohort: NORMAL_COHORT,
         traceId: lastSpan.traceId,
         sessionId,
       });
@@ -284,6 +292,8 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
       explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionPreview}`,
       evaluator: RULE_EVALUATOR,
       evaluatorType: RULE_EVALUATOR_TYPE,
+      evaluatorKind: RULE_EVALUATOR_KIND,
+      cohort: NORMAL_COHORT,
       traceId: lastSpan.traceId,
       sessionId,
     });
@@ -337,6 +347,8 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       explanation: `Session ${sessionPreview}: ${count} handoffs across ${distinctAgentCount} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
       evaluator: RULE_EVALUATOR,
       evaluatorType: RULE_EVALUATOR_TYPE,
+      evaluatorKind: RULE_EVALUATOR_KIND,
+      cohort: NORMAL_COHORT,
       traceId: lastSpan.traceId,
       sessionId,
     });

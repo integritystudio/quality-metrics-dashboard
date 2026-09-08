@@ -46,8 +46,11 @@ function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
     evaluationName: 'relevance',
     scoreValue: 0.85,
     explanation: 'Test explanation',
-    evaluator: 'llm-judge',
+    evaluator: 'dashboard:judge-evaluations',
     evaluatorType: 'llm',
+    evaluatorKind: 'llm',
+    cohort: 'normal',
+    judgeModel: 'claude-haiku-4-5-20251001',
     traceId: 'trace-001',
     sessionId: 'abc12345-session',
     ...overrides,
@@ -520,13 +523,17 @@ describe('seedEvaluations', () => {
     expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
   });
 
-  it('sets evaluatorType to seed or canary for seed evals', () => {
+  // OBP16: this used to assert the inverse of the correct behaviour — that a
+  // canary record carries evaluator 'llm'. Both branches hash, so neither may
+  // claim an LLM produced the score; the cohort is what tells them apart.
+  it('marks seed evals by cohort, and never claims an llm produced them', () => {
     const { evals } = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
+    expect(evals.length).toBeGreaterThan(0);
     for (const ev of evals) {
-      expect(['seed', 'canary']).toContain(ev.evaluatorType);
-      // seed records use 'seed' evaluator; canary records use 'llm' evaluator
-      const expectedEvaluator = ev.evaluatorType === 'seed' ? 'seed' : 'llm';
-      expect(ev.evaluator).toBe(expectedEvaluator);
+      expect(['seed', 'canary']).toContain(ev.cohort);
+      expect(ev.evaluatorKind).toBe('rule');
+      expect(ev.evaluator).toBe('dashboard:judge-evaluations');
+      expect(ev.judgeModel).toBeUndefined();
     }
   });
 
@@ -623,8 +630,10 @@ describe('toOTelRecord', () => {
     expect(attrs['gen_ai.evaluation.name']).toBe('relevance');
     expect(attrs['gen_ai.evaluation.score.value']).toBe(0.85);
     expect(attrs['gen_ai.evaluation.explanation']).toBe('Test explanation');
-    expect(attrs['gen_ai.evaluation.evaluator']).toBe('llm-judge');
-    expect(attrs['gen_ai.evaluation.evaluator.type']).toBe('llm');
+    expect(attrs['integritystudio.evaluation.producer']).toBe('dashboard:judge-evaluations');
+    expect(attrs['integritystudio.evaluation.evaluator.kind']).toBe('llm');
+    expect(attrs['integritystudio.evaluation.cohort']).toBe('normal');
+    expect(attrs['integritystudio.evaluation.judge.model']).toBe('claude-haiku-4-5-20251001');
     expect(attrs['session.id']).toBe('abc12345-session');
   });
 
@@ -634,12 +643,22 @@ describe('toOTelRecord', () => {
     expect(attrs['session.id']).toBeUndefined();
   });
 
-  it('uses dot notation for evaluator.type (not underscore)', () => {
+  // OBP16: neither key is in the semconv registry, so both were local fields
+  // squatting under an OpenTelemetry-owned namespace (AA3 Gate 1c).
+  it('no longer writes the two overloaded gen_ai evaluator keys', () => {
     const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
-    const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-    expect(evaluatorTypeSchema.safeParse(evalType).success).toBe(true);
+    expect(attrs['gen_ai.evaluation.evaluator.type']).toBeUndefined();
+    expect(attrs['gen_ai.evaluation.evaluator']).toBeUndefined();
     expect(attrs['gen_ai.evaluation.evaluator_type']).toBeUndefined();
+  });
+
+  it('omits the judge model for a score no model produced', () => {
+    const canary = makeEvalRecord({ cohort: 'canary', evaluatorKind: 'rule', judgeModel: undefined });
+    const record = toOTelRecord(canary) as Record<string, unknown>;
+    const attrs = record.attributes as Record<string, unknown>;
+    expect(attrs['integritystudio.evaluation.cohort']).toBe('canary');
+    expect(attrs['integritystudio.evaluation.judge.model']).toBeUndefined();
   });
 });
 
@@ -790,14 +809,15 @@ describe('evaluateTurn', () => {
     expect(evals.some(e => e.evaluationName === 'coherence')).toBe(true);
   });
 
-  it('sets evaluatorType to llm for all results', async () => {
+  it('sets evaluatorKind to llm for all judged results', async () => {
     const llm = createMockLLM();
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
     const turn = makeTurn({ toolResults: ['ctx'] });
 
     const evals = await evaluateTurn(judge, turn, new Set());
     for (const ev of evals) {
-      expect(ev.evaluatorType).toBe('llm');
+      expect(ev.evaluatorKind).toBe('llm');
+      expect(ev.cohort).toBe('normal');
     }
   });
 });

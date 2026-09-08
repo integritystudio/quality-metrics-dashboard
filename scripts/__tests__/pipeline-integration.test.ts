@@ -28,7 +28,7 @@ import {
   type Turn,
   type EvalRecord,
 } from '../judge-evaluations.js';
-import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -110,8 +110,9 @@ describe('pipeline contract: derive → judge', () => {
     expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
     expect(attrs['gen_ai.evaluation.score.value']).toBe(1.0);
     expect(typeof attrs['gen_ai.evaluation.explanation']).toBe('string');
-    expect(attrs['gen_ai.evaluation.evaluator']).toBe('rule');
-    expect(attrs['gen_ai.evaluation.evaluator.type']).toBe('rule');
+    expect(attrs['integritystudio.evaluation.producer']).toBe('rule');
+    expect(attrs['integritystudio.evaluation.evaluator.kind']).toBe('rule');
+    expect(attrs['integritystudio.evaluation.cohort']).toBe('normal');
     expect(attrs['session.id']).toBe('sess-pipeline');
   });
 
@@ -194,7 +195,7 @@ describe('pipeline contract: judge seed output', () => {
     expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
   });
 
-  it('canary evaluations have evaluatorType "canary", others have "seed"', () => {
+  it('canary evaluations carry cohort "canary", others "seed"', () => {
     // Generate enough turns to hit at least one canary (~2% rate)
     const turns = Array.from({ length: 200 }, (_, i) =>
       makeTurn({
@@ -204,19 +205,26 @@ describe('pipeline contract: judge seed output', () => {
     );
     const { evals, canaryCount } = seedEvaluations(turns, new Set());
 
-    const canaryEvals = evals.filter(e => e.evaluatorType === 'canary');
-    const seedEvals = evals.filter(e => e.evaluatorType === 'seed');
+    const canaryEvals = evals.filter(e => e.cohort === 'canary');
+    const seedEvals = evals.filter(e => e.cohort === 'seed');
 
     expect(canaryCount).toBeGreaterThan(0);
     expect(canaryEvals.length).toBeGreaterThan(0);
     expect(seedEvals.length).toBeGreaterThan(0);
 
-    // evaluator field matches evaluatorType: canary → 'llm', seed → 'seed'
-    for (const ev of canaryEvals) expect(ev.evaluator).toBe('llm');
-    for (const ev of seedEvals) expect(ev.evaluator).toBe('seed');
+    // OBP16: both branches hash, so neither may claim an llm produced the
+    // score. Producer is the writing component; kind is the mechanism.
+    for (const ev of canaryEvals) {
+      expect(ev.evaluator).toBe('dashboard:judge-evaluations');
+      expect(ev.evaluatorKind).toBe('rule');
+    }
+    for (const ev of seedEvals) {
+      expect(ev.evaluator).toBe('dashboard:judge-evaluations');
+      expect(ev.evaluatorKind).toBe('rule');
+    }
 
     // Canary evals should NOT appear if filtered out (as sync-to-kv does)
-    const afterFilter = evals.filter(e => e.evaluatorType !== 'canary');
+    const afterFilter = evals.filter(e => e.cohort !== 'canary');
     expect(afterFilter.length).toBeLessThan(evals.length);
   });
 });
@@ -266,7 +274,8 @@ describe('pipeline contract: judge → sync-to-kv', () => {
       const evalName = attrs['gen_ai.evaluation.name'] as string;
       expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
       expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-      expect(evaluatorTypeSchema.safeParse(attrs['gen_ai.evaluation.evaluator.type']).success).toBe(true);
+      expect(evaluatorKindSchema.safeParse(attrs['integritystudio.evaluation.evaluator.kind']).success).toBe(true);
+      expect(evaluationCohortSchema.safeParse(attrs['integritystudio.evaluation.cohort']).success).toBe(true);
     }
   });
 
@@ -280,15 +289,15 @@ describe('pipeline contract: judge → sync-to-kv', () => {
     );
     const { evals } = seedEvaluations(turns, new Set());
 
-    // Simulate sync-to-kv canary filter
-    const filtered = evals.filter(ev => ev.evaluatorType !== 'canary');
+    // Simulate sync-to-kv canary filter, which now keys on the cohort
+    const filtered = evals.filter(ev => ev.cohort !== 'canary');
 
-    // All remaining should have evaluatorType 'seed'
+    // All remaining should be the seed cohort
     for (const ev of filtered) {
-      expect(ev.evaluatorType).toBe('seed');
+      expect(ev.cohort).toBe('seed');
     }
     // At least some canaries were removed if canary rate ~2% of 100 turns
-    const hasCanaries = evals.some(ev => ev.evaluatorType === 'canary');
+    const hasCanaries = evals.some(ev => ev.cohort === 'canary');
     if (hasCanaries) {
       expect(filtered.length).toBeLessThan(evals.length);
     }

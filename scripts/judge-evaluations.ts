@@ -33,6 +33,8 @@ import {
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
   type EvaluatorType,
+  type EvaluatorKind,
+  type EvaluationCohort,
   HALLUCINATION_EVAL_NAME,
   LLM_EVALUATOR_TYPE,
 } from '../../src/lib/validation/dashboard-schemas.js';
@@ -72,11 +74,35 @@ const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude-history', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
+/** Producer recorded on every record this script writes. */
+export const PRODUCER = 'dashboard:judge-evaluations';
 export const SEED_EVALUATOR: EvaluatorType = 'seed';
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
 export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
+
+/**
+ * A seeded or canary score is a SHA-256 of the session and turn key mapped into
+ * a range — deterministic and reproducible, with no model and no relationship
+ * to the content being scored. That makes its *kind* `rule`; what marks it as
+ * not-real-data is the cohort, never the kind (OBP16).
+ */
+export const SYNTHETIC_EVALUATOR_KIND: EvaluatorKind = 'rule';
+export const LLM_EVALUATOR_KIND: EvaluatorKind = 'llm';
+
+/**
+ * The legacy `evaluatorType` value for a kind, or `undefined` when the kind has
+ * none. Three of the four kinds are also members of the older enum; the fourth,
+ * `ground_truth`, is not, and is left unset rather than coerced.
+ */
+function legacyEvaluatorType(kind: EvaluatorKind): EvaluatorType | undefined {
+  return kind === 'ground_truth' ? undefined : kind;
+}
+export const NORMAL_COHORT: EvaluationCohort = 'normal';
+export const SEED_COHORT: EvaluationCohort = 'seed';
+export const CANARY_COHORT: EvaluationCohort = 'canary';
+export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
 export const RELEVANCE_EVAL_NAME = 'relevance';
 export const COHERENCE_EVAL_NAME = 'coherence';
 export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
@@ -96,25 +122,67 @@ export const MAX_TURN_LIMIT = 10_000;
 export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09T01:11:15"
 export const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
 
+/**
+ * On-disk attribute keys. **Must stay identical to `EVALUATION_ATTRS` in
+ * `hooks/lib/quality-signals.ts`** — both writers append to the same
+ * `evaluations-YYYY-MM-DD.jsonl` files, so a divergence splits the corpus into
+ * two shapes that no single reader handles.
+ *
+ * `gen_ai.evaluation.evaluator{,.type}` were dropped here (OBP16): neither is
+ * in the semconv registry, so they were local fields under an OpenTelemetry
+ * namespace, and between them they carried four different facts.
+ */
+export const EVALUATION_ATTRS = {
+  NAME: 'gen_ai.evaluation.name',
+  SCORE_VALUE: 'gen_ai.evaluation.score.value',
+  SCORE_UNIT: 'gen_ai.evaluation.score.unit',
+  EXPLANATION: 'gen_ai.evaluation.explanation',
+  EVALUATOR_KIND: 'integritystudio.evaluation.evaluator.kind',
+  COHORT: 'integritystudio.evaluation.cohort',
+  PRODUCER: 'integritystudio.evaluation.producer',
+  JUDGE_MODEL: 'integritystudio.evaluation.judge.model',
+  SESSION_ID: 'session.id',
+} as const;
+
+/** Legacy overloaded key, read-only — still present on every pre-OBP16 record. */
+export const LEGACY_EVALUATOR_TYPE_ATTR = 'gen_ai.evaluation.evaluator.type';
+
+export const EVALUATION_RESULT_EVENT = 'gen_ai.evaluation.result';
+
 export function normalizeScore(score: number): number {
   return Math.round(score * 10000) / 10000;
 }
 
+/**
+ * Build one record.
+ *
+ * `kind` and `cohort` are separate arguments on purpose (OBP16). This function
+ * previously took `(evaluator, evaluatorType)` and every caller passed a value
+ * that was sometimes a kind and sometimes a cohort — so a hashed canary score
+ * was written as `evaluator: 'llm'`, indistinguishable from a judged one. The
+ * two axes cannot now be confused, and `judgeModel` is omitted for any score no
+ * model produced.
+ */
 function createEvalRecord(
   turn: Turn,
   evaluationName: string,
   scoreValue: number,
   explanation: string,
-  evaluator: string,
-  evaluatorType: EvaluatorType,
+  kind: EvaluatorKind,
+  cohort: EvaluationCohort,
+  judgeModel?: string,
 ): EvalRecord {
   return {
     timestamp: turn.timestamp,
     evaluationName,
     scoreValue: normalizeScore(scoreValue),
     explanation,
-    evaluator,
-    evaluatorType,
+    evaluator: PRODUCER,
+    // Narrowed to the kind axis; the cohort has its own field now.
+    ...(legacyEvaluatorType(kind) && { evaluatorType: legacyEvaluatorType(kind) }),
+    evaluatorKind: kind,
+    cohort,
+    ...(judgeModel && { judgeModel }),
     traceId: turn.traceId,
     sessionId: turn.sessionId,
   };
@@ -143,8 +211,21 @@ export interface EvalRecord {
   /** e.g. 'seconds', 'ratio_0_1'; omitted when the score is unitless. */
   scoreUnit?: string;
   explanation: string;
+  /** Producer — which component wrote this. Never a model id (OBP16). */
   evaluator: string;
-  evaluatorType: EvaluatorType;
+  /**
+   * @deprecated Overloaded field, kept so the query/export surface keeps
+   * filtering. Mirrors `evaluatorKind` where the two enums overlap, and is
+   * omitted for `ground_truth`, which has no legacy value — mapping it onto one
+   * would be the same misstatement OBP16 removed.
+   */
+  evaluatorType?: EvaluatorType;
+  /** How the score was produced. */
+  evaluatorKind: EvaluatorKind;
+  /** Whether the score describes real data. */
+  cohort: EvaluationCohort;
+  /** Judge model — omitted for any score no model produced. */
+  judgeModel?: string;
   traceId: string;
   sessionId: string;
 }
@@ -476,8 +557,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           canary
             ? `Relevance (canary) for session ${sessionPreview}`
             : `Relevance (seeded) for session ${sessionPreview}`,
-          canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
-          canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          SYNTHETIC_EVALUATOR_KIND,
+          canary ? CANARY_COHORT : SEED_COHORT,
         ),
       );
     }
@@ -494,8 +575,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
           canary
             ? `Coherence (canary) for session ${sessionPreview}`
             : `Coherence (seeded) for session ${sessionPreview}`,
-          canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
-          canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+          SYNTHETIC_EVALUATOR_KIND,
+          canary ? CANARY_COHORT : SEED_COHORT,
         ),
       );
     }
@@ -516,8 +597,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             canary
               ? `Faithfulness (canary) for session ${sessionPreview}`
               : `Faithfulness (seeded) for session ${sessionPreview}`,
-            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
-            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+            SYNTHETIC_EVALUATOR_KIND,
+            canary ? CANARY_COHORT : SEED_COHORT,
           ),
         );
       }
@@ -532,8 +613,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             canary
               ? `Hallucination (canary) for session ${sessionPreview}`
               : `Hallucination (seeded) for session ${sessionPreview}`,
-            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
-            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+            SYNTHETIC_EVALUATOR_KIND,
+            canary ? CANARY_COHORT : SEED_COHORT,
           ),
         );
       }
@@ -553,8 +634,8 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
             canary
               ? `Tool correctness (canary) for session ${sessionPreview}`
               : `Tool correctness (seeded) for session ${sessionPreview}`,
-            canary ? LLM_EVALUATOR_TYPE : SEED_EVALUATOR,
-            canary ? CANARY_EVALUATOR_TYPE : SEED_EVALUATOR_TYPE,
+            SYNTHETIC_EVALUATOR_KIND,
+            canary ? CANARY_COHORT : SEED_COHORT,
           ),
         );
       }
@@ -595,8 +676,9 @@ export async function evaluateTurn(
           RELEVANCE_EVAL_NAME,
           result.score,
           result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-          LLM_EVALUATOR_TYPE,
-          LLM_EVALUATOR_TYPE,
+          LLM_EVALUATOR_KIND,
+          NORMAL_COHORT,
+          HAIKU_MODEL,
         ),
       );
     } catch (err) {
@@ -615,8 +697,9 @@ export async function evaluateTurn(
           COHERENCE_EVAL_NAME,
           result.score,
           result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-          LLM_EVALUATOR_TYPE,
-          LLM_EVALUATOR_TYPE,
+          LLM_EVALUATOR_KIND,
+          NORMAL_COHORT,
+          HAIKU_MODEL,
         ),
       );
     } catch (err) {
@@ -645,8 +728,9 @@ export async function evaluateTurn(
             FAITHFULNESS_EVAL_NAME,
             faithResult.score,
             faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
-            LLM_EVALUATOR_TYPE,
-            LLM_EVALUATOR_TYPE,
+            LLM_EVALUATOR_KIND,
+            NORMAL_COHORT,
+            HAIKU_MODEL,
           ),
         );
       } catch (err) {
@@ -671,8 +755,9 @@ export async function evaluateTurn(
             HALLUCINATION_EVAL_NAME,
             halScore,
             halResult.reason ?? `Hallucination: ${normalizeScore(halScore).toFixed(2)} for session ${sessionPreview}`,
-            LLM_EVALUATOR_TYPE,
-            LLM_EVALUATOR_TYPE,
+            LLM_EVALUATOR_KIND,
+            NORMAL_COHORT,
+            HAIKU_MODEL,
           ),
         );
       } catch (err) {
@@ -696,8 +781,9 @@ export async function evaluateTurn(
             TOOL_CORRECTNESS_CRITERIA.name,
             tcResult.score,
             tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
-            LLM_EVALUATOR_TYPE,
-            LLM_EVALUATOR_TYPE,
+            LLM_EVALUATOR_KIND,
+            NORMAL_COHORT,
+            HAIKU_MODEL,
           ),
         );
       } catch (err) {
@@ -723,8 +809,9 @@ export async function evaluateTurn(
               name,
               result.score,
               result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-              LLM_EVALUATOR_TYPE,
-              LLM_EVALUATOR_TYPE,
+              LLM_EVALUATOR_KIND,
+              NORMAL_COHORT,
+              HAIKU_MODEL,
             ),
           );
         } catch (err) {
@@ -740,17 +827,19 @@ export async function evaluateTurn(
 
 export function toOTelRecord(ev: EvalRecord): object {
   const attrs: Record<string, unknown> = {
-    'gen_ai.evaluation.name': ev.evaluationName,
-    'gen_ai.evaluation.score.value': ev.scoreValue,
-    'gen_ai.evaluation.explanation': ev.explanation,
-    'gen_ai.evaluation.evaluator': ev.evaluator,
-    'gen_ai.evaluation.evaluator.type': ev.evaluatorType,
+    [EVALUATION_ATTRS.NAME]: ev.evaluationName,
+    [EVALUATION_ATTRS.SCORE_VALUE]: ev.scoreValue,
+    [EVALUATION_ATTRS.EXPLANATION]: ev.explanation,
+    [EVALUATION_ATTRS.EVALUATOR_KIND]: ev.evaluatorKind,
+    [EVALUATION_ATTRS.COHORT]: ev.cohort,
+    [EVALUATION_ATTRS.PRODUCER]: ev.evaluator,
+    ...(ev.judgeModel && { [EVALUATION_ATTRS.JUDGE_MODEL]: ev.judgeModel }),
   };
-  if (ev.scoreUnit) attrs['gen_ai.evaluation.score.unit'] = ev.scoreUnit;
-  if (ev.sessionId) attrs['session.id'] = ev.sessionId;
+  if (ev.scoreUnit) attrs[EVALUATION_ATTRS.SCORE_UNIT] = ev.scoreUnit;
+  if (ev.sessionId) attrs[EVALUATION_ATTRS.SESSION_ID] = ev.sessionId;
   return {
     timestamp: ev.timestamp,
-    name: 'gen_ai.evaluation.result',
+    name: EVALUATION_RESULT_EVENT,
     attributes: attrs,
     // Omit rather than emit '' — TraceIdSchema is optional but rejects an
     // empty string, so a written '' is silently dropped on read.
@@ -764,6 +853,29 @@ export function toOTelRecord(ev: EvalRecord): object {
   };
 }
 
+/**
+ * Whether a record on disk is one this script produced, and therefore counts
+ * toward dedup.
+ *
+ * **Dual-read, deliberately.** The 780,921 records written before OBP16 carry
+ * the overloaded `gen_ai.evaluation.evaluator.type`, holding a kind for judged
+ * rows and a cohort for seeded ones; records written after it carry
+ * `integritystudio.evaluation.cohort` instead. Neither set is being
+ * backfilled, so a reader that knows only one shape either re-judges every
+ * historical turn or re-seeds every new one — both duplicate silently.
+ */
+function isThisScriptsRecord(attrs: Record<string, unknown>): boolean {
+  const cohort = attrs[EVALUATION_ATTRS.COHORT];
+  if (typeof cohort === 'string') {
+    // Post-OBP16: judged rows are the NORMAL cohort, the rest are ours by cohort.
+    return cohort === NORMAL_COHORT || cohort === SEED_COHORT || cohort === BACKFILL_COHORT;
+  }
+  const legacy = attrs[LEGACY_EVALUATOR_TYPE_ATTR];
+  return legacy === LLM_EVALUATOR_TYPE
+    || legacy === SEED_EVALUATOR_TYPE
+    || legacy === TRACE_BACKFILL_EVALUATOR_TYPE;
+}
+
 function _loadExistingKeys(): Set<string> {
   const keys = new Set<string>();
   const evalFiles = readdirSync(TELEMETRY_DIR)
@@ -775,11 +887,10 @@ function _loadExistingKeys(): Set<string> {
 
     for (const record of records) {
       const attrs = record.attributes;
-      const evalType = attrs['gen_ai.evaluation.evaluator.type'];
-      if (evalType !== LLM_EVALUATOR_TYPE && evalType !== SEED_EVALUATOR_TYPE && evalType !== TRACE_BACKFILL_EVALUATOR_TYPE) continue;
+      if (!isThisScriptsRecord(attrs)) continue;
 
-      const sessionId = attrs['session.id'] as string || '';
-      const metricName = attrs['gen_ai.evaluation.name'] as string || '';
+      const sessionId = attrs[EVALUATION_ATTRS.SESSION_ID] as string || '';
+      const metricName = attrs[EVALUATION_ATTRS.NAME] as string || '';
       // record.timestamp is epoch nanos (bigint) — the schema decodes ISO to nanos.
       // Turn keys are compared against ISO-prefix keys, so convert back.
       const ms = Number(record.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
@@ -930,9 +1041,12 @@ async function main() {
       if (newTurns.length === 0) return;
 
       const seedResult = seedEvaluations(newTurns, existingKeys);
-      // Override evaluatorType for transparency — backfilled data is not organic seed
+      // Backfilled data is not organic seed, so re-cohort it. The cohort axis
+      // owns this now — `evaluatorType` keeps the kind and is left alone
+      // (OBP16); previously this line overwrote a kind with a cohort value.
       for (const ev of seedResult.evals) {
-        if (ev.evaluatorType === SEED_EVALUATOR_TYPE) {
+        if (ev.cohort === SEED_COHORT) {
+          ev.cohort = BACKFILL_COHORT;
           ev.evaluatorType = TRACE_BACKFILL_EVALUATOR_TYPE;
         }
       }
@@ -1021,7 +1135,7 @@ async function main() {
       const judge = new LLMJudge(llm, {
         timeoutMs: TIME_MS.MINUTE,
         maxRetries: 2,
-        evaluator: LLM_EVALUATOR_TYPE,
+        evaluator: PRODUCER,
         evaluatorType: LLM_EVALUATOR_TYPE,
         logger: {
           warn: (msg) => console.warn(`  [warn] ${msg}`),

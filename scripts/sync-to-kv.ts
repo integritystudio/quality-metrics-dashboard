@@ -73,7 +73,7 @@ import {
   jsonSafe,
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
-import { CANARY_EVALUATOR_TYPE } from './judge-evaluations.js';
+import { CANARY_EVALUATOR_TYPE, CANARY_COHORT } from './judge-evaluations.js';
 import { ascending, mean, quantileSorted, rollup } from 'd3-array';
 
 // Used to be exported as DEGRADATION_KV_KEY from ../../src/lib/quality/quality-constants.ts,
@@ -158,8 +158,19 @@ export function toKVValue(value: unknown): string {
   return JSON.stringify(jsonSafe(value));
 }
 
+/**
+ * Drop canary evaluations before aggregation — their scores are synthetic and
+ * would drag every average they land in.
+ *
+ * **Checks both fields, and must keep doing so.** Records written before OBP16
+ * mark a canary in the overloaded `evaluatorType`; records written after it use
+ * `cohort`, leaving `evaluatorType` to carry the evaluator kind. Neither set is
+ * being backfilled, so dropping either check silently readmits one era's
+ * canaries into the aggregates.
+ */
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
-  return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
+  return evals.filter(ev =>
+    ev.cohort !== CANARY_COHORT && ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
 }
 
 export const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
@@ -991,6 +1002,8 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
         evaluator: e.evaluator,
         label: e.scoreLabel,
         evaluatorType: e.evaluatorType,
+        evaluatorKind: e.evaluatorKind,
+        cohort: e.cohort,
         spanId: e.spanId,
         sessionId: e.sessionId,
         agentName: e.agentName,
