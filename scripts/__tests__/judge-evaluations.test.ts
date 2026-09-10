@@ -20,7 +20,6 @@ import {
   type Turn,
   type EvalRecord,
 } from '../judge-evaluations.js';
-import { evaluatorTypeSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 
