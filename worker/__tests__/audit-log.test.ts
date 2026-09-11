@@ -64,7 +64,7 @@ function withAdminAuth(
 }
 
 let fetchMock: FetchMock;
-let mockExecutionCtx: { waitUntil: ReturnType<typeof vi.fn>; passThroughOnException: ReturnType<typeof vi.fn> };
+let mockExecutionCtx: { waitUntil: Mock<ExecutionContext['waitUntil']>; passThroughOnException: Mock<ExecutionContext['passThroughOnException']> };
 
 beforeEach(async () => {
   vi.clearAllMocks();
