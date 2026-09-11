@@ -11,7 +11,7 @@
  * discriminator these tests assert on.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
 
 const MOCK_AUTH0_ID = 'auth0|test-agents-user';
@@ -57,7 +57,7 @@ function withAgentsAuth(url: string): Promise<Response> {
   return Promise.resolve(new Response(null, { status: 200 }));
 }
 
-let mockExecutionCtx: { waitUntil: ReturnType<typeof vi.fn>; passThroughOnException: ReturnType<typeof vi.fn> };
+let mockExecutionCtx: { waitUntil: Mock<ExecutionContext['waitUntil']>; passThroughOnException: Mock<ExecutionContext['passThroughOnException']> };
 
 beforeEach(async () => {
   vi.clearAllMocks();
