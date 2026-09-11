@@ -98,6 +98,13 @@ GITLOG_TOP_FILE_NAME="$DISPLAY_PATH/${FILE_PREFIX}$GIT_TOP_20.txt"
 DIFF_SUMMARY_REL="$DISPLAY_PATH/${FILE_PREFIX}$DIFF_SUMMARY_STEM.xml"
 
 
+# git-ranked runs FIRST: its config sets includeDiffs, so running it after the
+# other artifacts packs their just-rewritten diffs (and its own) as ~56% noise.
+echo "Generating git-ranked repomix file for $PROJECT_DIR at $GIT_RANKED_FILE_NAME"
+bash "$GIT_RANKED_SCRIPT" "$GIT_RANKED_REPO_FILE"
+echo "Success!"
+echo
+
 echo "Generating token count tree for $PROJECT_DIR at $TREE_FILE"
 bash "$TOKEN_TREE_SCRIPT" "$TOKEN_TREE_FILE"
 echo "Success!"
@@ -115,11 +122,6 @@ echo
 
 echo "Generating docs-only repomix file for $PROJECT_DIR at $DOCS_ONLY_FILE_NAME"
 bash "$DOCS_ONLY_SCRIPT" "$DOCS_ONLY_REPO_FILE"
-echo "Success!"
-echo
-
-echo "Generating git-ranked repomix file for $PROJECT_DIR at $GIT_RANKED_FILE_NAME"
-bash "$GIT_RANKED_SCRIPT" "$GIT_RANKED_REPO_FILE"
 echo "Success!"
 echo
 

@@ -659,7 +659,172 @@ fi
   echo &apos;```&apos;
   tail -n &quot;+$((fence_close + 1))&quot; &quot;$README_PATH&quot;
 } &gt; &quot;$README_PATH.tmp&quot;
-mv &quot;$README_PATH.tmp&quot; &quot;$README_PATH&quot;</file><file path="src/__tests__/support/fixtures.ts">import type {
+mv &quot;$README_PATH.tmp&quot; &quot;$README_PATH&quot;</file><file path="src/__tests__/support/api-responses.ts">import type { JsonSafe } from &apos;../../api/api-constants.js&apos;;
+import type { WorkflowGraph } from &apos;../../types/workflow-graph.js&apos;;
+import type {
+  CompositeQualityIndex,
+  CoverageHeatmap,
+  EvaluationResult,
+  HumanVerificationEvent,
+  MetricDetailResult,
+  MetricDynamics,
+  MultiAgentEvaluation,
+  PercentileDistribution,
+  QualityDashboardSummary,
+  RoleView,
+  SLAComplianceResult,
+} from &apos;../../types.js&apos;;
+export type WireEvaluation = JsonSafe&lt;EvaluationResult&gt;;
+export interface ErrorResponse {
+  error: string;
+}
+interface DashboardExtras {
+  cqi?: JsonSafe&lt;CompositeQualityIndex&gt;;
+  sparklines: Record&lt;string, (number | null)[]&gt;;
+}
+export type DashboardResponse = JsonSafe&lt;QualityDashboardSummary&gt; &amp; DashboardExtras;
+export type RoleViewResponse = JsonSafe&lt;RoleView&gt; &amp; DashboardExtras;
+export interface HealthResponse {
+  status: string;
+  hasData: boolean;
+}
+export interface QualityLiveResponse {
+  metrics: { name: string; score: number; evaluatorType: string; timestamp: string }[];
+  sessionCount: number;
+  lastUpdated: string;
+}
+export type MetricDetailResponse = JsonSafe&lt;MetricDetailResult&gt; &amp; {
+  dynamics?: JsonSafe&lt;MetricDynamics&gt;;
+};
+interface MetricEvaluationRowRaw {
+  score: number;
+  explanation: EvaluationResult[&apos;explanation&apos;];
+  traceId: EvaluationResult[&apos;traceId&apos;];
+  timestamp: EvaluationResult[&apos;timestamp&apos;];
+  evaluator: EvaluationResult[&apos;evaluator&apos;];
+  label: EvaluationResult[&apos;scoreLabel&apos;];
+  evaluatorType: EvaluationResult[&apos;evaluatorType&apos;];
+  spanId: EvaluationResult[&apos;spanId&apos;];
+  sessionId: EvaluationResult[&apos;sessionId&apos;];
+  agentName: EvaluationResult[&apos;agentName&apos;];
+  trajectoryLength: EvaluationResult[&apos;trajectoryLength&apos;];
+  stepScores: EvaluationResult[&apos;stepScores&apos;];
+  toolVerifications: EvaluationResult[&apos;toolVerifications&apos;];
+}
+export type MetricEvaluationRow = JsonSafe&lt;MetricEvaluationRowRaw&gt;;
+export interface MetricEvaluationsResponse {
+  rows: MetricEvaluationRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+export interface TrendDetailResponse {
+  metric: string;
+  period: string;
+  bucketCount: number;
+  totalEvaluations: number;
+  overallPercentiles: JsonSafe&lt;PercentileDistribution&gt; | null | undefined;
+  trendData: unknown[];
+  narrowed: boolean;
+}
+export interface TrendSummaryResponse {
+  period: string;
+  metrics: {
+    metric: string;
+    count: number;
+    percentiles: JsonSafe&lt;PercentileDistribution&gt; | null;
+  }[];
+}
+export interface WireSpan {
+  traceId: string;
+  spanId: string;
+  name: string;
+  startTimeUnixNano: string;
+  endTimeUnixNano?: string;
+  durationMs?: number;
+  status?: { code?: string | number; message?: string };
+  attributes?: Record&lt;string, unknown&gt;;
+}
+export interface TraceDetailResponse {
+  traceId: string;
+  spans: WireSpan[];
+  evaluations: WireEvaluation[];
+}
+export interface AgentSummary {
+  agentName: string;
+  invocations: number;
+  errors: number;
+  errorRate: number;
+  rateLimitCount: number;
+  avgOutputSize: number;
+  sessionCount: number;
+  sessionIds: string[];
+  sessionIdsTruncated: boolean;
+  traceIdsTotal: number;
+  traceIds: string[];
+  traceIdsTruncated: boolean;
+  sourceTypes: Record&lt;string, number&gt;;
+  dailyCounts: Record&lt;string, number&gt;;
+  evalSummary: Record&lt;string, { avg: number; min: number; max: number; count: number }&gt;;
+}
+export interface AgentListResponse {
+  period: string;
+  startDate: string;
+  endDate: string;
+  agents: AgentSummary[];
+}
+export interface AgentDetailResponse {
+  sessionId: string;
+  spans: WireSpan[];
+  evaluation: JsonSafe&lt;MultiAgentEvaluation&gt; | null;
+  evaluations: WireEvaluation[];
+  agentMap: Record&lt;string, string&gt;;
+  graph: JsonSafe&lt;WorkflowGraph&gt;;
+}
+export interface SessionDetailResponse {
+  sessionId: string;
+  dataSources: { traces: unknown; logs: unknown; evaluations: unknown; total: number };
+  timespan: unknown;
+  sessionInfo: unknown;
+  tokenTotals: unknown;
+  tokenProgression: unknown;
+  toolUsage: Record&lt;string, number&gt;;
+  mcpUsage: Record&lt;string, number&gt;;
+  spanBreakdown: Record&lt;string, number&gt;;
+  hookLatency: unknown;
+  errors: { byCategory: Record&lt;string, number&gt;; details: unknown[] };
+  agentActivity: unknown;
+  fileAccess: unknown;
+  gitCommits: unknown;
+  alertSummary: unknown;
+  codeStructure: unknown;
+  evaluationBreakdown: unknown;
+  logSummary: {
+    bySeverity: Record&lt;string, number&gt;;
+    logs: Partial&lt;Record&lt;&apos;timestamp&apos; | &apos;severity&apos; | &apos;traceId&apos;, unknown&gt;&gt;[];
+  };
+  multiAgentEvaluation: unknown;
+  evaluations: WireEvaluation[];
+}
+export interface TraceEvaluationsResponse {
+  evaluations: WireEvaluation[];
+}
+export interface SlaComplianceResponse {
+  period: string;
+  results: JsonSafe&lt;SLAComplianceResult&gt;[];
+  noSLAsConfigured: boolean;
+}
+export interface VerificationsResponse {
+  period: string;
+  count: number;
+  verifications: JsonSafe&lt;HumanVerificationEvent&gt;[];
+}
+export type CoverageResponse = JsonSafe&lt;CoverageHeatmap&gt; &amp; { period: string };
+export interface CorrelationsResponse {
+  correlations: unknown;
+  metrics: string[];
+}</file><file path="src/__tests__/support/fixtures.ts">import type {
   CompositeQualityIndex,
   EvaluationResult,
   ExecutiveView,
@@ -746,6 +911,32 @@ export function makeOperatorView(overrides: Partial&lt;OperatorView&gt; = {}): O
     degradingTrends: [],
     ...overrides,
   };
+}</file><file path="src/__tests__/support/query-harness.tsx">import { QueryClient, QueryClientProvider } from &apos;@tanstack/react-query&apos;;
+import { vi } from &apos;vitest&apos;;
+import type { ReactNode } from &apos;react&apos;;
+export const TEST_ACCESS_TOKEN = &apos;test-access-token&apos;;
+export function makeQueryWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  function QueryWrapper({ children }: { children: ReactNode }) {
+    return &lt;QueryClientProvider client={queryClient}&gt;{children}&lt;/QueryClientProvider&gt;;
+  }
+  return { wrapper: QueryWrapper, queryClient };
+}
+const HTTP_OK = 200;
+export function stubFetch(body: unknown, { status = HTTP_OK }: { status?: number } = {}) {
+  const fetchSpy = vi.fn((_url: string, _init?: RequestInit) =&gt;
+    Promise.resolve(new Response(JSON.stringify(body), {
+      status,
+      headers: { &apos;Content-Type&apos;: &apos;application/json&apos; },
+    })),
+  );
+  vi.stubGlobal(&apos;fetch&apos;, fetchSpy);
+  return fetchSpy;
+}
+export function headersOf(init: RequestInit | undefined): Record&lt;string, string&gt; {
+  return (init?.headers ?? {}) as Record&lt;string, string&gt;;
 }</file><file path="src/__tests__/setup.ts">import &apos;@testing-library/jest-dom/vitest&apos;;
 if (typeof window !== &apos;undefined&apos; &amp;&amp; !(&apos;ResizeObserver&apos; in window)) {
   (window as unknown as Record&lt;string, unknown&gt;).ResizeObserver = class {
@@ -6558,6 +6749,34 @@ export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAge
       &lt;/div&gt;
     &lt;/div&gt;
   );
+}</file><file path="src/context/CalibrationContext.tsx">import { createContext, useContext, useMemo, type ReactNode } from &apos;react&apos;;
+import { useCalibration, getMetricCalibration, type MetricCalibration } from &apos;../hooks/useCalibration.js&apos;;
+import type { CalibrationResponse } from &apos;../lib/validation/dashboard-schemas.js&apos;;
+interface CalibrationContextValue {
+  data: CalibrationResponse | undefined;
+  isLoading: boolean;
+}
+const CalibrationContext = createContext&lt;CalibrationContextValue | null&gt;(null);
+export function CalibrationProvider({ children }: { children: ReactNode }) {
+  const { data, isLoading } = useCalibration();
+  const value = useMemo(() =&gt; ({ data, isLoading }), [data, isLoading]);
+  return (
+    &lt;CalibrationContext.Provider value={value}&gt;
+      {children}
+    &lt;/CalibrationContext.Provider&gt;
+  );
+}
+export function useCalibrationData(): CalibrationContextValue {
+  const ctx = useContext(CalibrationContext);
+  if (!ctx) {
+    throw new Error(&apos;useCalibrationData must be used within a CalibrationProvider&apos;);
+  }
+  return ctx;
+}
+export function useMetricCalibration(metricName: string): MetricCalibration | undefined {
+  const ctx = useContext(CalibrationContext);
+  if (!ctx) return undefined;
+  return getMetricCalibration(ctx.data, metricName);
 }</file><file path="src/contexts/KeyboardNavContext.tsx">import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from &apos;react&apos;;
 type ShortcutKey = string;
 type ComboKey = `${string} ${string}`;
@@ -6795,6 +7014,34 @@ export function useRole(): RoleContextValue {
     throw new Error(&apos;useRole must be used within a RoleProvider&apos;);
   }
   return ctx;
+}</file><file path="src/hooks/useAgentSession.ts">import type { MultiAgentEvaluation, EvaluationResult } from &apos;../types.js&apos;;
+import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
+import { API_BASE, STALE_TIME } from &apos;../lib/constants.js&apos;;
+import { useApiQuery } from &apos;./useApiQuery.js&apos;;
+export interface AgentSessionResponse {
+  sessionId: string;
+  spans: Array&lt;{
+    traceId: string;
+    spanId: string;
+    name: string;
+    durationMs?: number;
+    status?: { code: number; message?: string };
+    attributes?: Record&lt;string, unknown&gt;;
+  }&gt;;
+  evaluation: MultiAgentEvaluation;
+  evaluations: EvaluationResult[];
+  agentMap: Record&lt;string, string&gt;;
+  graph: WorkflowGraph;
+}
+export function useAgentSession(sessionId: string | undefined) {
+  return useApiQuery&lt;AgentSessionResponse&gt;(
+    [&apos;agent-session&apos;, sessionId],
+    () =&gt; {
+      if (!sessionId) throw new Error(&apos;sessionId is required&apos;);
+      return `${API_BASE}/api/agents/${encodeURIComponent(sessionId)}`;
+    },
+    { enabled: !!sessionId, staleTime: STALE_TIME.DETAIL },
+  );
 }</file><file path="src/hooks/useAgentStats.ts">import type { Period } from &apos;../types.js&apos;;
 import { API_BASE, STALE_TIME, ErrorMessage } from &apos;../lib/constants.js&apos;;
 import { useApiQuery } from &apos;./useApiQuery.js&apos;;
@@ -6895,6 +7142,30 @@ export function useApiQuery&lt;TRaw, T = TRaw&gt;(
     refetchInterval,
     retryDelay,
   });
+}</file><file path="src/hooks/useCalibration.ts">import type { PercentileDistribution } from &apos;../lib/quality-utils.js&apos;;
+import type { CalibrationResponse } from &apos;../lib/validation/dashboard-schemas.js&apos;;
+import { API_BASE, STALE_TIME } from &apos;../lib/constants.js&apos;;
+import { useApiQuery } from &apos;./useApiQuery.js&apos;;
+export interface MetricCalibration {
+  distribution: PercentileDistribution;
+  sampleSize: number;
+}
+export function useCalibration() {
+  return useApiQuery&lt;CalibrationResponse&gt;(
+    [&apos;calibration&apos;],
+    () =&gt; `${API_BASE}/api/calibration`,
+    { staleTime: STALE_TIME.AGGREGATE, retry: 1 },
+  );
+}
+export function getMetricCalibration(
+  data: CalibrationResponse | undefined,
+  metricName: string,
+): MetricCalibration | undefined {
+  if (!data) return undefined;
+  const distribution = data.distributions[metricName];
+  const sampleSize = data.sampleCounts[metricName];
+  if (!distribution || sampleSize == null) return undefined;
+  return { distribution, sampleSize };
 }</file><file path="src/hooks/useCompliance.ts">import type { SLAComplianceResult, HumanVerificationEvent, Period } from &apos;../types.js&apos;;
 import { API_BASE } from &apos;../lib/constants.js&apos;;
 import { useApiQuery } from &apos;./useApiQuery.js&apos;;
@@ -7421,7 +7692,85 @@ export const MeResponseSchema = z.object({
   role: DashboardRoleSchema.optional(),
   isStaff: z.boolean().optional(),
 });
-export type MeResponse = z.infer&lt;typeof MeResponseSchema&gt;;</file><file path="src/lib/activity-logger.ts">import { API_BASE } from &apos;./constants.js&apos;;
+export type MeResponse = z.infer&lt;typeof MeResponseSchema&gt;;</file><file path="src/lib/validation/dashboard-schemas.ts">import { z } from &apos;zod&apos;;
+export { TraceIdSchema, SpanIdSchema, evaluatorTypeSchema, type EvaluatorType } from &apos;@parent/lib/core/shared-schemas.js&apos;;
+const normalizedScoreSchema = z.number().min(0).max(1);
+export {
+  HALLUCINATION_EVAL_NAME_SCHEMA,
+  HALLUCINATION_EVAL_NAME,
+  LLM_EVALUATOR_TYPE_SCHEMA,
+  LLM_EVALUATOR_TYPE,
+  hrtSchema,
+  localTraceSpanSchema,
+  otelLogEntrySchema,
+  transcriptEntrySchema,
+  otelEvaluationRecordSchema,
+  kvSyncEntrySchema,
+  kvSyncStateSchema,
+  metricDetailValueSchema,
+  coverageHeatmapSchema,
+} from &apos;@parent/lib/validation/dashboard-schemas.js&apos;;
+export type {
+  HallucinationEvalName,
+  LlmEvaluatorType,
+  LocalTraceSpan,
+  OTelLogEntry,
+  TranscriptEntry,
+  OTelEvaluationRecord,
+  KvSyncEntry,
+  KvSyncState,
+  MetricDetailValue,
+  CoverageHeatmap,
+} from &apos;@parent/lib/validation/dashboard-schemas.js&apos;;
+const routingTelemetrySummarySchema = z.object({
+  routedSpans: z.int().min(0),
+  fallbackRate: normalizedScoreSchema,
+});
+const routingTelemetryModelPairGroupSchema = z.object({
+  pair: z.string(),
+  requestedModel: z.string(),
+  actualModel: z.string(),
+  provider: z.string().nullable(),
+  count: z.int().min(0),
+});
+const routingTelemetryStrategyGroupSchema = z.object({
+  strategy: z.string(),
+  count: z.int().min(0),
+  fallbackCount: z.int().min(0),
+  fallbackRate: normalizedScoreSchema,
+});
+const routingTelemetryGroupSchema = z.union([
+  routingTelemetryStrategyGroupSchema,
+  routingTelemetryModelPairGroupSchema,
+]);
+export const routingTelemetryKvSchema = z.object({
+  period: z.string().optional(),
+  totalSpansScanned: z.int().min(0).default(0),
+  summary: routingTelemetrySummarySchema.default({ routedSpans: 0, fallbackRate: 0 }),
+  modelDistribution: z.record(z.string(), z.int().min(0)).default({}),
+  providerDistribution: z.record(z.string(), z.int().min(0)).default({}),
+  costSavings: z.number().min(0).default(0),
+  routingLatency: z.object({
+    p50: z.number().min(0),
+    p99: z.number().min(0),
+    source: z.enum([&apos;classification_time&apos;, &apos;span_duration&apos;]),
+  }).optional(),
+  groups: z.array(routingTelemetryGroupSchema).default([]),
+});
+export type RoutingTelemetryKvData = z.infer&lt;typeof routingTelemetryKvSchema&gt;;
+const calibrationPercentilesSchema = z.object({
+  p10: z.number().finite(),
+  p25: z.number().finite(),
+  p50: z.number().finite(),
+  p75: z.number().finite(),
+  p90: z.number().finite(),
+});
+export const calibrationResponseSchema = z.object({
+  distributions: z.record(z.string(), calibrationPercentilesSchema),
+  sampleCounts: z.record(z.string(), z.int().min(0)),
+  lastCalibrated: z.string().min(1),
+});
+export type CalibrationResponse = z.infer&lt;typeof calibrationResponseSchema&gt;;</file><file path="src/lib/activity-logger.ts">import { API_BASE } from &apos;./constants.js&apos;;
 import type { FrontendActivityEvent } from &apos;../types/activity.js&apos;;
 const ACTIVITY_TIMEOUT_MS = 3000;
 export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise&lt;void&gt; {
@@ -9820,191 +10169,7 @@ if (!skipSync) {
   runStep(&apos;sync-to-kv&apos;, &apos;sync-to-kv.ts&apos;, syncArgs);
 }
 for (const _r of results) {  }
-const _total = results.reduce((sum, r) =&gt; sum + r.ms, 0);</file><file path="src/__tests__/support/query-harness.tsx">import { QueryClient, QueryClientProvider } from &apos;@tanstack/react-query&apos;;
-import { vi } from &apos;vitest&apos;;
-import type { ReactNode } from &apos;react&apos;;
-export const TEST_ACCESS_TOKEN = &apos;test-access-token&apos;;
-export function makeQueryWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
-  function QueryWrapper({ children }: { children: ReactNode }) {
-    return &lt;QueryClientProvider client={queryClient}&gt;{children}&lt;/QueryClientProvider&gt;;
-  }
-  return { wrapper: QueryWrapper, queryClient };
-}
-const HTTP_OK = 200;
-export function stubFetch(body: unknown, { status = HTTP_OK }: { status?: number } = {}) {
-  const fetchSpy = vi.fn((_url: string, _init?: RequestInit) =&gt;
-    Promise.resolve(new Response(JSON.stringify(body), {
-      status,
-      headers: { &apos;Content-Type&apos;: &apos;application/json&apos; },
-    })),
-  );
-  vi.stubGlobal(&apos;fetch&apos;, fetchSpy);
-  return fetchSpy;
-}
-export function headersOf(init: RequestInit | undefined): Record&lt;string, string&gt; {
-  return (init?.headers ?? {}) as Record&lt;string, string&gt;;
-}</file><file path="src/context/CalibrationContext.tsx">import { createContext, useContext, useMemo, type ReactNode } from &apos;react&apos;;
-import { useCalibration, getMetricCalibration, type MetricCalibration } from &apos;../hooks/useCalibration.js&apos;;
-import type { CalibrationResponse } from &apos;../lib/validation/dashboard-schemas.js&apos;;
-interface CalibrationContextValue {
-  data: CalibrationResponse | undefined;
-  isLoading: boolean;
-}
-const CalibrationContext = createContext&lt;CalibrationContextValue | null&gt;(null);
-export function CalibrationProvider({ children }: { children: ReactNode }) {
-  const { data, isLoading } = useCalibration();
-  const value = useMemo(() =&gt; ({ data, isLoading }), [data, isLoading]);
-  return (
-    &lt;CalibrationContext.Provider value={value}&gt;
-      {children}
-    &lt;/CalibrationContext.Provider&gt;
-  );
-}
-export function useCalibrationData(): CalibrationContextValue {
-  const ctx = useContext(CalibrationContext);
-  if (!ctx) {
-    throw new Error(&apos;useCalibrationData must be used within a CalibrationProvider&apos;);
-  }
-  return ctx;
-}
-export function useMetricCalibration(metricName: string): MetricCalibration | undefined {
-  const ctx = useContext(CalibrationContext);
-  if (!ctx) return undefined;
-  return getMetricCalibration(ctx.data, metricName);
-}</file><file path="src/hooks/useAgentSession.ts">import type { MultiAgentEvaluation, EvaluationResult } from &apos;../types.js&apos;;
-import type { WorkflowGraph } from &apos;../types/workflow-graph.js&apos;;
-import { API_BASE, STALE_TIME } from &apos;../lib/constants.js&apos;;
-import { useApiQuery } from &apos;./useApiQuery.js&apos;;
-export interface AgentSessionResponse {
-  sessionId: string;
-  spans: Array&lt;{
-    traceId: string;
-    spanId: string;
-    name: string;
-    durationMs?: number;
-    status?: { code: number; message?: string };
-    attributes?: Record&lt;string, unknown&gt;;
-  }&gt;;
-  evaluation: MultiAgentEvaluation;
-  evaluations: EvaluationResult[];
-  agentMap: Record&lt;string, string&gt;;
-  graph: WorkflowGraph;
-}
-export function useAgentSession(sessionId: string | undefined) {
-  return useApiQuery&lt;AgentSessionResponse&gt;(
-    [&apos;agent-session&apos;, sessionId],
-    () =&gt; {
-      if (!sessionId) throw new Error(&apos;sessionId is required&apos;);
-      return `${API_BASE}/api/agents/${encodeURIComponent(sessionId)}`;
-    },
-    { enabled: !!sessionId, staleTime: STALE_TIME.DETAIL },
-  );
-}</file><file path="src/hooks/useCalibration.ts">import type { PercentileDistribution } from &apos;../lib/quality-utils.js&apos;;
-import type { CalibrationResponse } from &apos;../lib/validation/dashboard-schemas.js&apos;;
-import { API_BASE, STALE_TIME } from &apos;../lib/constants.js&apos;;
-import { useApiQuery } from &apos;./useApiQuery.js&apos;;
-export interface MetricCalibration {
-  distribution: PercentileDistribution;
-  sampleSize: number;
-}
-export function useCalibration() {
-  return useApiQuery&lt;CalibrationResponse&gt;(
-    [&apos;calibration&apos;],
-    () =&gt; `${API_BASE}/api/calibration`,
-    { staleTime: STALE_TIME.AGGREGATE, retry: 1 },
-  );
-}
-export function getMetricCalibration(
-  data: CalibrationResponse | undefined,
-  metricName: string,
-): MetricCalibration | undefined {
-  if (!data) return undefined;
-  const distribution = data.distributions[metricName];
-  const sampleSize = data.sampleCounts[metricName];
-  if (!distribution || sampleSize == null) return undefined;
-  return { distribution, sampleSize };
-}</file><file path="src/lib/validation/dashboard-schemas.ts">import { z } from &apos;zod&apos;;
-export { TraceIdSchema, SpanIdSchema, evaluatorTypeSchema, type EvaluatorType } from &apos;@parent/lib/core/shared-schemas.js&apos;;
-const normalizedScoreSchema = z.number().min(0).max(1);
-export {
-  HALLUCINATION_EVAL_NAME_SCHEMA,
-  HALLUCINATION_EVAL_NAME,
-  LLM_EVALUATOR_TYPE_SCHEMA,
-  LLM_EVALUATOR_TYPE,
-  hrtSchema,
-  localTraceSpanSchema,
-  otelLogEntrySchema,
-  transcriptEntrySchema,
-  otelEvaluationRecordSchema,
-  kvSyncEntrySchema,
-  kvSyncStateSchema,
-  metricDetailValueSchema,
-  coverageHeatmapSchema,
-} from &apos;@parent/lib/validation/dashboard-schemas.js&apos;;
-export type {
-  HallucinationEvalName,
-  LlmEvaluatorType,
-  LocalTraceSpan,
-  OTelLogEntry,
-  TranscriptEntry,
-  OTelEvaluationRecord,
-  KvSyncEntry,
-  KvSyncState,
-  MetricDetailValue,
-  CoverageHeatmap,
-} from &apos;@parent/lib/validation/dashboard-schemas.js&apos;;
-const routingTelemetrySummarySchema = z.object({
-  routedSpans: z.int().min(0),
-  fallbackRate: normalizedScoreSchema,
-});
-const routingTelemetryModelPairGroupSchema = z.object({
-  pair: z.string(),
-  requestedModel: z.string(),
-  actualModel: z.string(),
-  provider: z.string().nullable(),
-  count: z.int().min(0),
-});
-const routingTelemetryStrategyGroupSchema = z.object({
-  strategy: z.string(),
-  count: z.int().min(0),
-  fallbackCount: z.int().min(0),
-  fallbackRate: normalizedScoreSchema,
-});
-const routingTelemetryGroupSchema = z.union([
-  routingTelemetryStrategyGroupSchema,
-  routingTelemetryModelPairGroupSchema,
-]);
-export const routingTelemetryKvSchema = z.object({
-  period: z.string().optional(),
-  totalSpansScanned: z.int().min(0).default(0),
-  summary: routingTelemetrySummarySchema.default({ routedSpans: 0, fallbackRate: 0 }),
-  modelDistribution: z.record(z.string(), z.int().min(0)).default({}),
-  providerDistribution: z.record(z.string(), z.int().min(0)).default({}),
-  costSavings: z.number().min(0).default(0),
-  routingLatency: z.object({
-    p50: z.number().min(0),
-    p99: z.number().min(0),
-    source: z.enum([&apos;classification_time&apos;, &apos;span_duration&apos;]),
-  }).optional(),
-  groups: z.array(routingTelemetryGroupSchema).default([]),
-});
-export type RoutingTelemetryKvData = z.infer&lt;typeof routingTelemetryKvSchema&gt;;
-const calibrationPercentilesSchema = z.object({
-  p10: z.number().finite(),
-  p25: z.number().finite(),
-  p50: z.number().finite(),
-  p75: z.number().finite(),
-  p90: z.number().finite(),
-});
-export const calibrationResponseSchema = z.object({
-  distributions: z.record(z.string(), calibrationPercentilesSchema),
-  sampleCounts: z.record(z.string(), z.int().min(0)),
-  lastCalibrated: z.string().min(1),
-});
-export type CalibrationResponse = z.infer&lt;typeof calibrationResponseSchema&gt;;</file><file path="src/lib/auth0.ts">export { Auth0Provider, useAuth0 } from &apos;@auth0/auth0-react&apos;;
+const _total = results.reduce((sum, r) =&gt; sum + r.ms, 0);</file><file path="src/lib/auth0.ts">export { Auth0Provider, useAuth0 } from &apos;@auth0/auth0-react&apos;;
 export const AUTH0_DOMAIN = (import.meta.env.VITE_AUTH0_DOMAIN as string | undefined) ?? &apos;&apos;;
 export const AUTH0_CLIENT_ID = (import.meta.env.VITE_AUTH0_CLIENT_ID as string | undefined) ?? &apos;&apos;;
 export const AUTH0_AUDIENCE = (import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined) ?? &apos;&apos;;
@@ -10406,7 +10571,856 @@ export function LoginPage() {
     });
   }, [loginWithRedirect, search]);
   return &lt;div className=&quot;auth-loading&quot; role=&quot;status&quot; aria-label=&quot;Loading&quot; /&gt;;
-}</file><file path="scripts/judge-evaluations.ts">#!/usr/bin/env tsx
+}</file><file path="worker/index.ts">import { Hono } from &apos;hono&apos;;
+import { cors } from &apos;hono/cors&apos;;
+import { createRemoteJWKSet, jwtVerify } from &apos;jose&apos;;
+import { z } from &apos;zod&apos;;
+import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from &apos;../src/types/auth.js&apos;;
+import type { UserActivityEvent } from &apos;../src/types/activity.js&apos;;
+import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema } from &apos;../src/lib/validation/auth-schemas.js&apos;;
+import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from &apos;../src/lib/org-rbac.js&apos;;
+import { routingTelemetryKvSchema, calibrationResponseSchema } from &apos;../src/lib/validation/dashboard-schemas.js&apos;;
+import { supabasePost } from &apos;../src/lib/supabase-rest.js&apos;;
+export type { DashboardPermission, AppSession };
+const Http = {
+  Ok: 200,
+  NoContent: 204,
+  BadRequest: 400,
+  Unauthorized: 401,
+  Forbidden: 403,
+  NotFound: 404,
+  InternalServerError: 500,
+} as const satisfies Record&lt;string, number&gt;;
+const VALID_PERIOD_KEYS = [&apos;24h&apos;, &apos;7d&apos;, &apos;30d&apos;] as const;
+const ERR_INVALID_PERIOD = &apos;Invalid period. Must be 24h, 7d, or 30d.&apos;;
+const VALID_SORT_BY = [&apos;timestamp_desc&apos;, &apos;score_asc&apos;, &apos;score_desc&apos;] as const;
+const ERR_INVALID_SORT_BY = &apos;Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.&apos;;
+const PaginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+const ERR_INVALID_PAGINATION = &apos;Invalid pagination params. limit must be 1–200, offset must be &gt;= 0.&apos;;
+const ERR_UNAUTHORIZED = &apos;Unauthorized&apos;;
+const ERR_FORBIDDEN = &apos;Forbidden&apos;;
+const ERR_INVALID_REQUEST_BODY = &apos;Invalid request body&apos;;
+const ERR_INVALID_METRIC_NAME = &apos;Invalid metric name&apos;;
+const ERR_INVALID_TRACE_ID = &apos;Invalid traceId&apos;;
+const ERR_INVALID_SESSION_ID = &apos;Invalid sessionId&apos;;
+const ERR_INVALID_AGENT_ID = &apos;Invalid agentId&apos;;
+const VALID_ROLES = [&apos;executive&apos;, &apos;operator&apos;, &apos;auditor&apos;] as const;
+const ERR_INVALID_ROLE = &apos;Invalid role. Must be executive, operator, or auditor.&apos;;
+const VALID_INPUT_KEYS = [&apos;traceId&apos;, &apos;sessionId&apos;] as const;
+const ERR_INVALID_INPUT_KEY = &apos;Invalid inputKey. Must be traceId or sessionId.&apos;;
+const ERR_INVALID_USER_ID = &apos;Invalid userId&apos;;
+const ERR_INVALID_ROLE_ID = &apos;Invalid roleId&apos;;
+const ERR_INTERNAL = &apos;Internal server error&apos;;
+const ERR_NO_ORG = &apos;No organization membership&apos;;
+const ERR_NO_DATA = &apos;No data available&apos;;
+const ERR_NO_CALIBRATION_DATA = &apos;No calibration data available&apos;;
+const ERR_ROUTING_TELEMETRY_MALFORMED = &apos;Routing telemetry data is malformed&apos;;
+const ERR_CALIBRATION_MALFORMED = &apos;Calibration data is malformed&apos;;
+const ERR_FAILED_LOAD_USER_ROLES = &apos;Failed to load user roles&apos;;
+const KV_SCHEMA_VERSION = 1;
+const PARAM_RE = /^[\w:.-]+$/;
+const MAX_PARAM_LEN = 200;
+function safeArray&lt;T&gt;(val: unknown): T[] {
+  return Array.isArray(val) ? val as T[] : [];
+}
+function isValidId(id: string | undefined): id is string {
+  return !!id &amp;&amp; id.length &lt;= MAX_PARAM_LEN &amp;&amp; PARAM_RE.test(id);
+}
+async function readKvEnvelope&lt;T&gt;(kv: KVNamespace, key: string): Promise&lt;T | null&gt; {
+  const raw: unknown = await kv.get(key, &apos;json&apos;);
+  if (raw === null) return null;
+  if (typeof raw === &apos;object&apos; &amp;&amp; &apos;v&apos; in raw &amp;&amp; &apos;data&apos; in raw) {
+    const envelope = raw;
+    if (envelope.v !== KV_SCHEMA_VERSION) {
+      console.warn(`[kv] schema version mismatch for &quot;${key}&quot;: expected ${KV_SCHEMA_VERSION}, got ${String(envelope.v)} — treating as missing`);
+      return null;
+    }
+    return envelope.data as T;
+  }
+  return raw as T;
+}
+let kvFallbackHits = 0;
+type OrgKvEnv = { HOME_ORG_ID?: string; ORG_KV_FALLBACK_DISABLED?: string };
+async function getKv&lt;T&gt;(kv: KVNamespace, orgId: string | null, key: string, env: OrgKvEnv): Promise&lt;T | null&gt; {
+  if (!orgId) return readKvEnvelope&lt;T&gt;(kv, key);
+  const scoped = await readKvEnvelope&lt;T&gt;(kv, `org:${orgId}:${key}`);
+  if (scoped !== null) return scoped;
+  if (env.ORG_KV_FALLBACK_DISABLED !== &apos;true&apos; &amp;&amp; env.HOME_ORG_ID &amp;&amp; orgId === env.HOME_ORG_ID) {
+    const legacy = await readKvEnvelope&lt;T&gt;(kv, key);
+    if (legacy !== null) {
+      kvFallbackHits++;
+      console.log(`[kv] kv_fallback_hits=${kvFallbackHits} key=&quot;${key}&quot; (bare-key fallback, home org)`);
+      return legacy;
+    }
+  }
+  return null;
+}
+const GLOBAL_KV_ALLOWLIST = new Set([&apos;system:lastSync&apos;]);
+async function getGlobalKv&lt;T&gt;(kv: KVNamespace, key: string): Promise&lt;T | null&gt; {
+  if (!GLOBAL_KV_ALLOWLIST.has(key)) {
+    console.error(`[kv] getGlobalKv called with non-allowlisted key &quot;${key}&quot; — refusing`);
+    return null;
+  }
+  return readKvEnvelope&lt;T&gt;(kv, key);
+}
+type AuditAction = &apos;role.assign&apos; | &apos;role.revoke&apos; | &apos;member.role_change&apos; | &apos;member.remove&apos;;
+type SupabaseEnv = { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string };
+type WaitUntilFn = (promise: Promise&lt;unknown&gt;) =&gt; void;
+function logAuditEvent(
+  actorUserId: string | undefined,
+  action: AuditAction,
+  targetUserId: string,
+  roleId: string | undefined,
+  env: SupabaseEnv,
+  waitUntil: WaitUntilFn,
+  organizationId?: string,
+): void {
+  if (!actorUserId) return;
+  waitUntil(supabasePost(
+    `${env.SUPABASE_URL}/rest/v1/audit_log`,
+    {
+      actor_user_id: actorUserId,
+      action,
+      target_type: &apos;user&apos;,
+      target_id: targetUserId,
+      ...(roleId !== undefined &amp;&amp; { metadata: { role_id: roleId } }),
+      ...(organizationId !== undefined &amp;&amp; { organization_id: organizationId }),
+    },
+    env.SUPABASE_SERVICE_ROLE_KEY,
+  ));
+}
+function logActivity(
+  appUserId: string | undefined,
+  activityType: UserActivityEvent,
+  env: SupabaseEnv,
+  waitUntil: WaitUntilFn,
+): void {
+  if (!appUserId) return;
+  waitUntil(supabasePost(
+    `${env.SUPABASE_URL}/rest/v1/user_activity`,
+    { user_id: appUserId, activity_type: activityType },
+    env.SUPABASE_SERVICE_ROLE_KEY,
+  ));
+}
+const VIEW_PERMISSION_MAP: Array&lt;[DashboardPermission, DashboardView]&gt; = [
+  [&apos;dashboard.executive&apos;, &apos;executive&apos;],
+  [&apos;dashboard.operator&apos;, &apos;operator&apos;],
+  [&apos;dashboard.auditor&apos;, &apos;auditor&apos;],
+];
+const VALID_PERMISSIONS = new Set&lt;string&gt;([
+  &apos;dashboard.read&apos;,
+  &apos;dashboard.executive&apos;,
+  &apos;dashboard.operator&apos;,
+  &apos;dashboard.auditor&apos;,
+  &apos;dashboard.traces.read&apos;,
+  &apos;dashboard.sessions.read&apos;,
+  &apos;dashboard.agents.read&apos;,
+  &apos;dashboard.pipeline.read&apos;,
+  &apos;dashboard.compliance.read&apos;,
+  &apos;dashboard.admin&apos;,
+] satisfies DashboardPermission[]);
+type Bindings = {
+  DASHBOARD: KVNamespace;
+  ASSETS: Fetcher;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_ROLE_KEY: string;
+  AUTH0_DOMAIN: string;
+  AUTH0_AUDIENCE: string;
+  ALLOW_TEST_BYPASS?: string;
+  ORG_SCOPING_ENABLED?: string;
+  HOME_ORG_ID?: string;
+  STAFF_USER_IDS?: string;
+  ORG_KV_FALLBACK_DISABLED?: string;
+};
+type Variables = {
+  session: AppSession;
+};
+const app = new Hono&lt;{ Bindings: Bindings; Variables: Variables }&gt;();
+app.use(&apos;/*&apos;, cors({
+  origin: [
+    &apos;https://integritystudio.dev&apos;,
+    &apos;https://www.aledlie.com&apos;,
+    &apos;https://aledlie.com&apos;,
+    &apos;http://localhost:5173&apos;,
+    &apos;http://localhost:3000&apos;,
+  ],
+  allowMethods: [&apos;GET&apos;, &apos;POST&apos;, &apos;DELETE&apos;],
+  allowHeaders: [&apos;Authorization&apos;, &apos;Content-Type&apos;, &apos;X-Org-Id&apos;],
+}));
+app.use(&apos;/api/*&apos;, async (c, next) =&gt; {
+  await next();
+  c.header(&apos;Cache-Control&apos;, &apos;private, no-store&apos;);
+});
+const AUTH_TIMEOUT_MS = 5000;
+app.use(&apos;/api/*&apos;, async (c, next) =&gt; {
+  if (c.req.path === &apos;/api/health&apos;) return next();
+  const authHeader = c.req.header(&apos;Authorization&apos;);
+  const jwt = authHeader?.startsWith(&apos;Bearer &apos;) ? authHeader.slice(7) : null;
+  if (c.env.ALLOW_TEST_BYPASS === &apos;true&apos; &amp;&amp; jwt === &apos;test-token&apos;) {
+    if ((c.env.HOME_ORG_ID ?? &apos;&apos;) !== &apos;&apos; || parseStaffIds(c.env.STAFF_USER_IDS).size &gt; 0) {
+      console.error(&apos;[auth] ALLOW_TEST_BYPASS refused: production env markers present (HOME_ORG_ID/STAFF_USER_IDS)&apos;);
+      return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    }
+    const bypassOrgId = &apos;a0000000-0000-4000-8000-000000000001&apos;;
+    c.set(&apos;session&apos;, {
+      authUserId: &apos;auth0|test-user&apos;,
+      appUserId: &apos;a0000000-0000-4000-8000-000000000002&apos;,
+      email: &apos;test@example.com&apos;,
+      roles: [&apos;test&apos;],
+      permissions: [&apos;dashboard.admin&apos;],
+      allowedViews: [...VALID_ROLES],
+      activeOrgId: bypassOrgId,
+      memberships: [{
+        orgId: bypassOrgId,
+        slug: &apos;test-org&apos;,
+        name: &apos;Test Org&apos;,
+        membershipRole: &apos;owner&apos;,
+        dashboardRole: &apos;owner&apos;,
+      }],
+      role: &apos;owner&apos;,
+      isStaff: false,
+    });
+    return next();
+  }
+  if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  const controller = new AbortController();
+  const timeout = setTimeout(() =&gt; controller.abort(), AUTH_TIMEOUT_MS);
+  try {
+    const JWKS = createRemoteJWKSet(
+      new URL(`https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`),
+    );
+    let jwtPayload: Record&lt;string, unknown&gt;;
+    try {
+      const { payload } = await jwtVerify(jwt, JWKS, {
+        issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+        audience: c.env.AUTH0_AUDIENCE,
+      });
+      jwtPayload = payload;
+    } catch {
+      return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    }
+    const auth0Id = typeof jwtPayload[&apos;sub&apos;] === &apos;string&apos; ? jwtPayload[&apos;sub&apos;] : null;
+    if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    const orgScopingEnabled = c.env.ORG_SCOPING_ENABLED === &apos;true&apos;;
+    if (orgScopingEnabled &amp;&amp; !c.env.HOME_ORG_ID) {
+      console.error(&apos;[auth] ORG_SCOPING_ENABLED=true but HOME_ORG_ID is empty — refusing to serve&apos;);
+      return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+    }
+    const userRes = await fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,default_organization_id&amp;auth0_id=eq.${encodeURIComponent(auth0Id)}&amp;limit=1`,
+      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
+    ).catch(() =&gt; null);
+    if (!userRes?.ok) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    const rawUsers: unknown = await userRes.json().catch(() =&gt; null);
+    if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    const userResult = PublicUserSchema.safeParse(rawUsers[0]);
+    if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    const appUserId = userResult.data.id;
+    const email = userResult.data.email;
+    const defaultOrgId = userResult.data.default_organization_id ?? null;
+    const authUserId = auth0Id;
+    const rolesPromise = fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&amp;user_id=eq.${encodeURIComponent(appUserId)}`,
+      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
+    ).catch(() =&gt; null);
+    const membershipsPromise = orgScopingEnabled
+      ? fetch(
+          `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role,organization_id,organizations(id,slug,name)&amp;user_id=eq.${encodeURIComponent(appUserId)}`,
+          { headers: serviceRoleHeaders(c.env), signal: controller.signal },
+        ).catch(() =&gt; null)
+      : Promise.resolve(null);
+    const [rolesRes, membershipsRes] = await Promise.all([rolesPromise, membershipsPromise]);
+    if (!rolesRes?.ok) {
+      console.error(&apos;[auth] role fetch failed for user&apos;, appUserId, &apos;status:&apos;, rolesRes?.status ?? &apos;network error&apos;);
+      return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, Http.InternalServerError);
+    }
+    const rawRows: unknown = await rolesRes.json().catch(() =&gt; []);
+    const rows = safeArray(rawRows);
+    const roles: string[] = [];
+    const permissionSet = new Set&lt;DashboardPermission&gt;();
+    for (const row of rows) {
+      const rowResult = UserRoleRowSchema.safeParse(row);
+      if (!rowResult.success || !rowResult.data.roles) continue;
+      roles.push(rowResult.data.roles.name);
+      for (const perm of rowResult.data.roles.permissions) {
+        if (VALID_PERMISSIONS.has(perm)) permissionSet.add(perm as DashboardPermission);
+      }
+    }
+    if (orgScopingEnabled) {
+      const memberships = parseMemberships(membershipsRes ? await membershipsRes.json().catch(() =&gt; []) : []);
+      const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
+      const requestedOrg = c.req.header(&apos;X-Org-Id&apos;);
+      let activeOrgId: string | undefined;
+      if (requestedOrg) {
+        if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+        if (!isStaff &amp;&amp; !memberships.some(m =&gt; m.orgId === requestedOrg)) {
+          return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+        }
+        activeOrgId = requestedOrg;
+      }
+      if (!activeOrgId &amp;&amp; defaultOrgId &amp;&amp; (isStaff || memberships.some(m =&gt; m.orgId === defaultOrgId))) {
+        activeOrgId = defaultOrgId;
+      }
+      activeOrgId ??= memberships[0]?.orgId;
+      if (!activeOrgId &amp;&amp; isStaff) activeOrgId = c.env.HOME_ORG_ID;
+      if (activeOrgId) {
+        const membership = memberships.find(m =&gt; m.orgId === activeOrgId);
+        const role = isStaff ? &apos;owner&apos; : membership?.dashboardRole ?? &apos;read&apos;;
+        const permissions = [...PERMISSIONS_BY_DASHBOARD_ROLE[role]];
+        const allowedViews = viewsForPermissions(permissions);
+        c.set(&apos;session&apos;, { authUserId, appUserId, email, roles, permissions, allowedViews, activeOrgId, memberships, role, isStaff });
+        return next();
+      }
+      if (roles.length === 0) {
+        return c.json({ error: ERR_NO_ORG }, Http.Forbidden);
+      }
+    }
+    const permissions = [...permissionSet];
+    const allowedViews: DashboardView[] = permissionSet.has(&apos;dashboard.admin&apos;)
+      ? [...VALID_ROLES]
+      : VIEW_PERMISSION_MAP
+          .filter(([perm]) =&gt; permissionSet.has(perm))
+          .map(([, view]: [DashboardPermission, DashboardView]) =&gt; view);
+    c.set(&apos;session&apos;, { authUserId, appUserId, email, roles, permissions, allowedViews });
+    return next();
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+function parseStaffIds(raw: string | undefined): Set&lt;string&gt; {
+  if (!raw) return new Set();
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed.filter((v): v is string =&gt; typeof v === &apos;string&apos;)) : new Set();
+  } catch {
+    console.error(&apos;[auth] STAFF_USER_IDS is not valid JSON — treating as empty allowlist&apos;);
+    return new Set();
+  }
+}
+function parseMemberships(raw: unknown): OrgMembershipSummary[] {
+  const memberships: OrgMembershipSummary[] = [];
+  for (const row of safeArray(raw)) {
+    const parsed = OrgMembershipRowSchema.safeParse(row);
+    if (!parsed.success || !parsed.data.organizations) continue;
+    memberships.push({
+      orgId: parsed.data.organizations.id,
+      slug: parsed.data.organizations.slug,
+      name: parsed.data.organizations.name,
+      membershipRole: parsed.data.role,
+      dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[parsed.data.role],
+    });
+  }
+  return memberships;
+}
+function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
+  return session.permissions.includes(&apos;dashboard.admin&apos;) || session.permissions.includes(permission);
+}
+type AppContext = {
+  env: Bindings;
+  get: (key: &apos;session&apos;) =&gt; AppSession;
+};
+function getSessionKv&lt;T&gt;(c: AppContext, key: string): Promise&lt;T | null&gt; {
+  const orgId = c.env.ORG_SCOPING_ENABLED === &apos;true&apos;
+    ? c.get(&apos;session&apos;).activeOrgId ?? null
+    : null;
+  return getKv&lt;T&gt;(c.env.DASHBOARD, orgId, key, c.env);
+}
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
+  return {
+    &apos;apikey&apos;: env.SUPABASE_SERVICE_ROLE_KEY,
+    &apos;Authorization&apos;: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    &apos;Content-Type&apos;: &apos;application/json&apos;,
+  };
+}
+function buildMePayload(session: AppSession): Record&lt;string, unknown&gt; {
+  return {
+    email: session.email,
+    roles: session.roles,
+    permissions: session.permissions,
+    allowedViews: session.allowedViews,
+    ...(session.activeOrgId !== undefined &amp;&amp; { activeOrg: session.activeOrgId }),
+    ...(session.memberships !== undefined &amp;&amp; { memberships: session.memberships }),
+    ...(session.role !== undefined &amp;&amp; { role: session.role }),
+    ...(session.isStaff !== undefined &amp;&amp; { isStaff: session.isStaff }),
+  };
+}
+app.get(&apos;/api/me&apos;, (c) =&gt; {
+  const meResult = MeResponseSchema.safeParse(buildMePayload(c.get(&apos;session&apos;)));
+  if (!meResult.success) {
+    console.error(&apos;[/api/me] MeResponseSchema validation failed:&apos;, meResult.error.issues);
+    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+  }
+  return c.json(meResult.data);
+});
+app.post(&apos;/api/org/switch&apos;, async (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  const body: unknown = await c.req.json().catch(() =&gt; null);
+  const result = OrgSwitchRequestSchema.safeParse(body);
+  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  const { orgId } = result.data;
+  if (!session.isStaff &amp;&amp; !session.memberships?.some(m =&gt; m.orgId === orgId)) {
+    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  }
+  if (session.appUserId) {
+    const res = await fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(session.appUserId)}`,
+      {
+        method: &apos;PATCH&apos;,
+        headers: { ...(serviceRoleHeaders(c.env) as Record&lt;string, string&gt;), &apos;Prefer&apos;: &apos;return=minimal&apos; },
+        body: JSON.stringify({ default_organization_id: orgId }),
+      },
+    ).catch(() =&gt; null);
+    if (!res?.ok) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+  }
+  const membership = session.memberships?.find(m =&gt; m.orgId === orgId);
+  const role = session.isStaff ? &apos;owner&apos; : membership?.dashboardRole ?? &apos;read&apos;;
+  const permissions = [...PERMISSIONS_BY_DASHBOARD_ROLE[role]];
+  const updated: AppSession = {
+    ...session,
+    activeOrgId: orgId,
+    role,
+    permissions,
+    allowedViews: viewsForPermissions(permissions),
+  };
+  const meResult = MeResponseSchema.safeParse(buildMePayload(updated));
+  if (!meResult.success) {
+    console.error(&apos;[/api/org/switch] MeResponseSchema validation failed:&apos;, meResult.error.issues);
+    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+  }
+  return c.json(meResult.data);
+});
+app.post(&apos;/api/logout&apos;, (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  logActivity(session.appUserId, &apos;logout&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.body(null, Http.NoContent);
+});
+app.post(&apos;/api/activity&apos;, async (c) =&gt; {
+  const body: unknown = await c.req.json().catch(() =&gt; null);
+  const result = ActivityRequestSchema.safeParse(body);
+  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  logActivity(c.get(&apos;session&apos;).appUserId, result.data.activity_type, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.body(null, Http.NoContent);
+});
+app.get(&apos;/api/dashboard&apos;, async (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  if (!hasPermission(session, &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const role = c.req.query(&apos;role&apos;);
+  if (role &amp;&amp; !VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
+    return c.json({ error: ERR_INVALID_ROLE }, Http.BadRequest);
+  }
+  if (role &amp;&amp; !session.allowedViews.includes(role as DashboardView)) {
+    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  }
+  const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
+  const data = await getSessionKv&lt;unknown&gt;(c,key);
+  if (!data) return c.json({ error: ERR_NO_DATA }, Http.NotFound);
+  logActivity(session.appUserId, &apos;dashboard_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.json(data);
+});
+app.get(&apos;/api/metrics/:name/evaluations&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const name = c.req.param(&apos;name&apos;);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const pagination = PaginationSchema.safeParse({ limit: c.req.query(&apos;limit&apos;), offset: c.req.query(&apos;offset&apos;) });
+  if (!pagination.success) return c.json({ error: ERR_INVALID_PAGINATION }, Http.BadRequest);
+  const { limit, offset } = pagination.data;
+  const sortBy = c.req.query(&apos;sortBy&apos;) ?? &apos;timestamp_desc&apos;;
+  if (!VALID_SORT_BY.includes(sortBy as typeof VALID_SORT_BY[number])) {
+    return c.json({ error: ERR_INVALID_SORT_BY }, Http.BadRequest);
+  }
+  const scoreLabel = c.req.query(&apos;scoreLabel&apos;);
+  const data = await getSessionKv&lt;{ rows: Record&lt;string, unknown&gt;[] }&gt;(c, `metric:evaluations:${name}:${period}`);
+  if (!data) return c.json({ rows: [], total: 0, limit, offset, hasMore: false });
+  let rows = data.rows;
+  if (scoreLabel) rows = rows.filter((r: Record&lt;string, unknown&gt;) =&gt; r.label === scoreLabel);
+  if (sortBy === &apos;score_asc&apos;) rows.sort((a, b) =&gt; (typeof a.score === &apos;number&apos; ? a.score : 0) - (typeof b.score === &apos;number&apos; ? b.score : 0));
+  else if (sortBy === &apos;score_desc&apos;) rows.sort((a, b) =&gt; (typeof b.score === &apos;number&apos; ? b.score : 0) - (typeof a.score === &apos;number&apos; ? a.score : 0));
+  const total = rows.length;
+  const page = rows.slice(offset, offset + limit);
+  return c.json({ rows: page, total, limit, offset, hasMore: offset + limit &lt; total });
+});
+app.get(&apos;/api/metrics/:name&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const name = c.req.param(&apos;name&apos;);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
+  const data = await getSessionKv&lt;unknown&gt;(c,`metric:${name}`);
+  if (!data) {
+    return c.json({
+      name,
+      displayName: name,
+      status: &apos;no_data&apos;,
+      values: { count: 0 },
+      alerts: [],
+      sampleCount: 0,
+      scoreDistribution: [],
+      worstEvaluations: [],
+      bestEvaluations: [],
+    });
+  }
+  return c.json(data);
+});
+app.get(&apos;/api/trends/:name&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const name = c.req.param(&apos;name&apos;);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const data = await getSessionKv&lt;unknown&gt;(c,`trend:${name}:${period}`);
+  if (!data) return c.json({ metric: name, period, points: [], bucketCount: 0 });
+  return c.json(data);
+});
+app.get(&apos;/api/evaluations/trace/:traceId&apos;, async (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  if (!hasPermission(session, &apos;dashboard.traces.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const traceId = c.req.param(&apos;traceId&apos;);
+  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
+  const data = await getSessionKv&lt;unknown&gt;(c,`evaluations:trace:${traceId}`);
+  if (!data) return c.json({ evaluations: [] });
+  logActivity(session.appUserId, &apos;trace_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.json(data);
+});
+app.get(&apos;/api/traces/:traceId&apos;, async (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  if (!hasPermission(session, &apos;dashboard.traces.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const traceId = c.req.param(&apos;traceId&apos;);
+  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
+  const data = await getSessionKv&lt;unknown&gt;(c,`trace:${traceId}`);
+  if (!data) return c.json({ error: `No trace data for: ${traceId}` }, Http.NotFound);
+  logActivity(session.appUserId, &apos;trace_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.json(data);
+});
+app.get(&apos;/api/correlations&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;30d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const data = await getSessionKv&lt;unknown&gt;(c,`correlations:${period}`);
+  if (!data) return c.json({ correlations: [], metrics: [] });
+  return c.json(data);
+});
+app.get(&apos;/api/degradation-signals&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const data = await getSessionKv&lt;unknown&gt;(c,`meta/dashboard/degradation-signals:${period}`);
+  if (!data) return c.json({ period, reports: [], computedAt: null });
+  return c.json(data);
+});
+app.get(&apos;/api/coverage&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const inputKey = c.req.query(&apos;inputKey&apos;) ?? &apos;traceId&apos;;
+  if (!VALID_INPUT_KEYS.includes(inputKey as typeof VALID_INPUT_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_INPUT_KEY }, Http.BadRequest);
+  }
+  const data = await getSessionKv&lt;unknown&gt;(c,`coverage:${period}:${inputKey}`);
+  if (!data) return c.json({ period, metrics: [], inputs: [], heatmap: [] });
+  return c.json(data);
+});
+app.get(&apos;/api/pipeline&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.pipeline.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const data = await getSessionKv&lt;unknown&gt;(c,`pipeline:${period}`);
+  if (!data) return c.json({ period, stages: [], totalEvaluations: 0 });
+  return c.json(data);
+});
+app.get(&apos;/api/sessions/:sessionId&apos;, async (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  if (!hasPermission(session, &apos;dashboard.sessions.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const sessionId = c.req.param(&apos;sessionId&apos;);
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
+  const data = await getSessionKv&lt;unknown&gt;(c,`session:${sessionId}`);
+  if (!data) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
+  logActivity(session.appUserId, &apos;session_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.json(data);
+});
+app.get(&apos;/api/agents&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.agents.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const data = await getSessionKv&lt;unknown&gt;(c,&apos;meta:agents&apos;);
+  if (!data) return c.json([]);
+  return c.json(data);
+});
+app.get(&apos;/api/agents/detail/:agentId&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.agents.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const agentId = c.req.param(&apos;agentId&apos;);
+  if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, Http.BadRequest);
+  const data = await getSessionKv&lt;unknown&gt;(c,`agent:${agentId}`);
+  if (!data) return c.json({ error: `No data for agent: ${agentId}` }, Http.NotFound);
+  return c.json(data);
+});
+app.get(&apos;/api/agents/:sessionId&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.agents.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const sessionId = c.req.param(&apos;sessionId&apos;);
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
+  const session = await getSessionKv&lt;Record&lt;string, unknown&gt;&gt;(c, `session:${sessionId}`);
+  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
+  return c.json({
+    sessionId,
+    spans: [],
+    evaluation: session[&apos;multiAgentEvaluation&apos;] ?? null,
+    evaluations: safeArray(session[&apos;evaluations&apos;]),
+    agentMap: {},
+  });
+});
+app.get(&apos;/api/compliance/sla&apos;, async (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  if (!hasPermission(session, &apos;dashboard.compliance.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const dashboard = await getSessionKv&lt;Record&lt;string, unknown&gt;&gt;(c, `dashboard:${period}`);
+  if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
+  logActivity(session.appUserId, &apos;compliance_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  const slaResults = safeArray(dashboard[&apos;slaCompliance&apos;]);
+  return c.json({
+    period,
+    results: slaResults,
+    noSLAsConfigured: slaResults.length === 0,
+  });
+});
+app.get(&apos;/api/compliance/verifications&apos;, (c) =&gt; {
+  const session = c.get(&apos;session&apos;);
+  if (!hasPermission(session, &apos;dashboard.compliance.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  logActivity(session.appUserId, &apos;compliance_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.json({ period, count: 0, verifications: [] });
+});
+app.get(&apos;/api/calibration&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const raw = await getSessionKv&lt;unknown&gt;(c,&apos;meta:calibration&apos;);
+  if (!raw) return c.json({ error: ERR_NO_CALIBRATION_DATA }, Http.NotFound);
+  const result = calibrationResponseSchema.safeParse(raw);
+  if (!result.success) {
+    console.error(&apos;[/api/calibration] schema validation failed:&apos;, result.error.issues);
+    return c.json({ error: ERR_CALIBRATION_MALFORMED }, Http.InternalServerError);
+  }
+  return c.json(result.data);
+});
+app.get(&apos;/api/routing-telemetry&apos;, async (c) =&gt; {
+  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
+  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
+    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
+  }
+  const raw = await getSessionKv&lt;unknown&gt;(c,`routing-telemetry:${period}`);
+  const result = routingTelemetryKvSchema.safeParse(raw ?? {});
+  if (!result.success) {
+    console.error(&apos;[/api/routing-telemetry] schema validation failed:&apos;, result.error.issues);
+    return c.json({ error: ERR_ROUTING_TELEMETRY_MALFORMED }, Http.InternalServerError);
+  }
+  return c.json({ ...result.data, period });
+});
+app.get(&apos;/api/health&apos;, async (c) =&gt; {
+  const lastSync = c.env.ORG_SCOPING_ENABLED === &apos;true&apos;
+    ? await getGlobalKv&lt;string&gt;(c.env.DASHBOARD, &apos;system:lastSync&apos;)
+    : await getKv&lt;string&gt;(c.env.DASHBOARD, null, &apos;meta:lastSync&apos;, c.env);
+  return c.json({
+    status: lastSync ? &apos;ok&apos; : &apos;no_data&apos;,
+    lastSync: lastSync ?? null,
+  });
+});
+function orgAdminScope(c: AppContext): { session: AppSession; orgId: string } | null {
+  const session = c.get(&apos;session&apos;);
+  if (!hasPermission(session, &apos;dashboard.admin&apos;)) return null;
+  if (!session.activeOrgId) return null;
+  return { session, orgId: session.activeOrgId };
+}
+function canTouchOwnerRole(session: AppSession): boolean {
+  return session.isStaff === true || session.role === &apos;owner&apos;;
+}
+app.get(&apos;/api/admin/members&apos;, async (c) =&gt; {
+  const scope = orgAdminScope(c);
+  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=user_id,role,users(id,email)&amp;organization_id=eq.${encodeURIComponent(scope.orgId)}`,
+    { headers: serviceRoleHeaders(c.env) },
+  ).catch(() =&gt; null);
+  if (!res?.ok) return c.json({ error: &apos;Failed to fetch members&apos; }, Http.InternalServerError);
+  const rawJson: unknown = await res.json().catch(() =&gt; null);
+  const members = [];
+  for (const row of safeArray(rawJson)) {
+    const parsed = AdminMemberRowSchema.safeParse(row);
+    if (!parsed.success) continue;
+    members.push({
+      userId: parsed.data.user_id,
+      ...(parsed.data.users?.email ? { email: parsed.data.users.email } : {}),
+      membershipRole: parsed.data.role,
+      dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[parsed.data.role],
+    });
+  }
+  return c.json(members);
+});
+app.post(&apos;/api/admin/members/:userId/role&apos;, async (c) =&gt; {
+  const scope = orgAdminScope(c);
+  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const userId = c.req.param(&apos;userId&apos;);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
+  const body: unknown = await c.req.json().catch(() =&gt; null);
+  const result = UpdateMemberRoleRequestSchema.safeParse(body);
+  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  const newRole = result.data.membershipRole;
+  const currentRes = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role&amp;organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}&amp;limit=1`,
+    { headers: serviceRoleHeaders(c.env) },
+  ).catch(() =&gt; null);
+  if (!currentRes?.ok) return c.json({ error: &apos;Failed to fetch member&apos; }, Http.InternalServerError);
+  const currentRows = safeArray&lt;{ role?: string }&gt;(await currentRes.json().catch(() =&gt; []));
+  if (!currentRows[0]) return c.json({ error: ERR_INVALID_USER_ID }, Http.NotFound);
+  const currentRole = currentRows[0].role;
+  if ((newRole === &apos;owner&apos; || currentRole === &apos;owner&apos;) &amp;&amp; !canTouchOwnerRole(scope.session)) {
+    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  }
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}`,
+    {
+      method: &apos;PATCH&apos;,
+      headers: { ...(serviceRoleHeaders(c.env) as Record&lt;string, string&gt;), &apos;Prefer&apos;: &apos;return=minimal&apos; },
+      body: JSON.stringify({ role: newRole }),
+    },
+  ).catch(() =&gt; null);
+  if (!res?.ok) return c.json({ error: &apos;Failed to update member role&apos; }, Http.InternalServerError);
+  logAuditEvent(scope.session.appUserId, &apos;member.role_change&apos;, userId, undefined, c.env, c.executionCtx.waitUntil.bind(c.executionCtx), scope.orgId);
+  return c.body(null, Http.NoContent);
+});
+app.delete(&apos;/api/admin/members/:userId&apos;, async (c) =&gt; {
+  const scope = orgAdminScope(c);
+  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const userId = c.req.param(&apos;userId&apos;);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
+  const currentRes = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role&amp;organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}&amp;limit=1`,
+    { headers: serviceRoleHeaders(c.env) },
+  ).catch(() =&gt; null);
+  if (!currentRes?.ok) return c.json({ error: &apos;Failed to fetch member&apos; }, Http.InternalServerError);
+  const currentRows = safeArray&lt;{ role?: string }&gt;(await currentRes.json().catch(() =&gt; []));
+  if (!currentRows[0]) return c.json({ error: ERR_INVALID_USER_ID }, Http.NotFound);
+  if (currentRows[0].role === &apos;owner&apos; &amp;&amp; !canTouchOwnerRole(scope.session)) {
+    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  }
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}`,
+    { method: &apos;DELETE&apos;, headers: serviceRoleHeaders(c.env) },
+  ).catch(() =&gt; null);
+  if (!res?.ok) return c.json({ error: &apos;Failed to remove member&apos; }, Http.InternalServerError);
+  logAuditEvent(scope.session.appUserId, &apos;member.remove&apos;, userId, undefined, c.env, c.executionCtx.waitUntil.bind(c.executionCtx), scope.orgId);
+  return c.body(null, Http.NoContent);
+});
+function canUseGlobalAdmin(c: AppContext): boolean {
+  const session = c.get(&apos;session&apos;);
+  if (c.env.ORG_SCOPING_ENABLED === &apos;true&apos;) return session.isStaff === true;
+  return hasPermission(session, &apos;dashboard.admin&apos;);
+}
+app.get(&apos;/api/admin/users&apos;, async (c) =&gt; {
+  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const headers = serviceRoleHeaders(c.env);
+  const [usersRes, roleRowsRes] = await Promise.all([
+    fetch(`${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,created_at&amp;order=created_at.desc`, { headers }),
+    fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles?select=user_id,role_id,roles(id,name)`, { headers }),
+  ]);
+  if (!usersRes.ok) return c.json({ error: &apos;Failed to fetch users&apos; }, Http.InternalServerError);
+  if (!roleRowsRes.ok) return c.json({ error: &apos;Failed to fetch role assignments&apos; }, Http.InternalServerError);
+  const rawUsersJson: unknown = await usersRes.json().catch(() =&gt; null);
+  const rawUsers = safeArray(rawUsersJson);
+  const rawRoleRowsJson: unknown = await roleRowsRes.json().catch(() =&gt; []);
+  const rawRoleRows = safeArray(rawRoleRowsJson);
+  const rolesByUser = new Map&lt;string, { id: string; name: string }[]&gt;();
+  for (const row of rawRoleRows) {
+    const parsed = AdminUserRoleRowSchema.safeParse(row);
+    if (!parsed.success || !parsed.data.roles) continue;
+    const existing = rolesByUser.get(parsed.data.user_id) ?? [];
+    existing.push({ id: parsed.data.roles.id, name: parsed.data.roles.name });
+    rolesByUser.set(parsed.data.user_id, existing);
+  }
+  const users = [];
+  for (const raw of rawUsers) {
+    const r = raw as Record&lt;string, unknown&gt;;
+    const parsed = AdminUserSchema.safeParse({
+      id: r[&apos;id&apos;],
+      email: r[&apos;email&apos;],
+      created_at: r[&apos;created_at&apos;],
+      roles: rolesByUser.get(r[&apos;id&apos;] as string) ?? [],
+    });
+    if (parsed.success) users.push(parsed.data);
+  }
+  return c.json(users);
+});
+app.get(&apos;/api/admin/roles&apos;, async (c) =&gt; {
+  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/roles?select=id,name,permissions&amp;order=name.asc`,
+    { headers: serviceRoleHeaders(c.env) },
+  );
+  if (!res.ok) return c.json({ error: &apos;Failed to fetch roles&apos; }, Http.InternalServerError);
+  const rawJson: unknown = await res.json().catch(() =&gt; null);
+  const rows = safeArray(rawJson);
+  const roles = rows.flatMap((row) =&gt; {
+    const parsed = AdminRoleSchema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return c.json(roles);
+});
+app.post(&apos;/api/admin/users/:userId/roles&apos;, async (c) =&gt; {
+  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const userId = c.req.param(&apos;userId&apos;);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
+  const body: unknown = await c.req.json().catch(() =&gt; null);
+  const result = AssignRoleRequestSchema.safeParse(body);
+  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  const res = await fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles`, {
+    method: &apos;POST&apos;,
+    headers: { ...(serviceRoleHeaders(c.env) as Record&lt;string, string&gt;), &apos;Prefer&apos;: &apos;return=minimal&apos; },
+    body: JSON.stringify({ user_id: userId, role_id: result.data.role_id }),
+  });
+  if (!res.ok) return c.json({ error: &apos;Failed to assign role&apos; }, Http.InternalServerError);
+  logAuditEvent(c.get(&apos;session&apos;).appUserId, &apos;role.assign&apos;, userId, result.data.role_id, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.body(null, Http.NoContent);
+});
+app.delete(&apos;/api/admin/users/:userId/roles/:roleId&apos;, async (c) =&gt; {
+  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const userId = c.req.param(&apos;userId&apos;);
+  const roleId = c.req.param(&apos;roleId&apos;);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
+  if (!UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_ROLE_ID }, Http.BadRequest);
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${encodeURIComponent(userId)}&amp;role_id=eq.${encodeURIComponent(roleId)}`,
+    { method: &apos;DELETE&apos;, headers: serviceRoleHeaders(c.env) },
+  );
+  if (!res.ok) return c.json({ error: &apos;Failed to revoke role&apos; }, Http.InternalServerError);
+  logAuditEvent(c.get(&apos;session&apos;).appUserId, &apos;role.revoke&apos;, userId, roleId, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  return c.body(null, Http.NoContent);
+});
+app.get(&apos;*&apos;, async (c) =&gt; {
+  if (c.req.path === &apos;/api&apos; || c.req.path.startsWith(&apos;/api/&apos;)) return c.notFound();
+  return c.env.ASSETS.fetch(c.req.raw);
+});
+export default app;</file><file path="scripts/judge-evaluations.ts">#!/usr/bin/env tsx
 import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from &apos;fs&apos;;
 import { createHash } from &apos;crypto&apos;;
 import { join, basename } from &apos;path&apos;;
@@ -11323,171 +12337,6 @@ if (isDirectRun) {
     console.error(&apos;Fatal error:&apos;, err);
     safeExit(1);
   });
-}</file><file path="src/__tests__/support/api-responses.ts">import type { JsonSafe } from &apos;../../api/api-constants.js&apos;;
-import type { WorkflowGraph } from &apos;../../types/workflow-graph.js&apos;;
-import type {
-  CompositeQualityIndex,
-  CoverageHeatmap,
-  EvaluationResult,
-  HumanVerificationEvent,
-  MetricDetailResult,
-  MetricDynamics,
-  MultiAgentEvaluation,
-  PercentileDistribution,
-  QualityDashboardSummary,
-  RoleView,
-  SLAComplianceResult,
-} from &apos;../../types.js&apos;;
-export type WireEvaluation = JsonSafe&lt;EvaluationResult&gt;;
-export interface ErrorResponse {
-  error: string;
-}
-interface DashboardExtras {
-  cqi?: JsonSafe&lt;CompositeQualityIndex&gt;;
-  sparklines: Record&lt;string, (number | null)[]&gt;;
-}
-export type DashboardResponse = JsonSafe&lt;QualityDashboardSummary&gt; &amp; DashboardExtras;
-export type RoleViewResponse = JsonSafe&lt;RoleView&gt; &amp; DashboardExtras;
-export interface HealthResponse {
-  status: string;
-  hasData: boolean;
-}
-export interface QualityLiveResponse {
-  metrics: { name: string; score: number; evaluatorType: string; timestamp: string }[];
-  sessionCount: number;
-  lastUpdated: string;
-}
-export type MetricDetailResponse = JsonSafe&lt;MetricDetailResult&gt; &amp; {
-  dynamics?: JsonSafe&lt;MetricDynamics&gt;;
-};
-interface MetricEvaluationRowRaw {
-  score: number;
-  explanation: EvaluationResult[&apos;explanation&apos;];
-  traceId: EvaluationResult[&apos;traceId&apos;];
-  timestamp: EvaluationResult[&apos;timestamp&apos;];
-  evaluator: EvaluationResult[&apos;evaluator&apos;];
-  label: EvaluationResult[&apos;scoreLabel&apos;];
-  evaluatorType: EvaluationResult[&apos;evaluatorType&apos;];
-  spanId: EvaluationResult[&apos;spanId&apos;];
-  sessionId: EvaluationResult[&apos;sessionId&apos;];
-  agentName: EvaluationResult[&apos;agentName&apos;];
-  trajectoryLength: EvaluationResult[&apos;trajectoryLength&apos;];
-  stepScores: EvaluationResult[&apos;stepScores&apos;];
-  toolVerifications: EvaluationResult[&apos;toolVerifications&apos;];
-}
-export type MetricEvaluationRow = JsonSafe&lt;MetricEvaluationRowRaw&gt;;
-export interface MetricEvaluationsResponse {
-  rows: MetricEvaluationRow[];
-  total: number;
-  limit: number;
-  offset: number;
-  hasMore: boolean;
-}
-export interface TrendDetailResponse {
-  metric: string;
-  period: string;
-  bucketCount: number;
-  totalEvaluations: number;
-  overallPercentiles: JsonSafe&lt;PercentileDistribution&gt; | null | undefined;
-  trendData: unknown[];
-  narrowed: boolean;
-}
-export interface TrendSummaryResponse {
-  period: string;
-  metrics: {
-    metric: string;
-    count: number;
-    percentiles: JsonSafe&lt;PercentileDistribution&gt; | null;
-  }[];
-}
-export interface WireSpan {
-  traceId: string;
-  spanId: string;
-  name: string;
-  startTimeUnixNano: string;
-  endTimeUnixNano?: string;
-  durationMs?: number;
-  status?: { code?: string | number; message?: string };
-  attributes?: Record&lt;string, unknown&gt;;
-}
-export interface TraceDetailResponse {
-  traceId: string;
-  spans: WireSpan[];
-  evaluations: WireEvaluation[];
-}
-export interface AgentSummary {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  errorRate: number;
-  rateLimitCount: number;
-  avgOutputSize: number;
-  sessionCount: number;
-  sessionIds: string[];
-  sessionIdsTruncated: boolean;
-  traceIdsTotal: number;
-  traceIds: string[];
-  traceIdsTruncated: boolean;
-  sourceTypes: Record&lt;string, number&gt;;
-  dailyCounts: Record&lt;string, number&gt;;
-  evalSummary: Record&lt;string, { avg: number; min: number; max: number; count: number }&gt;;
-}
-export interface AgentListResponse {
-  period: string;
-  startDate: string;
-  endDate: string;
-  agents: AgentSummary[];
-}
-export interface AgentDetailResponse {
-  sessionId: string;
-  spans: WireSpan[];
-  evaluation: JsonSafe&lt;MultiAgentEvaluation&gt; | null;
-  evaluations: WireEvaluation[];
-  agentMap: Record&lt;string, string&gt;;
-  graph: JsonSafe&lt;WorkflowGraph&gt;;
-}
-export interface SessionDetailResponse {
-  sessionId: string;
-  dataSources: { traces: unknown; logs: unknown; evaluations: unknown; total: number };
-  timespan: unknown;
-  sessionInfo: unknown;
-  tokenTotals: unknown;
-  tokenProgression: unknown;
-  toolUsage: Record&lt;string, number&gt;;
-  mcpUsage: Record&lt;string, number&gt;;
-  spanBreakdown: Record&lt;string, number&gt;;
-  hookLatency: unknown;
-  errors: { byCategory: Record&lt;string, number&gt;; details: unknown[] };
-  agentActivity: unknown;
-  fileAccess: unknown;
-  gitCommits: unknown;
-  alertSummary: unknown;
-  codeStructure: unknown;
-  evaluationBreakdown: unknown;
-  logSummary: {
-    bySeverity: Record&lt;string, number&gt;;
-    logs: Partial&lt;Record&lt;&apos;timestamp&apos; | &apos;severity&apos; | &apos;traceId&apos;, unknown&gt;&gt;[];
-  };
-  multiAgentEvaluation: unknown;
-  evaluations: WireEvaluation[];
-}
-export interface TraceEvaluationsResponse {
-  evaluations: WireEvaluation[];
-}
-export interface SlaComplianceResponse {
-  period: string;
-  results: JsonSafe&lt;SLAComplianceResult&gt;[];
-  noSLAsConfigured: boolean;
-}
-export interface VerificationsResponse {
-  period: string;
-  count: number;
-  verifications: JsonSafe&lt;HumanVerificationEvent&gt;[];
-}
-export type CoverageResponse = JsonSafe&lt;CoverageHeatmap&gt; &amp; { period: string };
-export interface CorrelationsResponse {
-  correlations: unknown;
-  metrics: string[];
 }</file><file path="src/components/Layout.tsx">import { useCallback, useState, type ReactNode } from &apos;react&apos;;
 import type { Period } from &apos;../types.js&apos;;
 import { ShortcutOverlay } from &apos;./ShortcutOverlay.js&apos;;
@@ -13550,856 +14399,7 @@ summary.section-rail {
   align-items: center;
   gap: 0.5rem;
   margin-left: 0.75rem;
-}</file><file path="worker/index.ts">import { Hono } from &apos;hono&apos;;
-import { cors } from &apos;hono/cors&apos;;
-import { createRemoteJWKSet, jwtVerify } from &apos;jose&apos;;
-import { z } from &apos;zod&apos;;
-import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from &apos;../src/types/auth.js&apos;;
-import type { UserActivityEvent } from &apos;../src/types/activity.js&apos;;
-import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema } from &apos;../src/lib/validation/auth-schemas.js&apos;;
-import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from &apos;../src/lib/org-rbac.js&apos;;
-import { routingTelemetryKvSchema, calibrationResponseSchema } from &apos;../src/lib/validation/dashboard-schemas.js&apos;;
-import { supabasePost } from &apos;../src/lib/supabase-rest.js&apos;;
-export type { DashboardPermission, AppSession };
-const Http = {
-  Ok: 200,
-  NoContent: 204,
-  BadRequest: 400,
-  Unauthorized: 401,
-  Forbidden: 403,
-  NotFound: 404,
-  InternalServerError: 500,
-} as const satisfies Record&lt;string, number&gt;;
-const VALID_PERIOD_KEYS = [&apos;24h&apos;, &apos;7d&apos;, &apos;30d&apos;] as const;
-const ERR_INVALID_PERIOD = &apos;Invalid period. Must be 24h, 7d, or 30d.&apos;;
-const VALID_SORT_BY = [&apos;timestamp_desc&apos;, &apos;score_asc&apos;, &apos;score_desc&apos;] as const;
-const ERR_INVALID_SORT_BY = &apos;Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.&apos;;
-const PaginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-});
-const ERR_INVALID_PAGINATION = &apos;Invalid pagination params. limit must be 1–200, offset must be &gt;= 0.&apos;;
-const ERR_UNAUTHORIZED = &apos;Unauthorized&apos;;
-const ERR_FORBIDDEN = &apos;Forbidden&apos;;
-const ERR_INVALID_REQUEST_BODY = &apos;Invalid request body&apos;;
-const ERR_INVALID_METRIC_NAME = &apos;Invalid metric name&apos;;
-const ERR_INVALID_TRACE_ID = &apos;Invalid traceId&apos;;
-const ERR_INVALID_SESSION_ID = &apos;Invalid sessionId&apos;;
-const ERR_INVALID_AGENT_ID = &apos;Invalid agentId&apos;;
-const VALID_ROLES = [&apos;executive&apos;, &apos;operator&apos;, &apos;auditor&apos;] as const;
-const ERR_INVALID_ROLE = &apos;Invalid role. Must be executive, operator, or auditor.&apos;;
-const VALID_INPUT_KEYS = [&apos;traceId&apos;, &apos;sessionId&apos;] as const;
-const ERR_INVALID_INPUT_KEY = &apos;Invalid inputKey. Must be traceId or sessionId.&apos;;
-const ERR_INVALID_USER_ID = &apos;Invalid userId&apos;;
-const ERR_INVALID_ROLE_ID = &apos;Invalid roleId&apos;;
-const ERR_INTERNAL = &apos;Internal server error&apos;;
-const ERR_NO_ORG = &apos;No organization membership&apos;;
-const ERR_NO_DATA = &apos;No data available&apos;;
-const ERR_NO_CALIBRATION_DATA = &apos;No calibration data available&apos;;
-const ERR_ROUTING_TELEMETRY_MALFORMED = &apos;Routing telemetry data is malformed&apos;;
-const ERR_CALIBRATION_MALFORMED = &apos;Calibration data is malformed&apos;;
-const ERR_FAILED_LOAD_USER_ROLES = &apos;Failed to load user roles&apos;;
-const KV_SCHEMA_VERSION = 1;
-const PARAM_RE = /^[\w:.-]+$/;
-const MAX_PARAM_LEN = 200;
-function safeArray&lt;T&gt;(val: unknown): T[] {
-  return Array.isArray(val) ? val as T[] : [];
-}
-function isValidId(id: string | undefined): id is string {
-  return !!id &amp;&amp; id.length &lt;= MAX_PARAM_LEN &amp;&amp; PARAM_RE.test(id);
-}
-async function readKvEnvelope&lt;T&gt;(kv: KVNamespace, key: string): Promise&lt;T | null&gt; {
-  const raw: unknown = await kv.get(key, &apos;json&apos;);
-  if (raw === null) return null;
-  if (typeof raw === &apos;object&apos; &amp;&amp; &apos;v&apos; in raw &amp;&amp; &apos;data&apos; in raw) {
-    const envelope = raw;
-    if (envelope.v !== KV_SCHEMA_VERSION) {
-      console.warn(`[kv] schema version mismatch for &quot;${key}&quot;: expected ${KV_SCHEMA_VERSION}, got ${String(envelope.v)} — treating as missing`);
-      return null;
-    }
-    return envelope.data as T;
-  }
-  return raw as T;
-}
-let kvFallbackHits = 0;
-type OrgKvEnv = { HOME_ORG_ID?: string; ORG_KV_FALLBACK_DISABLED?: string };
-async function getKv&lt;T&gt;(kv: KVNamespace, orgId: string | null, key: string, env: OrgKvEnv): Promise&lt;T | null&gt; {
-  if (!orgId) return readKvEnvelope&lt;T&gt;(kv, key);
-  const scoped = await readKvEnvelope&lt;T&gt;(kv, `org:${orgId}:${key}`);
-  if (scoped !== null) return scoped;
-  if (env.ORG_KV_FALLBACK_DISABLED !== &apos;true&apos; &amp;&amp; env.HOME_ORG_ID &amp;&amp; orgId === env.HOME_ORG_ID) {
-    const legacy = await readKvEnvelope&lt;T&gt;(kv, key);
-    if (legacy !== null) {
-      kvFallbackHits++;
-      console.log(`[kv] kv_fallback_hits=${kvFallbackHits} key=&quot;${key}&quot; (bare-key fallback, home org)`);
-      return legacy;
-    }
-  }
-  return null;
-}
-const GLOBAL_KV_ALLOWLIST = new Set([&apos;system:lastSync&apos;]);
-async function getGlobalKv&lt;T&gt;(kv: KVNamespace, key: string): Promise&lt;T | null&gt; {
-  if (!GLOBAL_KV_ALLOWLIST.has(key)) {
-    console.error(`[kv] getGlobalKv called with non-allowlisted key &quot;${key}&quot; — refusing`);
-    return null;
-  }
-  return readKvEnvelope&lt;T&gt;(kv, key);
-}
-type AuditAction = &apos;role.assign&apos; | &apos;role.revoke&apos; | &apos;member.role_change&apos; | &apos;member.remove&apos;;
-type SupabaseEnv = { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string };
-type WaitUntilFn = (promise: Promise&lt;unknown&gt;) =&gt; void;
-function logAuditEvent(
-  actorUserId: string | undefined,
-  action: AuditAction,
-  targetUserId: string,
-  roleId: string | undefined,
-  env: SupabaseEnv,
-  waitUntil: WaitUntilFn,
-  organizationId?: string,
-): void {
-  if (!actorUserId) return;
-  waitUntil(supabasePost(
-    `${env.SUPABASE_URL}/rest/v1/audit_log`,
-    {
-      actor_user_id: actorUserId,
-      action,
-      target_type: &apos;user&apos;,
-      target_id: targetUserId,
-      ...(roleId !== undefined &amp;&amp; { metadata: { role_id: roleId } }),
-      ...(organizationId !== undefined &amp;&amp; { organization_id: organizationId }),
-    },
-    env.SUPABASE_SERVICE_ROLE_KEY,
-  ));
-}
-function logActivity(
-  appUserId: string | undefined,
-  activityType: UserActivityEvent,
-  env: SupabaseEnv,
-  waitUntil: WaitUntilFn,
-): void {
-  if (!appUserId) return;
-  waitUntil(supabasePost(
-    `${env.SUPABASE_URL}/rest/v1/user_activity`,
-    { user_id: appUserId, activity_type: activityType },
-    env.SUPABASE_SERVICE_ROLE_KEY,
-  ));
-}
-const VIEW_PERMISSION_MAP: Array&lt;[DashboardPermission, DashboardView]&gt; = [
-  [&apos;dashboard.executive&apos;, &apos;executive&apos;],
-  [&apos;dashboard.operator&apos;, &apos;operator&apos;],
-  [&apos;dashboard.auditor&apos;, &apos;auditor&apos;],
-];
-const VALID_PERMISSIONS = new Set&lt;string&gt;([
-  &apos;dashboard.read&apos;,
-  &apos;dashboard.executive&apos;,
-  &apos;dashboard.operator&apos;,
-  &apos;dashboard.auditor&apos;,
-  &apos;dashboard.traces.read&apos;,
-  &apos;dashboard.sessions.read&apos;,
-  &apos;dashboard.agents.read&apos;,
-  &apos;dashboard.pipeline.read&apos;,
-  &apos;dashboard.compliance.read&apos;,
-  &apos;dashboard.admin&apos;,
-] satisfies DashboardPermission[]);
-type Bindings = {
-  DASHBOARD: KVNamespace;
-  ASSETS: Fetcher;
-  SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
-  AUTH0_DOMAIN: string;
-  AUTH0_AUDIENCE: string;
-  ALLOW_TEST_BYPASS?: string;
-  ORG_SCOPING_ENABLED?: string;
-  HOME_ORG_ID?: string;
-  STAFF_USER_IDS?: string;
-  ORG_KV_FALLBACK_DISABLED?: string;
-};
-type Variables = {
-  session: AppSession;
-};
-const app = new Hono&lt;{ Bindings: Bindings; Variables: Variables }&gt;();
-app.use(&apos;/*&apos;, cors({
-  origin: [
-    &apos;https://integritystudio.dev&apos;,
-    &apos;https://www.aledlie.com&apos;,
-    &apos;https://aledlie.com&apos;,
-    &apos;http://localhost:5173&apos;,
-    &apos;http://localhost:3000&apos;,
-  ],
-  allowMethods: [&apos;GET&apos;, &apos;POST&apos;, &apos;DELETE&apos;],
-  allowHeaders: [&apos;Authorization&apos;, &apos;Content-Type&apos;, &apos;X-Org-Id&apos;],
-}));
-app.use(&apos;/api/*&apos;, async (c, next) =&gt; {
-  await next();
-  c.header(&apos;Cache-Control&apos;, &apos;private, no-store&apos;);
-});
-const AUTH_TIMEOUT_MS = 5000;
-app.use(&apos;/api/*&apos;, async (c, next) =&gt; {
-  if (c.req.path === &apos;/api/health&apos;) return next();
-  const authHeader = c.req.header(&apos;Authorization&apos;);
-  const jwt = authHeader?.startsWith(&apos;Bearer &apos;) ? authHeader.slice(7) : null;
-  if (c.env.ALLOW_TEST_BYPASS === &apos;true&apos; &amp;&amp; jwt === &apos;test-token&apos;) {
-    if ((c.env.HOME_ORG_ID ?? &apos;&apos;) !== &apos;&apos; || parseStaffIds(c.env.STAFF_USER_IDS).size &gt; 0) {
-      console.error(&apos;[auth] ALLOW_TEST_BYPASS refused: production env markers present (HOME_ORG_ID/STAFF_USER_IDS)&apos;);
-      return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    }
-    const bypassOrgId = &apos;a0000000-0000-4000-8000-000000000001&apos;;
-    c.set(&apos;session&apos;, {
-      authUserId: &apos;auth0|test-user&apos;,
-      appUserId: &apos;a0000000-0000-4000-8000-000000000002&apos;,
-      email: &apos;test@example.com&apos;,
-      roles: [&apos;test&apos;],
-      permissions: [&apos;dashboard.admin&apos;],
-      allowedViews: [...VALID_ROLES],
-      activeOrgId: bypassOrgId,
-      memberships: [{
-        orgId: bypassOrgId,
-        slug: &apos;test-org&apos;,
-        name: &apos;Test Org&apos;,
-        membershipRole: &apos;owner&apos;,
-        dashboardRole: &apos;owner&apos;,
-      }],
-      role: &apos;owner&apos;,
-      isStaff: false,
-    });
-    return next();
-  }
-  if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-  const controller = new AbortController();
-  const timeout = setTimeout(() =&gt; controller.abort(), AUTH_TIMEOUT_MS);
-  try {
-    const JWKS = createRemoteJWKSet(
-      new URL(`https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`),
-    );
-    let jwtPayload: Record&lt;string, unknown&gt;;
-    try {
-      const { payload } = await jwtVerify(jwt, JWKS, {
-        issuer: `https://${c.env.AUTH0_DOMAIN}/`,
-        audience: c.env.AUTH0_AUDIENCE,
-      });
-      jwtPayload = payload;
-    } catch {
-      return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    }
-    const auth0Id = typeof jwtPayload[&apos;sub&apos;] === &apos;string&apos; ? jwtPayload[&apos;sub&apos;] : null;
-    if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    const orgScopingEnabled = c.env.ORG_SCOPING_ENABLED === &apos;true&apos;;
-    if (orgScopingEnabled &amp;&amp; !c.env.HOME_ORG_ID) {
-      console.error(&apos;[auth] ORG_SCOPING_ENABLED=true but HOME_ORG_ID is empty — refusing to serve&apos;);
-      return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
-    }
-    const userRes = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,default_organization_id&amp;auth0_id=eq.${encodeURIComponent(auth0Id)}&amp;limit=1`,
-      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
-    ).catch(() =&gt; null);
-    if (!userRes?.ok) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    const rawUsers: unknown = await userRes.json().catch(() =&gt; null);
-    if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    const userResult = PublicUserSchema.safeParse(rawUsers[0]);
-    if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    const appUserId = userResult.data.id;
-    const email = userResult.data.email;
-    const defaultOrgId = userResult.data.default_organization_id ?? null;
-    const authUserId = auth0Id;
-    const rolesPromise = fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&amp;user_id=eq.${encodeURIComponent(appUserId)}`,
-      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
-    ).catch(() =&gt; null);
-    const membershipsPromise = orgScopingEnabled
-      ? fetch(
-          `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role,organization_id,organizations(id,slug,name)&amp;user_id=eq.${encodeURIComponent(appUserId)}`,
-          { headers: serviceRoleHeaders(c.env), signal: controller.signal },
-        ).catch(() =&gt; null)
-      : Promise.resolve(null);
-    const [rolesRes, membershipsRes] = await Promise.all([rolesPromise, membershipsPromise]);
-    if (!rolesRes?.ok) {
-      console.error(&apos;[auth] role fetch failed for user&apos;, appUserId, &apos;status:&apos;, rolesRes?.status ?? &apos;network error&apos;);
-      return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, Http.InternalServerError);
-    }
-    const rawRows: unknown = await rolesRes.json().catch(() =&gt; []);
-    const rows = safeArray(rawRows);
-    const roles: string[] = [];
-    const permissionSet = new Set&lt;DashboardPermission&gt;();
-    for (const row of rows) {
-      const rowResult = UserRoleRowSchema.safeParse(row);
-      if (!rowResult.success || !rowResult.data.roles) continue;
-      roles.push(rowResult.data.roles.name);
-      for (const perm of rowResult.data.roles.permissions) {
-        if (VALID_PERMISSIONS.has(perm)) permissionSet.add(perm as DashboardPermission);
-      }
-    }
-    if (orgScopingEnabled) {
-      const memberships = parseMemberships(membershipsRes ? await membershipsRes.json().catch(() =&gt; []) : []);
-      const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
-      const requestedOrg = c.req.header(&apos;X-Org-Id&apos;);
-      let activeOrgId: string | undefined;
-      if (requestedOrg) {
-        if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-        if (!isStaff &amp;&amp; !memberships.some(m =&gt; m.orgId === requestedOrg)) {
-          return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-        }
-        activeOrgId = requestedOrg;
-      }
-      if (!activeOrgId &amp;&amp; defaultOrgId &amp;&amp; (isStaff || memberships.some(m =&gt; m.orgId === defaultOrgId))) {
-        activeOrgId = defaultOrgId;
-      }
-      activeOrgId ??= memberships[0]?.orgId;
-      if (!activeOrgId &amp;&amp; isStaff) activeOrgId = c.env.HOME_ORG_ID;
-      if (activeOrgId) {
-        const membership = memberships.find(m =&gt; m.orgId === activeOrgId);
-        const role = isStaff ? &apos;owner&apos; : membership?.dashboardRole ?? &apos;read&apos;;
-        const permissions = [...PERMISSIONS_BY_DASHBOARD_ROLE[role]];
-        const allowedViews = viewsForPermissions(permissions);
-        c.set(&apos;session&apos;, { authUserId, appUserId, email, roles, permissions, allowedViews, activeOrgId, memberships, role, isStaff });
-        return next();
-      }
-      if (roles.length === 0) {
-        return c.json({ error: ERR_NO_ORG }, Http.Forbidden);
-      }
-    }
-    const permissions = [...permissionSet];
-    const allowedViews: DashboardView[] = permissionSet.has(&apos;dashboard.admin&apos;)
-      ? [...VALID_ROLES]
-      : VIEW_PERMISSION_MAP
-          .filter(([perm]) =&gt; permissionSet.has(perm))
-          .map(([, view]: [DashboardPermission, DashboardView]) =&gt; view);
-    c.set(&apos;session&apos;, { authUserId, appUserId, email, roles, permissions, allowedViews });
-    return next();
-  } finally {
-    clearTimeout(timeout);
-  }
-});
-function parseStaffIds(raw: string | undefined): Set&lt;string&gt; {
-  if (!raw) return new Set();
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? new Set(parsed.filter((v): v is string =&gt; typeof v === &apos;string&apos;)) : new Set();
-  } catch {
-    console.error(&apos;[auth] STAFF_USER_IDS is not valid JSON — treating as empty allowlist&apos;);
-    return new Set();
-  }
-}
-function parseMemberships(raw: unknown): OrgMembershipSummary[] {
-  const memberships: OrgMembershipSummary[] = [];
-  for (const row of safeArray(raw)) {
-    const parsed = OrgMembershipRowSchema.safeParse(row);
-    if (!parsed.success || !parsed.data.organizations) continue;
-    memberships.push({
-      orgId: parsed.data.organizations.id,
-      slug: parsed.data.organizations.slug,
-      name: parsed.data.organizations.name,
-      membershipRole: parsed.data.role,
-      dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[parsed.data.role],
-    });
-  }
-  return memberships;
-}
-function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
-  return session.permissions.includes(&apos;dashboard.admin&apos;) || session.permissions.includes(permission);
-}
-type AppContext = {
-  env: Bindings;
-  get: (key: &apos;session&apos;) =&gt; AppSession;
-};
-function getSessionKv&lt;T&gt;(c: AppContext, key: string): Promise&lt;T | null&gt; {
-  const orgId = c.env.ORG_SCOPING_ENABLED === &apos;true&apos;
-    ? c.get(&apos;session&apos;).activeOrgId ?? null
-    : null;
-  return getKv&lt;T&gt;(c.env.DASHBOARD, orgId, key, c.env);
-}
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
-  return {
-    &apos;apikey&apos;: env.SUPABASE_SERVICE_ROLE_KEY,
-    &apos;Authorization&apos;: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-    &apos;Content-Type&apos;: &apos;application/json&apos;,
-  };
-}
-function buildMePayload(session: AppSession): Record&lt;string, unknown&gt; {
-  return {
-    email: session.email,
-    roles: session.roles,
-    permissions: session.permissions,
-    allowedViews: session.allowedViews,
-    ...(session.activeOrgId !== undefined &amp;&amp; { activeOrg: session.activeOrgId }),
-    ...(session.memberships !== undefined &amp;&amp; { memberships: session.memberships }),
-    ...(session.role !== undefined &amp;&amp; { role: session.role }),
-    ...(session.isStaff !== undefined &amp;&amp; { isStaff: session.isStaff }),
-  };
-}
-app.get(&apos;/api/me&apos;, (c) =&gt; {
-  const meResult = MeResponseSchema.safeParse(buildMePayload(c.get(&apos;session&apos;)));
-  if (!meResult.success) {
-    console.error(&apos;[/api/me] MeResponseSchema validation failed:&apos;, meResult.error.issues);
-    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
-  }
-  return c.json(meResult.data);
-});
-app.post(&apos;/api/org/switch&apos;, async (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  const body: unknown = await c.req.json().catch(() =&gt; null);
-  const result = OrgSwitchRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  const { orgId } = result.data;
-  if (!session.isStaff &amp;&amp; !session.memberships?.some(m =&gt; m.orgId === orgId)) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  }
-  if (session.appUserId) {
-    const res = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(session.appUserId)}`,
-      {
-        method: &apos;PATCH&apos;,
-        headers: { ...(serviceRoleHeaders(c.env) as Record&lt;string, string&gt;), &apos;Prefer&apos;: &apos;return=minimal&apos; },
-        body: JSON.stringify({ default_organization_id: orgId }),
-      },
-    ).catch(() =&gt; null);
-    if (!res?.ok) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
-  }
-  const membership = session.memberships?.find(m =&gt; m.orgId === orgId);
-  const role = session.isStaff ? &apos;owner&apos; : membership?.dashboardRole ?? &apos;read&apos;;
-  const permissions = [...PERMISSIONS_BY_DASHBOARD_ROLE[role]];
-  const updated: AppSession = {
-    ...session,
-    activeOrgId: orgId,
-    role,
-    permissions,
-    allowedViews: viewsForPermissions(permissions),
-  };
-  const meResult = MeResponseSchema.safeParse(buildMePayload(updated));
-  if (!meResult.success) {
-    console.error(&apos;[/api/org/switch] MeResponseSchema validation failed:&apos;, meResult.error.issues);
-    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
-  }
-  return c.json(meResult.data);
-});
-app.post(&apos;/api/logout&apos;, (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  logActivity(session.appUserId, &apos;logout&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.body(null, Http.NoContent);
-});
-app.post(&apos;/api/activity&apos;, async (c) =&gt; {
-  const body: unknown = await c.req.json().catch(() =&gt; null);
-  const result = ActivityRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  logActivity(c.get(&apos;session&apos;).appUserId, result.data.activity_type, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.body(null, Http.NoContent);
-});
-app.get(&apos;/api/dashboard&apos;, async (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  if (!hasPermission(session, &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const role = c.req.query(&apos;role&apos;);
-  if (role &amp;&amp; !VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
-    return c.json({ error: ERR_INVALID_ROLE }, Http.BadRequest);
-  }
-  if (role &amp;&amp; !session.allowedViews.includes(role as DashboardView)) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  }
-  const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
-  const data = await getSessionKv&lt;unknown&gt;(c,key);
-  if (!data) return c.json({ error: ERR_NO_DATA }, Http.NotFound);
-  logActivity(session.appUserId, &apos;dashboard_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.json(data);
-});
-app.get(&apos;/api/metrics/:name/evaluations&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const name = c.req.param(&apos;name&apos;);
-  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const pagination = PaginationSchema.safeParse({ limit: c.req.query(&apos;limit&apos;), offset: c.req.query(&apos;offset&apos;) });
-  if (!pagination.success) return c.json({ error: ERR_INVALID_PAGINATION }, Http.BadRequest);
-  const { limit, offset } = pagination.data;
-  const sortBy = c.req.query(&apos;sortBy&apos;) ?? &apos;timestamp_desc&apos;;
-  if (!VALID_SORT_BY.includes(sortBy as typeof VALID_SORT_BY[number])) {
-    return c.json({ error: ERR_INVALID_SORT_BY }, Http.BadRequest);
-  }
-  const scoreLabel = c.req.query(&apos;scoreLabel&apos;);
-  const data = await getSessionKv&lt;{ rows: Record&lt;string, unknown&gt;[] }&gt;(c, `metric:evaluations:${name}:${period}`);
-  if (!data) return c.json({ rows: [], total: 0, limit, offset, hasMore: false });
-  let rows = data.rows;
-  if (scoreLabel) rows = rows.filter((r: Record&lt;string, unknown&gt;) =&gt; r.label === scoreLabel);
-  if (sortBy === &apos;score_asc&apos;) rows.sort((a, b) =&gt; (typeof a.score === &apos;number&apos; ? a.score : 0) - (typeof b.score === &apos;number&apos; ? b.score : 0));
-  else if (sortBy === &apos;score_desc&apos;) rows.sort((a, b) =&gt; (typeof b.score === &apos;number&apos; ? b.score : 0) - (typeof a.score === &apos;number&apos; ? a.score : 0));
-  const total = rows.length;
-  const page = rows.slice(offset, offset + limit);
-  return c.json({ rows: page, total, limit, offset, hasMore: offset + limit &lt; total });
-});
-app.get(&apos;/api/metrics/:name&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const name = c.req.param(&apos;name&apos;);
-  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
-  const data = await getSessionKv&lt;unknown&gt;(c,`metric:${name}`);
-  if (!data) {
-    return c.json({
-      name,
-      displayName: name,
-      status: &apos;no_data&apos;,
-      values: { count: 0 },
-      alerts: [],
-      sampleCount: 0,
-      scoreDistribution: [],
-      worstEvaluations: [],
-      bestEvaluations: [],
-    });
-  }
-  return c.json(data);
-});
-app.get(&apos;/api/trends/:name&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const name = c.req.param(&apos;name&apos;);
-  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const data = await getSessionKv&lt;unknown&gt;(c,`trend:${name}:${period}`);
-  if (!data) return c.json({ metric: name, period, points: [], bucketCount: 0 });
-  return c.json(data);
-});
-app.get(&apos;/api/evaluations/trace/:traceId&apos;, async (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  if (!hasPermission(session, &apos;dashboard.traces.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const traceId = c.req.param(&apos;traceId&apos;);
-  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
-  const data = await getSessionKv&lt;unknown&gt;(c,`evaluations:trace:${traceId}`);
-  if (!data) return c.json({ evaluations: [] });
-  logActivity(session.appUserId, &apos;trace_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.json(data);
-});
-app.get(&apos;/api/traces/:traceId&apos;, async (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  if (!hasPermission(session, &apos;dashboard.traces.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const traceId = c.req.param(&apos;traceId&apos;);
-  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
-  const data = await getSessionKv&lt;unknown&gt;(c,`trace:${traceId}`);
-  if (!data) return c.json({ error: `No trace data for: ${traceId}` }, Http.NotFound);
-  logActivity(session.appUserId, &apos;trace_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.json(data);
-});
-app.get(&apos;/api/correlations&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;30d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const data = await getSessionKv&lt;unknown&gt;(c,`correlations:${period}`);
-  if (!data) return c.json({ correlations: [], metrics: [] });
-  return c.json(data);
-});
-app.get(&apos;/api/degradation-signals&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const data = await getSessionKv&lt;unknown&gt;(c,`meta/dashboard/degradation-signals:${period}`);
-  if (!data) return c.json({ period, reports: [], computedAt: null });
-  return c.json(data);
-});
-app.get(&apos;/api/coverage&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const inputKey = c.req.query(&apos;inputKey&apos;) ?? &apos;traceId&apos;;
-  if (!VALID_INPUT_KEYS.includes(inputKey as typeof VALID_INPUT_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_INPUT_KEY }, Http.BadRequest);
-  }
-  const data = await getSessionKv&lt;unknown&gt;(c,`coverage:${period}:${inputKey}`);
-  if (!data) return c.json({ period, metrics: [], inputs: [], heatmap: [] });
-  return c.json(data);
-});
-app.get(&apos;/api/pipeline&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.pipeline.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const data = await getSessionKv&lt;unknown&gt;(c,`pipeline:${period}`);
-  if (!data) return c.json({ period, stages: [], totalEvaluations: 0 });
-  return c.json(data);
-});
-app.get(&apos;/api/sessions/:sessionId&apos;, async (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  if (!hasPermission(session, &apos;dashboard.sessions.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const sessionId = c.req.param(&apos;sessionId&apos;);
-  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
-  const data = await getSessionKv&lt;unknown&gt;(c,`session:${sessionId}`);
-  if (!data) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
-  logActivity(session.appUserId, &apos;session_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.json(data);
-});
-app.get(&apos;/api/agents&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.agents.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const data = await getSessionKv&lt;unknown&gt;(c,&apos;meta:agents&apos;);
-  if (!data) return c.json([]);
-  return c.json(data);
-});
-app.get(&apos;/api/agents/detail/:agentId&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.agents.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const agentId = c.req.param(&apos;agentId&apos;);
-  if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, Http.BadRequest);
-  const data = await getSessionKv&lt;unknown&gt;(c,`agent:${agentId}`);
-  if (!data) return c.json({ error: `No data for agent: ${agentId}` }, Http.NotFound);
-  return c.json(data);
-});
-app.get(&apos;/api/agents/:sessionId&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.agents.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const sessionId = c.req.param(&apos;sessionId&apos;);
-  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
-  const session = await getSessionKv&lt;Record&lt;string, unknown&gt;&gt;(c, `session:${sessionId}`);
-  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
-  return c.json({
-    sessionId,
-    spans: [],
-    evaluation: session[&apos;multiAgentEvaluation&apos;] ?? null,
-    evaluations: safeArray(session[&apos;evaluations&apos;]),
-    agentMap: {},
-  });
-});
-app.get(&apos;/api/compliance/sla&apos;, async (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  if (!hasPermission(session, &apos;dashboard.compliance.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const dashboard = await getSessionKv&lt;Record&lt;string, unknown&gt;&gt;(c, `dashboard:${period}`);
-  if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
-  logActivity(session.appUserId, &apos;compliance_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  const slaResults = safeArray(dashboard[&apos;slaCompliance&apos;]);
-  return c.json({
-    period,
-    results: slaResults,
-    noSLAsConfigured: slaResults.length === 0,
-  });
-});
-app.get(&apos;/api/compliance/verifications&apos;, (c) =&gt; {
-  const session = c.get(&apos;session&apos;);
-  if (!hasPermission(session, &apos;dashboard.compliance.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  logActivity(session.appUserId, &apos;compliance_view&apos;, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.json({ period, count: 0, verifications: [] });
-});
-app.get(&apos;/api/calibration&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const raw = await getSessionKv&lt;unknown&gt;(c,&apos;meta:calibration&apos;);
-  if (!raw) return c.json({ error: ERR_NO_CALIBRATION_DATA }, Http.NotFound);
-  const result = calibrationResponseSchema.safeParse(raw);
-  if (!result.success) {
-    console.error(&apos;[/api/calibration] schema validation failed:&apos;, result.error.issues);
-    return c.json({ error: ERR_CALIBRATION_MALFORMED }, Http.InternalServerError);
-  }
-  return c.json(result.data);
-});
-app.get(&apos;/api/routing-telemetry&apos;, async (c) =&gt; {
-  if (!hasPermission(c.get(&apos;session&apos;), &apos;dashboard.read&apos;)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const period = c.req.query(&apos;period&apos;) ?? &apos;7d&apos;;
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const raw = await getSessionKv&lt;unknown&gt;(c,`routing-telemetry:${period}`);
-  const result = routingTelemetryKvSchema.safeParse(raw ?? {});
-  if (!result.success) {
-    console.error(&apos;[/api/routing-telemetry] schema validation failed:&apos;, result.error.issues);
-    return c.json({ error: ERR_ROUTING_TELEMETRY_MALFORMED }, Http.InternalServerError);
-  }
-  return c.json({ ...result.data, period });
-});
-app.get(&apos;/api/health&apos;, async (c) =&gt; {
-  const lastSync = c.env.ORG_SCOPING_ENABLED === &apos;true&apos;
-    ? await getGlobalKv&lt;string&gt;(c.env.DASHBOARD, &apos;system:lastSync&apos;)
-    : await getKv&lt;string&gt;(c.env.DASHBOARD, null, &apos;meta:lastSync&apos;, c.env);
-  return c.json({
-    status: lastSync ? &apos;ok&apos; : &apos;no_data&apos;,
-    lastSync: lastSync ?? null,
-  });
-});
-function orgAdminScope(c: AppContext): { session: AppSession; orgId: string } | null {
-  const session = c.get(&apos;session&apos;);
-  if (!hasPermission(session, &apos;dashboard.admin&apos;)) return null;
-  if (!session.activeOrgId) return null;
-  return { session, orgId: session.activeOrgId };
-}
-function canTouchOwnerRole(session: AppSession): boolean {
-  return session.isStaff === true || session.role === &apos;owner&apos;;
-}
-app.get(&apos;/api/admin/members&apos;, async (c) =&gt; {
-  const scope = orgAdminScope(c);
-  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=user_id,role,users(id,email)&amp;organization_id=eq.${encodeURIComponent(scope.orgId)}`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() =&gt; null);
-  if (!res?.ok) return c.json({ error: &apos;Failed to fetch members&apos; }, Http.InternalServerError);
-  const rawJson: unknown = await res.json().catch(() =&gt; null);
-  const members = [];
-  for (const row of safeArray(rawJson)) {
-    const parsed = AdminMemberRowSchema.safeParse(row);
-    if (!parsed.success) continue;
-    members.push({
-      userId: parsed.data.user_id,
-      ...(parsed.data.users?.email ? { email: parsed.data.users.email } : {}),
-      membershipRole: parsed.data.role,
-      dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[parsed.data.role],
-    });
-  }
-  return c.json(members);
-});
-app.post(&apos;/api/admin/members/:userId/role&apos;, async (c) =&gt; {
-  const scope = orgAdminScope(c);
-  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const userId = c.req.param(&apos;userId&apos;);
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
-  const body: unknown = await c.req.json().catch(() =&gt; null);
-  const result = UpdateMemberRoleRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  const newRole = result.data.membershipRole;
-  const currentRes = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role&amp;organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}&amp;limit=1`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() =&gt; null);
-  if (!currentRes?.ok) return c.json({ error: &apos;Failed to fetch member&apos; }, Http.InternalServerError);
-  const currentRows = safeArray&lt;{ role?: string }&gt;(await currentRes.json().catch(() =&gt; []));
-  if (!currentRows[0]) return c.json({ error: ERR_INVALID_USER_ID }, Http.NotFound);
-  const currentRole = currentRows[0].role;
-  if ((newRole === &apos;owner&apos; || currentRole === &apos;owner&apos;) &amp;&amp; !canTouchOwnerRole(scope.session)) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  }
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}`,
-    {
-      method: &apos;PATCH&apos;,
-      headers: { ...(serviceRoleHeaders(c.env) as Record&lt;string, string&gt;), &apos;Prefer&apos;: &apos;return=minimal&apos; },
-      body: JSON.stringify({ role: newRole }),
-    },
-  ).catch(() =&gt; null);
-  if (!res?.ok) return c.json({ error: &apos;Failed to update member role&apos; }, Http.InternalServerError);
-  logAuditEvent(scope.session.appUserId, &apos;member.role_change&apos;, userId, undefined, c.env, c.executionCtx.waitUntil.bind(c.executionCtx), scope.orgId);
-  return c.body(null, Http.NoContent);
-});
-app.delete(&apos;/api/admin/members/:userId&apos;, async (c) =&gt; {
-  const scope = orgAdminScope(c);
-  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const userId = c.req.param(&apos;userId&apos;);
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
-  const currentRes = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role&amp;organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}&amp;limit=1`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() =&gt; null);
-  if (!currentRes?.ok) return c.json({ error: &apos;Failed to fetch member&apos; }, Http.InternalServerError);
-  const currentRows = safeArray&lt;{ role?: string }&gt;(await currentRes.json().catch(() =&gt; []));
-  if (!currentRows[0]) return c.json({ error: ERR_INVALID_USER_ID }, Http.NotFound);
-  if (currentRows[0].role === &apos;owner&apos; &amp;&amp; !canTouchOwnerRole(scope.session)) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  }
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?organization_id=eq.${encodeURIComponent(scope.orgId)}&amp;user_id=eq.${encodeURIComponent(userId)}`,
-    { method: &apos;DELETE&apos;, headers: serviceRoleHeaders(c.env) },
-  ).catch(() =&gt; null);
-  if (!res?.ok) return c.json({ error: &apos;Failed to remove member&apos; }, Http.InternalServerError);
-  logAuditEvent(scope.session.appUserId, &apos;member.remove&apos;, userId, undefined, c.env, c.executionCtx.waitUntil.bind(c.executionCtx), scope.orgId);
-  return c.body(null, Http.NoContent);
-});
-function canUseGlobalAdmin(c: AppContext): boolean {
-  const session = c.get(&apos;session&apos;);
-  if (c.env.ORG_SCOPING_ENABLED === &apos;true&apos;) return session.isStaff === true;
-  return hasPermission(session, &apos;dashboard.admin&apos;);
-}
-app.get(&apos;/api/admin/users&apos;, async (c) =&gt; {
-  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const headers = serviceRoleHeaders(c.env);
-  const [usersRes, roleRowsRes] = await Promise.all([
-    fetch(`${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,created_at&amp;order=created_at.desc`, { headers }),
-    fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles?select=user_id,role_id,roles(id,name)`, { headers }),
-  ]);
-  if (!usersRes.ok) return c.json({ error: &apos;Failed to fetch users&apos; }, Http.InternalServerError);
-  if (!roleRowsRes.ok) return c.json({ error: &apos;Failed to fetch role assignments&apos; }, Http.InternalServerError);
-  const rawUsersJson: unknown = await usersRes.json().catch(() =&gt; null);
-  const rawUsers = safeArray(rawUsersJson);
-  const rawRoleRowsJson: unknown = await roleRowsRes.json().catch(() =&gt; []);
-  const rawRoleRows = safeArray(rawRoleRowsJson);
-  const rolesByUser = new Map&lt;string, { id: string; name: string }[]&gt;();
-  for (const row of rawRoleRows) {
-    const parsed = AdminUserRoleRowSchema.safeParse(row);
-    if (!parsed.success || !parsed.data.roles) continue;
-    const existing = rolesByUser.get(parsed.data.user_id) ?? [];
-    existing.push({ id: parsed.data.roles.id, name: parsed.data.roles.name });
-    rolesByUser.set(parsed.data.user_id, existing);
-  }
-  const users = [];
-  for (const raw of rawUsers) {
-    const r = raw as Record&lt;string, unknown&gt;;
-    const parsed = AdminUserSchema.safeParse({
-      id: r[&apos;id&apos;],
-      email: r[&apos;email&apos;],
-      created_at: r[&apos;created_at&apos;],
-      roles: rolesByUser.get(r[&apos;id&apos;] as string) ?? [],
-    });
-    if (parsed.success) users.push(parsed.data);
-  }
-  return c.json(users);
-});
-app.get(&apos;/api/admin/roles&apos;, async (c) =&gt; {
-  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/roles?select=id,name,permissions&amp;order=name.asc`,
-    { headers: serviceRoleHeaders(c.env) },
-  );
-  if (!res.ok) return c.json({ error: &apos;Failed to fetch roles&apos; }, Http.InternalServerError);
-  const rawJson: unknown = await res.json().catch(() =&gt; null);
-  const rows = safeArray(rawJson);
-  const roles = rows.flatMap((row) =&gt; {
-    const parsed = AdminRoleSchema.safeParse(row);
-    return parsed.success ? [parsed.data] : [];
-  });
-  return c.json(roles);
-});
-app.post(&apos;/api/admin/users/:userId/roles&apos;, async (c) =&gt; {
-  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const userId = c.req.param(&apos;userId&apos;);
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
-  const body: unknown = await c.req.json().catch(() =&gt; null);
-  const result = AssignRoleRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  const res = await fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles`, {
-    method: &apos;POST&apos;,
-    headers: { ...(serviceRoleHeaders(c.env) as Record&lt;string, string&gt;), &apos;Prefer&apos;: &apos;return=minimal&apos; },
-    body: JSON.stringify({ user_id: userId, role_id: result.data.role_id }),
-  });
-  if (!res.ok) return c.json({ error: &apos;Failed to assign role&apos; }, Http.InternalServerError);
-  logAuditEvent(c.get(&apos;session&apos;).appUserId, &apos;role.assign&apos;, userId, result.data.role_id, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.body(null, Http.NoContent);
-});
-app.delete(&apos;/api/admin/users/:userId/roles/:roleId&apos;, async (c) =&gt; {
-  if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-  const userId = c.req.param(&apos;userId&apos;);
-  const roleId = c.req.param(&apos;roleId&apos;);
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
-  if (!UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_ROLE_ID }, Http.BadRequest);
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${encodeURIComponent(userId)}&amp;role_id=eq.${encodeURIComponent(roleId)}`,
-    { method: &apos;DELETE&apos;, headers: serviceRoleHeaders(c.env) },
-  );
-  if (!res.ok) return c.json({ error: &apos;Failed to revoke role&apos; }, Http.InternalServerError);
-  logAuditEvent(c.get(&apos;session&apos;).appUserId, &apos;role.revoke&apos;, userId, roleId, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
-  return c.body(null, Http.NoContent);
-});
-app.get(&apos;*&apos;, async (c) =&gt; {
-  if (c.req.path === &apos;/api&apos; || c.req.path.startsWith(&apos;/api/&apos;)) return c.notFound();
-  return c.env.ASSETS.fetch(c.req.raw);
-});
-export default app;</file><file path="scripts/backtest-degradation.ts">#!/usr/bin/env tsx
+}</file><file path="scripts/backtest-degradation.ts">#!/usr/bin/env tsx
 import { existsSync, readFileSync, writeFileSync } from &apos;fs&apos;;
 import { basename, join } from &apos;path&apos;;
 import { z } from &apos;zod&apos;;
@@ -16374,7 +16374,7 @@ if (isDirectRun) {
     console.error(err);
     process.exit(1);
   });
-}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-09-10 22:04:29 -0500</date><message>fix(auth): fix audit_log payload — target_type/target_id, role_id in metadata (AUTH-DASHBOARD-AUDIT-LOG)</message><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-09-09 22:50:02 -0500</date><message>chore(scripts): drop unused import</message><files>scripts/__tests__/judge-evaluations.test.ts</files></git_log_commit><git_log_commit><date>2026-09-08 17:25:03 -0500</date><message>fix(scripts): separate evaluator kind from sampling cohort (OBP16)</message><files>scripts/__tests__/judge-evaluations.test.ts</files><files>scripts/__tests__/pipeline-integration.test.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-09-08 15:13:14 -0500</date><message>test(derive): pin the OBP15 guards, and make them total (OBP15)</message><files>scripts/__tests__/derive-evaluations.test.ts</files><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-09-08 15:06:06 -0500</date><message>fix(derive): skip malformed spans in deriveEvaluationLatency (OBP15)</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-09-05 12:41:55 -0500</date><message>docs(backlog): migrate SCRIPTS-TSCONFIG-NUIA to v3.0.8 changelog</message><files>docs/BACKLOG.md</files><files>docs/changelog/3.0.8/CHANGELOG.md</files></git_log_commit><git_log_commit><date>2026-08-30 04:43:41 -0500</date><message>docs(roadmap): repoint parent link to docs/auth-architecture.md</message><files>docs/roadmap/impl-auth0-migration.md</files></git_log_commit><git_log_commit><date>2026-08-28 12:06:19 -0500</date><message>docs: reflect SCRIPTS-TSCONFIG-NUIA step 2 completion</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-28 12:01:51 -0500</date><message>refactor(lint): dedupe shared rules and glob arrays in eslint.config.mjs</message><files>eslint.config.mjs</files></git_log_commit><git_log_commit><date>2026-08-28 11:53:03 -0500</date><message>fix(lint): promote scripts/ type-safety rules from warn to error</message><files>eslint.config.mjs</files></git_log_commit><git_log_commit><date>2026-08-28 11:52:57 -0500</date><message>fix(types): enable noUncheckedIndexedAccess in tsconfig.scripts.json</message><files>tsconfig.scripts.json</files></git_log_commit><git_log_commit><date>2026-08-28 11:44:17 -0500</date><message>docs(backlog): mark SCRIPTS-TSCONFIG-NUIA done — all 93 errors resolved</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-28 11:43:53 -0500</date><message>fix(types): non-null assert array index accesses in sync-to-kv tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/sync-to-kv.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:43:02 -0500</date><message>fix(types): non-null assert result[0] and index accesses in sync-prioritization tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/sync-prioritization.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:42:31 -0500</date><message>fix(types): non-null assert array index accesses in pipeline-integration tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/pipeline-integration.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:41:33 -0500</date><message>fix(types): non-null assert mock.calls[0/1] in kv-bulk-delete tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/kv-bulk-delete.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:40:26 -0500</date><message>fix(types): non-null assert turns[0/1] accesses in judge-evaluations tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/judge-evaluations.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:39:47 -0500</date><message>fix(types): non-null assert array index accesses in derive-evaluations tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/derive-evaluations.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:38:58 -0500</date><message>fix(types): guard undefined array/Record access throughout sync-to-kv (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:35:46 -0500</date><message>fix(types): guard undefined array access and fix latency field names in backtest-degradation (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:34:01 -0500</date><message>fix(types): tighten STATUS_SCORES type and guard undefined array access in derive-evaluations (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:32:56 -0500</date><message>fix(types): guard undefined indexing in judge-evaluations (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:32:09 -0500</date><message>fix(types): handle possibly-undefined arg in populate-dashboard --limit parsing (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/populate-dashboard.ts</files></git_log_commit><git_log_commit><date>2026-08-27 15:49:25 -0500</date><message>docs: cost Agent-as-Judge as a Cloudflare Worker job</message><files>PIPELINE_COST_COMPARISON.md</files></git_log_commit><git_log_commit><date>2026-08-22 22:09:40 -0500</date><message>docs: compare populate-pipeline replacement costs</message><files>PIPELINE_COST_COMPARISON.md</files></git_log_commit><git_log_commit><date>2026-08-22 20:55:41 -0500</date><message>fix(auth): stop clearing the session before the logout navigation commits</message><files>src/__tests__/auth-context-refresh.test.tsx</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-08-22 20:42:25 -0500</date><message>fix(auth): disable the Log out button in flight and clear session on logout failure</message><files>src/components/Layout.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-08-22 20:35:34 -0500</date><message>feat(ui): add a Log out button to the dashboard header</message><files>src/components/Layout.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-08-22 15:33:15 -0500</date><message>docs: record the Map/rollup interim state for SCRIPTS-TSCONFIG-NUIA</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-22 15:33:15 -0500</date><message>refactor: replace lookup() and dirname assertions with honest types</message><files>scripts/backtest-degradation.ts</files><files>scripts/sync-to-kv.ts</files><files>src/__tests__/dashboard-file-utils.test.ts</files><files>src/lib/dashboard-file-utils.ts</files></git_log_commit><git_log_commit><date>2026-08-22 15:17:41 -0500</date><message>docs: move two resolved KV-sync items into the 3.0.7 changelog</message><files>docs/BACKLOG.md</files><files>docs/changelog/3.0.7/CHANGELOG.md</files></git_log_commit><git_log_commit><date>2026-08-22 13:22:41 -0500</date><message>fix(auth): restore post-login deep links and stop the callback error loop</message><files>src/App.tsx</files><files>src/lib/auth0.ts</files><files>src/pages/LoginPage.tsx</files></git_log_commit><git_log_commit><date>2026-08-22 13:14:19 -0500</date><message>feat(auth): persist sessions with rotating refresh tokens</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-08-22 13:04:08 -0500</date><message>feat(hosting): migrate integritystudio.dev from GitHub Pages to the worker</message><files>.github/workflows/deploy.yml</files><files>index.html</files><files>public/404.html</files><files>public/CNAME</files><files>public/_headers</files></git_log_commit><git_log_commit><date>2026-08-22 13:03:51 -0500</date><message>perf(build): drop forced workflow-viz manual chunk from critical path</message><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-08-22 13:03:36 -0500</date><message>fix(worker): serve index.html for SPA deep links via not_found_handling</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-17 15:21:47 -0600</date><message>docs(backlog): move SYNC-KV-BIGINT and DERIVE-EVAL-LINT-STRINGIFY to resolved</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-17 15:21:47 -0600</date><message>fix(scripts): serialize KV values through jsonSafe to handle bigint — SYNC-KV-BIGINT</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:05:14 -0600</date><message>refactor: refactor 4 files</message><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/auth-context-refresh.test.tsx</files><files>src/__tests__/quality-utils-drift.test.ts</files><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:04:34 -0600</date><message>refactor(scripts): refactor backtest-degradation</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:04:24 -0600</date><message>refactor(scripts): refactor sync-to-kv.test, sync-to-kv</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:04:05 -0600</date><message>docs(docs): update backlog</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-17 14:58:34 -0600</date><message>refactor(scripts): refactor derive-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-17 14:32:14 -0600</date><message>chore: gitignore .claude/.current-session-id</message><files>.gitignore</files></git_log_commit><git_log_commit><date>2026-08-17 14:31:00 -0600</date><message>refactor(worker): refactor activity-logging.test, admin-routes.test, aud</message><files>worker/__tests__/activity-logging.test.ts</files><files>worker/__tests__/admin-routes.test.ts</files><files>worker/__tests__/audit-log.test.ts</files></git_log_commit><git_log_commit><date>2026-08-17 14:01:55 -0600</date><message>docs(claude): rewrite integration test Auth0 ROPC config entry</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-08-17 14:01:45 -0600</date><message>test(e2e): add /api/calibration 500 case and full contract test</message><files>e2e/integration/api-contracts.spec.ts</files></git_log_commit><git_log_commit><date>2026-08-17 14:01:25 -0600</date><message>refactor(e2e): rename DEV_WORKER_URL -&gt; METRICS_API_URL; fail-fast baseURL; add list reporter</message><files>.github/workflows/deploy.yml</files><files>e2e/integration/setup.ts</files><files>playwright.config.ts</files><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-17 01:12:42 -0600</date><message>refactor(calibration): centralize CalibrationResponse behind Zod schema</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files><files>src/__tests__/WorkflowPage.test.tsx</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/data-loader-trace-ids.test.ts</files><files>src/__tests__/support/api-responses.ts</files><files>src/__tests__/support/query-harness.tsx</files><files>src/__tests__/useCalibration.test.ts</files><files>src/__tests__/useCalibration.test.tsx</files><files>src/__tests__/useQualityLive.test.tsx</files><files>src/__tests__/vite-web-worker-stub.test.ts</files><files>src/context/CalibrationContext.tsx</files><files>src/hooks/useAgentSession.ts</files><files>src/hooks/useCalibration.ts</files><files>src/lib/validation/dashboard-schemas.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-08-16 19:07:14 -0600</date><message>test(api): drop the buildWorkflowGraph mock and assert the real graph</message><files>src/__tests__/api-agents.test.ts</files><files>src/__tests__/support/api-responses.ts</files></git_log_commit><git_log_commit><date>2026-08-16 19:02:19 -0600</date><message>test(api): type response bodies and mock fixtures against the real types</message><files>src/__tests__/api-agents.test.ts</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/api-compliance.test.ts</files><files>src/__tests__/api-correlations.test.ts</files><files>src/__tests__/api-coverage.test.ts</files><files>src/__tests__/api-dashboard.test.ts</files><files>src/__tests__/api-evaluations.test.ts</files><files>src/__tests__/api-metrics.test.ts</files><files>src/__tests__/api-pipeline.test.ts</files><files>src/__tests__/api-sessions.test.ts</files><files>src/__tests__/api-traces.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>src/__tests__/support/api-responses.ts</files><files>src/__tests__/support/fixtures.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-08-16 19:02:00 -0600</date><message>fix(api): serialize bigint timestamps at the response boundary</message><files>docs/BACKLOG.md</files><files>src/api/api-constants.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files><files>src/api/routes/metrics.ts</files><files>src/api/routes/sessions.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-08-16 11:28:49 -0600</date><message>fix: resolve TypeScript errors in dashboard</message><files>scripts/__tests__/judge-evaluations.test.ts</files><files>scripts/backtest-degradation.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/auth-context-refresh.test.tsx</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>tsconfig.scripts.json</files></git_log_commit><git_log_commit><date>2026-08-14 01:04:35 -0600</date><message>fix(ui): validate stored org id as UUID; document target-org X-Org-Id on switch</message><files>src/contexts/OrgContext.tsx</files><files>src/lib/api-client.ts</files></git_log_commit><git_log_commit><date>2026-08-14 01:00:46 -0600</date><message>feat(worker,ui): org resolution, scoped KV choke points, org context + admin (org-scoping P5+P6)</message><files>src/App.tsx</files><files>src/components/OrgSwitcher.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/contexts/OrgContext.tsx</files><files>src/hooks/useApiQuery.ts</files><files>src/hooks/useTrace.ts</files><files>src/lib/api-client.ts</files><files>src/lib/org-rbac.ts</files><files>src/lib/validation/auth-schemas.ts</files><files>src/pages/AdminPage.tsx</files><files>src/theme.css</files><files>src/types/auth.ts</files><files>worker/__tests__/kv-choke-point.test.ts</files><files>worker/__tests__/org-kv-scoping.test.ts</files><files>worker/__tests__/org-rbac.test.ts</files><files>worker/index.ts</files><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-14 01:00:32 -0600</date><message>feat(pipeline): org-prefixed KV dual-write with write-budget counter (org-scoping P4)</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-08 01:28:50 -0500</date><message>docs: record the third dashboard Worker and why [env.dev] has to exist</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-08-08 01:27:17 -0500</date><message>feat(worker): add [env.dev] — quality-metrics-api-dev on the dev Auth0 tenant</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-06 23:01:20 -0500</date><message>docs: correct date in preview_urls comment — 2026-08-07 was a day ahead</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-06 20:18:32 -0500</date><message>fix(worker): disable per-version preview URLs on both dashboard Workers</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-06 20:03:23 -0500</date><message>docs: barrels are re-export-only, not literally one line</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-08-06 19:42:39 -0500</date><message>refactor(scripts): use the submodule&apos;s dashboard-file-utils, not the parent&apos;s (SRC-DUP-TYPES)</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-06 19:33:28 -0500</date><message>refactor: enforce parent-import boundary — no more relative dist/ reach-ins (DASH-DIST-IMPORT)</message><files>CLAUDE.md</files><files>eslint.config.mjs</files><files>scripts/__tests__/sync-to-kv.test.ts</files><files>src/__tests__/api-agents.test.ts</files><files>src/__tests__/api-compliance.test.ts</files><files>src/__tests__/api-correlations.test.ts</files><files>src/__tests__/api-coverage.test.ts</files><files>src/__tests__/api-dashboard.test.ts</files><files>src/__tests__/api-evaluations.test.ts</files><files>src/__tests__/api-metrics.test.ts</files><files>src/__tests__/api-pipeline.test.ts</files><files>src/__tests__/api-sessions.test.ts</files><files>src/__tests__/api-traces.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/__tests__/data-loader-trace-ids.test.ts</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>src/api/api-constants.ts</files><files>src/api/data-loader.ts</files><files>src/api/parent/backends.ts</files><files>src/api/parent/bucket-utils.ts</files><files>src/api/parent/error-sanitizer.ts</files><files>src/api/parent/qfe-backtest.ts</files><files>src/api/parent/qfe-correlation.ts</files><files>src/api/parent/qfe-cqi.ts</files><files>src/api/parent/qfe-dynamics.ts</files><files>src/api/parent/qfe-percentiles.ts</files><files>src/api/parent/quality-constants.ts</files><files>src/api/parent/quality-metrics.ts</files><files>src/api/parent/quality-multi-agent.ts</files><files>src/api/parent/quality-views.ts</files><files>src/api/parent/quality-visualization.ts</files><files>src/api/parent/query-logs.ts</files><files>src/api/parent/query-traces.ts</files><files>src/api/parent/verification-events.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/compliance.ts</files><files>src/api/routes/correlations.ts</files><files>src/api/routes/coverage.ts</files><files>src/api/routes/dashboard.ts</files><files>src/api/routes/evaluations.ts</files><files>src/api/routes/metrics.ts</files><files>src/api/routes/pipeline.ts</files><files>src/api/routes/quality.ts</files><files>src/api/routes/sessions.ts</files><files>src/api/routes/traces.ts</files><files>src/api/routes/trends.ts</files><files>src/types.ts</files><files>vite-plugins.ts</files></git_log_commit><git_log_commit><date>2026-08-03 01:15:31 -0500</date><message>fix: bump nested brace-expansion 1.1.16 -&gt; 1.1.18, clearing a high advisory</message><files>package-lock.json</files></git_log_commit><git_log_commit><date>2026-08-02 19:53:16 -0500</date><message>fix(dashboard): snapshot timestamps arrive as ISO strings, not bigint</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-08-02 19:47:09 -0500</date><message>fix(dashboard): import localTraceSpanSchema, not the backend traceSpanSchema</message><files>scripts/judge-evaluations.ts</files><files>src/lib/validation/dashboard-schemas.ts</files></git_log_commit><git_log_commit><date>2026-07-31 19:56:59 -0500</date><message>fix(types): rename TraceSpan to LocalTraceSpan (SRC-DUP-TYPES)</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-07-30 02:32:07 -0500</date><message>docs: update claude</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-07-30 02:14:49 -0500</date><message>Merge branch &apos;narrow-17-schema-narrowing&apos; into main (NARROW-17)</message></git_log_commit><git_log_commit><date>2026-07-29 16:33:35 -0500</date><message>test(sync): add kvBulkDelete unit tests (KV-DELETE-TEST)</message><files>scripts/__tests__/kv-bulk-delete.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 12:32:54 -0500</date><message>fix(test): use canonical SECONDS.DAY from units.ts instead of local constant</message><files>scripts/__tests__/sync-to-kv.test.ts</files></git_log_commit><git_log_commit><date>2026-07-29 12:31:36 -0500</date><message>fix(sync): review fixups — exact SESSION_KEY_TTL_SECONDS test, comment precision</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 12:30:09 -0500</date><message>fix(sync): add 90-day TTL to trace/session KV entries and prune stale state-tracked keys (KV-KEY-BLOAT)</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 04:53:21 -0500</date><message>fix(tests): update missed vi.mock in dr13-coverage.test.tsx to qfe-dynamics.js</message><files>src/__tests__/dr13-coverage.test.tsx</files></git_log_commit><git_log_commit><date>2026-07-29 04:51:53 -0500</date><message>fix(quality): update computeMetricDynamics imports to qfe-dynamics.js (QFE-SPLIT seam 5)</message><files>scripts/sync-to-kv.ts</files><files>src/__tests__/api-metrics.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/api/routes/metrics.ts</files><files>src/api/routes/trends.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-29 03:14:55 -0500</date><message>feat(scripts): add run-summary logging to sync-to-kv (SYNC-SILENT)</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 03:13:12 -0500</date><message>fix(scripts): gate all state writes on !dryRun in sync-to-kv (SYNC-DRYRUN-STATE)</message><files>.gitignore</files><files>scripts/.degradation-incidents.json</files><files>scripts/.kv-sync-coverage.json</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-28 17:48:16 -0500</date><message>fix(sync-to-kv): add missing truncation warning for allSpans query (CLOUD-PAGE-CAP)</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-28 13:31:33 -0500</date><message>docs: add worker-types and e2e sections, sync-to-kv gotchas</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-07-28 13:14:28 -0500</date><message>chore(repomix): exclude src/__tests__ from the token tree</message><files>README.md</files><files>docs/repomix/token-count-tree.txt</files><files>repomix.config.ts</files></git_log_commit><git_log_commit><date>2026-07-28 13:14:18 -0500</date><message>fix(e2e): add the API server to Playwright&apos;s readiness gate</message><files>playwright.config.ts</files></git_log_commit><git_log_commit><date>2026-07-28 13:14:18 -0500</date><message>test(worker): cover overlapping agent routes</message><files>worker/__tests__/agent-route-overlap.test.ts</files></git_log_commit><git_log_commit><date>2026-07-28 02:16:44 -0500</date><message>chore(config): delete orphaned worker/tsconfig.json</message><files>worker/tsconfig.json</files></git_log_commit><git_log_commit><date>2026-07-28 02:13:30 -0500</date><message>fix(types): declare workers-types in root tsconfig, not ad-hoc references</message><files>src/__tests__/api-calibration.test.ts</files><files>tsconfig.json</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-07-28 02:13:20 -0500</date><message>chore(deps): bump @cloudflare/workers-types to v5</message><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-28 01:43:22 -0500</date><message>docs(dashboard): correct CLAUDE.md test-scope claim</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-07-28 01:43:05 -0500</date><message>chore(deps): upgrade TypeScript to 7.0.2 alongside TS 6 for eslint</message><files>CLAUDE.md</files><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-27 22:20:32 -0500</date><message>refactor(scripts): refactor pipeline-integration.test, derive-evaluation</message><files>scripts/__tests__/pipeline-integration.test.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-07-27 22:03:46 -0500</date><message>fix(scripts): adapt to bigint evaluation timestamps; scope derive by date</message><files>scripts/__tests__/sync-prioritization.test.ts</files><files>scripts/backtest-degradation.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-27 20:38:09 -0500</date><message>fix(scripts): repair six assign-to-const crashes in derive and sync</message><files>scripts/derive-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-27 20:37:58 -0500</date><message>fix(scripts): repair three crashes in judge-evaluations</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-07-27 20:37:47 -0500</date><message>chore(tooling): run tsc against scripts/ via typecheck:scripts</message><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-27 20:37:31 -0500</date><message>chore(deps): bump 5 packages to latest majors</message><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-26 00:22:18 -0500</date><message>fix(scripts): repoint stale imports that broke sync-to-kv/backtest module loading</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/backtest-degradation.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-25 23:17:58 -0500</date><message>refactor(quality): repoint dashboard imports off the quality-metrics hub</message><files>src/__tests__/api-coverage.test.ts</files><files>src/__tests__/api-pipeline.test.ts</files><files>src/api/routes/coverage.ts</files><files>src/api/routes/pipeline.ts</files><files>src/api/routes/trends.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-25 22:38:00 -0500</date><message>refactor(qfe): update dashboard importers to qfe-cqi.js (QFE-SPLIT seam 4)</message><files>src/__tests__/api-dashboard.test.ts</files><files>src/api/routes/dashboard.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-25 22:19:53 -0500</date><message>refactor(qfe): update dashboard importers to qfe-correlation.js (QFE-SPLIT seam 3)</message><files>src/__tests__/api-correlations.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>src/api/routes/correlations.ts</files><files>src/api/routes/quality.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-25 13:10:01 -0500</date><message>refactor(qfe): update dashboard importers to qfe-percentiles.js (QFE-SPLIT seam 2)</message><files>scripts/derive-evaluations.ts</files><files>scripts/sync-to-kv.ts</files><files>src/api/routes/trends.ts</files></git_log_commit><git_log_commit><date>2026-07-18 13:54:55 -0500</date><message>feat(api): scope local dev server queries via DEV_ORG_ID (org-scoping P2)</message><files>src/api/data-loader.ts</files></git_log_commit><git_log_commit><date>2026-07-18 02:26:31 -0500</date><message>chore(worker): add HOME_ORG_ID + STAFF_USER_IDS vars (org-scoping P0)</message><files>wrangler.toml</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
+}</file></files><git_diffs><git_diff_work_tree></git_diff_work_tree><git_diff_staged></git_diff_staged></git_diffs><git_logs><git_log_commit><date>2026-09-11 01:25:15 -0500</date><message>test(worker): type ExecutionContext mocks with vitest Mock&lt;T&gt; (MOCK-VI-FN-UNTYPED)</message><files>worker/__tests__/agent-route-overlap.test.ts</files><files>worker/__tests__/audit-log.test.ts</files></git_log_commit><git_log_commit><date>2026-09-11 10:27:01 -0500</date><message>fix(repomix): pack worker/ and e2e/, un-break inert test-exclusion patterns (#3)</message><files>docs/repomix/gitlog-top20.txt</files><files>docs/repomix/repo-compressed.xml</files><files>docs/repomix/repomix-docs.xml</files><files>docs/repomix/repomix-git-ranked.xml</files><files>docs/repomix/repomix.xml</files><files>docs/repomix/token-tree.txt</files><files>scripts/repomix/repomix.config.json</files><files>scripts/repomix/repomix.git-ranked.json</files></git_log_commit><git_log_commit><date>2026-09-10 22:04:29 -0500</date><message>fix(auth): fix audit_log payload — target_type/target_id, role_id in metadata (AUTH-DASHBOARD-AUDIT-LOG)</message><files>worker/__tests__/audit-log.test.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-09-09 22:50:02 -0500</date><message>chore(scripts): drop unused import</message><files>scripts/__tests__/judge-evaluations.test.ts</files></git_log_commit><git_log_commit><date>2026-09-08 17:25:03 -0500</date><message>fix(scripts): separate evaluator kind from sampling cohort (OBP16)</message><files>scripts/__tests__/judge-evaluations.test.ts</files><files>scripts/__tests__/pipeline-integration.test.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-09-08 15:13:14 -0500</date><message>test(derive): pin the OBP15 guards, and make them total (OBP15)</message><files>scripts/__tests__/derive-evaluations.test.ts</files><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-09-08 15:06:06 -0500</date><message>fix(derive): skip malformed spans in deriveEvaluationLatency (OBP15)</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-09-05 12:41:55 -0500</date><message>docs(backlog): migrate SCRIPTS-TSCONFIG-NUIA to v3.0.8 changelog</message><files>docs/BACKLOG.md</files><files>docs/changelog/3.0.8/CHANGELOG.md</files></git_log_commit><git_log_commit><date>2026-08-30 04:43:41 -0500</date><message>docs(roadmap): repoint parent link to docs/auth-architecture.md</message><files>docs/roadmap/impl-auth0-migration.md</files></git_log_commit><git_log_commit><date>2026-08-28 12:06:19 -0500</date><message>docs: reflect SCRIPTS-TSCONFIG-NUIA step 2 completion</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-28 12:01:51 -0500</date><message>refactor(lint): dedupe shared rules and glob arrays in eslint.config.mjs</message><files>eslint.config.mjs</files></git_log_commit><git_log_commit><date>2026-08-28 11:53:03 -0500</date><message>fix(lint): promote scripts/ type-safety rules from warn to error</message><files>eslint.config.mjs</files></git_log_commit><git_log_commit><date>2026-08-28 11:52:57 -0500</date><message>fix(types): enable noUncheckedIndexedAccess in tsconfig.scripts.json</message><files>tsconfig.scripts.json</files></git_log_commit><git_log_commit><date>2026-08-28 11:44:17 -0500</date><message>docs(backlog): mark SCRIPTS-TSCONFIG-NUIA done — all 93 errors resolved</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-28 11:43:53 -0500</date><message>fix(types): non-null assert array index accesses in sync-to-kv tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/sync-to-kv.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:43:02 -0500</date><message>fix(types): non-null assert result[0] and index accesses in sync-prioritization tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/sync-prioritization.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:42:31 -0500</date><message>fix(types): non-null assert array index accesses in pipeline-integration tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/pipeline-integration.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:41:33 -0500</date><message>fix(types): non-null assert mock.calls[0/1] in kv-bulk-delete tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/kv-bulk-delete.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:40:26 -0500</date><message>fix(types): non-null assert turns[0/1] accesses in judge-evaluations tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/judge-evaluations.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:39:47 -0500</date><message>fix(types): non-null assert array index accesses in derive-evaluations tests (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/__tests__/derive-evaluations.test.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:38:58 -0500</date><message>fix(types): guard undefined array/Record access throughout sync-to-kv (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:35:46 -0500</date><message>fix(types): guard undefined array access and fix latency field names in backtest-degradation (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:34:01 -0500</date><message>fix(types): tighten STATUS_SCORES type and guard undefined array access in derive-evaluations (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:32:56 -0500</date><message>fix(types): guard undefined indexing in judge-evaluations (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-28 11:32:09 -0500</date><message>fix(types): handle possibly-undefined arg in populate-dashboard --limit parsing (SCRIPTS-TSCONFIG-NUIA)</message><files>scripts/populate-dashboard.ts</files></git_log_commit><git_log_commit><date>2026-08-27 15:49:25 -0500</date><message>docs: cost Agent-as-Judge as a Cloudflare Worker job</message><files>PIPELINE_COST_COMPARISON.md</files></git_log_commit><git_log_commit><date>2026-08-22 22:09:40 -0500</date><message>docs: compare populate-pipeline replacement costs</message><files>PIPELINE_COST_COMPARISON.md</files></git_log_commit><git_log_commit><date>2026-08-22 20:55:41 -0500</date><message>fix(auth): stop clearing the session before the logout navigation commits</message><files>src/__tests__/auth-context-refresh.test.tsx</files><files>src/contexts/AuthContext.tsx</files></git_log_commit><git_log_commit><date>2026-08-22 20:42:25 -0500</date><message>fix(auth): disable the Log out button in flight and clear session on logout failure</message><files>src/components/Layout.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-08-22 20:35:34 -0500</date><message>feat(ui): add a Log out button to the dashboard header</message><files>src/components/Layout.tsx</files><files>src/theme.css</files></git_log_commit><git_log_commit><date>2026-08-22 15:33:15 -0500</date><message>docs: record the Map/rollup interim state for SCRIPTS-TSCONFIG-NUIA</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-22 15:33:15 -0500</date><message>refactor: replace lookup() and dirname assertions with honest types</message><files>scripts/backtest-degradation.ts</files><files>scripts/sync-to-kv.ts</files><files>src/__tests__/dashboard-file-utils.test.ts</files><files>src/lib/dashboard-file-utils.ts</files></git_log_commit><git_log_commit><date>2026-08-22 15:17:41 -0500</date><message>docs: move two resolved KV-sync items into the 3.0.7 changelog</message><files>docs/BACKLOG.md</files><files>docs/changelog/3.0.7/CHANGELOG.md</files></git_log_commit><git_log_commit><date>2026-08-22 13:22:41 -0500</date><message>fix(auth): restore post-login deep links and stop the callback error loop</message><files>src/App.tsx</files><files>src/lib/auth0.ts</files><files>src/pages/LoginPage.tsx</files></git_log_commit><git_log_commit><date>2026-08-22 13:14:19 -0500</date><message>feat(auth): persist sessions with rotating refresh tokens</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-08-22 13:04:08 -0500</date><message>feat(hosting): migrate integritystudio.dev from GitHub Pages to the worker</message><files>.github/workflows/deploy.yml</files><files>index.html</files><files>public/404.html</files><files>public/CNAME</files><files>public/_headers</files></git_log_commit><git_log_commit><date>2026-08-22 13:03:51 -0500</date><message>perf(build): drop forced workflow-viz manual chunk from critical path</message><files>vite.config.ts</files></git_log_commit><git_log_commit><date>2026-08-22 13:03:36 -0500</date><message>fix(worker): serve index.html for SPA deep links via not_found_handling</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-17 15:21:47 -0600</date><message>docs(backlog): move SYNC-KV-BIGINT and DERIVE-EVAL-LINT-STRINGIFY to resolved</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-17 15:21:47 -0600</date><message>fix(scripts): serialize KV values through jsonSafe to handle bigint — SYNC-KV-BIGINT</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:05:14 -0600</date><message>refactor: refactor 4 files</message><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/auth-context-refresh.test.tsx</files><files>src/__tests__/quality-utils-drift.test.ts</files><files>src/lib/quality-utils.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:04:34 -0600</date><message>refactor(scripts): refactor backtest-degradation</message><files>scripts/backtest-degradation.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:04:24 -0600</date><message>refactor(scripts): refactor sync-to-kv.test, sync-to-kv</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-17 15:04:05 -0600</date><message>docs(docs): update backlog</message><files>docs/BACKLOG.md</files></git_log_commit><git_log_commit><date>2026-08-17 14:58:34 -0600</date><message>refactor(scripts): refactor derive-evaluations</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-17 14:32:14 -0600</date><message>chore: gitignore .claude/.current-session-id</message><files>.gitignore</files></git_log_commit><git_log_commit><date>2026-08-17 14:31:00 -0600</date><message>refactor(worker): refactor activity-logging.test, admin-routes.test, aud</message><files>worker/__tests__/activity-logging.test.ts</files><files>worker/__tests__/admin-routes.test.ts</files><files>worker/__tests__/audit-log.test.ts</files></git_log_commit><git_log_commit><date>2026-08-17 14:01:55 -0600</date><message>docs(claude): rewrite integration test Auth0 ROPC config entry</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-08-17 14:01:45 -0600</date><message>test(e2e): add /api/calibration 500 case and full contract test</message><files>e2e/integration/api-contracts.spec.ts</files></git_log_commit><git_log_commit><date>2026-08-17 14:01:25 -0600</date><message>refactor(e2e): rename DEV_WORKER_URL -&gt; METRICS_API_URL; fail-fast baseURL; add list reporter</message><files>.github/workflows/deploy.yml</files><files>e2e/integration/setup.ts</files><files>playwright.config.ts</files><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-17 01:12:42 -0600</date><message>refactor(calibration): centralize CalibrationResponse behind Zod schema</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files><files>src/__tests__/WorkflowPage.test.tsx</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/data-loader-trace-ids.test.ts</files><files>src/__tests__/support/api-responses.ts</files><files>src/__tests__/support/query-harness.tsx</files><files>src/__tests__/useCalibration.test.ts</files><files>src/__tests__/useCalibration.test.tsx</files><files>src/__tests__/useQualityLive.test.tsx</files><files>src/__tests__/vite-web-worker-stub.test.ts</files><files>src/context/CalibrationContext.tsx</files><files>src/hooks/useAgentSession.ts</files><files>src/hooks/useCalibration.ts</files><files>src/lib/validation/dashboard-schemas.ts</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-08-16 19:07:14 -0600</date><message>test(api): drop the buildWorkflowGraph mock and assert the real graph</message><files>src/__tests__/api-agents.test.ts</files><files>src/__tests__/support/api-responses.ts</files></git_log_commit><git_log_commit><date>2026-08-16 19:02:19 -0600</date><message>test(api): type response bodies and mock fixtures against the real types</message><files>src/__tests__/api-agents.test.ts</files><files>src/__tests__/api-calibration.test.ts</files><files>src/__tests__/api-compliance.test.ts</files><files>src/__tests__/api-correlations.test.ts</files><files>src/__tests__/api-coverage.test.ts</files><files>src/__tests__/api-dashboard.test.ts</files><files>src/__tests__/api-evaluations.test.ts</files><files>src/__tests__/api-metrics.test.ts</files><files>src/__tests__/api-pipeline.test.ts</files><files>src/__tests__/api-sessions.test.ts</files><files>src/__tests__/api-traces.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>src/__tests__/support/api-responses.ts</files><files>src/__tests__/support/fixtures.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-08-16 19:02:00 -0600</date><message>fix(api): serialize bigint timestamps at the response boundary</message><files>docs/BACKLOG.md</files><files>src/api/api-constants.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/evaluations.ts</files><files>src/api/routes/metrics.ts</files><files>src/api/routes/sessions.ts</files><files>src/api/routes/traces.ts</files></git_log_commit><git_log_commit><date>2026-08-16 11:28:49 -0600</date><message>fix: resolve TypeScript errors in dashboard</message><files>scripts/__tests__/judge-evaluations.test.ts</files><files>scripts/backtest-degradation.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files><files>src/__tests__/WorkflowGraph.test.tsx</files><files>src/__tests__/auth-context-refresh.test.tsx</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>tsconfig.scripts.json</files></git_log_commit><git_log_commit><date>2026-08-14 01:04:35 -0600</date><message>fix(ui): validate stored org id as UUID; document target-org X-Org-Id on switch</message><files>src/contexts/OrgContext.tsx</files><files>src/lib/api-client.ts</files></git_log_commit><git_log_commit><date>2026-08-14 01:00:46 -0600</date><message>feat(worker,ui): org resolution, scoped KV choke points, org context + admin (org-scoping P5+P6)</message><files>src/App.tsx</files><files>src/components/OrgSwitcher.tsx</files><files>src/contexts/AuthContext.tsx</files><files>src/contexts/OrgContext.tsx</files><files>src/hooks/useApiQuery.ts</files><files>src/hooks/useTrace.ts</files><files>src/lib/api-client.ts</files><files>src/lib/org-rbac.ts</files><files>src/lib/validation/auth-schemas.ts</files><files>src/pages/AdminPage.tsx</files><files>src/theme.css</files><files>src/types/auth.ts</files><files>worker/__tests__/kv-choke-point.test.ts</files><files>worker/__tests__/org-kv-scoping.test.ts</files><files>worker/__tests__/org-rbac.test.ts</files><files>worker/index.ts</files><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-14 01:00:32 -0600</date><message>feat(pipeline): org-prefixed KV dual-write with write-budget counter (org-scoping P4)</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-08-08 01:28:50 -0500</date><message>docs: record the third dashboard Worker and why [env.dev] has to exist</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-08-08 01:27:17 -0500</date><message>feat(worker): add [env.dev] — quality-metrics-api-dev on the dev Auth0 tenant</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-06 23:01:20 -0500</date><message>docs: correct date in preview_urls comment — 2026-08-07 was a day ahead</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-06 20:18:32 -0500</date><message>fix(worker): disable per-version preview URLs on both dashboard Workers</message><files>wrangler.toml</files></git_log_commit><git_log_commit><date>2026-08-06 20:03:23 -0500</date><message>docs: barrels are re-export-only, not literally one line</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-08-06 19:42:39 -0500</date><message>refactor(scripts): use the submodule&apos;s dashboard-file-utils, not the parent&apos;s (SRC-DUP-TYPES)</message><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-08-06 19:33:28 -0500</date><message>refactor: enforce parent-import boundary — no more relative dist/ reach-ins (DASH-DIST-IMPORT)</message><files>CLAUDE.md</files><files>eslint.config.mjs</files><files>scripts/__tests__/sync-to-kv.test.ts</files><files>src/__tests__/api-agents.test.ts</files><files>src/__tests__/api-compliance.test.ts</files><files>src/__tests__/api-correlations.test.ts</files><files>src/__tests__/api-coverage.test.ts</files><files>src/__tests__/api-dashboard.test.ts</files><files>src/__tests__/api-evaluations.test.ts</files><files>src/__tests__/api-metrics.test.ts</files><files>src/__tests__/api-pipeline.test.ts</files><files>src/__tests__/api-sessions.test.ts</files><files>src/__tests__/api-traces.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/__tests__/data-loader-trace-ids.test.ts</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>src/api/api-constants.ts</files><files>src/api/data-loader.ts</files><files>src/api/parent/backends.ts</files><files>src/api/parent/bucket-utils.ts</files><files>src/api/parent/error-sanitizer.ts</files><files>src/api/parent/qfe-backtest.ts</files><files>src/api/parent/qfe-correlation.ts</files><files>src/api/parent/qfe-cqi.ts</files><files>src/api/parent/qfe-dynamics.ts</files><files>src/api/parent/qfe-percentiles.ts</files><files>src/api/parent/quality-constants.ts</files><files>src/api/parent/quality-metrics.ts</files><files>src/api/parent/quality-multi-agent.ts</files><files>src/api/parent/quality-views.ts</files><files>src/api/parent/quality-visualization.ts</files><files>src/api/parent/query-logs.ts</files><files>src/api/parent/query-traces.ts</files><files>src/api/parent/verification-events.ts</files><files>src/api/routes/agents.ts</files><files>src/api/routes/compliance.ts</files><files>src/api/routes/correlations.ts</files><files>src/api/routes/coverage.ts</files><files>src/api/routes/dashboard.ts</files><files>src/api/routes/evaluations.ts</files><files>src/api/routes/metrics.ts</files><files>src/api/routes/pipeline.ts</files><files>src/api/routes/quality.ts</files><files>src/api/routes/sessions.ts</files><files>src/api/routes/traces.ts</files><files>src/api/routes/trends.ts</files><files>src/types.ts</files><files>vite-plugins.ts</files></git_log_commit><git_log_commit><date>2026-08-03 01:15:31 -0500</date><message>fix: bump nested brace-expansion 1.1.16 -&gt; 1.1.18, clearing a high advisory</message><files>package-lock.json</files></git_log_commit><git_log_commit><date>2026-08-02 19:53:16 -0500</date><message>fix(dashboard): snapshot timestamps arrive as ISO strings, not bigint</message><files>src/App.tsx</files></git_log_commit><git_log_commit><date>2026-08-02 19:47:09 -0500</date><message>fix(dashboard): import localTraceSpanSchema, not the backend traceSpanSchema</message><files>scripts/judge-evaluations.ts</files><files>src/lib/validation/dashboard-schemas.ts</files></git_log_commit><git_log_commit><date>2026-07-31 19:56:59 -0500</date><message>fix(types): rename TraceSpan to LocalTraceSpan (SRC-DUP-TYPES)</message><files>scripts/derive-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-07-30 02:32:07 -0500</date><message>docs: update claude</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-07-30 02:14:49 -0500</date><message>Merge branch &apos;narrow-17-schema-narrowing&apos; into main (NARROW-17)</message></git_log_commit><git_log_commit><date>2026-07-29 16:33:35 -0500</date><message>test(sync): add kvBulkDelete unit tests (KV-DELETE-TEST)</message><files>scripts/__tests__/kv-bulk-delete.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 12:32:54 -0500</date><message>fix(test): use canonical SECONDS.DAY from units.ts instead of local constant</message><files>scripts/__tests__/sync-to-kv.test.ts</files></git_log_commit><git_log_commit><date>2026-07-29 12:31:36 -0500</date><message>fix(sync): review fixups — exact SESSION_KEY_TTL_SECONDS test, comment precision</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 12:30:09 -0500</date><message>fix(sync): add 90-day TTL to trace/session KV entries and prune stale state-tracked keys (KV-KEY-BLOAT)</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 04:53:21 -0500</date><message>fix(tests): update missed vi.mock in dr13-coverage.test.tsx to qfe-dynamics.js</message><files>src/__tests__/dr13-coverage.test.tsx</files></git_log_commit><git_log_commit><date>2026-07-29 04:51:53 -0500</date><message>fix(quality): update computeMetricDynamics imports to qfe-dynamics.js (QFE-SPLIT seam 5)</message><files>scripts/sync-to-kv.ts</files><files>src/__tests__/api-metrics.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/api/routes/metrics.ts</files><files>src/api/routes/trends.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-29 03:14:55 -0500</date><message>feat(scripts): add run-summary logging to sync-to-kv (SYNC-SILENT)</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-29 03:13:12 -0500</date><message>fix(scripts): gate all state writes on !dryRun in sync-to-kv (SYNC-DRYRUN-STATE)</message><files>.gitignore</files><files>scripts/.degradation-incidents.json</files><files>scripts/.kv-sync-coverage.json</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-28 17:48:16 -0500</date><message>fix(sync-to-kv): add missing truncation warning for allSpans query (CLOUD-PAGE-CAP)</message><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-28 13:31:33 -0500</date><message>docs: add worker-types and e2e sections, sync-to-kv gotchas</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-07-28 13:14:28 -0500</date><message>chore(repomix): exclude src/__tests__ from the token tree</message><files>README.md</files><files>docs/repomix/token-count-tree.txt</files><files>repomix.config.ts</files></git_log_commit><git_log_commit><date>2026-07-28 13:14:18 -0500</date><message>fix(e2e): add the API server to Playwright&apos;s readiness gate</message><files>playwright.config.ts</files></git_log_commit><git_log_commit><date>2026-07-28 13:14:18 -0500</date><message>test(worker): cover overlapping agent routes</message><files>worker/__tests__/agent-route-overlap.test.ts</files></git_log_commit><git_log_commit><date>2026-07-28 02:16:44 -0500</date><message>chore(config): delete orphaned worker/tsconfig.json</message><files>worker/tsconfig.json</files></git_log_commit><git_log_commit><date>2026-07-28 02:13:30 -0500</date><message>fix(types): declare workers-types in root tsconfig, not ad-hoc references</message><files>src/__tests__/api-calibration.test.ts</files><files>tsconfig.json</files><files>worker/index.ts</files></git_log_commit><git_log_commit><date>2026-07-28 02:13:20 -0500</date><message>chore(deps): bump @cloudflare/workers-types to v5</message><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-28 01:43:22 -0500</date><message>docs(dashboard): correct CLAUDE.md test-scope claim</message><files>CLAUDE.md</files></git_log_commit><git_log_commit><date>2026-07-28 01:43:05 -0500</date><message>chore(deps): upgrade TypeScript to 7.0.2 alongside TS 6 for eslint</message><files>CLAUDE.md</files><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-27 22:20:32 -0500</date><message>refactor(scripts): refactor pipeline-integration.test, derive-evaluation</message><files>scripts/__tests__/pipeline-integration.test.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-07-27 22:03:46 -0500</date><message>fix(scripts): adapt to bigint evaluation timestamps; scope derive by date</message><files>scripts/__tests__/sync-prioritization.test.ts</files><files>scripts/backtest-degradation.ts</files><files>scripts/derive-evaluations.ts</files><files>scripts/judge-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-27 20:38:09 -0500</date><message>fix(scripts): repair six assign-to-const crashes in derive and sync</message><files>scripts/derive-evaluations.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-27 20:37:58 -0500</date><message>fix(scripts): repair three crashes in judge-evaluations</message><files>scripts/judge-evaluations.ts</files></git_log_commit><git_log_commit><date>2026-07-27 20:37:47 -0500</date><message>chore(tooling): run tsc against scripts/ via typecheck:scripts</message><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-27 20:37:31 -0500</date><message>chore(deps): bump 5 packages to latest majors</message><files>package-lock.json</files><files>package.json</files></git_log_commit><git_log_commit><date>2026-07-26 00:22:18 -0500</date><message>fix(scripts): repoint stale imports that broke sync-to-kv/backtest module loading</message><files>scripts/__tests__/sync-to-kv.test.ts</files><files>scripts/backtest-degradation.ts</files><files>scripts/sync-to-kv.ts</files></git_log_commit><git_log_commit><date>2026-07-25 23:17:58 -0500</date><message>refactor(quality): repoint dashboard imports off the quality-metrics hub</message><files>src/__tests__/api-coverage.test.ts</files><files>src/__tests__/api-pipeline.test.ts</files><files>src/api/routes/coverage.ts</files><files>src/api/routes/pipeline.ts</files><files>src/api/routes/trends.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-25 22:38:00 -0500</date><message>refactor(qfe): update dashboard importers to qfe-cqi.js (QFE-SPLIT seam 4)</message><files>src/__tests__/api-dashboard.test.ts</files><files>src/api/routes/dashboard.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-25 22:19:53 -0500</date><message>refactor(qfe): update dashboard importers to qfe-correlation.js (QFE-SPLIT seam 3)</message><files>src/__tests__/api-correlations.test.ts</files><files>src/__tests__/api-trends.test.ts</files><files>src/__tests__/dr13-coverage.test.tsx</files><files>src/api/routes/correlations.ts</files><files>src/api/routes/quality.ts</files><files>src/types.ts</files></git_log_commit><git_log_commit><date>2026-07-25 13:10:01 -0500</date><message>refactor(qfe): update dashboard importers to qfe-percentiles.js (QFE-SPLIT seam 2)</message><files>scripts/derive-evaluations.ts</files><files>scripts/sync-to-kv.ts</files><files>src/api/routes/trends.ts</files></git_log_commit></git_logs><instruction># Quality Metrics Dashboard
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.
 

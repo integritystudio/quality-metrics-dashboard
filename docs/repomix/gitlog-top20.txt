@@ -1,3 +1,9 @@
+bc74ff9 2026-09-11 fix(repomix): pack worker/ and e2e/, un-break inert test-exclusion patterns (#3)
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
 e42aa47 2026-09-10 fix(auth): fix audit_log payload — target_type/target_id, role_id in metadata (AUTH-DASHBOARD-AUDIT-LOG)
   worker/index.ts
 
@@ -376,11 +382,6 @@ b92f6b8 2026-03-27 feat(e2e): add Sentry reporter and migrate setup to Auth0 ROP
   package-lock.json
 
 dbde04c 2026-03-27 chore: regenerate repomix docs after Round 4 simplifications
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-a894348 2026-03-27 chore: regenerate repomix docs after task-tracker prefix cleanup
   docs/repomix/repo-compressed.xml
   docs/repomix/repomix-git-ranked.xml
   docs/repomix/repomix.xml
