@@ -121,8 +121,12 @@ describe('audit log: role.assign', () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.actor_user_id).toBe(MOCK_APP_USER_ID);
     expect(body.action).toBe('role.assign');
-    expect(body.target_user_id).toBe(VALID_USER_UUID);
-    expect(body.role_id).toBe(VALID_ROLE_UUID);
+    expect(body.target_type).toBe('user');
+    expect(body.target_id).toBe(VALID_USER_UUID);
+    expect((body.metadata as { role_id: string }).role_id).toBe(VALID_ROLE_UUID);
+    // Ensure non-column names are absent — PostgREST rejects unknown columns
+    expect(body.target_user_id).toBeUndefined();
+    expect(body.role_id).toBeUndefined();
   });
 
   it('does not POST to audit_log when role assignment fails', async () => {
@@ -207,8 +211,12 @@ describe('audit log: role.revoke', () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.actor_user_id).toBe(MOCK_APP_USER_ID);
     expect(body.action).toBe('role.revoke');
-    expect(body.target_user_id).toBe(VALID_USER_UUID);
-    expect(body.role_id).toBe(VALID_ROLE_UUID);
+    expect(body.target_type).toBe('user');
+    expect(body.target_id).toBe(VALID_USER_UUID);
+    expect((body.metadata as { role_id: string }).role_id).toBe(VALID_ROLE_UUID);
+    // Ensure non-column names are absent — PostgREST rejects unknown columns
+    expect(body.target_user_id).toBeUndefined();
+    expect(body.role_id).toBeUndefined();
   });
 
   it('does not POST to audit_log when role revocation fails', async () => {

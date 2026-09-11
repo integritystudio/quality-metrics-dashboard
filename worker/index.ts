@@ -141,9 +141,8 @@ type WaitUntilFn = (promise: Promise<unknown>) => void;
 // Fire-and-forget: logs sensitive admin mutations to audit_log without blocking the response.
 // No-ops when actorUserId is absent; otherwise only fires on success (not on upstream Supabase failure).
 // organizationId (P6): org-admin mutations always record session.activeOrgId, so an
-// audit row can never claim a scope the mutation did not have. Requires the
-// `ALTER TABLE audit_log ADD COLUMN organization_id uuid` migration; supabasePost
-// swallows the PostgREST error until that lands (fire-and-forget by design).
+// audit row can never claim a scope the mutation did not have. organization_id exists
+// since 20260320020000_create_phase2_ledger_tables.sql; supabasePost is fire-and-forget by design.
 function logAuditEvent(
   actorUserId: string | undefined,
   action: AuditAction,
@@ -159,10 +158,11 @@ function logAuditEvent(
     {
       actor_user_id: actorUserId,
       action,
-      target_user_id: targetUserId,
-      // Member mutations carry no role uuid — the membership role change is
-      // implied by the action + org scope; role_id stays a uuid-only column.
-      ...(roleId !== undefined && { role_id: roleId }),
+      // target_type and target_id are NOT NULL columns; role_id is not a column —
+      // carry it in metadata for role.assign / role.revoke actions.
+      target_type: 'user',
+      target_id: targetUserId,
+      ...(roleId !== undefined && { metadata: { role_id: roleId } }),
       ...(organizationId !== undefined && { organization_id: organizationId }),
     },
     env.SUPABASE_SERVICE_ROLE_KEY,
