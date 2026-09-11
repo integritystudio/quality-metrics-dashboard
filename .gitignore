@@ -3,9 +3,11 @@ dist/
 *.jsonl
 .DS_Store
 .wrangler/
+
+# Repomix packs - regenerate locally with `npm run repomix`
 repomix-output.xml
-docs/repomix/docs.xml
-docs/repomix/docs-compressed.xml
+docs/repomix/
+
 .kv-sync-state.json
 scripts/.kv-sync-coverage.json
 scripts/.degradation-incidents.json
