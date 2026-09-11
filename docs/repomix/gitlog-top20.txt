@@ -1,3 +1,144 @@
+a6a44fc 2026-09-08 fix(scripts): separate evaluator kind from sampling cohort (OBP16)
+  scripts/__tests__/judge-evaluations.test.ts
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+f8ba609 2026-08-28 fix(types): non-null assert turns[0/1] accesses in judge-evaluations tests (SCRIPTS-TSCONFIG-NUIA)
+  scripts/__tests__/judge-evaluations.test.ts
+
+8cdf315 2026-08-28 fix(types): guard undefined array/Record access throughout sync-to-kv (SCRIPTS-TSCONFIG-NUIA)
+  scripts/sync-to-kv.ts
+
+680baee 2026-08-28 fix(types): guard undefined indexing in judge-evaluations (SCRIPTS-TSCONFIG-NUIA)
+  scripts/judge-evaluations.ts
+
+df94780 2026-08-22 fix(auth): disable the Log out button in flight and clear session on logout failure
+  src/theme.css
+
+3188ee2 2026-08-22 feat(ui): add a Log out button to the dashboard header
+  src/theme.css
+
+77b8486 2026-08-22 refactor: replace lookup() and dirname assertions with honest types
+  scripts/sync-to-kv.ts
+
+ae85fdd 2026-08-17 fix(scripts): serialize KV values through jsonSafe to handle bigint — SYNC-KV-BIGINT
+  scripts/sync-to-kv.ts
+
+cb31706 2026-08-17 refactor(scripts): refactor sync-to-kv.test, sync-to-kv
+  scripts/sync-to-kv.ts
+
+34dac91 2026-08-17 refactor(calibration): centralize CalibrationResponse behind Zod schema
+  scripts/sync-to-kv.ts
+  worker/index.ts
+
+0c30db2 2026-08-16 test(api): type response bodies and mock fixtures against the real types
+  src/__tests__/dr13-coverage.test.tsx
+
+b453627 2026-08-16 fix: resolve TypeScript errors in dashboard
+  scripts/__tests__/judge-evaluations.test.ts
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+  src/__tests__/dr13-coverage.test.tsx
+
+cd1a22b 2026-08-14 feat(worker,ui): org resolution, scoped KV choke points, org context + admin (org-scoping P5+P6)
+  src/theme.css
+  worker/index.ts
+
+b946f3a 2026-08-14 feat(pipeline): org-prefixed KV dual-write with write-budget counter (org-scoping P4)
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+d664ae9 2026-08-06 refactor(scripts): use the submodule's dashboard-file-utils, not the parent's (SRC-DUP-TYPES)
+  scripts/judge-evaluations.ts
+
+8f386fb 2026-08-06 refactor: enforce parent-import boundary — no more relative dist/ reach-ins (DASH-DIST-IMPORT)
+  src/__tests__/dr13-coverage.test.tsx
+
+85b09e6 2026-08-03 fix: bump nested brace-expansion 1.1.16 -> 1.1.18, clearing a high advisory
+  package-lock.json
+
+bfc9491 2026-08-02 fix(dashboard): import localTraceSpanSchema, not the backend traceSpanSchema
+  scripts/judge-evaluations.ts
+
+1a00bba 2026-07-29 test(sync): add kvBulkDelete unit tests (KV-DELETE-TEST)
+  scripts/sync-to-kv.ts
+
+786b4a4 2026-07-29 fix(sync): review fixups — exact SESSION_KEY_TTL_SECONDS test, comment precision
+  scripts/sync-to-kv.ts
+
+63d9269 2026-07-29 fix(sync): add 90-day TTL to trace/session KV entries and prune stale state-tracked keys (KV-KEY-BLOAT)
+  scripts/sync-to-kv.ts
+
+8e22587 2026-07-29 fix(tests): update missed vi.mock in dr13-coverage.test.tsx to qfe-dynamics.js
+  src/__tests__/dr13-coverage.test.tsx
+
+cb446b5 2026-07-29 fix(quality): update computeMetricDynamics imports to qfe-dynamics.js (QFE-SPLIT seam 5)
+  scripts/sync-to-kv.ts
+
+88c7d7a 2026-07-29 feat(scripts): add run-summary logging to sync-to-kv (SYNC-SILENT)
+  scripts/sync-to-kv.ts
+
+35e1d87 2026-07-29 fix(scripts): gate all state writes on !dryRun in sync-to-kv (SYNC-DRYRUN-STATE)
+  scripts/sync-to-kv.ts
+
+120e567 2026-07-28 fix(sync-to-kv): add missing truncation warning for allSpans query (CLOUD-PAGE-CAP)
+  scripts/sync-to-kv.ts
+
+656a9cf 2026-07-28 fix(types): declare workers-types in root tsconfig, not ad-hoc references
+  worker/index.ts
+
+375af73 2026-07-28 chore(deps): bump @cloudflare/workers-types to v5
+  package-lock.json
+
+9005ec3 2026-07-28 chore(deps): upgrade TypeScript to 7.0.2 alongside TS 6 for eslint
+  package-lock.json
+
+29f1112 2026-07-27 refactor(scripts): refactor pipeline-integration.test, derive-evaluation
+  scripts/judge-evaluations.ts
+
+cb882cd 2026-07-27 fix(scripts): adapt to bigint evaluation timestamps; scope derive by date
+  scripts/judge-evaluations.ts
+  scripts/sync-to-kv.ts
+
+70a9ff9 2026-07-27 fix(scripts): repair six assign-to-const crashes in derive and sync
+  scripts/sync-to-kv.ts
+
+b31ca2f 2026-07-27 fix(scripts): repair three crashes in judge-evaluations
+  scripts/judge-evaluations.ts
+
+a79ab09 2026-07-27 chore(deps): bump 5 packages to latest majors
+  package-lock.json
+
+e2d3277 2026-07-26 fix(scripts): repoint stale imports that broke sync-to-kv/backtest module loading
+  scripts/sync-to-kv.ts
+
+c0b34e8 2026-07-25 refactor(qfe): update dashboard importers to qfe-correlation.js (QFE-SPLIT seam 3)
+  src/__tests__/dr13-coverage.test.tsx
+
+5a263d7 2026-07-25 refactor(qfe): update dashboard importers to qfe-percentiles.js (QFE-SPLIT seam 2)
+  scripts/sync-to-kv.ts
+
+fb26be7 2026-07-15 docs(docs): update 6 files in docs
+  docs/repomix/repo-compressed.xml
+  docs/repomix/repomix-docs.xml
+  docs/repomix/repomix-git-ranked.xml
+  docs/repomix/repomix.xml
+
+4d27a91 2026-07-15 refactor(theme): unify chip tints, define --status-healthy-muted
+  src/theme.css
+
+5f176a2 2026-07-15 refactor(theme): route score bands through [data-band]{--band-fg}
+  src/theme.css
+
+3acff2f 2026-07-15 refactor(theme): add --border-width-thin token, adopt for 1px borders
+  src/theme.css
+
+3f05821 2026-07-14 refactor(theme): tokenize WorkflowGraph color palette
+  src/theme.css
+
+36b900e 2026-07-14 refactor(theme): dedupe CSS rules and adopt existing tokens
+  src/theme.css
+
 8011f1e 2026-07-14 refactor: refactor workflowgraph.test, workflowgraph, theme
   src/theme.css
 
@@ -245,158 +386,3 @@ a592dd5 2026-03-27 refactor(comments): strip remaining task-tracker prefixes (WG
 
 7a254df 2026-03-27 style(theme): strip FU-G5-FILTER task-tracker reference from CSS comment
   src/theme.css
-
-a0165c1 2026-03-27 refactor(workflow): hoist containerStyle const; strip CR-STYLE-1 from theme.css
-  src/theme.css
-
-360e735 2026-03-27 refactor(workflow-graph): replace inline height style with CSS variable
-  src/theme.css
-
-153d4d4 2026-03-27 chore: regenerate repomix compressed XML
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-835dd30 2026-03-27 style: strip B6/B12/CR-ERR-4/CR-TS-5/WG-6 task-tracker prefixes from comments
-  scripts/judge-evaluations.ts
-
-f6e3825 2026-03-27 fix(ci): pin all Doppler secret fetches to prd config
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  scripts/judge-evaluations.ts
-
-48f38b5 2026-03-27 feat(e2e): replace localStorage session seeding with Auth0 stub
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-34d779b 2026-03-27 style(routes/worker): strip WG-C1 task-tracker prefixes and WHAT comments
-  worker/index.ts
-
-7586436 2026-03-27 perf(sync-to-kv): parallelize metric detail queries with Promise.all
-  scripts/sync-to-kv.ts
-
-4c4166c 2026-03-27 style(judge-evaluations): remove B8/B9 task-tracker JSDoc comments
-  scripts/judge-evaluations.ts
-
-9758158 2026-03-27 refactor(sync-to-kv): use activePeriods in remaining period loops
-  scripts/sync-to-kv.ts
-
-6b05712 2026-03-27 perf(sync-to-kv): parallelize period batch queries with Promise.all
-  scripts/sync-to-kv.ts
-
-48fae89 2026-03-27 style(sync-to-kv): remove L1/R5/N3 task-tracker prefixes from comments
-  scripts/sync-to-kv.ts
-
-c120375 2026-03-27 fix(sync-to-kv): restore string literals in META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY declarations
-  scripts/sync-to-kv.ts
-
-835c8c3 2026-03-27 refactor(sync-to-kv): extract META_LAST_SYNC_KEY and META_SYNC_COVERAGE_KEY constants
-  scripts/sync-to-kv.ts
-
-f1dadeb 2026-03-27 refactor(judge-evaluations): extract JUDGE_MAX_TOKENS and JUDGE_DEFAULT_TEMPERATURE constants
-  scripts/judge-evaluations.ts
-
-d61d1b6 2026-03-27 style(judge-evaluations): remove task-tracker prefixes and WHAT comments from seedEvaluations/evaluateTurn
-  scripts/judge-evaluations.ts
-
-fa7315f 2026-03-27 feat(workflow): add graph controls, critical path, and PNG export
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  package-lock.json
-  src/theme.css
-
-0bd623c 2026-03-27 refactor(judge-evaluations): use TOOL_CORRECTNESS_CRITERIA.name; simplify subCriteria to drop redundant name field
-  scripts/judge-evaluations.ts
-
-058b71a 2026-03-27 refactor(judge-evaluations): extract RELEVANCE/COHERENCE/FAITHFULNESS/HALLUCINATION_EVAL_NAME constants; replace 20 raw strings
-  scripts/judge-evaluations.ts
-
-7174e88 2026-03-27 refactor(judge-evaluations): replace raw evaluator type strings at evalType filter and dataset run record
-  scripts/judge-evaluations.ts
-
-635b81f 2026-03-27 refactor(judge-evaluations): extract TRACE_BACKFILL_EVALUATOR_TYPE; replace raw strings at backfill override
-  scripts/judge-evaluations.ts
-
-a3fbb92 2026-03-27 refactor(sync-to-kv): remove unnecessary Record<string,unknown> cast in filterCanary
-  scripts/sync-to-kv.ts
-
-9ce79aa 2026-03-27 refactor(sync-to-kv): replace raw 'canary' string with CANARY_EVALUATOR_TYPE constant
-  scripts/sync-to-kv.ts
-
-f34ce33 2026-03-27 refactor(scripts): extract RULE_EVALUATOR_TYPE constant; replace 6 raw 'rule' literals
-  scripts/judge-evaluations.ts
-
-4c8321b 2026-03-27 refactor(scripts): add CANARY/SEED_EVALUATOR_TYPE constants; hoist sessionPreview
-  scripts/judge-evaluations.ts
-
-f652c5b 2026-03-27 fix(judge-evaluations): correct self-referential sessionPreview; add declaration to evaluateTurn
-  scripts/judge-evaluations.ts
-
-222fae8 2026-03-27 refactor(scripts): apply RULE_EVALUATOR/LLM_EVALUATOR_TYPE constants; hoist sessionPreview
-  scripts/judge-evaluations.ts
-
-1cc72fa 2026-03-26 refactor(scripts): extract LLM_JUDGE_EVALUATOR constant; remove blank line
-  scripts/judge-evaluations.ts
-
-5356e01 2026-03-26 perf(workflow): memoize effectiveSelected Set and document style exemption
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-a64d695 2026-03-26 feat(workflow): add agent filter chip bar to AgentWorkflowView (FU-G5-FILTER)
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  src/theme.css
-
-107873e 2026-03-26 refactor(judge-evaluations): remove redundant streaming WHAT comments
-  scripts/judge-evaluations.ts
-
-8d0d0d2 2026-03-26 refactor(judge-evaluations): remove WHAT inline comments
-  scripts/judge-evaluations.ts
-
-258c6ba 2026-03-26 refactor(judge-evaluations): remove WHAT inline comment
-  scripts/judge-evaluations.ts
-
-1baccef 2026-03-26 refactor(scripts): use HOOK_NAME constant and remove WHAT comments
-  scripts/judge-evaluations.ts
-  scripts/sync-to-kv.ts
-
-5c52517 2026-03-26 fix(worker): replace parseInt pagination with Zod PaginationSchema (CR-WK-3)
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-  worker/index.ts
-
-8df9944 2026-03-26 refactor(sync-to-kv): replace local HOOK_NAMES duplicate with imported HOOK_NAME
-  scripts/sync-to-kv.ts
-
-6a39352 2026-03-26 docs(auth): replace roadmap doc with canonical auth reference and fix AuthContext cleanup
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-docs.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-9265670 2026-03-26 refactor(CoverageGrid): replace inline gridTemplateColumns with CSS variable
-  src/theme.css
-
-b89436f 2026-03-26 refactor(CorrelationHeatmap): replace inline grid-template styles with CSS variables
-  src/theme.css
-
-c07f7f3 2026-03-26 refactor(worker): extract ERR_FAILED_LOAD_USER_ROLES constant and fix percentile bounds
-  worker/index.ts
-
-74ca2f1 2026-03-26 chore: regenerate repomix docs after Round 6 simplifications
-  docs/repomix/repo-compressed.xml
-  docs/repomix/repomix-git-ranked.xml
-  docs/repomix/repomix.xml
-
-1609a58 2026-03-26 refactor(worker): extract remaining inline error strings to ERR_ constants
-  worker/index.ts
-
-c1ba1fc 2026-03-26 refactor(constants): extract inline error strings into ErrorMessage enum
-  worker/index.ts
