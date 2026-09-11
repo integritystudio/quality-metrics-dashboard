@@ -37,10 +37,7 @@
 
   "include": [
     "src/**/*",
-    "services/**/*",
     "scripts/**/*",
-    "rules/**/*",
-    "skills/**/*",
     "worker/**/*",
     "e2e/**/*"
   ],
