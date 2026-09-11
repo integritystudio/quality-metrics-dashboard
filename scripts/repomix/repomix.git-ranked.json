@@ -37,10 +37,9 @@
 
   "include": [
     "src/**/*",
-    "services/**/*",
     "scripts/**/*",
-    "rules/**/*",
-    "skills/**/*"
+    "worker/**/*",
+    "e2e/**/*"
   ],
 
   "ignore": {
@@ -62,6 +61,7 @@
       "**/.ast-grep-backups/**",
       ".ast-grep-backups/**",
 
+      "**/.claude/**",
       "**/node_modules/**",
       "**/dist/**",
       "**/build/**",
@@ -85,8 +85,8 @@
       "**/__snapshots__/**",
       "**/*.snap",
       "tests/**",
-      "**/*.test.*",
-      "**/*.spec.*",
+      "**/*.test.*[a-z]",
+      "**/*.spec.*[a-z]",
 
       "**/fixtures/**",
       "**/test-files/**",
