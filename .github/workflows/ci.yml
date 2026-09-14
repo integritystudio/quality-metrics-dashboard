@@ -42,7 +42,13 @@ jobs:
           npm ci --prefix "${RUNNER_TEMP}/parent"
           npm run build --prefix "${RUNNER_TEMP}/parent"
           # tsconfig resolves @parent/* to ../dist/* relative to this checkout.
-          cp -r "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
+          # Symlink rather than copy: the parent's compiled output requires its
+          # own runtime deps (zod and friends), which Node finds by walking up
+          # from the module's REAL path. A copied dist/ has no node_modules
+          # beside it and dies with "Cannot find module 'zod'"; a symlink
+          # resolves back into the parent checkout, exactly as on a dev machine
+          # where ../dist sits inside the parent repo.
+          ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       # Specs asserting on rendered metric content skip themselves when
