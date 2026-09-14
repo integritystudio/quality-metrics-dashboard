@@ -132,6 +132,17 @@ describe('GET /agents', () => {
     expect(body).toHaveProperty('endDate');
   });
 
+  // Regression: the route used to pass date-only 'YYYY-MM-DD' bounds. They
+  // type-check (queryTraces declares `string | bigint`) but its string arm is
+  // validated as an ISO *datetime*, so every request 500'd on a Zod error.
+  // The response keeps date-only bounds — only the query is widened.
+  it('queries with full ISO datetime bounds, not date-only', async () => {
+    await agentRoutes.request('/agents?period=7d');
+    const opts = vi.mocked(queryTraces).mock.calls[0]?.[0];
+    expect(opts?.startDate).toMatch(/T.*Z$/);
+    expect(opts?.endDate).toMatch(/T.*Z$/);
+  });
+
   it('aggregates spans into agent records', async () => {
     const spans = [
       makeSpan('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' }),

@@ -1,7 +1,8 @@
-import { test, expect } from './fixtures.js';
+import { test, expect, NO_DATA_SKIP_REASON } from './fixtures.js';
 
 test.describe('Dashboard Home', () => {
-  test('loads and displays metric grid', async ({ page }) => {
+  test('loads and displays metric grid', async ({ page, hasData }) => {
+    test.skip(!hasData, NO_DATA_SKIP_REASON);
     await page.goto('/');
     // Wait for data to load (card-link appears when API responds)
     await expect(page.locator('.card-link').first()).toBeVisible({ timeout: 15_000 });
@@ -19,7 +20,8 @@ test.describe('Dashboard Home', () => {
     await expect(page.locator('.period-btn.active')).toHaveText('24h');
   });
 
-  test('shows sparklines in metric cards', async ({ page }) => {
+  test('shows sparklines in metric cards', async ({ page, hasData }) => {
+    test.skip(!hasData, NO_DATA_SKIP_REASON);
     await page.goto('/');
     await expect(page.locator('.card-link').first()).toBeVisible({ timeout: 15_000 });
     const sparklines = page.locator('.card-link svg');

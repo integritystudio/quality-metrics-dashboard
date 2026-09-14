@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.js';
+import { test, expect, NO_DATA_SKIP_REASON } from './fixtures.js';
 
 test.describe('Tab Navigation', () => {
   test('navigates to correlations page', async ({ page }) => {
@@ -68,13 +68,15 @@ test.describe('Metric Detail Page', () => {
     await expect(page.getByText(/back to dashboard/i)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('shows metric heading after data loads', { timeout: 60_000 }, async ({ page }) => {
+  test('shows metric heading after data loads', { timeout: 60_000 }, async ({ page, hasData }) => {
+    test.skip(!hasData, NO_DATA_SKIP_REASON);
     await page.goto(`/metrics/${metricName}`);
     // h2 with metric display name appears once API responds and skeleton is replaced
     await expect(page.locator('.text-lg').first()).toBeVisible({ timeout: 45_000 });
   });
 
-  test('shows evaluations section', { timeout: 60_000 }, async ({ page }) => {
+  test('shows evaluations section', { timeout: 60_000 }, async ({ page, hasData }) => {
+    test.skip(!hasData, NO_DATA_SKIP_REASON);
     await page.goto(`/metrics/${metricName}`);
     // ViewSection with title "Evaluations" renders after data loads
     await expect(page.getByRole('heading', { name: 'Evaluations', exact: true })).toBeVisible({ timeout: 45_000 });

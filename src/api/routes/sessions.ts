@@ -17,6 +17,7 @@ import {
   type SafeLogEntry,
   PARAM_ID_RE,
   isValidParam,
+  toIsoWindowBound,
   PERCENT_BASE,
   LATENCY_DISPLAY_PRECISION,
   spanAttr,
@@ -79,8 +80,8 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
   const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']!), { representation: 'date' });
   const result = await queryTraces({
     attributeFilter: { 'session.id': sessionId },
-    startDate: start,
-    endDate: end,
+    startDate: toIsoWindowBound(start, 'start'),
+    endDate: toIsoWindowBound(end, 'end'),
     limit: LIMIT_SESSION_SPANS,
   });
   return result.traces;
