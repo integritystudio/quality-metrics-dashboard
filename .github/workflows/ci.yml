@@ -14,13 +14,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dopplerhq/cli-action@v3
-        with:
-          token: ${{ secrets.DOPPLER_TOKEN }}
+      # cli-action only installs the CLI — it has no `token` input, so the
+      # token must reach `doppler run` as an env var on the step itself
+      # (same pattern as deploy.yml).
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
       - run: npm ci
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
       - name: Run src tests (script tests require parent dist from observability-toolkit)
         run: doppler run --project integrity-studio --config prd -- npm test src/
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Run E2E tests
         run: npm run test:e2e
