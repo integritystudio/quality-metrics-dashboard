@@ -95,7 +95,13 @@ export default defineConfig({
       },
     },
     {
-      command: 'vite',
+      // `--mode test` loads the tracked .env.test, whose placeholder
+      // VITE_AUTH0_* values satisfy the import-time check in src/lib/auth0.ts
+      // (the SDK itself is stubbed under VITE_E2E=1, so real values would add
+      // nothing). Plain `vite` loads .env instead — untracked, present only on
+      // developer machines — so every page spec threw "Missing required env
+      // vars" anywhere else, CI included.
+      command: 'vite --mode test',
       url: BASE_URL,
       reuseExistingServer: !process.env.CI,
       timeout: SERVER_TIMEOUT_MS,

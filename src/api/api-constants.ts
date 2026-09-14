@@ -137,6 +137,24 @@ export function toDateOnly(d: Date | string): string {
   return (typeof d === 'string' ? d : d.toISOString()).split('T')[0] ?? '';
 }
 
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_START_SUFFIX = 'T00:00:00.000Z';
+const DAY_END_SUFFIX = 'T23:59:59.999Z';
+
+/**
+ * Widen a date bound to the full ISO datetime `queryTraces` actually requires.
+ *
+ * Its `startDate`/`endDate` are typed `string | bigint`, but the string arm is
+ * validated as an ISO *datetime* — so a date-only 'YYYY-MM-DD' type-checks and
+ * then fails Zod at request time. A date-only value names a whole UTC day, so
+ * the start bound opens it and the end bound closes it; values that already
+ * carry a time are returned unchanged.
+ */
+export function toIsoWindowBound(value: string, bound: 'start' | 'end'): string {
+  if (!DATE_ONLY_RE.test(value)) return value;
+  return `${value}${bound === 'start' ? DAY_START_SUFFIX : DAY_END_SUFFIX}`;
+}
+
 export type SpanLike = { attributes?: Record<string, unknown> };
 
 export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {

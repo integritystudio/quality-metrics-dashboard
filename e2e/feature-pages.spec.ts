@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.js';
+import { test, expect, NO_DATA_SKIP_REASON } from './fixtures.js';
 
 test.describe('Correlations Page', () => {
   test('renders correlation content', async ({ page }) => {
@@ -13,7 +13,8 @@ test.describe('Pipeline Page', () => {
     await expect(page.locator('.card, table, [class*="stage"]').first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test('shows percentage values after data loads', async ({ page }) => {
+  test('shows percentage values after data loads', async ({ page, hasData }) => {
+    test.skip(!hasData, NO_DATA_SKIP_REASON);
     const responsePromise = page.waitForResponse('**/api/pipeline*');
     await page.goto('/pipeline');
     await responsePromise;
@@ -24,12 +25,14 @@ test.describe('Pipeline Page', () => {
 });
 
 test.describe('Compliance Page', () => {
-  test('renders SLA compliance table', async ({ page }) => {
+  test('renders SLA compliance table', async ({ page, hasData }) => {
+    test.skip(!hasData, NO_DATA_SKIP_REASON);
     await page.goto('/compliance');
     await expect(page.locator('table').first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test('renders compliance framework map', async ({ page }) => {
+  test('renders compliance framework map', async ({ page, hasData }) => {
+    test.skip(!hasData, NO_DATA_SKIP_REASON);
     await page.goto('/compliance');
     await expect(page.getByText('EU AI Act')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('NIST')).toBeVisible();

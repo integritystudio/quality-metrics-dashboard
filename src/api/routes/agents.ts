@@ -54,17 +54,24 @@ agentRoutes.get('/agents', async (c) => {
     return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
   }
   const now = new Date();
+  const windowStart = new Date(now.getTime() - periodDays * TIME_MS.DAY);
+  // Date-only: the response contract and the daily bucket keys.
   const endDate = toDateOnly(now);
-  const startDate = toDateOnly(new Date(now.getTime() - periodDays * TIME_MS.DAY));
+  const startDate = toDateOnly(windowStart);
 
   try {
     // OBP7b: CloudBackend canonicalizes attribute keys on read (legacy pre-cutover
     // D1 rows included) and applies non-sessionId attributeFilter entries
     // client-side, so a single canonical-key query covers every row era.
+    //
+    // queryTraces types startDate/endDate as `string | bigint` but validates the
+    // string arm as a full ISO *datetime* — a date-only 'YYYY-MM-DD' type-checks
+    // and then fails Zod at runtime, which made this route a guaranteed 500.
+    // Pass the datetimes; the date-only values above stay for buckets/response.
     const result = await queryTraces({
       attributeFilter: { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },
-      startDate,
-      endDate,
+      startDate: windowStart.toISOString(),
+      endDate: now.toISOString(),
       limit: LIMIT_AGENT_SPANS,
     });
     const agentSpans = result.traces;

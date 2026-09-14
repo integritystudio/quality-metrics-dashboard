@@ -26,5 +26,50 @@ jobs:
         run: doppler run --project integrity-studio --config prd -- npm test src/
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      # The e2e API server imports the parent observability-toolkit through
+      # `@parent/*`, which tsconfig maps to `../dist/*` — the parent's build
+      # output, absent from a standalone dashboard checkout. Without it the
+      # Playwright webServer dies at startup with ERR_MODULE_NOT_FOUND and no
+      # spec runs. Clone shallow and WITHOUT submodules: the parent tracks this
+      # repo as one, and recursing would check the dashboard out inside itself.
+      - name: Build parent observability-toolkit into ../dist
+        run: |
+          GH_TOKEN=$(doppler secrets get GITHUB_TOKEN --project integrity-studio --config prd --plain)
+          echo "::add-mask::$GH_TOKEN"
+          git clone --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/integritystudio/observability-toolkit.git" \
+            "${RUNNER_TEMP}/parent"
+          npm ci --prefix "${RUNNER_TEMP}/parent"
+          npm run build --prefix "${RUNNER_TEMP}/parent"
+          # tsconfig resolves @parent/* to ../dist/* relative to this checkout.
+          # Symlink rather than copy: the parent's compiled output requires its
+          # own runtime deps (zod and friends), which Node finds by walking up
+          # from the module's REAL path. A copied dist/ has no node_modules
+          # beside it and dies with "Cannot find module 'zod'"; a symlink
+          # resolves back into the parent checkout, exactly as on a dev machine
+          # where ../dist sits inside the parent repo.
+          ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      # Specs asserting on rendered metric content skip themselves when
+      # /api/health reports hasData: false (see e2e/fixtures.ts) — the API
+      # reads a live cloud window, so its emptiness is an environment fact.
+      # Secrets are exported rather than wrapped in `doppler run`: under
+      # `doppler run` the Playwright webServer's `tsx src/api/server.ts` child
+      # never binds its port, so every API-backed spec fails on a dead proxy.
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: |
+          OBTOOL_API_URL=$(doppler secrets get OBTOOL_API_URL --project integrity-studio --config prd --plain)
+          OBTOOL_API_KEY=$(doppler secrets get OBTOOL_API_KEY --project integrity-studio --config prd --plain)
+          echo "::add-mask::$OBTOOL_API_KEY"
+          export OBTOOL_API_URL OBTOOL_API_KEY
+          npm run test:e2e
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
