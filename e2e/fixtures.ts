@@ -22,9 +22,16 @@ const HEALTH_URL = `http://${API_HOST}:${API_PORT}/api/health`;
  * renders empty states, and failing there would report an environment fact as
  * a regression. Specs that assert on navigation, layout and controls stay
  * unconditional: those must pass with or without data.
+ *
+ * `hasData` is `checkHealth()` in src/api/data-loader.ts — "did the CLOUD API
+ * return at least one evaluation in the last 7 days", over HTTP through
+ * CloudBackend. Note what does NOT satisfy it: `npm run populate -- --seed`
+ * derives and judges into *local* evaluations-*.jsonl and syncs to *KV*, and
+ * the e2e API reads neither. Lifting these skips means putting evaluation rows
+ * into the cloud store itself.
  */
 export const NO_DATA_SKIP_REASON =
-  'API reports hasData: false — seed with `npm run populate -- --seed` to run data-dependent specs';
+  'API reports hasData: false (no cloud evaluations in the last 7d) — these specs need rows in the cloud store, which `npm run populate -- --seed` does not provide';
 
 type WorkerFixtures = {
   /** Whether /api/health reports a non-empty data window. Fetched once per worker. */

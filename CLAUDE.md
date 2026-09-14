@@ -89,11 +89,14 @@ To verify the declaration is load-bearing: remove it from `tsconfig.json` and `n
 
 ## E2E (`e2e/`, chromium project)
 
-`playwright.config.ts` starts **two** webServers — `tsx src/api/server.ts` gated on `/api/health`, and `vite` gated on the page URL. It previously ran a single `npm run dev` and waited only on vite, so specs started against a dead `/api` proxy and failed with 502s. The API port comes from `src/api/config.ts`, not a literal.
+`playwright.config.ts` starts **two** webServers — `tsx src/api/server.ts` gated on `/api/health`, and `vite --mode test` gated on the page URL. It previously ran a single `npm run dev` and waited only on vite, so specs started against a dead `/api` proxy and failed with 502s. The API port comes from `src/api/config.ts`, not a literal.
 
 - `vite.config.ts:48` still hardcodes the proxy target `http://127.0.0.1:3001`, so setting `API_PORT` desyncs the gate from the proxy.
-- Most e2e specs still fail for a **different** reason: the local API reports `hasData: false` (all 9 metrics `no_data`), so anything asserting on rendered metric content cannot pass. Seed with `npm run populate -- --seed`.
-- `GET /api/agents` returns 500 locally — a real bug the readiness fix uncovered, previously masked as a 502.
+- **`--mode test` is load-bearing**: `src/lib/auth0.ts` throws at import without `VITE_AUTH0_*`, and plain `vite` loads `.env` — untracked, so present only on developer machines. Test mode loads the tracked `.env.test` placeholders, which suffice because the SDK is stubbed under `VITE_E2E=1`.
+- **Never wrap an e2e run in `doppler run`** — the webServer's `tsx` child then never binds its port, and Playwright does *not* fail the health gate: it proceeds, and every API-backed spec fails against a dead proxy (`ECONNREFUSED 127.0.0.1:3001`). Export `OBTOOL_API_URL`/`OBTOOL_API_KEY` via `doppler secrets get … --plain` instead.
+- Seven specs assert on rendered metric content and **skip themselves** when `/api/health` reports `hasData: false` (worker-scoped fixture in `e2e/fixtures.ts`). Expect **32 passed / 7 skipped** in ~23s.
+- ⚠️ **`npm run populate -- --seed` does NOT lift those skips** — this line said it did until 2026-09-14. `hasData` is `checkHealth()` in `data-loader.ts`: "did the **cloud API** return ≥1 evaluation in the last 7 days", read through `CloudBackend` over HTTP (there is no local-file backend; an unset `OBTOOL_API_URL` throws). But `populate` derives and judges into **local** `evaluations-*.jsonl`, and its `sync-to-kv` stage reads the *cloud API* and writes *KV* — which the e2e API never reads. Nothing carries local JSONL into the cloud. Lifting the skips means putting evaluation rows into the cloud store for the queried window (HMAC `POST /v1/evaluations`, or `obs_inject_evaluations`), which lands via R2 → the `*/5` flush cron → D1, so it is not synchronous; scope it to a CI org via `DEV_ORG_ID` or it writes into production telemetry.
+- `GET /api/agents` returned 500 on **every** request until 2026-09-14 (PR #6): `queryTraces` types its date bounds `string | bigint` but validates the string arm as an ISO *datetime*, so the route's date-only `'YYYY-MM-DD'` type-checked and failed Zod. Fixed there and in the sessions route via `toIsoWindowBound`.
 
 ## Integration Tests (`e2e/integration/`)
 
