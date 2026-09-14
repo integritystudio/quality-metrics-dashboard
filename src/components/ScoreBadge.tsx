@@ -3,7 +3,7 @@ import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
-import { useMetricCalibration } from '../context/CalibrationContext.js';
+import { useMetricCalibration } from '../contexts/CalibrationContext.js';
 import type { ReactNode } from 'react';
 
 function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode; mono?: boolean }) {

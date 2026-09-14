@@ -41,7 +41,7 @@ import { useDashboard } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
-import { CalibrationProvider } from './context/CalibrationContext.js';
+import { CalibrationProvider } from './contexts/CalibrationContext.js';
 import { ROLES } from './lib/constants.js';
 import type {
   Period,
