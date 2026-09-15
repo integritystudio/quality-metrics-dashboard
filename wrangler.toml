@@ -74,10 +74,14 @@ AUTH0_AUDIENCE = "https://api.integritystudio.dev"
 # must fail loudly in dev rather than silently resolve a production org.
 HOME_ORG_ID = ""
 STAFF_USER_IDS = "[]"
-# Dev stays OFF until it gets its own non-empty HOME_ORG_ID (the dev project's
-# home org is 4fab26df-8675-47b1-9ba3-eae681c1285f, created 2026-09-14 by
-# p0-apply-dev.py; the 12fc779f-… this used to name was dev-signup-test-…, a
-# personal fixture org standing in before a real home org existed); with the flag on and an
+# Dev stays OFF until it gets its own non-empty HOME_ORG_ID. The value the rest
+# of the dev fleet uses is 12fc779f-fc19-483f-be29-0036c76da75c — ingest and
+# obtool-api both bind it, ingest writes R2 keys under it and the API reads them
+# back, so it is a fleet-wide constant and not a per-worker choice. Dev did gain
+# a real `home`-slug org on 2026-09-14 (4fab26df-8675-47b1-9ba3-eae681c1285f,
+# from p0-apply-dev.py) and it is the better name semantically, but adopting it
+# means moving every binding and the existing data together: repointing ingest
+# alone that day turned ingest-evaluations.e2e.ts case 4 red. With the flag on and an
 # empty HOME_ORG_ID the worker refuses to serve (fail-loud by design).
 ORG_SCOPING_ENABLED = "false"
 
