@@ -75,7 +75,9 @@ AUTH0_AUDIENCE = "https://api.integritystudio.dev"
 HOME_ORG_ID = ""
 STAFF_USER_IDS = "[]"
 # Dev stays OFF until it gets its own non-empty HOME_ORG_ID (the dev project's
-# home org is 12fc779f-fc19-483f-be29-0036c76da75c); with the flag on and an
+# home org is 4fab26df-8675-47b1-9ba3-eae681c1285f, created 2026-09-14 by
+# p0-apply-dev.py; the 12fc779f-… this used to name was dev-signup-test-…, a
+# personal fixture org standing in before a real home org existed); with the flag on and an
 # empty HOME_ORG_ID the worker refuses to serve (fail-loud by design).
 ORG_SCOPING_ENABLED = "false"
 
