@@ -21,7 +21,7 @@ complianceRoutes.get('/compliance/sla', async (c) => {
     const dates = computePeriodDates(period);
 
     const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const summary = computeDashboardSummary(evaluationsByMetric, undefined, dates);
+    const summary = computeDashboardSummary(evaluationsByMetric, { period: dates });
 
     return c.json({
       period,

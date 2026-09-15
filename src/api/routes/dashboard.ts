@@ -48,7 +48,7 @@ dashboardRoutes.get('/dashboard', async (c) => {
     const role = roleResult.data;
     const dates = computePeriodDates(period);
     const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const dashboard = computeDashboardSummary(evaluationsByMetric, undefined, dates);
+    const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
     const cqi = computeCQI(dashboard.metrics);
 
     const startMs = new Date(dates.start).getTime();

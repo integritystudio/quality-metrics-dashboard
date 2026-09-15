@@ -121,7 +121,7 @@ trendRoutes.get('/trends/:name', async (c) => {
         : undefined;
 
       const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, previousTrend, periodHours)
+        ? computeMetricDynamics(detail.trend, periodHours, { previousTrend })
         : undefined;
       if (detail?.trend) previousTrend = detail.trend;
 

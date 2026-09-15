@@ -68,7 +68,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
     });
 
     const dynamics = detail.trend
-      ? computeMetricDynamics(detail.trend, undefined, periodResult.data === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
+      ? computeMetricDynamics(detail.trend, periodResult.data === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
       : undefined;
 
     return c.json(jsonSafe({ ...detail, dynamics }));

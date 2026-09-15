@@ -197,6 +197,17 @@ describe('GET /metrics/:name', () => {
     expect(body).toHaveProperty('dynamics');
   });
 
+  it('passes the period length as the second argument, not a previous trend', async () => {
+    // computeMetricDynamics takes (currentTrend, periodHours, options?). The
+    // old positional form put previousTrend second; it type-errors but only
+    // after the parent rebuilds, and the mock here accepts anything — so the
+    // route silently returned velocity: null in production. Pin the shape.
+    await metricsRoutes.request('/metrics/relevance?period=7d');
+
+    const [, periodHours] = vi.mocked(computeMetricDynamics).mock.calls[0]!;
+    expect(typeof periodHours).toBe('number');
+  });
+
   it('omits dynamics when trend is absent', async () => {
     vi.mocked(computeMetricDetail).mockReturnValue({ ...makeMockDetail(), trend: undefined });
 

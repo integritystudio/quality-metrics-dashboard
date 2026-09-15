@@ -91,6 +91,9 @@ function makeMockEval(timestamp = EVAL_NANOS, score = 0.85): EvaluationResult {
   };
 }
 
+/** Nanoseconds per millisecond — evaluation timestamps are epoch nanos. */
+const NANOS_PER_MS = 1_000_000n;
+
 const MOCK_PERCENTILES: Percentiles = { p10: 0.7, p25: 0.8, p50: 0.85, p75: 0.9, p90: 0.95 };
 
 const MOCK_TREND: MetricTrend = {
@@ -175,6 +178,27 @@ describe('GET /trends/:name', () => {
     for (const buckets of [3, 7, 15, 30]) {
       const res = await trendRoutes.request(`/trends/relevance?period=7d&buckets=${buckets}`);
       expect(res.status).toBe(200);
+    }
+  });
+
+  it('passes the period length second and the previous trend in options', async () => {
+    // Same argument-order trap as api-metrics, but this route actually has a
+    // previousTrend to misplace: positionally it landed in periodHours and
+    // killed both velocity and acceleration.
+    // The shared fixture timestamp is fixed, so it falls outside the rolling
+    // window and every bucket comes back empty — the route then never reaches
+    // computeMetricDynamics at all. Put one evaluation inside the window.
+    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([
+      makeMockEval(BigInt(Date.now()) * NANOS_PER_MS),
+    ]);
+
+    await trendRoutes.request('/trends/relevance?period=7d');
+
+    const calls = vi.mocked(computeMetricDynamics).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [, periodHours, options] of calls) {
+      expect(typeof periodHours).toBe('number');
+      expect(options === undefined || typeof options === 'object').toBe(true);
     }
   });
 
