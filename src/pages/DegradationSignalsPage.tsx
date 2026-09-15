@@ -1,10 +1,27 @@
-import { useDegradationSignals, type DegradationReport } from '../hooks/useDegradationSignals.js';
+import { useDegradationSignals, type DegradationReport, type DegradationSignal } from '../hooks/useDegradationSignals.js';
 import { PageShell } from '../components/PageShell.js';
 import { StatusBadge } from '../components/Indicators.js';
 import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
 const COVERAGE_DROPOUT_PRECISION = 1;
+
+/** Digits for a p-value, which needs more resolution than a 0-1 score. */
+const P_VALUE_PRECISION = 4;
+
+/**
+ * The drift cell reports the raw test and, when a family-level FDR correction
+ * overruled it, says so. Without this the table shows "Yes" next to a healthy
+ * status with nothing explaining the gap.
+ */
+function formatDrift(signal: DegradationSignal): string {
+  if (!signal.ewmaDriftDetected) return 'No';
+  // Nullish, not null: a pre-FDR payload from KV omits the field entirely.
+  const p = signal.ewmaDriftPValue;
+  const pLabel = p == null ? '' : ` (p=${p.toFixed(P_VALUE_PRECISION)})`;
+  if (signal.ewmaDriftFdrSignificant === false) return `Not significant${pLabel}`;
+  return `Yes${pLabel}`;
+}
 
 const VARIANCE_TREND_LABEL = {
   increasing: 'Increasing',
@@ -20,7 +37,7 @@ function ReportRow({ report }: { report: DegradationReport }) {
       <td>
         <StatusBadge status={signal.predictedStatus} />
       </td>
-      <td className="mono">{signal.ewmaDriftDetected ? 'Yes' : 'No'}</td>
+      <td className="mono">{formatDrift(signal)}</td>
       <td className="mono">{VARIANCE_TREND_LABEL[signal.varianceTrend]}</td>
       <td className="mono">{signal.varianceRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
       <td className="mono">{signal.consecutiveBreaches}</td>

@@ -130,6 +130,26 @@ describe('DegradationSignalsPage — signal display', () => {
     expect(screen.getByText('Yes')).toBeInTheDocument();
   });
 
+  it('marks a drift the family-level FDR correction overruled, with its p-value', () => {
+    // Raw detection stays visible; without the label the table would show a
+    // drift beside a healthy status and explain nothing.
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: true, ewmaDriftPValue: 0.0435, ewmaDriftFdrSignificant: false }) })],
+    }));
+    render(<DegradationSignalsPage period="7d" />);
+    expect(screen.getByText(/Not significant \(p=0\.0435\)/)).toBeInTheDocument();
+  });
+
+  it('renders a pre-FDR payload from KV, which carries neither field', () => {
+    // The pipeline overwrites these entries on its next run; until then the
+    // page must not blow up on the fields it has not got.
+    mockLoaded(makeResponse({
+      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: true, ewmaDriftPValue: undefined, ewmaDriftFdrSignificant: undefined }) })],
+    }));
+    render(<DegradationSignalsPage period="7d" />);
+    expect(screen.getByText('Yes')).toBeInTheDocument();
+  });
+
   it('shows "No" in EWMA Drift column when ewmaDriftDetected is false', () => {
     mockLoaded(makeResponse({
       reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: false, confirmed: false }) })],
