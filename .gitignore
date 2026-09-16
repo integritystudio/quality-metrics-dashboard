@@ -11,6 +11,9 @@ docs/repomix/
 .kv-sync-state.json
 scripts/.kv-sync-coverage.json
 scripts/.degradation-incidents.json
+# Machine-local sync sidecar, same class as the three above — written by
+# sync-to-kv's degradation pass, was the only one of the four not ignored.
+scripts/.degradation-state.json
 worker-configuration.d.ts
 playwright-report/
 test-results/

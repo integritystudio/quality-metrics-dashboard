@@ -5,14 +5,22 @@
  * Steps:
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
- *   3. sync-to-kv          → aggregate + upload to Cloudflare KV
+ *   3. upload-evaluations  → ship local evaluations JSONL to the cloud evaluations table
+ *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
+ *
+ * Step 3 is not optional plumbing. Steps 1-2 write `evaluations-<date>.jsonl`
+ * to `TELEMETRY_DIR`, but step 4 reads the *cloud* (`CloudBackend.queryEvaluations`,
+ * source `'table'`). Without an upload between them the pipeline looks healthy
+ * at every stage and still computes an empty dashboard — which is exactly how
+ * it ran, unnoticed, until 2026-09-15. It needs `INJECT_HMAC_SECRET`.
  *
  * Usage:
  *   npm run populate                          # full pipeline (needs ANTHROPIC_API_KEY)
  *   npm run populate -- --seed                # offline: synthetic judge scores
  *   npm run populate -- --dry-run --seed      # preview only, no writes
- *   npm run populate -- --skip-judge          # rule-based + sync only
- *   npm run populate -- --skip-sync           # derive + judge only
+ *   npm run populate -- --skip-judge          # rule-based + upload + sync only
+ *   npm run populate -- --skip-upload         # derive + judge + sync (sync will see no new evals)
+ *   npm run populate -- --skip-sync           # derive + judge + upload only
  *   npm run populate -- --limit 5 --seed      # judge at most 5 turns
  */
 
@@ -25,6 +33,7 @@ const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
 
 const args = process.argv.slice(2);
 const skipJudge = args.includes('--skip-judge');
+const skipUpload = args.includes('--skip-upload');
 const skipSync = args.includes('--skip-sync');
 const dryRun = args.includes('--dry-run');
 const seed = args.includes('--seed');
@@ -73,6 +82,18 @@ if (!skipJudge) {
   if (seed || autoSeed) judgeArgs.push('--seed');
   if (limit) judgeArgs.push('--limit', limit);
   runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
+}
+
+if (!skipUpload) {
+  if (!process.env.INJECT_HMAC_SECRET && !dryRun) {
+    // Fail loudly. A silent skip here is what the dead-dashboard failure mode
+    // looked like: every step green, nothing reaching the cloud.
+    console.error('[populate] Error: INJECT_HMAC_SECRET is not set, so derived evaluations cannot reach the cloud and sync-to-kv would compute an empty dashboard. Run under `doppler run --project integrity-studio --config prd`, or pass --skip-upload to accept that.');
+    process.exit(1);
+  }
+  const uploadArgs: string[] = [];
+  if (dryRun) uploadArgs.push('--dry-run');
+  runStep('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
 }
 
 if (!skipSync) {

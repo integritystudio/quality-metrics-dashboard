@@ -907,7 +907,11 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     }
     groupedByPeriod.set(period, grouped);
 
-    const dashboard = computeDashboardSummary(grouped, undefined, dates);
+    // Options object, not positional: the parent moved computeDashboardSummary
+    // to `(evaluationsByMetric, options?)`, so the old third argument was being
+    // dropped on the floor and every dashboard summary was computed with no
+    // period attached. `dates` is already `{ start, end }` ISO — a `TimeRange`.
+    const dashboard = computeDashboardSummary(grouped, { period: dates });
     entries.push({ key: `dashboard:${period}`, value: toKVValue(dashboard) });
 
     for (const role of ROLES) {
@@ -1087,7 +1091,11 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
           : undefined;
         let dynamics: MetricDynamics | undefined;
         if (detail?.trend) {
-          dynamics = computeMetricDynamics(detail.trend, previousTrend, periodHours);
+          // Signature is `(currentTrend, periodHours, options?)`. The old
+          // positional call passed `previousTrend` (an object) as periodHours
+          // and `periodHours` (a number) as the options bag, so every trend
+          // bucket's dynamics were computed from NaN with no previous trend.
+          dynamics = computeMetricDynamics(detail.trend, periodHours, { previousTrend });
           previousTrend = detail.trend;
         }
         return {

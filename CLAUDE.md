@@ -63,11 +63,14 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 
 ## Data Pipeline (`scripts/`)
 
-`npm run populate` runs: derive → judge → sync-to-kv
+`npm run populate` runs: derive → judge → upload → sync-to-kv
 
 - `derive-evaluations.ts` — rule-based metrics (tool_correctness, evaluation_latency, task_completion)
 - `judge-evaluations.ts` — LLM-based metrics (relevance, coherence, faithfulness, hallucination)
+- `upload-evaluations.ts` — ships local `evaluations-*.jsonl` to the **cloud** `evaluations` table over the HMAC webhook. **Load-bearing, not plumbing**: the next stage reads the cloud, not these files, so without this every stage reports success and the dashboard still serves `no_data` — which is what happened for five months (`DASHBOARD-PIPELINE-DEAD`). Needs `INJECT_HMAC_SECRET`; deduped by content fingerprint because `derive` rewrites each file wholesale and a re-send duplicates rather than being ignored.
 - `sync-to-kv.ts` — delta sync aggregates to Cloudflare KV (priority: meta/agent > metrics > trends > traces)
+
+Full run with its Doppler env: `bash ../scripts/run-dashboard-pipeline.sh`. **Nothing schedules any of this** — see `DASHBOARD-PIPELINE-DEAD`.
 
 Requires parent `dist/` — run `npm run build` in observability-toolkit first.
 
@@ -95,7 +98,7 @@ To verify the declaration is load-bearing: remove it from `tsconfig.json` and `n
 - **`--mode test` is load-bearing**: `src/lib/auth0.ts` throws at import without `VITE_AUTH0_*`, and plain `vite` loads `.env` — untracked, so present only on developer machines. Test mode loads the tracked `.env.test` placeholders, which suffice because the SDK is stubbed under `VITE_E2E=1`.
 - **Never wrap an e2e run in `doppler run`** — the webServer's `tsx` child then never binds its port, and Playwright does *not* fail the health gate: it proceeds, and every API-backed spec fails against a dead proxy (`ECONNREFUSED 127.0.0.1:3001`). Export `OBTOOL_API_URL`/`OBTOOL_API_KEY` via `doppler secrets get … --plain` instead.
 - Seven specs assert on rendered metric content and **skip themselves** when `/api/health` reports `hasData: false` (worker-scoped fixture in `e2e/fixtures.ts`). Expect **32 passed / 7 skipped** in ~23s.
-- ⚠️ **`npm run populate -- --seed` does NOT lift those skips** — this line said it did until 2026-09-14. `hasData` is `checkHealth()` in `data-loader.ts`: "did the **cloud API** return ≥1 evaluation in the last 7 days", read through `CloudBackend` over HTTP (there is no local-file backend; an unset `OBTOOL_API_URL` throws). But `populate` derives and judges into **local** `evaluations-*.jsonl`, and its `sync-to-kv` stage reads the *cloud API* and writes *KV* — which the e2e API never reads. Nothing carries local JSONL into the cloud. Lifting the skips means putting evaluation rows into the cloud store for the queried window (HMAC `POST /v1/evaluations`, or `obs_inject_evaluations`), which lands via R2 → the `*/5` flush cron → D1, so it is not synchronous; scope it to a CI org via `DEV_ORG_ID` or it writes into production telemetry.
+- ⚠️ **`npm run populate -- --seed` does NOT lift those skips** (and until 2026-09-15 no invocation of `populate` did). `hasData` is `checkHealth()` in `data-loader.ts`: "did the **cloud API** return ≥1 evaluation in the last 7 days", read through `CloudBackend` over HTTP (there is no local-file backend; an unset `OBTOOL_API_URL` throws). But `populate` derives and judges into **local** `evaluations-*.jsonl`, and its `sync-to-kv` stage reads the *cloud API* and writes *KV* — which the e2e API never reads. **`npm run upload` is what carries local JSONL into the cloud** (added 2026-09-15; before that nothing did, and the production dashboard served `no_data` for five months as a result — see `DASHBOARD-PIPELINE-DEAD`). `populate` now runs derive → judge → **upload** → sync, so a plain `npm run populate` under `doppler run` does lift the skips — but not synchronously: rows land via HMAC `POST /v1/evaluations` → R2 → the `*/5` flush cron → D1, so allow a minute. ⚠️ It writes into **production** telemetry unless scoped to a CI org via `DEV_ORG_ID`. And `--seed` still does not lift them honestly — it produces synthetic scores that `filterCanary` does not drop, so they land in the real aggregates.
 - `GET /api/agents` returned 500 on **every** request until 2026-09-14 (PR #6): `queryTraces` types its date bounds `string | bigint` but validates the string arm as an ISO *datetime*, so the route's date-only `'YYYY-MM-DD'` type-checked and failed Zod. Fixed there and in the sessions route via `toIsoWindowBound`.
 
 ## Integration Tests (`e2e/integration/`)
