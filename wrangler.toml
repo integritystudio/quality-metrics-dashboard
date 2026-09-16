@@ -66,23 +66,34 @@ AUTH0_DOMAIN = "dev-njjmghdzm23uy0p7.us.auth0.com"
 # name, and each tenant registers its own API under it. The audience was never
 # the mismatch; only the issuer/JWKS was.
 AUTH0_AUDIENCE = "https://api.integritystudio.dev"
-# Deliberately empty, not copied. Both hold PRODUCTION identifiers — an org uuid
-# and ten staff user uuids that exist only in project cfrbahzzklwrnmbtqojl. Dev
-# has no equivalent rows, and carrying production uuids into a dev Worker is the
-# exact shape of the `createTestUser` hardcoded-prod-org defect. Nothing reads
-# either var yet (P5 org resolution is unbuilt); when P5 lands, an empty value
-# must fail loudly in dev rather than silently resolve a production org.
-HOME_ORG_ID = ""
+# DEV's home org, not production's. This was `""` until 2026-09-15 because dev
+# had no home org of its own and carrying production's uuid into a dev Worker is
+# the exact shape of the `createTestUser` hardcoded-prod-org defect. Dev now has
+# one (`home` slug, from scripts/org-scoping/p0-apply-dev.py) and the rest of the
+# dev fleet already binds it: obtool-ingest-dev writes the evaluations keyspace
+# under it, obtool-api-dev reads it back as its default scope. Fleet-wide
+# constant — see services/obtool-ingest/wrangler.toml before changing it.
+HOME_ORG_ID = "4fab26df-8675-47b1-9ba3-eae681c1285f"
+# Still empty, and not for the same reason as HOME_ORG_ID was. The production
+# list is ten staff uuids that exist only in project cfrbahzzklwrnmbtqojl; dev
+# has no staff accounts at all (p0-apply-dev.py's STAFF_EMAILS is empty by
+# measurement, not oversight). An empty allowlist means no dev user is staff,
+# which is correct: staff bypass membership checks, and nothing in dev should.
 STAFF_USER_IDS = "[]"
-# Dev stays OFF until it gets its own non-empty HOME_ORG_ID. The value the rest
-# of the dev fleet uses is 4fab26df-8675-47b1-9ba3-eae681c1285f, dev's `home`-slug
-# org — ingest and obtool-api both bind it, ingest writes the evaluations keyspace
-# under it and the API reads that back as its default scope, so it is a fleet-wide
-# constant and not a per-worker choice. (It named the `dev-signup-test-…` fixture
-# org until 2026-09-15; see HOME-ORG-ID-DEV-FLEET.) With the flag on and an empty
-# HOME_ORG_ID the worker refuses to serve (fail-loud by design), which is why this
-# stays empty rather than adopting the value above.
-ORG_SCOPING_ENABLED = "false"
+# 🔴 DEV IS CUT OVER; PRODUCTION IS NOT. Dev leads deliberately — that is what
+# this environment is for — so do not read this as the state of the two
+# production workers, which are still "false" (cutover runbook P7).
+#
+# Turning this on changes who can see what, not just which keys are read: the
+# worker now derives permissions from the ACTIVE ORG's membership role
+# (DASHBOARD_ROLE_BY_MEMBERSHIP) instead of legacy user_roles, and scopes every
+# KV read to `org:<activeOrgId>:…` with the bare-key fallback restricted to the
+# home org. The e2e users the sender mints are `owner` of their own fresh empty
+# personal org, which under those rules would hand them `dashboard.admin` and
+# 404 every data route — so `createAuth0TestUser` grants them a home-org
+# `viewer` membership and pins `default_organization_id` to it. Flipping this
+# back to "false" without reverting that is harmless; the reverse is not.
+ORG_SCOPING_ENABLED = "true"
 
 [env.dev.observability]
 enabled = true
