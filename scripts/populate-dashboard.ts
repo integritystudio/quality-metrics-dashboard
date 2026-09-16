@@ -49,9 +49,30 @@ if (limitIdx !== -1) {
   limit = String(parsed);
 }
 
-// Auto-fallback to --seed when no API key is present
+// Auto-fallback to --seed when no API key is present.
+//
+// 🔴 THIS MUST ANNOUNCE ITSELF. The branch was an empty block, so a run with no
+// ANTHROPIC_API_KEY quietly published SYNTHETIC judge scores while every stage
+// reported success — the same shape as the dead-dashboard failure the
+// INJECT_HMAC_SECRET check below was added to prevent, and harder to notice,
+// because the output is a full dashboard of plausible numbers rather than an
+// empty one. Doppler `prd` carries the key today, so the scheduled run judges
+// for real; rotate it out and this is the branch that decides, twice a day,
+// without saying so.
+//
+// Warns rather than exits, unlike its neighbour: running offline against seeded
+// scores is a legitimate local workflow (`npm run populate -- --seed` asks for
+// exactly this). What is not legitimate is doing it by accident.
 const autoSeed = !seed && !skipJudge && !process.env.ANTHROPIC_API_KEY;
-if (autoSeed) { /* fallback to seed mode */ }
+if (autoSeed) {
+  console.warn(
+    '[populate] WARNING: ANTHROPIC_API_KEY is not set — falling back to --seed, ' +
+    'so judge scores in this run are SYNTHETIC, not real. The dashboard it ' +
+    'publishes will look populated and be fabricated. Set the key (e.g. run ' +
+    'under `doppler run --project integrity-studio --config prd`), or pass ' +
+    '--skip-judge to leave judge metrics out entirely.',
+  );
+}
 
 // Preflight: dist/ must exist for sync-to-kv (imports compiled quality-metrics)
 if (!skipSync && !existsSync(DIST_DIR)) {
