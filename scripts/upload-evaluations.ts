@@ -127,6 +127,10 @@ export interface EvaluationPayload {
   spanId?: string;
   sessionId?: string;
   serviceName?: string;
+  /** Client-supplied event time (Unix ms). When set the flush dates the row to
+   *  this time instead of the batch-receipt time, so period aggregations are
+   *  correct for batched uploads. */
+  evaluatedAtMs?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -213,10 +217,13 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   if (spanId) payload.spanId = spanId;
   if (sessionId) payload.sessionId = sessionId;
 
+  // Supply evaluatedAtMs so the flush dates the row to when the evaluation
+  // was produced, not when this batch arrived (EVAL-WEBHOOK-EVENT-TIME).
+  if (!Number.isNaN(tMs)) payload.evaluatedAtMs = tMs;
+
   // `cohort` is not a column on the evaluations table and is dropped by the
   // table read path, so it rides in `metadata`, which the flush preserves into
-  // `attributes`. The original evaluation time goes with it — the only place
-  // it survives, since the webhook overwrites the row timestamp.
+  // `attributes`. evaluatedAt keeps the ISO string form for auditability.
   const metadata: Record<string, unknown> = {};
   if (cohort) metadata.cohort = cohort;
   if (judgeModel) metadata.judgeModel = judgeModel;
