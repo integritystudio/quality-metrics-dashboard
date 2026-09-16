@@ -96,6 +96,12 @@ const MS_PER_DAY = 86_400_000;
 /** Pause between batches so a large first run does not burst the worker. */
 const INTER_BATCH_DELAY_MS = 250;
 
+/** Transient-failure retry budget per batch (429, 5xx, and transport errors). */
+const MAX_SEND_ATTEMPTS = 4;
+const RETRY_BASE_DELAY_MS = 500;
+/** Per-request ceiling; a hung connection would otherwise stall the whole run. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 /** Recorded on every row this script ships, so cloud rows are attributable. */
 const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 
@@ -289,15 +295,58 @@ function signature(payload: string, secret: string): string {
   return `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`;
 }
 
-async function postBatch(url: string, batch: EvaluationPayload[], secret: string): Promise<{ ok: boolean; detail: string }> {
+interface SendResult { ok: boolean; detail: string; retryable: boolean }
+
+/**
+ * One POST attempt. Never throws.
+ *
+ * A thrown `fetch` here would skip the caller's `saveShipped`, losing the
+ * fingerprints of batches this run already delivered — and because the
+ * evaluations INSERT keys on a per-POST `r2_key`, the next run would re-send
+ * them as duplicates rather than have them ignored. So transport failures are
+ * returned as values, not exceptions.
+ */
+async function postBatchOnce(url: string, batch: EvaluationPayload[], secret: string): Promise<SendResult> {
   const body = JSON.stringify({ evaluations: batch });
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-signature': signature(body, secret) },
-    body,
-  });
-  const text = await response.text();
-  return { ok: response.ok, detail: `${response.status} ${text.slice(0, 300)}` };
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-signature': signature(body, secret) },
+      body,
+      // Without this a hung connection stalls the run indefinitely.
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const text = await response.text();
+    return {
+      ok: response.ok,
+      detail: `${response.status} ${text.slice(0, 300)}`,
+      // 4xx other than 429 is a payload problem — retrying re-sends the same
+      // bytes to the same verdict, so only throttling and server faults retry.
+      retryable: response.status === 429 || response.status >= 500,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      detail: `transport: ${err instanceof Error ? err.message : String(err)}`,
+      retryable: true,
+    };
+  }
+}
+
+/** Retry transient failures with exponential backoff; log once on exhaustion. */
+async function postBatch(url: string, batch: EvaluationPayload[], secret: string): Promise<SendResult> {
+  let last: SendResult = { ok: false, detail: 'no attempt made', retryable: false };
+  for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+    last = await postBatchOnce(url, batch, secret);
+    if (last.ok || !last.retryable) return last;
+    if (attempt < MAX_SEND_ATTEMPTS) {
+      const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.warn(`[upload-evaluations] attempt ${attempt}/${MAX_SEND_ATTEMPTS} failed (${last.detail}) — retrying in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  console.error(`[upload-evaluations] giving up after ${MAX_SEND_ATTEMPTS} attempts: ${last.detail}`);
+  return last;
 }
 
 interface Options {
@@ -345,6 +394,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   let parseErrors = 0;
   let alreadyShipped = 0;
 
+  // try/finally, not a trailing save: an unexpected throw anywhere below would
+  // otherwise skip saveShipped and lose the fingerprints of batches this run
+  // already delivered, which the next run re-sends as duplicates.
+  try {
   for (const file of files) {
     if (sent >= opts.limit) break;
     const done = new Set(shipped[file] ?? []);
@@ -400,13 +453,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 
     shipped[file] = delivered;
     if (!ok) {
-      if (!opts.dryRun) saveShipped(TELEMETRY_DIR, shipped);
       console.error('[upload-evaluations] aborted on send failure — state saved up to the last accepted batch');
       return 1;
     }
   }
-
-  if (!opts.dryRun) saveShipped(TELEMETRY_DIR, shipped);
+  } finally {
+    if (!opts.dryRun) saveShipped(TELEMETRY_DIR, shipped);
+  }
 
   const skipSummary = Object.entries(skips).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
   console.log(

@@ -247,3 +247,43 @@ describe('webhook caps mirrored from the ingest worker', () => {
     }
   });
 });
+
+describe('network failure handling', () => {
+  // Regression guard for three defects the first cut of this script had:
+  // a thrown fetch escaped past saveShipped (losing fingerprints for batches
+  // already delivered, which the next run re-sends as DUPLICATES, since the
+  // evaluations INSERT keys on a per-POST r2_key); no retry, so one blip
+  // aborted a 49-batch run; and no timeout, so a hung connection stalled it.
+  const SCRIPT = readFileSync(resolve(__dirname, '../upload-evaluations.ts'), 'utf8');
+
+  it('never lets a transport error escape as an exception', () => {
+    // postBatchOnce must convert a thrown fetch into a returned result.
+    const once = SCRIPT.slice(SCRIPT.indexOf('async function postBatchOnce'));
+    const body = once.slice(0, once.indexOf('\n}\n'));
+    expect(body).toContain('try {');
+    expect(body).toContain('catch');
+    expect(body).toMatch(/retryable:\s*true/);
+  });
+
+  it('persists the shipped index on every exit path, not just clean ones', () => {
+    // A trailing saveShipped is not enough — it must be in a finally block.
+    expect(SCRIPT).toMatch(/finally\s*\{\s*\n\s*if \(!opts\.dryRun\) saveShipped/);
+  });
+
+  it('retries transient failures and logs once on exhaustion', () => {
+    const retry = SCRIPT.slice(SCRIPT.indexOf('async function postBatch(url'));
+    const body = retry.slice(0, retry.indexOf('\n}\n'));
+    expect(body).toContain('MAX_SEND_ATTEMPTS');
+    expect(body).toMatch(/console\.error\(`\[upload-evaluations\] giving up/);
+  });
+
+  it('retries throttling and server faults but not payload rejections', () => {
+    // A 400 means the same bytes will be rejected again — retrying wastes the
+    // budget and delays the real error reaching the operator.
+    expect(SCRIPT).toMatch(/response\.status === 429 \|\| response\.status >= 500/);
+  });
+
+  it('bounds every request with a timeout', () => {
+    expect(SCRIPT).toContain('AbortSignal.timeout(REQUEST_TIMEOUT_MS)');
+  });
+});
