@@ -41,6 +41,8 @@ import {
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
+import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES } from './pipeline-stages.js';
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import pLimit from 'p-limit';
 
@@ -648,8 +650,92 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
 /** Track evaluation failures for summary reporting */
 export const evalFailures: Record<string, number> = {};
 
-function trackFailure(metric: string): void {
+export type JudgeFailureClass = 'billing' | 'network' | 'parse' | 'invalid-input' | 'other';
+export const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'parse', 'invalid-input', 'other'];
+
+/** Failures by cause across all metrics — what decides the exit code. */
+export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, parse: 0, 'invalid-input': 0, other: 0 };
+
+const BILLING_FAILURE_PATTERN = /credit balance|billing|payment required|insufficient (?:funds|credit)/i;
+const NETWORK_FAILURE_PATTERN = /Connection error|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|timed out/i;
+const INVALID_INPUT_FAILURE_PATTERN = /Invalid TestCase|Invalid GEvalConfig/;
+const PARSE_FAILURE_PATTERN = /below minimum|not valid JSON|Unexpected token|Invalid normalized score|Could not (?:extract|parse)/i;
+
+/** Bucket a judge error by what would fix it: money, the network, the parser, or the input this script built. */
+export function classifyJudgeFailure(message: string): JudgeFailureClass {
+  if (BILLING_FAILURE_PATTERN.test(message)) return 'billing';
+  if (NETWORK_FAILURE_PATTERN.test(message)) return 'network';
+  if (INVALID_INPUT_FAILURE_PATTERN.test(message)) return 'invalid-input';
+  if (PARSE_FAILURE_PATTERN.test(message)) return 'parse';
+  return 'other';
+}
+
+export function resetFailureTracking(): void {
+  for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+  for (const cls of JUDGE_FAILURE_CLASSES) failureClasses[cls] = 0;
+}
+
+function trackFailure(metric: string, err: unknown): void {
   evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
+  failureClasses[classifyJudgeFailure(err instanceof Error ? err.message : String(err))] += 1;
+}
+
+/** Appended when a context item is cut to fit the judge's schema. */
+export const CONTEXT_TRUNCATION_MARKER = '\n…[truncated to fit the judge input cap]';
+
+/**
+ * Fit tool results to what `testCaseSchema` accepts: at most the smaller of
+ * MAX_TOOL_CONTEXT_ITEMS / MAX_CONTEXT_ITEMS entries, each at most
+ * MAX_TEXT_LENGTH characters. Before this, one oversized tool result failed
+ * every metric for its turn with "Invalid TestCase … too_big" — 60 of the 480
+ * failures in every scheduled run from 2026-09-16 on.
+ */
+export function fitContextForJudge(toolResults: readonly string[]): string[] {
+  const itemLimit = Math.min(MAX_TOOL_CONTEXT_ITEMS, MAX_CONTEXT_ITEMS);
+  return toolResults.slice(0, itemLimit).map(item =>
+    item.length <= MAX_TEXT_LENGTH
+      ? item
+      : item.slice(0, MAX_TEXT_LENGTH - CONTEXT_TRUNCATION_MARKER.length) + CONTEXT_TRUNCATION_MARKER,
+  );
+}
+
+export interface JudgeRunSummary {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  byClass: Record<JudgeFailureClass, number>;
+  /** 0 when the run produced scores and saw no billing refusal. */
+  exitCode: number;
+  /** The one line the log gets, verdict included. */
+  line: string;
+}
+
+/**
+ * What the run did and how loudly to say so. A billing refusal wins — nothing
+ * else in the run can be trusted and the fix is external. A run that attempted
+ * evaluations and produced none is the other failure the pipeline used to
+ * report as success: every scheduled run from 2026-09-16 to 09-19 did exactly
+ * that while the launchd log said "completed".
+ */
+export function summarizeJudgeRun(
+  succeeded: number,
+  byMetric: Record<string, number>,
+  byClass: Record<JudgeFailureClass, number>,
+): JudgeRunSummary {
+  const failed = Object.values(byMetric).reduce((sum, n) => sum + n, 0);
+  const attempted = succeeded + failed;
+  const classes = JUDGE_FAILURE_CLASSES.filter(c => byClass[c] > 0).map(c => `${c}=${byClass[c]}`).join(' ') || 'none';
+  let exitCode = 0;
+  let verdict = 'ok';
+  if (byClass.billing > 0) {
+    exitCode = JUDGE_EXIT_BILLING;
+    verdict = 'BILLING REFUSED — no judge output from this run can be trusted; top up credit before re-running';
+  } else if (attempted > 0 && succeeded === 0) {
+    exitCode = JUDGE_EXIT_NO_SCORES;
+    verdict = 'NO SCORES PRODUCED — every evaluation failed';
+  }
+  const line = `[judge] summary: attempted=${attempted} succeeded=${succeeded} failed=${failed} classes: ${classes} — ${verdict}`;
+  return { attempted, succeeded, failed, byClass: { ...byClass }, exitCode, line };
 }
 
 export async function evaluateTurn(
@@ -660,7 +746,7 @@ export async function evaluateTurn(
   const evals: EvalRecord[] = [];
   const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
-  const toolContext = turn.toolResults.slice(0, MAX_TOOL_CONTEXT_ITEMS);
+  const toolContext = fitContextForJudge(turn.toolResults);
 
   const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
   if (!existingKeys.has(relKey)) {
@@ -682,7 +768,7 @@ export async function evaluateTurn(
         ),
       );
     } catch (err) {
-      trackFailure(RELEVANCE_EVAL_NAME);
+      trackFailure(RELEVANCE_EVAL_NAME, err);
       console.warn(`  [${RELEVANCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
     }
   }
@@ -703,7 +789,7 @@ export async function evaluateTurn(
         ),
       );
     } catch (err) {
-      trackFailure(COHERENCE_EVAL_NAME);
+      trackFailure(COHERENCE_EVAL_NAME, err);
       console.warn(`  [${COHERENCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
     }
   }
@@ -734,7 +820,7 @@ export async function evaluateTurn(
           ),
         );
       } catch (err) {
-        trackFailure(FAITHFULNESS_EVAL_NAME);
+        trackFailure(FAITHFULNESS_EVAL_NAME, err);
         console.warn(`  [${FAITHFULNESS_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
     }
@@ -761,7 +847,7 @@ export async function evaluateTurn(
           ),
         );
       } catch (err) {
-        trackFailure(HALLUCINATION_EVAL_NAME);
+        trackFailure(HALLUCINATION_EVAL_NAME, err);
         console.warn(`  [${HALLUCINATION_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
     }
@@ -787,7 +873,7 @@ export async function evaluateTurn(
           ),
         );
       } catch (err) {
-        trackFailure(TOOL_CORRECTNESS_CRITERIA.name);
+        trackFailure(TOOL_CORRECTNESS_CRITERIA.name, err);
         console.warn(`  [${TOOL_CORRECTNESS_CRITERIA.name}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
 
@@ -815,7 +901,7 @@ export async function evaluateTurn(
             ),
           );
         } catch (err) {
-          trackFailure(name);
+          trackFailure(name, err);
           console.warn(`  [${name}] Error for ${sessionPreview}: ${(err as Error).message}`);
         }
       }
@@ -1123,7 +1209,7 @@ async function main() {
   try {
     const existingKeys = _loadExistingKeys();
 
-    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+    resetFailureTracking();
 
     let flatEvals: EvalRecord[];
 
@@ -1150,6 +1236,14 @@ async function main() {
       );
 
       flatEvals = allEvals.flat();
+
+      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses);
+      (summary.exitCode === 0 ? console.log : console.error)(summary.line);
+      if (summary.exitCode !== 0) {
+        // Set rather than exit: the finally below must still release the lock,
+        // and populate-dashboard.ts reads this code to keep upload + sync running.
+        process.exitCode = summary.exitCode;
+      }
     }
 
     if (flatEvals.length === 0) {

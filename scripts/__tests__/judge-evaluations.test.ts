@@ -16,12 +16,21 @@ import {
   evalFailures,
   toOTelRecord,
   processBatch,
+  fitContextForJudge,
+  CONTEXT_TRUNCATION_MARKER,
+  MAX_TOOL_CONTEXT_ITEMS,
+  classifyJudgeFailure,
+  summarizeJudgeRun,
+  resetFailureTracking,
+  type JudgeFailureClass,
   type TranscriptInfo,
   type Turn,
   type EvalRecord,
 } from '../judge-evaluations.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
+import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES } from '../pipeline-stages.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -818,5 +827,85 @@ describe('evaluateTurn', () => {
       expect(ev.evaluatorKind).toBe('llm');
       expect(ev.cohort).toBe('normal');
     }
+  });
+});
+
+describe('fitContextForJudge', () => {
+  it('leaves items within the cap untouched', () => {
+    const items = ['a', 'b'.repeat(MAX_TEXT_LENGTH)];
+
+    expect(fitContextForJudge(items)).toEqual(items);
+  });
+
+  it('truncates an oversized item to exactly the cap and marks the cut', () => {
+    const [fitted] = fitContextForJudge(['x'.repeat(MAX_TEXT_LENGTH + 1)]);
+
+    expect(fitted).toHaveLength(MAX_TEXT_LENGTH);
+    expect(fitted!.endsWith(CONTEXT_TRUNCATION_MARKER)).toBe(true);
+  });
+
+  it('keeps at most the tool-context item limit', () => {
+    const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS + 5 }, (_, i) => `result ${i}`);
+
+    expect(fitContextForJudge(many)).toHaveLength(MAX_TOOL_CONTEXT_ITEMS);
+  });
+});
+
+describe('evaluateTurn with an oversized tool result', () => {
+  it('evaluates every metric instead of failing schema validation (60 of 480 failures per run before)', async () => {
+    resetFailureTracking();
+    const llm = createMockLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: ['x'.repeat(MAX_TEXT_LENGTH + 500)] });
+
+    const evals = await evaluateTurn(judge, turn, new Set());
+
+    expect(evals.map(e => e.evaluationName)).toEqual(expect.arrayContaining(['faithfulness', 'tool_correctness']));
+    expect(evalFailures).toEqual({});
+  });
+});
+
+describe('classifyJudgeFailure', () => {
+  it.each<[JudgeFailureClass, string]>([
+    ['billing', '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}'],
+    ['network', 'Connection error.'],
+    ['network', 'getaddrinfo ENOTFOUND api.anthropic.com'],
+    ['parse', 'Generated evaluation steps below minimum (got 0, require 3)'],
+    ['parse', "Unexpected token '`', \"```json\" is not valid JSON"],
+    ['invalid-input', 'Invalid TestCase: [ { "code": "too_big" } ]'],
+    ['other', 'something nobody anticipated'],
+  ])('classifies as %s: %s', (expected, message) => {
+    expect(classifyJudgeFailure(message)).toBe(expected);
+  });
+});
+
+describe('summarizeJudgeRun', () => {
+  const noFailures: Record<JudgeFailureClass, number> = { billing: 0, network: 0, parse: 0, 'invalid-input': 0, other: 0 };
+
+  it('exits 0 with a one-line summary when scores were produced', () => {
+    const summary = summarizeJudgeRun(56, { coherence: 100 }, { ...noFailures, parse: 100 });
+
+    expect(summary.exitCode).toBe(0);
+    expect(summary.attempted).toBe(156);
+    expect(summary.line).toContain('attempted=156 succeeded=56 failed=100');
+    expect(summary.line).toContain('parse=100');
+  });
+
+  it('exits JUDGE_EXIT_NO_SCORES when evaluations were attempted and none succeeded', () => {
+    const summary = summarizeJudgeRun(0, { coherence: 100, relevance: 100 }, { ...noFailures, parse: 200 });
+
+    expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
+    expect(summary.line).toMatch(/NO SCORES PRODUCED/);
+  });
+
+  it('exits JUDGE_EXIT_BILLING when any call was refused for billing, even if others scored', () => {
+    const summary = summarizeJudgeRun(3, { coherence: 10 }, { ...noFailures, billing: 10 });
+
+    expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
+    expect(summary.line).toMatch(/BILLING REFUSED/);
+  });
+
+  it('exits 0 when nothing was attempted', () => {
+    expect(summarizeJudgeRun(0, {}, noFailures).exitCode).toBe(0);
   });
 });
