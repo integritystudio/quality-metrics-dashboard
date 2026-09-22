@@ -22,6 +22,17 @@ import {
   classifyJudgeFailure,
   summarizeJudgeRun,
   resetFailureTracking,
+  createUsageTotals,
+  recordUsage,
+  usageCostUsd,
+  judgePricing,
+  estimateJudgeRun,
+  EST_OUTPUT_TOKENS_PER_EVAL,
+  EVAL_SCORE_PRECISION,
+  CACHE_READ_INPUT_PRICE_RATIO,
+  CACHE_CREATION_INPUT_PRICE_RATIO,
+  type JudgeSpend,
+  type JudgeUsageTotals,
   type JudgeFailureClass,
   type TranscriptInfo,
   type Turn,
@@ -31,6 +42,8 @@ import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES } from '../pipeline-stages.js';
+import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
+import { TOKENS_PER_MILLION, type ModelPricingEntry } from '../../../src/lib/core/constants-models.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -881,9 +894,10 @@ describe('classifyJudgeFailure', () => {
 
 describe('summarizeJudgeRun', () => {
   const noFailures: Record<JudgeFailureClass, number> = { billing: 0, network: 0, parse: 0, 'invalid-input': 0, other: 0 };
+  const noSpend: JudgeSpend = { usage: createUsageTotals(), estimatedUsd: 0, keySource: DEFAULT_API_KEY_ENV };
 
   it('exits 0 with a one-line summary when scores were produced', () => {
-    const summary = summarizeJudgeRun(56, { coherence: 100 }, { ...noFailures, parse: 100 });
+    const summary = summarizeJudgeRun(56, { coherence: 100 }, { ...noFailures, parse: 100 }, noSpend);
 
     expect(summary.exitCode).toBe(0);
     expect(summary.attempted).toBe(156);
@@ -892,20 +906,107 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('exits JUDGE_EXIT_NO_SCORES when evaluations were attempted and none succeeded', () => {
-    const summary = summarizeJudgeRun(0, { coherence: 100, relevance: 100 }, { ...noFailures, parse: 200 });
+    const summary = summarizeJudgeRun(0, { coherence: 100, relevance: 100 }, { ...noFailures, parse: 200 }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
     expect(summary.line).toMatch(/NO SCORES PRODUCED/);
   });
 
   it('exits JUDGE_EXIT_BILLING when any call was refused for billing, even if others scored', () => {
-    const summary = summarizeJudgeRun(3, { coherence: 10 }, { ...noFailures, billing: 10 });
+    const summary = summarizeJudgeRun(3, { coherence: 10 }, { ...noFailures, billing: 10 }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
     expect(summary.line).toMatch(/BILLING REFUSED/);
   });
 
   it('exits 0 when nothing was attempted', () => {
-    expect(summarizeJudgeRun(0, {}, noFailures).exitCode).toBe(0);
+    expect(summarizeJudgeRun(0, {}, noFailures, noSpend).exitCode).toBe(0);
+  });
+
+  it('carries the usage totals, both cost figures and the key source name on the line', () => {
+    const usage: JudgeUsageTotals = {
+      input_tokens: 1_000_000, output_tokens: 100_000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0,
+    };
+    const estimatedUsd = 1.8;
+
+    const summary = summarizeJudgeRun(5, {}, noFailures, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
+
+    const pricing = judgePricing();
+    const actualUsd = (usage.input_tokens / TOKENS_PER_MILLION) * pricing.input
+      + (usage.output_tokens / TOKENS_PER_MILLION) * pricing.output;
+    expect(summary.usage).toEqual(usage);
+    expect(summary.estimatedUsd).toBe(estimatedUsd);
+    expect(summary.actualUsd).toBeCloseTo(actualUsd);
+    expect(summary.keySource).toBe(JUDGE_API_KEY_ENV);
+    expect(summary.line).toContain(
+      `usage: in=1000000 out=100000 cache_read=0 cache_creation=0 est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=LLM_JUDGE_ANTHROPIC_KEY`,
+    );
+  });
+
+  it('copies the totals rather than sharing the accumulator', () => {
+    const usage = createUsageTotals();
+    const summary = summarizeJudgeRun(0, {}, noFailures, { ...noSpend, usage });
+
+    recordUsage(usage, { input_tokens: 1, output_tokens: 1 });
+
+    expect(summary.usage.input_tokens).toBe(0);
+  });
+});
+
+describe('recordUsage', () => {
+  it('sums every response into the totals and treats null cache counts as zero', () => {
+    const totals = createUsageTotals();
+
+    recordUsage(totals, { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 });
+    recordUsage(totals, { input_tokens: 200, output_tokens: 20, cache_read_input_tokens: null, cache_creation_input_tokens: null });
+
+    expect(totals).toEqual({ input_tokens: 300, output_tokens: 30, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 });
+  });
+});
+
+describe('usageCostUsd', () => {
+  const pricing: ModelPricingEntry = { input: 2, output: 10, provider: 'anthropic' };
+
+  it('prices input and output at list rates', () => {
+    const totals = { ...createUsageTotals(), input_tokens: TOKENS_PER_MILLION, output_tokens: TOKENS_PER_MILLION };
+
+    expect(usageCostUsd(totals, pricing)).toBeCloseTo(pricing.input + pricing.output);
+  });
+
+  it('prices cache reads at a tenth of input and cache writes at their ratio', () => {
+    const totals: JudgeUsageTotals = {
+      input_tokens: 0, output_tokens: 0, cache_read_input_tokens: TOKENS_PER_MILLION, cache_creation_input_tokens: TOKENS_PER_MILLION,
+    };
+
+    expect(usageCostUsd(totals, pricing)).toBeCloseTo(
+      pricing.input * CACHE_READ_INPUT_PRICE_RATIO + pricing.input * CACHE_CREATION_INPUT_PRICE_RATIO,
+    );
+  });
+
+  it('is zero for a run that made no calls', () => {
+    expect(usageCostUsd(createUsageTotals(), pricing)).toBe(0);
+  });
+});
+
+describe('estimateJudgeRun', () => {
+  it('counts two evals for a turn without tools and five for one with', () => {
+    const est = estimateJudgeRun([makeTurn({ toolResults: [] }), makeTurn({ toolResults: ['file contents'] })]);
+
+    expect(est.evals).toBe(7);
+    expect(est.outputTokens).toBe(est.evals * EST_OUTPUT_TOKENS_PER_EVAL);
+    expect(est.inputTokens).toBeGreaterThan(0);
+  });
+
+  it('prices the estimate at the judge model list rates', () => {
+    const est = estimateJudgeRun([makeTurn()]);
+    const pricing = judgePricing();
+
+    expect(est.costUsd).toBeCloseTo(
+      (est.inputTokens / TOKENS_PER_MILLION) * pricing.input + (est.outputTokens / TOKENS_PER_MILLION) * pricing.output,
+    );
+  });
+
+  it('is free for no turns', () => {
+    expect(estimateJudgeRun([])).toEqual({ evals: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
   });
 });

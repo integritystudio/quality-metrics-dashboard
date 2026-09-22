@@ -13,6 +13,9 @@
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --limit 5
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts
+ *
+ * LLM_JUDGE_ANTHROPIC_KEY, when set, is used instead of ANTHROPIC_API_KEY so
+ * judge spend is attributable to its own key (see judge-credentials.ts).
  */
 
 import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
@@ -39,11 +42,12 @@ import {
   LLM_EVALUATOR_TYPE,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
-import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION } from '../../src/lib/core/constants-models.js';
+import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES } from './pipeline-stages.js';
 import { HOOK_NAME } from '../src/api/api-constants.js';
+import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKeySource } from './judge-credentials.js';
 import pLimit from 'p-limit';
 
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
@@ -491,10 +495,67 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
   return turns;
 }
 
-async function createAnthropicProvider(): Promise<LLMProvider> {
+// ---------------------------------------------------------------------------
+// Usage accounting
+// ---------------------------------------------------------------------------
+// The dry-run prices a run from TOKENS_PER_CHAR, and that estimate used to be
+// the only cost figure the run ever reported ($1.80 estimated against ~$3.30
+// billed). Every response carries `usage`; the provider folds each one into
+// the totals the summary line prints beside the estimate.
+
+/** Cache reads bill at a tenth of the input rate. */
+export const CACHE_READ_INPUT_PRICE_RATIO = 0.1;
+/** Cache writes bill at 1.25x the input rate. */
+export const CACHE_CREATION_INPUT_PRICE_RATIO = 1.25;
+
+/** Token totals folded from every `response.usage` a run saw. Field names match the API. */
+export interface JudgeUsageTotals {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+}
+
+/** The `usage` of one Messages API response; cache counts are null on models without caching. */
+export interface ProviderUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+}
+
+export function createUsageTotals(): JudgeUsageTotals {
+  return { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+}
+
+/** Fold one response's usage into the run totals. */
+export function recordUsage(totals: JudgeUsageTotals, usage: ProviderUsage): void {
+  totals.input_tokens += usage.input_tokens;
+  totals.output_tokens += usage.output_tokens;
+  totals.cache_read_input_tokens += usage.cache_read_input_tokens ?? 0;
+  totals.cache_creation_input_tokens += usage.cache_creation_input_tokens ?? 0;
+}
+
+/** List pricing for the judge model; throws rather than pricing a run at $0. */
+export function judgePricing(): ModelPricingEntry {
+  const pricing = MODEL_PRICING[HAIKU_MODEL];
+  if (!pricing) throw new Error(`No pricing data for model ${HAIKU_MODEL}`);
+  return pricing;
+}
+
+/** USD the totals imply at list rates: input and output as billed, cache reads and writes at their ratios. */
+export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntry): number {
+  const inputUsd = (totals.input_tokens / TOKENS_PER_MILLION) * pricing.input;
+  const outputUsd = (totals.output_tokens / TOKENS_PER_MILLION) * pricing.output;
+  const cacheReadUsd = (totals.cache_read_input_tokens / TOKENS_PER_MILLION) * pricing.input * CACHE_READ_INPUT_PRICE_RATIO;
+  const cacheCreationUsd = (totals.cache_creation_input_tokens / TOKENS_PER_MILLION) * pricing.input * CACHE_CREATION_INPUT_PRICE_RATIO;
+  return inputUsd + outputUsd + cacheReadUsd + cacheCreationUsd;
+}
+
+async function createAnthropicProvider(apiKey: string, usage: JudgeUsageTotals): Promise<LLMProvider> {
   // Dynamic import to avoid requiring @anthropic-ai/sdk when using --seed
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey });
 
   return {
     async generate(
@@ -507,6 +568,7 @@ async function createAnthropicProvider(): Promise<LLMProvider> {
         temperature: options?.temperature ?? JUDGE_DEFAULT_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
       });
+      recordUsage(usage, response.usage);
 
       const text = response.content
         .filter((b: { type: string; text?: string }) => b.type === 'text')
@@ -699,11 +761,61 @@ export function fitContextForJudge(toolResults: readonly string[]): string[] {
   );
 }
 
+/** Estimated tokens per evaluation response — the judge answers with a short JSON verdict. */
+export const EST_OUTPUT_TOKENS_PER_EVAL = 200;
+
+export interface JudgeRunEstimate {
+  evals: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+/**
+ * What the run should cost before it spends anything, priced from content
+ * length (TOKENS_PER_CHAR). The dry-run prints it; a real run prints it beside
+ * the usage the API reported, which is how a $1.80 estimate was found to be
+ * a ~$3.30 bill.
+ */
+export function estimateJudgeRun(turns: readonly Turn[]): JudgeRunEstimate {
+  // 2 base evals (relevance, coherence) + 3 with tools (faithfulness, hallucination, tool_correctness)
+  const evals = turns.reduce((sum, t) =>
+    sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
+  // Estimate tokens from actual content length (~4 chars/token)
+  const inputTokens = turns.reduce((sum, t) => {
+    const contentChars = t.userText.length + t.assistantText.length
+      + t.toolResults.reduce((s, r) => s + r.length, 0);
+    const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
+    return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
+  }, 0);
+  const outputTokens = evals * EST_OUTPUT_TOKENS_PER_EVAL;
+  const pricing = judgePricing();
+  const costUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
+    + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
+  return { evals, inputTokens, outputTokens, costUsd };
+}
+
+/** What a run spent, for the summary line. */
+export interface JudgeSpend {
+  /** Totals folded from every `response.usage` the run saw. */
+  usage: JudgeUsageTotals;
+  /** What estimateJudgeRun said before the run spent anything. */
+  estimatedUsd: number;
+  /** Environment variable NAME the key came from — never the value. */
+  keySource: JudgeApiKeySource;
+}
+
 export interface JudgeRunSummary {
   attempted: number;
   succeeded: number;
   failed: number;
   byClass: Record<JudgeFailureClass, number>;
+  /** Token totals the API reported, and what they cost at list rates. */
+  usage: JudgeUsageTotals;
+  estimatedUsd: number;
+  actualUsd: number;
+  /** Environment variable NAME the key came from — never the value. */
+  keySource: JudgeApiKeySource;
   /** 0 when the run produced scores and saw no billing refusal. */
   exitCode: number;
   /** The one line the log gets, verdict included. */
@@ -715,12 +827,15 @@ export interface JudgeRunSummary {
  * else in the run can be trusted and the fix is external. A run that attempted
  * evaluations and produced none is the other failure the pipeline used to
  * report as success: every scheduled run from 2026-09-16 to 09-19 did exactly
- * that while the launchd log said "completed".
+ * that while the launchd log said "completed". The spend block beside the
+ * verdict is what the run cost from the usage the API reported, next to the
+ * pre-run estimate and the NAME of the key it was billed to.
  */
 export function summarizeJudgeRun(
   succeeded: number,
   byMetric: Record<string, number>,
   byClass: Record<JudgeFailureClass, number>,
+  spend: JudgeSpend,
 ): JudgeRunSummary {
   const failed = Object.values(byMetric).reduce((sum, n) => sum + n, 0);
   const attempted = succeeded + failed;
@@ -734,8 +849,11 @@ export function summarizeJudgeRun(
     exitCode = JUDGE_EXIT_NO_SCORES;
     verdict = 'NO SCORES PRODUCED — every evaluation failed';
   }
-  const line = `[judge] summary: attempted=${attempted} succeeded=${succeeded} failed=${failed} classes: ${classes} — ${verdict}`;
-  return { attempted, succeeded, failed, byClass: { ...byClass }, exitCode, line };
+  const { usage, estimatedUsd, keySource } = spend;
+  const actualUsd = usageCostUsd(usage, judgePricing());
+  const spent = `usage: in=${usage.input_tokens} out=${usage.output_tokens} cache_read=${usage.cache_read_input_tokens} cache_creation=${usage.cache_creation_input_tokens} est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=${keySource}`;
+  const line = `[judge] summary: attempted=${attempted} succeeded=${succeeded} failed=${failed} classes: ${classes} ${spent} — ${verdict}`;
+  return { attempted, succeeded, failed, byClass: { ...byClass }, usage: { ...usage }, estimatedUsd, actualUsd, keySource, exitCode, line };
 }
 
 export async function evaluateTurn(
@@ -1161,25 +1279,11 @@ async function main() {
   const allTurns = turnArrays.flat().slice(0, limit);
 
   if (dryRun) {
-    // 2 base evals (relevance, coherence) + 3 with tools (faithfulness, hallucination, tool_correctness)
-    const estEvals = allTurns.reduce((sum, t) =>
-      sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
-    // Estimate tokens from actual content length (~4 chars/token)
-    const estInputTokens = allTurns.reduce((sum, t) => {
-      const contentChars = t.userText.length + t.assistantText.length
-        + t.toolResults.reduce((s, r) => s + r.length, 0);
-      const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
-      return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
-    }, 0);
-    const estOutputTokens = estEvals * 200;
-    const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
-    if (!haikuPricing) throw new Error(`No pricing data for model ${HAIKU_MODEL}`);
-    const estCost = (estInputTokens / TOKENS_PER_MILLION) * haikuPricing.input
-      + (estOutputTokens / TOKENS_PER_MILLION) * haikuPricing.output;
+    const est = estimateJudgeRun(allTurns);
 
-    console.log(`[dry-run] ${allTurns.length} turns → ${estEvals} evals`);
-    console.log(`[dry-run] ~${estInputTokens.toLocaleString()} input tokens, ~${estOutputTokens.toLocaleString()} output tokens`);
-    console.log(`[dry-run] estimated cost: $${estCost.toFixed(EVAL_SCORE_PRECISION)}`);
+    console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} evals`);
+    console.log(`[dry-run] ~${est.inputTokens.toLocaleString()} input tokens, ~${est.outputTokens.toLocaleString()} output tokens`);
+    console.log(`[dry-run] estimated cost: $${est.costUsd.toFixed(EVAL_SCORE_PRECISION)}`);
 
     const bySession = new Map<string, number>();
     for (const t of allTurns) {
@@ -1194,9 +1298,11 @@ async function main() {
     return;
   }
 
-  // Validate API key early (before expensive operations)
-  if (!seed && !process.env.ANTHROPIC_API_KEY) {
-    console.error('Error: ANTHROPIC_API_KEY required (or use --seed for offline mode)');
+  // Validate API key early (before expensive operations). Seed mode needs no
+  // key; the LLM branch below narrows on the same value.
+  const judgeKey = seed ? undefined : resolveJudgeApiKey();
+  if (!seed && !judgeKey) {
+    console.error(`Error: ${JUDGE_API_KEY_ENV} or ${DEFAULT_API_KEY_ENV} required (or use --seed for offline mode)`);
     process.exit(1);
   }
 
@@ -1213,11 +1319,14 @@ async function main() {
 
     let flatEvals: EvalRecord[];
 
-    if (seed) {
+    if (!judgeKey) {
+      // No key means --seed; the guard above exited otherwise.
       const seedResult = seedEvaluations(allTurns, existingKeys);
       flatEvals = seedResult.evals;
     } else {
-      const llm = await createAnthropicProvider();
+      const estimatedUsd = estimateJudgeRun(allTurns).costUsd;
+      const usage = createUsageTotals();
+      const llm = await createAnthropicProvider(judgeKey.apiKey, usage);
       const judge = new LLMJudge(llm, {
         timeoutMs: TIME_MS.MINUTE,
         maxRetries: 2,
@@ -1237,7 +1346,7 @@ async function main() {
 
       flatEvals = allEvals.flat();
 
-      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses);
+      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source });
       (summary.exitCode === 0 ? console.log : console.error)(summary.line);
       if (summary.exitCode !== 0) {
         // Set rather than exit: the finally below must still release the lock,
