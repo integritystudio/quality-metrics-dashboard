@@ -282,7 +282,7 @@ function resolveTranscriptPath(originalPath: string): string | null {
 }
 
 /** Discover transcripts from telemetry logs (primary) and directory scan (fallback) */
-async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
+export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   // Track by sessionId (UUID) to deduplicate across sources
   const seen = new Set<string>();
   const transcripts: TranscriptInfo[] = [];
@@ -1293,6 +1293,7 @@ async function main() {
   const seed = args.includes('--seed');
   const backfill = args.includes('--backfill');
   const batch = args.includes(JUDGE_BATCH_FLAG);
+  const consolidated = args.includes('--consolidated');
   const limitIdx = args.indexOf('--limit');
   let limit = Infinity;
   if (limitIdx !== -1) {
@@ -1432,13 +1433,18 @@ async function main() {
           error: (msg) => console.error(`  [error] ${msg}`),
         },
       });
-      const allEvals = batchProvider
+      // --consolidated: one call per turn (judge-consolidated.ts), off by default.
+      // It makes its own requests, so --batch applies to the per-criterion path only.
+      const evaluate = consolidated
+        ? await (await import('./judge-consolidated.js')).createConsolidatedTurnEvaluator(existingKeys)
+        : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
+      const allEvals = batchProvider && !consolidated
         ? await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys)
         : await processBatch(
           allTurns,
           CONCURRENCY,
           BATCH_DELAY_MS,
-          (turn) => evaluateTurn(judge, turn, existingKeys),
+          evaluate,
         );
 
       flatEvals = allEvals.flat();
