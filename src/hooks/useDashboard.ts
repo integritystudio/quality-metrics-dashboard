@@ -13,7 +13,7 @@ function dashboardNotFound(body: unknown): QualityDashboardSummary | undefined {
     body !== null &&
     typeof body === 'object' &&
     'error' in body &&
-    (body as { error: unknown }).error === WORKER_ERR_NO_DATA
+    body.error === WORKER_ERR_NO_DATA
   ) {
     return {
       overallStatus: 'no_data',

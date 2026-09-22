@@ -264,7 +264,8 @@ class MessageBatchProvider implements BatchLLMProvider {
     const pending = this.takePending(custom_id);
     if (!pending) return;
     if (result.type === 'succeeded') {
-      if (result.message.usage) this.options.onUsage?.(result.message.usage);
+      // `usage` is required on a succeeded message; only the callback is optional.
+      this.options.onUsage?.(result.message.usage);
       pending.resolve({ text: textOf(result.message) });
       return;
     }

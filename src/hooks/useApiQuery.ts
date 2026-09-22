@@ -32,6 +32,14 @@ function defaultRetry(failureCount: number, error: unknown): boolean {
  * data (no retry, no error state); return `undefined` to fall through to the
  * default behaviour of throwing `"API error: 404 – <body>"`.
  */
+/**
+ * `Response.status` is a plain number while {@link HttpStatus} is a const enum,
+ * so comparing them directly trips no-unsafe-enum-comparison and casting at the
+ * comparison trips no-unnecessary-type-assertion. Widening once here keeps the
+ * named constant as the source of the value and satisfies both.
+ */
+const NOT_FOUND_STATUS: number = HttpStatus.NotFound;
+
 export function useApiQuery<TRaw, T = TRaw>(
   queryKey: readonly unknown[],
   buildUrl: () => string,
@@ -66,7 +74,7 @@ export function useApiQuery<TRaw, T = TRaw>(
       const res = await apiFetch(url, token, activeOrgId);
       if (!res.ok) {
         const body = await res.text().catch(() => '');
-        if (res.status === HttpStatus.NotFound && onNotFound !== undefined) {
+        if (res.status === NOT_FOUND_STATUS && onNotFound !== undefined) {
           let parsedBody: unknown;
           try {
             parsedBody = JSON.parse(body);
