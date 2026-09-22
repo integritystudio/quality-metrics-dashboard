@@ -1301,9 +1301,9 @@ interface JudgeRunState {
  * Read the previous run's state from the sidecar file. Returns undefined when
  * the file is absent (first run) or unreadable — never throws.
  */
-export function readRunState(): JudgeRunState | undefined {
+export function readRunState(path: string = JUDGE_RUN_STATE_FILE): JudgeRunState | undefined {
   try {
-    const raw = readFileSync(JUDGE_RUN_STATE_FILE, 'utf-8');
+    const raw = readFileSync(path, 'utf-8');
     const parsed = JSON.parse(raw) as unknown;
     if (
       typeof parsed === 'object' &&
@@ -1321,9 +1321,9 @@ export function readRunState(): JudgeRunState | undefined {
  * Persist succeeded count for the drop check on the next run. Best-effort —
  * a write failure must not fail the pipeline.
  */
-export function writeRunState(succeeded: number): void {
+export function writeRunState(succeeded: number, path: string = JUDGE_RUN_STATE_FILE): void {
   try {
-    writeFileSync(JUDGE_RUN_STATE_FILE, JSON.stringify({ succeeded, timestamp: new Date().toISOString() }), 'utf-8');
+    writeFileSync(path, JSON.stringify({ succeeded, timestamp: new Date().toISOString() }), 'utf-8');
   } catch { /* best effort; drop check will be skipped next run */ }
 }
 

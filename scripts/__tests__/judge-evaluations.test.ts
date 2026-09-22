@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeFileSync, readFileSync, mkdirSync, rmSync } from 'fs';
+import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -35,7 +35,6 @@ import {
   BATCH_PRICE_RATIO,
   readRunState,
   writeRunState,
-  JUDGE_RUN_STATE_FILE,
   type JudgeSpend,
   type JudgeUsageTotals,
   anthropicProviderFor,
@@ -1024,42 +1023,34 @@ describe('summarizeJudgeRun', () => {
 });
 
 describe('readRunState / writeRunState', () => {
-  // Preserve whatever was on disk before this suite and restore it after
-  let savedState: Buffer | null = null;
+  // A temp path, never the default: that is the live file the
+  // scheduled pipeline's drop check reads.
+  let stateDir: string;
+  let stateFile: string;
 
   beforeEach(() => {
-    try { savedState = readFileSync(JUDGE_RUN_STATE_FILE); } catch { savedState = null; }
-    // Remove state file so each test starts clean
-    rmSync(JUDGE_RUN_STATE_FILE, { force: true });
+    stateDir = mkdtempSync(join(tmpdir(), 'judge-run-state-'));
+    stateFile = join(stateDir, 'state.json');
   });
 
   afterEach(() => {
-    if (savedState !== null) {
-      try { writeFileSync(JUDGE_RUN_STATE_FILE, savedState); } catch { /* best effort */ }
-    } else {
-      rmSync(JUDGE_RUN_STATE_FILE, { force: true });
-    }
+    rmSync(stateDir, { recursive: true, force: true });
   });
 
   it('returns undefined when no state file exists', () => {
-    expect(readRunState()).toBeUndefined();
+    expect(readRunState(stateFile)).toBeUndefined();
   });
 
   it('round-trips a succeeded count through writeRunState / readRunState', () => {
-    writeRunState(420);
-    const state = readRunState();
-    // If the TELEMETRY_DIR does not exist (CI), writeRunState no-ops — tolerate that.
-    if (state !== undefined) {
-      expect(state.succeeded).toBe(420);
-      expect(state.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    }
+    writeRunState(420, stateFile);
+    const state = readRunState(stateFile);
+    expect(state?.succeeded).toBe(420);
+    expect(state?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it('returns undefined for a corrupt state file without throwing', () => {
-    try {
-      writeFileSync(JUDGE_RUN_STATE_FILE, 'not-json', 'utf-8');
-    } catch { /* TELEMETRY_DIR may not exist in CI — skip the corruption setup */ }
-    expect(() => readRunState()).not.toThrow();
+    writeFileSync(stateFile, 'not-json', 'utf-8');
+    expect(readRunState(stateFile)).toBeUndefined();
   });
 });
 
