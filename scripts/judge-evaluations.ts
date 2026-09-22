@@ -523,6 +523,8 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
 export const CACHE_READ_INPUT_PRICE_RATIO = 0.1;
 /** Cache writes bill at 1.25x the input rate. */
 export const CACHE_CREATION_INPUT_PRICE_RATIO = 1.25;
+/** Message Batches API bills at half the synchronous rate. */
+export const BATCH_PRICE_RATIO = 0.5;
 
 /** Token totals folded from every `response.usage` a run saw. Field names match the API. */
 export interface JudgeUsageTotals {
@@ -816,9 +818,10 @@ export interface JudgeRunEstimate {
  * What the run should cost before it spends anything, priced from content
  * length (TOKENS_PER_CHAR). The dry-run prints it; a real run prints it beside
  * the usage the API reported, which is how a $1.80 estimate was found to be
- * a ~$3.30 bill.
+ * a ~$3.30 bill. Pass `batch: true` when `--batch` is set — Message Batches
+ * bill at BATCH_PRICE_RATIO (half list rates).
  */
-export function estimateJudgeRun(turns: readonly Turn[]): JudgeRunEstimate {
+export function estimateJudgeRun(turns: readonly Turn[], batch = false): JudgeRunEstimate {
   // 2 base evals (relevance, coherence) + 3 with tools (faithfulness, hallucination, tool_correctness)
   const evals = turns.reduce((sum, t) =>
     sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
@@ -831,8 +834,9 @@ export function estimateJudgeRun(turns: readonly Turn[]): JudgeRunEstimate {
   }, 0);
   const outputTokens = evals * EST_OUTPUT_TOKENS_PER_EVAL;
   const pricing = judgePricing();
-  const costUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
+  const listCostUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
     + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
+  const costUsd = batch ? listCostUsd * BATCH_PRICE_RATIO : listCostUsd;
   return { evals, inputTokens, outputTokens, costUsd };
 }
 
@@ -1367,11 +1371,11 @@ async function main() {
   const allTurns = turnArrays.flat().slice(0, limit);
 
   if (dryRun) {
-    const est = estimateJudgeRun(allTurns);
+    const est = estimateJudgeRun(allTurns, batch);
 
     console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} evals`);
     console.log(`[dry-run] ~${est.inputTokens.toLocaleString()} input tokens, ~${est.outputTokens.toLocaleString()} output tokens`);
-    console.log(`[dry-run] estimated cost: $${est.costUsd.toFixed(EVAL_SCORE_PRECISION)}`);
+    console.log(`[dry-run] estimated cost: $${est.costUsd.toFixed(EVAL_SCORE_PRECISION)}${batch ? ' (batch rate, 50% off list)' : ''}`);
 
     const bySession = new Map<string, number>();
     for (const t of allTurns) {
@@ -1412,7 +1416,7 @@ async function main() {
       const seedResult = seedEvaluations(allTurns, existingKeys);
       flatEvals = seedResult.evals;
     } else {
-      const estimatedUsd = estimateJudgeRun(allTurns).costUsd;
+      const estimatedUsd = estimateJudgeRun(allTurns, batch).costUsd;
       const usage = createUsageTotals();
       const batchProvider = batch
         ? await createBatchProvider({

@@ -32,6 +32,7 @@ import {
   EVAL_SCORE_PRECISION,
   CACHE_READ_INPUT_PRICE_RATIO,
   CACHE_CREATION_INPUT_PRICE_RATIO,
+  BATCH_PRICE_RATIO,
   type JudgeSpend,
   type JudgeUsageTotals,
   anthropicProviderFor,
@@ -1013,6 +1014,24 @@ describe('estimateJudgeRun', () => {
 
   it('is free for no turns', () => {
     expect(estimateJudgeRun([])).toEqual({ evals: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+  });
+
+  it('halves the cost estimate when batch=true', () => {
+    const turn = makeTurn();
+    const list = estimateJudgeRun([turn], false);
+    const batch = estimateJudgeRun([turn], true);
+
+    expect(batch.evals).toBe(list.evals);
+    expect(batch.inputTokens).toBe(list.inputTokens);
+    expect(batch.outputTokens).toBe(list.outputTokens);
+    expect(batch.costUsd).toBeCloseTo(list.costUsd * BATCH_PRICE_RATIO);
+  });
+
+  it('applies no discount by default (backward compat)', () => {
+    const explicit = estimateJudgeRun([makeTurn()], false);
+    const implicit = estimateJudgeRun([makeTurn()]);
+
+    expect(implicit.costUsd).toBeCloseTo(explicit.costUsd);
   });
 });
 
