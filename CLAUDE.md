@@ -66,11 +66,11 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 `npm run populate` runs: derive → judge → upload → sync-to-kv
 
 - `derive-evaluations.ts` — rule-based metrics (tool_correctness, evaluation_latency, task_completion)
-- `judge-evaluations.ts` — LLM-based metrics (relevance, coherence, faithfulness, hallucination)
+- `judge-evaluations.ts` — LLM-based metrics (relevance, coherence, faithfulness, hallucination). Scores come back schema-constrained: `gEval` sends `output_config` with a JSON schema (`reasoning` before `score`, integer 1-5) and `extractScoreFromText` parses JSON first, falling back to the old regexes for providers that ignore the schema. That closed the failure where ~480 of every 536 calls were billed and produced no score. Key precedence is `LLM_JUDGE_ANTHROPIC_KEY` then `ANTHROPIC_API_KEY` (`judge-credentials.ts`); the `[judge] summary:` line carries real `response.usage` totals, their USD, the pre-run estimate and the key's variable name. Two cost modes: `--batch` (`judge-batch-provider.ts`, Message Batches at half price, results settled by `custom_id`, `maxRetries: 0`, ~3 h wall clock with an idle auto-flush) and `--consolidated` (`judge-consolidated.ts`, one call per turn, **off by default** — ~10x cheaper but only 34.5% exact agreement with the per-criterion scores, `docs/judge-agreement-2026-09-22.json`)
 - `upload-evaluations.ts` — ships local `evaluations-*.jsonl` to the **cloud** `evaluations` table over the HMAC webhook. **Load-bearing, not plumbing**: the next stage reads the cloud, not these files, so without this every stage reports success and the dashboard still serves `no_data` — which is what happened for five months (`DASHBOARD-PIPELINE-DEAD`). Needs `INJECT_HMAC_SECRET`; deduped by content fingerprint because `derive` rewrites each file wholesale and a re-send duplicates rather than being ignored.
 - `sync-to-kv.ts` — delta sync aggregates to Cloudflare KV (priority: meta/agent > metrics > trends > traces)
 
-Full run with its Doppler env: `bash ../scripts/run-dashboard-pipeline.sh`. **Nothing schedules any of this** — see `DASHBOARD-PIPELINE-DEAD`.
+Full run with its Doppler env: `bash ../scripts/run-dashboard-pipeline.sh`. **A launchd agent does schedule it** — `ai.integritystudio.dashboard-pipeline` fires the wrapper at 06:00 and 18:00 local with `--limit 100` and `--batch` (`~/.local/bin/dashboard-pipeline.sh`, tracked at `../scripts/launchd/`); the long-dead state described by `DASHBOARD-PIPELINE-DEAD` ended when that agent was loaded. `--dry-run` prices a run without spending, and its estimate quotes list rates, so it reads high against a `--batch` run's actuals.
 
 Requires parent `dist/` — run `npm run build` in observability-toolkit first.
 

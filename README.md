@@ -76,18 +76,33 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 |------|--------|--------|
 | 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion |
 | 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination |
-| 3. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
+| 3. Upload | `upload-evaluations.ts` | Ships local `evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
+| 4. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
 npm run populate -- --seed          # offline (synthetic judge scores)
-npm run populate                    # full (needs ANTHROPIC_API_KEY)
+npm run populate                    # full (needs a judge API key, see below)
 npm run populate -- --dry-run --seed  # preview only, no writes
 npm run populate -- --skip-judge    # rule-based + sync only
 npm run populate -- --skip-sync     # derive + judge only
 npm run populate -- --limit 5 --seed  # judge at most 5 turns
+npm run populate -- --batch         # judge through the Message Batches API: 50% off, minutes not seconds
+npm run populate -- --consolidated  # one judge call per turn instead of 2-4 (off by default)
 ```
 
-Auto-detects missing `ANTHROPIC_API_KEY` and falls back to `--seed` mode.
+**Judge credentials.** The judge prefers `LLM_JUDGE_ANTHROPIC_KEY` and falls back to
+`ANTHROPIC_API_KEY`, so judge spend is attributable to its own key in the Usage and Cost
+Admin API rather than blended into a shared one. With neither set, populate falls back to
+`--seed` mode. The `[judge] summary:` line reports the key's variable name (never its
+value) alongside real `response.usage` totals, the USD they imply, and the pre-run estimate.
+
+**Judge cost modes.** `--batch` is the cheap default for unattended runs and is what
+`../scripts/run-dashboard-pipeline.sh` passes: every token is half price, results are
+matched back by `custom_id`, and the judge's per-call retry is off because a retry would
+land in a later batch. `--consolidated` sends one prompt per turn carrying the turn content
+once plus every applicable criterion, which measured ~10x cheaper but does not agree
+closely with the per-criterion scores — see `docs/judge-agreement-2026-09-22.json` before
+turning it on.
 
 Requires parent `dist/` for the sync step — run `npm run build` in the parent observability-toolkit first.
 
@@ -99,8 +114,10 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run build` | Production Vite build |
 | `npm run populate` | Full data pipeline (derive + judge + sync) |
 | `npm run sync` | KV sync only (`--budget=450` default, `--budget=5000` for bulk) |
-| `npm test` | Vitest |
+| `npm test` | Vitest for `src/` + `worker/` (Vite context) |
+| `npm run test:scripts` | Vitest for `scripts/` (separate config; a bare `npx vitest run <path>` under `scripts/__tests__` finds no tests) |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck:scripts` | TS 7 against `scripts/` (`tsconfig.scripts.json`); pass `-- --pretty false` to make the output greppable |
 | `npm run test:e2e` | Playwright E2E tests (mocked auth, Chromium) |
 | `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration` | Auth0 integration tests against deployed worker |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
