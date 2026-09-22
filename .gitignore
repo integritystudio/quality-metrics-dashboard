@@ -29,3 +29,6 @@ coverage/
 .claude/tsc-cache/
 .claude/scheduled_tasks.lock
 .claude/.current-session-id
+
+# Run lock for scripts/judge-agreement.ts; the script refuses to run while it exists.
+docs/.judge-agreement.started
