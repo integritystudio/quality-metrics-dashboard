@@ -13,7 +13,7 @@ import { createFixtureServer, evalToWire, spanToWire } from './support/fixture-s
 import type { FixtureServer } from './support/fixture-server.js';
 
 import { traceRoutes } from '../api/routes/traces.js';
-import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../api/data-loader.js';
+import type { loadTracesByTraceId, loadEvaluationsByTraceId } from '../api/data-loader.js';
 import type { TraceDetailResponse } from './support/api-responses.js';
 
 let fixture: FixtureServer;
