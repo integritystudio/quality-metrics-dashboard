@@ -21,6 +21,13 @@ export const JUDGE_EXIT_NO_SCORES = 3;
 export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES]);
 
 /**
+ * judge-evaluations flag: run through the Message Batches API — half price,
+ * results within minutes, nobody waiting. Passed by the scheduled pipeline
+ * and forwarded by populate-dashboard.ts.
+ */
+export const JUDGE_BATCH_FLAG = '--batch';
+
+/**
  * Waits between sync-to-kv attempts, in order — five retries, ~30 minutes in
  * total. Sized to the outages seen at the 18:00 firing on 2026-09-17, 18 and
  * 19: fifteen to thirty-five minutes of no DNS or reset connections on the

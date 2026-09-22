@@ -13,6 +13,7 @@
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --limit 5
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts
+ *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --batch   # Message Batches API: half price, unattended
  *
  * LLM_JUDGE_ANTHROPIC_KEY, when set, is used instead of ANTHROPIC_API_KEY so
  * judge spend is attributable to its own key (see judge-credentials.ts).
@@ -46,7 +47,13 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_BATCH_FLAG } from './pipeline-stages.js';
+import {
+  createBatchProvider,
+  BATCH_POLL_INTERVAL_MS,
+  BATCH_WALL_CLOCK_MS,
+  type BatchLLMProvider,
+} from './judge-batch-provider.js';
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKeySource } from './judge-credentials.js';
 import pLimit from 'p-limit';
@@ -115,6 +122,14 @@ export const COHERENCE_EVAL_NAME = 'coherence';
 export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
+/**
+ * --batch: the judge's per-call budget must outlast the provider's wall clock
+ * plus the poll that notices it has run out, so an overrun surfaces as the
+ * provider's typed error rather than as a per-call timeout.
+ */
+export const BATCH_MODE_JUDGE_TIMEOUT_MS = BATCH_WALL_CLOCK_MS + BATCH_POLL_INTERVAL_MS;
+/** --batch: a retry would land in a later batch and double the wait; a failed item is counted, not retried. */
+export const BATCH_MODE_MAX_RETRIES = 0;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 export const JUDGE_MAX_TOKENS = 1024;
 /** Low temperature for consistent, deterministic evaluation scores */
@@ -882,18 +897,37 @@ export function summarizeJudgeRun(
   return { attempted, succeeded, failed, byClass: { ...byClass }, usage: { ...usage }, estimatedUsd, actualUsd, keySource, exitCode, line };
 }
 
+export interface EvaluateTurnOptions {
+  /**
+   * Issue every criterion at once instead of one after another. Required by
+   * the batch provider, whose calls resolve only when the batch does: awaiting
+   * the first criterion before issuing the second would wait on a batch that
+   * cannot ship until the second is queued.
+   */
+  concurrent?: boolean;
+}
+
 export async function evaluateTurn(
   judge: LLMJudge,
   turn: Turn,
   existingKeys: Set<string>,
+  options: EvaluateTurnOptions = {},
 ): Promise<EvalRecord[]> {
   const evals: EvalRecord[] = [];
   const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = fitContextForJudge(turn.toolResults);
+  // Every criterion catches its own failure, so a collected promise can only
+  // fulfil; the allSettled at the end is the guard, not the error path.
+  const inFlight: Promise<void>[] = [];
+  const score = (criterion: () => Promise<void>): Promise<void> => {
+    if (!options.concurrent) return criterion();
+    inFlight.push(criterion());
+    return Promise.resolve();
+  };
 
   const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
-  if (!existingKeys.has(relKey)) {
+  if (!existingKeys.has(relKey)) await score(async () => {
     try {
       const result = await judge.evaluateRelevance(
         turn.userText,
@@ -915,10 +949,10 @@ export async function evaluateTurn(
       trackFailure(RELEVANCE_EVAL_NAME, err);
       console.warn(`  [${RELEVANCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
     }
-  }
+  });
 
   const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
-  if (!existingKeys.has(cohKey)) {
+  if (!existingKeys.has(cohKey)) await score(async () => {
     try {
       const result = await judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText });
       evals.push(
@@ -936,7 +970,7 @@ export async function evaluateTurn(
       trackFailure(COHERENCE_EVAL_NAME, err);
       console.warn(`  [${COHERENCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
     }
-  }
+  });
 
   if (turn.toolResults.length > 0) {
     const faithKey = `${turn.sessionId}:${FAITHFULNESS_EVAL_NAME}:${turnKey}`;
@@ -945,7 +979,7 @@ export async function evaluateTurn(
     const needsHal = !existingKeys.has(halKey);
 
     // qagEvaluate() for retry support; faithfulness and hallucination evaluated independently
-    if (needsFaith) {
+    if (needsFaith) await score(async () => {
       try {
         const faithResult = await judge.qagEvaluate(
           turn.userText,
@@ -967,10 +1001,10 @@ export async function evaluateTurn(
         trackFailure(FAITHFULNESS_EVAL_NAME, err);
         console.warn(`  [${FAITHFULNESS_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
-    }
+    });
 
     // Hallucination derived by inverting faithfulness score (1 - faithfulness)
-    if (needsHal) {
+    if (needsHal) await score(async () => {
       try {
         const halResult = await judge.evaluateFaithfulness(
           turn.userText,
@@ -994,7 +1028,7 @@ export async function evaluateTurn(
         trackFailure(HALLUCINATION_EVAL_NAME, err);
         console.warn(`  [${HALLUCINATION_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
       }
-    }
+    });
 
     const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
     if (!existingKeys.has(tcKey)) {
@@ -1003,23 +1037,25 @@ export async function evaluateTurn(
         output: turn.assistantText,
         context: toolContext,
       };
-      try {
-        const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
-        evals.push(
-          createEvalRecord(
-            turn,
-            TOOL_CORRECTNESS_CRITERIA.name,
-            tcResult.score,
-            tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
-            LLM_EVALUATOR_KIND,
-            NORMAL_COHORT,
-            HAIKU_MODEL,
-          ),
-        );
-      } catch (err) {
-        trackFailure(TOOL_CORRECTNESS_CRITERIA.name, err);
-        console.warn(`  [${TOOL_CORRECTNESS_CRITERIA.name}] Error for ${sessionPreview}: ${(err as Error).message}`);
-      }
+      await score(async () => {
+        try {
+          const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
+          evals.push(
+            createEvalRecord(
+              turn,
+              TOOL_CORRECTNESS_CRITERIA.name,
+              tcResult.score,
+              tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
+              LLM_EVALUATOR_KIND,
+              NORMAL_COHORT,
+              HAIKU_MODEL,
+            ),
+          );
+        } catch (err) {
+          trackFailure(TOOL_CORRECTNESS_CRITERIA.name, err);
+          console.warn(`  [${TOOL_CORRECTNESS_CRITERIA.name}] Error for ${sessionPreview}: ${(err as Error).message}`);
+        }
+      });
 
       const subCriteria = [
         TOOL_SELECTION_CRITERIA,
@@ -1031,28 +1067,52 @@ export async function evaluateTurn(
         const { name } = config;
         const subKey = `${turn.sessionId}:${name}:${turnKey}`;
         if (existingKeys.has(subKey)) continue;
-        try {
-          const result = await judge.gEval(config, tcTestCase);
-          evals.push(
-            createEvalRecord(
-              turn,
-              name,
-              result.score,
-              result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
-              LLM_EVALUATOR_KIND,
-              NORMAL_COHORT,
-              HAIKU_MODEL,
-            ),
-          );
-        } catch (err) {
-          trackFailure(name, err);
-          console.warn(`  [${name}] Error for ${sessionPreview}: ${(err as Error).message}`);
-        }
+        await score(async () => {
+          try {
+            const result = await judge.gEval(config, tcTestCase);
+            evals.push(
+              createEvalRecord(
+                turn,
+                name,
+                result.score,
+                result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+                LLM_EVALUATOR_KIND,
+                NORMAL_COHORT,
+                HAIKU_MODEL,
+              ),
+            );
+          } catch (err) {
+            trackFailure(name, err);
+            console.warn(`  [${name}] Error for ${sessionPreview}: ${(err as Error).message}`);
+          }
+        });
       }
     }
   }
 
+  await Promise.allSettled(inFlight);
   return evals;
+}
+
+/**
+ * The --batch path. Every turn's criteria are issued at once — nothing awaits a
+ * result before the batch ships — then one flush() submits them and settles
+ * every promise; the calls a criterion issues after that (G-Eval's scoring
+ * step, QAG's questions and answers) ride the provider's later rounds and its
+ * idle auto-flush. A wall-clock overrun is thrown, never returned as partial
+ * records.
+ */
+export async function evaluateTurnsBatched(
+  provider: BatchLLMProvider,
+  judge: LLMJudge,
+  turns: Turn[],
+  existingKeys: Set<string>,
+): Promise<EvalRecord[][]> {
+  const inFlight = turns.map(turn => evaluateTurn(judge, turn, existingKeys, { concurrent: true }));
+  await provider.flush();
+  const perTurn = await Promise.all(inFlight);
+  if (provider.failure) throw provider.failure;
+  return perTurn;
 }
 
 export function toOTelRecord(ev: EvalRecord): object {
@@ -1232,6 +1292,7 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const seed = args.includes('--seed');
   const backfill = args.includes('--backfill');
+  const batch = args.includes(JUDGE_BATCH_FLAG);
   const limitIdx = args.indexOf('--limit');
   let limit = Infinity;
   if (limitIdx !== -1) {
@@ -1352,10 +1413,18 @@ async function main() {
     } else {
       const estimatedUsd = estimateJudgeRun(allTurns).costUsd;
       const usage = createUsageTotals();
-      const llm = await createAnthropicProvider(judgeKey.apiKey, usage);
+      const batchProvider = batch
+        ? await createBatchProvider({
+            model: HAIKU_MODEL,
+            maxTokens: JUDGE_MAX_TOKENS,
+            temperature: JUDGE_DEFAULT_TEMPERATURE,
+            onUsage: (u) => recordUsage(usage, u),
+          })
+        : undefined;
+      const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
       const judge = new LLMJudge(llm, {
-        timeoutMs: TIME_MS.MINUTE,
-        maxRetries: 2,
+        timeoutMs: batchProvider ? BATCH_MODE_JUDGE_TIMEOUT_MS : TIME_MS.MINUTE,
+        maxRetries: batchProvider ? BATCH_MODE_MAX_RETRIES : 2,
         evaluator: PRODUCER,
         evaluatorType: LLM_EVALUATOR_TYPE,
         logger: {
@@ -1363,12 +1432,14 @@ async function main() {
           error: (msg) => console.error(`  [error] ${msg}`),
         },
       });
-      const allEvals = await processBatch(
-        allTurns,
-        CONCURRENCY,
-        BATCH_DELAY_MS,
-        (turn) => evaluateTurn(judge, turn, existingKeys),
-      );
+      const allEvals = batchProvider
+        ? await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys)
+        : await processBatch(
+          allTurns,
+          CONCURRENCY,
+          BATCH_DELAY_MS,
+          (turn) => evaluateTurn(judge, turn, existingKeys),
+        );
 
       flatEvals = allEvals.flat();
 

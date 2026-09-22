@@ -22,6 +22,7 @@
  *   npm run populate -- --skip-upload         # derive + judge + sync (sync will see no new evals)
  *   npm run populate -- --skip-sync           # derive + judge + upload only
  *   npm run populate -- --limit 5 --seed      # judge at most 5 turns
+ *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  
  *
  * Exit codes (read by the launchd wrapper, which logs FAILED for anything non-zero):
@@ -42,6 +43,7 @@ import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import {
+  JUDGE_BATCH_FLAG,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
   isTransientNetworkFailure,
@@ -60,6 +62,7 @@ const skipUpload = args.includes('--skip-upload');
 const skipSync = args.includes('--skip-sync');
 const dryRun = args.includes('--dry-run');
 const seed = args.includes('--seed');
+const batch = args.includes(JUDGE_BATCH_FLAG);
 const limitIdx = args.indexOf('--limit');
 let limit: string | undefined;
 if (limitIdx !== -1) {
@@ -156,6 +159,7 @@ async function main(): Promise<void> {
     if (dryRun) judgeArgs.push('--dry-run');
     if (seed || autoSeed) judgeArgs.push('--seed');
     if (limit) judgeArgs.push('--limit', limit);
+    if (batch) judgeArgs.push(JUDGE_BATCH_FLAG);
     const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
     if (!judge.ok) {
       if (judge.status !== null && JUDGE_SOFT_FAILURE_EXITS.has(judge.status)) {
