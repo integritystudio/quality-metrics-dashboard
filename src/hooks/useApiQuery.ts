@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { STALE_TIME } from '../lib/constants.js';
+import { HttpStatus, STALE_TIME } from '../lib/constants.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useOrgOptional } from '../contexts/OrgContext.js';
 import { apiFetch } from '../lib/api-client.js';
@@ -25,6 +25,12 @@ function defaultRetry(failureCount: number, error: unknown): boolean {
  *
  * **Auth**: throws `AUTH_REQUIRED` immediately (no HTTP request) when no token
  * is available. Token refresh is handled automatically by the Auth0 SDK.
+ *
+ * **`onNotFound`**: optional 404 interceptor. When the server returns 404 the
+ * hook parses the response body (JSON if possible, raw text otherwise) and
+ * calls this function. Return a `TRaw` value to treat the 404 as successful
+ * data (no retry, no error state); return `undefined` to fall through to the
+ * default behaviour of throwing `"API error: 404 – <body>"`.
  */
 export function useApiQuery<TRaw, T = TRaw>(
   queryKey: readonly unknown[],
@@ -36,9 +42,10 @@ export function useApiQuery<TRaw, T = TRaw>(
     refetchInterval?: number;
     retryDelay?: (attempt: number) => number;
     select?: (raw: TRaw) => T;
+    onNotFound?: (body: unknown) => TRaw | undefined;
   } = {},
 ) {
-  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select } = options;
+  const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select, onNotFound } = options;
   const { getAccessToken } = useAuth();
   // Org scoping (P6): the active org is part of EVERY query key so an org
   // switch can never serve prior-org cache entries, and every request carries
@@ -59,9 +66,19 @@ export function useApiQuery<TRaw, T = TRaw>(
       const res = await apiFetch(url, token, activeOrgId);
       if (!res.ok) {
         const body = await res.text().catch(() => '');
+        if (res.status === HttpStatus.NotFound && onNotFound !== undefined) {
+          let parsedBody: unknown;
+          try {
+            parsedBody = JSON.parse(body);
+          } catch {
+            parsedBody = body;
+          }
+          const result = onNotFound(parsedBody);
+          if (result !== undefined) return result;
+        }
         throw new Error(body ? `API error: ${res.status} – ${body}` : `API error: ${res.status}`);
       }
-      return res.json();
+      return res.json() as Promise<TRaw>;
     },
     select,
     enabled,

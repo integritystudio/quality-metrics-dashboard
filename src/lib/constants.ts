@@ -7,6 +7,14 @@ export const enum HttpStatus {
   InternalServerError = 500,
 }
 
+/**
+ * The `error` string the worker returns in its JSON body when a KV key does not
+ * exist for the requesting org (HTTP 404). Kept as a constant so both the
+ * dashboard loader and its tests reference the same string rather than literals
+ * that can diverge from the worker's `ERR_NO_DATA` value.
+ */
+export const WORKER_ERR_NO_DATA = 'No data available';
+
 /** Reusable error messages for API and response validation. */
 export const enum ErrorMessage {
   InvalidResponseShape = 'Invalid response shape',
