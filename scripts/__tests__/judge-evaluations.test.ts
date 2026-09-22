@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -13,6 +13,7 @@ import {
   isCanaryTurn,
   seedEvaluations,
   evaluateTurn,
+  evaluateTurnsBatched,
   evalFailures,
   toOTelRecord,
   processBatch,
@@ -29,6 +30,7 @@ import {
 } from '../judge-evaluations.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
+import type { BatchLLMProvider } from '../judge-batch-provider.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES } from '../pipeline-stages.js';
 
@@ -907,5 +909,84 @@ describe('summarizeJudgeRun', () => {
 
   it('exits 0 when nothing was attempted', () => {
     expect(summarizeJudgeRun(0, {}, noFailures).exitCode).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluateTurn concurrent mode + evaluateTurnsBatched (--batch wiring)
+// ---------------------------------------------------------------------------
+
+/** Long enough for gEval's dynamic import and promise chain to reach the provider. */
+const SETTLE_MS = 20;
+const settle = () => new Promise(resolve => setTimeout(resolve, SETTLE_MS));
+
+/** A provider that answers nothing until asked, so in-flight calls can be counted. */
+function createDeferredLLM() {
+  const waiting: Array<{ prompt: string; resolve: (r: { text: string }) => void }> = [];
+  const llm: LLMProvider = {
+    generate(prompt: string) {
+      return new Promise(resolve => waiting.push({ prompt, resolve }));
+    },
+  };
+  const answerAll = () => {
+    for (const { prompt, resolve } of waiting.splice(0)) resolve(mockResponse(prompt));
+  };
+  return { llm, waiting, answerAll };
+}
+
+describe('evaluateTurn in concurrent mode', () => {
+  it('issues every criterion before any result comes back, unlike the sequential default', async () => {
+    const sequential = createDeferredLLM();
+    const sequentialRun = evaluateTurn(new LLMJudge(sequential.llm, { timeoutMs: 5000, maxRetries: 0 }), makeTurn({ toolResults: [] }), new Set());
+    await settle();
+    expect(sequential.waiting).toHaveLength(1);
+
+    const concurrent = createDeferredLLM();
+    const concurrentRun = evaluateTurn(new LLMJudge(concurrent.llm, { timeoutMs: 5000, maxRetries: 0 }), makeTurn({ toolResults: [] }), new Set(), { concurrent: true });
+    await settle();
+    expect(concurrent.waiting).toHaveLength(2); // relevance and coherence, both at their first call
+
+    // Each answered round lets the next call out; both runs are done once a round leaves nothing waiting.
+    do {
+      sequential.answerAll();
+      concurrent.answerAll();
+      await settle();
+    } while (sequential.waiting.length + concurrent.waiting.length > 0);
+    expect((await concurrentRun).map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
+    expect((await sequentialRun).map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
+  });
+});
+
+describe('evaluateTurnsBatched', () => {
+  function batchProvider(overrides: Partial<BatchLLMProvider> = {}): BatchLLMProvider {
+    const mock = createMockLLM();
+    return { generate: (prompt: string) => mock.generate(prompt), flush: vi.fn(() => Promise.resolve()), failure: undefined, ...overrides };
+  }
+
+  it('flushes the provider exactly once for a small run and scores every turn', async () => {
+    resetFailureTracking();
+    const flush = vi.fn(() => Promise.resolve());
+    const provider = batchProvider({ flush });
+    const judge = new LLMJudge(provider, { timeoutMs: 5000, maxRetries: 0 });
+    const turns = [makeTurn({ sessionId: 'batch-1' }), makeTurn({ sessionId: 'batch-2', toolResults: ['ctx'] })];
+
+    const perTurn = await evaluateTurnsBatched(provider, judge, turns, new Set());
+
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(perTurn).toHaveLength(2);
+    expect(perTurn[0]!.map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
+    expect(perTurn[1]!.map(e => e.evaluationName)).toEqual(expect.arrayContaining(['faithfulness', 'hallucination', 'tool_correctness']));
+    expect(evalFailures).toEqual({});
+  });
+
+  it('throws when flush() fails, and when the provider records a failure, instead of returning partial records', async () => {
+    const wallClock = new Error('wall clock');
+    const judge = (provider: BatchLLMProvider) => new LLMJudge(provider, { timeoutMs: 5000, maxRetries: 0 });
+
+    const failingFlush = batchProvider({ flush: vi.fn(() => Promise.reject(wallClock)) });
+    await expect(evaluateTurnsBatched(failingFlush, judge(failingFlush), [makeTurn()], new Set())).rejects.toBe(wallClock);
+
+    const recorded = batchProvider({ failure: wallClock });
+    await expect(evaluateTurnsBatched(recorded, judge(recorded), [makeTurn()], new Set())).rejects.toBe(wallClock);
   });
 });
