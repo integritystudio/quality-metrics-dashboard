@@ -154,7 +154,7 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | `GET /api/traces/:traceId` | ✓ | Trace spans + evaluations |
 | `GET /api/correlations` | ✓ | Metric correlation matrix (`?period=30d`) |
 | `GET /api/degradation-signals` | ✓ | Quality degradation signals (`?period=7d`) |
-| `GET /api/coverage` | ✓ | Evaluation coverage heatmap (`?period=7d&inputKey=traceId`) |
+| `GET /api/coverage` | ✓ | Columnar coverage matrix — metrics, inputs, `counts[metric][input]`; the grid derives status and gaps (`?period=7d&inputKey=traceId`) |
 | `GET /api/pipeline` | ✓ | Populate pipeline status (`?period=7d`) |
 | `GET /api/sessions/:sessionId` | ✓ | Session detail |
 | `GET /api/agents` | ✓ | Cross-session agent list (all agents, sorted by invocations) |
