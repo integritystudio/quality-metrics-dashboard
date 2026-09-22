@@ -2,12 +2,14 @@
  * AuthContext — Auth0 integration
  *
  * Verifies that AuthContext fetches /api/me when Auth0 reports isAuthenticated,
- * clears session when not authenticated, and exposes getAccessToken.
+ * clears session when not authenticated, exposes getAccessToken, and posts
+ * a login activity event exactly once per browser tab session.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, act, waitFor, cleanup, within } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../contexts/AuthContext.js';
+import { postActivityEvent } from '../lib/activity-logger.js';
 import type { ReactNode } from 'react';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ function Wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
   mockIsAuthenticated = false;
   mockIsLoading = false;
   mockGetAccessTokenSilently.mockResolvedValue('mock-access-token');
@@ -138,6 +141,67 @@ describe('AuthContext: authenticated state', () => {
     await waitFor(() => {
       expect(scope.getByTestId('no-session')).toBeDefined();
     });
+  });
+});
+
+describe('AuthContext: login activity', () => {
+  function makeAuthenticatedFetch() {
+    return vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/me')) {
+        return Promise.resolve(new Response(JSON.stringify(makeMeResponse('user@test.com')), { status: 200 }));
+      }
+      return Promise.resolve(new Response(null, { status: 201 }));
+    });
+  }
+
+  it('posts login activity when session is established for the first time', async () => {
+    mockIsAuthenticated = true;
+    vi.stubGlobal('fetch', makeAuthenticatedFetch());
+
+    const { container } = render(<TestConsumer />, { wrapper: Wrapper });
+    const scope = within(container);
+
+    await waitFor(() => {
+      expect(scope.getByTestId('session-email').textContent).toBe('user@test.com');
+    });
+
+    const mockPost = vi.mocked(postActivityEvent);
+    expect(mockPost).toHaveBeenCalledOnce();
+    expect(mockPost).toHaveBeenCalledWith('login', 'mock-access-token');
+  });
+
+  it('does not post login activity on re-render when sessionStorage flag is already set', async () => {
+    mockIsAuthenticated = true;
+    sessionStorage.setItem('obs:login_recorded', '1');
+    vi.stubGlobal('fetch', makeAuthenticatedFetch());
+
+    const { container } = render(<TestConsumer />, { wrapper: Wrapper });
+    const scope = within(container);
+
+    await waitFor(() => {
+      expect(scope.getByTestId('session-email').textContent).toBe('user@test.com');
+    });
+
+    expect(vi.mocked(postActivityEvent)).not.toHaveBeenCalled();
+  });
+
+  it('does not post login activity when /api/me fails (no valid session)', async () => {
+    mockIsAuthenticated = true;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/me')) {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 }));
+      }
+      return Promise.resolve(new Response(null, { status: 200 }));
+    }));
+
+    const { container } = render(<TestConsumer />, { wrapper: Wrapper });
+    const scope = within(container);
+
+    await waitFor(() => {
+      expect(scope.getByTestId('no-session')).toBeDefined();
+    });
+
+    expect(vi.mocked(postActivityEvent)).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,10 @@ import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import { API_BASE } from '../lib/constants.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
+import { postActivityEvent } from '../lib/activity-logger.js';
+
+/** sessionStorage key used to prevent duplicate login events on page refresh. */
+const SESSION_LOGIN_KEY = 'obs:login_recorded';
 
 interface AuthContextValue {
   session: AppSession | null;
@@ -70,10 +74,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     }
 
+    let capturedJwt: string | null = null;
+
     getAccessToken()
-      .then((jwt) => (cancelled ? null : fetchAppSession(jwt, controller.signal)))
+      .then((jwt) => {
+        capturedJwt = jwt;
+        return cancelled ? null : fetchAppSession(jwt, controller.signal);
+      })
       .then((appSession) => {
         if (!cancelled) {
+          if (appSession && capturedJwt) {
+            // Record login once per browser tab session — guards against
+            // duplicate rows on page refresh while still capturing the event on
+            // the initial sign-in redirect.
+            try {
+              if (!sessionStorage.getItem(SESSION_LOGIN_KEY)) {
+                sessionStorage.setItem(SESSION_LOGIN_KEY, '1');
+                void postActivityEvent('login', capturedJwt);
+              }
+            } catch {
+              // sessionStorage unavailable (private browsing, blocked) — skip silently.
+            }
+          }
           setSession(appSession);
           setIsLoading(false);
         }
