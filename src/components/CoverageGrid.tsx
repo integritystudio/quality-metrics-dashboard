@@ -1,18 +1,20 @@
 import { memo, useState, useMemo, type CSSProperties } from 'react';
-import type { CoverageCell, CoverageGap, CoverageStatus } from '../types.js';
+import type { CoverageMatrix, CoverageStatus } from '../types.js';
 import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
+import { coverageStatusForCount, countAt, summarizeCoverageGaps } from '../lib/coverage-matrix.js';
 import {
   COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
   COVERAGE_GRID_MAX_INPUTS,
 } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
+/**
+ * Renders the columnar coverage matrix (CVG-1). Status and per-metric gaps are
+ * derived from `counts` rather than shipped: the dense cell list they replace
+ * did not fit KV's value limit at production cardinality.
+ */
 interface CoverageGridProps {
-  metrics: string[];
-  inputs: string[];
-  cells: CoverageCell[];
-  gaps: CoverageGap[];
-  overallCoveragePercent: number;
+  matrix: CoverageMatrix;
 }
 
 const STATUS_COLORS: Record<CoverageStatus, string> = {
@@ -23,19 +25,18 @@ const STATUS_COLORS: Record<CoverageStatus, string> = {
 
 const COVERAGE_STATUSES = Object.keys(STATUS_COLORS) as CoverageStatus[];
 
-function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercent }: CoverageGridProps) {
+function CoverageGridInner({ matrix }: CoverageGridProps) {
+  const { metrics, inputs, coveredThreshold, partialThreshold, overallCoveragePercent } = matrix;
   const [hovered, setHovered] = useState<{ metric: string; input: string } | null>(null);
 
-  const cellMap = useMemo(() => {
-    const map = new Map<string, CoverageCell>();
-    for (const cell of cells) map.set(`${cell.metric}|${cell.input}`, cell);
-    return map;
-  }, [cells]);
+  const gaps = useMemo(() => summarizeCoverageGaps(matrix), [matrix]);
 
   if (metrics.length === 0 || inputs.length === 0) {
     return <EmptyState message="No coverage data available." />;
   }
 
+  // A prefix slice, so an index into displayInputs is also an index into the
+  // matrix columns — no lookup table needed.
   const displayInputs = inputs.slice(0, COVERAGE_GRID_MAX_INPUTS);
   const truncated = inputs.length > COVERAGE_GRID_MAX_INPUTS;
 
@@ -85,7 +86,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
             ))}
           </div>
 
-          {metrics.map(metric => (
+          {metrics.map((metric, metricIndex) => (
             <div key={metric} role="row" className="contents">
               <div
                 role="rowheader"
@@ -94,10 +95,9 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
               >
                 {metric}
               </div>
-              {displayInputs.map(input => {
-                const cell = cellMap.get(`${metric}|${input}`);
-                const status = cell?.status ?? 'missing';
-                const count = cell?.count ?? 0;
+              {displayInputs.map((input, inputIndex) => {
+                const count = countAt(matrix, metricIndex, inputIndex);
+                const status = coverageStatusForCount(count, coveredThreshold, partialThreshold);
                 const isHovered = hovered?.metric === metric && hovered.input === input;
 
                 return (
@@ -134,7 +134,7 @@ function CoverageGridInner({ metrics, inputs, cells, gaps, overallCoveragePercen
             {gaps.map(gap => (
               <li key={gap.metric} className="mb-1">
                 <strong>{gap.metric}</strong>: {formatPercent(gap.coveragePercent, 0)} covered
-                ({plural(gap.missingInputs.length, 'input')} missing)
+                ({plural(gap.missingCount, 'input')} missing)
               </li>
             ))}
           </ul>

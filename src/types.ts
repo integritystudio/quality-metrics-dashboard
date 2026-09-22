@@ -18,6 +18,8 @@ export type {
   CoverageCell,
   CoverageGap,
   CoverageStatus,
+  CoverageMatrix,
+  CoverageGapSummary,
 } from '@parent/lib/quality/quality-visualization.js';
 
 // View types live in quality-views.js (not re-exported via quality-metrics.js;

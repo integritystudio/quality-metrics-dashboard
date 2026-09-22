@@ -20,7 +20,7 @@ import type { JsonSafe } from '../../api/api-constants.js';
 import type { WorkflowGraph } from '../../types/workflow-graph.js';
 import type {
   CompositeQualityIndex,
-  CoverageHeatmap,
+  CoverageMatrix,
   EvaluationResult,
   HumanVerificationEvent,
   MetricDetailResult,
@@ -228,7 +228,7 @@ export interface VerificationsResponse {
 }
 
 /** `GET /coverage` — `{ period, ...heatmap }`. */
-export type CoverageResponse = JsonSafe<CoverageHeatmap> & { period: string };
+export type CoverageResponse = JsonSafe<CoverageMatrix> & { period: string };
 
 /** `GET /correlations`. */
 export interface CorrelationsResponse {

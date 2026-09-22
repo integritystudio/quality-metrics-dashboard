@@ -724,7 +724,9 @@ app.get('/api/coverage', async (c) => {
     return c.json({ error: ERR_INVALID_INPUT_KEY }, Http.BadRequest);
   }
   const data = await getSessionKv<unknown>(c,`coverage:${period}:${inputKey}`);
-  if (!data) return c.json({ period, metrics: [], inputs: [], heatmap: [] });
+  // Shape-compatible empty matrix: the grid derives status and gaps from
+  // `counts`, so an absent key must still present every field it reads.
+  if (!data) return c.json({ period, metrics: [], inputs: [], counts: [], coveredThreshold: 1, partialThreshold: 0, overallCoveragePercent: 0 });
   return c.json(data);
 });
 

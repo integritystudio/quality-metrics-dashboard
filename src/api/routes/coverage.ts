@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { computeCoverageHeatmap } from '../parent/quality-visualization.js';
+import { computeCoverageMatrix } from '../parent/quality-visualization.js';
 import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import type { EvaluationResult } from '../../types.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
@@ -25,7 +25,8 @@ export const coverageRoutes = new Hono();
 
 /**
  * GET /api/coverage
- * Returns coverage heatmap: metrics x inputs with gap identification.
+ * Returns the columnar coverage matrix: metrics x inputs counts, with
+ * status and gaps derivable by the reader (CVG-1).
  *
  * Query params:
  *   period: '24h' | '7d' | '30d' (default: '7d')
@@ -48,11 +49,13 @@ coverageRoutes.get('/coverage', async (c) => {
     const allEvaluations = await loadEvaluationsByMetric(start, end);
     const evaluationsByMetric = filterJudgeEvaluations(allEvaluations);
 
-    const heatmap = computeCoverageHeatmap(evaluationsByMetric, {
+    // Columnar, matching what sync-to-kv writes to KV and the Worker serves, so
+    // the dev server and production hand the grid the same shape (CVG-1).
+    const matrix = computeCoverageMatrix(evaluationsByMetric, {
       inputKey: inputKeyResult.data,
     });
 
-    return c.json({ period, ...heatmap });
+    return c.json({ period, ...matrix });
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }

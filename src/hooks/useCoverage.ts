@@ -1,8 +1,9 @@
-import type { Period, CoverageHeatmap } from '../types.js';
+import type { Period, CoverageMatrix } from '../types.js';
 import { API_BASE, DEFAULT_INPUT_KEY, type InputKey } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export type CoverageResponse = CoverageHeatmap & { period: string };
+/** The columnar matrix the Worker and dev API both return (CVG-1). */
+export type CoverageResponse = CoverageMatrix & { period: string };
 
 export function useCoverage(period: Period, inputKey: InputKey = DEFAULT_INPUT_KEY) {
   return useApiQuery<CoverageResponse>(

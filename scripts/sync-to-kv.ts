@@ -27,7 +27,7 @@ import {
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
 import { computeRoleView, computeMetricDetail } from '../../src/lib/quality/quality-views.js';
-import { computePipelineView } from '../../src/lib/quality/quality-visualization.js';
+import { computePipelineView, computeCoverageMatrix } from '../../src/lib/quality/quality-visualization.js';
 import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
 import type { EvaluationResult, StepScore, TraceSpan } from '../../src/backends/index.js';
 import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/qfe-dynamics.js';
@@ -121,6 +121,8 @@ const MAX_RECENT_SESSIONS = 20;
 
 const META_LAST_SYNC_KEY = 'meta:lastSync';
 const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
+/** Input axes the coverage matrix is built for — one KV key per (period, axis). */
+const COVERAGE_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 /** Global (never org-prefixed) heartbeat for the session-less /api/health route (P4/P5). */
 export const SYSTEM_LAST_SYNC_KEY = 'system:lastSync';
 
@@ -931,14 +933,19 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       value: toKVValue({ correlations, metrics: corrMetricNames }),
     });
 
-    // TODO: Re-enable coverage heatmaps once values are capped to stay under KV 25 MB limit
-    // for (const inputKey of ['traceId', 'sessionId'] as const) {
-    //   const heatmap = computeCoverageHeatmap(grouped, { inputKey });
-    //   entries.push({
-    //     key: `coverage:${period}:${inputKey}`,
-    //     value: JSON.stringify({ period, ...heatmap }),
-    //   });
-    // }
+    // Columnar, never the dense metric x input cell list: that shape repeats the
+    // metric name and a 32-36 char input id in every cell (and the ids again in
+    // `gaps`), reaching 112 MB at the ~85,000-input cardinality that breached
+    // KV's 25 MiB value limit and disabled this feature in February 2026 (CVG-1).
+    // The columnar matrix measures 4.68 MB for that same case. Sizes and the
+    // rejected compression alternatives: `CoverageMatrix` in quality-visualization.ts.
+    for (const inputKey of COVERAGE_INPUT_KEYS) {
+      const matrix = computeCoverageMatrix(grouped, { inputKey });
+      entries.push({
+        key: `coverage:${period}:${inputKey}`,
+        value: toKVValue({ period, ...matrix }),
+      });
+    }
 
     const pipeline = computePipelineView(grouped, dashboard);
     entries.push({

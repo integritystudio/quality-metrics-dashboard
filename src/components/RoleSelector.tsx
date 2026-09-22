@@ -11,7 +11,7 @@ const ROLE_TABS: Array<{ path: string; label: string; role: RoleViewType }> = [
 const STATIC_TABS: Array<{ path: string; label: string }> = [
   { path: '/', label: 'Dashboard' },
   { path: '/correlations', label: 'Correlations' },
-  // { path: '/coverage', label: 'Coverage' },  // hidden until data compression (see BACKLOG.md)
+  { path: '/coverage', label: 'Coverage' },
   { path: '/pipeline', label: 'Pipeline' },
 ];
 

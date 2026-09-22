@@ -23,6 +23,7 @@ import { TrendSeries } from './components/TrendSeries.js';
 import { ConfidencePanel } from './components/ConfidencePanel.js';
 import { ViewSection } from './components/Section.js';
 import { CorrelationsPage } from './pages/CorrelationsPage.js';
+import { CoveragePage } from './pages/CoveragePage.js';
 import { PipelinePage } from './pages/PipelinePage.js';
 import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { CompliancePage } from './pages/CompliancePage.js';
@@ -301,7 +302,7 @@ function GlobalShortcuts({ setPeriod, navigate }: {
   useShortcut('g h', 'Go to home', 'Navigation', useCallback(() => navigate('/'), [navigate]));
   useShortcut('g c', 'Go to correlations', 'Navigation', useCallback(() => navigate('/correlations'), [navigate]));
   useShortcut('g p', 'Go to pipeline', 'Navigation', useCallback(() => navigate('/pipeline'), [navigate]));
-  // useShortcut('g v', 'Go to coverage', 'Navigation', useCallback(() => navigate('/coverage'), [navigate]));  // hidden until data compression
+  useShortcut('g v', 'Go to coverage', 'Navigation', useCallback(() => navigate('/coverage'), [navigate]));
   useShortcut('g a', 'Go to agents', 'Navigation', useCallback(() => navigate('/agents'), [navigate]));
   useShortcut('g r', 'Go to routing telemetry', 'Navigation', useCallback(() => navigate('/routing-telemetry'), [navigate]));
   useShortcut('g d', 'Go to degradation signals', 'Navigation', useCallback(() => navigate('/degradation-signals'), [navigate]));
@@ -435,7 +436,11 @@ export function App() {
                           <CorrelationsPage period={period} />
                         </ErrorBoundary>
                       </Route>
-                      {/* Coverage route hidden until data compression (see BACKLOG.md) */}
+                      <Route path="/coverage">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <CoveragePage period={period} />
+                        </ErrorBoundary>
+                      </Route>
                       <Route path="/pipeline">
                         <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
                           <PipelinePage period={period} />

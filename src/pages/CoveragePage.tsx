@@ -26,13 +26,7 @@ export function CoveragePage({ period }: { period: Period }) {
             </select>
           </div>
           <div className="card">
-            <CoverageGrid
-              metrics={data.metrics}
-              inputs={data.inputs}
-              cells={data.cells}
-              gaps={data.gaps}
-              overallCoveragePercent={data.overallCoveragePercent}
-            />
+            <CoverageGrid matrix={data} />
           </div>
         </>
       )}
