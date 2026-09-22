@@ -47,7 +47,7 @@ loudly rather than silently fall through to a live endpoint.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | ~~NO-DATA-404-RENDERS-AS-ERROR~~ | ~~An org with no KV keys gets "Failed to load — API error: 404" instead of the no-data state~~ | ~~P2~~ | Done 2026-09-22 — commit 77ef484 |
-| LOGIN-ACTIVITY-NEVER-RECORDED | `user_activity` has 8 `logout` rows and 0 `login` rows against 235 dashboard views | P3 | Filed 2026-09-20; measured across all users |
+| ~~LOGIN-ACTIVITY-NEVER-RECORDED~~ | ~~`user_activity` has 8 `logout` rows and 0 `login` rows against 235 dashboard views~~ | ~~P3~~ | Done 2026-09-22 — commit 116007b |
 
 **NO-DATA-404-RENDERS-AS-ERROR.** Under org scoping, `/api/dashboard` answers `404 ERR_NO_DATA` when the
 active org has no `org:<id>:dashboard:7d` key — by design, and true today for every org except home
