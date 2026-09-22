@@ -1,37 +1,36 @@
 /**
  * API route tests: /api/correlations.
+ *
+ * Approach C — fixture HTTP server. The real data-loader (isoToNs, grouping
+ * by evaluationName) runs against CloudBackend pointing at the local fixture,
+ * so computeCorrelationMatrix receives an honest Map.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createFixtureServer, evalToWire } from './support/fixture-server.js';
+import type { FixtureServer } from './support/fixture-server.js';
 
 vi.mock('../api/parent/qfe-correlation.js', () => ({
   computeCorrelationMatrix: vi.fn(),
 }));
 
-vi.mock('../api/parent/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-
 import { correlationRoutes } from '../api/routes/correlations.js';
 import { computeCorrelationMatrix } from '../api/parent/qfe-correlation.js';
-import { loadEvaluationsByMetric } from '../api/data-loader.js';
 import type { CorrelationFeature } from '../types.js';
 import { makeEvaluation } from './support/fixtures.js';
 import type { CorrelationsResponse } from './support/api-responses.js';
+
+let fixture: FixtureServer;
+
+beforeAll(async () => {
+  fixture = await createFixtureServer();
+  process.env.OBTOOL_API_URL = fixture.url;
+});
+
+afterAll(async () => {
+  delete process.env.OBTOOL_API_URL;
+  await fixture.close();
+});
 
 function makeCorrelation(overrides: Partial<CorrelationFeature> = {}): CorrelationFeature {
   return {
@@ -51,17 +50,17 @@ function makeCorrelation(overrides: Partial<CorrelationFeature> = {}): Correlati
   };
 }
 
-beforeEach(vi.clearAllMocks);
+beforeEach(() => {
+  vi.clearAllMocks();
+  fixture.reset();
+});
 
 describe('GET /correlations', () => {
   beforeEach(() => {
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([
-      ['relevance', [makeEvaluation({ scoreValue: 0.8, traceId: 't1' })]],
-      ['coherence', [makeEvaluation({ evaluationName: 'coherence', scoreValue: 0.9, traceId: 't1' })]],
-    ]));
-    // `computeCorrelationMatrix` returns `CorrelationFeature[]`, not a numeric
-    // matrix — the previous `[[1, 0.5], [0.5, 1]]` stub was the wrong shape
-    // entirely, and `as any` was the only thing making it fit.
+    fixture.setEvals([
+      evalToWire(makeEvaluation({ evaluationName: 'relevance', scoreValue: 0.8, traceId: 't1' }), 1),
+      evalToWire(makeEvaluation({ evaluationName: 'coherence', scoreValue: 0.9, traceId: 't1' }), 2),
+    ]);
     vi.mocked(computeCorrelationMatrix).mockReturnValue([makeCorrelation()]);
   });
 
@@ -86,13 +85,15 @@ describe('GET /correlations', () => {
 
   it('accepts all valid periods', async () => {
     for (const period of ['24h', '7d', '30d']) {
+      fixture.reset();
+      vi.mocked(computeCorrelationMatrix).mockReturnValue([makeCorrelation()]);
       const res = await correlationRoutes.request(`/correlations?period=${period}`);
       expect(res.status).toBe(200);
     }
   });
 
-  it('returns 500 when data-loader throws', async () => {
-    vi.mocked(loadEvaluationsByMetric).mockRejectedValue(new Error('fail'));
+  it('returns 500 when backend throws', async () => {
+    fixture.failPath('/v1/evaluations');
     const res = await correlationRoutes.request('/correlations?period=7d');
     expect(res.status).toBe(500);
   });

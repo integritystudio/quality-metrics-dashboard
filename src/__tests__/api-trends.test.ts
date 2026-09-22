@@ -1,8 +1,14 @@
 /**
  * API route tests: /api/trends/:name and /api/trends.
+ *
+ * Approach C — fixture HTTP server. The real data-loader and CloudBackend run;
+ * pure computation functions (getQualityMetric, computeMetricDetail, etc.)
+ * stay mocked because they receive EvaluationResult arrays, not HTTP payloads.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createFixtureServer, evalToWire } from './support/fixture-server.js';
+import type { FixtureServer } from './support/fixture-server.js';
 
 vi.mock('../api/parent/quality-metrics.js', () => ({
   getQualityMetric: vi.fn(),
@@ -21,49 +27,33 @@ vi.mock('../api/parent/qfe-percentiles.js', () => ({
   computePercentileDistribution: vi.fn(),
 }));
 
-vi.mock('../api/parent/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-
 import { trendRoutes } from '../api/routes/trends.js';
 import { getQualityMetric, computeAggregations } from '../api/parent/quality-metrics.js';
 import { computeMetricDetail } from '../api/parent/quality-views.js';
 import { computeMetricDynamics } from '../api/parent/qfe-dynamics.js';
 import { computePercentileDistribution } from '../api/parent/qfe-percentiles.js';
-import { loadEvaluationsForMetric } from '../api/data-loader.js';
 import type { TrendDetailResponse, TrendSummaryResponse } from './support/api-responses.js';
 import type {
-  EvaluationResult,
   MetricDetailResult,
   MetricDynamics,
   MetricTrend,
   QualityMetricConfig,
 } from '../types.js';
 
-beforeEach(vi.clearAllMocks);
+let fixture: FixtureServer;
 
+beforeAll(async () => {
+  fixture = await createFixtureServer();
+  process.env.OBTOOL_API_URL = fixture.url;
+});
+
+afterAll(async () => {
+  delete process.env.OBTOOL_API_URL;
+  await fixture.close();
+});
 
 /**
- * Fixtures are typed off the real signatures — `NonNullable<ReturnType<...>>`
- * for mock return values, so each one is exactly what the route consumes and a
- * parent shape change fails `npm run typecheck` here. Previously `as any`, and
- * drifted: `makeMockConfig` had `direction`/`threshold` (not on
- * `QualityMetricConfig`) and the `computeMetricDetail` stub returned
- * `{ trend: [...], aggregations }`, a shape `MetricDetailResult` never had.
+ * Fixtures typed off real parent types — drift-detecting.
  */
 type Percentiles = NonNullable<ReturnType<typeof computePercentileDistribution>>;
 
@@ -81,17 +71,6 @@ function makeMockConfig(): QualityMetricConfig {
   };
 }
 
-function makeMockEval(timestamp = EVAL_NANOS, score = 0.85): EvaluationResult {
-  return {
-    evaluationName: 'relevance',
-    scoreValue: score,
-    timestamp,
-    traceId: 'trace-001',
-    evaluatorType: 'seed',
-  };
-}
-
-/** Nanoseconds per millisecond — evaluation timestamps are epoch nanos. */
 const NANOS_PER_MS = 1_000_000n;
 
 const MOCK_PERCENTILES: Percentiles = { p10: 0.7, p25: 0.8, p50: 0.85, p75: 0.9, p90: 0.95 };
@@ -133,8 +112,10 @@ const MOCK_DYNAMICS: MetricDynamics = {
 
 describe('GET /trends/:name', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    fixture.reset();
+    fixture.setEvals([evalToWire({ evaluationName: 'relevance', scoreValue: 0.85, timestamp: EVAL_NANOS })]);
     vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()]);
     vi.mocked(computePercentileDistribution).mockReturnValue(MOCK_PERCENTILES);
     vi.mocked(computeMetricDetail).mockReturnValue(makeMockDetail());
     vi.mocked(computeAggregations).mockReturnValue(makeMockDetail().values);
@@ -182,15 +163,8 @@ describe('GET /trends/:name', () => {
   });
 
   it('passes the period length second and the previous trend in options', async () => {
-    // Same argument-order trap as api-metrics, but this route actually has a
-    // previousTrend to misplace: positionally it landed in periodHours and
-    // killed both velocity and acceleration.
-    // The shared fixture timestamp is fixed, so it falls outside the rolling
-    // window and every bucket comes back empty — the route then never reaches
-    // computeMetricDynamics at all. Put one evaluation inside the window.
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([
-      makeMockEval(BigInt(Date.now()) * NANOS_PER_MS),
-    ]);
+    // Put one evaluation inside the rolling window so computeMetricDynamics is reached.
+    fixture.setEvals([evalToWire({ evaluationName: 'relevance', scoreValue: 0.85, timestamp: BigInt(Date.now()) * NANOS_PER_MS })]);
 
     await trendRoutes.request('/trends/relevance?period=7d');
 
@@ -202,8 +176,8 @@ describe('GET /trends/:name', () => {
     }
   });
 
-  it('returns 500 when data-loader throws', async () => {
-    vi.mocked(loadEvaluationsForMetric).mockRejectedValue(new Error('fail'));
+  it('returns 500 when backend throws', async () => {
+    fixture.failPath('/v1/evaluations');
     const res = await trendRoutes.request('/trends/relevance?period=7d');
     expect(res.status).toBe(500);
   });
@@ -213,7 +187,9 @@ describe('GET /trends/:name', () => {
 
 describe('GET /trends', () => {
   beforeEach(() => {
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()]);
+    vi.clearAllMocks();
+    fixture.reset();
+    fixture.setEvals([evalToWire({ evaluationName: 'relevance', scoreValue: 0.85, timestamp: EVAL_NANOS })]);
     vi.mocked(computePercentileDistribution).mockReturnValue(MOCK_PERCENTILES);
   });
 
@@ -241,8 +217,8 @@ describe('GET /trends', () => {
     }
   });
 
-  it('returns 500 when data-loader throws', async () => {
-    vi.mocked(loadEvaluationsForMetric).mockRejectedValue(new Error('fail'));
+  it('returns 500 when backend throws', async () => {
+    fixture.failPath('/v1/evaluations');
     const res = await trendRoutes.request('/trends?period=7d');
     expect(res.status).toBe(500);
   });

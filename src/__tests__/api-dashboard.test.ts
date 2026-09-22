@@ -1,11 +1,14 @@
 /**
- * API route tests: /api/dashboard and /api/quality/live (Approach A — Node routes, mocked data-loader).
+ * API route tests: /api/dashboard and /api/quality/live.
  *
- * Parent code is mocked at the src/api/parent/ boundary modules — the only
- * sanctioned import path for parent runtime code (see CLAUDE.md § Parent boundary).
+ * Approach C — fixture HTTP server. The real data-loader and CloudBackend run;
+ * pure computation functions (computeDashboardSummary, computeRoleView, computeCQI)
+ * stay mocked because they receive EvaluationResult arrays, not HTTP payloads.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createFixtureServer, evalToWire } from './support/fixture-server.js';
+import type { FixtureServer } from './support/fixture-server.js';
 
 vi.mock('../api/parent/quality-metrics.js', () => ({
   QUALITY_METRICS: {},
@@ -20,31 +23,11 @@ vi.mock('../api/parent/qfe-cqi.js', () => ({
   computeCQI: vi.fn(),
 }));
 
-vi.mock('../api/parent/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-
-// Mock data-loader with explicit factory to avoid auto-mock resolution issues
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-
 import { dashboardRoutes } from '../api/routes/dashboard.js';
 import { qualityRoutes } from '../api/routes/quality.js';
 import { computeDashboardSummary } from '../api/parent/quality-metrics.js';
 import { computeRoleView } from '../api/parent/quality-views.js';
 import { computeCQI } from '../api/parent/qfe-cqi.js';
-import { loadEvaluationsByMetric, checkHealth } from '../api/data-loader.js';
 import type {
   DashboardResponse,
   ErrorResponse,
@@ -61,20 +44,33 @@ import {
   makeOperatorView,
 } from './support/fixtures.js';
 
+let fixture: FixtureServer;
+
+beforeAll(async () => {
+  fixture = await createFixtureServer();
+  process.env.OBTOOL_API_URL = fixture.url;
+});
+
+afterAll(async () => {
+  delete process.env.OBTOOL_API_URL;
+  await fixture.close();
+});
 
 function makeMockEval(name = 'relevance', score = 0.85, timestamp = EVAL_NANOS) {
   return makeEvaluation({ evaluationName: name, scoreValue: score, timestamp });
 }
 
-// Clear all mocks between every test to prevent call-count accumulation
-// across describe blocks (dashboard → health → quality/live).
-beforeEach(vi.clearAllMocks);
+// Clear all mocks between every test
+beforeEach(() => {
+  vi.clearAllMocks();
+  fixture.reset();
+});
 
 // /dashboard route
 
 describe('GET /dashboard', () => {
   beforeEach(() => {
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([['relevance', [makeMockEval()]]]));
+    fixture.setEvals([evalToWire(makeMockEval())]);
     vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary());
     vi.mocked(computeCQI).mockReturnValue(makeCQI());
   });
@@ -100,9 +96,6 @@ describe('GET /dashboard', () => {
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('cqi');
     expect(body).toHaveProperty('sparklines');
-    // `computeCQI` returns a `CompositeQualityIndex` object and the route passes
-    // it through untouched. This asserted `typeof body.cqi === 'number'`, which
-    // only held because the mock returned a bare `0.82`.
     expect(body.cqi?.value).toBeCloseTo(0.82, 3);
     expect(body.cqi).toHaveProperty('contributions');
   });
@@ -133,7 +126,6 @@ describe('GET /dashboard', () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=operator');
     expect(res.status).toBe(200);
     const body = await res.json() as RoleViewResponse;
-    // operator role does not include cqi at top level (only executive)
     expect(body).not.toHaveProperty('cqi');
   });
 
@@ -142,6 +134,8 @@ describe('GET /dashboard', () => {
     const body = await res.json() as DashboardResponse;
     const sparklines = body.sparklines;
     expect(typeof sparklines).toBe('object');
+    // sparklines keys come from the evaluation Map returned by loadEvaluationsByMetric;
+    // the fixture serves a 'relevance' evaluation so 'relevance' is a key.
     expect(sparklines).toHaveProperty('relevance');
     const vals = sparklines['relevance'] as (number | null)[];
     expect(Array.isArray(vals)).toBe(true);
@@ -150,7 +144,7 @@ describe('GET /dashboard', () => {
   });
 
   it('returns 500 when data-loader throws', async () => {
-    vi.mocked(loadEvaluationsByMetric).mockRejectedValue(new Error('disk read failed'));
+    fixture.failPath('/v1/evaluations');
     const res = await dashboardRoutes.request('/dashboard?period=7d');
     expect(res.status).toBe(500);
   });
@@ -160,7 +154,7 @@ describe('GET /dashboard', () => {
 
 describe('GET /health', () => {
   it('returns 200 with status and hasData', async () => {
-    vi.mocked(checkHealth).mockResolvedValue({ status: 'healthy', hasData: true });
+    // fixture /health returns { status: 'ok' }, /v1/evaluations returns []
     const res = await dashboardRoutes.request('/health');
     expect(res.status).toBe(200);
     const body = await res.json() as HealthResponse;
@@ -168,8 +162,11 @@ describe('GET /health', () => {
     expect(body).toHaveProperty('hasData');
   });
 
-  it('returns 500 when checkHealth throws', async () => {
-    vi.mocked(checkHealth).mockRejectedValue(new Error('backend unavailable'));
+  it('returns 500 when the evaluations query throws', async () => {
+    // healthCheck() catches errors from be.healthCheck() internally (returns
+    // error status instead of throwing). be.queryEvaluations() is NOT caught
+    // by healthCheck(), so failing /v1/evaluations propagates to the route.
+    fixture.failPath('/v1/evaluations');
     const res = await dashboardRoutes.request('/health');
     expect(res.status).toBe(500);
   });
@@ -178,12 +175,13 @@ describe('GET /health', () => {
 // /quality/live route
 
 describe('GET /quality/live', () => {
+  const ONE_HOUR_NANOS = 3_600_000_000_000n;
+
   beforeEach(() => {
-    const ONE_HOUR_NANOS = 3_600_000_000_000n;
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map([
-      ['relevance', [makeMockEval('relevance', 0.85, EVAL_NANOS + ONE_HOUR_NANOS)]],
-      ['coherence', [makeMockEval('coherence', 0.9, EVAL_NANOS)]],
-    ]));
+    fixture.setEvals([
+      evalToWire(makeMockEval('relevance', 0.85, EVAL_NANOS + ONE_HOUR_NANOS), 1),
+      evalToWire(makeMockEval('coherence', 0.9, EVAL_NANOS), 2),
+    ]);
   });
 
   it('returns 200 with metrics, sessionCount, lastUpdated', async () => {
@@ -214,7 +212,7 @@ describe('GET /quality/live', () => {
   });
 
   it('handles empty evaluation map gracefully', async () => {
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map());
+    fixture.reset(); // empty evals
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(200);
     const body = await res.json() as QualityLiveResponse;
@@ -222,7 +220,7 @@ describe('GET /quality/live', () => {
   });
 
   it('returns 500 when data-loader throws', async () => {
-    vi.mocked(loadEvaluationsByMetric).mockRejectedValue(new Error('no data'));
+    fixture.failPath('/v1/evaluations');
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(500);
   });

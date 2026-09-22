@@ -1,41 +1,41 @@
 /**
  * API route tests: /api/coverage.
+ *
+ * Approach C — fixture HTTP server. The real data-loader and CloudBackend run;
+ * computeCoverageMatrix receives an honest Map from loadEvaluationsByMetric.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createFixtureServer } from './support/fixture-server.js';
+import type { FixtureServer } from './support/fixture-server.js';
 
 vi.mock('../api/parent/quality-visualization.js', () => ({
   computeCoverageMatrix: vi.fn(),
 }));
 
-vi.mock('../api/parent/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-
 import { coverageRoutes } from '../api/routes/coverage.js';
 import { computeCoverageMatrix } from '../api/parent/quality-visualization.js';
-import { loadEvaluationsByMetric } from '../api/data-loader.js';
 import type { CoverageResponse, ErrorResponse } from './support/api-responses.js';
 
-beforeEach(vi.clearAllMocks);
+let fixture: FixtureServer;
+
+beforeAll(async () => {
+  fixture = await createFixtureServer();
+  process.env.OBTOOL_API_URL = fixture.url;
+});
+
+afterAll(async () => {
+  delete process.env.OBTOOL_API_URL;
+  await fixture.close();
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  fixture.reset();
+});
 
 describe('GET /coverage', () => {
   beforeEach(() => {
-    vi.mocked(loadEvaluationsByMetric).mockResolvedValue(new Map());
     vi.mocked(computeCoverageMatrix).mockReturnValue({
       metrics: [],
       inputs: [],
@@ -100,8 +100,8 @@ describe('GET /coverage', () => {
     expect(res.status).toBe(200);
   });
 
-  it('returns 500 when data-loader throws', async () => {
-    vi.mocked(loadEvaluationsByMetric).mockRejectedValue(new Error('fail'));
+  it('returns 500 when backend throws', async () => {
+    fixture.failPath('/v1/evaluations');
     const res = await coverageRoutes.request('/coverage?period=7d');
     expect(res.status).toBe(500);
   });

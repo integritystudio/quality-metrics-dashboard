@@ -6,7 +6,7 @@ import { queryVerifications as queryVerificationsLib } from './parent/verificati
 import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { toDateOnly, NANOS_TO_MS } from './api-constants.js';
+import { toDateOnly, toIsoWindowBound, NANOS_TO_MS } from './api-constants.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d']!;
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d']!;
@@ -33,7 +33,13 @@ function getBackend(): CloudBackend {
   // server has no auth middleware, so it must never trust a client-supplied
   // org — the scope is a fixed env value. Absent, obtool-api defaults the
   // scope to its HOME_ORG_ID server-side.
-  backend ??= new CloudBackend({ orgId: process.env.DEV_ORG_ID });
+  // Pass baseUrl explicitly so tests can override it via process.env before
+  // the first call (the parent's constants.js captures OBTOOL_API_URL at
+  // module-load time, which would bypass a beforeAll override otherwise).
+  backend ??= new CloudBackend({
+    orgId: process.env.DEV_ORG_ID,
+    baseUrl: process.env.OBTOOL_API_URL,
+  });
   return backend;
 }
 
@@ -120,17 +126,36 @@ export async function loadEvaluationsByTraceIds(
 
 function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return { start: toDateOnly(startDate ?? defStart), end: toDateOnly(endDate ?? defEnd) };
+  // queryTracesTool validates startDate/endDate as ISO 8601 datetime (not date-only).
+  // toIsoWindowBound expands 'YYYY-MM-DD' → 'YYYY-MM-DDT00:00:00.000Z'; ISO strings pass through.
+  return {
+    start: toIsoWindowBound(startDate ?? defStart, 'start'),
+    end: toIsoWindowBound(endDate ?? defEnd, 'end'),
+  };
 }
 
 export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
   const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
 }
 
 export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
   const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES })).traces;
+  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
+}
+
+/**
+ * Query traces by a free-form attributeFilter with explicit ISO datetime bounds.
+ * Routes should prefer this over calling queryTraces directly so the singleton
+ * backend (configured with the correct API URL at first-use time) is always used.
+ */
+export async function loadTracesByFilter(
+  attributeFilter: Record<string, string | boolean | number>,
+  startDate: string,
+  endDate: string,
+  limit: number,
+) {
+  return (await queryTracesTool({ attributeFilter, startDate, endDate, limit }, { backend: getBackend() })).traces;
 }
 
 async function queryLogsWithDefaultRange(
@@ -139,9 +164,11 @@ async function queryLogsWithDefaultRange(
   endDate?: string,
 ): Promise<Awaited<ReturnType<typeof queryLogs>>['logs']> {
   const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
-  const start = toDateOnly(startDate ?? defStart);
-  const end = toDateOnly(endDate ?? defEnd);
-  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS });
+  // queryLogs validates startDate/endDate as ISO 8601 datetime (not date-only).
+  // toIsoWindowBound expands 'YYYY-MM-DD' → 'YYYY-MM-DDT00:00:00.000Z'; ISO strings pass through.
+  const start = toIsoWindowBound(startDate ?? defStart, 'start');
+  const end = toIsoWindowBound(endDate ?? defEnd, 'end');
+  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS }, { backend: getBackend() });
   return result.logs;
 }
 

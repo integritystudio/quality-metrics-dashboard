@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
-import { loadTracesBySessionId, loadEvaluationsByTraceIds } from '../data-loader.js';
-import { queryTraces } from '../parent/query-traces.js';
+import { loadTracesBySessionId, loadEvaluationsByTraceIds, loadTracesByFilter } from '../data-loader.js';
 import type { StepScore } from '../../types.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs, jsonSafe } from '../api-constants.js';
@@ -68,13 +67,12 @@ agentRoutes.get('/agents', async (c) => {
     // string arm as a full ISO *datetime* — a date-only 'YYYY-MM-DD' type-checks
     // and then fails Zod at runtime, which made this route a guaranteed 500.
     // Pass the datetimes; the date-only values above stay for buckets/response.
-    const result = await queryTraces({
-      attributeFilter: { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },
-      startDate: windowStart.toISOString(),
-      endDate: now.toISOString(),
-      limit: LIMIT_AGENT_SPANS,
-    });
-    const agentSpans = result.traces;
+    const agentSpans = await loadTracesByFilter(
+      { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },
+      windowStart.toISOString(),
+      now.toISOString(),
+      LIMIT_AGENT_SPANS,
+    );
 
     const dateBuckets: string[] = [];
     const bucketIndex = new Map<string, number>();

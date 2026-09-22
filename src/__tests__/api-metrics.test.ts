@@ -1,9 +1,14 @@
 /**
  * API route tests: /api/metrics/:name and /api/metrics/:name/evaluations.
- * Approach A — Node routes with mocked data-loader and dist dependencies.
+ *
+ * Approach C — fixture HTTP server. The real data-loader and CloudBackend run;
+ * pure computation functions stay mocked because they receive EvaluationResult
+ * arrays, not HTTP payloads.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createFixtureServer, evalToWire } from './support/fixture-server.js';
+import type { FixtureServer } from './support/fixture-server.js';
 
 vi.mock('../api/parent/quality-metrics.js', () => ({
   getQualityMetric: vi.fn(),
@@ -18,29 +23,10 @@ vi.mock('../api/parent/qfe-dynamics.js', () => ({
   computeMetricDynamics: vi.fn(),
 }));
 
-vi.mock('../api/parent/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: (err: unknown) => String(err),
-}));
-
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsByMetric: vi.fn(),
-  loadEvaluationsForMetric: vi.fn(),
-  loadEvaluationsByTraceId: vi.fn(),
-  loadEvaluationsByTraceIds: vi.fn(),
-  loadTracesByTraceId: vi.fn(),
-  loadTracesBySessionId: vi.fn(),
-  loadLogsByTraceId: vi.fn(),
-  loadLogsBySessionId: vi.fn(),
-  loadVerifications: vi.fn(),
-  loadEvaluationsBySessionId: vi.fn(),
-  checkHealth: vi.fn(),
-}));
-
 import { metricsRoutes } from '../api/routes/metrics.js';
 import { getQualityMetric, computeAggregations } from '../api/parent/quality-metrics.js';
 import { computeMetricDetail } from '../api/parent/quality-views.js';
 import { computeMetricDynamics } from '../api/parent/qfe-dynamics.js';
-import { loadEvaluationsForMetric } from '../api/data-loader.js';
 import type { ErrorResponse, MetricDetailResponse, MetricEvaluationsResponse } from './support/api-responses.js';
 import type {
   EvaluationResult,
@@ -50,20 +36,23 @@ import type {
   QualityMetricConfig,
 } from '../types.js';
 
+let fixture: FixtureServer;
+
+beforeAll(async () => {
+  fixture = await createFixtureServer();
+  process.env.OBTOOL_API_URL = fixture.url;
+});
+
+afterAll(async () => {
+  delete process.env.OBTOOL_API_URL;
+  await fixture.close();
+});
 
 /**
- * Fixtures are typed against the real parent types (via `../types.js`, which is
- * type-only and therefore safe under `parentDistStub` in standalone CI). That
- * makes them drift-detecting: a parent shape change fails `npm run typecheck`
- * here instead of silently producing a fixture that models nothing.
- *
- * These previously carried `as any` and had drifted badly — `makeMockConfig`
- * declared `direction`/`threshold` (not fields on `QualityMetricConfig`) and a
- * `p10` aggregation (not in the enum), and `makeMockDetail` returned
- * `config`/`evaluations`/`aggregations`/`distribution`, none of which exist on
- * `MetricDetailResult`.
+ * Fixtures typed off real parent types — drift-detecting.
  */
 const EVAL_NANOS = 1737000000000000000n;
+const ONE_HOUR_NANOS = 3_600_000_000_000n;
 
 function makeMockConfig(): QualityMetricConfig {
   return {
@@ -139,8 +128,9 @@ const MOCK_DYNAMICS: MetricDynamics = {
 describe('GET /metrics/:name', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    fixture.reset();
+    fixture.setEvals([evalToWire(makeMockEval())]);
     vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([makeMockEval()]);
     vi.mocked(computeAggregations).mockReturnValue(makeMockDetail().values);
     vi.mocked(computeMetricDetail).mockReturnValue(makeMockDetail());
     vi.mocked(computeMetricDynamics).mockReturnValue(MOCK_DYNAMICS);
@@ -175,19 +165,11 @@ describe('GET /metrics/:name', () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
     const body = await res.json() as MetricDetailResponse;
-    // `MetricDetailResult` fields — the route spreads `...detail`. This used to
-    // assert `config`/`aggregations`, which the type has never had; the test
-    // passed only because the fixture invented them.
     expect(body).toHaveProperty('name', 'relevance');
     expect(body).toHaveProperty('values');
     expect(body).toHaveProperty('sampleCount');
     expect(body).toHaveProperty('scoreDistribution');
     expect(body).toHaveProperty('trend');
-  });
-
-  it('calls loadEvaluationsForMetric twice (current + previous period)', async () => {
-    await metricsRoutes.request('/metrics/relevance?period=7d');
-    expect(vi.mocked(loadEvaluationsForMetric)).toHaveBeenCalledTimes(2);
   });
 
   it('includes dynamics when trend is present', async () => {
@@ -217,8 +199,8 @@ describe('GET /metrics/:name', () => {
     expect(body.dynamics).toBeUndefined();
   });
 
-  it('returns 500 when data-loader throws', async () => {
-    vi.mocked(loadEvaluationsForMetric).mockRejectedValue(new Error('disk error'));
+  it('returns 500 when backend throws', async () => {
+    fixture.failPath('/v1/evaluations');
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(500);
   });
@@ -227,9 +209,7 @@ describe('GET /metrics/:name', () => {
 // /metrics/:name/evaluations route
 
 describe('GET /metrics/:name/evaluations', () => {
-  // Descending timestamps, one hour apart. Epoch nanos, not ISO strings —
-  // `EvaluationResult.timestamp` is a bigint (`isoDatetimeToEpochNanos` codec).
-  const ONE_HOUR_NANOS = 3_600_000_000_000n;
+  // Descending timestamps, one hour apart.
   const evals = [
     makeMockEval({ scoreValue: 0.9, timestamp: EVAL_NANOS + ONE_HOUR_NANOS * 2n, scoreLabel: 'relevant' }),
     makeMockEval({ scoreValue: 0.6, timestamp: EVAL_NANOS + ONE_HOUR_NANOS, scoreLabel: 'partial' }),
@@ -237,9 +217,10 @@ describe('GET /metrics/:name/evaluations', () => {
   ];
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    fixture.reset();
     vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
-    // Spread to prevent route's in-place sort from mutating the shared array
-    vi.mocked(loadEvaluationsForMetric).mockResolvedValue([...evals]);
+    fixture.setEvals(evals.map((e, i) => evalToWire(e, i + 1)));
   });
 
   it('returns 404 for unknown metric', async () => {

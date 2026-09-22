@@ -26,8 +26,8 @@ import {
 import {
   loadEvaluationsBySessionId,
   loadLogsBySessionId,
+  loadTracesByFilter,
 } from '../data-loader.js';
-import { queryTraces } from '../parent/query-traces.js';
 import type { StepScore } from '../../types.js';
 
 export const sessionRoutes = new Hono();
@@ -78,13 +78,12 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
   const now = new Date();
   const end = endDate ?? formatISO(now, { representation: 'date' });
   const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']!), { representation: 'date' });
-  const result = await queryTraces({
-    attributeFilter: { 'session.id': sessionId },
-    startDate: toIsoWindowBound(start, 'start'),
-    endDate: toIsoWindowBound(end, 'end'),
-    limit: LIMIT_SESSION_SPANS,
-  });
-  return result.traces;
+  return loadTracesByFilter(
+    { 'session.id': sessionId },
+    toIsoWindowBound(start, 'start'),
+    toIsoWindowBound(end, 'end'),
+    LIMIT_SESSION_SPANS,
+  );
 }
 
 sessionRoutes.get('/sessions/:sessionId', async (c) => {
