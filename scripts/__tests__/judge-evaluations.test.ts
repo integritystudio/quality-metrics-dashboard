@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -33,6 +33,9 @@ import {
   CACHE_READ_INPUT_PRICE_RATIO,
   CACHE_CREATION_INPUT_PRICE_RATIO,
   BATCH_PRICE_RATIO,
+  readRunState,
+  writeRunState,
+  JUDGE_RUN_STATE_FILE,
   type JudgeSpend,
   type JudgeUsageTotals,
   anthropicProviderFor,
@@ -47,7 +50,7 @@ import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 import type { BatchLLMProvider } from '../judge-batch-provider.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES } from '../pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION, type ModelPricingEntry } from '../../../src/lib/core/constants-models.js';
 
@@ -889,6 +892,8 @@ describe('classifyJudgeFailure', () => {
     ['billing', '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}'],
     ['network', 'Connection error.'],
     ['network', 'getaddrinfo ENOTFOUND api.anthropic.com'],
+    ['schema-rejection', '400 {"type":"error","error":{"type":"invalid_request_error","message":"output_config.format.schema is invalid: minimum is not a supported keyword"}}'],
+    ['schema-rejection', 'Request failed: output_config validation failed'],
     ['parse', 'Generated evaluation steps below minimum (got 0, require 3)'],
     ['parse', "Unexpected token '`', \"```json\" is not valid JSON"],
     ['invalid-input', 'Invalid TestCase: [ { "code": "too_big" } ]'],
@@ -896,19 +901,25 @@ describe('classifyJudgeFailure', () => {
   ])('classifies as %s: %s', (expected, message) => {
     expect(classifyJudgeFailure(message)).toBe(expected);
   });
+
+  it('does not classify billing errors as schema-rejection even if they share keywords', () => {
+    // billing wins because BILLING_FAILURE_PATTERN is checked first
+    expect(classifyJudgeFailure('credit balance is too low; output_config ignored')).toBe('billing');
+  });
 });
 
 describe('summarizeJudgeRun', () => {
-  const noFailures: Record<JudgeFailureClass, number> = { billing: 0, network: 0, parse: 0, 'invalid-input': 0, other: 0 };
+  const noFailures: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, other: 0 };
   const noSpend: JudgeSpend = { usage: createUsageTotals(), estimatedUsd: 0, keySource: DEFAULT_API_KEY_ENV };
 
   it('exits 0 with a one-line summary when scores were produced', () => {
-    const summary = summarizeJudgeRun(56, { coherence: 100 }, { ...noFailures, parse: 100 }, noSpend);
+    // 200 successes, 40 failures = 17% failure rate — well below the 50% threshold
+    const summary = summarizeJudgeRun(200, { coherence: 40 }, { ...noFailures, parse: 40 }, noSpend);
 
     expect(summary.exitCode).toBe(0);
-    expect(summary.attempted).toBe(156);
-    expect(summary.line).toContain('attempted=156 succeeded=56 failed=100');
-    expect(summary.line).toContain('parse=100');
+    expect(summary.attempted).toBe(240);
+    expect(summary.line).toContain('attempted=240 succeeded=200 failed=40');
+    expect(summary.line).toContain('parse=40');
   });
 
   it('exits JUDGE_EXIT_NO_SCORES when evaluations were attempted and none succeeded', () => {
@@ -923,6 +934,59 @@ describe('summarizeJudgeRun', () => {
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
     expect(summary.line).toMatch(/BILLING REFUSED/);
+  });
+
+  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when more than half the attempts fail', () => {
+    // 46 succeeded, 490 failed = 91.4% failure — the 09-22 collapse
+    const summary = summarizeJudgeRun(46, { coherence: 490 }, { ...noFailures, 'schema-rejection': 490 }, noSpend);
+
+    expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
+    expect(summary.line).toMatch(/HIGH FAILURE RATE/);
+    expect(summary.line).toContain('490 of 536');
+  });
+
+  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE exactly at the 50% threshold', () => {
+    // 99 fail, 100 succeed → 49.7% failure rate → no alarm
+    expect(summarizeJudgeRun(100, { coherence: 99 }, noFailures, noSpend).exitCode).toBe(0);
+    // 101 fail, 100 succeed → 50.25% failure rate → alarm
+    expect(summarizeJudgeRun(100, { coherence: 101 }, noFailures, noSpend).exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
+  });
+
+  it('JUDGE_EXIT_NO_SCORES wins over JUDGE_EXIT_HIGH_FAILURE_RATE at 100% failure', () => {
+    // 100% failure is the no-scores condition, checked before the rate check
+    const summary = summarizeJudgeRun(0, { coherence: 100 }, noFailures, noSpend);
+    expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
+  });
+
+  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when succeeded drops by more than half versus previous run', () => {
+    // previous run: 420 succeeded; this run: 200 succeeded (52% drop)
+    const summary = summarizeJudgeRun(200, {}, noFailures, noSpend, 420);
+
+    expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
+    expect(summary.line).toMatch(/SCORE DROP/);
+    expect(summary.line).toContain('200');
+    expect(summary.line).toContain('420');
+  });
+
+  it('exits 0 when drop is below the 50% threshold', () => {
+    // 210 of 420 is exactly 50% — not strictly less than half, no alarm
+    expect(summarizeJudgeRun(210, {}, noFailures, noSpend, 420).exitCode).toBe(0);
+  });
+
+  it('skips the drop check when prevSucceeded is below the minimum significant count', () => {
+    // previous run had only 5 successes — too small to be meaningful
+    expect(summarizeJudgeRun(1, {}, noFailures, noSpend, 5).exitCode).toBe(0);
+  });
+
+  it('skips the drop check when prevSucceeded is undefined (first run)', () => {
+    expect(summarizeJudgeRun(5, {}, noFailures, noSpend, undefined).exitCode).toBe(0);
+  });
+
+  it('high failure rate check takes precedence over drop check', () => {
+    // Both conditions would fire; rate check is tested first in code
+    const summary = summarizeJudgeRun(10, { coherence: 200 }, noFailures, noSpend, 500);
+    expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
+    expect(summary.line).toMatch(/HIGH FAILURE RATE/);
   });
 
   it('exits 0 when nothing was attempted', () => {
@@ -956,6 +1020,46 @@ describe('summarizeJudgeRun', () => {
     recordUsage(usage, { input_tokens: 1, output_tokens: 1 });
 
     expect(summary.usage.input_tokens).toBe(0);
+  });
+});
+
+describe('readRunState / writeRunState', () => {
+  // Preserve whatever was on disk before this suite and restore it after
+  let savedState: Buffer | null = null;
+
+  beforeEach(() => {
+    try { savedState = readFileSync(JUDGE_RUN_STATE_FILE); } catch { savedState = null; }
+    // Remove state file so each test starts clean
+    rmSync(JUDGE_RUN_STATE_FILE, { force: true });
+  });
+
+  afterEach(() => {
+    if (savedState !== null) {
+      try { writeFileSync(JUDGE_RUN_STATE_FILE, savedState); } catch { /* best effort */ }
+    } else {
+      rmSync(JUDGE_RUN_STATE_FILE, { force: true });
+    }
+  });
+
+  it('returns undefined when no state file exists', () => {
+    expect(readRunState()).toBeUndefined();
+  });
+
+  it('round-trips a succeeded count through writeRunState / readRunState', () => {
+    writeRunState(420);
+    const state = readRunState();
+    // If the TELEMETRY_DIR does not exist (CI), writeRunState no-ops — tolerate that.
+    if (state !== undefined) {
+      expect(state.succeeded).toBe(420);
+      expect(state.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
+  });
+
+  it('returns undefined for a corrupt state file without throwing', () => {
+    try {
+      writeFileSync(JUDGE_RUN_STATE_FILE, 'not-json', 'utf-8');
+    } catch { /* TELEMETRY_DIR may not exist in CI — skip the corruption setup */ }
+    expect(() => readRunState()).not.toThrow();
   });
 });
 

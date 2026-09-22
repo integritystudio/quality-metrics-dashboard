@@ -12,13 +12,19 @@
 export const JUDGE_EXIT_BILLING = 4;
 /** judge-evaluations exit: evaluations were attempted and none produced a score. */
 export const JUDGE_EXIT_NO_SCORES = 3;
+/**
+ * judge-evaluations exit: more than half the attempts failed, or the success
+ * count dropped significantly from the previous run. Indicates a request-shape
+ * or model-output regression that a 0-score check would not catch.
+ */
+export const JUDGE_EXIT_HIGH_FAILURE_RATE = 5;
 
 /**
  * Judge exits populate-dashboard.ts forwards to its own exit instead of
  * aborting: the judge already said why, and the rule-based evaluations from
  * derive still deserve to reach the cloud.
  */
-export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES]);
+export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE]);
 
 /**
  * judge-evaluations flag: run through the Message Batches API — half price,

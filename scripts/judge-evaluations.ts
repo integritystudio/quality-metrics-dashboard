@@ -47,7 +47,7 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_BATCH_FLAG } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_BATCH_FLAG } from './pipeline-stages.js';
 import {
   createBatchProvider,
   BATCH_POLL_INTERVAL_MS,
@@ -755,21 +755,29 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
 /** Track evaluation failures for summary reporting */
 export const evalFailures: Record<string, number> = {};
 
-export type JudgeFailureClass = 'billing' | 'network' | 'parse' | 'invalid-input' | 'other';
-export const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'parse', 'invalid-input', 'other'];
+export type JudgeFailureClass = 'billing' | 'network' | 'schema-rejection' | 'parse' | 'invalid-input' | 'other';
+export const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'other'];
 
 /** Failures by cause across all metrics — what decides the exit code. */
-export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, parse: 0, 'invalid-input': 0, other: 0 };
+export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, other: 0 };
 
 const BILLING_FAILURE_PATTERN = /credit balance|billing|payment required|insufficient (?:funds|credit)/i;
 const NETWORK_FAILURE_PATTERN = /Connection error|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|timed out/i;
+/**
+ * Matches API 400s that rejected the request because of the output_config JSON
+ * schema — e.g. unsupported keywords like minimum/maximum on an integer field.
+ * Distinct from `parse` failures, which are about decoding the model's output;
+ * this class means the request shape was wrong.
+ */
+const SCHEMA_REJECTION_PATTERN = /output_config|json_schema.*format|schema.*keyword|unsupported.*schema/i;
 const INVALID_INPUT_FAILURE_PATTERN = /Invalid TestCase|Invalid GEvalConfig/;
 const PARSE_FAILURE_PATTERN = /below minimum|not valid JSON|Unexpected token|Invalid normalized score|Could not (?:extract|parse)/i;
 
-/** Bucket a judge error by what would fix it: money, the network, the parser, or the input this script built. */
+/** Bucket a judge error by what would fix it: money, the network, the request schema, the parser, or the input this script built. */
 export function classifyJudgeFailure(message: string): JudgeFailureClass {
   if (BILLING_FAILURE_PATTERN.test(message)) return 'billing';
   if (NETWORK_FAILURE_PATTERN.test(message)) return 'network';
+  if (SCHEMA_REJECTION_PATTERN.test(message)) return 'schema-rejection';
   if (INVALID_INPUT_FAILURE_PATTERN.test(message)) return 'invalid-input';
   if (PARSE_FAILURE_PATTERN.test(message)) return 'parse';
   return 'other';
@@ -881,6 +889,7 @@ export function summarizeJudgeRun(
   byMetric: Record<string, number>,
   byClass: Record<JudgeFailureClass, number>,
   spend: JudgeSpend,
+  prevSucceeded?: number,
 ): JudgeRunSummary {
   const failed = Object.values(byMetric).reduce((sum, n) => sum + n, 0);
   const attempted = succeeded + failed;
@@ -893,6 +902,16 @@ export function summarizeJudgeRun(
   } else if (attempted > 0 && succeeded === 0) {
     exitCode = JUDGE_EXIT_NO_SCORES;
     verdict = 'NO SCORES PRODUCED — every evaluation failed';
+  } else if (attempted > 0 && failed / attempted > HIGH_FAILURE_RATE_THRESHOLD) {
+    exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
+    verdict = `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * 100).toFixed(1)}%); check failure classes above`;
+  } else if (
+    prevSucceeded !== undefined &&
+    prevSucceeded >= PREV_RUN_MIN_SUCCEEDED &&
+    succeeded < prevSucceeded * (1 - SIGNIFICANT_DROP_THRESHOLD)
+  ) {
+    exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
+    verdict = `SCORE DROP — ${succeeded} succeeded vs ${prevSucceeded} on the previous run; check for a new failure class`;
   }
   const { usage, estimatedUsd, keySource } = spend;
   const actualUsd = usageCostUsd(usage, judgePricing());
@@ -1198,6 +1217,14 @@ function _loadExistingKeys(): Set<string> {
 }
 
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
+/** Path to the sidecar that records each run's succeeded count for the drop check. */
+export const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json');
+/** Failure rate above which a run is flagged as JUDGE_EXIT_HIGH_FAILURE_RATE. */
+const HIGH_FAILURE_RATE_THRESHOLD = 0.5;
+/** Drop factor: flag when succeeded falls below this fraction of the previous run. */
+const SIGNIFICANT_DROP_THRESHOLD = 0.5;
+/** Minimum previous-run success count before the drop check is meaningful. */
+const PREV_RUN_MIN_SUCCEEDED = 10;
 
 function acquireLock(): boolean {
   // Atomic create via O_CREAT | O_EXCL eliminates TOCTOU race
@@ -1263,6 +1290,41 @@ function releaseLock(): void {
 function safeExit(code: number): never {
   releaseLock();
   process.exit(code);
+}
+
+interface JudgeRunState {
+  succeeded: number;
+  timestamp: string;
+}
+
+/**
+ * Read the previous run's state from the sidecar file. Returns undefined when
+ * the file is absent (first run) or unreadable — never throws.
+ */
+export function readRunState(): JudgeRunState | undefined {
+  try {
+    const raw = readFileSync(JUDGE_RUN_STATE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'succeeded' in parsed &&
+      typeof (parsed as JudgeRunState).succeeded === 'number'
+    ) {
+      return parsed as JudgeRunState;
+    }
+  } catch { /* file missing, unreadable, or corrupt — first run or interrupted */ }
+  return undefined;
+}
+
+/**
+ * Persist succeeded count for the drop check on the next run. Best-effort —
+ * a write failure must not fail the pipeline.
+ */
+export function writeRunState(succeeded: number): void {
+  try {
+    writeFileSync(JUDGE_RUN_STATE_FILE, JSON.stringify({ succeeded, timestamp: new Date().toISOString() }), 'utf-8');
+  } catch { /* best effort; drop check will be skipped next run */ }
 }
 
 function writeEvaluations(evals: EvalRecord[]): void {
@@ -1453,9 +1515,12 @@ async function main() {
 
       flatEvals = allEvals.flat();
 
-      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source });
+      const prevState = readRunState();
+      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source }, prevState?.succeeded);
       (summary.exitCode === 0 ? console.log : console.error)(summary.line);
-      if (summary.exitCode !== 0) {
+      if (summary.exitCode === 0) {
+        writeRunState(summary.succeeded);
+      } else {
         // Set rather than exit: the finally below must still release the lock,
         // and populate-dashboard.ts reads this code to keep upload + sync running.
         process.exitCode = summary.exitCode;
