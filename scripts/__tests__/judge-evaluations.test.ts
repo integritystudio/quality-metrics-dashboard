@@ -33,6 +33,9 @@ import {
   CACHE_CREATION_INPUT_PRICE_RATIO,
   type JudgeSpend,
   type JudgeUsageTotals,
+  anthropicProviderFor,
+  JUDGE_MAX_TOKENS,
+  type JudgeMessagesClient,
   type JudgeFailureClass,
   type TranscriptInfo,
   type Turn,
@@ -1008,5 +1011,61 @@ describe('estimateJudgeRun', () => {
 
   it('is free for no turns', () => {
     expect(estimateJudgeRun([])).toEqual({ evals: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// anthropicProviderFor (structured score output)
+// ---------------------------------------------------------------------------
+
+/** Room for two to three sentences of reasoning plus the score object. */
+const STRUCTURED_OUTPUT_MAX_TOKENS_FLOOR = 512;
+const SCORE_SCHEMA = {
+  type: 'object',
+  properties: { reasoning: { type: 'string' }, score: { type: 'integer', minimum: 1, maximum: 5 } },
+  required: ['reasoning', 'score'],
+  additionalProperties: false,
+};
+
+type JudgeCreateParams = Parameters<JudgeMessagesClient['messages']['create']>[0];
+type JudgeCreateResponse = Awaited<ReturnType<JudgeMessagesClient['messages']['create']>>;
+
+function makeFakeAnthropicClient(text: string): { client: JudgeMessagesClient; calls: JudgeCreateParams[] } {
+  const calls: JudgeCreateParams[] = [];
+  const client: JudgeMessagesClient = {
+    messages: {
+      create(params) {
+        calls.push(params);
+        const response: JudgeCreateResponse = { content: [{ type: 'text', text, citations: null }] };
+        return Promise.resolve(response);
+      },
+    },
+  };
+  return { client, calls };
+}
+
+describe('anthropicProviderFor', () => {
+  it('sends output_config with the json_schema format when a schema is given', async () => {
+    const { client, calls } = makeFakeAnthropicClient('{"reasoning": "Clear.", "score": 4}');
+
+    const result = await anthropicProviderFor(client).generate('rate it', { jsonSchema: SCORE_SCHEMA });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.output_config).toEqual({ format: { type: 'json_schema', schema: SCORE_SCHEMA } });
+    expect(calls[0]?.max_tokens).toBe(JUDGE_MAX_TOKENS);
+    expect(result).toEqual({ text: '{"reasoning": "Clear.", "score": 4}' });
+  });
+
+  it('omits output_config when no schema is given', async () => {
+    const { client, calls } = makeFakeAnthropicClient('Score: 4');
+
+    await anthropicProviderFor(client).generate('rate it');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toHaveProperty('output_config');
+  });
+
+  it('keeps max_tokens high enough for the reasoning and the score', () => {
+    expect(JUDGE_MAX_TOKENS).toBeGreaterThanOrEqual(STRUCTURED_OUTPUT_MAX_TOKENS_FLOOR);
   });
 });

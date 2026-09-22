@@ -21,7 +21,8 @@
 import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
-import type { LLMProvider, GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
+import type AnthropicSdk from '@anthropic-ai/sdk';
+import type { LLMProvider, GEvalConfig, ResponseJsonSchema } from '../../src/lib/judge/llm-as-judge.js';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
 import {
   LLMJudge,
@@ -552,23 +553,48 @@ export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntr
   return inputUsd + outputUsd + cacheReadUsd + cacheCreationUsd;
 }
 
+/** `output_config.format.type` for a response constrained by a JSON Schema (structured outputs). */
+const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
+
+/** The slice of the SDK client the judge provider calls; a test passes a fake. */
+export type JudgeMessagesClient = {
+  messages: {
+    create(params: AnthropicSdk.MessageCreateParamsNonStreaming): Promise<Pick<AnthropicSdk.Message, 'content'> & { usage?: ProviderUsage }>;
+  };
+};
+
+/**
+ * `output_config` constraining the response to `jsonSchema`, or nothing when
+ * the caller gave no schema so the request is unchanged from before.
+ */
+export function judgeOutputConfig(
+  jsonSchema: ResponseJsonSchema | undefined
+): Pick<AnthropicSdk.MessageCreateParamsNonStreaming, 'output_config'> {
+  return jsonSchema ? { output_config: { format: { type: JSON_SCHEMA_OUTPUT_FORMAT, schema: jsonSchema } } } : {};
+}
+
 async function createAnthropicProvider(apiKey: string, usage: JudgeUsageTotals): Promise<LLMProvider> {
   // Dynamic import to avoid requiring @anthropic-ai/sdk when using --seed
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
+  return anthropicProviderFor(new Anthropic({ apiKey }), usage);
+}
 
+/** The judge's provider over an SDK client, or a fake one in tests. */
+export function anthropicProviderFor(client: JudgeMessagesClient, usage: JudgeUsageTotals = createUsageTotals()): LLMProvider {
   return {
     async generate(
       prompt: string,
-      options?: { temperature?: number; logprobs?: boolean }
+      options?: { temperature?: number; logprobs?: boolean; jsonSchema?: ResponseJsonSchema }
     ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
       const response = await client.messages.create({
         model: HAIKU_MODEL,
+        // The backstop for a schema-constrained reply (reasoning plus score); never below 512.
         max_tokens: JUDGE_MAX_TOKENS,
         temperature: options?.temperature ?? JUDGE_DEFAULT_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
+        ...judgeOutputConfig(options?.jsonSchema),
       });
-      recordUsage(usage, response.usage);
+      if (response.usage) recordUsage(usage, response.usage);
 
       const text = response.content
         .filter((b: { type: string; text?: string }) => b.type === 'text')
