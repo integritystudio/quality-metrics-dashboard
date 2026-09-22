@@ -8,7 +8,7 @@ Open items from code reviews and deferred work.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| ROUTE-TESTS-MOCK-FREE | Exercise API routes against a local HTTP fixture instead of `vi.mock` | P3 | 13 files under `src/__tests__/api-*.test.ts`, 41 `vi.mock` calls. 22 of them are two modules: `../api/data-loader.js` (11) and `../api/parent/error-sanitizer.js` (11). |
+| ~~ROUTE-TESTS-MOCK-FREE~~ | ~~Exercise API routes against a local HTTP fixture instead of `vi.mock`~~ | ~~P3~~ | Done 2026-09-22 — commit 25512fd |
 
 **What the mocks cost, measured rather than asserted.** `/api/agents` returned **500 on every
 request** from whenever the route was written until 2026-09-14 (PR #6). Thirteen route test files
