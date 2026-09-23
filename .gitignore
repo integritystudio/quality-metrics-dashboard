@@ -32,3 +32,6 @@ coverage/
 
 # Run lock for scripts/judge-agreement.ts; the script refuses to run while it exists.
 docs/.judge-agreement.started
+
+# Run lock for scripts/judge-quality-eval.ts; same refusal as the agreement lock above.
+docs/.judge-quality.started
