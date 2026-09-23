@@ -308,7 +308,10 @@ export function estimateReferenceSpend(
  * computeAgreement (configuration in the first slot, reference in the second);
  * the signed mean is added here because agreement has no direction.
  */
-export function compareToReference(turns: readonly QualityTurn[], side: Side): ReferenceSummary {
+export function compareToReference<K extends string>(
+  turns: readonly (Record<K, Record<string, number>> & { reference: Record<string, number> })[],
+  side: K,
+): ReferenceSummary {
   const agreement = computeAgreement(turns.map(t => ({ perCriterion: t[side], consolidated: t.reference })));
 
   const signedSums = new Map<string, number>();
@@ -365,7 +368,7 @@ export function closerConfiguration(
  * thinking is adaptive and effort is pinned so the reference is reproducible
  * in configuration, if not in output.
  */
-async function createReferenceProvider(
+export async function createReferenceProvider(
   apiKey: string,
   onUsage: (usage: JudgeTokenUsage) => void,
 ): Promise<ConsolidatedProvider> {

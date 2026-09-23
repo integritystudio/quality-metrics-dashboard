@@ -82,7 +82,7 @@ const ISO_DATE_LEN = 10;
 const JSON_INDENT = 2;
 const EXIT_REFUSED = 1;
 /** Mirrors the pipeline's LLMJudge config. */
-const JUDGE_MAX_RETRIES = 2;
+export const JUDGE_MAX_RETRIES = 2;
 const NO_BATCH_DELAY_MS = 0;
 /** Estimate only: QAG answers one question per statement, each carrying the context. */
 const QAG_STATEMENTS_ESTIMATE = MAX_STATEMENTS / 2;
@@ -426,7 +426,7 @@ export function countMissing(outcomes: readonly TurnOutcome[], side: keyof TurnS
 // ---------------------------------------------------------------------------
 
 /** Mirrors createAnthropicProvider in judge-evaluations.ts, adding the usage hook. */
-async function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
+export async function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
   return {
@@ -443,7 +443,7 @@ async function createPerCriterionProvider(apiKey: string, onUsage: (usage: Judge
   };
 }
 
-function scoresByName(records: readonly EvalRecord[]): Record<string, number> {
+export function scoresByName(records: readonly EvalRecord[]): Record<string, number> {
   return Object.fromEntries(records.map(r => [r.evaluationName, r.scoreValue]));
 }
 

@@ -17,7 +17,9 @@
  *   per-criterion path no longer does either: it runs one QAG sweep and scores
  *   `faithfulness` and `hallucination` as separate tallies over it, so its two
  *   series do not sum to 1 and this one's do. That is a second source of the
- *   disagreement between the two modes.
+ *   disagreement between the two modes. `directHallucination`
+ *   (ConsolidatedCriteriaOptions) judges it on its own criterion instead; it is
+ *   opt-in and nothing in production sets it.
  * - Evaluation steps depend only on the criteria text, so they are generated
  *   once per criterion per run (`EvaluationStepsCache`) rather than per call.
  * - No `judge.method` attribute is written: `EvalRecord` has no slot for extra
@@ -41,6 +43,7 @@ import { normalizeEvaluationSteps } from '../../src/lib/judge/llm-judge-geval.js
 import {
   RELEVANCE_CRITERIA,
   FAITHFULNESS_CRITERIA,
+  HALLUCINATION_CRITERIA,
   COHERENCE_CRITERIA,
 } from '../../src/lib/judge/llm-judge-config.js';
 import {
@@ -180,6 +183,19 @@ export interface ConsolidatedSelection {
   recordNames: string[];
 }
 
+/**
+ * Opt-in variants of the consolidated call. Production passes none, so its
+ * records are unchanged; judge-hallucination-eval.ts scores the variant.
+ */
+export interface ConsolidatedCriteriaOptions {
+  /**
+   * Judge `hallucination` with HALLUCINATION_CRITERIA as a criterion of its own
+   * in the same call, instead of inverting the faithfulness verdict. Off until
+   * the eval JUDGE-HALLUCINATION-INVERTED-ON-DEFAULT gates on has run.
+   */
+  directHallucination?: boolean;
+}
+
 export interface ParsedConsolidatedResponse {
   verdicts: Map<string, CriterionVerdict>;
   failures: Map<string, Error>;
@@ -189,12 +205,20 @@ export interface ParsedConsolidatedResponse {
 // Selection — mirrors evaluateTurn's dedup keys and gating exactly
 // ---------------------------------------------------------------------------
 
-/** The criterion a record's score comes from: hallucination is derived from faithfulness. */
-export function sourceCriterionName(recordName: string): string {
+/**
+ * The criterion a record's score comes from: hallucination is derived from
+ * faithfulness unless it is judged directly.
+ */
+export function sourceCriterionName(recordName: string, options: ConsolidatedCriteriaOptions = {}): string {
+  if (options.directHallucination) return recordName;
   return recordName === HALLUCINATION_EVAL_NAME ? FAITHFULNESS_EVAL_NAME : recordName;
 }
 
-export function selectCriteria(turn: Turn, existingKeys: Set<string>): ConsolidatedSelection {
+export function selectCriteria(
+  turn: Turn,
+  existingKeys: Set<string>,
+  options: ConsolidatedCriteriaOptions = {},
+): ConsolidatedSelection {
   const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
   const missing = (name: string): boolean => !existingKeys.has(`${turn.sessionId}:${name}:${turnKey}`);
   const criteria: GEvalConfig[] = [];
@@ -212,7 +236,12 @@ export function selectCriteria(turn: Turn, existingKeys: Set<string>): Consolida
   if (turn.toolResults.length > 0) {
     const needsFaith = missing(FAITHFULNESS_EVAL_NAME);
     const needsHal = missing(HALLUCINATION_EVAL_NAME);
-    if (needsFaith || needsHal) criteria.push(FAITHFULNESS_CRITERIA);
+    if (options.directHallucination) {
+      if (needsFaith) criteria.push(FAITHFULNESS_CRITERIA);
+      if (needsHal) criteria.push(HALLUCINATION_CRITERIA);
+    } else if (needsFaith || needsHal) {
+      criteria.push(FAITHFULNESS_CRITERIA);
+    }
     if (needsFaith) recordNames.push(FAITHFULNESS_EVAL_NAME);
     if (needsHal) recordNames.push(HALLUCINATION_EVAL_NAME);
 
@@ -419,14 +448,15 @@ export async function evaluateTurnConsolidated(
   turn: Turn,
   existingKeys: Set<string>,
   stepsCache: EvaluationStepsCache = new Map(),
+  options: ConsolidatedCriteriaOptions = {},
 ): Promise<EvalRecord[]> {
-  const selection = selectCriteria(turn, existingKeys);
+  const selection = selectCriteria(turn, existingKeys, options);
   if (selection.criteria.length === 0) return [];
 
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = fitContextForJudge(turn.toolResults);
   const recordNamesFor = (criterionName: string): string[] =>
-    selection.recordNames.filter(name => sourceCriterionName(name) === criterionName);
+    selection.recordNames.filter(name => sourceCriterionName(name, options) === criterionName);
 
   // Steps are per criterion; a criterion whose steps fail drops out of this
   // turn alone, as it would on the per-criterion path.
@@ -445,7 +475,7 @@ export async function evaluateTurnConsolidated(
   if (prepared.length === 0) return [];
 
   const names = prepared.map(p => p.config.name);
-  const wanted = selection.recordNames.filter(name => names.includes(sourceCriterionName(name)));
+  const wanted = selection.recordNames.filter(name => names.includes(sourceCriterionName(name, options)));
 
   let parsed: ParsedConsolidatedResponse;
   try {
@@ -462,15 +492,16 @@ export async function evaluateTurnConsolidated(
 
   const records: EvalRecord[] = [];
   for (const name of wanted) {
-    const source = sourceCriterionName(name);
+    const source = sourceCriterionName(name, options);
     const verdict = parsed.verdicts.get(source);
     if (!verdict) {
       trackFailure(name, sessionPreview, parsed.failures.get(source) ?? new Error(`Could not parse verdict for ${source}`));
       continue;
     }
     const normalized = toNormalizedScore(verdict.score);
-    // Hallucination is the complement of faithfulness — this path's own convention;
-    // the per-criterion path measures fabrication directly (see the header).
+    // Hallucination is stored higher-is-worse and both of its sources grade 5 = best:
+    // by default the faithfulness verdict (this path's own convention, see the
+    // header), under directHallucination HALLUCINATION_CRITERIA's 5 = no fabrication.
     const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
     const explanation = verdict.reasoning.trim()
       || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`;

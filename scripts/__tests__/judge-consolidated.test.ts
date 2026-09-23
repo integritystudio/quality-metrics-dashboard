@@ -58,6 +58,7 @@ const ALL_TOOL_NAMES = [
   TOOL_INTEGRATION_CRITERIA.name,
 ];
 const ALL_TOOL_CRITERIA = ALL_TOOL_NAMES.filter(n => n !== 'hallucination');
+const DIRECT = { directHallucination: true } as const;
 
 function makeTurn(overrides: Partial<Turn> = {}): Turn {
   return {
@@ -155,6 +156,21 @@ describe('selectCriteria', () => {
   it('derives hallucination from faithfulness and every other record from itself', () => {
     expect(sourceCriterionName('hallucination')).toBe(FAITHFULNESS_EVAL_NAME);
     expect(sourceCriterionName(RELEVANCE_EVAL_NAME)).toBe(RELEVANCE_EVAL_NAME);
+  });
+
+  it('under directHallucination, puts hallucination in the schema as its own criterion', () => {
+    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
+    const selection = selectCriteria(turn, new Set(), DIRECT);
+    expect(names(selection)).toEqual(ALL_TOOL_NAMES);
+    expect(selection.recordNames).toEqual(ALL_TOOL_NAMES);
+    expect(sourceCriterionName('hallucination', DIRECT)).toBe('hallucination');
+  });
+
+  it('under directHallucination, drops faithfulness from the schema when only hallucination is needed', () => {
+    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
+    const selection = selectCriteria(turn, new Set([keyFor(turn, FAITHFULNESS_EVAL_NAME)]), DIRECT);
+    expect(names(selection)).not.toContain(FAITHFULNESS_EVAL_NAME);
+    expect(names(selection)).toContain('hallucination');
   });
 });
 
@@ -330,6 +346,22 @@ describe('evaluateTurnConsolidated', () => {
     expect(byName[FAITHFULNESS_EVAL_NAME]!.scoreValue).toBe(0.25);
     expect(byName['hallucination']!.scoreValue).toBe(0.75);
     expect(byName['hallucination']!.explanation).toBe(`${FAITHFULNESS_EVAL_NAME} reasoning`);
+  });
+
+  it('under directHallucination, scores hallucination from its own verdict, so the two no longer sum to 1', async () => {
+    const calls: RecordedCall[] = [];
+    const provider = createFakeProvider({ [FAITHFULNESS_EVAL_NAME]: 2, hallucination: 5 }, calls);
+    const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set(), new Map(), DIRECT);
+    const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
+
+    const schemaCalls = calls.filter(c => c.options?.schema);
+    expect(schemaCalls).toHaveLength(1);
+    expect((schemaCalls[0]!.options!.schema as { required: string[] }).required).toContain('hallucination');
+    expect(byName[FAITHFULNESS_EVAL_NAME]!.scoreValue).toBe(0.25);
+    // 5 = no fabrication on HALLUCINATION_CRITERIA, stored higher-is-worse.
+    expect(byName['hallucination']!.scoreValue).toBe(0);
+    expect(byName['hallucination']!.explanation).toBe('hallucination reasoning');
+    expect(byName[FAITHFULNESS_EVAL_NAME]!.scoreValue + byName['hallucination']!.scoreValue).not.toBe(1);
   });
 
   it('skips criteria already covered by existingKeys and emits nothing when all are', async () => {
