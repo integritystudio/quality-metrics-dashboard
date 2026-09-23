@@ -104,6 +104,14 @@ const DEFAULT_MAX_AGE_HOURS = 36;
 
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
+const MS_PER_S = 1_000;
+const NS_PER_MS = 1_000_000;
+/**
+ * Start time given to a stamp whose span has none: it sorts last and is never at
+ * or before an evaluation's time, so it can decide only a single-account trace.
+ * Finite on purpose — `Infinity - Infinity` is `NaN`, which breaks the sort.
+ */
+const UNTIMED_MS = Number.MAX_SAFE_INTEGER;
 
 /** Pause between batches so a large first run does not burst the worker. */
 const INTER_BATCH_DELAY_MS = 250;
@@ -334,8 +342,18 @@ export function windowFiles(dir: string, windowDays: number, nowMs: number): str
 /** Account ref as stamped: a secret name, or `null` for an unmapped account. */
 export type AccountRef = string | null;
 
+/** One stamped span's start time and account. */
+export interface TraceStamp {
+  atMs: number;
+  ref: AccountRef;
+}
+
 export interface AccountIndex {
-  byTrace: Map<string, AccountRef>;
+  /**
+   * Every stamp a trace's spans carried, sorted by start time. A trace is one
+   * prompt, and a prompt can span a `/login`, so one trace can hold two accounts.
+   */
+  byTrace: Map<string, TraceStamp[]>;
   /** Every ref a session's spans carried; more than one means it switched. */
   bySession: Map<string, Set<AccountRef>>;
 }
@@ -378,7 +396,11 @@ export function buildAccountIndex(dir: string, windowDays: number, nowMs: number
       const raw = span[IDENTITY_KEY_REF_FIELD];
       const ref: AccountRef = typeof raw === 'string' ? raw : null;
       const traceId = asString(span.traceId);
-      if (traceId) index.byTrace.set(traceId, ref);
+      if (traceId) {
+        const stamps = index.byTrace.get(traceId) ?? [];
+        stamps.push({ atMs: hrTimeToMs(span.startTime), ref });
+        index.byTrace.set(traceId, stamps);
+      }
       const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
         ? span.attributes as Record<string, unknown>
         : {};
@@ -390,7 +412,36 @@ export function buildAccountIndex(dir: string, windowDays: number, nowMs: number
       }
     }
   }
+  for (const stamps of index.byTrace.values()) stamps.sort((a, b) => a.atMs - b.atMs);
   return index;
+}
+
+/** OTel `[seconds, nanoseconds]` start time to epoch ms; `UNTIMED_MS` when absent or malformed. */
+function hrTimeToMs(value: unknown): number {
+  if (!Array.isArray(value) || value.length !== 2) return UNTIMED_MS;
+  const [s, ns] = value;
+  return typeof s === 'number' && typeof ns === 'number' ? s * MS_PER_S + ns / NS_PER_MS : UNTIMED_MS;
+}
+
+/**
+ * The account a trace was under at `atMs`: its only account, or — for a trace
+ * that spans a `/login` — the account of the latest stamp at or before `atMs`.
+ * `undefined` when a mixed trace cannot be placed (no time, or before its first
+ * stamp), so the caller falls back rather than guessing.
+ *
+ * Time is an approximation for a judge score produced after the turn: it lands
+ * on the trace's last account. The records carry no span id to do better.
+ */
+function traceAccountAt(stamps: TraceStamp[], atMs: number | undefined): AccountRef | undefined {
+  const refs = new Set(stamps.map((s) => s.ref));
+  if (refs.size === 1) return [...refs][0];
+  if (atMs === undefined) return undefined;
+  let ref: AccountRef | undefined;
+  for (const stamp of stamps) {
+    if (stamp.atMs > atMs) break;
+    ref = stamp.ref;
+  }
+  return ref;
 }
 
 /**
@@ -399,9 +450,9 @@ export function buildAccountIndex(dir: string, windowDays: number, nowMs: number
  */
 export function resolveRoute(payload: EvaluationPayload, index: AccountIndex): Route {
   let ref: AccountRef | undefined;
-  if (payload.traceId && index.byTrace.has(payload.traceId)) {
-    ref = index.byTrace.get(payload.traceId);
-  } else if (payload.sessionId) {
+  const stamps = payload.traceId ? index.byTrace.get(payload.traceId) : undefined;
+  if (stamps) ref = traceAccountAt(stamps, payload.evaluatedAtMs);
+  if (ref === undefined && payload.sessionId) {
     const refs = index.bySession.get(payload.sessionId);
     if (refs?.size === 1) ref = [...refs][0];
   }

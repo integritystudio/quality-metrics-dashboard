@@ -269,6 +269,39 @@ describe('account routing (TKR7)', () => {
     expect(resolveRoute(payload({ sessionId: 'switched' }), index)).toEqual({ kind: 'webhook' });
   });
 
+  describe('a trace that spans a /login', () => {
+    const T0 = Date.parse('2026-09-15T01:00:00Z');
+    const MIN = 60_000;
+    const timed = (traceId: string, ref: string, atMs: number): string => JSON.stringify({
+      traceId,
+      startTime: [Math.floor(atMs / 1000), (atMs % 1000) * 1_000_000],
+      attributes: { 'session.id': 's-switch' },
+      identityKeyRef: ref,
+    });
+    // Written out of order: the index must sort by start time, not file order.
+    const lines = [timed('t', GMAIL_REF, T0 + 10 * MIN), timed('t', HOME_REF, T0), timed('t', HOME_REF, T0 + 20 * MIN)];
+
+    it.each([
+      ['inside the gmail window', T0 + 15 * MIN, GMAIL_REF],
+      ['exactly at the switch', T0 + 10 * MIN, GMAIL_REF],
+      ['after switching back', T0 + 25 * MIN, HOME_REF],
+      ['before the switch', T0 + 5 * MIN, HOME_REF],
+    ])('routes a record %s to the account signed in at its time', (_label, evaluatedAtMs, ref) => {
+      writeTraces('traces-2026-09-15.jsonl', lines);
+      expect(resolveRoute(payload({ traceId: 't', sessionId: 's-switch', evaluatedAtMs }), buildAccountIndex(dir, 7, NOW)))
+        .toEqual({ kind: 'keyed', ref });
+    });
+
+    it.each([
+      ['has no time', undefined],
+      ['predates the first stamp', T0 - MIN],
+    ])('falls back to the webhook when the record %s', (_label, evaluatedAtMs) => {
+      writeTraces('traces-2026-09-15.jsonl', lines);
+      expect(resolveRoute(payload({ traceId: 't', sessionId: 's-switch', evaluatedAtMs }), buildAccountIndex(dir, 7, NOW)))
+        .toEqual({ kind: 'webhook' });
+    });
+  });
+
   it('skips a line that parses to something other than an object', () => {
     // A JSONL line can hold any JSON value, and a bare string carrying the field
     // name reaches the same code as a span does — `line.includes(...)` cannot tell
