@@ -10,7 +10,11 @@ import {
   saveShipped,
   pruneShipped,
   windowFiles,
+  buildAccountIndex,
+  resolveRoute,
+  keyedRequest,
   type ShippedIndex,
+  type EvaluationPayload,
 } from '../upload-evaluations.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
@@ -221,6 +225,88 @@ describe('windowFiles', () => {
   });
 });
 
+describe('account routing (TKR7)', () => {
+  let dir: string;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'eval-accounts-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  const HOME_REF = 'OBTOOL_API_KEY';
+  const GMAIL_REF = 'OBTOOL_API_KEY_ALYSHIA_LEDLIE';
+
+  const span = (traceId: string, sessionId: string, ref?: string | null): string => JSON.stringify({
+    traceId,
+    attributes: { 'session.id': sessionId },
+    ...(ref === undefined ? {} : { identityKeyRef: ref }),
+  });
+  const writeTraces = (name: string, lines: string[]): void =>
+    writeFileSync(join(dir, name), lines.join('\n') + '\n');
+  const payload = (extra: Partial<EvaluationPayload>): EvaluationPayload => ({
+    evaluationName: 'relevance', evaluator: 'judge', evaluatorType: 'llm', scoreValue: 4, ...extra,
+  });
+
+  it('sends a record to the account that stamped its trace', () => {
+    writeTraces('traces-2026-09-15.jsonl', [span('t-gmail', 's1', GMAIL_REF)]);
+    const index = buildAccountIndex(dir, 7, NOW);
+    expect(resolveRoute(payload({ traceId: 't-gmail', sessionId: 's1' }), index))
+      .toEqual({ kind: 'keyed', ref: GMAIL_REF });
+  });
+
+  it('prefers the trace over the session when a session switched account', () => {
+    writeTraces('traces-2026-09-15.jsonl', [span('t-home', 's1', HOME_REF), span('t-gmail', 's1', GMAIL_REF)]);
+    const index = buildAccountIndex(dir, 7, NOW);
+    expect(resolveRoute(payload({ traceId: 't-home', sessionId: 's1' }), index))
+      .toEqual({ kind: 'keyed', ref: HOME_REF });
+  });
+
+  it('falls back to the session only when it saw a single account', () => {
+    writeTraces('traces-2026-09-15.jsonl', [
+      span('t1', 'single', GMAIL_REF),
+      span('t2', 'switched', HOME_REF),
+      span('t3', 'switched', GMAIL_REF),
+    ]);
+    const index = buildAccountIndex(dir, 7, NOW);
+    expect(resolveRoute(payload({ sessionId: 'single' }), index)).toEqual({ kind: 'keyed', ref: GMAIL_REF });
+    expect(resolveRoute(payload({ sessionId: 'switched' }), index)).toEqual({ kind: 'webhook' });
+  });
+
+  it('withholds a record whose account is unmapped', () => {
+    writeTraces('traces-2026-09-15.jsonl', [span('t1', 's1', null)]);
+    expect(resolveRoute(payload({ traceId: 't1' }), buildAccountIndex(dir, 7, NOW))).toEqual({ kind: 'withheld' });
+  });
+
+  it('keeps the webhook for unstamped spans, which cannot outvote a stamped one', () => {
+    writeTraces('traces-2026-09-15.jsonl', [
+      span('t-old', 's-mixed'),
+      span('t-new', 's-mixed', GMAIL_REF),
+      span('t-pre', 's-pre'),
+    ]);
+    const index = buildAccountIndex(dir, 7, NOW);
+    expect(resolveRoute(payload({ traceId: 't-old', sessionId: 's-mixed' }), index))
+      .toEqual({ kind: 'keyed', ref: GMAIL_REF });
+    expect(resolveRoute(payload({ traceId: 't-pre', sessionId: 's-pre' }), index)).toEqual({ kind: 'webhook' });
+  });
+
+  it('never reads an environment variable that is not an identity-map secret', () => {
+    writeTraces('traces-2026-09-15.jsonl', [span('t1', 's1', 'PATH')]);
+    expect(resolveRoute(payload({ traceId: 't1' }), buildAccountIndex(dir, 7, NOW))).toEqual({ kind: 'webhook' });
+  });
+
+  it('ignores trace files outside the index window and evaluation files', () => {
+    writeTraces('traces-2026-08-01.jsonl', [span('t-old', 's-old', GMAIL_REF)]);
+    writeTraces('evaluations-2026-09-15.jsonl', [span('t-eval', 's-eval', GMAIL_REF)]);
+    const index = buildAccountIndex(dir, 7, NOW);
+    expect(index.byTrace.size).toBe(0);
+    expect(index.bySession.size).toBe(0);
+  });
+
+  it('builds a keyed backfill request the ingest drain reads line by line', () => {
+    const req = keyedRequest('https://ingest.example', [payload({ traceId: 'a' }), payload({ traceId: 'b' })], 'k');
+    expect(req.url).toBe('https://ingest.example/v1/ingest/backfill?signal=evaluations');
+    expect(req.headers).toEqual({ 'Content-Type': 'application/x-ndjson', Authorization: 'Bearer k' });
+    expect(req.body.trimEnd().split('\n').map((l) => JSON.parse(l).traceId)).toEqual(['a', 'b']);
+  });
+});
+
 describe('webhook caps mirrored from the ingest worker', () => {
   // These four are module-private in services/obtool-ingest/src/evaluations.ts,
   // so upload-evaluations.ts copies them. This test is what keeps the copy
@@ -271,7 +357,7 @@ describe('network failure handling', () => {
   });
 
   it('retries transient failures and logs once on exhaustion', () => {
-    const retry = SCRIPT.slice(SCRIPT.indexOf('async function postBatch(url'));
+    const retry = SCRIPT.slice(SCRIPT.indexOf('async function postBatch(request'));
     const body = retry.slice(0, retry.indexOf('\n}\n'));
     expect(body).toContain('MAX_SEND_ATTEMPTS');
     expect(body).toMatch(/console\.error\(`\[upload-evaluations\] giving up/);

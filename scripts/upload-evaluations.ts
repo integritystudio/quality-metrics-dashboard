@@ -13,10 +13,21 @@
  * evaluations accumulated on disk forever, `/v1/evaluations` held nothing but
  * its 2026-07-28 e2e fixtures, and every sync run computed an empty dashboard.
  *
- * Transport is the HMAC webhook `POST /v1/evaluations` on the ingest worker —
- * the same path `obs_inject_evaluations` uses (`src/tools/inject-evaluations.ts`
- * `sendToIngestWorker`). The webhook carries no per-org identity, so rows land
- * in the ingest worker's `HOME_ORG_ID` keyspace by design.
+ * Transport is chosen per record by the account that produced it (TKR7). The
+ * hooks stamp every span with `identityKeyRef` — the identity map's secret name
+ * for the signed-in account, or `null` for an unmapped one (TKR6). Evaluations
+ * carry no stamp of their own, so each is joined to its source spans by trace
+ * id, then by session id when the session saw only one account:
+ *
+ * - **Attributed**: `POST /v1/ingest/backfill?signal=evaluations` with that
+ *   account's API key, read from the environment under the ref's name. Ingest
+ *   assigns the org from the key, and the flush reads the same line schema as
+ *   the webhook's.
+ * - **`null`**: withheld and recorded as consumed (TKR3's fail-closed rule).
+ * - **Unattributed** (pre-TKR6 spans, or a session that switched account with
+ *   no trace hit): the HMAC webhook `POST /v1/evaluations`, as before. It
+ *   carries no per-org identity, so rows land in `HOME_ORG_ID`.
+ * - **Key not in the environment**: held, so the next run retries it.
  *
  * ## Two properties a caller must know
  *
@@ -45,7 +56,8 @@
  *   tsx scripts/upload-evaluations.ts --limit=50       # stop after N records
  *   tsx scripts/upload-evaluations.ts --max-age-hours=48
  *
- * Env: INJECT_HMAC_SECRET (required), OBTOOL_INGEST_URL (optional).
+ * Env: INJECT_HMAC_SECRET (required), OBTOOL_INGEST_URL (optional), and one
+ * `OBTOOL_API_KEY*` per mapped account (all present under `doppler run … prd`).
  */
 
 import { createHash, createHmac } from 'crypto';
@@ -107,6 +119,27 @@ const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 
 /** `evaluations-YYYY-MM-DD.jsonl` */
 const EVAL_FILE_PATTERN = /^evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
+/** `traces-YYYY-MM-DD.jsonl` — the stamped spans evaluations are joined to. */
+const TRACE_FILE_PATTERN = /^traces-(\d{4}-\d{2}-\d{2})\.jsonl$/;
+
+/**
+ * Trace files read for the account join, in days. Wider than the upload
+ * window because the judge scores backlog turns whose spans are older than
+ * the evaluation record itself.
+ */
+const ACCOUNT_INDEX_WINDOW_DAYS = 7;
+
+/** Record field the hooks' file exporters stamp (`appendJsonl`, TKR6). */
+const IDENTITY_KEY_REF_FIELD = 'identityKeyRef';
+/** Only identity-map secret names are read from the environment. */
+const IDENTITY_KEY_REF_PATTERN = /^OBTOOL_API_KEY(?:_[A-Z0-9]+)*$/;
+const SPAN_SESSION_ID_ATTR = 'session.id';
+
+const WEBHOOK_PATH = '/v1/evaluations';
+const KEYED_PATH = '/v1/ingest/backfill?signal=evaluations';
+const NDJSON_CONTENT_TYPE = 'application/x-ndjson';
+/** Summary label for records sent through the org-less webhook. */
+const WEBHOOK_DESTINATION = 'webhook';
 
 const STATE_FILENAME = '.eval-upload-state.json';
 
@@ -281,8 +314,8 @@ export function pruneShipped(index: ShippedIndex, windowDays: number, nowMs: num
   return pruned;
 }
 
-function inWindow(file: string, windowDays: number, nowMs: number): boolean {
-  const m = EVAL_FILE_PATTERN.exec(file);
+function inWindow(file: string, windowDays: number, nowMs: number, pattern: RegExp = EVAL_FILE_PATTERN): boolean {
+  const m = pattern.exec(file);
   if (!m) return false;
   // Compare on the date in the name, never mtime: derive rewrites these files
   // wholesale, so mtime says nothing about which day's records are inside.
@@ -298,8 +331,102 @@ export function windowFiles(dir: string, windowDays: number, nowMs: number): str
   }
 }
 
+/** Account ref as stamped: a secret name, or `null` for an unmapped account. */
+export type AccountRef = string | null;
+
+export interface AccountIndex {
+  byTrace: Map<string, AccountRef>;
+  /** Every ref a session's spans carried; more than one means it switched. */
+  bySession: Map<string, Set<AccountRef>>;
+}
+
+/** Where one record goes. */
+export type Route =
+  | { kind: 'keyed'; ref: string }
+  | { kind: 'withheld' }
+  | { kind: 'webhook' };
+
+/**
+ * Index stamped spans by trace and session. Unstamped spans (written before
+ * TKR6) are skipped, so they cannot outvote a stamped one in the same session.
+ */
+export function buildAccountIndex(dir: string, windowDays: number, nowMs: number): AccountIndex {
+  const index: AccountIndex = { byTrace: new Map(), bySession: new Map() };
+  let files: string[];
+  try {
+    files = readdirSync(dir).filter((f) => inWindow(f, windowDays, nowMs, TRACE_FILE_PATTERN));
+  } catch {
+    return index;
+  }
+  for (const file of files) {
+    for (const line of readFileSync(join(dir, file), 'utf8').split('\n')) {
+      if (!line.includes(IDENTITY_KEY_REF_FIELD)) continue;
+      let span: Record<string, unknown>;
+      try {
+        span = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      if (typeof span !== 'object' || span === null || !(IDENTITY_KEY_REF_FIELD in span)) continue;
+      const raw = span[IDENTITY_KEY_REF_FIELD];
+      const ref: AccountRef = typeof raw === 'string' ? raw : null;
+      const traceId = asString(span.traceId);
+      if (traceId) index.byTrace.set(traceId, ref);
+      const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
+        ? span.attributes as Record<string, unknown>
+        : {};
+      const sessionId = asString(attrs[SPAN_SESSION_ID_ATTR]);
+      if (sessionId) {
+        const refs = index.bySession.get(sessionId) ?? new Set<AccountRef>();
+        refs.add(ref);
+        index.bySession.set(sessionId, refs);
+      }
+    }
+  }
+  return index;
+}
+
+/**
+ * Trace id first — it pins the turn even in a session that ran `/login`.
+ * A session id is used only when that session saw a single account.
+ */
+export function resolveRoute(payload: EvaluationPayload, index: AccountIndex): Route {
+  let ref: AccountRef | undefined;
+  if (payload.traceId && index.byTrace.has(payload.traceId)) {
+    ref = index.byTrace.get(payload.traceId);
+  } else if (payload.sessionId) {
+    const refs = index.bySession.get(payload.sessionId);
+    if (refs?.size === 1) ref = [...refs][0];
+  }
+  if (ref === undefined) return { kind: 'webhook' };
+  if (ref === null) return { kind: 'withheld' };
+  // A ref that is not an identity-map secret name is not read from the
+  // environment; the record ships as it did before stamping existed.
+  return IDENTITY_KEY_REF_PATTERN.test(ref) ? { kind: 'keyed', ref } : { kind: 'webhook' };
+}
+
 function signature(payload: string, secret: string): string {
   return `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`;
+}
+
+interface SendRequest { url: string; headers: Record<string, string>; body: string }
+
+function webhookRequest(baseUrl: string, batch: EvaluationPayload[], secret: string): SendRequest {
+  const body = JSON.stringify({ evaluations: batch });
+  return {
+    url: `${baseUrl}${WEBHOOK_PATH}`,
+    headers: { 'Content-Type': 'application/json', 'x-signature': signature(body, secret) },
+    body,
+  };
+}
+
+/** The org comes from the key, so this is the path that keeps accounts apart. */
+export function keyedRequest(baseUrl: string, batch: EvaluationPayload[], apiKey: string): SendRequest {
+  return {
+    url: `${baseUrl}${KEYED_PATH}`,
+    headers: { 'Content-Type': NDJSON_CONTENT_TYPE, Authorization: `Bearer ${apiKey}` },
+    body: batch.map((p) => JSON.stringify(p)).join('\n') + '\n',
+  };
 }
 
 interface SendResult { ok: boolean; detail: string; retryable: boolean }
@@ -313,13 +440,12 @@ interface SendResult { ok: boolean; detail: string; retryable: boolean }
  * them as duplicates rather than have them ignored. So transport failures are
  * returned as values, not exceptions.
  */
-async function postBatchOnce(url: string, batch: EvaluationPayload[], secret: string): Promise<SendResult> {
-  const body = JSON.stringify({ evaluations: batch });
+async function postBatchOnce(request: SendRequest): Promise<SendResult> {
   try {
-    const response = await fetch(url, {
+    const response = await fetch(request.url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-signature': signature(body, secret) },
-      body,
+      headers: request.headers,
+      body: request.body,
       // Without this a hung connection stalls the run indefinitely.
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -341,10 +467,10 @@ async function postBatchOnce(url: string, batch: EvaluationPayload[], secret: st
 }
 
 /** Retry transient failures with exponential backoff; log once on exhaustion. */
-async function postBatch(url: string, batch: EvaluationPayload[], secret: string): Promise<SendResult> {
+async function postBatch(request: SendRequest): Promise<SendResult> {
   let last: SendResult = { ok: false, detail: 'no attempt made', retryable: false };
   for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
-    last = await postBatchOnce(url, batch, secret);
+    last = await postBatchOnce(request);
     if (last.ok || !last.retryable) return last;
     if (attempt < MAX_SEND_ATTEMPTS) {
       const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
@@ -386,7 +512,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   }
   // asString, not `??`: an empty OBTOOL_INGEST_URL must fall back to the
   // default host, and `??` would keep the empty string and POST to `/v1/...`.
-  const url = `${asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL}/v1/evaluations`;
+  const baseUrl = asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL;
 
   const nowMs = Date.now();
   const shipped = pruneShipped(loadShipped(TELEMETRY_DIR), opts.windowDays, nowMs);
@@ -396,10 +522,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
 
+  const accounts = buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, nowMs);
   const skips: Record<string, number> = {};
+  const sentByDestination: Record<string, number> = {};
   let sent = 0;
   let parseErrors = 0;
   let alreadyShipped = 0;
+  let withheld = 0;
+  const heldForKey: Record<string, number> = {};
 
   // try/finally, not a trailing save: an unexpected throw anywhere below would
   // otherwise skip saveShipped and lose the fingerprints of batches this run
@@ -409,33 +539,41 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     if (sent >= opts.limit) break;
     const done = new Set(shipped[file] ?? []);
 
-    let batch: { payload: EvaluationPayload; fp: string }[] = [];
+    /** One pending batch per destination: `WEBHOOK_DESTINATION` or a key ref. */
+    const batches = new Map<string, { payload: EvaluationPayload; fp: string }[]>();
     /** Confirmed-delivered fingerprints for this file, recorded only after a 2xx. */
     const delivered: string[] = [...done];
 
-    const flush = async (): Promise<boolean> => {
+    const flush = async (destination: string): Promise<boolean> => {
+      const batch = batches.get(destination) ?? [];
       if (batch.length === 0) return true;
       if (!opts.dryRun) {
-        const res = await postBatch(url, batch.map((b) => b.payload), secret!);
+        const payloads = batch.map((b) => b.payload);
+        const request = destination === WEBHOOK_DESTINATION
+          ? webhookRequest(baseUrl, payloads, secret!)
+          : keyedRequest(baseUrl, payloads, process.env[destination]!);
+        const res = await postBatch(request);
         if (!res.ok) {
-          console.error(`[upload-evaluations] POST failed for ${file}: ${res.detail}`);
+          console.error(`[upload-evaluations] POST failed for ${file} (${destination}): ${res.detail}`);
           return false;
         }
       }
       sent += batch.length;
+      sentByDestination[destination] = (sentByDestination[destination] ?? 0) + batch.length;
       // Record only what the worker accepted. A batch that never got a 2xx is
       // left unrecorded so the next run retries it — the one direction that
       // errs toward a duplicate rather than toward silent data loss.
       for (const b of batch) delivered.push(b.fp);
-      batch = [];
+      batches.delete(destination);
       if (!opts.dryRun) await new Promise((r) => setTimeout(r, INTER_BATCH_DELAY_MS));
       return true;
     };
+    const pendingCount = (): number => [...batches.values()].reduce((n, b) => n + b.length, 0);
 
     let ok = true;
     for (const line of readFileSync(join(TELEMETRY_DIR, file), 'utf8').split('\n')) {
       if (!line.trim()) continue;
-      if (sent + batch.length >= opts.limit) break;
+      if (sent + pendingCount() >= opts.limit) break;
       const fp = fingerprint(line);
       if (done.has(fp)) { alreadyShipped++; continue; }
       let parsed: unknown;
@@ -453,10 +591,28 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         if (mapped.skip !== 'too-old') delivered.push(fp);
         continue;
       }
+      const route = resolveRoute(mapped.payload!, accounts);
+      if (route.kind === 'withheld') {
+        // Unmapped account: consumed unsent, never re-examined (TKR3).
+        withheld++;
+        delivered.push(fp);
+        continue;
+      }
+      if (route.kind === 'keyed' && !asString(process.env[route.ref])) {
+        // Left unrecorded so a run that has the key ships it.
+        heldForKey[route.ref] = (heldForKey[route.ref] ?? 0) + 1;
+        continue;
+      }
+      const destination = route.kind === 'keyed' ? route.ref : WEBHOOK_DESTINATION;
+      const batch = batches.get(destination) ?? [];
       batch.push({ payload: mapped.payload!, fp });
-      if (batch.length >= MAX_BATCH_SIZE && !(await flush())) { ok = false; break; }
+      batches.set(destination, batch);
+      if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
     }
-    if (ok) ok = await flush();
+    for (const destination of [...batches.keys()]) {
+      if (!ok) break;
+      ok = await flush(destination);
+    }
 
     shipped[file] = delivered;
     if (!ok) {
@@ -468,10 +624,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     if (!opts.dryRun) saveShipped(TELEMETRY_DIR, shipped);
   }
 
-  const skipSummary = Object.entries(skips).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
+  const summarize = (counts: Record<string, number>): string =>
+    Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
   console.log(
     `[upload-evaluations]${opts.dryRun ? ' dry-run:' : ''} ` +
-    `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${skipSummary}]` +
+    `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${summarize(skips)}]` +
+    ` byDestination[${summarize(sentByDestination)}] withheld=${withheld}` +
+    (Object.keys(heldForKey).length ? ` heldForKey[${summarize(heldForKey)}]` : '') +
     (parseErrors ? ` parseErrors=${parseErrors}` : ''),
   );
   return 0;
