@@ -970,6 +970,10 @@ describe('evaluateTurn with an oversized tool result', () => {
 describe('classifyJudgeFailure', () => {
   it.each<[JudgeFailureClass, string]>([
     ['billing', '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}'],
+    // A QAG sweep reports its own summary; the provider's text has to survive
+    // inside it, or a billing refusal mid-sweep is counted as `other` and the
+    // run-level escalation never fires.
+    ['billing', 'QAG evaluation failed: no verification questions generated (400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}})'],
     ['network', 'Connection error.'],
     ['network', 'getaddrinfo ENOTFOUND api.anthropic.com'],
     ['schema-rejection', '400 {"type":"error","error":{"type":"invalid_request_error","message":"output_config.format.schema is invalid: minimum is not a supported keyword"}}'],
