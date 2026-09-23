@@ -857,19 +857,21 @@ describe('evaluateTurn faithfulness and hallucination', () => {
   });
 
   /**
-   * A QAG sweep over three statements the context supports, contradicts and cannot
-   * settle, in that order. Counts only the sweep's own calls so the surrounding
-   * G-Eval criteria do not pollute the total.
+   * A QAG sweep over four statements: two the context supports, one it contradicts
+   * and one it cannot settle. The counts are deliberately unequal — with an even
+   * split the two modes score the same and a test could not tell a mode-mapping
+   * bug from correct behaviour. Counts only the sweep's own calls so the
+   * surrounding G-Eval criteria do not pollute the total.
    */
   function createQagLLM(): { llm: LLMProvider; sweepCalls: () => number } {
-    const answers = ['yes', 'no', 'maybe'];
+    const answers = ['yes', 'yes', 'no', 'maybe'];
     let answerIndex = 0;
     let sweepCalls = 0;
     const llm: LLMProvider = {
       generate(prompt: string) {
         if (prompt.includes('Extract all factual claims')) {
           sweepCalls++;
-          return Promise.resolve({ text: JSON.stringify(['A', 'B', 'C']) });
+          return Promise.resolve({ text: JSON.stringify(['A', 'B', 'C', 'D']) });
         }
         if (prompt.includes('yes/no question')) {
           sweepCalls++;
@@ -892,11 +894,12 @@ describe('evaluateTurn faithfulness and hallucination', () => {
     const evals = await evaluateTurn(judge, makeTurn({ toolResults: ['tool output'] }), new Set());
 
     const byName = new Map(evals.map(e => [e.evaluationName, e.scoreValue]));
-    // 1 of 3 supported, 1 of 3 contradicted, 1 inconclusive and counted by neither.
-    expect(byName.get('faithfulness')).toBeCloseTo(1 / 3);
-    expect(byName.get('hallucination')).toBeCloseTo(1 / 3);
-    // 1 extraction + 3 questions + 3 answers. A second sweep would make it 14.
-    expect(sweepCalls()).toBe(7);
+    // 2 of 4 supported, 1 of 4 contradicted, 1 inconclusive and counted by neither.
+    // The two differ, so writing one mode's score under both names fails here.
+    expect(byName.get('faithfulness')).toBeCloseTo(0.5);
+    expect(byName.get('hallucination')).toBeCloseTo(0.25);
+    // 1 extraction + 4 questions + 4 answers. A second sweep would make it 18.
+    expect(sweepCalls()).toBe(9);
   });
 
   it('runs the sweep only for the metric that is missing', async () => {
@@ -910,7 +913,9 @@ describe('evaluateTurn faithfulness and hallucination', () => {
     const names = evals.map(e => e.evaluationName);
     expect(names).toContain('hallucination');
     expect(names).not.toContain('faithfulness');
-    expect(sweepCalls()).toBe(7);
+    // The score is the fabrication tally, not the faithfulness one it sits beside.
+    expect(evals.find(e => e.evaluationName === 'hallucination')?.scoreValue).toBeCloseTo(0.25);
+    expect(sweepCalls()).toBe(9);
   });
 
   it('counts a failed sweep against every metric that asked for it', async () => {
