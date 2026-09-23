@@ -8,7 +8,8 @@
  * steps the per-criterion path uses — and asks for one JSON object keyed by
  * criterion through `output_config` (structured outputs). It then produces
  * the same records the per-criterion path produces: same evaluation names,
- * 1–5 → 0–1 normalization, dedup keys, cohort, producer and judge model.
+ * 1–5 → 0–1 normalization, dedup keys, cohort and judge model — but its OWN
+ * producer, see CONSOLIDATED_PRODUCER.
  *
  * Where it differs from the per-criterion path, and why:
  * - `faithfulness` is scored from FAITHFULNESS_CRITERIA, not from QAG, and
@@ -21,7 +22,8 @@
  *   once per criterion per run (`EvaluationStepsCache`) rather than per call.
  * - No `judge.method` attribute is written: `EvalRecord` has no slot for extra
  *   attributes and `toOTelRecord` emits fixed keys, so the record schema does
- *   not allow one.
+ *   not allow one. `evaluator` (the producer) carries the distinction instead
+ *   — see CONSOLIDATED_PRODUCER.
  *
  * The default since 2026-09-22 (JCP4): against a claude-opus-5 reference on 25
  * real turns it was closer than the per-criterion path (MAE 0.945 vs 1.223 of
@@ -61,7 +63,6 @@ import {
   TOOL_SELECTION_CRITERIA,
   TOOL_ARGUMENTS_CRITERIA,
   TOOL_INTEGRATION_CRITERIA,
-  PRODUCER,
   LLM_EVALUATOR_KIND,
   NORMAL_COHORT,
   HAIKU_MODEL,
@@ -85,6 +86,21 @@ import {
 export const CONSOLIDATED_MAX_TOKENS = 4096;
 export const REASONING_KEY = 'reasoning';
 export const SCORE_KEY = 'score';
+/**
+ * Producer written on every record this module builds.
+ *
+ * Deliberately NOT the per-criterion path's `PRODUCER`. The two paths measure
+ * `faithfulness` and `hallucination` with different instruments — G-Eval and an
+ * inversion here, a QAG sweep and a fabrication tally there — so records from
+ * the two are not interchangeable samples of one series. They were nevertheless
+ * written under the same producer string until 2026-09-22, which made the
+ * instrument switch at the JCP4 cutover invisible in the stored data: same
+ * evaluation name, same cohort, same evaluator kind, same judge model, nothing
+ * to join or filter on. This is the only field in `EvalRecord` free enough to
+ * carry that, and nothing filters or groups on its value.
+ */
+export const CONSOLIDATED_PRODUCER = 'dashboard:judge-consolidated';
+
 const REASONING_DESCRIPTION = 'Your reasoning for this criterion, written before the score.';
 const SCORE_DESCRIPTION = `Integer score from ${G_EVAL_MIN_SCORE} to ${G_EVAL_MAX_SCORE}.`;
 const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
@@ -376,7 +392,7 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
     evaluationName,
     scoreValue: normalizeScore(scoreValue),
     explanation,
-    evaluator: PRODUCER,
+    evaluator: CONSOLIDATED_PRODUCER,
     evaluatorType: LLM_EVALUATOR_TYPE,
     evaluatorKind: LLM_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,

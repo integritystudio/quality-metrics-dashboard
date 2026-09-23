@@ -10,6 +10,7 @@ import {
   evaluateTurnConsolidated,
   cachedEvaluationSteps,
   sourceCriterionName,
+  CONSOLIDATED_PRODUCER,
   REASONING_KEY,
   SCORE_KEY,
   type ConsolidatedProvider,
@@ -304,7 +305,11 @@ describe('evaluateTurnConsolidated', () => {
     expect((schemaCalls[0]!.options!.schema as { required: string[] }).required).toEqual(ALL_TOOL_CRITERIA);
     expect(schemaCalls[0]!.prompt.split(TOOL_RESULT).length - 1).toBe(1);
     for (const record of records) {
-      expect(record.evaluator).toBe(PRODUCER);
+      // Its own producer, distinct from the per-criterion path's: the two measure
+      // faithfulness and hallucination with different instruments, and this is the
+      // only field that says which one a stored record came from.
+      expect(record.evaluator).toBe(CONSOLIDATED_PRODUCER);
+      expect(record.evaluator).not.toBe(PRODUCER);
       expect(record.evaluatorType).toBe('llm');
       expect(record.evaluatorKind).toBe('llm');
       expect(record.cohort).toBe('normal');
