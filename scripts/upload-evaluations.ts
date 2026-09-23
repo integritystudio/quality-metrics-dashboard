@@ -361,13 +361,20 @@ export function buildAccountIndex(dir: string, windowDays: number, nowMs: number
   for (const file of files) {
     for (const line of readFileSync(join(dir, file), 'utf8').split('\n')) {
       if (!line.includes(IDENTITY_KEY_REF_FIELD)) continue;
-      let span: Record<string, unknown>;
+      // `unknown`, not a cast to Record: JSON.parse returns whatever the line held,
+      // and a line reaches here only by containing IDENTITY_KEY_REF_FIELD — which a
+      // bare JSON string does too. Asserting the object shape up front makes the
+      // guard below look redundant to the type checker while `'x' in "a string"`
+      // still throws at runtime.
+      let parsed: unknown;
       try {
-        span = JSON.parse(line) as Record<string, unknown>;
+        parsed = JSON.parse(line);
       } catch {
         continue;
       }
-      if (typeof span !== 'object' || span === null || !(IDENTITY_KEY_REF_FIELD in span)) continue;
+      if (typeof parsed !== 'object' || parsed === null) continue;
+      const span = parsed as Record<string, unknown>;
+      if (!(IDENTITY_KEY_REF_FIELD in span)) continue;
       const raw = span[IDENTITY_KEY_REF_FIELD];
       const ref: AccountRef = typeof raw === 'string' ? raw : null;
       const traceId = asString(span.traceId);

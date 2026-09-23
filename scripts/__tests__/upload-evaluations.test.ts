@@ -269,6 +269,23 @@ describe('account routing (TKR7)', () => {
     expect(resolveRoute(payload({ sessionId: 'switched' }), index)).toEqual({ kind: 'webhook' });
   });
 
+  it('skips a line that parses to something other than an object', () => {
+    // A JSONL line can hold any JSON value, and a bare string carrying the field
+    // name reaches the same code as a span does — `line.includes(...)` cannot tell
+    // them apart. `'x' in "a string"` throws, so without the object guard one
+    // malformed line takes the whole index down and every record falls back to
+    // the webhook.
+    writeTraces('traces-2026-09-15.jsonl', [
+      JSON.stringify('identityKeyRef'),
+      span('t-gmail', 's1', GMAIL_REF),
+    ]);
+
+    const index = buildAccountIndex(dir, 7, NOW);
+
+    expect(resolveRoute(payload({ traceId: 't-gmail', sessionId: 's1' }), index))
+      .toEqual({ kind: 'keyed', ref: GMAIL_REF });
+  });
+
   it('withholds a record whose account is unmapped', () => {
     writeTraces('traces-2026-09-15.jsonl', [span('t1', 's1', null)]);
     expect(resolveRoute(payload({ traceId: 't1' }), buildAccountIndex(dir, 7, NOW))).toEqual({ kind: 'withheld' });
@@ -303,7 +320,8 @@ describe('account routing (TKR7)', () => {
     const req = keyedRequest('https://ingest.example', [payload({ traceId: 'a' }), payload({ traceId: 'b' })], 'k');
     expect(req.url).toBe('https://ingest.example/v1/ingest/backfill?signal=evaluations');
     expect(req.headers).toEqual({ 'Content-Type': 'application/x-ndjson', Authorization: 'Bearer k' });
-    expect(req.body.trimEnd().split('\n').map((l) => JSON.parse(l).traceId)).toEqual(['a', 'b']);
+    const lines = req.body.trimEnd().split('\n').map((l) => JSON.parse(l) as { traceId: string });
+    expect(lines.map((l) => l.traceId)).toEqual(['a', 'b']);
   });
 });
 
