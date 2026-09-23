@@ -14,6 +14,11 @@
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --limit 5
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --batch   # Message Batches API: half price, unattended
+ *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --per-criterion   # one call per criterion (~10x cost)
+ *
+ * Scoring is consolidated by default — one call per turn carrying every
+ * criterion (judge-consolidated.ts; chosen by JCP4, 2026-09-22). `--batch`
+ * applies to either mode.
  *
  * LLM_JUDGE_ANTHROPIC_KEY, when set, is used instead of ANTHROPIC_API_KEY so
  * judge spend is attributable to its own key (see judge-credentials.ts).
@@ -47,7 +52,7 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_BATCH_FLAG } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG } from './pipeline-stages.js';
 import {
   createBatchProvider,
   BATCH_POLL_INTERVAL_MS,
@@ -828,6 +833,10 @@ export function fitContextForJudge(toolResults: readonly string[]): string[] {
 
 /** Estimated tokens per evaluation response — the judge answers with a short JSON verdict. */
 export const EST_OUTPUT_TOKENS_PER_EVAL = 200;
+/** Criteria in one consolidated prompt: relevance and coherence, always. */
+export const CONSOLIDATED_BASE_CRITERIA = 2;
+/** Added with tool results: faithfulness, tool_correctness and its three sub-criteria. */
+export const CONSOLIDATED_TOOL_CRITERIA = 5;
 
 export interface JudgeRunEstimate {
   evals: number;
@@ -841,9 +850,12 @@ export interface JudgeRunEstimate {
  * length (TOKENS_PER_CHAR). The dry-run prints it; a real run prints it beside
  * the usage the API reported, which is how a $1.80 estimate was found to be
  * a ~$3.30 bill. Pass `batch: true` when `--batch` is set — Message Batches
- * bill at BATCH_PRICE_RATIO (half list rates).
+ * bill at BATCH_PRICE_RATIO (half list rates). Pass `consolidated: true` for
+ * the default mode, which sends each turn's content once and answers every
+ * criterion in that one call.
  */
-export function estimateJudgeRun(turns: readonly Turn[], batch = false): JudgeRunEstimate {
+export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolidated = false): JudgeRunEstimate {
+  if (consolidated) return estimateConsolidatedRun(turns, batch);
   // 2 base evals (relevance, coherence) + 2 with tools (tool_correctness, and one
   // QAG sweep that scores faithfulness and hallucination together — hallucination
   // is no longer a paid call of its own).
@@ -862,6 +874,28 @@ export function estimateJudgeRun(turns: readonly Turn[], batch = false): JudgeRu
     + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
   const costUsd = batch ? listCostUsd * BATCH_PRICE_RATIO : listCostUsd;
   return { evals, inputTokens, outputTokens, costUsd };
+}
+
+/**
+ * One call per turn: content once, every criterion's reasoning in the reply.
+ * The per-criterion steps calls (one per criterion per run) are left out —
+ * at most seven short calls, noise beside the verdicts.
+ */
+function estimateConsolidatedRun(turns: readonly Turn[], batch: boolean): JudgeRunEstimate {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for (const t of turns) {
+    const contentChars = t.userText.length + t.assistantText.length
+      + fitContextForJudge(t.toolResults).reduce((s, r) => s + r.length, 0);
+    inputTokens += Math.ceil(contentChars * TOKENS_PER_CHAR);
+    const criteria = CONSOLIDATED_BASE_CRITERIA + (t.toolResults.length > 0 ? CONSOLIDATED_TOOL_CRITERIA : 0);
+    outputTokens += criteria * EST_OUTPUT_TOKENS_PER_EVAL;
+  }
+  const pricing = judgePricing();
+  const listCostUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
+    + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
+  const costUsd = batch ? listCostUsd * BATCH_PRICE_RATIO : listCostUsd;
+  return { evals: turns.length, inputTokens, outputTokens, costUsd };
 }
 
 /** What a run spent, for the summary line. */
@@ -1366,7 +1400,8 @@ async function main() {
   const seed = args.includes('--seed');
   const backfill = args.includes('--backfill');
   const batch = args.includes(JUDGE_BATCH_FLAG);
-  const consolidated = args.includes('--consolidated');
+  // Consolidated is the default (JCP4); --per-criterion opts out.
+  const consolidated = !args.includes(JUDGE_PER_CRITERION_FLAG);
   const limitIdx = args.indexOf('--limit');
   let limit = Infinity;
   if (limitIdx !== -1) {
@@ -1440,9 +1475,9 @@ async function main() {
   const allTurns = turnArrays.flat().slice(0, limit);
 
   if (dryRun) {
-    const est = estimateJudgeRun(allTurns, batch);
+    const est = estimateJudgeRun(allTurns, batch, consolidated);
 
-    console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} evals`);
+    console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} ${consolidated ? 'consolidated calls' : 'evals'}`);
     console.log(`[dry-run] ~${est.inputTokens.toLocaleString()} input tokens, ~${est.outputTokens.toLocaleString()} output tokens`);
     console.log(`[dry-run] estimated cost: $${est.costUsd.toFixed(EVAL_SCORE_PRECISION)}${batch ? ' (batch rate, 50% off list)' : ''}`);
 
@@ -1485,7 +1520,7 @@ async function main() {
       const seedResult = seedEvaluations(allTurns, existingKeys);
       flatEvals = seedResult.evals;
     } else {
-      const estimatedUsd = estimateJudgeRun(allTurns, batch).costUsd;
+      const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated).costUsd;
       const usage = createUsageTotals();
       const batchProvider = batch
         ? await createBatchProvider({
@@ -1506,19 +1541,30 @@ async function main() {
           error: (msg) => console.error(`  [error] ${msg}`),
         },
       });
-      // --consolidated: one call per turn (judge-consolidated.ts), off by default.
-      // It makes its own requests, so --batch applies to the per-criterion path only.
-      const evaluate = consolidated
-        ? await (await import('./judge-consolidated.js')).createConsolidatedTurnEvaluator(existingKeys)
-        : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
-      const allEvals = batchProvider && !consolidated
-        ? await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys)
-        : await processBatch(
-          allTurns,
-          CONCURRENCY,
-          BATCH_DELAY_MS,
-          evaluate,
-        );
+      // Consolidated (the default): one call per turn, judge-consolidated.ts. Its
+      // synchronous provider gets the judge key and the run's usage totals, so it
+      // bills and reports exactly as the per-criterion path does; under --batch
+      // it rides the same batch provider (JCP3).
+      const consolidatedModule = consolidated ? await import('./judge-consolidated.js') : undefined;
+      let allEvals: EvalRecord[][];
+      if (batchProvider) {
+        allEvals = consolidatedModule
+          ? await consolidatedModule.evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys)
+          : await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys);
+      } else {
+        const evaluate = consolidatedModule
+          ? await consolidatedModule.createConsolidatedTurnEvaluator(existingKeys, {
+              apiKey: judgeKey.apiKey,
+              onUsage: (u) => recordUsage(usage, {
+                input_tokens: u.inputTokens,
+                output_tokens: u.outputTokens,
+                cache_read_input_tokens: u.cacheReadInputTokens,
+                cache_creation_input_tokens: u.cacheCreationInputTokens,
+              }),
+            })
+          : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
+        allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);
+      }
 
       flatEvals = allEvals.flat();
 

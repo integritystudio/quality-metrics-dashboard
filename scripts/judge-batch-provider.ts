@@ -111,6 +111,8 @@ export interface BatchLLMProvider extends LLMProvider {
  */
 export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate']>[1]> & {
   jsonSchema?: Anthropic.Messages.JSONOutputFormat['schema'];
+  /** Per-request output budget; the provider's `maxTokens` when absent. A consolidated verdict needs more than one criterion's. */
+  maxTokens?: number;
 };
 
 /** Maps `jsonSchema` onto the request's `output_config.format`; nothing when the option is absent. */
@@ -189,7 +191,7 @@ class MessageBatchProvider implements BatchLLMProvider {
   private toParams(prompt: string, options?: BatchGenerateOptions): MessageParams {
     return {
       model: this.options.model,
-      max_tokens: this.options.maxTokens,
+      max_tokens: options?.maxTokens ?? this.options.maxTokens,
       temperature: options?.temperature ?? this.options.temperature,
       messages: [{ role: 'user', content: prompt }],
       ...toOutputConfig(options),

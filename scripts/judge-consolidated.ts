@@ -11,21 +11,29 @@
  * 1–5 → 0–1 normalization, dedup keys, cohort, producer and judge model.
  *
  * Where it differs from the per-criterion path, and why:
- * - `faithfulness` is scored from FAITHFULNESS_CRITERIA (the G-Eval text the
- *   per-criterion path uses for hallucination), not from QAG, and
- *   `hallucination` is `1 - faithfulness` from that same verdict — exactly how
- *   the per-criterion path derives hallucination from a FAITHFULNESS G-Eval.
+ * - `faithfulness` is scored from FAITHFULNESS_CRITERIA, not from QAG, and
+ *   `hallucination` is `1 - faithfulness` from that same verdict. The
+ *   per-criterion path no longer does either: it runs one QAG sweep and scores
+ *   `faithfulness` and `hallucination` as separate tallies over it, so its two
+ *   series do not sum to 1 and this one's do. That is a second source of the
+ *   disagreement between the two modes.
  * - Evaluation steps depend only on the criteria text, so they are generated
  *   once per criterion per run (`EvaluationStepsCache`) rather than per call.
  * - No `judge.method` attribute is written: `EvalRecord` has no slot for extra
  *   attributes and `toOTelRecord` emits fixed keys, so the record schema does
  *   not allow one.
  *
- * Off by default — `judge-evaluations.ts --consolidated` dispatches here.
- * Agreement with the per-criterion path is measured by judge-agreement.ts.
+ * The default since 2026-09-22 (JCP4): against a claude-opus-5 reference on 25
+ * real turns it was closer than the per-criterion path (MAE 0.945 vs 1.223 of
+ * 5, docs/judge-quality-2026-09-22.json) at ~1/10 the cost. `--per-criterion`
+ * in judge-evaluations.ts opts back out; `--batch` routes this path through
+ * the Message Batches provider (`adaptBatchProvider`, JCP3).
+ * Agreement with the per-criterion path is measured by judge-agreement.ts,
+ * distance from a reference by judge-quality-eval.ts.
  */
 
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
+import type { BatchLLMProvider } from './judge-batch-provider.js';
 import { sanitizeForPrompt, sanitizeContextArray, safeJSONParse } from '../../src/lib/judge/llm-as-judge.js';
 import { normalizeEvaluationSteps } from '../../src/lib/judge/llm-judge-geval.js';
 import {
@@ -61,6 +69,7 @@ import {
   JUDGE_DEFAULT_TEMPERATURE,
   TIMESTAMP_TURN_KEY_LEN,
   SESSION_ID_PREVIEW_LEN,
+  SCORE_PREVIEW_DECIMALS,
   normalizeScore,
   fitContextForJudge,
   evalFailures,
@@ -80,7 +89,6 @@ const REASONING_DESCRIPTION = 'Your reasoning for this criterion, written before
 const SCORE_DESCRIPTION = `Integer score from ${G_EVAL_MIN_SCORE} to ${G_EVAL_MAX_SCORE}.`;
 const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
 const MAX_TOKENS_STOP_REASON = 'max_tokens';
-const SCORE_PREVIEW_DECIMALS = 2;
 const VALID_SCORE_SET: ReadonlySet<number> = new Set<number>(G_EVAL_VALID_SCORES);
 /** Tool sub-criteria, judged only alongside tool_correctness — mirrors `evaluateTurn`. */
 const TOOL_SUB_CRITERIA: readonly GEvalConfig[] = [
@@ -445,7 +453,8 @@ export async function evaluateTurnConsolidated(
       continue;
     }
     const normalized = toNormalizedScore(verdict.score);
-    // Hallucination is the complement of faithfulness, as on the per-criterion path.
+    // Hallucination is the complement of faithfulness — this path's own convention;
+    // the per-criterion path measures fabrication directly (see the header).
     const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
     const explanation = verdict.reasoning.trim()
       || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`;
@@ -509,11 +518,56 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
   };
 }
 
-/** What `judge-evaluations.ts --consolidated` hands to processBatch in place of evaluateTurn. */
+/** What judge-evaluations.ts hands to processBatch in place of evaluateTurn on the synchronous path. */
 export async function createConsolidatedTurnEvaluator(
   existingKeys: Set<string>,
+  options: ConsolidatedProviderOptions = {},
 ): Promise<(turn: Turn) => Promise<EvalRecord[]>> {
-  const provider = await createConsolidatedProvider();
+  const provider = await createConsolidatedProvider(options);
   const stepsCache: EvaluationStepsCache = new Map();
   return (turn: Turn) => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache);
+}
+
+// ---------------------------------------------------------------------------
+// Batch path (JCP3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Message Batches provider behind the consolidated interface. A schema
+ * call gets CONSOLIDATED_MAX_TOKENS, as on the synchronous provider. Usage is
+ * reported by the batch provider's own `onUsage`, so none is returned here.
+ * The batch result carries no stop reason, so a verdict truncated at
+ * max_tokens surfaces as the parse failure it produces rather than by name.
+ */
+export function adaptBatchProvider(batch: BatchLLMProvider): ConsolidatedProvider {
+  return {
+    async generate(prompt: string, options: ConsolidatedGenerateOptions = {}): Promise<ConsolidatedResponse> {
+      const { schema, temperature } = options;
+      const { text } = await batch.generate(prompt, {
+        ...(temperature !== undefined && { temperature }),
+        ...(schema && { jsonSchema: schema, maxTokens: CONSOLIDATED_MAX_TOKENS }),
+      });
+      return { text };
+    },
+  };
+}
+
+/**
+ * The --batch path. Every turn is issued at once; the first round carries the
+ * evaluation-steps calls (one per criterion, shared through the cache), the
+ * second the verdicts, both drained by one flush(). A wall-clock overrun is
+ * thrown, never returned as partial records — as in evaluateTurnsBatched.
+ */
+export async function evaluateTurnsConsolidatedBatched(
+  batch: BatchLLMProvider,
+  turns: readonly Turn[],
+  existingKeys: Set<string>,
+): Promise<EvalRecord[][]> {
+  const provider = adaptBatchProvider(batch);
+  const stepsCache: EvaluationStepsCache = new Map();
+  const inFlight = turns.map(turn => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache));
+  await batch.flush();
+  const perTurn = await Promise.all(inFlight);
+  if (batch.failure) throw batch.failure;
+  return perTurn;
 }

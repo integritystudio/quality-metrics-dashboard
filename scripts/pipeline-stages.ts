@@ -34,6 +34,13 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([JUDGE_EXIT
 export const JUDGE_BATCH_FLAG = '--batch';
 
 /**
+ * judge-evaluations flag: score every criterion in its own call instead of the
+ * default consolidated one call per turn (JCP4, 2026-09-22). ~10x the cost;
+ * kept for comparison runs and as the way back if the default regresses.
+ */
+export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
+
+/**
  * Waits between sync-to-kv attempts, in order — five retries, ~30 minutes in
  * total. Sized to the outages seen at the 18:00 firing on 2026-09-17, 18 and
  * 19: fifteen to thirty-five minutes of no DNS or reset connections on the
