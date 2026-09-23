@@ -79,6 +79,7 @@ import {
   evalFailures,
   failureClasses,
   classifyJudgeFailure,
+  turnAccountField,
 } from './judge-evaluations.js';
 
 // ---------------------------------------------------------------------------
@@ -428,6 +429,7 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
     judgeModel: HAIKU_MODEL,
     traceId: turn.traceId,
     sessionId: turn.sessionId,
+    ...turnAccountField(turn),
   };
 }
 

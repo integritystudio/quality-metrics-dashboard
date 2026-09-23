@@ -15,9 +15,13 @@
  *
  * Transport is chosen per record by the account that produced it (TKR7). The
  * hooks stamp every span with `identityKeyRef` — the identity map's secret name
- * for the signed-in account, or `null` for an unmapped one (TKR6). Evaluations
- * carry no stamp of their own, so each is joined to its source spans by trace
- * id, then by session id when the session saw only one account:
+ * for the signed-in account, or `null` for an unmapped one (TKR6). Since TKR8
+ * Phase 1, `derive-evaluations` and `judge-evaluations` copy the stamp of the
+ * span or turn they score onto the evaluation record itself, and that stamp
+ * routes it. A record written before Phase 1 has none, so it is joined to its
+ * source spans instead — by trace id, then by session id when the session saw
+ * only one account. The summary's `routedBy[stamp=… join=…]` shows how much
+ * still takes the join; once it reads `join=0` the join can be deleted.
  *
  * - **Attributed**: `POST /v1/ingest/backfill?signal=evaluations` with that
  *   account's API key, read from the environment under the ref's name. Ingest
@@ -73,6 +77,18 @@ import {
   LEGACY_EVALUATOR_TYPE_ATTR,
   TELEMETRY_DIR,
 } from './judge-evaluations.js';
+import {
+  ACCOUNT_INDEX_WINDOW_DAYS,
+  IDENTITY_KEY_REF_FIELD,
+  asString,
+  buildAccountIndex,
+  fileInWindow,
+  type AccountIndex,
+  type AccountRef,
+  type TraceStamp,
+} from './account-stamps.js';
+
+export { buildAccountIndex, type AccountIndex, type AccountRef, type TraceStamp };
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
 const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
@@ -103,15 +119,6 @@ const DEFAULT_WINDOW_DAYS = 2;
 const DEFAULT_MAX_AGE_HOURS = 36;
 
 const MS_PER_HOUR = 3_600_000;
-const MS_PER_DAY = 86_400_000;
-const MS_PER_S = 1_000;
-const NS_PER_MS = 1_000_000;
-/**
- * Start time given to a stamp whose span has none: it sorts last and is never at
- * or before an evaluation's time, so it can decide only a single-account trace.
- * Finite on purpose — `Infinity - Infinity` is `NaN`, which breaks the sort.
- */
-const UNTIMED_MS = Number.MAX_SAFE_INTEGER;
 
 /** Pause between batches so a large first run does not burst the worker. */
 const INTER_BATCH_DELAY_MS = 250;
@@ -127,21 +134,8 @@ const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 
 /** `evaluations-YYYY-MM-DD.jsonl` */
 const EVAL_FILE_PATTERN = /^evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
-/** `traces-YYYY-MM-DD.jsonl` — the stamped spans evaluations are joined to. */
-const TRACE_FILE_PATTERN = /^traces-(\d{4}-\d{2}-\d{2})\.jsonl$/;
-
-/**
- * Trace files read for the account join, in days. Wider than the upload
- * window because the judge scores backlog turns whose spans are older than
- * the evaluation record itself.
- */
-const ACCOUNT_INDEX_WINDOW_DAYS = 7;
-
-/** Record field the hooks' file exporters stamp (`appendJsonl`, TKR6). */
-const IDENTITY_KEY_REF_FIELD = 'identityKeyRef';
 /** Only identity-map secret names are read from the environment. */
 const IDENTITY_KEY_REF_PATTERN = /^OBTOOL_API_KEY(?:_[A-Z0-9]+)*$/;
-const SPAN_SESSION_ID_ATTR = 'session.id';
 
 const WEBHOOK_PATH = '/v1/evaluations';
 const KEYED_PATH = '/v1/ingest/backfill?signal=evaluations';
@@ -177,16 +171,18 @@ export interface EvaluationPayload {
 
 export interface MapResult {
   payload?: EvaluationPayload;
+  /**
+   * The record's own account stamp (TKR8 Phase 1); absent when the record has
+   * none. Kept off `payload` on purpose: the stamp routes the record and is
+   * never shipped.
+   */
+  accountRef?: AccountRef;
   /** Why the record was dropped; absent when `payload` is set. */
   skip?: 'not-an-evaluation' | 'canary' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
 }
 
 function truncate(value: string, max: number): string {
   return value.length > max ? value.slice(0, max) : value;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
 /**
@@ -277,6 +273,10 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
     if (Buffer.byteLength(JSON.stringify(payload)) > MAX_EVALUATION_BYTES) return { skip: 'too-large' };
   }
 
+  if (IDENTITY_KEY_REF_FIELD in r) {
+    const raw = r[IDENTITY_KEY_REF_FIELD];
+    return { payload, accountRef: typeof raw === 'string' ? raw : null };
+  }
   return { payload };
 }
 
@@ -286,9 +286,29 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
  * Built from the raw line so it is stable under `derive`'s wholesale rewrite
  * and independent of how this script happens to map fields today — a mapping
  * change must not silently re-ship the whole window.
+ *
+ * The account stamp is left out. `derive` regenerates its rule records on
+ * every run, so once it began stamping them (TKR8 Phase 1) every record it had
+ * already shipped would otherwise come back with a new fingerprint and ship
+ * twice. `toOTelRecord` writes the stamp as the last key, so dropping it and
+ * re-serializing yields exactly the line written before stamping.
  */
 export function fingerprint(line: string): string {
-  return createHash('sha256').update(line.trim()).digest('hex').slice(0, FINGERPRINT_LENGTH);
+  return createHash('sha256').update(unstamped(line.trim())).digest('hex').slice(0, FINGERPRINT_LENGTH);
+}
+
+function unstamped(line: string): string {
+  if (!line.includes(IDENTITY_KEY_REF_FIELD)) return line;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return line;
+  }
+  if (typeof parsed !== 'object' || parsed === null || !(IDENTITY_KEY_REF_FIELD in parsed)) return line;
+  const rest = { ...(parsed as Record<string, unknown>) };
+  delete rest[IDENTITY_KEY_REF_FIELD];
+  return JSON.stringify(rest);
 }
 
 export function loadShipped(dir: string): ShippedIndex {
@@ -322,12 +342,8 @@ export function pruneShipped(index: ShippedIndex, windowDays: number, nowMs: num
   return pruned;
 }
 
-function inWindow(file: string, windowDays: number, nowMs: number, pattern: RegExp = EVAL_FILE_PATTERN): boolean {
-  const m = pattern.exec(file);
-  if (!m) return false;
-  // Compare on the date in the name, never mtime: derive rewrites these files
-  // wholesale, so mtime says nothing about which day's records are inside.
-  return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * MS_PER_DAY;
+function inWindow(file: string, windowDays: number, nowMs: number): boolean {
+  return fileInWindow(file, EVAL_FILE_PATTERN, windowDays, nowMs);
 }
 
 /** Evaluation files in the date window, oldest first. */
@@ -339,91 +355,11 @@ export function windowFiles(dir: string, windowDays: number, nowMs: number): str
   }
 }
 
-/** Account ref as stamped: a secret name, or `null` for an unmapped account. */
-export type AccountRef = string | null;
-
-/** One stamped span's start time and account. */
-export interface TraceStamp {
-  atMs: number;
-  ref: AccountRef;
-}
-
-export interface AccountIndex {
-  /**
-   * Every stamp a trace's spans carried, sorted by start time. A trace is one
-   * prompt, and a prompt can span a `/login`, so one trace can hold two accounts.
-   */
-  byTrace: Map<string, TraceStamp[]>;
-  /** Every ref a session's spans carried; more than one means it switched. */
-  bySession: Map<string, Set<AccountRef>>;
-}
-
 /** Where one record goes. */
 export type Route =
   | { kind: 'keyed'; ref: string }
   | { kind: 'withheld' }
   | { kind: 'webhook' };
-
-/**
- * Index stamped spans by trace and session. Unstamped spans (written before
- * TKR6) are skipped, so they cannot outvote a stamped one in the same session.
- */
-export function buildAccountIndex(dir: string, windowDays: number, nowMs: number): AccountIndex {
-  const index: AccountIndex = { byTrace: new Map(), bySession: new Map() };
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => inWindow(f, windowDays, nowMs, TRACE_FILE_PATTERN));
-  } catch {
-    return index;
-  }
-  for (const file of files) {
-    for (const line of readFileSync(join(dir, file), 'utf8').split('\n')) {
-      if (!line.includes(IDENTITY_KEY_REF_FIELD)) continue;
-      // `unknown`, not a cast to Record: JSON.parse returns whatever the line held,
-      // and a line reaches here only by containing IDENTITY_KEY_REF_FIELD — which a
-      // bare JSON string does too. Asserting the object shape up front makes the
-      // guard below look redundant to the type checker while `'x' in "a string"`
-      // still throws at runtime.
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      if (typeof parsed !== 'object' || parsed === null) continue;
-      const span = parsed as Record<string, unknown>;
-      if (!(IDENTITY_KEY_REF_FIELD in span)) continue;
-      const raw = span[IDENTITY_KEY_REF_FIELD];
-      const ref: AccountRef = typeof raw === 'string' ? raw : null;
-      const traceId = asString(span.traceId);
-      if (traceId) {
-        const stamps = index.byTrace.get(traceId) ?? [];
-        stamps.push({ atMs: hrTimeToMs(span.startTime), ref });
-        index.byTrace.set(traceId, stamps);
-      }
-      const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
-        ? span.attributes as Record<string, unknown>
-        : {};
-      const sessionId = asString(attrs[SPAN_SESSION_ID_ATTR]);
-      if (sessionId) {
-        const refs = index.bySession.get(sessionId) ?? new Set<AccountRef>();
-        refs.add(ref);
-        index.bySession.set(sessionId, refs);
-      }
-    }
-  }
-  for (const stamps of index.byTrace.values()) stamps.sort((a, b) => a.atMs - b.atMs);
-  return index;
-}
-
-/** OTel `[seconds, nanoseconds]` start time to epoch ms; `UNTIMED_MS` when absent or malformed. */
-function hrTimeToMs(value: unknown): number {
-  if (!Array.isArray(value) || value.length !== 2) return UNTIMED_MS;
-  // Array.isArray narrows `unknown` to `any[]`, so name the element type rather
-  // than destructure `any`; the typeof guards below still do the real checking.
-  const [s, ns] = value as [unknown, unknown];
-  return typeof s === 'number' && typeof ns === 'number' ? s * MS_PER_S + ns / NS_PER_MS : UNTIMED_MS;
-}
 
 /**
  * The account a trace was under at `atMs`: its only account, or — for a trace
@@ -432,7 +368,8 @@ function hrTimeToMs(value: unknown): number {
  * stamp), so the caller falls back rather than guessing.
  *
  * Time is an approximation for a judge score produced after the turn: it lands
- * on the trace's last account. The records carry no span id to do better.
+ * on the trace's last account. Only records written before TKR8 Phase 1 reach
+ * this; stamped records route on their own stamp.
  */
 function traceAccountAt(stamps: TraceStamp[], atMs: number | undefined): AccountRef | undefined {
   const refs = new Set(stamps.map((s) => s.ref));
@@ -458,11 +395,27 @@ export function resolveRoute(payload: EvaluationPayload, index: AccountIndex): R
     const refs = index.bySession.get(payload.sessionId);
     if (refs?.size === 1) ref = [...refs][0];
   }
-  if (ref === undefined) return { kind: 'webhook' };
+  return ref === undefined ? { kind: 'webhook' } : routeForRef(ref);
+}
+
+function routeForRef(ref: AccountRef): Route {
   if (ref === null) return { kind: 'withheld' };
   // A ref that is not an identity-map secret name is not read from the
   // environment; the record ships as it did before stamping existed.
   return IDENTITY_KEY_REF_PATTERN.test(ref) ? { kind: 'keyed', ref } : { kind: 'webhook' };
+}
+
+/** How a record's route was decided: its own stamp, or the pre-Phase-1 join. */
+export type RouteBasis = 'stamp' | 'join';
+
+/**
+ * Route a mapped record. Its own stamp wins outright — it names the account of
+ * the span or turn that was scored, which no join can improve on. Only an
+ * unstamped record falls back to `resolveRoute`.
+ */
+export function routeRecord(mapped: MapResult, index: AccountIndex): { route: Route; basis: RouteBasis } {
+  if (mapped.accountRef !== undefined) return { route: routeForRef(mapped.accountRef), basis: 'stamp' };
+  return { route: resolveRoute(mapped.payload!, index), basis: 'join' };
 }
 
 function signature(payload: string, secret: string): string {
@@ -590,6 +543,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   let alreadyShipped = 0;
   let withheld = 0;
   const heldForKey: Record<string, number> = {};
+  const routedBy: Record<RouteBasis, number> = { stamp: 0, join: 0 };
 
   // try/finally, not a trailing save: an unexpected throw anywhere below would
   // otherwise skip saveShipped and lose the fingerprints of batches this run
@@ -651,7 +605,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         if (mapped.skip !== 'too-old') delivered.push(fp);
         continue;
       }
-      const route = resolveRoute(mapped.payload!, accounts);
+      const { route, basis } = routeRecord(mapped, accounts);
+      routedBy[basis]++;
       if (route.kind === 'withheld') {
         // Unmapped account: consumed unsent, never re-examined (TKR3).
         withheld++;
@@ -690,6 +645,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     `[upload-evaluations]${opts.dryRun ? ' dry-run:' : ''} ` +
     `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${summarize(skips)}]` +
     ` byDestination[${summarize(sentByDestination)}] withheld=${withheld}` +
+    ` routedBy[${summarize(routedBy)}]` +
     (Object.keys(heldForKey).length ? ` heldForKey[${summarize(heldForKey)}]` : '') +
     (parseErrors ? ` parseErrors=${parseErrors}` : ''),
   );

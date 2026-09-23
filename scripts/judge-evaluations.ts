@@ -62,6 +62,14 @@ import {
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKeySource } from './judge-credentials.js';
 import pLimit from 'p-limit';
+import {
+  ACCOUNT_INDEX_WINDOW_DAYS,
+  IDENTITY_KEY_REF_FIELD,
+  buildAccountIndex,
+  turnAccount,
+  type AccountIndex,
+  type AccountRef,
+} from './account-stamps.js';
 
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',
@@ -226,7 +234,45 @@ function createEvalRecord(
     ...(judgeModel && { judgeModel }),
     traceId: turn.traceId,
     sessionId: turn.sessionId,
+    ...turnAccountField(turn),
   };
+}
+
+/**
+ * The scored turn's account stamp, for a record built from it (TKR8 Phase 1).
+ * Spread, not assigned: an unstamped turn must yield a record with no
+ * `identityKeyRef` key at all, which upload reads as "fall back to the join";
+ * `null` is a real stamp (unmapped account, withheld).
+ */
+export function turnAccountField(turn: Turn): Pick<EvalRecord, 'identityKeyRef'> {
+  return turn.identityKeyRef === undefined ? {} : { identityKeyRef: turn.identityKeyRef };
+}
+
+/**
+ * Stamp each turn with the account it ran under, from its own spans: the
+ * session's first stamped span between the turn's start and the next turn's.
+ *
+ * Never from the turn's `traceId`. A transcript's turns all share the trace id
+ * of whichever prompt the token-metrics log recorded first, so it names the
+ * wrong prompt for every turn but one. And never from the account signed in
+ * now: the judge runs hours after the turn, often under another account.
+ */
+export function stampTurns(turns: Turn[], index: AccountIndex): void {
+  const bySession = new Map<string, Turn[]>();
+  for (const turn of turns) {
+    const group = bySession.get(turn.sessionId) ?? [];
+    group.push(turn);
+    bySession.set(turn.sessionId, group);
+  }
+  for (const [sessionId, group] of bySession) {
+    const timed = group
+      .map((turn) => ({ turn, atMs: Date.parse(turn.timestamp) }))
+      .sort((a, b) => a.atMs - b.atMs);
+    timed.forEach(({ turn, atMs }, i) => {
+      const ref = turnAccount(index, sessionId, atMs, timed[i + 1]?.atMs);
+      if (ref !== undefined) turn.identityKeyRef = ref;
+    });
+  }
 }
 
 export interface TranscriptInfo {
@@ -242,6 +288,8 @@ export interface Turn {
   userText: string;
   assistantText: string;
   toolResults: string[];
+  /** Account the turn ran under (`stampTurns`); absent when no stamped span covers it. */
+  identityKeyRef?: AccountRef;
 }
 
 /** Canonical evaluation record. Also used by derive-evaluations.ts. */
@@ -269,6 +317,13 @@ export interface EvalRecord {
   judgeModel?: string;
   traceId: string;
   sessionId: string;
+  /**
+   * Account of the span or turn this scores, copied from its hook stamp (TKR8
+   * Phase 1): a secret name, `null` for an unmapped account, absent when the
+   * source carried none. Written as a record field, never an attribute, so it
+   * routes the upload and is never shipped.
+   */
+  identityKeyRef?: AccountRef;
 }
 
 /**
@@ -1210,6 +1265,9 @@ export function toOTelRecord(ev: EvalRecord): object {
     // (docs/roadmap/org-scoped-multi-tenancy.md, Phase 4). Omitted when the
     // env is unset so pre-tenancy behavior is byte-identical.
     ...(process.env.HOME_ORG_ID && { org_id: process.env.HOME_ORG_ID }),
+    // Last, so upload's fingerprint can drop it and recover the exact line
+    // this record serialized to before stamping existed.
+    ...(ev.identityKeyRef !== undefined && { [IDENTITY_KEY_REF_FIELD]: ev.identityKeyRef }),
   };
 }
 
@@ -1435,6 +1493,7 @@ async function main() {
   // --backfill: generate seed evals from trace data for sessions missing transcripts
   if (backfill) {
     const traceTurns = await discoverSessionsFromTraces();
+    stampTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
     console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
 
     if (!acquireLock()) {
@@ -1487,7 +1546,11 @@ async function main() {
 
   const concurrencyLimit = pLimit(CONCURRENCY);
   const turnArrays = await Promise.all(transcripts.map(info => concurrencyLimit(() => extractTurns(info))));
-  const allTurns = turnArrays.flat().slice(0, limit);
+  // Stamped before the limit slices, so each turn's window is bounded by the
+  // real next turn rather than by whichever turns happened to survive the cut.
+  const extracted = turnArrays.flat();
+  stampTurns(extracted, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
+  const allTurns = extracted.slice(0, limit);
 
   if (dryRun) {
     const est = estimateJudgeRun(allTurns, batch, consolidated);

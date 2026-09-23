@@ -26,6 +26,7 @@ export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
+import { indexTraceFiles, type AccountRef } from './account-stamps.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -33,6 +34,23 @@ import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js'
 export type { EvalRecord } from './judge-evaluations.js';
 
 /** Span attributes are `unknown`-valued; render primitives, never objects. */
+/**
+ * Each span's account stamp by span id, set by `main` from the raw trace lines
+ * (TKR8 Phase 1). The raw lines, because `localTraceSpanSchema` strips unknown
+ * keys, so the stamp never reaches the parsed spans. Empty by default, which
+ * leaves every record unstamped, as before.
+ */
+let spanAccounts: ReadonlyMap<string, AccountRef> = new Map();
+
+export function setSpanAccounts(accounts: ReadonlyMap<string, AccountRef>): void {
+  spanAccounts = accounts;
+}
+
+/** The scored span's stamp as a record field; `{}` when the span carried none. */
+function spanAccountField(span: LocalTraceSpan): Pick<EvalRecord, 'identityKeyRef'> {
+  return spanAccounts.has(span.spanId) ? { identityKeyRef: spanAccounts.get(span.spanId)! } : {};
+}
+
 function attrString(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -90,6 +108,7 @@ function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
     evaluatorKind: RULE_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
     traceId: span.traceId,
+    ...spanAccountField(span),
     sessionId: attrString(attrs['session.id']),
   };
 }
@@ -131,6 +150,7 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
     evaluatorKind: RULE_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
     traceId: span.traceId,
+    ...spanAccountField(span),
     sessionId: attrString(attrs['session.id']),
   };
 }
@@ -223,6 +243,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         evaluatorKind: RULE_EVALUATOR_KIND,
         cohort: NORMAL_COHORT,
         traceId: lastSpan.traceId,
+        ...spanAccountField(lastSpan),
         sessionId,
       });
     } else {
@@ -240,6 +261,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         evaluatorKind: RULE_EVALUATOR_KIND,
         cohort: NORMAL_COHORT,
         traceId: lastSpan.traceId,
+        ...spanAccountField(lastSpan),
         sessionId,
       });
     }
@@ -295,6 +317,7 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
       evaluatorKind: RULE_EVALUATOR_KIND,
       cohort: NORMAL_COHORT,
       traceId: lastSpan.traceId,
+      ...spanAccountField(lastSpan),
       sessionId,
     });
   }
@@ -350,6 +373,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       evaluatorKind: RULE_EVALUATOR_KIND,
       cohort: NORMAL_COHORT,
       traceId: lastSpan.traceId,
+      ...spanAccountField(lastSpan),
       sessionId,
     });
   }
@@ -412,6 +436,7 @@ function main(): void {
       || dateScope.has(f.slice(TRACE_FILE_PREFIX.length, TRACE_FILE_PREFIX.length + DATE_ONLY_LEN)))
     .sort();
 
+  setSpanAccounts(indexTraceFiles(TELEMETRY_DIR, traceFiles).bySpan);
   const allEvals: EvalRecord[] = [];
 
   for (const file of traceFiles) {
