@@ -3,13 +3,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { buildAccountIndex, turnAccount, type AccountIndex } from '../account-stamps.js';
-import { stampTurns, toOTelRecord, type EvalRecord, type Turn } from '../judge-evaluations.js';
+import { buildAccountIndex, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
+import { anchorTurns, turnSourceFields, toOTelRecord, type EvalRecord, type Turn } from '../judge-evaluations.js';
 import { deriveEvaluationLatency, setSpanAccounts, type TraceSpan } from '../derive-evaluations.js';
 import { fingerprint, mapRecord, routeRecord } from '../upload-evaluations.js';
 
 // TKR8 Phase 1: evaluations carry the account of what they score, and upload
-// routes on that stamp instead of joining by trace and time.
+// routes on that stamp instead of joining by trace and time. Phase 2: they also
+// name the span they score, and upload can route by that span's stamp.
 
 const NOW = Date.parse('2026-09-23T12:00:00.000Z');
 const HOME_REF = 'OBTOOL_API_KEY';
@@ -79,21 +80,52 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
     });
   });
 
-  describe('judge: stampTurns', () => {
-    const turn = (timestamp: string): Turn => ({
-      sessionId: SESSION, traceId: 't1', timestamp, userText: 'q', assistantText: 'a', toolResults: [],
+  describe('turnSpan', () => {
+    it("returns the first span in the turn's window, stamped or not", () => {
+      const idx = index([
+        { spanId: 'u1', traceId: 't-turn1', atMs: at('10:00') },
+        { spanId: 'a1', traceId: 't-turn1', atMs: at('10:05'), ref: HOME_REF },
+        { spanId: 'b1', traceId: 't-turn2', atMs: at('11:00'), ref: GMAIL_REF },
+      ]);
+      expect(turnSpan(idx, SESSION, at('09:59'), at('10:59'))).toEqual({ spanId: 'u1', traceId: 't-turn1' });
+      expect(turnSpan(idx, SESSION, at('10:59'))).toEqual({ spanId: 'b1', traceId: 't-turn2' });
+      expect(turnSpan(idx, SESSION, at('11:30'))).toBeUndefined();
+    });
+  });
+
+  describe('judge: anchorTurns', () => {
+    const turn = (timestamp: string, extra: Partial<Turn> = {}): Turn => ({
+      sessionId: SESSION, traceId: '', timestamp, userText: 'q', assistantText: 'a', toolResults: [], ...extra,
     });
 
-    it('stamps each turn with its own account across a /login, not by the shared trace id', () => {
+    it('stamps each turn with its own account across a /login', () => {
       const turns = [turn('2026-09-23T11:00:00.000Z'), turn('2026-09-23T09:59:59.000Z')];
-      stampTurns(turns, switchedSession());
+      anchorTurns(turns, switchedSession());
       expect(turns.map((t) => t.identityKeyRef)).toEqual([GMAIL_REF, HOME_REF]);
     });
 
-    it('leaves a turn with no covering span unstamped', () => {
+    it("gives each turn its own trace and span rather than the transcript's shared trace", () => {
+      const idx = index([
+        { spanId: 's-a', traceId: 't-prompt1', atMs: at('10:00'), ref: HOME_REF },
+        { spanId: 's-b', traceId: 't-prompt2', atMs: at('11:00'), ref: HOME_REF },
+      ]);
+      const turns = [turn('2026-09-23T09:59:59.000Z'), turn('2026-09-23T10:59:59.000Z')];
+      anchorTurns(turns, idx);
+      expect(turns.map((t) => [t.traceId, t.spanId])).toEqual([['t-prompt1', 's-a'], ['t-prompt2', 's-b']]);
+    });
+
+    it('leaves a turn with no covering span unanchored', () => {
       const t = turn('2026-09-23T12:30:00.000Z');
-      stampTurns([t], switchedSession());
-      expect('identityKeyRef' in t).toBe(false);
+      anchorTurns([t], switchedSession());
+      expect(t).not.toHaveProperty('identityKeyRef');
+      expect(t).not.toHaveProperty('spanId');
+      expect(t.traceId).toBe('');
+    });
+
+    it('links a record by span, and by response id only when no span is known', () => {
+      expect(turnSourceFields(turn('x', { spanId: 's-a', responseId: 'msg_1', identityKeyRef: HOME_REF })))
+        .toEqual({ spanId: 's-a', identityKeyRef: HOME_REF });
+      expect(turnSourceFields(turn('x', { responseId: 'msg_1' }))).toEqual({ responseId: 'msg_1' });
     });
   });
 
@@ -104,11 +136,17 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       ...extra,
     });
 
-    it('writes the stamp as the last record field and never as an attribute', () => {
-      const out = toOTelRecord(record({ identityKeyRef: GMAIL_REF })) as Record<string, unknown>;
-      expect(Object.keys(out).at(-1)).toBe('identityKeyRef');
+    it('writes span id then stamp as the last record fields, neither as an attribute', () => {
+      const out = toOTelRecord(record({ spanId: 's-a', identityKeyRef: GMAIL_REF })) as Record<string, unknown>;
+      expect(Object.keys(out).slice(-2)).toEqual(['spanId', 'identityKeyRef']);
       expect(out.identityKeyRef).toBe(GMAIL_REF);
       expect(out.attributes).not.toHaveProperty('identityKeyRef');
+      expect(out.attributes).not.toHaveProperty('spanId');
+    });
+
+    it('writes the response id as the semconv attribute', () => {
+      const out = toOTelRecord(record({ responseId: 'msg_1' })) as { attributes: Record<string, unknown> };
+      expect(out.attributes['gen_ai.response.id']).toBe('msg_1');
     });
 
     it('writes a null stamp and omits an absent one', () => {
@@ -127,6 +165,10 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       setSpanAccounts(new Map([['stamped', GMAIL_REF]]));
       expect(deriveEvaluationLatency(measurable('stamped'))!.identityKeyRef).toBe(GMAIL_REF);
       expect(deriveEvaluationLatency(measurable('bare'))).not.toHaveProperty('identityKeyRef');
+    });
+
+    it('names the span it scores', () => {
+      expect(deriveEvaluationLatency(measurable('scored'))!.spanId).toBe('scored');
     });
   });
 
@@ -156,6 +198,22 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       expect(routeRecord(unstamped, idx)).toEqual({ route: { kind: 'keyed', ref: GMAIL_REF }, basis: 'join' });
     });
 
+    it("routes an unstamped record by its span's stamp before any join", () => {
+      // Span a1 is home's; the time join would say gmail (evaluated 11:30).
+      const idx = switchedSession();
+      const bySpan = mapRecord(evalLine({ spanId: 'a1' }), NOW, MAX_AGE_MS);
+      expect(routeRecord(bySpan, idx)).toEqual({ route: { kind: 'keyed', ref: HOME_REF }, basis: 'span' });
+      const unknownSpan = mapRecord(evalLine({ spanId: 'not-indexed' }), NOW, MAX_AGE_MS);
+      expect(routeRecord(unknownSpan, idx).basis).toBe('join');
+    });
+
+    it('forwards the response id in metadata', () => {
+      const mapped = mapRecord(evalLine({
+        attributes: { 'gen_ai.evaluation.name': 'relevance', 'gen_ai.evaluation.score.value': 0.8, 'gen_ai.response.id': 'msg_1' },
+      }), NOW, MAX_AGE_MS);
+      expect(mapped.payload!.metadata).toMatchObject({ responseId: 'msg_1' });
+    });
+
     it('withholds a record stamped with an unmapped account', () => {
       const mapped = mapRecord(evalLine({ identityKeyRef: null }), NOW, MAX_AGE_MS);
       expect(routeRecord(mapped, switchedSession())).toEqual({ route: { kind: 'withheld' }, basis: 'stamp' });
@@ -167,6 +225,8 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       const before = JSON.stringify(evalLine());
       const after = JSON.stringify(evalLine({ identityKeyRef: HOME_REF }));
       expect(fingerprint(after)).toBe(fingerprint(before));
+      const withSpan = JSON.stringify(evalLine({ spanId: 's-a', identityKeyRef: HOME_REF }));
+      expect(fingerprint(withSpan)).toBe(fingerprint(before));
       expect(fingerprint(JSON.stringify(evalLine({ traceId: 't2' })))).not.toBe(fingerprint(before));
     });
   });

@@ -108,6 +108,7 @@ function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
     evaluatorKind: RULE_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
     traceId: span.traceId,
+    spanId: span.spanId,
     ...spanAccountField(span),
     sessionId: attrString(attrs['session.id']),
   };
@@ -150,6 +151,7 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
     evaluatorKind: RULE_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
     traceId: span.traceId,
+    spanId: span.spanId,
     ...spanAccountField(span),
     sessionId: attrString(attrs['session.id']),
   };
@@ -243,6 +245,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         evaluatorKind: RULE_EVALUATOR_KIND,
         cohort: NORMAL_COHORT,
         traceId: lastSpan.traceId,
+        spanId: lastSpan.spanId,
         ...spanAccountField(lastSpan),
         sessionId,
       });
@@ -261,6 +264,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         evaluatorKind: RULE_EVALUATOR_KIND,
         cohort: NORMAL_COHORT,
         traceId: lastSpan.traceId,
+        spanId: lastSpan.spanId,
         ...spanAccountField(lastSpan),
         sessionId,
       });
@@ -317,6 +321,7 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
       evaluatorKind: RULE_EVALUATOR_KIND,
       cohort: NORMAL_COHORT,
       traceId: lastSpan.traceId,
+      spanId: lastSpan.spanId,
       ...spanAccountField(lastSpan),
       sessionId,
     });
@@ -373,6 +378,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       evaluatorKind: RULE_EVALUATOR_KIND,
       cohort: NORMAL_COHORT,
       traceId: lastSpan.traceId,
+      spanId: lastSpan.spanId,
       ...spanAccountField(lastSpan),
       sessionId,
     });

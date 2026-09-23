@@ -67,6 +67,7 @@ import {
   IDENTITY_KEY_REF_FIELD,
   buildAccountIndex,
   turnAccount,
+  turnSpan,
   type AccountIndex,
   type AccountRef,
 } from './account-stamps.js';
@@ -191,6 +192,8 @@ export const EVALUATION_ATTRS = {
   PRODUCER: 'integritystudio.evaluation.producer',
   JUDGE_MODEL: 'integritystudio.evaluation.judge.model',
   SESSION_ID: 'session.id',
+  /** Semconv fallback link to the scored response when no span id is known (TKR8 Phase 2). */
+  RESPONSE_ID: 'gen_ai.response.id',
 } as const;
 
 /** Legacy overloaded key, read-only — still present on every pre-OBP16 record. */
@@ -234,30 +237,40 @@ function createEvalRecord(
     ...(judgeModel && { judgeModel }),
     traceId: turn.traceId,
     sessionId: turn.sessionId,
-    ...turnAccountField(turn),
+    ...turnSourceFields(turn),
   };
 }
 
 /**
- * The scored turn's account stamp, for a record built from it (TKR8 Phase 1).
+ * What a record built from a turn carries to link it to that turn: its span
+ * (Phase 2), the response id when no span is known, and its account stamp
+ * (Phase 1).
+ *
  * Spread, not assigned: an unstamped turn must yield a record with no
  * `identityKeyRef` key at all, which upload reads as "fall back to the join";
- * `null` is a real stamp (unmapped account, withheld).
+ * `null` is a real stamp (unmapped account, withheld). The response id follows
+ * the semconv rule literally — it is set only "when span id is not available".
  */
-export function turnAccountField(turn: Turn): Pick<EvalRecord, 'identityKeyRef'> {
-  return turn.identityKeyRef === undefined ? {} : { identityKeyRef: turn.identityKeyRef };
+export function turnSourceFields(turn: Turn): Pick<EvalRecord, 'identityKeyRef' | 'spanId' | 'responseId'> {
+  return {
+    ...(turn.spanId ? { spanId: turn.spanId } : turn.responseId ? { responseId: turn.responseId } : {}),
+    ...(turn.identityKeyRef !== undefined && { identityKeyRef: turn.identityKeyRef }),
+  };
 }
 
 /**
- * Stamp each turn with the account it ran under, from its own spans: the
- * session's first stamped span between the turn's start and the next turn's.
+ * Anchor each turn to its own spans: the session's spans between the turn's
+ * start and the next turn's. The first of them gives the turn its trace and
+ * the span its evaluations are parented to (Phase 2); the first stamped one
+ * gives its account (Phase 1).
  *
- * Never from the turn's `traceId`. A transcript's turns all share the trace id
- * of whichever prompt the token-metrics log recorded first, so it names the
- * wrong prompt for every turn but one. And never from the account signed in
- * now: the judge runs hours after the turn, often under another account.
+ * Never from the transcript's trace id. A transcript's turns all share the
+ * trace id of whichever prompt the token-metrics log recorded first, so it
+ * names the wrong prompt for every turn but one — `extractTurns` no longer
+ * copies it. And never from the account signed in now: the judge runs hours
+ * after the turn, often under another account.
  */
-export function stampTurns(turns: Turn[], index: AccountIndex): void {
+export function anchorTurns(turns: Turn[], index: AccountIndex): void {
   const bySession = new Map<string, Turn[]>();
   for (const turn of turns) {
     const group = bySession.get(turn.sessionId) ?? [];
@@ -269,8 +282,14 @@ export function stampTurns(turns: Turn[], index: AccountIndex): void {
       .map((turn) => ({ turn, atMs: Date.parse(turn.timestamp) }))
       .sort((a, b) => a.atMs - b.atMs);
     timed.forEach(({ turn, atMs }, i) => {
-      const ref = turnAccount(index, sessionId, atMs, timed[i + 1]?.atMs);
+      const nextMs = timed[i + 1]?.atMs;
+      const ref = turnAccount(index, sessionId, atMs, nextMs);
       if (ref !== undefined) turn.identityKeyRef = ref;
+      const span = turnSpan(index, sessionId, atMs, nextMs);
+      if (span) {
+        turn.traceId = span.traceId;
+        turn.spanId = span.spanId;
+      }
     });
   }
 }
@@ -288,8 +307,12 @@ export interface Turn {
   userText: string;
   assistantText: string;
   toolResults: string[];
-  /** Account the turn ran under (`stampTurns`); absent when no stamped span covers it. */
+  /** Account the turn ran under (`anchorTurns`); absent when no stamped span covers it. */
   identityKeyRef?: AccountRef;
+  /** The turn's first span (`anchorTurns`), which its evaluations are parented to. */
+  spanId?: string;
+  /** API response id of the turn's assistant message — semconv `gen_ai.response.id`. */
+  responseId?: string;
 }
 
 /** Canonical evaluation record. Also used by derive-evaluations.ts. */
@@ -324,6 +347,13 @@ export interface EvalRecord {
    * routes the upload and is never shipped.
    */
   identityKeyRef?: AccountRef;
+  /**
+   * The span this scores (TKR8 Phase 2): written top-level beside `traceId`, as
+   * an OTel log record's span context, so the evaluation is parented to it.
+   */
+  spanId?: string;
+  /** The scored response's id, set only when `spanId` is unknown (semconv fallback). */
+  responseId?: string;
 }
 
 /**
@@ -527,6 +557,8 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
   const turns: Turn[] = [];
 
   let pendingUser: { text: string; timestamp: string } | null = null;
+  // Anchoring (`anchorTurns`) gives each turn its own trace; `info.traceId` is
+  // one prompt's trace for the whole transcript, so it is not copied (TKR8).
   const accumulatedToolResults: string[] = [];
 
   for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
@@ -570,11 +602,12 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
 
       turns.push({
         sessionId: info.sessionId,
-        traceId: info.traceId,
+        traceId: '',
         timestamp: pendingUser.timestamp,
         userText: pendingUser.text,
         assistantText: sanitizeForPrompt(assistantText, MAX_TURN_TEXT_LEN),
         toolResults: accumulatedToolResults.slice(-MAX_TOOL_RESULTS_PER_TURN),
+        ...(message.id && { responseId: message.id }),
       });
 
       pendingUser = null;
@@ -1251,6 +1284,7 @@ export function toOTelRecord(ev: EvalRecord): object {
     ...(ev.judgeModel && { [EVALUATION_ATTRS.JUDGE_MODEL]: ev.judgeModel }),
   };
   if (ev.scoreUnit) attrs[EVALUATION_ATTRS.SCORE_UNIT] = ev.scoreUnit;
+  if (ev.responseId) attrs[EVALUATION_ATTRS.RESPONSE_ID] = ev.responseId;
   if (ev.sessionId) attrs[EVALUATION_ATTRS.SESSION_ID] = ev.sessionId;
   return {
     timestamp: ev.timestamp,
@@ -1265,8 +1299,10 @@ export function toOTelRecord(ev: EvalRecord): object {
     // (docs/roadmap/org-scoped-multi-tenancy.md, Phase 4). Omitted when the
     // env is unset so pre-tenancy behavior is byte-identical.
     ...(process.env.HOME_ORG_ID && { org_id: process.env.HOME_ORG_ID }),
-    // Last, so upload's fingerprint can drop it and recover the exact line
-    // this record serialized to before stamping existed.
+    // `spanId` then the stamp, last and in this order, so upload's fingerprint
+    // can drop both and recover the exact line this record serialized to
+    // before either existed (derive rewrites its records every run).
+    ...(ev.spanId && { spanId: ev.spanId }),
     ...(ev.identityKeyRef !== undefined && { [IDENTITY_KEY_REF_FIELD]: ev.identityKeyRef }),
   };
 }
@@ -1493,7 +1529,7 @@ async function main() {
   // --backfill: generate seed evals from trace data for sessions missing transcripts
   if (backfill) {
     const traceTurns = await discoverSessionsFromTraces();
-    stampTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
+    anchorTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
     console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
 
     if (!acquireLock()) {
@@ -1546,10 +1582,10 @@ async function main() {
 
   const concurrencyLimit = pLimit(CONCURRENCY);
   const turnArrays = await Promise.all(transcripts.map(info => concurrencyLimit(() => extractTurns(info))));
-  // Stamped before the limit slices, so each turn's window is bounded by the
+  // Anchored before the limit slices, so each turn's window is bounded by the
   // real next turn rather than by whichever turns happened to survive the cut.
   const extracted = turnArrays.flat();
-  stampTurns(extracted, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
+  anchorTurns(extracted, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
   const allTurns = extracted.slice(0, limit);
 
   if (dryRun) {

@@ -14,9 +14,11 @@
  * Three consumers, three lookups:
  * - `derive-evaluations` scores a span it holds: `bySpan`.
  * - `judge-evaluations` scores a transcript turn, whose own spans are the
- *   session's stamps between that turn and the next: `turnAccount`.
- * - `upload-evaluations`, for records written before Phase 1: `byTrace` and
- *   `bySession`, the time-based join this replaces.
+ *   session's spans between that turn and the next: `turnAccount` for its
+ *   stamp and `turnSpan` for the span it is parented to (Phase 2).
+ * - `upload-evaluations`: `bySpan` for a record that names its span, then, for
+ *   records written before Phase 1, `byTrace` and `bySession` — the time-based
+ *   join this replaces.
  */
 
 import { readdirSync, readFileSync } from 'fs';
@@ -55,6 +57,24 @@ export interface TraceStamp {
   ref: AccountRef;
 }
 
+/**
+ * One span on a session's timeline. Unstamped spans are included (`ref`
+ * undefined) so a turn can be anchored to its span even where no account was
+ * stamped; `turnAccount` skips them.
+ */
+export interface SessionSpan {
+  atMs: number;
+  spanId?: string;
+  traceId?: string;
+  ref: AccountRef | undefined;
+}
+
+/** The span a turn is parented to, per the semconv evaluation-event rule. */
+export interface SpanRef {
+  spanId: string;
+  traceId: string;
+}
+
 export interface AccountIndex {
   /**
    * Every stamp a trace's spans carried, sorted by start time. A trace is one
@@ -63,8 +83,8 @@ export interface AccountIndex {
   byTrace: Map<string, TraceStamp[]>;
   /** Every ref a session's spans carried; more than one means it switched. */
   bySession: Map<string, Set<AccountRef>>;
-  /** Every stamp a session's spans carried, sorted by start time. */
-  sessionStamps: Map<string, TraceStamp[]>;
+  /** Every span of a session, stamped or not, sorted by start time. */
+  sessionSpans: Map<string, SessionSpan[]>;
   /** The stamp of one span, by span id. */
   bySpan: Map<string, AccountRef>;
 }
@@ -91,19 +111,19 @@ function hrTimeToMs(value: unknown): number {
   return typeof s === 'number' && typeof ns === 'number' ? s * MS_PER_S + ns / NS_PER_MS : UNTIMED_MS;
 }
 
-function pushStamp(map: Map<string, TraceStamp[]>, key: string, stamp: TraceStamp): void {
-  const stamps = map.get(key) ?? [];
-  stamps.push(stamp);
-  map.set(key, stamps);
+function pushTo<T>(map: Map<string, T[]>, key: string, value: T): void {
+  const values = map.get(key) ?? [];
+  values.push(value);
+  map.set(key, values);
 }
 
 /**
- * Index the stamped spans in `files` (names under `dir`). Unstamped spans
- * (written before TKR6) are skipped, so they cannot outvote a stamped one in
- * the same session.
+ * Index the spans in `files` (names under `dir`). Unstamped spans (written
+ * before TKR6) go only on the session timeline, so they cannot outvote a
+ * stamped one in any account lookup.
  */
 export function indexTraceFiles(dir: string, files: readonly string[]): AccountIndex {
-  const index: AccountIndex = { byTrace: new Map(), bySession: new Map(), sessionStamps: new Map(), bySpan: new Map() };
+  const index: AccountIndex = { byTrace: new Map(), bySession: new Map(), sessionSpans: new Map(), bySpan: new Map() };
   for (const file of files) {
     let text: string;
     try {
@@ -112,12 +132,9 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
       continue;
     }
     for (const line of text.split('\n')) {
-      if (!line.includes(IDENTITY_KEY_REF_FIELD)) continue;
-      // `unknown`, not a cast to Record: JSON.parse returns whatever the line held,
-      // and a line reaches here only by containing IDENTITY_KEY_REF_FIELD — which a
-      // bare JSON string does too. Asserting the object shape up front makes the
-      // guard below look redundant to the type checker while `'x' in "a string"`
-      // still throws at runtime.
+      if (!line.trim()) continue;
+      // `unknown`, not a cast to Record: JSON.parse returns whatever the line
+      // held, and a bare JSON string would make `'x' in span` throw below.
       let parsed: unknown;
       try {
         parsed = JSON.parse(line);
@@ -126,30 +143,31 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
       }
       if (typeof parsed !== 'object' || parsed === null) continue;
       const span = parsed as Record<string, unknown>;
-      if (!(IDENTITY_KEY_REF_FIELD in span)) continue;
-      const raw = span[IDENTITY_KEY_REF_FIELD];
-      const ref: AccountRef = typeof raw === 'string' ? raw : null;
-      const stamp: TraceStamp = { atMs: hrTimeToMs(span.startTime), ref };
-
+      const atMs = hrTimeToMs(span.startTime);
       const traceId = asString(span.traceId);
-      if (traceId) pushStamp(index.byTrace, traceId, stamp);
       const spanId = asString(span.spanId);
-      if (spanId) index.bySpan.set(spanId, ref);
-
       const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
         ? span.attributes as Record<string, unknown>
         : {};
       const sessionId = asString(attrs[SPAN_SESSION_ID_ATTR]);
-      if (sessionId) {
-        const refs = index.bySession.get(sessionId) ?? new Set<AccountRef>();
-        refs.add(ref);
-        index.bySession.set(sessionId, refs);
-        pushStamp(index.sessionStamps, sessionId, stamp);
+
+      let ref: AccountRef | undefined;
+      if (IDENTITY_KEY_REF_FIELD in span) {
+        const raw = span[IDENTITY_KEY_REF_FIELD];
+        ref = typeof raw === 'string' ? raw : null;
+        if (traceId) pushTo(index.byTrace, traceId, { atMs, ref });
+        if (spanId) index.bySpan.set(spanId, ref);
+        if (sessionId) {
+          const refs = index.bySession.get(sessionId) ?? new Set<AccountRef>();
+          refs.add(ref);
+          index.bySession.set(sessionId, refs);
+        }
       }
+      if (sessionId) pushTo(index.sessionSpans, sessionId, { atMs, spanId, traceId, ref });
     }
   }
   for (const stamps of index.byTrace.values()) stamps.sort((a, b) => a.atMs - b.atMs);
-  for (const stamps of index.sessionStamps.values()) stamps.sort((a, b) => a.atMs - b.atMs);
+  for (const spans of index.sessionSpans.values()) spans.sort((a, b) => a.atMs - b.atMs);
   return index;
 }
 
@@ -181,12 +199,32 @@ export function turnAccount(
   fromMs: number,
   toMs: number = UNTIMED_MS,
 ): AccountRef | undefined {
-  if (!Number.isFinite(fromMs)) return undefined;
-  const stamps = index.sessionStamps.get(sessionId);
-  if (!stamps) return undefined;
-  for (const stamp of stamps) {
-    if (stamp.atMs >= toMs) return undefined;
-    if (stamp.atMs >= fromMs) return stamp.ref;
-  }
-  return undefined;
+  return spansInTurn(index, sessionId, fromMs, toMs).find((s) => s.ref !== undefined)?.ref;
+}
+
+/**
+ * The span a transcript turn's evaluations are parented to: the session's
+ * first span in the turn's window, stamped or not (TKR8 Phase 2).
+ *
+ * The semconv rule parents an evaluation to "the GenAI operation span being
+ * evaluated". No such span is exported locally — the hooks' per-prompt parent
+ * context is never written as a span — so the turn's first exported span is
+ * the nearest real one, and it sits in the turn's own trace. `undefined` when
+ * no span falls in the window; the caller then falls back to the response id.
+ */
+export function turnSpan(
+  index: AccountIndex,
+  sessionId: string,
+  fromMs: number,
+  toMs: number = UNTIMED_MS,
+): SpanRef | undefined {
+  const span = spansInTurn(index, sessionId, fromMs, toMs).find((s) => s.spanId && s.traceId);
+  return span ? { spanId: span.spanId!, traceId: span.traceId! } : undefined;
+}
+
+/** A session's spans in `[fromMs, toMs)`, in start order. */
+function spansInTurn(index: AccountIndex, sessionId: string, fromMs: number, toMs: number): SessionSpan[] {
+  if (!Number.isFinite(fromMs)) return [];
+  const spans = index.sessionSpans.get(sessionId) ?? [];
+  return spans.filter((s) => s.atMs >= fromMs && s.atMs < toMs);
 }

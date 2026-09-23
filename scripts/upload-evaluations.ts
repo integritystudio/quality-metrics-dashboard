@@ -18,10 +18,13 @@
  * for the signed-in account, or `null` for an unmapped one (TKR6). Since TKR8
  * Phase 1, `derive-evaluations` and `judge-evaluations` copy the stamp of the
  * span or turn they score onto the evaluation record itself, and that stamp
- * routes it. A record written before Phase 1 has none, so it is joined to its
- * source spans instead — by trace id, then by session id when the session saw
- * only one account. The summary's `routedBy[stamp=… join=…]` shows how much
- * still takes the join; once it reads `join=0` the join can be deleted.
+ * routes it. A record without a stamp that names its span (Phase 2: derive and
+ * judge records, and the hooks' judge-span `span.id`) takes that span's stamp,
+ * which is just as exact. Anything else was written before Phase 1, so it is
+ * joined to its source spans instead — by trace id, then by session id when the
+ * session saw only one account. The summary's `routedBy[stamp=… span=… join=…]`
+ * shows how much still takes the join; once it reads `join=0` the join can be
+ * deleted.
  *
  * - **Attributed**: `POST /v1/ingest/backfill?signal=evaluations` with that
  *   account's API key, read from the environment under the ref's name. Ingest
@@ -134,6 +137,8 @@ const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 
 /** `evaluations-YYYY-MM-DD.jsonl` */
 const EVAL_FILE_PATTERN = /^evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
+/** Top-level span id a record may carry: derive and judge records (TKR8 Phase 2). */
+const SPAN_ID_FIELD = 'spanId';
 /** Only identity-map secret names are read from the environment. */
 const IDENTITY_KEY_REF_PATTERN = /^OBTOOL_API_KEY(?:_[A-Z0-9]+)*$/;
 
@@ -240,6 +245,7 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   const spanId = asString(r.spanId) ?? asString(attrs['span.id']);
   const sessionId = asString(attrs[EVALUATION_ATTRS.SESSION_ID]);
   const judgeModel = asString(attrs[EVALUATION_ATTRS.JUDGE_MODEL]);
+  const responseId = asString(attrs[EVALUATION_ATTRS.RESPONSE_ID]);
 
   const payload: EvaluationPayload = {
     evaluationName: truncate(evaluationName, WEBHOOK_MAX_NAME_LENGTH),
@@ -264,6 +270,8 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   const metadata: Record<string, unknown> = {};
   if (cohort) metadata.cohort = cohort;
   if (judgeModel) metadata.judgeModel = judgeModel;
+  // The payload has no response-id field; like `cohort`, it rides in metadata.
+  if (responseId) metadata.responseId = responseId;
   if (timestamp) metadata.evaluatedAt = timestamp;
   if (Object.keys(metadata).length > 0) payload.metadata = metadata;
 
@@ -287,27 +295,33 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
  * and independent of how this script happens to map fields today — a mapping
  * change must not silently re-ship the whole window.
  *
- * The account stamp is left out. `derive` regenerates its rule records on
- * every run, so once it began stamping them (TKR8 Phase 1) every record it had
- * already shipped would otherwise come back with a new fingerprint and ship
- * twice. `toOTelRecord` writes the stamp as the last key, so dropping it and
- * re-serializing yields exactly the line written before stamping.
+ * The fields TKR8 added to existing records are left out: the account stamp
+ * (Phase 1) and the top-level span id (Phase 2). `derive` regenerates its rule
+ * records on every run, so every record it had already shipped would otherwise
+ * come back with a new fingerprint and ship twice. `toOTelRecord` writes them
+ * as the last keys, so dropping them and re-serializing yields exactly the line
+ * written before either existed. Two records that differ only in span id were
+ * already identical lines before Phase 2, so this merges nothing that was
+ * previously distinct.
  */
 export function fingerprint(line: string): string {
-  return createHash('sha256').update(unstamped(line.trim())).digest('hex').slice(0, FINGERPRINT_LENGTH);
+  return createHash('sha256').update(withoutAddedFields(line.trim())).digest('hex').slice(0, FINGERPRINT_LENGTH);
 }
 
-function unstamped(line: string): string {
-  if (!line.includes(IDENTITY_KEY_REF_FIELD)) return line;
+/** Top-level record fields excluded from the fingerprint (see `fingerprint`). */
+const FINGERPRINT_EXCLUDED_FIELDS = [SPAN_ID_FIELD, IDENTITY_KEY_REF_FIELD] as const;
+
+function withoutAddedFields(line: string): string {
+  if (!FINGERPRINT_EXCLUDED_FIELDS.some((f) => line.includes(`"${f}"`))) return line;
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
   } catch {
     return line;
   }
-  if (typeof parsed !== 'object' || parsed === null || !(IDENTITY_KEY_REF_FIELD in parsed)) return line;
+  if (typeof parsed !== 'object' || parsed === null) return line;
   const rest = { ...(parsed as Record<string, unknown>) };
-  delete rest[IDENTITY_KEY_REF_FIELD];
+  for (const field of FINGERPRINT_EXCLUDED_FIELDS) delete rest[field];
   return JSON.stringify(rest);
 }
 
@@ -405,16 +419,19 @@ function routeForRef(ref: AccountRef): Route {
   return IDENTITY_KEY_REF_PATTERN.test(ref) ? { kind: 'keyed', ref } : { kind: 'webhook' };
 }
 
-/** How a record's route was decided: its own stamp, or the pre-Phase-1 join. */
-export type RouteBasis = 'stamp' | 'join';
+/** How a record's route was decided: its own stamp, its span's stamp, or the pre-Phase-1 join. */
+export type RouteBasis = 'stamp' | 'span' | 'join';
 
 /**
  * Route a mapped record. Its own stamp wins outright — it names the account of
- * the span or turn that was scored, which no join can improve on. Only an
- * unstamped record falls back to `resolveRoute`.
+ * the span or turn that was scored, which no join can improve on. Next, the
+ * stamp of the span it names, which is exact too. Only a record with neither
+ * falls back to `resolveRoute`.
  */
 export function routeRecord(mapped: MapResult, index: AccountIndex): { route: Route; basis: RouteBasis } {
   if (mapped.accountRef !== undefined) return { route: routeForRef(mapped.accountRef), basis: 'stamp' };
+  const spanId = mapped.payload!.spanId;
+  if (spanId && index.bySpan.has(spanId)) return { route: routeForRef(index.bySpan.get(spanId)!), basis: 'span' };
   return { route: resolveRoute(mapped.payload!, index), basis: 'join' };
 }
 
@@ -543,7 +560,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   let alreadyShipped = 0;
   let withheld = 0;
   const heldForKey: Record<string, number> = {};
-  const routedBy: Record<RouteBasis, number> = { stamp: 0, join: 0 };
+  const routedBy: Record<RouteBasis, number> = { stamp: 0, span: 0, join: 0 };
 
   // try/finally, not a trailing save: an unexpected throw anywhere below would
   // otherwise skip saveShipped and lose the fingerprints of batches this run
