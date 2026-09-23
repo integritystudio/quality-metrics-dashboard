@@ -419,7 +419,9 @@ export function buildAccountIndex(dir: string, windowDays: number, nowMs: number
 /** OTel `[seconds, nanoseconds]` start time to epoch ms; `UNTIMED_MS` when absent or malformed. */
 function hrTimeToMs(value: unknown): number {
   if (!Array.isArray(value) || value.length !== 2) return UNTIMED_MS;
-  const [s, ns] = value;
+  // Array.isArray narrows `unknown` to `any[]`, so name the element type rather
+  // than destructure `any`; the typeof guards below still do the real checking.
+  const [s, ns] = value as [unknown, unknown];
   return typeof s === 'number' && typeof ns === 'number' ? s * MS_PER_S + ns / NS_PER_MS : UNTIMED_MS;
 }
 
