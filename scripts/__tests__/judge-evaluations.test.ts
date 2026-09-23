@@ -1042,33 +1042,39 @@ describe('summarizeJudgeRun', () => {
     expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
   });
 
-  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when succeeded drops by more than half versus previous run', () => {
-    // previous run: 420 succeeded; this run: 200 succeeded (52% drop)
-    const summary = summarizeJudgeRun(200, {}, noFailures, noSpend, 420);
+  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when the success rate falls more than 25 points versus the previous run', () => {
+    // previous run: 100% of 536; this run: 60% of 500 — a 40-point fall, but only 40% failed
+    const summary = summarizeJudgeRun(300, { coherence: 200 }, noFailures, noSpend, { succeeded: 536, attempted: 536 });
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
-    expect(summary.line).toMatch(/SCORE DROP/);
-    expect(summary.line).toContain('200');
-    expect(summary.line).toContain('420');
+    expect(summary.line).toMatch(/SUCCESS RATE DROP/);
+    expect(summary.line).toContain('60.0% of 500');
+    expect(summary.line).toContain('100.0% of 536');
   });
 
-  it('exits 0 when drop is below the 50% threshold', () => {
-    // 210 of 420 is exactly 50% — not strictly less than half, no alarm
-    expect(summarizeJudgeRun(210, {}, noFailures, noSpend, 420).exitCode).toBe(0);
+  it('exits 0 when a smaller run has no failures, however far its count falls', () => {
+    // The count-based check flagged this: fewer new turns, nothing failed
+    expect(summarizeJudgeRun(60, {}, noFailures, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
   });
 
-  it('skips the drop check when prevSucceeded is below the minimum significant count', () => {
-    // previous run had only 5 successes — too small to be meaningful
-    expect(summarizeJudgeRun(1, {}, noFailures, noSpend, 5).exitCode).toBe(0);
+  it('exits 0 when a clean run is followed by the old 18-22% failure baseline', () => {
+    // 100% → 78.2% is a 21.8-point fall: under the threshold
+    expect(summarizeJudgeRun(419, { coherence: 117 }, noFailures, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
   });
 
-  it('skips the drop check when prevSucceeded is undefined (first run)', () => {
-    expect(summarizeJudgeRun(5, {}, noFailures, noSpend, undefined).exitCode).toBe(0);
+  it('skips the rate comparison when either run attempted too few evaluations', () => {
+    // 60% success would be a drop from 100%, but 10 attempts is too few to compare
+    expect(summarizeJudgeRun(6, { coherence: 4 }, noFailures, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
+    expect(summarizeJudgeRun(300, { coherence: 200 }, noFailures, noSpend, { succeeded: 10, attempted: 10 }).exitCode).toBe(0);
+  });
+
+  it('skips the rate comparison when there is no previous run', () => {
+    expect(summarizeJudgeRun(300, { coherence: 200 }, noFailures, noSpend, undefined).exitCode).toBe(0);
   });
 
   it('high failure rate check takes precedence over drop check', () => {
     // Both conditions would fire; rate check is tested first in code
-    const summary = summarizeJudgeRun(10, { coherence: 200 }, noFailures, noSpend, 500);
+    const summary = summarizeJudgeRun(10, { coherence: 200 }, noFailures, noSpend, { succeeded: 500, attempted: 500 });
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
     expect(summary.line).toMatch(/HIGH FAILURE RATE/);
   });
@@ -1126,11 +1132,18 @@ describe('readRunState / writeRunState', () => {
     expect(readRunState(stateFile)).toBeUndefined();
   });
 
-  it('round-trips a succeeded count through writeRunState / readRunState', () => {
-    writeRunState(420, stateFile);
+  it('round-trips the succeeded and attempted counts through writeRunState / readRunState', () => {
+    writeRunState(420, 536, stateFile);
     const state = readRunState(stateFile);
     expect(state?.succeeded).toBe(420);
+    expect(state?.attempted).toBe(536);
     expect(state?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('returns undefined for a state file written before attempted was recorded', () => {
+    // The shape the live file had on 2026-09-22: a count alone gives no rate
+    writeFileSync(stateFile, JSON.stringify({ succeeded: 536, timestamp: '2026-09-23T01:23:37.000Z' }), 'utf-8');
+    expect(readRunState(stateFile)).toBeUndefined();
   });
 
   it('returns undefined for a corrupt state file without throwing', () => {

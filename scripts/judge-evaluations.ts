@@ -50,7 +50,7 @@ import {
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
-import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
+import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG } from './pipeline-stages.js';
 import {
@@ -939,10 +939,12 @@ export function summarizeJudgeRun(
   byMetric: Record<string, number>,
   byClass: Record<JudgeFailureClass, number>,
   spend: JudgeSpend,
-  prevSucceeded?: number,
+  prev?: JudgeRunState,
 ): JudgeRunSummary {
   const failed = Object.values(byMetric).reduce((sum, n) => sum + n, 0);
   const attempted = succeeded + failed;
+  const successRate = attempted > 0 ? succeeded / attempted : 0;
+  const prevRate = prev && prev.attempted > 0 ? prev.succeeded / prev.attempted : undefined;
   const classes = JUDGE_FAILURE_CLASSES.filter(c => byClass[c] > 0).map(c => `${c}=${byClass[c]}`).join(' ') || 'none';
   let exitCode = 0;
   let verdict = 'ok';
@@ -954,14 +956,18 @@ export function summarizeJudgeRun(
     verdict = 'NO SCORES PRODUCED — every evaluation failed';
   } else if (attempted > 0 && failed / attempted > HIGH_FAILURE_RATE_THRESHOLD) {
     exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * 100).toFixed(1)}%); check failure classes above`;
+    verdict = `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * PERCENT_MULTIPLIER).toFixed(1)}%); check failure classes above`;
   } else if (
-    prevSucceeded !== undefined &&
-    prevSucceeded >= PREV_RUN_MIN_SUCCEEDED &&
-    succeeded < prevSucceeded * (1 - SIGNIFICANT_DROP_THRESHOLD)
+    prev !== undefined &&
+    prevRate !== undefined &&
+    prev.attempted >= RATE_COMPARISON_MIN_ATTEMPTS &&
+    attempted >= RATE_COMPARISON_MIN_ATTEMPTS &&
+    prevRate - successRate > SUCCESS_RATE_DROP_THRESHOLD
   ) {
+    // Rates, not counts: a run with fewer new turns scores fewer evaluations
+    // without anything having failed, and a count comparison called that a drop.
     exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `SCORE DROP — ${succeeded} succeeded vs ${prevSucceeded} on the previous run; check for a new failure class`;
+    verdict = `SUCCESS RATE DROP — ${(successRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${attempted} succeeded vs ${(prevRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${prev.attempted} on the previous run; check for a new failure class`;
   }
   const { usage, estimatedUsd, keySource } = spend;
   const actualUsd = usageCostUsd(usage, judgePricing());
@@ -1262,10 +1268,15 @@ const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 export const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json');
 /** Failure rate above which a run is flagged as JUDGE_EXIT_HIGH_FAILURE_RATE. */
 const HIGH_FAILURE_RATE_THRESHOLD = 0.5;
-/** Drop factor: flag when succeeded falls below this fraction of the previous run. */
-const SIGNIFICANT_DROP_THRESHOLD = 0.5;
-/** Minimum previous-run success count before the drop check is meaningful. */
-const PREV_RUN_MIN_SUCCEEDED = 10;
+/**
+ * Success-rate fall, in absolute points, that flags a run against the previous
+ * one. Above the whole pre-fix failure rate (18–22%) and far above its
+ * run-to-run swing (81.5% → 78.2% on 2026-09-21), so returning from a clean run
+ * to that old baseline stays quiet.
+ */
+const SUCCESS_RATE_DROP_THRESHOLD = 0.25;
+/** Attempts both runs need before their rates are compared; at 50, one failure moves the rate 2 points. */
+const RATE_COMPARISON_MIN_ATTEMPTS = 50;
 
 function acquireLock(): boolean {
   // Atomic create via O_CREAT | O_EXCL eliminates TOCTOU race
@@ -1333,14 +1344,16 @@ function safeExit(code: number): never {
   process.exit(code);
 }
 
-interface JudgeRunState {
+export interface JudgeRunState {
   succeeded: number;
-  timestamp: string;
+  attempted: number;
+  timestamp?: string;
 }
 
 /**
  * Read the previous run's state from the sidecar file. Returns undefined when
- * the file is absent (first run) or unreadable — never throws.
+ * the file is absent (first run), unreadable, or written before `attempted` was
+ * recorded — a count alone cannot give a rate. Never throws.
  */
 export function readRunState(path: string = JUDGE_RUN_STATE_FILE): JudgeRunState | undefined {
   try {
@@ -1350,7 +1363,9 @@ export function readRunState(path: string = JUDGE_RUN_STATE_FILE): JudgeRunState
       typeof parsed === 'object' &&
       parsed !== null &&
       'succeeded' in parsed &&
-      typeof (parsed as JudgeRunState).succeeded === 'number'
+      typeof (parsed as JudgeRunState).succeeded === 'number' &&
+      'attempted' in parsed &&
+      typeof (parsed as JudgeRunState).attempted === 'number'
     ) {
       return parsed as JudgeRunState;
     }
@@ -1359,12 +1374,12 @@ export function readRunState(path: string = JUDGE_RUN_STATE_FILE): JudgeRunState
 }
 
 /**
- * Persist succeeded count for the drop check on the next run. Best-effort —
+ * Persist this run's counts for the rate comparison on the next run. Best-effort —
  * a write failure must not fail the pipeline.
  */
-export function writeRunState(succeeded: number, path: string = JUDGE_RUN_STATE_FILE): void {
+export function writeRunState(succeeded: number, attempted: number, path: string = JUDGE_RUN_STATE_FILE): void {
   try {
-    writeFileSync(path, JSON.stringify({ succeeded, timestamp: new Date().toISOString() }), 'utf-8');
+    writeFileSync(path, JSON.stringify({ succeeded, attempted, timestamp: new Date().toISOString() }), 'utf-8');
   } catch { /* best effort; drop check will be skipped next run */ }
 }
 
@@ -1569,11 +1584,12 @@ async function main() {
       flatEvals = allEvals.flat();
 
       const prevState = readRunState();
-      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source }, prevState?.succeeded);
+      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source }, prevState);
       (summary.exitCode === 0 ? console.log : console.error)(summary.line);
-      if (summary.exitCode === 0) {
-        writeRunState(summary.succeeded);
-      } else {
+      // Every run that attempted something becomes the baseline, flagged or not:
+      // keeping only clean runs let one flagged run hold the alarm on for good.
+      if (summary.attempted > 0) writeRunState(summary.succeeded, summary.attempted);
+      if (summary.exitCode !== 0) {
         // Set rather than exit: the finally below must still release the lock,
         // and populate-dashboard.ts reads this code to keep upload + sync running.
         process.exitCode = summary.exitCode;
