@@ -23,7 +23,7 @@ import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, re
 import { createHash } from 'crypto';
 import { join, basename } from 'path';
 import type AnthropicSdk from '@anthropic-ai/sdk';
-import type { LLMProvider, GEvalConfig, ResponseJsonSchema } from '../../src/lib/judge/llm-as-judge.js';
+import type { LLMProvider, GEvalConfig, ResponseJsonSchema, QagVerificationMode } from '../../src/lib/judge/llm-as-judge.js';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
 import {
   LLMJudge,
@@ -88,6 +88,9 @@ const HOME = process.env.HOME ?? '';
 export const TELEMETRY_DIR = join(HOME, '.claude-history', 'telemetry');
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
+/** Decimal places in a record's fallback reason line. Restated here rather than
+ * imported from `src/lib/constants.ts`, which is Vite-only and unreachable from scripts. */
+export const SCORE_PREVIEW_DECIMALS = 2;
 /** Producer recorded on every record this script writes. */
 export const PRODUCER = 'dashboard:judge-evaluations';
 export const SEED_EVALUATOR: EvaluatorType = 'seed';
@@ -120,6 +123,17 @@ export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
 export const RELEVANCE_EVAL_NAME = 'relevance';
 export const COHERENCE_EVAL_NAME = 'coherence';
 export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
+
+/**
+ * How each QAG verification mode is recorded. The judge names the modes after what
+ * they measure; the dashboard names the metrics after what they mean, and
+ * `fabrication` is recorded as `hallucination` because that is the series every
+ * consumer already reads.
+ */
+export const QAG_MODE_RECORDS = {
+  faithfulness: { evalName: FAITHFULNESS_EVAL_NAME, label: 'Faithfulness' },
+  fabrication: { evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination' },
+} as const satisfies Record<QagVerificationMode, { evalName: string; label: string }>;
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 /**
@@ -830,9 +844,11 @@ export interface JudgeRunEstimate {
  * bill at BATCH_PRICE_RATIO (half list rates).
  */
 export function estimateJudgeRun(turns: readonly Turn[], batch = false): JudgeRunEstimate {
-  // 2 base evals (relevance, coherence) + 3 with tools (faithfulness, hallucination, tool_correctness)
+  // 2 base evals (relevance, coherence) + 2 with tools (tool_correctness, and one
+  // QAG sweep that scores faithfulness and hallucination together — hallucination
+  // is no longer a paid call of its own).
   const evals = turns.reduce((sum, t) =>
-    sum + 2 + (t.toolResults.length > 0 ? 3 : 0), 0);
+    sum + 2 + (t.toolResults.length > 0 ? 2 : 0), 0);
   // Estimate tokens from actual content length (~4 chars/token)
   const inputTokens = turns.reduce((sum, t) => {
     const contentChars = t.userText.length + t.assistantText.length
@@ -962,7 +978,7 @@ export async function evaluateTurn(
           turn,
           RELEVANCE_EVAL_NAME,
           result.score,
-          result.reason ?? `Relevance: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+          result.reason ?? `Relevance: ${result.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
           LLM_EVALUATOR_KIND,
           NORMAL_COHORT,
           HAIKU_MODEL,
@@ -983,7 +999,7 @@ export async function evaluateTurn(
           turn,
           COHERENCE_EVAL_NAME,
           result.score,
-          result.reason ?? `Coherence: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+          result.reason ?? `Coherence: ${result.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
           LLM_EVALUATOR_KIND,
           NORMAL_COHORT,
           HAIKU_MODEL,
@@ -1001,55 +1017,46 @@ export async function evaluateTurn(
     const needsFaith = !existingKeys.has(faithKey);
     const needsHal = !existingKeys.has(halKey);
 
-    // qagEvaluate() for retry support; faithfulness and hallucination evaluated independently
-    if (needsFaith) await score(async () => {
+    // One QAG sweep answers both. 'faithfulness' counts the statements the tool
+    // results support; 'fabrication' counts the ones they contradict — and the two
+    // do not sum to 1, because a statement the context cannot settle belongs to
+    // neither. Hallucination used to be `1 - gEval(faithfulness)`: a second paid
+    // call, to a different evaluator, whose inversion scored every inconclusive
+    // statement as a fabrication.
+    const qagModes: QagVerificationMode[] = [
+      ...(needsFaith ? (['faithfulness'] as const) : []),
+      ...(needsHal ? (['fabrication'] as const) : []),
+    ];
+    if (qagModes.length > 0) await score(async () => {
       try {
-        const faithResult = await judge.qagEvaluate(
+        const { scores } = await judge.qagEvaluateModes(
           turn.userText,
           turn.assistantText,
           toolContext,
+          qagModes,
         );
-        evals.push(
-          createEvalRecord(
-            turn,
-            FAITHFULNESS_EVAL_NAME,
-            faithResult.score,
-            faithResult.reason ?? `Faithfulness: ${faithResult.score.toFixed(2)} for session ${sessionPreview}`,
-            LLM_EVALUATOR_KIND,
-            NORMAL_COHORT,
-            HAIKU_MODEL,
-          ),
-        );
+        for (const mode of qagModes) {
+          const { evalName, label } = QAG_MODE_RECORDS[mode];
+          evals.push(
+            createEvalRecord(
+              turn,
+              evalName,
+              scores[mode],
+              `${label}: ${scores[mode].toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
+              LLM_EVALUATOR_KIND,
+              NORMAL_COHORT,
+              HAIKU_MODEL,
+            ),
+          );
+        }
       } catch (err) {
-        trackFailure(FAITHFULNESS_EVAL_NAME, err);
-        console.warn(`  [${FAITHFULNESS_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
-      }
-    });
-
-    // Hallucination derived by inverting faithfulness score (1 - faithfulness)
-    if (needsHal) await score(async () => {
-      try {
-        const halResult = await judge.evaluateFaithfulness(
-          turn.userText,
-          turn.assistantText,
-          toolContext,
-        );
-        // Invert: faithfulness measures consistency, hallucination is the complement
-        const halScore = 1 - halResult.score;
-        evals.push(
-          createEvalRecord(
-            turn,
-            HALLUCINATION_EVAL_NAME,
-            halScore,
-            halResult.reason ?? `Hallucination: ${normalizeScore(halScore).toFixed(2)} for session ${sessionPreview}`,
-            LLM_EVALUATOR_KIND,
-            NORMAL_COHORT,
-            HAIKU_MODEL,
-          ),
-        );
-      } catch (err) {
-        trackFailure(HALLUCINATION_EVAL_NAME, err);
-        console.warn(`  [${HALLUCINATION_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
+        // The sweep is shared, so its failure is every requested mode's failure —
+        // counting it once would under-report the metric that asked for it too.
+        for (const mode of qagModes) {
+          const { evalName } = QAG_MODE_RECORDS[mode];
+          trackFailure(evalName, err);
+          console.warn(`  [${evalName}] Error for ${sessionPreview}: ${(err as Error).message}`);
+        }
       }
     });
 
@@ -1068,7 +1075,7 @@ export async function evaluateTurn(
               turn,
               TOOL_CORRECTNESS_CRITERIA.name,
               tcResult.score,
-              tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(2)} for session ${sessionPreview}`,
+              tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
               LLM_EVALUATOR_KIND,
               NORMAL_COHORT,
               HAIKU_MODEL,
@@ -1098,7 +1105,7 @@ export async function evaluateTurn(
                 turn,
                 name,
                 result.score,
-                result.reason ?? `${name}: ${result.score.toFixed(2)} for session ${sessionPreview}`,
+                result.reason ?? `${name}: ${result.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
                 LLM_EVALUATOR_KIND,
                 NORMAL_COHORT,
                 HAIKU_MODEL,

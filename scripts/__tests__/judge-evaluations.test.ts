@@ -851,6 +851,82 @@ describe('evaluateTurn', () => {
   });
 });
 
+describe('evaluateTurn faithfulness and hallucination', () => {
+  beforeEach(() => {
+    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+  });
+
+  /**
+   * A QAG sweep over three statements the context supports, contradicts and cannot
+   * settle, in that order. Counts only the sweep's own calls so the surrounding
+   * G-Eval criteria do not pollute the total.
+   */
+  function createQagLLM(): { llm: LLMProvider; sweepCalls: () => number } {
+    const answers = ['yes', 'no', 'maybe'];
+    let answerIndex = 0;
+    let sweepCalls = 0;
+    const llm: LLMProvider = {
+      generate(prompt: string) {
+        if (prompt.includes('Extract all factual claims')) {
+          sweepCalls++;
+          return Promise.resolve({ text: JSON.stringify(['A', 'B', 'C']) });
+        }
+        if (prompt.includes('yes/no question')) {
+          sweepCalls++;
+          return Promise.resolve({ text: 'Is it so?' });
+        }
+        if (prompt.includes('answer the question with')) {
+          sweepCalls++;
+          return Promise.resolve({ text: answers[answerIndex++] ?? 'maybe' });
+        }
+        return Promise.resolve(mockResponse(prompt));
+      },
+    };
+    return { llm, sweepCalls: () => sweepCalls };
+  }
+
+  it('scores both from a single sweep, and hallucination is not 1 - faithfulness', async () => {
+    const { llm, sweepCalls } = createQagLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+
+    const evals = await evaluateTurn(judge, makeTurn({ toolResults: ['tool output'] }), new Set());
+
+    const byName = new Map(evals.map(e => [e.evaluationName, e.scoreValue]));
+    // 1 of 3 supported, 1 of 3 contradicted, 1 inconclusive and counted by neither.
+    expect(byName.get('faithfulness')).toBeCloseTo(1 / 3);
+    expect(byName.get('hallucination')).toBeCloseTo(1 / 3);
+    // 1 extraction + 3 questions + 3 answers. A second sweep would make it 14.
+    expect(sweepCalls()).toBe(7);
+  });
+
+  it('runs the sweep only for the metric that is missing', async () => {
+    const { llm, sweepCalls } = createQagLLM();
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: ['tool output'] });
+    const turnKey = turn.timestamp.slice(0, 19);
+
+    const evals = await evaluateTurn(judge, turn, new Set([`${turn.sessionId}:faithfulness:${turnKey}`]));
+
+    const names = evals.map(e => e.evaluationName);
+    expect(names).toContain('hallucination');
+    expect(names).not.toContain('faithfulness');
+    expect(sweepCalls()).toBe(7);
+  });
+
+  it('counts a failed sweep against every metric that asked for it', async () => {
+    const llm = createFailingLLM('Convert this statement');
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+
+    const evals = await evaluateTurn(judge, makeTurn({ toolResults: ['tool output'] }), new Set());
+
+    // One shared failure, two metrics missing — recording it once would leave the
+    // hallucination series looking merely absent rather than failed.
+    expect(evalFailures['faithfulness']).toBe(1);
+    expect(evalFailures['hallucination']).toBe(1);
+    expect(evals.map(e => e.evaluationName)).not.toContain('hallucination');
+  });
+});
+
 describe('fitContextForJudge', () => {
   it('leaves items within the cap untouched', () => {
     const items = ['a', 'b'.repeat(MAX_TEXT_LENGTH)];
@@ -1090,10 +1166,12 @@ describe('usageCostUsd', () => {
 });
 
 describe('estimateJudgeRun', () => {
-  it('counts two evals for a turn without tools and five for one with', () => {
+  it('counts two evals for a turn without tools and four for one with', () => {
+    // Four, not five: faithfulness and hallucination come from one QAG sweep, so
+    // the second score costs nothing to price.
     const est = estimateJudgeRun([makeTurn({ toolResults: [] }), makeTurn({ toolResults: ['file contents'] })]);
 
-    expect(est.evals).toBe(7);
+    expect(est.evals).toBe(6);
     expect(est.outputTokens).toBe(est.evals * EST_OUTPUT_TOKENS_PER_EVAL);
     expect(est.inputTokens).toBeGreaterThan(0);
   });
