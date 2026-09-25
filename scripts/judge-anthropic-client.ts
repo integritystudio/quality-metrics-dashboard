@@ -25,12 +25,7 @@ async function getHttp1Fetch(): Promise<SdkFetch> {
   if (http1Fetch) return http1Fetch;
   const { fetch, Agent } = await import('undici');
   const dispatcher = new Agent({ allowH2: false });
-  // undici's Request/Response types are structurally distinct from the DOM
-  // globals the SDK's Fetch type names, though identical at runtime.
-  const wrapped: SdkFetch = (input, init) => fetch(
-    input as Parameters<typeof fetch>[0],
-    { ...init, dispatcher } as Parameters<typeof fetch>[1],
-  ) as unknown as Promise<Response>;
+  const wrapped: SdkFetch = (input, init) => fetch(input, { ...init, dispatcher });
   http1Fetch = wrapped;
   return wrapped;
 }
