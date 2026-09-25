@@ -71,6 +71,7 @@ import {
   type AccountIndex,
   type AccountRef,
 } from './account-stamps.js';
+import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',
@@ -698,9 +699,7 @@ export function judgeOutputConfig(
 }
 
 async function createAnthropicProvider(apiKey: string, usage: JudgeUsageTotals): Promise<LLMProvider> {
-  // Dynamic import to avoid requiring @anthropic-ai/sdk when using --seed
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  return anthropicProviderFor(new Anthropic({ apiKey }), usage);
+  return anthropicProviderFor(await createJudgeAnthropicClient({ apiKey }), usage);
 }
 
 /** The judge's provider over an SDK client, or a fake one in tests. */

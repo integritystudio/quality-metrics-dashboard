@@ -22,6 +22,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import type { ProviderUsage } from './judge-evaluations.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
+import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 
 type BatchRequest = Anthropic.Messages.BatchCreateParams.Request;
 type MessageBatch = Anthropic.Messages.MessageBatch;
@@ -323,9 +324,7 @@ class MessageBatchProvider implements BatchLLMProvider {
 }
 
 async function createBatchClient(): Promise<BatchClient> {
-  // Dynamic import, as in createAnthropicProvider: a --seed run never loads the SDK.
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  return new Anthropic({ apiKey: resolveJudgeApiKey() }).messages.batches;
+  return (await createJudgeAnthropicClient({ apiKey: resolveJudgeApiKey() })).messages.batches;
 }
 
 export async function createBatchProvider(options: BatchProviderOptions): Promise<BatchLLMProvider> {

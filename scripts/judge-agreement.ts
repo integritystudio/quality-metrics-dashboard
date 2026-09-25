@@ -54,6 +54,7 @@ import {
   type EvaluationStepsCache,
   type JudgeTokenUsage,
 } from './judge-consolidated.js';
+import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -427,8 +428,7 @@ export function countMissing(outcomes: readonly TurnOutcome[], side: keyof TurnS
 
 /** Mirrors createAnthropicProvider in judge-evaluations.ts, adding the usage hook. */
 export async function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
+  const client = await createJudgeAnthropicClient({ apiKey });
   return {
     async generate(prompt: string, options?: { temperature?: number }): Promise<{ text: string }> {
       const response = await client.messages.create({

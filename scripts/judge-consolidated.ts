@@ -81,6 +81,7 @@ import {
   classifyJudgeFailure,
   turnSourceFields,
 } from './judge-evaluations.js';
+import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -540,9 +541,7 @@ export function toJudgeTokenUsage(usage: AnthropicUsageLike): JudgeTokenUsage {
 }
 
 export async function createConsolidatedProvider(options: ConsolidatedProviderOptions = {}): Promise<ConsolidatedProvider> {
-  // Dynamic import, as in judge-evaluations.ts: the SDK is only needed for a real run.
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = options.apiKey ? new Anthropic({ apiKey: options.apiKey }) : new Anthropic();
+  const client = await createJudgeAnthropicClient(options.apiKey ? { apiKey: options.apiKey } : {});
 
   return {
     async generate(prompt: string, generateOptions: ConsolidatedGenerateOptions = {}): Promise<ConsolidatedResponse> {

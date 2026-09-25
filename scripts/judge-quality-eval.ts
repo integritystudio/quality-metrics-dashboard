@@ -73,6 +73,7 @@ import {
   type UsageReport,
   type UsageTotals,
 } from './judge-agreement.js';
+import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -372,8 +373,7 @@ export async function createReferenceProvider(
   apiKey: string,
   onUsage: (usage: JudgeTokenUsage) => void,
 ): Promise<ConsolidatedProvider> {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
+  const client = await createJudgeAnthropicClient({ apiKey });
   return {
     async generate(prompt: string, options: ConsolidatedGenerateOptions = {}): Promise<ConsolidatedResponse> {
       const response = await client.messages.create({
