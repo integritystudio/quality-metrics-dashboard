@@ -1,0 +1,1642 @@
+{
+  "generatedAt": "2026-09-25T00:21:44.338Z",
+  "startedAt": "2026-09-25T00:12:33.313Z",
+  "priorReference": "/Users/alyshialedlie/.claude/mcp-servers/observability-toolkit/dashboard-h1fix/docs/judge-quality-2026-09-22.json",
+  "reference": {
+    "model": "claude-opus-5",
+    "effort": "high",
+    "method": "hallucination: G-Eval on HALLUCINATION_CRITERIA, judged directly, one call per tool turn; every other criterion reused from the prior reference"
+  },
+  "haikuModel": "claude-haiku-4-5-20251001",
+  "turnsEvaluated": 30,
+  "estimate": {
+    "haikuUsd": 2.487152,
+    "referenceCalls": 20,
+    "referenceUsd": 1.2114150000000001,
+    "totalUsd": 3.698567
+  },
+  "usage": {
+    "perCriterion": {
+      "calls": 866,
+      "inputTokens": 2286792,
+      "outputTokens": 79673,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "usd": 2.6851570000000002
+    },
+    "consolidated": {
+      "calls": 37,
+      "inputTokens": 182083,
+      "outputTokens": 24846,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "usd": 0.306313
+    },
+    "consolidatedDirect": {
+      "calls": 38,
+      "inputTokens": 191672,
+      "outputTokens": 29378,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "usd": 0.33856200000000003
+    },
+    "reference": {
+      "calls": 21,
+      "inputTokens": 167863,
+      "outputTokens": 43776,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "usd": 1.933715
+    }
+  },
+  "distance": {
+    "perCriterion": {
+      "byCriterion": {
+        "coherence": {
+          "paired": 24,
+          "exactMatchRate": 0.16666666666666666,
+          "meanAbsDiff": 1.5,
+          "meanSignedDiff": -1.5,
+          "configOnly": 6,
+          "referenceOnly": 0
+        },
+        "faithfulness": {
+          "paired": 16,
+          "exactMatchRate": 0.25,
+          "meanAbsDiff": 1.113875,
+          "meanSignedDiff": -1.113875,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "hallucination": {
+          "paired": 18,
+          "exactMatchRate": 0.3888888888888889,
+          "meanAbsDiff": 0.8333333333333333,
+          "meanSignedDiff": -0.10000000000000005,
+          "configOnly": 2,
+          "referenceOnly": 0
+        },
+        "relevance": {
+          "paired": 25,
+          "exactMatchRate": 0.28,
+          "meanAbsDiff": 1.12,
+          "meanSignedDiff": -0.88,
+          "configOnly": 5,
+          "referenceOnly": 0
+        },
+        "tool_arguments": {
+          "paired": 16,
+          "exactMatchRate": 0,
+          "meanAbsDiff": 2.875,
+          "meanSignedDiff": -2.875,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_correctness": {
+          "paired": 16,
+          "exactMatchRate": 0.0625,
+          "meanAbsDiff": 1.5625,
+          "meanSignedDiff": -1.1875,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_integration": {
+          "paired": 16,
+          "exactMatchRate": 0.5,
+          "meanAbsDiff": 0.5625,
+          "meanSignedDiff": -0.0625,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_selection": {
+          "paired": 16,
+          "exactMatchRate": 0.125,
+          "meanAbsDiff": 1.625,
+          "meanSignedDiff": -1,
+          "configOnly": 4,
+          "referenceOnly": 0
+        }
+      },
+      "overall": {
+        "paired": 147,
+        "exactMatchRate": 0.22448979591836735,
+        "meanAbsDiff": 1.379741496598639,
+        "meanSignedDiff": -1.0858639455782308,
+        "configOnly": 33,
+        "referenceOnly": 0
+      }
+    },
+    "consolidated": {
+      "byCriterion": {
+        "coherence": {
+          "paired": 24,
+          "exactMatchRate": 0.6666666666666666,
+          "meanAbsDiff": 0.375,
+          "meanSignedDiff": 0.125,
+          "configOnly": 6,
+          "referenceOnly": 0
+        },
+        "faithfulness": {
+          "paired": 16,
+          "exactMatchRate": 0.1875,
+          "meanAbsDiff": 0.9375,
+          "meanSignedDiff": 0.4375,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "hallucination": {
+          "paired": 18,
+          "exactMatchRate": 0.2222222222222222,
+          "meanAbsDiff": 1.0555555555555556,
+          "meanSignedDiff": -0.6111111111111112,
+          "configOnly": 2,
+          "referenceOnly": 0
+        },
+        "relevance": {
+          "paired": 25,
+          "exactMatchRate": 0.52,
+          "meanAbsDiff": 0.64,
+          "meanSignedDiff": -0.24,
+          "configOnly": 5,
+          "referenceOnly": 0
+        },
+        "tool_arguments": {
+          "paired": 16,
+          "exactMatchRate": 0.25,
+          "meanAbsDiff": 1.0625,
+          "meanSignedDiff": -0.0625,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_correctness": {
+          "paired": 16,
+          "exactMatchRate": 0.375,
+          "meanAbsDiff": 0.6875,
+          "meanSignedDiff": 0.0625,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_integration": {
+          "paired": 16,
+          "exactMatchRate": 0.375,
+          "meanAbsDiff": 0.9375,
+          "meanSignedDiff": -0.1875,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_selection": {
+          "paired": 16,
+          "exactMatchRate": 0.125,
+          "meanAbsDiff": 1.0625,
+          "meanSignedDiff": -0.0625,
+          "configOnly": 4,
+          "referenceOnly": 0
+        }
+      },
+      "overall": {
+        "paired": 147,
+        "exactMatchRate": 0.3673469387755102,
+        "meanAbsDiff": 0.8095238095238095,
+        "meanSignedDiff": -0.07482993197278912,
+        "configOnly": 33,
+        "referenceOnly": 0
+      }
+    },
+    "consolidatedDirect": {
+      "byCriterion": {
+        "coherence": {
+          "paired": 24,
+          "exactMatchRate": 0.5833333333333334,
+          "meanAbsDiff": 0.5,
+          "meanSignedDiff": -0.08333333333333333,
+          "configOnly": 6,
+          "referenceOnly": 0
+        },
+        "faithfulness": {
+          "paired": 16,
+          "exactMatchRate": 0.25,
+          "meanAbsDiff": 0.875,
+          "meanSignedDiff": 0.5,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "hallucination": {
+          "paired": 18,
+          "exactMatchRate": 0.2222222222222222,
+          "meanAbsDiff": 1.0555555555555556,
+          "meanSignedDiff": -0.6111111111111112,
+          "configOnly": 2,
+          "referenceOnly": 0
+        },
+        "relevance": {
+          "paired": 25,
+          "exactMatchRate": 0.48,
+          "meanAbsDiff": 0.72,
+          "meanSignedDiff": -0.4,
+          "configOnly": 5,
+          "referenceOnly": 0
+        },
+        "tool_arguments": {
+          "paired": 16,
+          "exactMatchRate": 0.3125,
+          "meanAbsDiff": 0.9375,
+          "meanSignedDiff": 0.0625,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_correctness": {
+          "paired": 16,
+          "exactMatchRate": 0.3125,
+          "meanAbsDiff": 0.8125,
+          "meanSignedDiff": 0.0625,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_integration": {
+          "paired": 16,
+          "exactMatchRate": 0.3125,
+          "meanAbsDiff": 0.875,
+          "meanSignedDiff": -0.125,
+          "configOnly": 4,
+          "referenceOnly": 0
+        },
+        "tool_selection": {
+          "paired": 16,
+          "exactMatchRate": 0.1875,
+          "meanAbsDiff": 0.9375,
+          "meanSignedDiff": 0.0625,
+          "configOnly": 4,
+          "referenceOnly": 0
+        }
+      },
+      "overall": {
+        "paired": 147,
+        "exactMatchRate": 0.35374149659863946,
+        "meanAbsDiff": 0.8163265306122449,
+        "meanSignedDiff": -0.09523809523809523,
+        "configOnly": 33,
+        "referenceOnly": 0
+      }
+    }
+  },
+  "closest": {
+    "coherence": "consolidated",
+    "faithfulness": "consolidatedDirect",
+    "hallucination": "perCriterion",
+    "relevance": "consolidated",
+    "tool_arguments": "consolidatedDirect",
+    "tool_correctness": "consolidated",
+    "tool_integration": "perCriterion",
+    "tool_selection": "consolidatedDirect"
+  },
+  "complement": {
+    "perCriterion": {
+      "paired": 20,
+      "sumToOne": 2
+    },
+    "consolidated": {
+      "paired": 20,
+      "sumToOne": 20
+    },
+    "consolidatedDirect": {
+      "paired": 20,
+      "sumToOne": 18
+    },
+    "reference": {
+      "paired": 14,
+      "sumToOne": 12
+    }
+  },
+  "failures": [
+    {
+      "sessionId": "1f00c800-3fb9-4483-87ea-0d21c0cad180",
+      "timestamp": "2026-08-28T04:24:25.568Z",
+      "errors": [
+        "Reference declined (reasoning_extraction)"
+      ]
+    },
+    {
+      "sessionId": "66d55031-9911-490c-b215-a111c99dd5aa",
+      "timestamp": "2026-08-28T17:31:00.093Z",
+      "errors": [
+        "Reference declined (reasoning_extraction)"
+      ]
+    }
+  ],
+  "turns": [
+    {
+      "sessionId": "05ca994d-e658-483c-9c80-c80b41fd2415",
+      "timestamp": "2026-08-28T17:38:56.941Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 1,
+        "tool_correctness": 1,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 1,
+        "hallucination": 0
+      },
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 0.45,
+        "hallucination": 0.35,
+        "tool_correctness": 0.5,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75
+      }
+    },
+    {
+      "sessionId": "1f00c800-3fb9-4483-87ea-0d21c0cad180",
+      "timestamp": "2026-08-28T03:47:25.508Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.25,
+        "coherence": 0.25,
+        "faithfulness": 1,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.25,
+        "hallucination": 0
+      },
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.5,
+        "tool_arguments": 0,
+        "tool_integration": 0.25
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.25,
+        "faithfulness": 0.5,
+        "hallucination": 0.5,
+        "tool_correctness": 0.5,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.25
+      },
+      "consolidatedDirect": {
+        "relevance": 0.25,
+        "coherence": 0,
+        "faithfulness": 0.5,
+        "hallucination": 0.25,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.25,
+        "tool_integration": 0
+      }
+    },
+    {
+      "sessionId": "1f00c800-3fb9-4483-87ea-0d21c0cad180",
+      "timestamp": "2026-08-28T04:12:30.618Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 0.75,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.3,
+        "hallucination": 0.2,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 0.75,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "1f00c800-3fb9-4483-87ea-0d21c0cad180",
+      "timestamp": "2026-08-28T04:24:25.568Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 0.75,
+        "tool_correctness": 0.75,
+        "tool_selection": 1,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.4167,
+        "hallucination": 0.3333,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.75,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "3a7b617a-3637-4b81-8e57-8f8f1fd002fa",
+      "timestamp": "2026-08-28T20:25:26.497Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0.5
+      },
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.75,
+        "coherence": 0.75
+      },
+      "consolidatedDirect": {
+        "relevance": 0.5,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "3a7b617a-3637-4b81-8e57-8f8f1fd002fa",
+      "timestamp": "2026-08-28T20:27:49.780Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 1,
+        "faithfulness": 1,
+        "tool_correctness": 0.5,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75,
+        "hallucination": 0
+      },
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0,
+        "faithfulness": 0.6667,
+        "hallucination": 0,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.5,
+        "tool_arguments": 0,
+        "tool_integration": 0.5
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.5,
+        "tool_selection": 0.25,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.5,
+        "tool_selection": 0.5,
+        "tool_arguments": 0.25,
+        "tool_integration": 0.25
+      }
+    },
+    {
+      "sessionId": "3a7b617a-3637-4b81-8e57-8f8f1fd002fa",
+      "timestamp": "2026-08-28T20:28:21.195Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 1,
+        "faithfulness": 0.5,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.5,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 0.5,
+        "coherence": 0.75,
+        "faithfulness": 0,
+        "hallucination": 0.6667,
+        "tool_correctness": 0,
+        "tool_selection": 0.75,
+        "tool_arguments": 0,
+        "tool_integration": 0.25
+      },
+      "consolidated": {
+        "relevance": 0.5,
+        "coherence": 0.5,
+        "faithfulness": 0.5,
+        "hallucination": 0.5,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.25,
+        "tool_arguments": 0,
+        "tool_integration": 0.25
+      },
+      "consolidatedDirect": {
+        "relevance": 0.5,
+        "coherence": 0.5,
+        "faithfulness": 0.5,
+        "hallucination": 0.75,
+        "tool_correctness": 0.25,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      }
+    },
+    {
+      "sessionId": "66d55031-9911-490c-b215-a111c99dd5aa",
+      "timestamp": "2026-08-28T17:24:01.298Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {
+        "relevance": 0.5,
+        "coherence": 0.75
+      },
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.5,
+        "coherence": 0.75
+      },
+      "consolidatedDirect": {
+        "relevance": 0.5,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "66d55031-9911-490c-b215-a111c99dd5aa",
+      "timestamp": "2026-08-28T17:31:00.093Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.5,
+        "coherence": 0.75,
+        "faithfulness": 0.25,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.5
+      },
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0,
+        "faithfulness": 0,
+        "hallucination": 0.4,
+        "tool_correctness": 0,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 0.25
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.75,
+        "faithfulness": 0,
+        "hallucination": 1,
+        "tool_correctness": 0.5,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.5,
+        "tool_integration": 0
+      },
+      "consolidatedDirect": {
+        "relevance": 0.5,
+        "coherence": 0.75,
+        "faithfulness": 0.25,
+        "hallucination": 0.75,
+        "tool_correctness": 0.5,
+        "tool_selection": 0.5,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.5
+      }
+    },
+    {
+      "sessionId": "66d55031-9911-490c-b215-a111c99dd5aa",
+      "timestamp": "2026-08-28T17:36:05.436Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 0.25,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.5,
+        "hallucination": 0.75
+      },
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0.25,
+        "faithfulness": 0,
+        "hallucination": 1,
+        "tool_correctness": 0,
+        "tool_selection": 0.25,
+        "tool_arguments": 0,
+        "tool_integration": 0.25
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.5,
+        "faithfulness": 0,
+        "hallucination": 1,
+        "tool_correctness": 0,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      },
+      "consolidatedDirect": {
+        "relevance": 0.25,
+        "coherence": 0.75,
+        "faithfulness": 0,
+        "hallucination": 1,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.25
+      }
+    },
+    {
+      "sessionId": "6e142b62-80f2-48a8-a8bd-86d0dd40c1ee",
+      "timestamp": "2026-08-28T04:51:20.129Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 0.75,
+        "tool_correctness": 0.75,
+        "tool_selection": 1,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75,
+        "hallucination": 0.5
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.55,
+        "hallucination": 0.2,
+        "tool_correctness": 0.75,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 0.75
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "6e142b62-80f2-48a8-a8bd-86d0dd40c1ee",
+      "timestamp": "2026-08-28T04:58:07.141Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0.25
+      },
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.25
+      },
+      "consolidatedDirect": {
+        "relevance": 0,
+        "coherence": 0
+      }
+    },
+    {
+      "sessionId": "6e142b62-80f2-48a8-a8bd-86d0dd40c1ee",
+      "timestamp": "2026-08-28T16:32:16.895Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0.75
+      },
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0.25
+      },
+      "consolidated": {
+        "relevance": 0.75,
+        "coherence": 0.75
+      },
+      "consolidatedDirect": {
+        "relevance": 0.5,
+        "coherence": 0.25
+      }
+    },
+    {
+      "sessionId": "80e95920-cde4-4bd6-a248-7c28095b11b1",
+      "timestamp": "2026-08-28T16:48:24.203Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.75,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.25,
+        "faithfulness": 0.75,
+        "hallucination": 0.1,
+        "tool_correctness": 0.5,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "80e95920-cde4-4bd6-a248-7c28095b11b1",
+      "timestamp": "2026-08-28T16:57:03.291Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 1,
+        "faithfulness": 0.75,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.1111,
+        "hallucination": 0.3333,
+        "tool_correctness": 1,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "80e95920-cde4-4bd6-a248-7c28095b11b1",
+      "timestamp": "2026-08-28T17:03:36.043Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 0.5,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 0.75,
+        "hallucination": 0.5
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.35,
+        "hallucination": 0.1,
+        "tool_correctness": 1,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 0.75
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "838331dd-37c2-4123-a79b-11040f47e062",
+      "timestamp": "2026-09-08T20:19:43.498Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.75,
+        "tool_correctness": 1,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 1,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.5,
+        "faithfulness": 0.75,
+        "hallucination": 0,
+        "tool_correctness": 0.25,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "838331dd-37c2-4123-a79b-11040f47e062",
+      "timestamp": "2026-09-08T20:53:08.560Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 0.75,
+        "tool_correctness": 1,
+        "tool_selection": 0.75,
+        "tool_arguments": 1,
+        "tool_integration": 1,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.55,
+        "hallucination": 0.3,
+        "tool_correctness": 0.5,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "838331dd-37c2-4123-a79b-11040f47e062",
+      "timestamp": "2026-09-08T21:30:31.419Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0
+      },
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidatedDirect": {
+        "relevance": 0,
+        "coherence": 0
+      }
+    },
+    {
+      "sessionId": "9b32e0d4-e551-4faa-b237-73ed42e6c787",
+      "timestamp": "2026-08-28T17:08:20.126Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {
+        "relevance": 0.5,
+        "coherence": 0.75
+      },
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.75
+      },
+      "consolidatedDirect": {
+        "relevance": 0.25,
+        "coherence": 0.75
+      }
+    },
+    {
+      "sessionId": "9b32e0d4-e551-4faa-b237-73ed42e6c787",
+      "timestamp": "2026-08-28T17:09:41.517Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.75,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 1,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.5,
+        "faithfulness": 0.2,
+        "hallucination": 0.4,
+        "tool_correctness": 0.5,
+        "tool_selection": 1,
+        "tool_arguments": 0.25,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "9b32e0d4-e551-4faa-b237-73ed42e6c787",
+      "timestamp": "2026-08-28T17:18:33.211Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 0.75,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.75,
+        "tool_integration": 1,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.7,
+        "hallucination": 0.1,
+        "tool_correctness": 0.5,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "a706f2af-9bfb-4b1c-b580-9ff22d05c930",
+      "timestamp": "2026-08-28T03:24:56.503Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {
+        "relevance": 0.75,
+        "coherence": 0.75
+      },
+      "perCriterion": {
+        "relevance": 0.5,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 0.75,
+        "coherence": 0.75
+      }
+    },
+    {
+      "sessionId": "a706f2af-9bfb-4b1c-b580-9ff22d05c930",
+      "timestamp": "2026-08-28T03:25:54.512Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "coherence": 1,
+        "hallucination": 0
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.5,
+        "faithfulness": 0.4,
+        "hallucination": 0.35,
+        "tool_correctness": 0.75,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "a706f2af-9bfb-4b1c-b580-9ff22d05c930",
+      "timestamp": "2026-08-28T03:39:15.357Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "relevance": 1,
+        "hallucination": 0.25
+      },
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.5,
+        "faithfulness": 0.5,
+        "hallucination": 0.2,
+        "tool_correctness": 0,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 0.75
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "a96ee2ba-646a-4df3-8504-2f911e1c32fc",
+      "timestamp": "2026-08-28T20:31:48.278Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {},
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.75
+      },
+      "consolidatedDirect": {
+        "relevance": 0.25,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "a96ee2ba-646a-4df3-8504-2f911e1c32fc",
+      "timestamp": "2026-08-28T20:32:10.594Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {},
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1
+      }
+    },
+    {
+      "sessionId": "a96ee2ba-646a-4df3-8504-2f911e1c32fc",
+      "timestamp": "2026-08-28T20:32:25.801Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "hallucination": 0
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.5,
+        "faithfulness": 0.9167,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.75,
+        "tool_selection": 1,
+        "tool_arguments": 0.75,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.75
+      }
+    },
+    {
+      "sessionId": "c2f32204-3eb2-4a74-9bfd-93b3fa59890b",
+      "timestamp": "2026-08-31T18:59:44.988Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "reference": {},
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0,
+        "coherence": 0.25
+      },
+      "consolidatedDirect": {
+        "relevance": 0.5,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "c2f32204-3eb2-4a74-9bfd-93b3fa59890b",
+      "timestamp": "2026-08-31T20:22:36.380Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "reference": {
+        "hallucination": 0.75
+      },
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.25,
+        "faithfulness": 0.4,
+        "hallucination": 0,
+        "tool_correctness": 0,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidatedDirect": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    }
+  ]
+}
