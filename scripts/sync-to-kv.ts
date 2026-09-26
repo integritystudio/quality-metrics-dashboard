@@ -123,6 +123,15 @@ const META_LAST_SYNC_KEY = 'meta:lastSync';
 const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
 /** Input axes the coverage matrix is built for — one KV key per (period, axis). */
 const COVERAGE_INPUT_KEYS = ['traceId', 'sessionId'] as const;
+/**
+ * Hard cap on the number of input columns stored per coverage key.
+ * The dashboard grid renders at most `COVERAGE_GRID_MAX_INPUTS = 30`, so a few
+ * hundred is ample headroom for all views. Without a cap the column count grows
+ * with each new trace or session in the window (COVERAGE-INPUT-SET-UNBOUNDED).
+ */
+const MAX_COVERAGE_COLUMNS = 500;
+/** 80 % of KV's 25 MiB value limit — warn before a write would fail silently. */
+const KV_VALUE_WARN_BYTES = Math.round(25 * 1024 * 1024 * 0.8);
 /** Global (never org-prefixed) heartbeat for the session-less /api/health route (P4/P5). */
 export const SYSTEM_LAST_SYNC_KEY = 'system:lastSync';
 
@@ -940,11 +949,17 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     // The columnar matrix measures 4.68 MB for that same case. Sizes and the
     // rejected compression alternatives: `CoverageMatrix` in quality-visualization.ts.
     for (const inputKey of COVERAGE_INPUT_KEYS) {
-      const matrix = computeCoverageMatrix(grouped, { inputKey });
-      entries.push({
-        key: `coverage:${period}:${inputKey}`,
-        value: toKVValue({ period, ...matrix }),
-      });
+      const matrix = computeCoverageMatrix(grouped, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
+      const coverageKey = `coverage:${period}:${inputKey}`;
+      const coverageValue = toKVValue({ period, ...matrix });
+      const coverageSizeBytes = Buffer.byteLength(coverageValue, 'utf8');
+      if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
+        console.warn(
+          `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / 1024)} KB,` +
+          ` approaching KV 25 MiB limit — reduce MAX_COVERAGE_COLUMNS`,
+        );
+      }
+      entries.push({ key: coverageKey, value: coverageValue });
     }
 
     const pipeline = computePipelineView(grouped, dashboard);
