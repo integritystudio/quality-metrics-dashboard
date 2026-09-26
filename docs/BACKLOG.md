@@ -68,6 +68,47 @@ from Auth0's `last_login`, which Supabase's `users.last_login` also never receiv
 Fix: post `login` once when the Auth0 SDK reports an authenticated session for the first time in a
 page load, mirroring the `logout` call. Acceptance: one sign-in produces exactly one `login` row.
 
+### Workflow page
+
+Deferred from the 2026-09-26 `/simplify` pass on `WorkflowPage` (commit 01f8e25).
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| WORKFLOW-GRAPH-ONLY-ENDPOINT | `WorkflowPage` fetches the full agent session to render only the graph | P3 | API + hook change |
+| AGENT-QUERY-PARAM-UNREAD | `?agent=` on `/agents/:sessionId` is written by `WorkflowPage` but read by nothing | P3 | Behaviour decision |
+| WORKFLOW-TEST-DEEP-MOCK | `WorkflowPage.test.tsx` mocks `WorkflowGraphView`, two levels below the page | P3 | Test-only |
+| AGENT-SESSION-TEST-MISPLACED | `AgentSessionPage`'s "View Workflow" test lives in `WorkflowPage.test.tsx` | P3 | Test-only |
+
+**WORKFLOW-GRAPH-ONLY-ENDPOINT.** `useAgentSession` calls `GET /api/agents/:sessionId`
+(`src/api/routes/agents.ts`), which returns every span with its `attributes`, runs
+`loadEvaluationsByTraceIds` for `evaluations`, and builds `agentMap`. `WorkflowPage` reads only
+`graph` and `evaluation`, so the extra storage read, the payload and the JSON parse all scale with
+span count for nothing. Fix: a `GET /api/agents/:sessionId/graph` route (or a `?fields=` option) that
+still builds the graph from spans server-side but skips the evaluations lookup and omits
+`spans`/`evaluations`/`agentMap`. Trade-off: the page currently shares the `['agent-session', id]`
+query cache with `AgentSessionPage`, so a node click lands on a warm cache; a slim endpoint makes that
+click a full fetch. Acceptance: the workflow view's response carries no `spans` array, and the
+node-click drill-in still renders.
+
+**AGENT-QUERY-PARAM-UNREAD.** Clicking a graph node navigates to
+`routes.agentSession(sessionId, nodeId)` → `/agents/:sessionId?agent=<nodeId>`, but no page reads
+the param — only `LoginPage` and `EvaluationDetailPage` call `useSearch`. So the click lands on the
+session page with no agent selected or highlighted. Decide: either `AgentSessionPage` reads `agent`
+and focuses that agent (scroll/highlight its turns), or the param is dropped from the builder.
+Acceptance: the param either changes what `AgentSessionPage` renders, with a test, or no longer exists.
+
+**WORKFLOW-TEST-DEEP-MOCK.** The page renders `AgentWorkflowView`, which renders `WorkflowGraphView`;
+the test mocks the latter, so it depends on `AgentWorkflowView`'s tab default and internals and imports
+`WorkflowGraphViewProps`. Mocking `../components/AgentWorkflowView.js` would isolate the page to what
+it passes (`graph`, `evaluation`, `onNodeClick`). Left as-is because the current mock also exercises
+`AgentWorkflowView`'s real code; if that coverage matters, move it to an `AgentWorkflowView` test
+first. Acceptance: the page test mocks only the page's direct children.
+
+**AGENT-SESSION-TEST-MISPLACED.** The `describe('AgentSessionPage')` block (the "View Workflow" link →
+`routes.workflow(sessionId)`) sits in `WorkflowPage.test.tsx` because it shares that file's mocks.
+Move it to an `AgentSessionPage` test file alongside the page's other coverage. Acceptance:
+`WorkflowPage.test.tsx` tests only `WorkflowPage`.
+
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.8](changelog/3.0.8/CHANGELOG.md) (2026-08-28), which closed
 `SCRIPTS-TSCONFIG-NUIA`.
