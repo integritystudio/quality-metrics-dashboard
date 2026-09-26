@@ -87,7 +87,7 @@ npm run populate -- --skip-judge    # rule-based + sync only
 npm run populate -- --skip-sync     # derive + judge only
 npm run populate -- --limit 5 --seed  # judge at most 5 turns
 npm run populate -- --batch         # judge through the Message Batches API: 50% off, minutes not seconds
-npm run populate -- --consolidated  # one judge call per turn instead of 2-4 (off by default)
+npx tsx scripts/judge-evaluations.ts --per-criterion  # one call per criterion (~10x cost); populate does not forward it
 ```
 
 **Judge credentials.** The judge prefers `LLM_JUDGE_ANTHROPIC_KEY` and falls back to
@@ -99,10 +99,10 @@ value) alongside real `response.usage` totals, the USD they imply, and the pre-r
 **Judge cost modes.** `--batch` is the cheap default for unattended runs and is what
 `../scripts/run-dashboard-pipeline.sh` passes: every token is half price, results are
 matched back by `custom_id`, and the judge's per-call retry is off because a retry would
-land in a later batch. `--consolidated` sends one prompt per turn carrying the turn content
-once plus every applicable criterion, which measured ~10x cheaper but does not agree
-closely with the per-criterion scores — see `docs/judge-agreement-2026-09-22.json` before
-turning it on.
+land in a later batch. Scoring is consolidated by default (JCP4): one prompt per turn
+carrying the turn content once plus every applicable criterion, which measured ~10x cheaper
+than one call per criterion but does not agree closely with the per-criterion scores — see
+`docs/judge-agreement-2026-09-22.json`. `--per-criterion` on `judge-evaluations.ts` opts out.
 
 Requires parent `dist/` for the sync step — run `npm run build` in the parent observability-toolkit first.
 
