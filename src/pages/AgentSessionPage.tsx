@@ -7,6 +7,7 @@ import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { plural } from '../lib/quality-utils.js';
+import { routes } from '../lib/routes.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function AgentSessionPage({ sessionId }: { sessionId: string }) {
@@ -27,7 +28,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             <span className="text-secondary text-xs">
               {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
             </span>
-            <Link href={`/workflows/${sessionId}`} className="text-xs text-link">View Workflow</Link>
+            <Link href={routes.workflow(sessionId)} className="text-xs text-link">View Workflow</Link>
           </DetailPageHeader>
 
           <div className="card flex-wrap gap-6 p-4 mb-4 align-start">

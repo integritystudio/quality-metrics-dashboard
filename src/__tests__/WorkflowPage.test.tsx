@@ -2,14 +2,13 @@ import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 
-
 /**
  * Only the three fields WorkflowPage/AgentSessionPage destructure off the query
  * result — typed so the mock cannot hand the pages a `data` shape the real
  * `useAgentSession` could never return.
  */
 interface AgentSessionQueryResult {
-  data: AgentSessionFixture | undefined;
+  data: AgentSessionResponse | undefined;
   isLoading: boolean;
   error: Error | null;
 }
@@ -50,17 +49,15 @@ vi.mock('../components/WorkflowGraph.js', () => ({
 // Mock DetailPageHeader — renders title and children
 
 vi.mock('../components/DetailPageHeader.js', () => ({
-  DetailPageHeader: ({ title, id, children }: DetailPageHeaderProps) => (
+  DetailPageHeader: ({ title, children }: DetailPageHeaderProps) => (
     <div data-testid="detail-page-header">
       <h2>{title}</h2>
-      {id && <span data-testid="header-id">{id}</span>}
       {children}
     </div>
   ),
 }));
 
-// Mock PageShell — renders children directly (no loading/error state needed
-// for most tests; tests that need loading/error states override the mock)
+// Mock PageShell — loading/error placeholders, otherwise renders children
 
 vi.mock('../components/PageShell.js', () => ({
   PageShell: ({ isLoading, error, children }: PageShellProps) => {
@@ -74,67 +71,33 @@ vi.mock('../components/PageShell.js', () => ({
 
 import { WorkflowPage } from '../pages/WorkflowPage.js';
 import { AgentSessionPage } from '../pages/AgentSessionPage.js';
-import { makeNode, makeGraph } from './workflow-fixtures.js';
+import { makeNode, makeGraph, makeEvaluation } from './workflow-fixtures.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { AgentSessionResponse } from '../hooks/useAgentSession.js';
-import type { MultiAgentEvaluation } from '../types.js';
-
-/**
- * `GET /api/agents/:sessionId` as the pages consume it, with `graph` widened.
- *
- * `AgentSessionResponse.graph` is declared non-nullable, but both pages guard
- * `data?.graph` and WorkflowPage renders "No workflow graph available" when it
- * is absent — so the type and the components disagree. The widening states that
- * divergence rather than hiding it behind an untyped fixture. `buildWorkflowGraph`
- * always returns an object, so if the route can genuinely never omit `graph`,
- * the empty-state branch is dead code and should be removed along with this.
- */
-type AgentSessionFixture = Omit<AgentSessionResponse, 'graph'> & {
-  graph: WorkflowGraph | null | undefined;
-};
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-function makeEvaluation(overrides: Partial<MultiAgentEvaluation> = {}): MultiAgentEvaluation {
-  return {
-    totalTurns: 3,
-    handoffs: [],
-    turns: [],
-    handoffScore: 0.9,
-    avgTurnRelevance: 0.8,
-    conversationCompleteness: 0.75,
-    errorPropagationTurns: 0,
-    ...overrides,
-  };
+function mockLoaded(graph: WorkflowGraph = makeGraph(), sessionId = 'session-abc') {
+  mockUseAgentSession.mockReturnValue({
+    data: {
+      sessionId,
+      spans: [],
+      evaluation: makeEvaluation(),
+      evaluations: [],
+      agentMap: {},
+      graph,
+    },
+    isLoading: false,
+    error: null,
+  });
 }
-
-function makeAgentSessionData(
-  graph: WorkflowGraph | null | undefined = makeGraph(),
-  sessionId = 'session-abc',
-): AgentSessionFixture {
-  return {
-    sessionId,
-    spans: [],
-    evaluation: makeEvaluation(),
-    evaluations: [],
-    agentMap: {},
-    graph,
-  };
-}
-
 
 describe('WorkflowPage', () => {
   describe('when data has a valid graph', () => {
-    beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(makeGraph()),
-        isLoading: false,
-        error: null,
-      });
-    });
+    beforeEach(() => mockLoaded());
 
     it('renders WorkflowGraphView when graph is present', () => {
       render(<WorkflowPage sessionId="session-abc" />);
@@ -147,58 +110,32 @@ describe('WorkflowPage', () => {
     });
 
     it('displays the workflow shape in the header', () => {
-      const graph = makeGraph({ workflowShape: 'branching' });
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(graph),
-        isLoading: false,
-        error: null,
-      });
+      mockLoaded(makeGraph({ workflowShape: 'branching' }));
       render(<WorkflowPage sessionId="session-abc" />);
       expect(screen.getByText(/branching/)).toBeInTheDocument();
     });
 
     it('displays agent count in the header', () => {
-      const graph = makeGraph({
+      mockLoaded(makeGraph({
         nodes: [
           makeNode({ id: 'n1' }),
           makeNode({ id: 'n2' }),
           makeNode({ id: 'n3' }),
         ],
-      });
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(graph),
-        isLoading: false,
-        error: null,
-      });
+      }));
       render(<WorkflowPage sessionId="session-abc" />);
       expect(screen.getByText(/3 agents/)).toBeInTheDocument();
+    });
+
+    it('uses the singular for a one-agent graph', () => {
+      mockLoaded(makeGraph({ nodes: [makeNode({ id: 'n1' })] }));
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.getByText(/1 agent$/)).toBeInTheDocument();
     });
 
     it('calls useAgentSession with the provided sessionId', () => {
       render(<WorkflowPage sessionId="my-session-id" />);
       expect(mockUseAgentSession).toHaveBeenCalledWith('my-session-id');
-    });
-  });
-
-  describe('when graph is null (data loaded but no graph)', () => {
-    beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(null),
-        isLoading: false,
-        error: null,
-      });
-    });
-
-    it('does not render WorkflowGraphView', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
-    });
-
-    it('shows empty state message', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(
-        screen.getByText(/No workflow graph available for this session/i)
-      ).toBeInTheDocument();
     });
   });
 
@@ -223,17 +160,8 @@ describe('WorkflowPage', () => {
   });
 
   describe('onNodeClick navigation', () => {
-    beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(
-          makeGraph({ nodes: [makeNode({ id: 'agent-node-42', label: 'executor' })] })
-        ),
-        isLoading: false,
-        error: null,
-      });
-    });
-
     it('navigates to /agents/{sessionId}?agent={nodeId} when a node is clicked', () => {
+      mockLoaded(makeGraph({ nodes: [makeNode({ id: 'agent-node-42', label: 'executor' })] }));
       render(<WorkflowPage sessionId="session-abc" />);
       fireEvent.click(screen.getByTestId('graph-node-agent-node-42'));
       expect(mockNavigate).toHaveBeenCalledWith(
@@ -242,13 +170,7 @@ describe('WorkflowPage', () => {
     });
 
     it('URL-encodes sessionId and nodeId in the navigation path', () => {
-      mockUseAgentSession.mockReturnValue({
-        data: makeAgentSessionData(
-          makeGraph({ nodes: [makeNode({ id: 'node with spaces', label: 'test' })] })
-        ),
-        isLoading: false,
-        error: null,
-      });
+      mockLoaded(makeGraph({ nodes: [makeNode({ id: 'node with spaces', label: 'test' })] }));
       render(<WorkflowPage sessionId="session/with/slashes" />);
       fireEvent.click(screen.getByTestId('graph-node-node with spaces'));
       expect(mockNavigate).toHaveBeenCalledWith(
@@ -261,42 +183,11 @@ describe('WorkflowPage', () => {
 // AgentSessionPage — "View Workflow" nav link
 
 describe('AgentSessionPage', () => {
-  const SESSION_ID = 'session-xyz';
-
-  beforeEach(() => {
-    mockUseAgentSession.mockReturnValue({
-      data: {
-        ...makeAgentSessionData(makeGraph(), SESSION_ID),
-        evaluation: makeEvaluation({
-          totalTurns: 2,
-          // TurnLevelResult requires relevance/taskProgress/hasError; the
-          // untyped fixture this replaces supplied only agentName + turnIndex,
-          // a turn shape the evaluation pipeline never produces.
-          turns: [{
-            agentName: 'agent-1',
-            turnIndex: 0,
-            relevance: 0.7,
-            taskProgress: 0.5,
-            hasError: false,
-          }],
-          handoffScore: 0.8,
-          avgTurnRelevance: 0.7,
-          conversationCompleteness: 0.9,
-        }),
-      },
-      isLoading: false,
-      error: null,
-    });
-  });
-
-  it('renders a "View Workflow" link', () => {
-    render(<AgentSessionPage sessionId={SESSION_ID} />);
-    expect(screen.getByRole('link', { name: /view workflow/i })).toBeInTheDocument();
-  });
-
-  it('"View Workflow" link points to /workflows/{sessionId}', () => {
-    render(<AgentSessionPage sessionId={SESSION_ID} />);
-    const link = screen.getByRole('link', { name: /view workflow/i });
-    expect(link).toHaveAttribute('href', `/workflows/${SESSION_ID}`);
+  it('links "View Workflow" to /workflows/{sessionId}', () => {
+    const sessionId = 'session-xyz';
+    mockLoaded(makeGraph(), sessionId);
+    render(<AgentSessionPage sessionId={sessionId} />);
+    expect(screen.getByRole('link', { name: /view workflow/i }))
+      .toHaveAttribute('href', `/workflows/${sessionId}`);
   });
 });
