@@ -57,7 +57,7 @@ import {
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION } from '../src/lib/constants.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
-import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, SECONDS } from '../../src/lib/core/units.js';
+import { BYTES, PERCENT_MULTIPLIER, TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, SECONDS } from '../../src/lib/core/units.js';
 import {
   OTEL_STATUS_ERROR_CODE,
   FILE_ACCESS_TOP_N,
@@ -130,8 +130,11 @@ const COVERAGE_INPUT_KEYS = ['traceId', 'sessionId'] as const;
  * with each new trace or session in the window (COVERAGE-INPUT-SET-UNBOUNDED).
  */
 const MAX_COVERAGE_COLUMNS = 500;
-/** 80 % of KV's 25 MiB value limit — warn before a write would fail silently. */
-const KV_VALUE_WARN_BYTES = Math.round(25 * 1024 * 1024 * 0.8);
+/** Cloudflare KV's per-value limit. A value past it fails its whole bulk-put batch (`kvBulkPut` throws). */
+const KV_VALUE_LIMIT_BYTES = 25 * BYTES.MB;
+/** Fraction of the limit at which the sync warns, so the column cap is lowered before a write fails. */
+const KV_VALUE_WARN_RATIO = 0.8;
+const KV_VALUE_WARN_BYTES = Math.round(KV_VALUE_LIMIT_BYTES * KV_VALUE_WARN_RATIO);
 /** Global (never org-prefixed) heartbeat for the session-less /api/health route (P4/P5). */
 export const SYSTEM_LAST_SYNC_KEY = 'system:lastSync';
 
@@ -955,8 +958,9 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       const coverageSizeBytes = Buffer.byteLength(coverageValue, 'utf8');
       if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
         console.warn(
-          `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / 1024)} KB,` +
-          ` approaching KV 25 MiB limit — reduce MAX_COVERAGE_COLUMNS`,
+          `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
+          ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV's ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
+          ' — reduce MAX_COVERAGE_COLUMNS',
         );
       }
       entries.push({ key: coverageKey, value: coverageValue });
