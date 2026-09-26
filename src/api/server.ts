@@ -13,6 +13,7 @@ import { traceRoutes } from './routes/traces.js';
 import { agentRoutes } from './routes/agents.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { qualityRoutes } from './routes/quality.js';
+import { codeQualityRoutes } from './routes/code-quality.js';
 import { API_HOST, API_PORT } from './config.js';
 
 const app = new Hono();
@@ -36,5 +37,6 @@ app.route('/api', traceRoutes);
 app.route('/api', agentRoutes);
 app.route('/api', sessionRoutes);
 app.route('/api', qualityRoutes);
+app.route('/api', codeQualityRoutes);
 
 serve({ fetch: app.fetch, hostname: API_HOST, port: API_PORT });
