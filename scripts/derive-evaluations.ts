@@ -2,19 +2,31 @@
 /**
  * Derive evaluation JSONL files from local telemetry trace data.
  *
- * Reads traces-*.jsonl, extracts quality signals, writes evaluations-*.jsonl
- * in the format expected by the observability-toolkit backend.
+ * Reads traces-*.jsonl, extracts quality signals, writes
+ * derived-evaluations-*.jsonl in the format expected by the
+ * observability-toolkit backend.
  *
- * Each target evaluations-<date>.jsonl is REPLACED, not appended to, so scope
- * the run and preview it before writing:
+ * Each target derived-evaluations-<date>.jsonl is REPLACED, not appended to,
+ * so scope the run and preview it before writing:
  *
  *   tsx scripts/derive-evaluations.ts --date=2026-07-27 --dry-run
  *   tsx scripts/derive-evaluations.ts --days=7
  *   tsx scripts/derive-evaluations.ts              # all dates
+ *
+ * The records get a file of their own (HDF5, 2026-09-27). Until then this
+ * rewrote the hooks' `evaluations-<date>.jsonl`, keeping every line whose
+ * `gen_ai.evaluation.evaluator` was not `rule` and prepending a fresh copy of
+ * its own — but `toOTelRecord` had stopped writing that attribute when the
+ * producer moved to `integritystudio.evaluation.producer`, so the filter kept
+ * every previous run's rule lines too. Twice a day, for months: on 2026-09-22
+ * the file held 57,156 lines for 4,641 distinct rule records, and the corpus
+ * reached 1.1 GB against 100 MB of traces. Writing to a separate file removes
+ * the preservation step, and with it the way it fails: this file is wholly
+ * ours and is replaced, and nothing in `evaluations-<date>.jsonl` is ours.
  */
 
 import { writeFileSync, readdirSync, readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import {
   computeCalibrationDistributions,
   loadCalibrationState,
@@ -24,7 +36,7 @@ import {
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, DERIVED_EVALUATIONS_FILE_PREFIX, datedJsonlName, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
 import { indexTraceFiles, type AccountRef } from './account-stamps.js';
 
@@ -387,7 +399,7 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   return evals;
 }
 
-/** `traces-YYYY-MM-DD.jsonl` / `evaluations-YYYY-MM-DD.jsonl` */
+/** `traces-YYYY-MM-DD.jsonl` */
 const TRACE_FILE_PREFIX = 'traces-';
 const DATE_ONLY_LEN = 10; // YYYY-MM-DD
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -400,8 +412,8 @@ const DRY_RUN_ARG = '--dry-run';
  * Returns null for "all dates" (no flag), preserving prior behavior.
  *
  * Scoping matters for safety, not just speed: the write loop below replaces
- * each `evaluations-<date>.jsonl` wholesale, and any record the reader fails
- * to validate is dropped rather than preserved.
+ * each `derived-evaluations-<date>.jsonl` wholesale, and any record the reader
+ * fails to validate is dropped rather than preserved.
  */
 export function resolveDateScope(args: string[], now: Date = new Date()): Set<string> | null {
   const dateArg = args.find(a => a.startsWith(DATE_ARG));
@@ -429,6 +441,33 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
   }
 
   return null;
+}
+
+/** Where this script's records for `date` go: a file of their own, replaced wholesale. */
+export function derivedEvaluationsPath(dir: string, date: string): string {
+  return join(dir, datedJsonlName(DERIVED_EVALUATIONS_FILE_PREFIX, date));
+}
+
+export interface DerivedWrite {
+  file: string;
+  lines: number;
+  /** Lines the file held before this write; counted only on a dry run. */
+  existing: number;
+}
+
+/**
+ * Replace `derived-evaluations-<date>.jsonl` with `lines`. Nothing is read
+ * back or preserved: every line in that file came from this script, so the
+ * fresh set is the whole truth for the date. The hooks' `evaluations-<date>.jsonl`
+ * is never opened.
+ */
+export function writeDerivedEvaluations(dir: string, date: string, lines: readonly string[], dryRun: boolean): DerivedWrite {
+  const outFile = derivedEvaluationsPath(dir, date);
+  const existing = dryRun && existsSync(outFile)
+    ? readFileSync(outFile, 'utf8').split('\n').filter(l => l.trim()).length
+    : 0;
+  if (!dryRun) writeFileSync(outFile, lines.join('\n') + '\n');
+  return { file: basename(outFile), lines: lines.length, existing };
 }
 
 function main(): void {
@@ -473,53 +512,21 @@ function main(): void {
     group.push(ev);
   }
 
-  let preservedCount = 0;
   let filesToWrite = 0;
   for (const [date, evals] of byDate) {
     // A span in an in-scope trace file can carry an out-of-scope timestamp;
     // never rewrite a date the caller did not ask for.
     if (dateScope && !dateScope.has(date)) continue;
 
-    const outFile = join(TELEMETRY_DIR, `evaluations-${date}.jsonl`);
-
-    // Keep any existing evaluation this script did not produce (e.g. LLM judge).
-    //
-    // Carry the ORIGINAL line through verbatim rather than re-serializing a
-    // parsed record: the schema decodes `timestamp` from ISO to epoch-nanos
-    // BigInt, so JSON.stringify would both throw and rewrite the wire format.
-    // Reading raw also means a record we cannot fully validate is retained
-    // rather than silently dropped by the overwrite below.
-    const preserved: string[] = [];
-    if (existsSync(outFile)) {
-      for (const line of readFileSync(outFile, 'utf8').split('\n')) {
-        if (!line.trim()) continue;
-        let rec: { attributes?: Record<string, unknown> };
-        try {
-          rec = JSON.parse(line) as { attributes?: Record<string, unknown> };
-        } catch {
-          preserved.push(line); // unparseable: keep rather than destroy
-          continue;
-        }
-        const evaluator = rec.attributes?.['gen_ai.evaluation.evaluator'];
-        if (evaluator !== RULE_EVALUATOR) preserved.push(line);
-      }
-    }
-
     const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
-    const content = [...ruleLines, ...preserved].join('\n') + '\n';
+    const written = writeDerivedEvaluations(TELEMETRY_DIR, date, ruleLines, dryRun);
     if (dryRun) {
-      const existing = existsSync(outFile)
-        ? readFileSync(outFile, 'utf8').split('\n').filter(l => l.trim()).length
-        : 0;
-      const total = ruleLines.length + preserved.length;
+      const net = written.lines - written.existing;
       console.log(
-        `[dry-run] evaluations-${date}.jsonl: ${ruleLines.length} rule + ${preserved.length} preserved`
-        + ` = ${total} lines (currently ${existing}, net ${total - existing >= 0 ? '+' : ''}${total - existing})`,
+        `[dry-run] ${written.file}: ${written.lines} rule lines`
+        + ` (currently ${written.existing}, net ${net >= 0 ? '+' : ''}${net})`,
       );
-    } else {
-      writeFileSync(outFile, content);
     }
-    preservedCount += preserved.length;
     filesToWrite++;
   }
 
@@ -559,7 +566,6 @@ function main(): void {
   for (const ev of allEvals) {
     byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
   }
-  if (preservedCount > 0) { /* logged externally */ }
   for (const [_name, _count] of byCat) { /* logged externally */ }
 }
 

@@ -2,8 +2,9 @@
 /**
  * Ship locally-derived evaluations to the cloud `evaluations` table.
  *
- * **This closes the seam that killed the dashboard.** `derive-evaluations` and
- * `judge-evaluations` write `evaluations-<date>.jsonl` into `TELEMETRY_DIR`;
+ * **This closes the seam that killed the dashboard.** `judge-evaluations`
+ * writes `evaluations-<date>.jsonl` into `TELEMETRY_DIR` and
+ * `derive-evaluations` writes `derived-evaluations-<date>.jsonl` beside it;
  * `sync-to-kv` reads the *cloud* (`CloudBackend.queryEvaluations`, which
  * defaults to the `'table'` source — the D1 `evaluations` table). Nothing
  * connected the two: the detached span shipper
@@ -51,10 +52,10 @@
  *    and every webhook POST allocates a fresh `r2_key` — so re-sending a record
  *    inserts a duplicate rather than being ignored; nothing downstream will
  *    catch it. A file offset cannot be the resume point either, because
- *    `derive-evaluations` REWRITES each `evaluations-<date>.jsonl` wholesale on
- *    every run and emits its rule lines *before* the preserved ones, so the
- *    prefix shifts whenever the rule count changes. This tracks a content
- *    fingerprint per record instead, which is stable under rewrite.
+ *    `derive-evaluations` REWRITES each `derived-evaluations-<date>.jsonl`
+ *    wholesale on every run, so the prefix shifts whenever the rule count
+ *    changes. This tracks a content fingerprint per record instead, which is
+ *    stable under rewrite.
  *
  * Usage:
  *   tsx scripts/upload-evaluations.ts                  # ship the default window
@@ -135,8 +136,14 @@ const REQUEST_TIMEOUT_MS = 30_000;
 /** Recorded on every row this script ships, so cloud rows are attributable. */
 const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 
-/** `evaluations-YYYY-MM-DD.jsonl` */
-const EVAL_FILE_PATTERN = /^evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
+/**
+ * `evaluations-YYYY-MM-DD.jsonl` (the hooks and the judge) and
+ * `derived-evaluations-YYYY-MM-DD.jsonl` (derive's rule records, a file of
+ * their own since HDF5, 2026-09-27). Both ship: the cloud reads
+ * `tool_correctness` and `evaluation_latency` into the CQI. The date is the
+ * one capture group `fileInWindow` reads.
+ */
+const EVAL_FILE_PATTERN = /^(?:derived-)?evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 /** Top-level span id a record may carry: derive and judge records (TKR8 Phase 2). */
 const SPAN_ID_FIELD = 'spanId';
 /** Only identity-map secret names are read from the environment. */

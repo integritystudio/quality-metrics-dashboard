@@ -4,12 +4,14 @@
  *
  * Steps:
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
+ *                            into derived-evaluations-<date>.jsonl, a file of its own (HDF5)
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
- *   3. upload-evaluations  → ship local evaluations JSONL to the cloud evaluations table
+ *                            appended to evaluations-<date>.jsonl beside the hooks' records
+ *   3. upload-evaluations  → ship both local evaluations JSONL files to the cloud evaluations table
  *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
  *
- * Step 3 is not optional plumbing. Steps 1-2 write `evaluations-<date>.jsonl`
- * to `TELEMETRY_DIR`, but step 4 reads the *cloud* (`CloudBackend.queryEvaluations`,
+ * Step 3 is not optional plumbing. Steps 1-2 write those files to
+ * `TELEMETRY_DIR`, but step 4 reads the *cloud* (`CloudBackend.queryEvaluations`,
  * source `'table'`). Without an upload between them the pipeline looks healthy
  * at every stage and still computes an empty dashboard — which is exactly how
  * it ran, unnoticed, until 2026-09-15. It needs `INJECT_HMAC_SECRET`.

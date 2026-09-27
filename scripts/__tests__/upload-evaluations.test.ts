@@ -165,8 +165,13 @@ describe('shipped index', () => {
     const index: ShippedIndex = {
       'evaluations-2026-09-15.jsonl': ['keep'],
       'evaluations-2026-08-01.jsonl': ['drop'],
+      'derived-evaluations-2026-09-15.jsonl': ['keep-derived'],
+      'derived-evaluations-2026-08-01.jsonl': ['drop-derived'],
     };
-    expect(pruneShipped(index, 2, NOW)).toEqual({ 'evaluations-2026-09-15.jsonl': ['keep'] });
+    expect(pruneShipped(index, 2, NOW)).toEqual({
+      'evaluations-2026-09-15.jsonl': ['keep'],
+      'derived-evaluations-2026-09-15.jsonl': ['keep-derived'],
+    });
   });
 });
 
@@ -218,6 +223,18 @@ describe('windowFiles', () => {
     write('logs-2026-09-15.jsonl', 10);
     write('metrics-2026-09-15.jsonl', 10);
     expect(windowFiles(dir, 2, NOW)).toEqual([]);
+  });
+
+  it("selects derive's own files alongside the hooks' (HDF5)", () => {
+    // The cloud reads tool_correctness and evaluation_latency into the CQI, so
+    // the rule records still ship from the file they moved to.
+    write('evaluations-2026-09-15.jsonl', 10);
+    write('derived-evaluations-2026-09-15.jsonl', 10);
+    write('derived-evaluations-2026-08-01.jsonl', 10);
+    expect(windowFiles(dir, 2, NOW)).toEqual([
+      'derived-evaluations-2026-09-15.jsonl',
+      'evaluations-2026-09-15.jsonl',
+    ]);
   });
 
   it('returns empty for a missing directory rather than throwing', () => {

@@ -101,6 +101,18 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
 const HOME = process.env.HOME ?? '';
 // Must match the producer: hooks/lib/constants.ts writes telemetry here.
 export const TELEMETRY_DIR = join(HOME, '.claude-history', 'telemetry');
+/** `evaluations-YYYY-MM-DD.jsonl`: the hooks' own records and this script's judge records. */
+export const EVALUATIONS_FILE_PREFIX = 'evaluations';
+/**
+ * `derived-evaluations-YYYY-MM-DD.jsonl`: derive's rule records, a file of their
+ * own since 2026-09-27 (HDF5). A reader that wants them opts in by name; nothing
+ * but the hooks and this script writes `evaluations-<date>.jsonl` any more.
+ */
+export const DERIVED_EVALUATIONS_FILE_PREFIX = 'derived-evaluations';
+/** Dated JSONL filename for a prefix. */
+export function datedJsonlName(prefix: string, date: string): string {
+  return `${prefix}-${date}.jsonl`;
+}
 export const SESSION_ID_PREVIEW_LEN = 8;
 export const EVAL_SCORE_PRECISION = 4;
 /** Decimal places in a record's fallback reason line. Restated here rather than
@@ -1332,7 +1344,7 @@ function isThisScriptsRecord(attrs: Record<string, unknown>): boolean {
 function _loadExistingKeys(): Set<string> {
   const keys = new Set<string>();
   const evalFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('evaluations-') && f.endsWith('.jsonl'));
+    .filter(f => f.startsWith(`${EVALUATIONS_FILE_PREFIX}-`) && f.endsWith('.jsonl'));
 
   for (const file of evalFiles) {
     const filepath = join(TELEMETRY_DIR, file);
@@ -1480,7 +1492,7 @@ function writeEvaluations(evals: EvalRecord[]): void {
   // Write all evals to today's file so they appear in recent time-window queries.
   // The record's timestamp field still reflects the original turn time for accuracy.
   const today = new Date().toISOString().slice(0, 10);
-  const outFile = join(TELEMETRY_DIR, `evaluations-${today}.jsonl`);
+  const outFile = join(TELEMETRY_DIR, datedJsonlName(EVALUATIONS_FILE_PREFIX, today));
   const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
   appendFileSync(outFile, content);
 }

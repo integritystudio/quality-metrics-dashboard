@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
   trackTaskActivity,
   deriveTaskCompletionPerSession,
   deriveEvaluationLatency,
+  derivedEvaluationsPath,
   scoreTask,
   sessionTasks,
+  writeDerivedEvaluations,
   STATUS_SCORES,
   type TraceSpan,
 } from '../derive-evaluations.js';
@@ -408,5 +413,56 @@ describe('deriveEvaluationLatency', () => {
       startTime: [2, 0],
       duration: [1, 0],
     }))).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// writeDerivedEvaluations — a file of its own (HDF5)
+// ---------------------------------------------------------------------------
+
+describe('writeDerivedEvaluations', () => {
+  let dir: string;
+  const DATE = '2026-09-27';
+  const line = (n: number): string => JSON.stringify({ name: 'gen_ai.evaluation.result', n });
+
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'derive-write-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  it("writes derived-evaluations-<date>.jsonl and never opens the hooks' file", () => {
+    const hooksFile = join(dir, `evaluations-${DATE}.jsonl`);
+    writeFileSync(hooksFile, 'hooks-line\n');
+
+    const result = writeDerivedEvaluations(dir, DATE, [line(1), line(2)], false);
+
+    expect(result).toEqual({ file: `derived-evaluations-${DATE}.jsonl`, lines: 2, existing: 0 });
+    expect(readFileSync(derivedEvaluationsPath(dir, DATE), 'utf8')).toBe(`${line(1)}\n${line(2)}\n`);
+    expect(readFileSync(hooksFile, 'utf8')).toBe('hooks-line\n');
+  });
+
+  it('replaces the file wholesale, so a second run cannot accumulate the first', () => {
+    // The failure this replaced: the old write into evaluations-<date>.jsonl
+    // preserved every line whose `gen_ai.evaluation.evaluator` was not `rule`,
+    // an attribute the writer had stopped emitting, so each run kept its own
+    // previous output and prepended a fresh copy — 57,156 lines for 4,641
+    // distinct records on 2026-09-22.
+    writeDerivedEvaluations(dir, DATE, [line(1), line(2), line(3)], false);
+    writeDerivedEvaluations(dir, DATE, [line(4)], false);
+
+    expect(readFileSync(derivedEvaluationsPath(dir, DATE), 'utf8')).toBe(`${line(4)}\n`);
+  });
+
+  it('writes nothing on a dry run and reports what the file holds now', () => {
+    writeDerivedEvaluations(dir, DATE, [line(1), line(2)], false);
+
+    const result = writeDerivedEvaluations(dir, DATE, [line(3)], true);
+
+    expect(result).toEqual({ file: `derived-evaluations-${DATE}.jsonl`, lines: 1, existing: 2 });
+    expect(readFileSync(derivedEvaluationsPath(dir, DATE), 'utf8')).toBe(`${line(1)}\n${line(2)}\n`);
+  });
+
+  it('creates no file on a dry run when none exists', () => {
+    writeDerivedEvaluations(dir, DATE, [line(1)], true);
+
+    expect(existsSync(derivedEvaluationsPath(dir, DATE))).toBe(false);
   });
 });
