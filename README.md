@@ -74,9 +74,9 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 
 | Step | Script | Output |
 |------|--------|--------|
-| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion |
-| 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination |
-| 3. Upload | `upload-evaluations.ts` | Ships local `evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
+| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion — written to `derived-evaluations-<date>.jsonl`, a file of its own, replaced wholesale each run (HDF5, 2026-09-27; it used to rewrite `evaluations-<date>.jsonl` and, keying its keep-filter on an attribute it no longer wrote, re-kept its own previous output every run) |
+| 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination — appended to `evaluations-<date>.jsonl` beside the hooks' records |
+| 3. Upload | `upload-evaluations.ts` | Ships local `evaluations-*.jsonl` and `derived-evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
 | 4. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
