@@ -74,7 +74,7 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 
 | Step | Script | Output |
 |------|--------|--------|
-| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion — POSTed straight to ingest for records from 2026-09-28 on (cloud-read Phase 3). Older records go to `derived-evaluations-<date>.jsonl`, a file of its own, replaced wholesale each run (HDF5, 2026-09-27; it used to rewrite `evaluations-<date>.jsonl` and, keying its keep-filter on an attribute it no longer wrote, re-kept its own previous output every run) |
+| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion, over spans the cloud holds for the last 7 days (`--source=cloud --days=7 --post-days=2`, cloud-read Phase 1) — POSTed straight to ingest for records from 2026-09-28 on and the last 2 days (Phase 3). Older records go to `derived-evaluations-<date>.jsonl`, a file of its own, replaced wholesale each run (HDF5, 2026-09-27; it used to rewrite `evaluations-<date>.jsonl` and, keying its keep-filter on an attribute it no longer wrote, re-kept its own previous output every run) |
 | 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination, over turns the cloud lists for the last 7 days (`--source=cloud --days=7`; turn text is read from local transcripts) — POSTed straight to ingest (Phase 4) and appended to `evaluations-<date>.jsonl` |
 | 3. Upload | `upload-evaluations.ts` | Ships the hooks' `evaluations-*.jsonl` records and pre-cutover `derived-evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
 | 4. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
@@ -90,6 +90,8 @@ npm run populate -- --batch         # judge through the Message Batches API: 50%
 npm run populate -- --per-criterion # one call per criterion (~10x cost)
 npm run populate -- --judge-days=30 # judge turns from the last 30 days instead of 7
 npm run populate -- --judge-source=local  # judge discovery from local telemetry (rollback)
+npm run populate -- --derive-days=14      # derive over the last 14 days instead of 7
+npm run populate -- --derive-source=local # derive from local trace files (rollback)
 ```
 
 **Judge credentials.** The judge prefers `LLM_JUDGE_ANTHROPIC_KEY` and falls back to

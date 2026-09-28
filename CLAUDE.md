@@ -66,9 +66,14 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 `npm run populate` runs: derive → judge → upload → sync-to-kv
 
 - `derive-evaluations.ts` — rule-based metrics (tool_correctness, evaluation_latency, task_completion).
+  - **`populate`, and so the schedule, passes `--source=cloud --days=7 --post-days=2`** (`DERIVE_DEFAULT_*` in `pipeline-stages.ts`, cloud-read Phase 1, 2026-09-28).
+    - It reads `/v1/traces` over 7 days but posts only the last 2. The wider read keeps session-level records built from whole sessions; posting the whole read would re-send a week each run.
+    - The 7 days are also the calibration corpus: `.calibration-state.json` is computed over every record derived. The local default read every trace file (~28 days).
+    - Override one run with `--derive-source=local` or `--derive-days=N`. Run directly, derive still defaults to the local source, which is the rollback until Phase 6.
+    - A failed cloud read exits `DERIVE_EXIT_READ_FAILED` (9) before anything is written or posted, and is handled like a failed post.
   - **Records from 2026-09-28T00:00Z on are POSTed straight to ingest** (`post-evaluations.ts`), each with an `evaluationId` the worker dedups on.
     - The cutover constant is `DERIVE_DIRECT_POST_SINCE_MS`.
-    - An unscoped run posts the last two days. `--date=`/`--days=` posts the whole scope, so that is how to backfill.
+    - An unscoped run posts the last two days. `--date=`/`--days=` posts the whole scope, so that is how to backfill, unless `--post-days=N` narrows it.
     - A failed post exits `DERIVE_EXIT_POST_FAILED` (8). `populate` retries derive on a transient network error (the same ~30 min schedule as sync), then carries on to judge, upload and sync. Re-running is safe, and the next run re-posts what was missed.
   - Earlier records still go to `derived-evaluations-<date>.jsonl`, a file of its own replaced wholesale each run (HDF5, 2026-09-27). `upload` skips derive records after the cutover, so the two paths never overlap.
   - HDF5 history: before 2026-09-27 it rewrote `evaluations-<date>.jsonl` and its keep-filter keyed on `gen_ai.evaluation.evaluator`, which `toOTelRecord` no longer writes, so every run re-kept its own previous rule lines: 2.08 M of the 2.12 M lines on disk were duplicates
