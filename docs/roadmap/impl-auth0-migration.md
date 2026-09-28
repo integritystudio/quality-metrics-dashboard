@@ -2,7 +2,7 @@
 
 **Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
 **Date**: 2026-03-26
-**Status**: Code complete (commits `6a53313`, `37f71c0`, 2026-03-26). Deployed and smoke-tested 2026-03-27 (`c96513a`). Only the `auth0_id` backfill remains — see [Rollout Sequence](#rollout-sequence).
+**Status**: Code complete (commits `6a53313`, `37f71c0`, 2026-03-26). Deployed and smoke-tested 2026-03-27 (`c96513a`). `auth0_id` backfill verified complete 2026-09-27 — nothing remains open.
 **Parent**: [`docs/auth-architecture.md`](../../../docs/auth-architecture.md) (history: [`docs/archive/user-rationalization-implementation-record.md`](../../../docs/archive/user-rationalization-implementation-record.md), Phase 4 — Auth0 canonical decision)
 
 ---
@@ -198,5 +198,5 @@ where auth0_id = id::text;  -- still has UUID stand-in
 - ✅ Deploy both workers (`obs-toolkit-quality-metrics-api` + `quality-metrics-api`) — deployed 2026-03-27
 - ✅ Smoke test: sign in, verify `/api/me`, verify a protected route, verify activity logging — all passing 2026-03-27; fixed `waitUntil` bug (activity logging was silently dropped without `ctx.waitUntil`)
 - ✅ Monitor Supabase logs for auth errors for 48h — no errors detected; 0 users with null `auth0_id` as of 2026-03-27; backfill fires on first Auth0 login per Post-Login Action
-- [ ] After all users log in via Auth0: verify `auth0_id` backfill complete (section 6b) — 2/12 users backfilled so far (alyshialedlie@gmail.com, test@integritystudio.ai); 5 core team users pending first Auth0 login
+- ✅ Verify `auth0_id` backfill complete (section 6b) — verified 2026-09-27: all 9 `public.users` rows carry a real Auth0 subject; none still holds the UUID stand-in
 - ✅ Delete `src/lib/supabase.ts` and remaining dead code — already deleted (pre-existing)

@@ -15,4 +15,4 @@ Nothing here is open. Open dashboard work is tracked in the parent [roadmap](../
 ## Completed Implementation Plans
 
 - [G5 — Multi-Agent Visualization](impl-g5-multi-agent-visualization.md) | [G5 v2.0 — Workflow Visualization Update](archive/impl-g5-workflow-visualization-update.md) (archived, superseded by the code)
-- [Auth0 Migration](impl-auth0-migration.md) — deployed 2026-03-27; the `auth0_id` backfill for users who have not yet logged in via Auth0 is still open
+- [Auth0 Migration](impl-auth0-migration.md) — deployed 2026-03-27; `auth0_id` backfill verified complete 2026-09-27
