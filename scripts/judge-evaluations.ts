@@ -2,12 +2,18 @@
 /**
  * LLM-as-Judge Evaluation Generator
  *
- * Discovers session transcripts from telemetry logs, extracts user/assistant
- * turns, and evaluates them using the LLM-as-Judge library (relevance,
- * coherence, hallucination) via the Anthropic API (Claude Haiku).
+ * Discovers session transcripts, extracts user/assistant turns, and evaluates
+ * them using the LLM-as-Judge library (relevance, coherence, hallucination)
+ * via the Anthropic API (Claude Haiku).
  *
- * Appends results to existing evaluations-*.jsonl files alongside rule-based
- * evaluations from derive-evaluations.ts.
+ * Discovery reads local telemetry logs by default. `--source=cloud` takes the
+ * sessions, each turn's account and the already-judged set from obtool-api
+ * instead (judge-cloud-source.ts, cloud-read Phase 4); turn text is always
+ * read from the local transcripts. Judged, withheld and held-for-key turns are
+ * dropped before `--limit` (judge-selection.ts).
+ *
+ * Results are posted straight to ingest (post-evaluations.ts) and appended to
+ * `evaluations-<today>.jsonl`, the ledger the local source dedups against.
  *
  * Usage:
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run
@@ -15,6 +21,7 @@
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --batch   # Message Batches API: half price, unattended
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --per-criterion   # one call per criterion (~10x cost)
+ *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run --source=cloud --days=7   # cloud discovery; needs --days= or --date=
  *
  * Scoring is consolidated by default — one call per turn carrying every
  * criterion (judge-consolidated.ts; chosen by JCP4, 2026-09-22). `--batch`
@@ -59,7 +66,7 @@ import {
   BATCH_WALL_CLOCK_MS,
   type BatchLLMProvider,
 } from './judge-batch-provider.js';
-import { HOOK_NAME } from '../src/api/api-constants.js';
+import { HOOK_NAME, toDateOnly } from '../src/api/api-constants.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKeySource } from './judge-credentials.js';
 import pLimit from 'p-limit';
 import {
@@ -72,6 +79,8 @@ import {
   type AccountRef,
 } from './account-stamps.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+// Type-only, so no runtime cycle: derive imports this module.
+import type { TraceSource } from './derive-evaluations.js';
 
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',
@@ -389,7 +398,7 @@ export interface EvalRecord {
  * Checked in order when a log-referenced path is missing, and scanned
  * directly to discover transcripts not referenced in logs at all.
  */
-const TRANSCRIPT_DIRS = [
+export const TRANSCRIPT_DIRS: readonly string[] = [
   join(HOME, '.claude', 'projects'),
   join(HOME, 'claude-tool-use', 'projects'),
   join(HOME, '.claude-history', 'projects'),
@@ -444,7 +453,19 @@ export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
     }
   }
 
-  for (const dir of TRANSCRIPT_DIRS) {
+  transcripts.push(...scanTranscriptDirs(TRANSCRIPT_DIRS, seen));
+  return transcripts;
+}
+
+/**
+ * Transcripts found by listing `<dir>/<slug>/<sessionId>.jsonl` under each of
+ * `dirs`, first directory winning. Session ids already in `seen` are skipped;
+ * the rest are added to it. Reads no telemetry, so the cloud source uses it to
+ * find the transcript of a session the cloud named.
+ */
+export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS, seen = new Set<string>()): TranscriptInfo[] {
+  const transcripts: TranscriptInfo[] = [];
+  for (const dir of dirs) {
     if (!existsSync(dir)) continue;
     let slugDirs: string[];
     try {
@@ -471,7 +492,6 @@ export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
       }
     }
   }
-
   return transcripts;
 }
 
@@ -1383,6 +1403,41 @@ function _loadExistingKeys(): Set<string> {
   return keys;
 }
 
+export interface TurnDiscovery {
+  /** Anchored, then restricted to the date scope when there is one. */
+  turns: Turn[];
+  /** The index the turns were anchored with; it also routes their posts. */
+  accounts: AccountIndex;
+  /** The already-judged set: the cloud's rows, or the local ledger read on call. */
+  loadExistingKeys: () => Set<string>;
+}
+
+/**
+ * Find the turns a run may judge. `local` reads telemetry logs and trace files
+ * and dedups against the local ledger; `cloud` takes all three from obtool-api
+ * (judge-cloud-source.ts) and needs a date scope. Turn text is local either way.
+ */
+export async function discoverTurns(source: TraceSource, dateScope: ReadonlySet<string> | null): Promise<TurnDiscovery> {
+  if (source === 'cloud' && !dateScope) throw new Error('the cloud source needs a date scope');
+  const cloud = source === 'cloud' && dateScope
+    ? await (await import('./judge-cloud-source.js')).discoverFromCloud(dateScope)
+    : undefined;
+  const transcripts = cloud?.transcripts ?? await _discoverTranscripts();
+
+  const concurrencyLimit = pLimit(CONCURRENCY);
+  const turnArrays = await Promise.all(transcripts.map(info => concurrencyLimit(() => extractTurns(info))));
+  // Anchored before the scope and the limit cut, so each turn's window is
+  // bounded by the real next turn rather than by whichever turns survived.
+  const extracted = turnArrays.flat();
+  const accounts = cloud?.accounts ?? buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now());
+  anchorTurns(extracted, accounts);
+  return {
+    turns: dateScope ? extracted.filter(t => dateScope.has(toDateOnly(t.timestamp))) : extracted,
+    accounts,
+    loadExistingKeys: () => cloud?.existingKeys ?? _loadExistingKeys(),
+  };
+}
+
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 /** Path to the sidecar that records each run's succeeded count for the drop check. */
 export const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json');
@@ -1604,22 +1659,17 @@ async function main() {
     return;
   }
 
-  const transcripts = await _discoverTranscripts();
-
-  const concurrencyLimit = pLimit(CONCURRENCY);
-  const turnArrays = await Promise.all(transcripts.map(info => concurrencyLimit(() => extractTurns(info))));
-  // Anchored before the limit slices, so each turn's window is bounded by the
-  // real next turn rather than by whichever turns happened to survive the cut.
-  const extracted = turnArrays.flat();
-  const accounts = buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now());
-  anchorTurns(extracted, accounts);
-  // Dynamic, like judge-consolidated below: both import this module.
+  // Dynamic imports here and below, like judge-consolidated: each of these
+  // modules imports this one.
+  const { resolveDateScope, resolveSource } = await import('./derive-evaluations.js');
+  const dateScope = resolveDateScope(args);
+  const { turns, accounts, loadExistingKeys } = await discoverTurns(resolveSource(args, dateScope), dateScope);
   const { selectTurns, formatTurnSelection } = await import('./judge-selection.js');
   // --seed posts nothing, so only a real run skips turns it could not deliver.
-  const select = (keys: Set<string>) => selectTurns(extracted, keys, { limit, deliverableOnly: !seed });
+  const select = (keys: Set<string>) => selectTurns(turns, keys, { limit, deliverableOnly: !seed });
 
   if (dryRun) {
-    const selection = select(_loadExistingKeys());
+    const selection = select(loadExistingKeys());
     console.log(`[dry-run] turns: ${formatTurnSelection(selection)}`);
     const allTurns = selection.selected;
     const est = estimateJudgeRun(allTurns, batch, consolidated);
@@ -1656,7 +1706,7 @@ async function main() {
   }
 
   try {
-    const existingKeys = _loadExistingKeys();
+    const existingKeys = loadExistingKeys();
     const selection = select(existingKeys);
     console.log(`[judge] turns: ${formatTurnSelection(selection)}`);
     const allTurns = selection.selected;

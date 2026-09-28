@@ -44,10 +44,17 @@ describe('selectTurns', () => {
     expect(selectTurns([t], onlyRelevance, opts).selected).toEqual([t]);
   });
 
-  it('keeps discovery order', () => {
-    const turns = ['3', '1', '2'].map((id) => turn(id));
+  it('takes the oldest pending turns, whatever order they were discovered in', () => {
+    const [t3, t1, t2] = ['3', '1', '2'].map((id) => turn(id)) as [Turn, Turn, Turn];
 
-    expect(selectTurns(turns, new Set(), opts).selected).toEqual(turns);
+    expect(selectTurns([t3, t1, t2], new Set(), { ...opts, limit: 2 }).selected).toEqual([t1, t2]);
+  });
+
+  it('breaks a timestamp tie by session id', () => {
+    const b = turn('1', { sessionId: 'sess-b' });
+    const a = turn('1', { sessionId: 'sess-a' });
+
+    expect(selectTurns([b, a], new Set(), opts).selected).toEqual([a, b]);
   });
 });
 

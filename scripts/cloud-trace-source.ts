@@ -118,7 +118,11 @@ export function mergeAccountSpans(
 }
 
 /** Load every in-scope span from the cloud, one query per account key in `env`. */
-export async function loadCloudSpans(dates: ReadonlySet<string>, env: NodeJS.ProcessEnv = process.env): Promise<LoadedSpans> {
+export async function loadCloudSpans(
+  dates: ReadonlySet<string>,
+  env: NodeJS.ProcessEnv = process.env,
+  logPrefix: string = CLI_PREFIX,
+): Promise<LoadedSpans> {
   const refs = accountRefsFromEnv(env);
   if (refs.length === 0) throw new Error('no OBTOOL_API_KEY* account key in the environment');
   const { fromMs, toMs } = dateScopeBounds(dates);
@@ -133,11 +137,11 @@ export async function loadCloudSpans(dates: ReadonlySet<string>, env: NodeJS.Pro
     if (spans.length >= CLOUD_SPAN_LIMIT) {
       throw new Error(`${ref}: cloud returned ${CLOUD_SPAN_LIMIT} spans, so the scope may be truncated; narrow --days`);
     }
-    console.log(`${CLI_PREFIX} ${ref}: ${spans.length} spans`);
+    console.log(`${logPrefix} ${ref}: ${spans.length} spans`);
     perAccount.push({ ref, spans });
   }
   const merged = mergeAccountSpans(perAccount, dates);
-  if (merged.duplicates > 0) console.warn(`${CLI_PREFIX} ${merged.duplicates} spans readable by more than one key; kept the first`);
-  if (merged.rejected > 0) console.warn(`${CLI_PREFIX} ${merged.rejected} spans failed localTraceSpanSchema and were skipped`);
+  if (merged.duplicates > 0) console.warn(`${logPrefix} ${merged.duplicates} spans readable by more than one key; kept the first`);
+  if (merged.rejected > 0) console.warn(`${logPrefix} ${merged.rejected} spans failed localTraceSpanSchema and were skipped`);
   return { spans: merged.spans, accounts: merged.accounts };
 }

@@ -69,7 +69,17 @@ export function turnSkip(
   return asString((opts.env ?? process.env)[secret]) ? undefined : 'held-for-key';
 }
 
-/** Drop the turns this run must not judge, then apply the limit. Order is kept. */
+/** Oldest first, session id breaking ties: the same order whichever source found the turns. */
+function byTurnTime(a: Turn, b: Turn): number {
+  return Date.parse(a.timestamp) - Date.parse(b.timestamp) || a.sessionId.localeCompare(b.sessionId);
+}
+
+/**
+ * Drop the turns this run must not judge, then take the `limit` oldest. The
+ * order is fixed rather than discovery order so the local and cloud sources,
+ * which list sessions differently, select the same turns; a date scope is
+ * what points a run at recent turns instead of the backlog.
+ */
 export function selectTurns(turns: readonly Turn[], existingKeys: Set<string>, opts: SelectOptions): TurnSelection {
   const selection: TurnSelection = {
     selected: [],
@@ -89,10 +99,11 @@ export function selectTurns(turns: readonly Turn[], existingKeys: Set<string>, o
       const secret = deliverySecret(turn)!;
       selection.heldForKey[secret] = (selection.heldForKey[secret] ?? 0) + 1;
     } else {
-      selection.pending++;
-      if (selection.selected.length < opts.limit) selection.selected.push(turn);
+      selection.selected.push(turn);
     }
   }
+  selection.pending = selection.selected.length;
+  selection.selected = selection.selected.sort(byTurnTime).slice(0, opts.limit);
   return selection;
 }
 

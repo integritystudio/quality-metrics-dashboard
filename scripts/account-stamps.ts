@@ -120,13 +120,8 @@ function pushTo<T>(map: Map<string, T[]>, key: string, value: T): void {
   map.set(key, values);
 }
 
-/**
- * Index the spans in `files` (names under `dir`). Unstamped spans (written
- * before TKR6) go only on the session timeline, so they cannot outvote a
- * stamped one in any account lookup.
- */
-export function indexTraceFiles(dir: string, files: readonly string[]): AccountIndex {
-  const index: AccountIndex = { byTrace: new Map(), bySession: new Map(), sessionSpans: new Map(), bySpan: new Map() };
+/** Every parseable line of the trace files `files` (names under `dir`). */
+function* traceFileRecords(dir: string, files: readonly string[]): Generator<unknown> {
   for (const file of files) {
     let text: string;
     try {
@@ -144,30 +139,49 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
       } catch {
         continue;
       }
-      if (typeof parsed !== 'object' || parsed === null) continue;
-      const span = parsed as Record<string, unknown>;
-      const atMs = hrTimeToMs(span.startTime);
-      const traceId = asString(span.traceId);
-      const spanId = asString(span.spanId);
-      const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
-        ? span.attributes as Record<string, unknown>
-        : {};
-      const sessionId = asString(attrs[SPAN_SESSION_ID_ATTR]);
-
-      let ref: AccountRef | undefined;
-      if (IDENTITY_KEY_REF_FIELD in span) {
-        const raw = span[IDENTITY_KEY_REF_FIELD];
-        ref = typeof raw === 'string' ? raw : null;
-        if (traceId) pushTo(index.byTrace, traceId, { atMs, ref });
-        if (spanId) index.bySpan.set(spanId, ref);
-        if (sessionId) {
-          const refs = index.bySession.get(sessionId) ?? new Set<AccountRef>();
-          refs.add(ref);
-          index.bySession.set(sessionId, refs);
-        }
-      }
-      if (sessionId) pushTo(index.sessionSpans, sessionId, { atMs, spanId, traceId, ref });
+      yield parsed;
     }
+  }
+}
+
+/** Index the spans in `files` (names under `dir`). */
+export function indexTraceFiles(dir: string, files: readonly string[]): AccountIndex {
+  return indexSpanRecords(traceFileRecords(dir, files));
+}
+
+/**
+ * Index span records in the file exporters' shape: HRT `startTime`, and the
+ * `identityKeyRef` stamp as a record field. Unstamped spans (written before
+ * TKR6) go only on the session timeline, so they cannot outvote a stamped one
+ * in any account lookup. The judge's cloud source feeds `/v1/traces` spans
+ * through here, stamped with the account whose key read them.
+ */
+export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
+  const index: AccountIndex = { byTrace: new Map(), bySession: new Map(), sessionSpans: new Map(), bySpan: new Map() };
+  for (const parsed of records) {
+    if (typeof parsed !== 'object' || parsed === null) continue;
+    const span = parsed as Record<string, unknown>;
+    const atMs = hrTimeToMs(span.startTime);
+    const traceId = asString(span.traceId);
+    const spanId = asString(span.spanId);
+    const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
+      ? span.attributes as Record<string, unknown>
+      : {};
+    const sessionId = asString(attrs[SPAN_SESSION_ID_ATTR]);
+
+    let ref: AccountRef | undefined;
+    if (IDENTITY_KEY_REF_FIELD in span) {
+      const raw = span[IDENTITY_KEY_REF_FIELD];
+      ref = typeof raw === 'string' ? raw : null;
+      if (traceId) pushTo(index.byTrace, traceId, { atMs, ref });
+      if (spanId) index.bySpan.set(spanId, ref);
+      if (sessionId) {
+        const refs = index.bySession.get(sessionId) ?? new Set<AccountRef>();
+        refs.add(ref);
+        index.bySession.set(sessionId, refs);
+      }
+    }
+    if (sessionId) pushTo(index.sessionSpans, sessionId, { atMs, spanId, traceId, ref });
   }
   for (const stamps of index.byTrace.values()) stamps.sort((a, b) => a.atMs - b.atMs);
   for (const spans of index.sessionSpans.values()) spans.sort((a, b) => a.atMs - b.atMs);
