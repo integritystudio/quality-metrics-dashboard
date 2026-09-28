@@ -3,8 +3,9 @@
  * Single-command pipeline to populate all 7 dashboard metrics.
  *
  * Steps:
- *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
- *                            into derived-evaluations-<date>.jsonl, a file of its own (HDF5)
+ *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion),
+ *                            POSTed straight to ingest for records from 2026-09-28 on (Phase 3);
+ *                            older ones still go to derived-evaluations-<date>.jsonl
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            appended to evaluations-<date>.jsonl beside the hooks' records
  *   3. upload-evaluations  → ship both local evaluations JSONL files to the cloud evaluations table
@@ -21,7 +22,7 @@
  *   npm run populate -- --seed                # offline: synthetic judge scores
  *   npm run populate -- --dry-run --seed      # preview only, no writes
  *   npm run populate -- --skip-judge          # rule-based + upload + sync only
- *   npm run populate -- --skip-upload         # derive + judge + sync (sync will see no new evals)
+ *   npm run populate -- --skip-upload         # derive + judge + sync (derive still posts its own records)
  *   npm run populate -- --skip-sync           # derive + judge + upload only
  *   npm run populate -- --limit 5 --seed      # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)

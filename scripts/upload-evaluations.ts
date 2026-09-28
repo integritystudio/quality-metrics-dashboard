@@ -39,19 +39,16 @@
  *
  * ## Two properties a caller must know
  *
- * 1. **Evaluation time is not preserved.** `handleEvaluationsWebhook` stamps
- *    `receivedAtMs = Date.now()` *after* spreading the payload
- *    (`services/obtool-ingest/src/evaluations.ts`), so a client-supplied value
- *    is overwritten, and the flush resolves `timestamp_ns` from it. Rows are
- *    therefore timestamped at *receipt*, not at evaluation. Ship promptly and
- *    often and the error stays under one run interval; back-filling an old
- *    file collapses its whole history onto today. `--max-age-hours` refuses
- *    stale records rather than silently mis-dating them.
- * 2. **The shipped index is load-bearing, and must not be a byte offset.** The
- *    evaluations INSERT is `INSERT OR IGNORE` keyed on `(r2_key, batch_index)`,
- *    and every webhook POST allocates a fresh `r2_key` — so re-sending a record
- *    inserts a duplicate rather than being ignored; nothing downstream will
- *    catch it. A file offset cannot be the resume point either, because
+ * 1. **Event time comes from `evaluatedAtMs`.** Since EVAL-WEBHOOK-EVENT-TIME
+ *    (v3.1.17) the flush dates a row by the record's own time. Rows shipped
+ *    before that carry receipt time; their real time is `metadata.evaluatedAt`.
+ *    `--max-age-hours` is now a bound on how far back a normal run looks.
+ * 2. **The shipped index is load-bearing, and must not be a byte offset.** Every
+ *    payload carries `evaluationId`, and ingest drops an id the org already
+ *    holds (migration 0015), so a re-send of anything shipped since then is a
+ *    no-op. Rows shipped before it have no id, and re-sending one of those
+ *    inserts a duplicate, since the only other key is `(r2_key, batch_index)`
+ *    and every POST allocates a fresh `r2_key`. A file offset cannot be the resume point either, because
  *    `derive-evaluations` REWRITES each `derived-evaluations-<date>.jsonl`
  *    wholesale on every run, so the prefix shifts whenever the rule count
  *    changes. This tracks a content fingerprint per record instead, which is
@@ -64,6 +61,10 @@
  *   tsx scripts/upload-evaluations.ts --limit=50       # stop after N records
  *   tsx scripts/upload-evaluations.ts --max-age-hours=48
  *   tsx scripts/upload-evaluations.ts --days=11 --only-keys=manifest.jsonl
+ *
+ * Derive records at or after `DERIVE_DIRECT_POST_SINCE_MS` are skipped here:
+ * derive posts those itself (Phase 3). This script keeps shipping the hooks'
+ * and the judge's `evaluations-<date>.jsonl`, and older derive files.
  *
  * `--only-keys` re-ships exactly the records a manifest names, for replacing
  * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md). Each line
@@ -86,6 +87,8 @@ import { pathToFileURL } from 'url';
 import {
   CANARY_COHORT,
   CANARY_EVALUATOR_TYPE,
+  DERIVED_EVALUATIONS_FILE_PREFIX,
+  DERIVE_DIRECT_POST_SINCE_MS,
   EVALUATION_ATTRS,
   EVALUATION_RESULT_EVENT,
   LEGACY_EVALUATOR_TYPE_ATTR,
@@ -106,7 +109,7 @@ import {
 export { buildAccountIndex, type AccountIndex, type AccountRef, type TraceStamp };
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
-const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
+export const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
 
 /**
  * Webhook caps, mirrored from `services/obtool-ingest/src/evaluations.ts`.
@@ -115,7 +118,7 @@ const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
  * `src/lib/validation/api-schemas.ts`. `upload-evaluations.test.ts` asserts
  * they still match the source.
  */
-const MAX_BATCH_SIZE = 100;
+export const MAX_BATCH_SIZE = 100;
 const MAX_EVALUATION_BYTES = 10_000;
 const WEBHOOK_MAX_NAME_LENGTH = 255;
 const WEBHOOK_MAX_EXPLANATION_LENGTH = 2000;
@@ -136,7 +139,7 @@ const DEFAULT_MAX_AGE_HOURS = 36;
 const MS_PER_HOUR = 3_600_000;
 
 /** Pause between batches so a large first run does not burst the worker. */
-const INTER_BATCH_DELAY_MS = 250;
+export const INTER_BATCH_DELAY_MS = 250;
 
 /** Transient-failure retry budget per batch (429, 5xx, and transport errors). */
 const MAX_SEND_ATTEMPTS = 4;
@@ -162,7 +165,7 @@ const WEBHOOK_PATH = '/v1/evaluations';
 const KEYED_PATH = '/v1/ingest/backfill?signal=evaluations';
 const NDJSON_CONTENT_TYPE = 'application/x-ndjson';
 /** Summary label for records sent through the org-less webhook. */
-const WEBHOOK_DESTINATION = 'webhook';
+export const WEBHOOK_DESTINATION = 'webhook';
 
 const STATE_FILENAME = '.eval-upload-state.json';
 
@@ -519,9 +522,9 @@ function signature(payload: string, secret: string): string {
   return `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`;
 }
 
-interface SendRequest { url: string; headers: Record<string, string>; body: string }
+export interface SendRequest { url: string; headers: Record<string, string>; body: string }
 
-function webhookRequest(baseUrl: string, batch: EvaluationPayload[], secret: string): SendRequest {
+export function webhookRequest(baseUrl: string, batch: EvaluationPayload[], secret: string): SendRequest {
   const body = JSON.stringify({ evaluations: batch });
   return {
     url: `${baseUrl}${WEBHOOK_PATH}`,
@@ -539,7 +542,7 @@ export function keyedRequest(baseUrl: string, batch: EvaluationPayload[], apiKey
   };
 }
 
-interface SendResult { ok: boolean; detail: string; retryable: boolean }
+export interface SendResult { ok: boolean; detail: string; retryable: boolean }
 
 /**
  * One POST attempt. Never throws.
@@ -577,7 +580,7 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
 }
 
 /** Retry transient failures with exponential backoff; log once on exhaustion. */
-async function postBatch(request: SendRequest): Promise<SendResult> {
+export async function postBatch(request: SendRequest): Promise<SendResult> {
   let last: SendResult = { ok: false, detail: 'no attempt made', retryable: false };
   for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
     last = await postBatchOnce(request);
@@ -590,6 +593,18 @@ async function postBatch(request: SendRequest): Promise<SendResult> {
   }
   console.error(`[upload-evaluations] giving up after ${MAX_SEND_ATTEMPTS} attempts: ${last.detail}`);
   return last;
+}
+
+const POSTED_BY_DERIVE_SKIP = 'posted-by-derive';
+
+/**
+ * A derive record at or after the Phase 3 cutover: derive posts those itself
+ * (`DERIVE_DIRECT_POST_SINCE_MS`). Its files only ever hold earlier ones once
+ * the new derive runs, so this matters for files a pre-cutover run wrote.
+ */
+export function isPostedByDerive(file: string, mapped: MapResult): boolean {
+  const at = mapped.payload?.evaluatedAtMs;
+  return file.startsWith(`${DERIVED_EVALUATIONS_FILE_PREFIX}-`) && at !== undefined && at >= DERIVE_DIRECT_POST_SINCE_MS;
 }
 
 const ONLY_KEYS_ARG = '--only-keys';
@@ -706,6 +721,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         continue;
       }
       const mapped = mapRecord(parsed, nowMs, maxAgeMs);
+      if (isPostedByDerive(file, mapped)) {
+        // derive posted this one itself, with an evaluationId; shipping it
+        // here too would add an id-less duplicate the worker cannot drop.
+        skips[POSTED_BY_DERIVE_SKIP] = (skips[POSTED_BY_DERIVE_SKIP] ?? 0) + 1;
+        delivered.push(fp);
+        continue;
+      }
       const key = manifest && mapped.payload ? payloadManifestKey(mapped.payload) : undefined;
       if (manifest && (key === undefined || !manifest.has(key))) {
         // Not ours to touch: left unrecorded so a normal run handles it as before.

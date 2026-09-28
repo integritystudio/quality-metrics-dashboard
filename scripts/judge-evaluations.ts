@@ -109,6 +109,21 @@ export const EVALUATIONS_FILE_PREFIX = 'evaluations';
  * but the hooks and this script writes `evaluations-<date>.jsonl` any more.
  */
 export const DERIVED_EVALUATIONS_FILE_PREFIX = 'derived-evaluations';
+/**
+ * Event-time cutover for derive's records (cloud-read migration Phase 3).
+ * From this instant on, `derive-evaluations` posts its records straight to
+ * ingest, each carrying an `evaluationId` the worker dedups on; before it,
+ * records go to `derived-evaluations-<date>.jsonl` and `upload-evaluations`
+ * ships them as it always has. Split by the record's own time, not by run,
+ * so the two paths are disjoint whichever version of either script runs:
+ * derive writes only earlier records to files, and upload skips later ones.
+ *
+ * Chosen above the newest derive row in D1 when it was set (2026-09-27
+ * 23:58:56Z), so nothing at or after it had been shipped without an id — a
+ * direct post of an already-shipped record would duplicate it. Delete with
+ * the file path (Phase 6) once every window is past it.
+ */
+export const DERIVE_DIRECT_POST_SINCE_MS = Date.parse('2026-09-28T00:00:00.000Z');
 /** Dated JSONL filename for a prefix. */
 export function datedJsonlName(prefix: string, date: string): string {
   return `${prefix}-${date}.jsonl`;

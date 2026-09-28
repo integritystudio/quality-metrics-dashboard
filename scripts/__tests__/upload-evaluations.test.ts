@@ -7,6 +7,7 @@ import {
   mapRecord,
   fingerprint,
   evaluationId,
+  isPostedByDerive,
   loadShipped,
   saveShipped,
   pruneShipped,
@@ -222,6 +223,23 @@ describe('evaluationId', () => {
   it('is sent on every mapped payload, so a re-send is dropped by the ingest worker', () => {
     const r = record({ 'gen_ai.evaluation.evaluator': 'derive-evaluations' }) as Record<string, unknown>;
     expect(mapRecord(r, NOW, MAX_AGE_MS).payload?.evaluationId).toBe(evaluationId(r));
+  });
+});
+
+describe('isPostedByDerive', () => {
+  const mapped = (evaluatedAtMs: number) => ({ payload: { evaluatedAtMs } as EvaluationPayload });
+  const cutover = Date.parse('2026-09-28T00:00:00.000Z');
+
+  it('skips derive-file records at or after the cutover, which derive posts itself', () => {
+    expect(isPostedByDerive('derived-evaluations-2026-09-28.jsonl', mapped(cutover))).toBe(true);
+  });
+
+  it('still ships derive-file records from before the cutover', () => {
+    expect(isPostedByDerive('derived-evaluations-2026-09-27.jsonl', mapped(cutover - 1))).toBe(false);
+  });
+
+  it('never skips records from the hooks or the judge', () => {
+    expect(isPostedByDerive('evaluations-2026-09-28.jsonl', mapped(cutover + 1))).toBe(false);
   });
 });
 

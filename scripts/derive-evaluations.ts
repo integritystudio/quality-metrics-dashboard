@@ -1,10 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * Derive evaluation JSONL files from local telemetry trace data.
+ * Derive rule-based evaluations from trace data and deliver them to the cloud.
  *
- * Reads traces-*.jsonl, extracts quality signals, writes
- * derived-evaluations-*.jsonl in the format expected by the
- * observability-toolkit backend.
+ * Reads traces-*.jsonl (or `/v1/traces` with `--source=cloud`), extracts
+ * quality signals, and delivers each record by its own event time
+ * (cloud-read migration Phase 3, `DERIVE_DIRECT_POST_SINCE_MS`):
+ *   - at or after the cutover: POSTed straight to ingest (`post-evaluations.ts`),
+ *     each with an `evaluationId` the worker dedups on, so re-posting is a no-op.
+ *     An unscoped run posts the last two days; `--date=`/`--days=` posts the
+ *     whole scope, which is how a backfill is done.
+ *   - before it: written to derived-evaluations-<date>.jsonl for
+ *     `upload-evaluations`, as before. Goes away in Phase 6.
  *
  * Each target derived-evaluations-<date>.jsonl is REPLACED, not appended to,
  * so scope the run and preview it before writing:
@@ -42,10 +48,11 @@ import {
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, DERIVED_EVALUATIONS_FILE_PREFIX, datedJsonlName, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, DERIVED_EVALUATIONS_FILE_PREFIX, DERIVE_DIRECT_POST_SINCE_MS, datedJsonlName, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
 import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
-import { indexTraceFiles, type AccountRef } from './account-stamps.js';
+import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
+import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
@@ -547,6 +554,33 @@ export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
   return allEvals;
 }
 
+/**
+ * Split at the Phase 3 cutover by the record's own time: earlier records still
+ * go to `derived-evaluations-<date>.jsonl` for `upload-evaluations`, later ones
+ * are posted directly (see `DERIVE_DIRECT_POST_SINCE_MS`).
+ */
+/**
+ * How far back an unscoped run posts. Every run re-derives every local date,
+ * so without a floor each run would re-post the whole history since the
+ * cutover — dropped by ingest, but sent. Matches upload's and the span
+ * shipper's two-day window. An explicit `--date=`/`--days=` posts its whole
+ * scope, which is how a backfill is done.
+ */
+const DIRECT_POST_WINDOW_DAYS = 2;
+const MS_PER_DAY = 86_400_000;
+
+/** Earliest event time an unscoped run posts; no floor when the caller scoped the dates. */
+export function postFloorMs(dateScope: Set<string> | null, nowMs: number): number {
+  return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DIRECT_POST_WINDOW_DAYS * MS_PER_DAY;
+}
+
+export function splitAtCutover(records: readonly EvalRecord[]): { toFile: EvalRecord[]; toPost: EvalRecord[] } {
+  const toFile: EvalRecord[] = [];
+  const toPost: EvalRecord[] = [];
+  for (const r of records) (Date.parse(r.timestamp) >= DERIVE_DIRECT_POST_SINCE_MS ? toPost : toFile).push(r);
+  return { toFile, toPost };
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dateScope = resolveDateScope(argv);
@@ -557,9 +591,13 @@ async function main(): Promise<void> {
     ? await loadCloudSpans(dateScope)
     : loadLocalSpans(TELEMETRY_DIR, dateScope);
   const allEvals = deriveAll(loaded);
+  // A span in an in-scope trace file can carry an out-of-scope timestamp;
+  // never write or post a date the caller did not ask for.
+  const inScope = dateScope ? allEvals.filter(ev => dateScope.has(toDateOnly(ev.timestamp))) : allEvals;
+  const { toFile, toPost } = splitAtCutover(inScope);
 
   const byDate = new Map<string, EvalRecord[]>();
-  for (const ev of allEvals) {
+  for (const ev of toFile) {
     const date = toDateOnly(ev.timestamp);
     let group = byDate.get(date);
     if (!group) byDate.set(date, group = []);
@@ -568,10 +606,6 @@ async function main(): Promise<void> {
 
   let filesToWrite = 0;
   for (const [date, evals] of byDate) {
-    // A span in an in-scope trace file can carry an out-of-scope timestamp;
-    // never rewrite a date the caller did not ask for.
-    if (dateScope && !dateScope.has(date)) continue;
-
     const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
     const written = writeDerivedEvaluations(TELEMETRY_DIR, date, ruleLines, dryRun);
     if (dryRun) {
@@ -583,6 +617,17 @@ async function main(): Promise<void> {
     }
     filesToWrite++;
   }
+
+  // Unstamped records fall back to the local account join only when the spans
+  // were local; every cloud span is stamped with the org that shipped it.
+  const accounts = source === 'local'
+    ? buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now())
+    : emptyAccountIndex();
+  const floorMs = postFloorMs(dateScope, Date.now());
+  const inWindow = toPost.filter(ev => Date.parse(ev.timestamp) >= floorMs);
+  const posted = await postEvaluationRecords(inWindow.map(toOTelRecord), { dryRun, accounts });
+  console.log(`[derive]${dryRun ? ' dry-run:' : ''} posted ${formatPostSummary(posted)}`);
+  if (posted.failure) process.exitCode = 1;
 
   // Calibration step: compute per-metric percentile distributions
   // and persist to .calibration-state.json for the dashboard API to consume.

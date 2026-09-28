@@ -12,10 +12,13 @@ import {
   resolveSource,
   scoreTask,
   sessionTasks,
+  splitAtCutover,
+  postFloorMs,
   writeDerivedEvaluations,
   STATUS_SCORES,
   type TraceSpan,
 } from '../derive-evaluations.js';
+import { DERIVE_DIRECT_POST_SINCE_MS, type EvalRecord } from '../judge-evaluations.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -492,6 +495,35 @@ describe('resolveSource', () => {
 
   it('rejects an unknown source', () => {
     expect(() => resolveSource(['--source=s3'], scope)).toThrow('local|cloud');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// splitAtCutover (cloud-read migration Phase 3)
+// ---------------------------------------------------------------------------
+
+describe('splitAtCutover', () => {
+  const at = (ms: number): EvalRecord =>
+    ({ timestamp: new Date(ms).toISOString(), evaluationName: 'tool_correctness', scoreValue: 1 }) as EvalRecord;
+
+  it('posts records at or after the cutover and files the ones before it', () => {
+    const before = at(DERIVE_DIRECT_POST_SINCE_MS - 1);
+    const exactly = at(DERIVE_DIRECT_POST_SINCE_MS);
+    const after = at(DERIVE_DIRECT_POST_SINCE_MS + 1);
+
+    expect(splitAtCutover([after, before, exactly])).toEqual({ toFile: [before], toPost: [after, exactly] });
+  });
+});
+
+describe('postFloorMs', () => {
+  const now = Date.parse('2026-10-01T12:00:00.000Z');
+
+  it('limits an unscoped run to the last two days', () => {
+    expect(postFloorMs(null, now)).toBe(Date.parse('2026-09-29T12:00:00.000Z'));
+  });
+
+  it('posts the whole scope when the caller named dates, so a backfill reaches old records', () => {
+    expect(postFloorMs(new Set(['2026-09-28']), now)).toBe(Number.NEGATIVE_INFINITY);
   });
 });
 
