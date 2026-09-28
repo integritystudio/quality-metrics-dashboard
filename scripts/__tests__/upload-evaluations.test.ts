@@ -13,9 +13,14 @@ import {
   buildAccountIndex,
   resolveRoute,
   keyedRequest,
+  manifestKey,
+  parseKeyManifest,
+  payloadManifestKey,
   type ShippedIndex,
   type EvaluationPayload,
 } from '../upload-evaluations.js';
+import { deriveToolCorrectness } from '../derive-evaluations.js';
+import { toOTelRecord } from '../judge-evaluations.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const MAX_AGE_MS = 36 * 3_600_000;
@@ -439,5 +444,62 @@ describe('network failure handling', () => {
 
   it('bounds every request with a timeout', () => {
     expect(SCRIPT).toContain('AbortSignal.timeout(REQUEST_TIMEOUT_MS)');
+  });
+});
+
+// --only-keys: re-ship exactly the records deleted from D1 in the builtin.*
+// key cleanup (docs/roadmap/builtin-key-eval-cleanup.md).
+describe('parseKeyManifest', () => {
+  const line = (e: Record<string, unknown>): string => JSON.stringify(e);
+  const entry = { ref: 'OBTOOL_API_KEY', evaluationName: 'tool_correctness', traceId: 't1', evaluatedAtMs: 1_790_553_614_235 };
+
+  it('maps each entry to its account ref, skipping blank lines', () => {
+    const manifest = parseKeyManifest(`${line(entry)}\n\n${line({ ...entry, ref: 'OBTOOL_API_KEY_B', traceId: 't2' })}\n`);
+
+    expect([...manifest]).toEqual([
+      [manifestKey('tool_correctness', 't1', 1_790_553_614_235), 'OBTOOL_API_KEY'],
+      [manifestKey('tool_correctness', 't2', 1_790_553_614_235), 'OBTOOL_API_KEY_B'],
+    ]);
+  });
+
+  it('accepts an empty trace id, which pre-span-id rows carry', () => {
+    expect(parseKeyManifest(line({ ...entry, traceId: '' })).size).toBe(1);
+  });
+
+  it.each([
+    ['a ref that is not an identity-map name', { ...entry, ref: 'CLOUDFLARE_API_TOKEN' }],
+    ['a missing event time', { ...entry, evaluatedAtMs: undefined }],
+    ['a fractional event time', { ...entry, evaluatedAtMs: 1.5 }],
+    ['an empty evaluation name', { ...entry, evaluationName: '' }],
+  ])('rejects the whole manifest on %s, naming the line', (_label, bad) => {
+    expect(() => parseKeyManifest(`${line(entry)}\n${line(bad)}`)).toThrow('manifest line 2');
+  });
+
+  it('rejects a line that is not JSON', () => {
+    expect(() => parseKeyManifest('{not json')).toThrow();
+  });
+});
+
+describe('payloadManifestKey', () => {
+  it('keys a derive record exactly as its D1 row is keyed (name, trace, event time in ms)', () => {
+    const span = {
+      traceId: '0123456789abcdef0123456789abcdef',
+      spanId: '00000000000000a1',
+      name: 'hook:builtin-post-tool',
+      startTime: [1_790_553_614, 235_000_000] as [number, number],
+      endTime: [1_790_553_614, 236_463_666] as [number, number],
+      duration: [0, 1_463_666] as [number, number],
+      attributes: { 'session.id': 's1', 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true },
+    };
+    const line = JSON.stringify(toOTelRecord(deriveToolCorrectness(span)!));
+
+    const { payload } = mapRecord(JSON.parse(line), NOW, Number.POSITIVE_INFINITY);
+
+    // A D1 row stores timestamp_ns = evaluatedAtMs * 1e6; the manifest carries that in ms.
+    expect(payloadManifestKey(payload!)).toBe(manifestKey('tool_correctness', '0123456789abcdef0123456789abcdef', 1_790_553_614_235));
+  });
+
+  it('is undefined for a payload with no event time', () => {
+    expect(payloadManifestKey({ evaluationName: 'x', evaluator: 'rule', evaluatorType: 'rule', scoreValue: 1 })).toBeUndefined();
   });
 });

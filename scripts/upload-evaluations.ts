@@ -63,6 +63,16 @@
  *   tsx scripts/upload-evaluations.ts --days=7         # widen the file window
  *   tsx scripts/upload-evaluations.ts --limit=50       # stop after N records
  *   tsx scripts/upload-evaluations.ts --max-age-hours=48
+ *   tsx scripts/upload-evaluations.ts --days=11 --only-keys=manifest.jsonl
+ *
+ * `--only-keys` re-ships exactly the records a manifest names, for replacing
+ * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md). Each line
+ * of the manifest is `{ref, evaluationName, traceId, evaluatedAtMs}`: a record
+ * is sent only when its (name, trace, event time) is listed, always keyed with
+ * the listed account's key so it lands in the org the deleted row came from,
+ * and without the `--max-age-hours` guard, because the flush dates rows by
+ * `evaluatedAtMs`. Everything else in the window is left untouched and
+ * unrecorded, so the next normal run treats it exactly as before.
  *
  * Env: INJECT_HMAC_SECRET (required), OBTOOL_INGEST_URL (optional), and one
  * `OBTOOL_API_KEY*` per mapped account (all present under `doppler run … prd`).
@@ -375,6 +385,46 @@ export function windowFiles(dir: string, windowDays: number, nowMs: number): str
   }
 }
 
+/** One manifest entry: which record to re-ship, and under which account's key. */
+export interface ManifestEntry {
+  ref: string;
+  evaluationName: string;
+  traceId: string;
+  evaluatedAtMs: number;
+}
+
+/** A record's identity for `--only-keys`: name, trace and event time, which a D1 row also carries. */
+export function manifestKey(evaluationName: string, traceId: string, evaluatedAtMs: number): string {
+  return `${evaluationName}|${traceId}|${evaluatedAtMs}`;
+}
+
+/**
+ * Parse a `--only-keys` manifest (JSONL) into key → account ref. Throws on a
+ * malformed line or a ref that is not an identity-map secret name: a manifest
+ * drives production writes, so a partial read must not ship a partial set.
+ */
+export function parseKeyManifest(text: string): Map<string, string> {
+  const manifest = new Map<string, string>();
+  text.split('\n').forEach((line, i) => {
+    if (!line.trim()) return;
+    const e = JSON.parse(line) as Partial<ManifestEntry>;
+    if (typeof e.ref !== 'string' || !IDENTITY_KEY_REF_PATTERN.test(e.ref)
+      || typeof e.evaluationName !== 'string' || !e.evaluationName
+      || typeof e.traceId !== 'string'
+      || typeof e.evaluatedAtMs !== 'number' || !Number.isInteger(e.evaluatedAtMs)) {
+      throw new Error(`manifest line ${i + 1} is not {ref, evaluationName, traceId, evaluatedAtMs}`);
+    }
+    manifest.set(manifestKey(e.evaluationName, e.traceId, e.evaluatedAtMs), e.ref);
+  });
+  return manifest;
+}
+
+/** The manifest key of a mapped payload; `undefined` when it has no event time to match on. */
+export function payloadManifestKey(payload: EvaluationPayload): string | undefined {
+  if (payload.evaluatedAtMs === undefined) return undefined;
+  return manifestKey(payload.evaluationName, payload.traceId ?? '', payload.evaluatedAtMs);
+}
+
 /** Where one record goes. */
 export type Route =
   | { kind: 'keyed'; ref: string }
@@ -518,11 +568,14 @@ async function postBatch(request: SendRequest): Promise<SendResult> {
   return last;
 }
 
+const ONLY_KEYS_ARG = '--only-keys';
+
 interface Options {
   dryRun: boolean;
   windowDays: number;
   maxAgeMs: number;
   limit: number;
+  onlyKeysPath?: string;
 }
 
 function parseArgs(argv: string[]): Options {
@@ -536,6 +589,7 @@ function parseArgs(argv: string[]): Options {
     windowDays: numeric('--days', DEFAULT_WINDOW_DAYS),
     maxAgeMs: numeric('--max-age-hours', DEFAULT_MAX_AGE_HOURS) * MS_PER_HOUR,
     limit: numeric('--limit', Number.POSITIVE_INFINITY),
+    onlyKeysPath: argv.find((a) => a.startsWith(`${ONLY_KEYS_ARG}=`))?.slice(ONLY_KEYS_ARG.length + 1),
   };
 }
 
@@ -549,6 +603,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   // asString, not `??`: an empty OBTOOL_INGEST_URL must fall back to the
   // default host, and `??` would keep the empty string and POST to `/v1/...`.
   const baseUrl = asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL;
+
+  const manifest = opts.onlyKeysPath ? parseKeyManifest(readFileSync(opts.onlyKeysPath, 'utf8')) : undefined;
+  // The flush dates rows by evaluatedAtMs, so a targeted re-ship of old records
+  // is correctly dated and needs no age guard.
+  const maxAgeMs = manifest ? Number.POSITIVE_INFINITY : opts.maxAgeMs;
+  const matchedKeys = new Set<string>();
+  let notInManifest = 0;
 
   const nowMs = Date.now();
   const shipped = pruneShipped(loadShipped(TELEMETRY_DIR), opts.windowDays, nowMs);
@@ -620,7 +681,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         parseErrors++;
         continue;
       }
-      const mapped = mapRecord(parsed, nowMs, opts.maxAgeMs);
+      const mapped = mapRecord(parsed, nowMs, maxAgeMs);
+      const key = manifest && mapped.payload ? payloadManifestKey(mapped.payload) : undefined;
+      if (manifest && (key === undefined || !manifest.has(key))) {
+        // Not ours to touch: left unrecorded so a normal run handles it as before.
+        notInManifest++;
+        continue;
+      }
       if (mapped.skip) {
         skips[mapped.skip] = (skips[mapped.skip] ?? 0) + 1;
         // Remember the decision so a permanently-unshippable record is not
@@ -628,7 +695,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         if (mapped.skip !== 'too-old') delivered.push(fp);
         continue;
       }
-      const { route, basis } = routeRecord(mapped, accounts);
+      const { route, basis } = key !== undefined
+        ? { route: { kind: 'keyed', ref: manifest!.get(key)! } as Route, basis: 'stamp' as RouteBasis }
+        : routeRecord(mapped, accounts);
+      if (key !== undefined) matchedKeys.add(key);
       routedBy[basis]++;
       if (route.kind === 'withheld') {
         // Unmapped account: consumed unsent, never re-examined (TKR3).
@@ -670,7 +740,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     ` byDestination[${summarize(sentByDestination)}] withheld=${withheld}` +
     ` routedBy[${summarize(routedBy)}]` +
     (Object.keys(heldForKey).length ? ` heldForKey[${summarize(heldForKey)}]` : '') +
-    (parseErrors ? ` parseErrors=${parseErrors}` : ''),
+    (parseErrors ? ` parseErrors=${parseErrors}` : '') +
+    (manifest ? ` onlyKeys[matched=${matchedKeys.size} of ${manifest.size} notInManifest=${notInManifest}]` : ''),
   );
   return 0;
 }
