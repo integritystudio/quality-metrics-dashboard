@@ -52,7 +52,7 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG } from './pipeline-stages.js';
 import {
   createBatchProvider,
   BATCH_POLL_INTERVAL_MS,
@@ -1748,7 +1748,8 @@ async function main() {
       if (posted.failure) {
         // Ingest drops any id it already holds, so re-sending the whole file is safe.
         console.error(`[judge] records are in ${outFile}; re-send them with upload-evaluations --days=1 and a --max-age-hours that reaches the oldest turn`);
-        process.exitCode = 1;
+        // Soft, so populate still runs upload + sync; this outranks a summary code.
+        process.exitCode = JUDGE_EXIT_POST_FAILED;
       }
     }
 

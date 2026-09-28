@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   JUDGE_EXIT_BILLING,
   JUDGE_EXIT_NO_SCORES,
+  JUDGE_EXIT_POST_FAILED,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
   isTransientNetworkFailure,
@@ -95,9 +96,10 @@ describe('runWithRetry', () => {
 });
 
 describe('pipeline exit-code contract', () => {
-  it('treats both judge codes as soft failures and nothing else', () => {
+  it('treats the judge\'s own codes as soft failures and nothing else', () => {
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BILLING)).toBe(true);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_NO_SCORES)).toBe(true);
+    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_POST_FAILED)).toBe(true);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(1)).toBe(false);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(0)).toBe(false);
   });

@@ -18,13 +18,24 @@ export const JUDGE_EXIT_NO_SCORES = 3;
  * or model-output regression that a 0-score check would not catch.
  */
 export const JUDGE_EXIT_HIGH_FAILURE_RATE = 5;
+/**
+ * judge-evaluations exit: turns were scored, but ingest refused the post. The
+ * records are in the judge's evaluations file, so nothing is lost; re-sending
+ * that file is safe, because ingest drops an evaluationId it already holds.
+ */
+export const JUDGE_EXIT_POST_FAILED = 6;
 
 /**
  * Judge exits populate-dashboard.ts forwards to its own exit instead of
  * aborting: the judge already said why, and the rule-based evaluations from
  * derive still deserve to reach the cloud.
  */
-export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE]);
+export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
+  JUDGE_EXIT_BILLING,
+  JUDGE_EXIT_NO_SCORES,
+  JUDGE_EXIT_HIGH_FAILURE_RATE,
+  JUDGE_EXIT_POST_FAILED,
+]);
 
 /**
  * judge-evaluations flag: run through the Message Batches API — half price,
