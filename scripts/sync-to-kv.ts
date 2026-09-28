@@ -696,7 +696,7 @@ function summarizeAgentSpans(group: SessionSpan[]) {
 
 function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
   const byAgent = rollup(
-    spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.AGENT_POST_TOOL),
+    spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.AGENT_FINALIZE),
     summarizeAgentSpans,
     s => spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown',
   );

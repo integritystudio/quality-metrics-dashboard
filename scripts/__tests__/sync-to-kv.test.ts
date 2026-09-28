@@ -354,3 +354,31 @@ describe('computeSessionDetail after the builtin.* rename', () => {
     expect(detail.fileAccess).toEqual([{ path: '/repo/src/a.ts', count: 1 }]);
   });
 });
+
+// Regression: the hooks renamed `agent-post-tool` to `agent.operation.finalize`
+// on 2026-08-13 and agent activity kept filtering on the old hook name, so every
+// session detail reported no agents. The name is copied from a real span.
+describe('computeSessionDetail after the agent hook rename', () => {
+  const finalize = (agentName: string, hasError: boolean) => ({
+    name: 'hook:agent.operation.finalize',
+    attributes: {
+      'integritystudio.hook.name': 'agent.operation.finalize',
+      'gen_ai.agent.name': agentName,
+      'integritystudio.agent.has_error': hasError,
+      'integritystudio.agent.output_size': 400,
+    },
+  });
+
+  it('counts invocations and errors per agent from the finalize spans', () => {
+    const detail = computeSessionDetail('s1', [
+      finalize('Explore', false),
+      finalize('Explore', true),
+      finalize('code-reviewer', false),
+    ], []);
+
+    expect(detail.agentActivity.map(a => [a.agentName, a.invocations, a.errors])).toEqual([
+      ['Explore', 2, 1],
+      ['code-reviewer', 1, 0],
+    ]);
+  });
+});

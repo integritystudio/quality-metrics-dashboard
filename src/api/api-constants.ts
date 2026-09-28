@@ -118,10 +118,21 @@ export function incrementCount(map: Record<string, number>, key: string): void {
   map[key] = (map[key] ?? 0) + 1;
 }
 
+/** A hook span's name is this prefix plus its `integritystudio.hook.name`. */
+export const HOOK_SPAN_PREFIX = 'hook:';
+
 export const HOOK_NAME = {
   SESSION_START: 'session-start',
   TOKEN_METRICS: 'token-metrics-extraction',
-  AGENT_POST_TOOL: 'agent-post-tool',
+  /**
+   * PreToolUse and PostToolUse on the Agent tool. Named `agent-pre-tool` and
+   * `agent-post-tool` until the hooks renamed them on 2026-08-13 (~/.claude
+   * ba8f3ce4), after which every reader of the old names found nothing
+   * (AGENT-POST-TOOL-READERS-DEAD). Only the new names are read: the old ones
+   * fall outside every period-scoped reader's 30-day window.
+   */
+  AGENT_PREPARE: 'agent.operation.prepare',
+  AGENT_FINALIZE: 'agent.operation.finalize',
   POST_COMMIT_REVIEW: 'post-commit-review',
   ALERT_EVALUATION: 'telemetry-alert-evaluation',
   CODE_STRUCTURE: 'code-structure',

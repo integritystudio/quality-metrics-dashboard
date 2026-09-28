@@ -52,7 +52,7 @@ import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '.
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, DERIVED_EVALUATIONS_FILE_PREFIX, DERIVE_DIRECT_POST_SINCE_MS, datedJsonlName, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
-import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
+import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
@@ -119,6 +119,15 @@ function hrtToISO(hrt: [number, number]): string {
 /** Maximum raw scores to persist per metric in calibration state (bounds file size) */
 const MAX_RAW_SCORES_PER_METRIC = 500;
 
+/**
+ * The Agent tool's pre- and post-tool hook spans. Derive matched their old
+ * names (`hook:agent-pre-tool` / `hook:agent-post-tool`) for six weeks after
+ * the hooks renamed them, so agent completion, handoff_correctness and agent
+ * hook latency produced nothing (AGENT-POST-TOOL-READERS-DEAD).
+ */
+const AGENT_PREPARE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_PREPARE}`;
+const AGENT_FINALIZE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_FINALIZE}`;
+
 export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   const attrs = attrsOf(span);
   const isBuiltin = span.name === 'hook:builtin-post-tool';
@@ -160,7 +169,7 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   const measurable = [
     'hook:builtin-post-tool',
     'hook:mcp-post-tool',
-    'hook:agent-post-tool',
+    AGENT_FINALIZE_SPAN,
     'hook:session-start',
     'hook:tsc-check',
   ];
@@ -179,8 +188,8 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   let hookType: string;
   if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrString(attrs['gen_ai.tool.name'], 'unknown')}`;
   else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrString(attrs['mcp.tool'], 'unknown')}`;
-  else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
-  else hookType = span.name.replace('hook:', '');
+  else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
+  else hookType = span.name.replace(HOOK_SPAN_PREFIX, '');
 
   return {
     timestamp: hrtToISO(span.startTime),
@@ -327,8 +336,8 @@ interface AgentSessionData {
 const sessionAgents = new Map<string, AgentSessionData>();
 
 function trackAgentActivity(span: LocalTraceSpan): void {
-  const isPre = span.name === 'hook:agent-pre-tool';
-  const isPost = span.name === 'hook:agent-post-tool';
+  const isPre = span.name === AGENT_PREPARE_SPAN;
+  const isPost = span.name === AGENT_FINALIZE_SPAN;
   if (!isPre && !isPost) return;
 
   const sessionId = attrString(span.attributes['session.id'], 'unknown');
@@ -526,9 +535,22 @@ export function loadLocalSpans(dir: string, dateScope: Set<string> | null): Load
 }
 
 /**
- * Every rule record for `spans`, in the order `main` has always produced them.
- * Clears the per-session accumulators first, so two sources can be derived in
- * one process (`derive-parity.ts`).
+ * Ascending by start time, span id breaking ties: the order `loadCloudSpans`
+ * returns. Local files are in write order, which differs when spans overlap
+ * (two agents finishing in parallel), and the session-level records attach
+ * to the session's last span, so without one order the two sources named
+ * different spans, and so different evaluation ids, for the same record.
+ */
+function byStartThenSpanId(a: LocalTraceSpan, b: LocalTraceSpan): number {
+  return a.startTime[0] - b.startTime[0]
+    || a.startTime[1] - b.startTime[1]
+    || a.spanId.localeCompare(b.spanId);
+}
+
+/**
+ * Every rule record for `spans`, taken in start order whatever order they
+ * arrive in. Clears the per-session accumulators first, so two sources can be
+ * derived in one process (`derive-parity.ts`).
  */
 export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
   sessionTasks.clear();
@@ -536,7 +558,7 @@ export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
   setSpanAccounts(loaded.accounts);
   const allEvals: EvalRecord[] = [];
 
-  for (const span of loaded.spans) {
+  for (const span of [...loaded.spans].sort(byStartThenSpanId)) {
     const toolCorr = deriveToolCorrectness(span);
     if (toolCorr) allEvals.push(toolCorr);
 

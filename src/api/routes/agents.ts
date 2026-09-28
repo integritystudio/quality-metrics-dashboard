@@ -68,7 +68,7 @@ agentRoutes.get('/agents', async (c) => {
     // and then fails Zod at runtime, which made this route a guaranteed 500.
     // Pass the datetimes; the date-only values above stay for buckets/response.
     const agentSpans = await loadTracesByFilter(
-      { 'integritystudio.hook.name': HOOK_NAME.AGENT_POST_TOOL },
+      { 'integritystudio.hook.name': HOOK_NAME.AGENT_FINALIZE },
       windowStart.toISOString(),
       now.toISOString(),
       LIMIT_AGENT_SPANS,

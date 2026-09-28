@@ -169,7 +169,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr(s, 'file.path', 'string') });
       }
 
-      if (hookName === HOOK_NAME.AGENT_POST_TOOL) {
+      if (hookName === HOOK_NAME.AGENT_FINALIZE) {
         const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
         const agentEntry = (agentAcc[name] ??= { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 });
         agentEntry.invocations++;

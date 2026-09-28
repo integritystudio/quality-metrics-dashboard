@@ -180,6 +180,29 @@ describe('GET /sessions/:sessionId', () => {
     expect(body.fileAccess).toEqual([{ path: '/repo/src/a.ts', count: 1 }]);
   });
 
+  // Regression: the hooks renamed `agent-post-tool` to `agent.operation.finalize`
+  // on 2026-08-13 and this route kept matching the old hook name, so every
+  // session reported no agent activity. The name is copied from a real span.
+  it('builds agent activity from the finalize hook spans', async () => {
+    const finalize = {
+      'builtin.tool': undefined,
+      'integritystudio.hook.name': 'agent.operation.finalize',
+      'gen_ai.agent.name': 'Explore',
+      'integritystudio.agent.output_size': 300,
+    };
+    fixture.setTraces([
+      makeSessionSpanWire('hook:agent.operation.finalize', finalize),
+      { ...makeSessionSpanWire('hook:agent.operation.finalize', { ...finalize, 'integritystudio.agent.has_error': true }), span_id: 'span-002' },
+    ]);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailResponse;
+
+    expect(body.agentActivity).toEqual([
+      { agentName: 'Explore', invocations: 2, errors: 1, hasRateLimit: false, avgOutputSize: 300 },
+    ]);
+  });
+
   it('computes dataSources total from all sources', async () => {
     fixture.setTraces([makeSessionSpanWire()]);
     // session.id must be in attributes so the client-side sessionId filter passes.

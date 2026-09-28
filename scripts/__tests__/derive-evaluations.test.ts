@@ -664,3 +664,83 @@ describe('deriveAll across the builtin.* rename', () => {
     expect(scores).toEqual([1, 1, 0]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Agent hook rename (hooks 2026-08-13)
+//
+// Regression: derive matched `hook:agent-pre-tool` / `hook:agent-post-tool`,
+// the hooks renamed them to `hook:agent.operation.prepare` / `.finalize`, and
+// agent completion, handoff_correctness and agent hook latency produced
+// nothing for six weeks. The names below are copied from real spans, not from
+// the constants, so a wrong constant fails here instead of matching itself.
+// ---------------------------------------------------------------------------
+
+const OTEL_STATUS_OK = 1;
+
+/** An Agent-tool hook span in one session, shaped like the hooks write it today. */
+function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId: string, startSec: number): TraceSpan {
+  return {
+    traceId: 'trace-001',
+    spanId,
+    name: `hook:agent.operation.${phase}`,
+    startTime: [startSec, 0],
+    endTime: [startSec, 1_000_000],
+    duration: [0, 1_000_000],
+    status: { code: OTEL_STATUS_OK },
+    attributes: {
+      'session.id': 'sess-agents',
+      'gen_ai.agent.name': agentName,
+      'integritystudio.agent.type': agentName,
+      'integritystudio.hook.name': `agent.operation.${phase}`,
+    },
+  };
+}
+
+describe('deriveAll over the renamed agent hook spans', () => {
+  const START_SEC = 1_790_000_000;
+  const spans = [
+    agentHookSpan('prepare', 'Explore', 'span-p1', START_SEC),
+    agentHookSpan('finalize', 'Explore', 'span-f1', START_SEC + 10),
+    agentHookSpan('prepare', 'code-reviewer', 'span-p2', START_SEC + 20),
+    agentHookSpan('finalize', 'code-reviewer', 'span-f2', START_SEC + 30),
+  ];
+  const records = (): EvalRecord[] => deriveAll({ spans, accounts: new Map() });
+
+  it('scores agent completion from prepare and finalize counts', () => {
+    const completion = records().filter(r => r.evaluationName === 'task_completion');
+
+    expect(completion.map(r => r.scoreValue)).toEqual([1]);
+    expect(completion[0]?.explanation).toMatch(/^Agent completion: 2\/2 agents finished/);
+  });
+
+  it('scores a handoff between two different agents', () => {
+    const handoffs = records().filter(r => r.evaluationName === 'handoff_correctness');
+
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]?.scoreValue).toBe(1);
+    expect(handoffs[0]?.spanId).toBe('span-f2');
+  });
+
+  // Regression: two agents finishing in parallel land in the trace file in the
+  // opposite order to their start times, so local derive attached the session
+  // record to one span and cloud derive, which reads in start order, to the other.
+  it('attaches session records to the latest-starting span whatever order the spans arrive in', () => {
+    const [p1, f1, p2, f2] = spans;
+    const writeOrder = [p1!, p2!, f2!, f1!];
+
+    const fromWriteOrder = deriveAll({ spans: writeOrder, accounts: new Map() })
+      .filter(r => r.evaluationName !== 'evaluation_latency');
+
+    expect(fromWriteOrder).toEqual(records().filter(r => r.evaluationName !== 'evaluation_latency'));
+    expect(fromWriteOrder.every(r => r.spanId === 'span-f2')).toBe(true);
+  });
+
+  it('measures the finalize hook latency under the agent type', () => {
+    const latency = records().filter(r => r.evaluationName === 'evaluation_latency');
+
+    expect(latency.map(r => r.explanation)).toEqual([
+      expect.stringMatching(/^Hook agent\/Explore executed in /),
+      expect.stringMatching(/^Hook agent\/code-reviewer executed in /),
+    ]);
+  });
+});

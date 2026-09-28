@@ -57,15 +57,18 @@ function makeAgentSpanWire(
   return spanToWire({
     traceId,
     spanId,
-    name: 'hook:agent-post-tool',
+    name: 'hook:agent.operation.finalize',
     kind: 'INTERNAL',
     startTimeUnixNano: 1737000000_000_000_000n,
     endTimeUnixNano: 1737000001_000_000_000n,
     attributes: {
       // 'integritystudio.hook.name' is the attributeFilter key the agents route
       // uses. CloudBackend applies non-sessionId attributeFilter client-side, so
-      // this must be present or the span is dropped after fetch.
-      'integritystudio.hook.name': 'agent-post-tool',
+      // this must be present or the span is dropped after fetch. Copied from a
+      // real span, not from HOOK_NAME: the fixture said 'agent-post-tool' for six
+      // weeks after the hooks renamed it, and passed against a route that matched
+      // nothing in production (AGENT-POST-TOOL-READERS-DEAD).
+      'integritystudio.hook.name': 'agent.operation.finalize',
       'gen_ai.agent.name': agentName,
       'integritystudio.agent.has_error': false,
       'integritystudio.agent.has_rate_limit': false,
