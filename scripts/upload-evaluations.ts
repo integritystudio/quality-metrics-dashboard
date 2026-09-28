@@ -84,6 +84,7 @@ import {
 import {
   ACCOUNT_INDEX_WINDOW_DAYS,
   IDENTITY_KEY_REF_FIELD,
+  IDENTITY_KEY_REF_PATTERN,
   asString,
   buildAccountIndex,
   fileInWindow,
@@ -146,8 +147,6 @@ const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 const EVAL_FILE_PATTERN = /^(?:derived-)?evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 /** Top-level span id a record may carry: derive and judge records (TKR8 Phase 2). */
 const SPAN_ID_FIELD = 'spanId';
-/** Only identity-map secret names are read from the environment. */
-const IDENTITY_KEY_REF_PATTERN = /^OBTOOL_API_KEY(?:_[A-Z0-9]+)*$/;
 
 const WEBHOOK_PATH = '/v1/evaluations';
 const KEYED_PATH = '/v1/ingest/backfill?signal=evaluations';

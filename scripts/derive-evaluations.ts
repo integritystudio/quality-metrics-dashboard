@@ -12,6 +12,12 @@
  *   tsx scripts/derive-evaluations.ts --date=2026-07-27 --dry-run
  *   tsx scripts/derive-evaluations.ts --days=7
  *   tsx scripts/derive-evaluations.ts              # all dates
+ *   tsx scripts/derive-evaluations.ts --source=cloud --days=7   # read /v1/traces instead
+ *
+ * `--source=cloud` reads spans from obtool-api, one query per `OBTOOL_API_KEY*`
+ * account in the environment, and needs `--date=` or `--days=` (an unbounded
+ * cloud read has no memory ceiling). Output is identical in shape; see
+ * `derive-parity.ts` for the check that the two sources agree.
  *
  * The records get a file of their own (HDF5, 2026-09-27). Until then this
  * rewrote the hooks' `evaluations-<date>.jsonl`, keeping every line whose
@@ -39,6 +45,7 @@ import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js'
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, DERIVED_EVALUATIONS_FILE_PREFIX, datedJsonlName, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
 import { indexTraceFiles, type AccountRef } from './account-stamps.js';
+import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -406,6 +413,23 @@ const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
 const DAYS_ARG = '--days=';
 const DRY_RUN_ARG = '--dry-run';
+const SOURCE_ARG = '--source=';
+
+export const TRACE_SOURCES = ['local', 'cloud'] as const;
+export type TraceSource = typeof TRACE_SOURCES[number];
+
+/** `--source=local|cloud`; `local` when absent. Cloud needs a date scope. */
+export function resolveSource(args: string[], dateScope: Set<string> | null): TraceSource {
+  const arg = args.find(a => a.startsWith(SOURCE_ARG));
+  const source = arg ? arg.slice(SOURCE_ARG.length) : 'local';
+  if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
+    throw new Error(`${SOURCE_ARG} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
+  }
+  if (source === 'cloud' && !dateScope) {
+    throw new Error(`${SOURCE_ARG}cloud needs ${DATE_ARG} or ${DAYS_ARG}`);
+  }
+  return source as TraceSource;
+}
 
 /**
  * Restrict which date buckets are read and rewritten.
@@ -470,39 +494,56 @@ export function writeDerivedEvaluations(dir: string, date: string, lines: readon
   return { file: basename(outFile), lines: lines.length, existing };
 }
 
-function main(): void {
-  const argv = process.argv.slice(2);
-  const dateScope = resolveDateScope(argv);
-  const dryRun = argv.includes(DRY_RUN_ARG);
-
-  const traceFiles = readdirSync(TELEMETRY_DIR)
+/** Every span in the in-scope `traces-<date>.jsonl` files, in file then line order. */
+export function loadLocalSpans(dir: string, dateScope: Set<string> | null): LoadedSpans {
+  const traceFiles = readdirSync(dir)
     .filter(f => f.startsWith(TRACE_FILE_PREFIX) && f.endsWith('.jsonl'))
     .filter(f => !dateScope
       || dateScope.has(f.slice(TRACE_FILE_PREFIX.length, TRACE_FILE_PREFIX.length + DATE_ONLY_LEN)))
     .sort();
+  const accounts = indexTraceFiles(dir, traceFiles).bySpan;
+  const spans = traceFiles.flatMap(file => readJsonlWithValidationSync(join(dir, file), localTraceSpanSchema));
+  return { spans, accounts };
+}
 
-  setSpanAccounts(indexTraceFiles(TELEMETRY_DIR, traceFiles).bySpan);
+/**
+ * Every rule record for `spans`, in the order `main` has always produced them.
+ * Clears the per-session accumulators first, so two sources can be derived in
+ * one process (`derive-parity.ts`).
+ */
+export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
+  sessionTasks.clear();
+  sessionAgents.clear();
+  setSpanAccounts(loaded.accounts);
   const allEvals: EvalRecord[] = [];
 
-  for (const file of traceFiles) {
-    const filePath = join(TELEMETRY_DIR, file);
-    const spans = readJsonlWithValidationSync(filePath, localTraceSpanSchema);
+  for (const span of loaded.spans) {
+    const toolCorr = deriveToolCorrectness(span);
+    if (toolCorr) allEvals.push(toolCorr);
 
-    for (const span of spans) {
-      const toolCorr = deriveToolCorrectness(span);
-      if (toolCorr) allEvals.push(toolCorr);
+    const latency = deriveEvaluationLatency(span);
+    if (latency) allEvals.push(latency);
 
-      const latency = deriveEvaluationLatency(span);
-      if (latency) allEvals.push(latency);
-
-      trackTaskActivity(span);
-      trackAgentActivity(span);
-    }
+    trackTaskActivity(span);
+    trackAgentActivity(span);
   }
 
   allEvals.push(...deriveTaskCompletionPerSession());
   allEvals.push(...deriveAgentCompletionPerSession());
   allEvals.push(...deriveHandoffCorrectnessPerSession());
+  return allEvals;
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+  const dateScope = resolveDateScope(argv);
+  const source = resolveSource(argv, dateScope);
+  const dryRun = argv.includes(DRY_RUN_ARG);
+
+  const loaded = source === 'cloud' && dateScope
+    ? await loadCloudSpans(dateScope)
+    : loadLocalSpans(TELEMETRY_DIR, dateScope);
+  const allEvals = deriveAll(loaded);
 
   const byDate = new Map<string, EvalRecord[]>();
   for (const ev of allEvals) {
@@ -573,5 +614,8 @@ function main(): void {
 const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
   process.argv[1]?.endsWith('derive-evaluations.js');
 if (isDirectRun) {
-  main();
+  main().catch((err: unknown) => {
+    console.error('[derive] fatal:', err);
+    process.exitCode = 1;
+  });
 }

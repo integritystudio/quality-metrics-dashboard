@@ -7,6 +7,8 @@ import {
   deriveTaskCompletionPerSession,
   deriveEvaluationLatency,
   derivedEvaluationsPath,
+  deriveAll,
+  resolveSource,
   scoreTask,
   sessionTasks,
   writeDerivedEvaluations,
@@ -464,5 +466,54 @@ describe('writeDerivedEvaluations', () => {
     writeDerivedEvaluations(dir, DATE, [line(1)], true);
 
     expect(existsSync(derivedEvaluationsPath(dir, DATE))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveSource
+// ---------------------------------------------------------------------------
+
+describe('resolveSource', () => {
+  const scope = new Set(['2026-09-26']);
+
+  it('defaults to local, with or without a date scope', () => {
+    expect(resolveSource([], null)).toBe('local');
+    expect(resolveSource([], scope)).toBe('local');
+  });
+
+  it('accepts cloud with a date scope', () => {
+    expect(resolveSource(['--source=cloud'], scope)).toBe('cloud');
+  });
+
+  it('refuses cloud without a date scope', () => {
+    expect(() => resolveSource(['--source=cloud'], null)).toThrow('--date= or --days=');
+  });
+
+  it('rejects an unknown source', () => {
+    expect(() => resolveSource(['--source=s3'], scope)).toThrow('local|cloud');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveAll
+// ---------------------------------------------------------------------------
+
+describe('deriveAll', () => {
+  const taskSpan = makeSpan({ attributes: { 'builtin.task_status': 'completed', 'builtin.task_id': 't1' } });
+
+  it('stamps records with the account of the span they score', () => {
+    const records = deriveAll({ spans: [taskSpan], accounts: new Map([['span-001', 'OBTOOL_API_KEY']]) });
+
+    expect(records.length).toBeGreaterThan(0);
+    expect(records.every(r => r.identityKeyRef === 'OBTOOL_API_KEY')).toBe(true);
+  });
+
+  it('gives the same records when run twice in one process', () => {
+    const loaded = { spans: [taskSpan], accounts: new Map() };
+
+    const first = deriveAll(loaded);
+    const second = deriveAll(loaded);
+
+    expect(second).toEqual(first);
   });
 });

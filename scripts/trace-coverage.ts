@@ -32,6 +32,8 @@ import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, typ
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_SETTLE_MINUTES = 60;
 const DEFAULT_MIN_COVERAGE = 0.99;
+/** `--min-coverage` is a ratio; a percentage like 99 is clamped rather than failing every run. */
+const MAX_COVERAGE = 1;
 /** Upper bound on cloud rows held in memory per account; ~10k spans/day locally. */
 const CLOUD_SPAN_LIMIT = 500_000;
 const TOP_MISSING_SESSIONS = 10;
@@ -179,7 +181,14 @@ function readLocalSpans(dir: string, window: CoverageWindow, windowDays: number,
   const files = readdirSync(dir).filter((f) => fileInWindow(f, TRACE_FILE_PATTERN, windowDays + 1, nowMs)).sort();
   const spans: LocalSpan[] = [];
   for (const file of files) {
-    for (const line of readFileSync(join(dir, file), 'utf8').split('\n')) {
+    let text: string;
+    try {
+      text = readFileSync(join(dir, file), 'utf8');
+    } catch (err) {
+      console.warn(`${CLI_PREFIX} skipping ${file}: ${String(err)}`);
+      continue;
+    }
+    for (const line of text.split('\n')) {
       const span = parseLocalSpan(line, window);
       if (span) spans.push(span);
     }
@@ -247,7 +256,7 @@ export function parseArgs(args: readonly string[]): CliOptions {
   return {
     days: Math.max(1, Math.floor(numberFlag(args, '--days', DEFAULT_WINDOW_DAYS))),
     settleMinutes: numberFlag(args, '--settle-minutes', DEFAULT_SETTLE_MINUTES),
-    minCoverage: numberFlag(args, '--min-coverage', DEFAULT_MIN_COVERAGE),
+    minCoverage: Math.min(MAX_COVERAGE, numberFlag(args, '--min-coverage', DEFAULT_MIN_COVERAGE)),
     jsonPath: jsonIndex === -1 ? undefined : args[jsonIndex + 1],
   };
 }

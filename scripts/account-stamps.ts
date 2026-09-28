@@ -31,6 +31,9 @@ import { join } from 'path';
  */
 export const ACCOUNT_INDEX_WINDOW_DAYS = 7;
 
+/** Only identity-map secret names are read from the environment. */
+export const IDENTITY_KEY_REF_PATTERN = /^OBTOOL_API_KEY(?:_[A-Z0-9]+)*$/;
+
 /** Record field the hooks' file exporters stamp (`appendJsonl`, TKR6). */
 export const IDENTITY_KEY_REF_FIELD = 'identityKeyRef';
 
