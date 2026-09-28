@@ -575,7 +575,7 @@ function computeUsageCounts(spans: SessionSpan[]) {
     if (trigger !== 'PostToolUse') continue;
     const type = spanAttr(s, 'integritystudio.hook.type', 'string');
     if (type === 'builtin') {
-      const tool = spanAttr(s, 'builtin.tool', 'string') ?? 'unknown';
+      const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown';
       toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
     } else if (type === 'mcp') {
       const tool = spanAttr(s, 'mcp.tool', 'string') ?? 'unknown';
@@ -609,19 +609,19 @@ function computeErrorSummary(spans: SessionSpan[]) {
   const byCategory: Record<string, number> = {};
   const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
   for (const s of spans) {
-    const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
+    const hasError = spanAttr(s, 'integritystudio.tool.has_error', 'boolean') === true
       || spanAttr(s, 'integritystudio.agent.has_error', 'boolean') === true
       || s.status?.code === OTEL_STATUS_ERROR_CODE || s.status?.code === 'ERROR';
     if (!hasError) continue;
-    const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
-    const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
+    const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
+    const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
     const key = `${tool} -> ${errType}`;
     byCategory[key] = (byCategory[key] ?? 0) + 1;
     details.push({
       spanName: s.name,
       tool,
       errorType: errType,
-      filePath: spanAttr(s, 'builtin.file_path', 'string'),
+      filePath: spanAttr(s, 'file.path', 'string'),
     });
   }
   return { byCategory, details };
@@ -741,7 +741,7 @@ export function computeSessionDetail(
 
   const fileCount: Record<string, number> = {};
   for (const s of spans) {
-    const fp = spanAttr(s, 'builtin.file_path', 'string');
+    const fp = spanAttr(s, 'file.path', 'string');
     if (fp) fileCount[fp] = (fileCount[fp] ?? 0) + 1;
   }
   const fileAccess = Object.entries(fileCount)

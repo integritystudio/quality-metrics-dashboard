@@ -44,6 +44,7 @@ export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
 import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, DERIVED_EVALUATIONS_FILE_PREFIX, datedJsonlName, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE } from '../src/api/api-constants.js';
+import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
 import { indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 
@@ -68,6 +69,17 @@ export function setSpanAccounts(accounts: ReadonlyMap<string, AccountRef>): void
 /** The scored span's stamp as a record field; `{}` when the span carried none. */
 function spanAccountField(span: LocalTraceSpan): Pick<EvalRecord, 'identityKeyRef'> {
   return spanAccounts.has(span.spanId) ? { identityKeyRef: spanAccounts.get(span.spanId)! } : {};
+}
+
+/**
+ * A span's attributes under their canonical keys. The hooks renamed `builtin.*`
+ * on 2026-09-18, so local trace files hold both spellings; reading the legacy
+ * key off a post-rename span found nothing and scored every builtin tool call a
+ * failure. Cloud spans arrive canonicalized already, and a bag with no legacy
+ * key is returned as-is, so this is free on the cloud path.
+ */
+function attrsOf(span: LocalTraceSpan): Record<string, unknown> {
+  return canonicalizeAttributes(span.attributes);
 }
 
 function attrString(value: unknown, fallback = ''): string {
@@ -96,15 +108,15 @@ function hrtToISO(hrt: [number, number]): string {
 /** Maximum raw scores to persist per metric in calibration state (bounds file size) */
 const MAX_RAW_SCORES_PER_METRIC = 500;
 
-function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
-  const attrs = span.attributes;
+export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
+  const attrs = attrsOf(span);
   const isBuiltin = span.name === 'hook:builtin-post-tool';
   const isMcp = span.name === 'hook:mcp-post-tool';
   if (!isBuiltin && !isMcp) return null;
 
-  const success = isBuiltin ? attrs['builtin.success'] : attrs['mcp.success'];
-  const tool = attrString(isBuiltin ? attrs['builtin.tool'] : attrs['mcp.tool'], 'unknown');
-  const errorType = attrString(isBuiltin ? attrs['builtin.error_type'] : attrs['mcp.error_type']);
+  const success = isBuiltin ? attrs['integritystudio.tool.success'] : attrs['mcp.success'];
+  const tool = attrString(isBuiltin ? attrs['gen_ai.tool.name'] : attrs['mcp.tool'], 'unknown');
+  const errorType = attrString(isBuiltin ? attrs['integritystudio.tool.error_type'] : attrs['mcp.error_type']);
   const server = isMcp ? attrString(attrs['mcp.server']) : '';
 
   const score = success === true ? 1.0 : 0.0;
@@ -151,10 +163,10 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   const [startSec] = span.startTime;
   if (startSec < 1_000_000_000) return null;
 
-  const attrs = span.attributes;
+  const attrs = attrsOf(span);
 
   let hookType: string;
-  if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrString(attrs['builtin.tool'], 'unknown')}`;
+  if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrString(attrs['gen_ai.tool.name'], 'unknown')}`;
   else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrString(attrs['mcp.tool'], 'unknown')}`;
   else if (span.name === 'hook:agent-post-tool') hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
   else hookType = span.name.replace('hook:', '');
@@ -203,10 +215,11 @@ export { sessionTasks };
 
 export function trackTaskActivity(span: LocalTraceSpan): void {
   if (span.name !== 'hook:builtin-post-tool') return;
-  const tool = span.attributes['builtin.tool'];
+  const attrs = attrsOf(span);
+  const tool = attrs['gen_ai.tool.name'];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
 
-  const sessionId = attrString(span.attributes['session.id'], 'unknown');
+  const sessionId = attrString(attrs['session.id'], 'unknown');
   let entry = sessionTasks.get(sessionId);
   if (!entry) sessionTasks.set(sessionId, entry = { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
   entry.lastSpan = span;
@@ -215,8 +228,8 @@ export function trackTaskActivity(span: LocalTraceSpan): void {
   if (tool === 'TaskCreate') entry.creates++;
   if (tool === 'TaskUpdate') entry.updates++;
 
-  const taskStatus = span.attributes['builtin.task_status'];
-  const taskId = span.attributes['builtin.task_id'];
+  const taskStatus = attrs['integritystudio.task.status'];
+  const taskId = attrs['integritystudio.task.id'];
 
   if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
     const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;
@@ -269,7 +282,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
         sessionId,
       });
     } else {
-      // Fallback: old trace data without builtin.task_status attributes
+      // Fallback: old trace data without a task status attribute
       if (data.creates === 0) continue;
       const completionRatio = Math.min(data.updates / (data.creates * 2), 1.0);
 

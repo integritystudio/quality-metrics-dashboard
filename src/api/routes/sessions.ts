@@ -149,7 +149,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
 
       if (hookTrigger === 'PostToolUse') {
-        if (hookType === 'builtin') incrementCount(toolUsage, spanAttr(s, 'builtin.tool', 'string') ?? 'unknown');
+        if (hookType === 'builtin') incrementCount(toolUsage, spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown');
         else if (hookType === 'mcp') incrementCount(mcpUsage, spanAttr(s, 'mcp.tool', 'string') ?? 'unknown');
       }
 
@@ -159,14 +159,14 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         (hookDurations[s.name] ??= []).push(ms);
       }
 
-      const hasError = spanAttr(s, 'builtin.has_error', 'boolean') === true
+      const hasError = spanAttr(s, 'integritystudio.tool.has_error', 'boolean') === true
         || spanAttr(s, 'integritystudio.agent.has_error', 'boolean') === true
         || s.status?.code === 'ERROR';
       if (hasError) {
-        const tool = spanAttr(s, 'builtin.tool', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
-        const errType = spanAttr(s, 'builtin.error_type', 'string') ?? 'unknown';
+        const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
+        const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
         incrementCount(errorsByCategory, `${tool} -> ${errType}`);
-        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr(s, 'builtin.file_path', 'string') });
+        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr(s, 'file.path', 'string') });
       }
 
       if (hookName === HOOK_NAME.AGENT_POST_TOOL) {
@@ -178,7 +178,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         agentEntry.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
       }
 
-      const fp = spanAttr(s, 'builtin.file_path', 'string');
+      const fp = spanAttr(s, 'file.path', 'string');
       if (fp) incrementCount(fileCount, fp);
 
       if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {

@@ -317,3 +317,40 @@ describe('computeSessionDetail multi-agent attribution', () => {
     expect(detail.multiAgentEvaluation.turns.map(t => t.agentName)).toEqual(['planner', 'executor']);
   });
 });
+
+// Regression: the hooks renamed builtin.* on 2026-09-18 and the session detail
+// kept reading the legacy keys, so every post-rename tool call surfaced as
+// 'unknown' with no error details or file access. Spans reach this function
+// through CloudBackend, which canonicalizes both eras, so it reads canonical.
+describe('computeSessionDetail after the builtin.* rename', () => {
+  const postTool = { 'integritystudio.hook.type': 'builtin', 'integritystudio.hook.trigger': 'PostToolUse' };
+
+  it('counts tool usage by gen_ai.tool.name', () => {
+    const detail = computeSessionDetail('s1', [
+      { name: 'hook:builtin-post-tool', attributes: { ...postTool, 'gen_ai.tool.name': 'Bash' } },
+      { name: 'hook:builtin-post-tool', attributes: { ...postTool, 'gen_ai.tool.name': 'Bash' } },
+      { name: 'hook:builtin-post-tool', attributes: { ...postTool, 'gen_ai.tool.name': 'Read' } },
+    ], []);
+
+    expect(detail.toolUsage).toEqual({ Bash: 2, Read: 1 });
+  });
+
+  it('reports a failed call with its tool, error type and file', () => {
+    const detail = computeSessionDetail('s1', [{
+      name: 'hook:builtin-post-tool',
+      attributes: {
+        ...postTool,
+        'gen_ai.tool.name': 'Edit',
+        'integritystudio.tool.has_error': true,
+        'integritystudio.tool.error_type': 'file_not_read',
+        'file.path': '/repo/src/a.ts',
+      },
+    }], []);
+
+    expect(detail.errors.byCategory).toEqual({ 'Edit -> file_not_read': 1 });
+    expect(detail.errors.details).toEqual([
+      { spanName: 'hook:builtin-post-tool', tool: 'Edit', errorType: 'file_not_read', filePath: '/repo/src/a.ts' },
+    ]);
+    expect(detail.fileAccess).toEqual([{ path: '/repo/src/a.ts', count: 1 }]);
+  });
+});

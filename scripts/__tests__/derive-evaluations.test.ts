@@ -8,6 +8,7 @@ import {
   deriveEvaluationLatency,
   derivedEvaluationsPath,
   deriveAll,
+  deriveToolCorrectness,
   resolveSource,
   scoreTask,
   sessionTasks,
@@ -515,5 +516,98 @@ describe('deriveAll', () => {
     const second = deriveAll(loaded);
 
     expect(second).toEqual(first);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// builtin.* key rename (hooks 2026-09-18)
+//
+// Regression: derive read `builtin.*` keys, the hooks started writing
+// `gen_ai.tool.name` / `integritystudio.tool.*` / `integritystudio.task.*`, and
+// every builtin tool call scored 0 (3,363 of 3,365 records on 2026-09-26) while
+// task tracking never fired. Both spellings live in the local files, so each
+// behavior is pinned for both.
+// ---------------------------------------------------------------------------
+
+/** A post-rename builtin post-tool span, shaped like the hooks write it today. */
+function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
+  return {
+    traceId: 'trace-001',
+    spanId: 'span-001',
+    name: 'hook:builtin-post-tool',
+    startTime: [1790553614, 235000000],
+    endTime: [1790553614, 236463666],
+    duration: [0, 1463666],
+    status: { code: 1 },
+    attributes: { 'session.id': 'sess-abc', 'integritystudio.hook.name': 'builtin-post-tool', ...attributes },
+  };
+}
+
+describe('deriveToolCorrectness across the builtin.* rename', () => {
+  it.each([
+    ['canonical', { 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true }],
+    ['legacy', { 'builtin.tool': 'Bash', 'builtin.success': true }],
+  ])('scores a successful call 1 from %s keys', (_era, attributes) => {
+    const record = deriveToolCorrectness(renamedToolSpan(attributes));
+
+    expect(record?.scoreValue).toBe(1);
+    expect(record?.explanation).toBe('Tool Bash completed successfully');
+  });
+
+  it.each([
+    ['canonical', { 'gen_ai.tool.name': 'Edit', 'integritystudio.tool.success': false, 'integritystudio.tool.error_type': 'file_not_read' }],
+    ['legacy', { 'builtin.tool': 'Edit', 'builtin.success': false, 'builtin.error_type': 'file_not_read' }],
+  ])('scores a failed call 0 with its error type from %s keys', (_era, attributes) => {
+    const record = deriveToolCorrectness(renamedToolSpan(attributes));
+
+    expect(record?.scoreValue).toBe(0);
+    expect(record?.explanation).toBe('Tool Edit failed: file_not_read');
+  });
+
+  it('still reads MCP spans from their mcp.* keys, which were not renamed', () => {
+    const span = { ...renamedToolSpan({ 'mcp.server': 'github', 'mcp.tool': 'get_me', 'mcp.success': true }), name: 'hook:mcp-post-tool' };
+
+    const record = deriveToolCorrectness(span);
+
+    expect(record?.scoreValue).toBe(1);
+    expect(record?.explanation).toBe('Tool github/get_me completed successfully');
+  });
+});
+
+describe('task tracking across the builtin.* rename', () => {
+  it.each([
+    ['canonical', { 'gen_ai.tool.name': 'TaskUpdate', 'integritystudio.task.id': 't1', 'integritystudio.task.status': 'completed' }],
+    ['legacy', { 'builtin.tool': 'TaskUpdate', 'builtin.task_id': 't1', 'builtin.task_status': 'completed' }],
+  ])('scores a completed task 1 from %s keys', (_era, attributes) => {
+    trackTaskActivity(renamedToolSpan(attributes));
+
+    const [record] = deriveTaskCompletionPerSession();
+
+    expect(record?.scoreValue).toBe(1);
+    expect(record?.explanation).toBe('Session sess-abc: 1 tasks (1 completed)');
+  });
+});
+
+describe('deriveEvaluationLatency across the builtin.* rename', () => {
+  it('names the tool from the canonical key', () => {
+    const record = deriveEvaluationLatency(renamedToolSpan({ 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true }));
+
+    expect(record?.explanation).toMatch(/^Hook builtin\/Bash executed in /);
+  });
+});
+
+describe('deriveAll across the builtin.* rename', () => {
+  it('scores a day of mostly successful post-rename calls as mostly successful', () => {
+    const spans = [
+      renamedToolSpan({ 'gen_ai.tool.name': 'Read', 'integritystudio.tool.success': true }),
+      { ...renamedToolSpan({ 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true }), spanId: 'span-002' },
+      { ...renamedToolSpan({ 'gen_ai.tool.name': 'Edit', 'integritystudio.tool.success': false }), spanId: 'span-003' },
+    ];
+
+    const scores = deriveAll({ spans, accounts: new Map() })
+      .filter(r => r.evaluationName === 'tool_correctness')
+      .map(r => r.scoreValue);
+
+    expect(scores).toEqual([1, 1, 0]);
   });
 });

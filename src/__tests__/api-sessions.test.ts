@@ -142,6 +142,44 @@ describe('GET /sessions/:sessionId', () => {
     expect(body.toolUsage.Write).toBe(1);
   });
 
+  // Regression: the hooks renamed builtin.* on 2026-09-18 and this route kept
+  // reading the legacy keys, so post-rename sessions showed every tool as
+  // 'unknown'. CloudBackend canonicalizes both eras; the route reads canonical.
+  it('builds tool usage from post-rename canonical keys and legacy keys alike', async () => {
+    const toolAttrs = { 'integritystudio.hook.type': 'builtin', 'integritystudio.hook.trigger': 'PostToolUse' };
+    fixture.setTraces([
+      makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, 'gen_ai.tool.name': 'Bash' }),
+      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, 'gen_ai.tool.name': 'Bash' }), span_id: 'span-002', trace_id: 'trace-002' },
+      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Bash' }), span_id: 'span-003', trace_id: 'trace-003' },
+    ]);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailResponse;
+
+    expect(body.toolUsage).toEqual({ Bash: 3 });
+  });
+
+  it('reports a failed tool call from post-rename canonical keys', async () => {
+    fixture.setTraces([
+      makeSessionSpanWire('hook:builtin-post-tool', {
+        'builtin.tool': undefined,
+        'gen_ai.tool.name': 'Edit',
+        'integritystudio.tool.has_error': true,
+        'integritystudio.tool.error_type': 'file_not_read',
+        'file.path': '/repo/src/a.ts',
+      }),
+    ]);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailResponse;
+
+    expect(body.errors.byCategory).toEqual({ 'Edit -> file_not_read': 1 });
+    expect(body.errors.details).toEqual([
+      { spanName: 'hook:builtin-post-tool', tool: 'Edit', errorType: 'file_not_read', filePath: '/repo/src/a.ts' },
+    ]);
+    expect(body.fileAccess).toEqual([{ path: '/repo/src/a.ts', count: 1 }]);
+  });
+
   it('computes dataSources total from all sources', async () => {
     fixture.setTraces([makeSessionSpanWire()]);
     // session.id must be in attributes so the client-side sessionId filter passes.
