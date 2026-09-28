@@ -45,6 +45,15 @@ import {
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
 import { buildWorkflowGraph } from '../src/lib/workflow-graph.js';
 import {
+  CODE_EVENT,
+  CODE_EVENT_ATTR,
+  CODE_QUALITY_CHECKPOINT_LIMIT,
+  CODE_QUALITY_INVOCATION_LIMIT,
+  CODE_QUALITY_KV_KEY,
+  CODE_QUALITY_LOOKBACK_DAYS,
+  summarizeCodeQuality,
+} from '../src/api/code-quality-summary.js';
+import {
   kvSyncStateSchema,
   metricDetailValueSchema,
   coverageHeatmapSchema,
@@ -891,6 +900,30 @@ export function buildTraceEntries(
   return traceEntries;
 }
 
+/**
+ * The Agent Code Quality page's data. The Worker has no live query path, so
+ * this KV key is the only way `/api/code-quality` reaches production; the dev
+ * API route computes the same summary from a live query.
+ */
+async function computeCodeQuality(backend: CloudBackend, now: Date) {
+  const startDate = BigInt(now.getTime() - CODE_QUALITY_LOOKBACK_DAYS * TIME_MS.DAY) * NANOSECONDS_PER_MILLISECOND_BIGINT;
+  const endDate = BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT;
+  const [checkpointSpans, invocationSpans] = await Promise.all([
+    backend.queryTraces({
+      startDate, endDate, limit: CODE_QUALITY_CHECKPOINT_LIMIT,
+      attributeFilter: { [CODE_EVENT_ATTR]: CODE_EVENT.CHECKPOINT },
+    }),
+    backend.queryTraces({
+      startDate, endDate, limit: CODE_QUALITY_INVOCATION_LIMIT,
+      attributeFilter: { [CODE_EVENT_ATTR]: CODE_EVENT.GENERATED },
+    }),
+  ]);
+  if (checkpointSpans.length === CODE_QUALITY_CHECKPOINT_LIMIT) {
+    console.warn(`[sync-to-kv] Code-quality checkpoint query hit ${CODE_QUALITY_CHECKPOINT_LIMIT} — oldest checkpoints dropped`);
+  }
+  return summarizeCodeQuality(checkpointSpans, invocationSpans);
+}
+
 async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
   const entries: KVEntry[] = [];
 
@@ -976,6 +1009,8 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       value: toKVValue({ period, ...pipeline }),
     });
   }
+
+  entries.push({ key: CODE_QUALITY_KV_KEY, value: toKVValue(await computeCodeQuality(backend, now)) });
 
   const sevenDayMs = PERIOD_MS['7d'];
   if (!sevenDayMs) throw new Error('Missing PERIOD_MS entry for 7d');

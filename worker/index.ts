@@ -759,6 +759,17 @@ app.get('/api/agents', async (c) => {
   return c.json(data);
 });
 
+// Written by scripts/sync-to-kv.ts (CODE_QUALITY_KV_KEY in src/api/code-quality-summary.ts).
+// The Worker cannot import that module, so the key is restated here.
+const CODE_QUALITY_KV_KEY = 'code-quality';
+
+app.get('/api/code-quality', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const data = await getSessionKv<unknown>(c, CODE_QUALITY_KV_KEY);
+  if (!data) return c.json({ survivalByAgentWindow: [], versionRollout: [], hasData: false });
+  return c.json(data);
+});
+
 app.get('/api/agents/detail/:agentId', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const agentId = c.req.param('agentId');

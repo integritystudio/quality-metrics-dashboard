@@ -120,6 +120,17 @@ describe('GET /code-quality', () => {
     expect(row).toMatchObject({ cohort: 'scored', contentKind: 'code' });
   });
 
+  it('reads rates the cloud returns as strings, as the live API does', async () => {
+    fixture.setTraces([checkpoint({
+      'integritystudio.code.quality.survival_rate': '0.75',
+      'integritystudio.code.quality.churn_rate': '0.25',
+    })]);
+
+    const [row] = (await get()).survivalByAgentWindow;
+
+    expect(row).toMatchObject({ avgSurvivalRate: 0.75, avgChurnRate: 0.25 });
+  });
+
   it('labels baseline invocations in the version rollout', async () => {
     fixture.setTraces([
       invocation({ 'integritystudio.code.survival.cohort': 'scored' }),
