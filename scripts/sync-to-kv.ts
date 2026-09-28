@@ -43,6 +43,7 @@ import {
   type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
+import { buildWorkflowGraph } from '../src/lib/workflow-graph.js';
 import {
   kvSyncStateSchema,
   metricDetailValueSchema,
@@ -1240,6 +1241,9 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
         agentActivity: detail.agentActivity.map(
           ({ totalOutputSize: _, ...rest }) => rest,
         ),
+        // The worker has no spans to build this from, so /api/agents/:sessionId
+        // serves the graph precomputed here.
+        workflowGraph: buildWorkflowGraph(detail.multiAgentEvaluation, sessionSpans),
       }),
       expirationTtl: SESSION_KEY_TTL_SECONDS,
     });

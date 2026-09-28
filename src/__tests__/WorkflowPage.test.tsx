@@ -80,7 +80,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mockLoaded(graph: WorkflowGraph = makeGraph(), sessionId = 'session-abc') {
+function mockLoaded(graph: WorkflowGraph | null = makeGraph(), sessionId = 'session-abc') {
   mockUseAgentSession.mockReturnValue({
     data: {
       sessionId,
@@ -136,6 +136,16 @@ describe('WorkflowPage', () => {
     it('calls useAgentSession with the provided sessionId', () => {
       render(<WorkflowPage sessionId="my-session-id" />);
       expect(mockUseAgentSession).toHaveBeenCalledWith('my-session-id');
+    });
+  });
+
+  describe('when the session has no precomputed graph', () => {
+    beforeEach(() => mockLoaded(null));
+
+    it('renders an empty state instead of the graph', () => {
+      render(<WorkflowPage sessionId="session-abc" />);
+      expect(screen.getByText('No workflow graph for this session')).toBeInTheDocument();
+      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
     });
   });
 

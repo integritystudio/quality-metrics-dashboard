@@ -16,7 +16,8 @@ export interface AgentSessionResponse {
   evaluation: MultiAgentEvaluation;
   evaluations: EvaluationResult[];
   agentMap: Record<string, string>;
-  graph: WorkflowGraph;
+  /** Null when the production worker serves a session key synced before graphs were precomputed. */
+  graph: WorkflowGraph | null;
 }
 
 export function useAgentSession(sessionId: string | undefined) {

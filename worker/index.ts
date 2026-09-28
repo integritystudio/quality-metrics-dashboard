@@ -780,6 +780,8 @@ app.get('/api/agents/:sessionId', async (c) => {
     evaluation: session['multiAgentEvaluation'] ?? null,
     evaluations: safeArray(session['evaluations']),
     agentMap: {},
+    // Precomputed by sync-to-kv; absent on session keys written before it was added.
+    graph: session['workflowGraph'] ?? null,
   });
 });
 

@@ -114,3 +114,24 @@ describe('overlapping agent routes: /api/agents/detail/:agentId vs /api/agents/:
     expect(kvKeys()).not.toContain(`agent:${SESSION_ID}`);
   });
 });
+
+describe('/api/agents/:sessionId payload', () => {
+  const graph = { nodes: [], edges: [], rootNodeId: null, workflowShape: 'linear' };
+
+  it('serves the workflowGraph precomputed by sync-to-kv as graph', async () => {
+    mockKV.get.mockResolvedValue({ workflowGraph: graph, evaluations: [] });
+
+    const res = await get(`/api/agents/${SESSION_ID}`);
+
+    expect(res.status).toBe(200);
+    expect((await res.json() as { graph: unknown }).graph).toEqual(graph);
+  });
+
+  it('serves graph: null for a session key synced before graphs were precomputed', async () => {
+    mockKV.get.mockResolvedValue({ evaluations: [] });
+
+    const res = await get(`/api/agents/${SESSION_ID}`);
+
+    expect((await res.json() as { graph: unknown }).graph).toBeNull();
+  });
+});

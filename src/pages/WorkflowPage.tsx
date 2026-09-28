@@ -3,6 +3,7 @@ import { useAgentSession } from '../hooks/useAgentSession.js';
 import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { plural } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
@@ -13,7 +14,14 @@ export function WorkflowPage({ sessionId }: { sessionId: string }) {
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && (
+      {data && !data.graph && (
+        <EmptyState
+          title="No workflow graph for this session"
+          description="The graph is computed during the dashboard sync."
+          showSyncHint
+        />
+      )}
+      {data?.graph && (
         <>
           <DetailPageHeader title="Workflow" id={sessionId}>
             <span className="text-secondary text-xs">
