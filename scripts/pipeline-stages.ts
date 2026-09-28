@@ -37,6 +37,45 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
   JUDGE_EXIT_POST_FAILED,
 ]);
 
+/** `--source=` values: where derive, and the judge's discovery, read telemetry from. */
+export const TRACE_SOURCES = ['local', 'cloud'] as const;
+export type TraceSource = typeof TRACE_SOURCES[number];
+/** Stage flags: `--source=local|cloud`, and `--days=N` for the last N UTC days. */
+export const SOURCE_FLAG = '--source=';
+export const DAYS_FLAG = '--days=';
+
+/**
+ * Where populate points the judge unless told otherwise: the cloud source over
+ * the last seven UTC days (cloud-read Phase 4). Seven is the dashboard's
+ * default period (`DEFAULT_PERIOD` in src/lib/constants.ts), so every run keeps
+ * that window judged; a turn older than the scope is never picked. Run on its
+ * own, judge-evaluations still defaults to the local source, kept as the
+ * rollback until Phase 6.
+ */
+export const JUDGE_DEFAULT_SOURCE: TraceSource = 'cloud';
+export const JUDGE_DEFAULT_DAYS = 7;
+/** populate flags that override the judge's source and scope for one run. */
+export const JUDGE_SOURCE_FLAG = '--judge-source=';
+export const JUDGE_DAYS_FLAG = '--judge-days=';
+
+/**
+ * The judge's `--source=` and `--days=` for a populate run given `args`.
+ * Throws on a bad override, so populate can stop before any stage runs.
+ */
+export function judgeScopeArgs(args: readonly string[]): string[] {
+  const override = (flag: string): string | undefined => args.find(a => a.startsWith(flag))?.slice(flag.length);
+  const source = override(JUDGE_SOURCE_FLAG) ?? JUDGE_DEFAULT_SOURCE;
+  if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
+    throw new Error(`${JUDGE_SOURCE_FLAG} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
+  }
+  const rawDays = override(JUDGE_DAYS_FLAG);
+  const days = rawDays === undefined ? JUDGE_DEFAULT_DAYS : Number(rawDays);
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error(`${JUDGE_DAYS_FLAG} must be a positive integer, got "${rawDays}"`);
+  }
+  return [`${SOURCE_FLAG}${source}`, `${DAYS_FLAG}${days}`];
+}
+
 /**
  * judge-evaluations flag: run through the Message Batches API — half price,
  * results within minutes, nobody waiting. Passed by the scheduled pipeline

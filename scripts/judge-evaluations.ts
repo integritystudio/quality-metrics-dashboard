@@ -59,7 +59,7 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
 import {
   createBatchProvider,
   BATCH_POLL_INTERVAL_MS,
@@ -79,8 +79,6 @@ import {
   type AccountRef,
 } from './account-stamps.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
-// Type-only, so no runtime cycle: derive imports this module.
-import type { TraceSource } from './derive-evaluations.js';
 
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',

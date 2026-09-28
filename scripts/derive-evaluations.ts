@@ -54,6 +54,7 @@ import { canonicalizeAttributes } from '../../src/lib/observability/attribute-al
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
+import { DAYS_FLAG as DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -431,12 +432,7 @@ const TRACE_FILE_PREFIX = 'traces-';
 const DATE_ONLY_LEN = 10; // YYYY-MM-DD
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
-const DAYS_ARG = '--days=';
 const DRY_RUN_ARG = '--dry-run';
-const SOURCE_ARG = '--source=';
-
-export const TRACE_SOURCES = ['local', 'cloud'] as const;
-export type TraceSource = typeof TRACE_SOURCES[number];
 
 /** `--source=local|cloud`; `local` when absent. Cloud needs a date scope. */
 export function resolveSource(args: string[], dateScope: Set<string> | null): TraceSource {

@@ -6,6 +6,7 @@ import {
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
   isTransientNetworkFailure,
+  judgeScopeArgs,
   runWithRetry,
 } from '../pipeline-stages.js';
 
@@ -109,5 +110,24 @@ describe('pipeline exit-code contract', () => {
 
     expect(total).toBeGreaterThanOrEqual(15 * MS_PER_MINUTE);
     expect(total).toBeLessThanOrEqual(30 * MS_PER_MINUTE);
+  });
+});
+
+describe('judgeScopeArgs', () => {
+  it('points the judge at the cloud over the last seven days when populate is given nothing', () => {
+    expect(judgeScopeArgs(['--limit', '100', '--batch'])).toEqual(['--source=cloud', '--days=7']);
+  });
+
+  it('takes the source and the day count from their overrides', () => {
+    expect(judgeScopeArgs(['--judge-source=local', '--judge-days=30'])).toEqual(['--source=local', '--days=30']);
+  });
+
+  it.each([
+    ['an unknown source', ['--judge-source=s3'], /--judge-source= must be one of local\|cloud/],
+    ['a zero day count', ['--judge-days=0'], /--judge-days= must be a positive integer/],
+    ['a fractional day count', ['--judge-days=1.5'], /--judge-days= must be a positive integer/],
+    ['a day count with trailing text', ['--judge-days=7d'], /--judge-days= must be a positive integer/],
+  ])('rejects %s', (_label, args, message) => {
+    expect(() => judgeScopeArgs(args)).toThrow(message);
   });
 });

@@ -83,7 +83,8 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
     - Upload's 36 h age guard skipped every judge record as too-old, because a judged turn is weeks old. No judge row reached the cloud after 09-16.
   - **`--source=cloud --days=N`** takes sessions, anchoring and the already-judged set from obtool-api (`judge-cloud-source.ts`, cloud-read Phase 4); turn text stays local.
     - `npm run judge:parity -- --days=7` checks that both sources select the same turns.
-    - The schedule still runs the local source.
+    - **`populate`, and so the schedule, passes `--source=cloud --days=7`** (`JUDGE_DEFAULT_*` in `pipeline-stages.ts`), so each run judges turns from the dashboard's default 7-day period and never older ones. Override one run with `--judge-source=local` or `--judge-days=N`.
+    - Run directly, the judge still defaults to the local source, which is the rollback until Phase 6.
 - `upload-evaluations.ts` — ships local `evaluations-*.jsonl` and `derived-evaluations-*.jsonl` to the **cloud** `evaluations` table over the HMAC webhook. Derive (Phase 3) and the judge (Phase 4) now post their own records, so what it still carries is the hooks' records and pre-cutover derive files. **Load-bearing, not plumbing**: the next stage reads the cloud, not these files, so without this every stage reports success and the dashboard still serves `no_data` — which is what happened for five months (`DASHBOARD-PIPELINE-DEAD`). Needs `INJECT_HMAC_SECRET`.
   - Dedup has two layers. The local content fingerprint skips records already sent; `derive` rewrites each file wholesale, so this is what stops a full re-send each run.
   - Every payload also carries `evaluationId(record)`, and the ingest worker drops any id the org already has (migration 0015). That covers a lost or pruned state file.

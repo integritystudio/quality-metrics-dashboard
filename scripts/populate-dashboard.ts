@@ -6,9 +6,11 @@
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion),
  *                            POSTed straight to ingest for records from 2026-09-28 on (Phase 3);
  *                            older ones still go to derived-evaluations-<date>.jsonl
- *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination),
- *                            POSTed straight to ingest (Phase 4) and appended to
- *                            evaluations-<date>.jsonl, the ledger it dedups against
+ *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
+ *                            over turns the cloud lists for the last 7 days
+ *                            (`--source=cloud --days=7`, JUDGE_DEFAULT_*), POSTed
+ *                            straight to ingest (Phase 4) and appended to
+ *                            evaluations-<date>.jsonl
  *   3. upload-evaluations  → ship the hooks' evaluations JSONL and pre-cutover derive files
  *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
  *
@@ -28,6 +30,8 @@
  *   npm run populate -- --limit 5 --seed      # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
+ *   npm run populate -- --judge-days=30       # judge turns from the last 30 days instead of 7
+ *   npm run populate -- --judge-source=local  # judge discovery from local telemetry (rollback)
  *
  * Exit codes (read by the launchd wrapper, which logs FAILED for anything non-zero):
  *   0  every stage succeeded
@@ -54,6 +58,7 @@ import {
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
   isTransientNetworkFailure,
+  judgeScopeArgs,
   runWithRetry,
 } from './pipeline-stages.js';
 
@@ -81,6 +86,16 @@ if (limitIdx !== -1) {
     process.exit(1);
   }
   limit = String(parsed);
+}
+
+// Cloud discovery over the last week unless --judge-source= / --judge-days=
+// say otherwise. Checked here so a bad override stops the run before derive.
+let judgeScope: string[];
+try {
+  judgeScope = judgeScopeArgs(args);
+} catch (err) {
+  console.error(`[populate] Error: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
 }
 
 // Auto-fallback to --seed when no API key is present.
@@ -163,7 +178,7 @@ async function main(): Promise<void> {
   }
 
   if (!skipJudge) {
-    const judgeArgs: string[] = [];
+    const judgeArgs: string[] = [...judgeScope];
     if (dryRun) judgeArgs.push('--dry-run');
     if (seed || autoSeed) judgeArgs.push('--seed');
     if (limit) judgeArgs.push('--limit', limit);
