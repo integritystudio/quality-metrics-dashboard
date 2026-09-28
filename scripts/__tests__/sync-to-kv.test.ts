@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
+import { buildCalibrationEntry, computeSessionDetail, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
@@ -290,5 +290,30 @@ describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
     expect(JSON.parse(toKVValue({ rows: [{ timestamp: 42n }] }))).toEqual({
       rows: [{ timestamp: '42' }],
     });
+  });
+});
+
+describe('computeSessionDetail multi-agent attribution', () => {
+  function span(name: string, attributes: Record<string, unknown>) {
+    return { name, traceId: 't1', attributes };
+  }
+
+  it('attributes turns by gen_ai.agent.name, the key hooks emit', () => {
+    const detail = computeSessionDetail('s1', [
+      span('a', { 'gen_ai.agent.name': 'planner' }),
+      span('b', { 'gen_ai.agent.name': 'executor' }),
+    ], []);
+
+    expect(detail.multiAgentEvaluation.turns.map(t => t.agentName)).toEqual(['planner', 'executor']);
+  });
+
+  it('still reads the legacy agent.name key', () => {
+    // Two distinct agents: computeMultiAgentEvaluation drops the map below that.
+    const detail = computeSessionDetail('s1', [
+      span('a', { 'agent.name': 'planner' }),
+      span('b', { 'agent.name': 'executor' }),
+    ], []);
+
+    expect(detail.multiAgentEvaluation.turns.map(t => t.agentName)).toEqual(['planner', 'executor']);
   });
 });

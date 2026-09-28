@@ -724,7 +724,7 @@ function computeEvalBreakdown(evaluations: EvaluationResult[]) {
   });
 }
 
-function computeSessionDetail(
+export function computeSessionDetail(
   sessionId: string,
   spans: SessionSpan[],
   evaluations: EvaluationResult[],
@@ -782,7 +782,10 @@ function computeSessionDetail(
 
   const agentMapForEval = new Map<number, string>();
   spans.forEach((span, i) => {
-    const agent = spanAttr(span, 'agent.name', 'string');
+    // Hooks emit the semconv 'gen_ai.agent.name'; 'agent.name' is the pre-OBP7b
+    // spelling. Reading only the latter left every turn unattributed, so every
+    // precomputed workflow graph had zero nodes. Mirrors src/api/routes/agents.ts.
+    const agent = spanAttr(span, 'gen_ai.agent.name', 'string') ?? spanAttr(span, 'agent.name', 'string');
     if (agent) agentMapForEval.set(i, agent);
   });
   const stepScores: StepScore[] = spans.map((span, i) => ({
