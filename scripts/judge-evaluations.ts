@@ -1503,13 +1503,13 @@ export function writeRunState(succeeded: number, attempted: number, path: string
   } catch { /* best effort; drop check will be skipped next run */ }
 }
 
-function writeEvaluations(evals: EvalRecord[]): void {
-  // Write all evals to today's file so they appear in recent time-window queries.
-  // The record's timestamp field still reflects the original turn time for accuracy.
+/** Append to today's file and return its path; each record keeps its turn time. */
+function writeEvaluations(evals: EvalRecord[]): string {
   const today = new Date().toISOString().slice(0, 10);
   const outFile = join(TELEMETRY_DIR, datedJsonlName(EVALUATIONS_FILE_PREFIX, today));
   const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
   appendFileSync(outFile, content);
+  return outFile;
 }
 
 export async function processBatch<T, R>(
@@ -1611,10 +1611,17 @@ async function main() {
   // Anchored before the limit slices, so each turn's window is bounded by the
   // real next turn rather than by whichever turns happened to survive the cut.
   const extracted = turnArrays.flat();
-  anchorTurns(extracted, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
-  const allTurns = extracted.slice(0, limit);
+  const accounts = buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now());
+  anchorTurns(extracted, accounts);
+  // Dynamic, like judge-consolidated below: both import this module.
+  const { selectTurns, formatTurnSelection } = await import('./judge-selection.js');
+  // --seed posts nothing, so only a real run skips turns it could not deliver.
+  const select = (keys: Set<string>) => selectTurns(extracted, keys, { limit, deliverableOnly: !seed });
 
   if (dryRun) {
+    const selection = select(_loadExistingKeys());
+    console.log(`[dry-run] turns: ${formatTurnSelection(selection)}`);
+    const allTurns = selection.selected;
     const est = estimateJudgeRun(allTurns, batch, consolidated);
 
     console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} ${consolidated ? 'consolidated calls' : 'evals'}`);
@@ -1650,6 +1657,9 @@ async function main() {
 
   try {
     const existingKeys = _loadExistingKeys();
+    const selection = select(existingKeys);
+    console.log(`[judge] turns: ${formatTurnSelection(selection)}`);
+    const allTurns = selection.selected;
 
     resetFailureTracking();
 
@@ -1725,7 +1735,22 @@ async function main() {
       return;
     }
 
-    writeEvaluations(flatEvals);
+    // The file stays the local ledger `_loadExistingKeys` reads. The records
+    // also go straight to ingest, because `upload-evaluations` refuses anything
+    // older than --max-age-hours and a judged turn is usually weeks old: from
+    // 2026-09-22 every judge record was skipped there as too-old.
+    const outFile = writeEvaluations(flatEvals);
+
+    if (judgeKey) {
+      const { formatPostSummary, postEvaluationRecords } = await import('./post-evaluations.js');
+      const posted = await postEvaluationRecords(flatEvals.map(toOTelRecord), { dryRun: false, accounts });
+      console.log(`[judge] posted ${formatPostSummary(posted)}`);
+      if (posted.failure) {
+        // Ingest drops any id it already holds, so re-sending the whole file is safe.
+        console.error(`[judge] records are in ${outFile}; re-send them with upload-evaluations --days=1 and a --max-age-hours that reaches the oldest turn`);
+        process.exitCode = 1;
+      }
+    }
 
     if (datasetId) {
       // --dataset-id scoping: dataset run recording is not yet supported by the cloud backend API.
