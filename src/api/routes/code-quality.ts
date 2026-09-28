@@ -1,18 +1,43 @@
 import { Hono } from 'hono';
 import { loadTracesByFilter } from '../data-loader.js';
 import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
-import { HttpStatus, TIME_MS } from '../../lib/constants.js';
-import { attrStr, attrNum, timestampToMs } from '../api-constants.js';
+import { CONTENT_KIND, HttpStatus, SURVIVAL_COHORT, TIME_MS, type ContentKind, type SurvivalCohort } from '../../lib/constants.js';
+import { attrStr, attrNum, timestampToMs, type SpanLike } from '../api-constants.js';
 
 const LOOKBACK_DAYS = 90;
-const LIMIT_CHECKPOINT_SPANS = 5000;
+/**
+ * queryTraces validates `limit <= 1000`; the previous 5000 failed that check,
+ * so this route returned 500 on every request. At three checkpoints per seed,
+ * 1000 covers ~330 seeds in the lookback — past that the oldest are dropped.
+ */
+const LIMIT_CHECKPOINT_SPANS = 1000;
 const LIMIT_INVOCATION_SPANS = 1000;
 const KEY_SEP = '\x00';
+
+const ATTR = {
+  AGENT_NAME: 'gen_ai.agent.name',
+  AGENT_VERSION: 'gen_ai.agent.version',
+  WINDOW: 'integritystudio.code.checkpoint_window',
+  COHORT: 'integritystudio.code.survival.cohort',
+  CONTENT_KIND: 'integritystudio.code.content_kind',
+} as const;
+
+function cohortOf(span: SpanLike): SurvivalCohort {
+  return attrStr(span, ATTR.COHORT) === SURVIVAL_COHORT.BASELINE ? SURVIVAL_COHORT.BASELINE : SURVIVAL_COHORT.SCORED;
+}
+
+function contentKindOf(span: SpanLike): ContentKind {
+  return attrStr(span, ATTR.CONTENT_KIND) === CONTENT_KIND.DOC ? CONTENT_KIND.DOC : CONTENT_KIND.CODE;
+}
+
+export type { ContentKind, SurvivalCohort };
 
 export interface AgentWindowStats {
   agentName: string;
   agentVersion: string;
   window: string;
+  cohort: SurvivalCohort;
+  contentKind: ContentKind;
   avgSurvivalRate: number;
   avgChurnRate: number;
   avgDeletionRate: number;
@@ -23,6 +48,7 @@ export interface AgentWindowStats {
 export interface AgentVersionStats {
   agentName: string;
   agentVersion: string;
+  cohort: SurvivalCohort;
   invocationCount: number;
   latestTimestamp: string;
 }
@@ -34,6 +60,8 @@ export interface CodeQualityResponse {
 }
 
 type WindowAcc = {
+  cohort: SurvivalCohort;
+  contentKind: ContentKind;
   survivalRates: number[];
   churnRates: number[];
   deletionRates: number[];
@@ -41,6 +69,7 @@ type WindowAcc = {
 };
 
 type VersionAcc = {
+  cohort: SurvivalCohort;
   invocationCount: number;
   latestMs: number;
 };
@@ -69,20 +98,22 @@ codeQualityRoutes.get('/code-quality', async (c) => {
       ),
     ]);
 
-    // Aggregate checkpoint spans by (agentName, agentVersion, window)
+    // Aggregate checkpoint spans by (agentName, agentVersion, window, cohort, contentKind)
     const windowAcc = new Map<string, WindowAcc>();
 
     for (const span of checkpointSpans) {
-      const agentName = attrStr(span, 'gen_ai.agent.name');
-      const agentVersion = attrStr(span, 'gen_ai.agent.version');
-      const checkpointWindow = attrStr(span, 'integritystudio.code.checkpoint_window');
+      const agentName = attrStr(span, ATTR.AGENT_NAME);
+      const agentVersion = attrStr(span, ATTR.AGENT_VERSION);
+      const checkpointWindow = attrStr(span, ATTR.WINDOW);
 
       if (agentName === 'unknown' || checkpointWindow === 'unknown') continue;
 
-      const key = [agentName, agentVersion, checkpointWindow].join(KEY_SEP);
+      const cohort = cohortOf(span);
+      const contentKind = contentKindOf(span);
+      const key = [agentName, agentVersion, checkpointWindow, cohort, contentKind].join(KEY_SEP);
       let entry = windowAcc.get(key);
       if (!entry) {
-        entry = { survivalRates: [], churnRates: [], deletionRates: [], latestMs: 0 };
+        entry = { cohort, contentKind, survivalRates: [], churnRates: [], deletionRates: [], latestMs: 0 };
         windowAcc.set(key, entry);
       }
 
@@ -108,6 +139,8 @@ codeQualityRoutes.get('/code-quality', async (c) => {
         agentName,
         agentVersion,
         window,
+        cohort: entry.cohort,
+        contentKind: entry.contentKind,
         avgSurvivalRate: avg(entry.survivalRates),
         avgChurnRate: avg(entry.churnRates),
         avgDeletionRate: avg(entry.deletionRates),
@@ -116,17 +149,18 @@ codeQualityRoutes.get('/code-quality', async (c) => {
       });
     }
 
-    // Aggregate invocation spans by (agentName, agentVersion)
+    // Aggregate invocation spans by (agentName, agentVersion, cohort)
     const versionAcc = new Map<string, VersionAcc>();
 
     for (const span of invocationSpans) {
-      const agentName = attrStr(span, 'gen_ai.agent.name');
-      const agentVersion = attrStr(span, 'gen_ai.agent.version');
-      const key = [agentName, agentVersion].join(KEY_SEP);
+      const agentName = attrStr(span, ATTR.AGENT_NAME);
+      const agentVersion = attrStr(span, ATTR.AGENT_VERSION);
+      const cohort = cohortOf(span);
+      const key = [agentName, agentVersion, cohort].join(KEY_SEP);
 
       let entry = versionAcc.get(key);
       if (!entry) {
-        entry = { invocationCount: 0, latestMs: 0 };
+        entry = { cohort, invocationCount: 0, latestMs: 0 };
         versionAcc.set(key, entry);
       }
 
@@ -143,6 +177,7 @@ codeQualityRoutes.get('/code-quality', async (c) => {
       versionRollout.push({
         agentName,
         agentVersion,
+        cohort: entry.cohort,
         invocationCount: entry.invocationCount,
         latestTimestamp: entry.latestMs > 0 ? new Date(entry.latestMs).toISOString() : '',
       });

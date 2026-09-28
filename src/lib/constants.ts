@@ -138,6 +138,24 @@ export const SKELETON_HEIGHT_SM = 200;
 export const SKELETON_HEIGHT_MD = 300;
 export const SKELETON_HEIGHT_LG = 400;
 export const CODE_QUALITY_WARN_THRESHOLD = 0.6;
+
+/**
+ * `scored` rows are agent and skill manifests (D7 and Tier 3 fitness input);
+ * `baseline` rows are agents with nothing to tune (`general-purpose`, `claude`,
+ * self-forks), kept as the comparison group. Spans written before cohorts
+ * existed (2026-09-28) carry no cohort and were all scored.
+ */
+export const SURVIVAL_COHORT = { SCORED: 'scored', BASELINE: 'baseline' } as const;
+export type SurvivalCohort = typeof SURVIVAL_COHORT[keyof typeof SURVIVAL_COHORT];
+
+/**
+ * Doc survival is reported, never scored as D7: status lines are meant to be
+ * rewritten. Pre-2026-09-28 spans carry no kind and read as code, matching
+ * agent-auditor's Q5.
+ */
+export const CONTENT_KIND = { CODE: 'code', DOC: 'doc' } as const;
+export type ContentKind = typeof CONTENT_KIND[keyof typeof CONTENT_KIND];
+
 export const DEFAULT_PAGE_LIMIT = 50;
 
 export const HEATMAP_ROW_HEADER_WIDTH = 80;

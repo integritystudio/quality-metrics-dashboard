@@ -1,20 +1,39 @@
 import { useCodeQuality } from '../hooks/useCodeQuality.js';
 import { PageShell } from '../components/PageShell.js';
-import { CODE_QUALITY_WARN_THRESHOLD, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { CODE_QUALITY_WARN_THRESHOLD, CONTENT_KIND, SKELETON_HEIGHT_MD, SURVIVAL_COHORT, type SurvivalCohort } from '../lib/constants.js';
 import type { AgentWindowStats, AgentVersionStats } from '../api/routes/code-quality.js';
 
 const RATE_PRECISION = 1;
+/** The window D7 and Tier 3 fitness read; earlier windows are progress only. */
+const SCORED_WINDOW = '21d';
 
 function fmtPct(rate: number): string {
   return (rate * 100).toFixed(RATE_PRECISION) + '%';
 }
 
-function SurvivalTable({ rows }: { rows: AgentWindowStats[] }) {
-  const rows21d = rows.filter(r => r.window === '21d');
-  if (rows21d.length === 0) return null;
+function CohortBadge({ cohort }: { cohort: SurvivalCohort }) {
+  if (cohort !== SURVIVAL_COHORT.BASELINE) return null;
+  return (
+    <span className="status-badge inline-flex-center text-xs ml-1" data-status="info" aria-label="Baseline cohort: not scored">
+      baseline
+    </span>
+  );
+}
+
+interface SurvivalTableProps {
+  title: string;
+  note: string;
+  rows: AgentWindowStats[];
+  /** Flag rows below the survival threshold — only meaningful for scored code. */
+  warnBelowThreshold: boolean;
+}
+
+function SurvivalTable({ title, note, rows, warnBelowThreshold }: SurvivalTableProps) {
+  if (rows.length === 0) return null;
   return (
     <div className="card mb-4">
-      <h3 className="text-base mb-2">Survival by Agent (21-day window)</h3>
+      <h3 className="text-base mb-1">{title}</h3>
+      <p className="text-secondary text-xs mb-2">{note}</p>
       <table className="data-table">
         <thead>
           <tr>
@@ -27,13 +46,14 @@ function SurvivalTable({ rows }: { rows: AgentWindowStats[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows21d.map(r => (
-            <tr key={`${r.agentName}-${r.agentVersion}`}>
+          {rows.map(r => (
+            <tr key={`${r.agentName}-${r.agentVersion}-${r.cohort}-${r.contentKind}`}>
               <td className="mono">
-                {r.avgSurvivalRate < CODE_QUALITY_WARN_THRESHOLD && (
+                {warnBelowThreshold && r.avgSurvivalRate < CODE_QUALITY_WARN_THRESHOLD && (
                   <span className="warn-indicator" aria-label="Below survival threshold">&#9888; </span>
                 )}
                 {r.agentName}
+                <CohortBadge cohort={r.cohort} />
               </td>
               <td className="mono text-secondary">{r.agentVersion}</td>
               <td className="mono">{fmtPct(r.avgSurvivalRate)}</td>
@@ -45,6 +65,45 @@ function SurvivalTable({ rows }: { rows: AgentWindowStats[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SurvivalSections({ rows }: { rows: AgentWindowStats[] }) {
+  const scoredWindow = rows.filter(r => r.window === SCORED_WINDOW);
+  const earlyCheckpoints = rows
+    .filter(r => r.window !== SCORED_WINDOW)
+    .reduce((sum, r) => sum + r.checkpointCount, 0);
+  const code = scoredWindow.filter(r => r.contentKind === CONTENT_KIND.CODE);
+
+  return (
+    <>
+      {scoredWindow.length === 0 && (
+        <div className="card mb-4">
+          <p className="text-secondary text-xs">
+            {earlyCheckpoints} earlier-window (3d / 7d) checkpoint{earlyCheckpoints === 1 ? '' : 's'} so far.
+            The tables below fill as {SCORED_WINDOW} checkpoints arrive.
+          </p>
+        </div>
+      )}
+      <SurvivalTable
+        title={`Survival by Agent (${SCORED_WINDOW}, code)`}
+        note="Agent and skill manifests. This is the signal agent-auditor's D7 scores."
+        rows={code.filter(r => r.cohort === SURVIVAL_COHORT.SCORED)}
+        warnBelowThreshold
+      />
+      <SurvivalTable
+        title={`Baseline Agents (${SCORED_WINDOW}, code)`}
+        note="Agents with no manifest to tune (general-purpose, claude, self-forks). The comparison group — never scored."
+        rows={code.filter(r => r.cohort === SURVIVAL_COHORT.BASELINE)}
+        warnBelowThreshold={false}
+      />
+      <SurvivalTable
+        title={`Documentation (${SCORED_WINDOW})`}
+        note="Doc-file survival, with status lines untracked and number-only edits counted as survived. Reported, never scored."
+        rows={scoredWindow.filter(r => r.contentKind === CONTENT_KIND.DOC)}
+        warnBelowThreshold={false}
+      />
+    </>
   );
 }
 
@@ -64,8 +123,11 @@ function VersionRolloutTable({ rows }: { rows: AgentVersionStats[] }) {
         </thead>
         <tbody>
           {rows.map(r => (
-            <tr key={`${r.agentName}-${r.agentVersion}`}>
-              <td className="mono">{r.agentName}</td>
+            <tr key={`${r.agentName}-${r.agentVersion}-${r.cohort}`}>
+              <td className="mono">
+                {r.agentName}
+                <CohortBadge cohort={r.cohort} />
+              </td>
               <td className="mono text-secondary">{r.agentVersion}</td>
               <td className="mono">{r.invocationCount}</td>
               <td className="mono text-secondary">
@@ -94,8 +156,7 @@ export function AgentCodeQualityPage() {
         <div className="empty-state">
           <h2>No Code Quality Data</h2>
           <p>
-            Survival checkpoints accumulate over 21 days after each seed commit.
-            The first checkpoint is due around 2026-10-16.
+            Survival checkpoints arrive 3, 7 and 21 days after each seed commit.
           </p>
           <p className="mt-2 text-secondary text-xs">
             Checkpoints are emitted by <code>ai.integritystudio.code-survival</code> every 6 hours.
@@ -104,7 +165,7 @@ export function AgentCodeQualityPage() {
         </div>
       ) : (
         <>
-          <SurvivalTable rows={data.survivalByAgentWindow} />
+          <SurvivalSections rows={data.survivalByAgentWindow} />
           <VersionRolloutTable rows={data.versionRollout} />
         </>
       )}
