@@ -2,7 +2,7 @@
 
 **Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
 **Date**: 2026-03-26
-**Status**: Code complete (commits `6a53313`, `37f71c0`, 2026-03-26). Worker secret provisioning and deployment remain.
+**Status**: Code complete (commits `6a53313`, `37f71c0`, 2026-03-26). Deployed and smoke-tested 2026-03-27 (`c96513a`). Only the `auth0_id` backfill remains — see [Rollout Sequence](#rollout-sequence).
 **Parent**: [`docs/auth-architecture.md`](../../../docs/auth-architecture.md) (history: [`docs/archive/user-rationalization-implementation-record.md`](../../../docs/archive/user-rationalization-implementation-record.md), Phase 4 — Auth0 canonical decision)
 
 ---
@@ -38,7 +38,7 @@ Supabase Auth (JWT verification via `/auth/v1/user`) has been replaced with Auth
 | Tests: update worker auth mocks | `worker/__tests__/` | ✅ Done (2026-03-26) |
 | DB: fix permissions mismatch (`dashboard.*` format) | Supabase `public.roles` | ✅ Done (2026-03-26) |
 
-**Remaining**: deploy both workers → smoke test → delete `src/lib/supabase.ts`.
+**Remaining**: none from this table. Workers deployed and smoke-tested 2026-03-27; `src/lib/supabase.ts` is deleted.
 
 ---
 

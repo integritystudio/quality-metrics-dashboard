@@ -33,6 +33,8 @@ The original document's phases, types, and test plan remain unchanged. This is a
 }
 ```
 
+> Installed as of 2026-09-27: `@xyflow/react ^12.10.1`, `elkjs ^0.12.0` (`package.json`). The ranges above are the ones validated when this plan was written.
+
 - `@xyflow/react@12.10.0` — React 19 compatible (Zustand 4.5.6+ peer dep resolved)
 - `elkjs@0.9.0` — `elk.bundled.js` includes WASM-free synchronous layout (30-150ms for 20-50 nodes)
 
