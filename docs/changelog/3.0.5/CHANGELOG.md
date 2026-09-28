@@ -101,6 +101,14 @@ Code review follow-ups and backlog clearance: workflow visualization completion,
 | Drop `user_profiles.role` column | Done — column had zero code references; RBAC sourced exclusively from `user_roles → roles.permissions` (2026-03-26) |
 | AppSession code simplification | Not applicable — `authUserId` (Auth0 subject) and `appUserId` (Supabase UUID) are always distinct post-migration; fields must not be collapsed |
 
+## Design Docs
+
+Implementation plans for work this release completed, archived here from `docs/roadmap/` on 2026-09-27:
+
+- [impl-g5-multi-agent-visualization.md](impl-g5-multi-agent-visualization.md) — G5 v1.1 plan: platform comparison, library decision, phases (code details historical)
+- [impl-g5-workflow-visualization-update.md](impl-g5-workflow-visualization-update.md) — G5 v2.0 code-level addendum, superseded by the code
+- [impl-auth0-migration.md](impl-auth0-migration.md) — Auth0 migration: decision, tenant setup, Post-Login Action, DB changes, rollout
+
 ## Summary
 
 - **Items resolved**: 40+ (G5: 10 items, ADMIN: 1, TF: 2, CR-WK: 7, CR-TS: 4, CR-ERR: 4, CR-PERF: 3, CR-AUTH: 2, CR-STYLE: 1, E2E: 1)

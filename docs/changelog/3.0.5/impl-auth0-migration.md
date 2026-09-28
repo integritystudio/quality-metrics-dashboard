@@ -3,7 +3,7 @@
 **Decision**: Auth0 is the canonical identity provider for external/enterprise user support.
 **Date**: 2026-03-26
 **Status**: Code complete (commits `6a53313`, `37f71c0`, 2026-03-26). Deployed and smoke-tested 2026-03-27 (`c96513a`). `auth0_id` backfill verified complete 2026-09-27 — nothing remains open.
-**Parent**: [`docs/auth-architecture.md`](../../../docs/auth-architecture.md) (history: [`docs/archive/user-rationalization-implementation-record.md`](../../../docs/archive/user-rationalization-implementation-record.md), Phase 4 — Auth0 canonical decision)
+**Parent**: [`docs/auth-architecture.md`](../../../../docs/auth-architecture.md) (history: [`docs/archive/user-rationalization-implementation-record.md`](../../../../docs/archive/user-rationalization-implementation-record.md), Phase 4 — Auth0 canonical decision)
 
 ---
 
@@ -21,8 +21,8 @@ Supabase Auth (JWT verification via `/auth/v1/user`) has been replaced with Auth
 
 The step-by-step worker, frontend, schema, env-var, test and permissions sections (former §3–§5 and §7–§9) were removed on 2026-09-27 because the code now carries them and had moved past their snippets — refresh tokens, org scoping, three workers, and the `provisioned-dashboard-viewer` default role all postdate them. They are in git history before that date. Read instead:
 
-- Dashboard auth flow, RBAC, protected routes, Zod schemas: [`docs/auth/user-authentication.md`](../auth/user-authentication.md)
-- Cross-service tokens and identity schema: [`docs/auth-architecture.md`](../../../docs/auth-architecture.md)
+- Dashboard auth flow, RBAC, protected routes, Zod schemas: [`docs/auth/user-authentication.md`](../../auth/user-authentication.md)
+- Cross-service tokens and identity schema: [`docs/auth-architecture.md`](../../../../docs/auth-architecture.md)
 - Code: `worker/index.ts` (JWKS verification, `auth0_id` lookup, activity logging), `src/App.tsx` (`Auth0Provider`), `src/contexts/AuthContext.tsx`, `src/lib/validation/auth-schemas.ts`
 
 What remains here is what the code does not hold: the decision, the tenant setup, the Post-Login Action source, the database changes, and the open backfill.

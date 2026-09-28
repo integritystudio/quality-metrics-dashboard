@@ -5,7 +5,7 @@
 **Version**: 2.0
 **Date**: 2026-03-01
 **Priority**: P3 | **Effort**: High
-**Source**: [impl-g5-multi-agent-visualization.md](../impl-g5-multi-agent-visualization.md) (v1.1), [BACKLOG.md](../../BACKLOG.md) G5
+**Source**: [impl-g5-multi-agent-visualization.md](impl-g5-multi-agent-visualization.md) (v1.1), [BACKLOG.md](../../BACKLOG.md) G5
 **Supersedes**: impl-g5-multi-agent-visualization.md v1.1 (adds concrete code patterns, v12 migration notes, ELKjs configuration)
 **Research validated**: 2026-03-01 — ReactFlow v12 API, ELKjs layout patterns, bundle isolation
 

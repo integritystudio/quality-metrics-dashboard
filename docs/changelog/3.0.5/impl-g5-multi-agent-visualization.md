@@ -3,7 +3,7 @@
 **Version**: 1.1
 **Date**: 2026-02-27
 **Priority**: P3 | **Effort**: High
-**Source**: [roadmap Known Gaps](../../../docs/roadmap/README.md#known-gaps) G5, white paper S7.3
+**Source**: [roadmap Known Gaps](../../../../docs/roadmap/README.md#known-gaps) G5, white paper S7.3
 **Competitive bar**: Arize Phoenix auto-flowcharts (June 2025), Langfuse Agent Graphs (GA Nov 2025)
 **Research validated**: 2026-02-27 — cross-platform comparison (Phoenix, Datadog, LangSmith, Langfuse) + library evaluation
 
