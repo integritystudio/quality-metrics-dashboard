@@ -6,6 +6,7 @@ import { join, resolve } from 'path';
 import {
   mapRecord,
   fingerprint,
+  evaluationId,
   loadShipped,
   saveShipped,
   pruneShipped,
@@ -198,6 +199,29 @@ describe('fingerprint', () => {
     const before = [a, b];
     const after = [b, a];
     expect(new Set(before.map(fingerprint))).toEqual(new Set(after.map(fingerprint)));
+  });
+});
+
+describe('evaluationId', () => {
+  const base = {
+    timestamp: '2026-09-15T11:00:00.000Z',
+    name: 'gen_ai.evaluation.result',
+    traceId: 'trace-1',
+    attributes: { 'gen_ai.evaluation.name': 'tool_correctness', 'gen_ai.evaluation.score.value': 1 },
+  };
+
+  it('is the same whether or not the record carries an account stamp', () => {
+    // A cloud-sourced derive stamps records a local one could not; both are one evaluation.
+    expect(evaluationId({ ...base, identityKeyRef: 'OBTOOL_API_KEY' })).toBe(evaluationId(base));
+  });
+
+  it('separates parallel spans that differ only in span id', () => {
+    expect(evaluationId({ ...base, spanId: 'span-a' })).not.toBe(evaluationId({ ...base, spanId: 'span-b' }));
+  });
+
+  it('is sent on every mapped payload, so a re-send is dropped by the ingest worker', () => {
+    const r = record({ 'gen_ai.evaluation.evaluator': 'derive-evaluations' }) as Record<string, unknown>;
+    expect(mapRecord(r, NOW, MAX_AGE_MS).payload?.evaluationId).toBe(evaluationId(r));
   });
 });
 

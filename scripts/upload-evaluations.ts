@@ -168,6 +168,11 @@ const STATE_FILENAME = '.eval-upload-state.json';
 
 /** Truncated sha256 is enough to separate records within a two-day window. */
 const FINGERPRINT_LENGTH = 16;
+/**
+ * Unlike the fingerprint, an evaluation id must stay unique across an org's
+ * whole history in D1, not one two-day window, so it keeps twice the bits.
+ */
+const EVALUATION_ID_LENGTH = 32;
 
 /** Fingerprints already shipped, grouped by source file so they prune together. */
 export type ShippedIndex = Record<string, string[]>;
@@ -187,6 +192,8 @@ export interface EvaluationPayload {
    *  this time instead of the batch-receipt time, so period aggregations are
    *  correct for batched uploads. */
   evaluatedAtMs?: number;
+  /** Server-side identity; see `evaluationId`. */
+  evaluationId?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -290,6 +297,7 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   if (responseId) metadata.responseId = responseId;
   if (timestamp) metadata.evaluatedAt = timestamp;
   if (Object.keys(metadata).length > 0) payload.metadata = metadata;
+  payload.evaluationId = evaluationId(r);
 
   if (Buffer.byteLength(JSON.stringify(payload)) > MAX_EVALUATION_BYTES) {
     // Explanation is the only unbounded-ish field left; drop it and retry once.
@@ -322,6 +330,22 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
  */
 export function fingerprint(line: string): string {
   return createHash('sha256').update(withoutAddedFields(line.trim())).digest('hex').slice(0, FINGERPRINT_LENGTH);
+}
+
+/**
+ * The id the ingest worker dedups on (`evaluation_id`, migration 0015): a
+ * re-send of a record it already stored is dropped server-side, whatever this
+ * script's state file says.
+ *
+ * Content-derived like `fingerprint`, but it keeps the span id: two parallel
+ * spans scored in the same millisecond differ only there, and are two
+ * evaluations. Only the account stamp is left out — it routes the record, and a
+ * cloud-sourced derive stamps records the local one could not, so including it
+ * would give the same evaluation two ids.
+ */
+export function evaluationId(record: Record<string, unknown>): string {
+  const { [IDENTITY_KEY_REF_FIELD]: _stamp, ...rest } = record;
+  return createHash('sha256').update(JSON.stringify(rest)).digest('hex').slice(0, EVALUATION_ID_LENGTH);
 }
 
 /** Top-level record fields excluded from the fingerprint (see `fingerprint`). */
