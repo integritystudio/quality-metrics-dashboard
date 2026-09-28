@@ -1,9 +1,11 @@
 # G5: Workflow Visualization — Updated Implementation Plan
 
+> **Superseded — archived 2026-09-27.** G5 shipped in v3.1.0 and the code moved away from nearly every snippet here, so read the code instead: `src/components/WorkflowGraph.tsx`, `src/components/AgentWorkflowView.tsx`, `src/components/WorkflowTimeline.tsx`, `src/lib/workflow-graph.ts`, `src/types/workflow-graph.ts`. Parts of this plan that never shipped or were reversed: the `workflow-viz` `manualChunks` chunk (removed — see the comment in `vite.config.ts`), the hash-based agent palette (`agentColor` is index-based), `AgentEdgeComponent`/`EDGE_TYPES`, and `onlyRenderVisibleElements`. Still useful: the xyflow v12 migration notes and the review-findings log.
+
 **Version**: 2.0
 **Date**: 2026-03-01
 **Priority**: P3 | **Effort**: High
-**Source**: [impl-g5-multi-agent-visualization.md](impl-g5-multi-agent-visualization.md) (v1.1), [BACKLOG.md](../BACKLOG.md) G5
+**Source**: [impl-g5-multi-agent-visualization.md](../impl-g5-multi-agent-visualization.md) (v1.1), [BACKLOG.md](../../BACKLOG.md) G5
 **Supersedes**: impl-g5-multi-agent-visualization.md v1.1 (adds concrete code patterns, v12 migration notes, ELKjs configuration)
 **Research validated**: 2026-03-01 — ReactFlow v12 API, ELKjs layout patterns, bundle isolation
 
