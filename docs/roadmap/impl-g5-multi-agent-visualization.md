@@ -7,6 +7,8 @@
 **Competitive bar**: Arize Phoenix auto-flowcharts (June 2025), Langfuse Agent Graphs (GA Nov 2025)
 **Research validated**: 2026-02-27 — cross-platform comparison (Phoenix, Datadog, LangSmith, Langfuse) + library evaluation
 
+> **Shipped in v3.1.0 — read as design history (note added 2026-09-27).** The Design Decision, Library Decision comparison, Anti-Patterns and Risks sections still hold. Everything that names code has drifted: the `file:line` pointers into the parent's `src/lib/quality/` and `src/lib/agent-judge/` resolve to the named symbols at different lines, `buildWorkflowGraph` takes `(evaluation, spans)` with no `agentMap`, `WorkflowNode`/`WorkflowEdge` gained `clusterId`, `latencyMs` and `droppedTurns`, graph and timeline are tabs rather than a split view, and `elkjs` is `^0.12`. The production worker serves the graph that `sync-to-kv` precomputes into each `session:` key — it has no spans to build one from. The code is authoritative: `src/lib/workflow-graph.ts`, `src/types/workflow-graph.ts`, `src/components/WorkflowGraph.tsx`, `src/components/AgentWorkflowView.tsx`.
+
 ---
 
 ## Design Decision
