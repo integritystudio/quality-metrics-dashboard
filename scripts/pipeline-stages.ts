@@ -38,6 +38,11 @@ export const JUDGE_EXIT_DISCOVERY_FAILED = 7;
  * carries on rather than losing the whole run.
  */
 export const DERIVE_EXIT_POST_FAILED = 8;
+/**
+ * derive-evaluations exit: reading `/v1/traces` failed, so nothing was
+ * derived, written or posted. The next run reads the same window again.
+ */
+export const DERIVE_EXIT_READ_FAILED = 9;
 
 /**
  * Judge exits populate-dashboard.ts forwards to its own exit instead of
@@ -53,7 +58,7 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
 ]);
 
 /** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
-export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED]);
+export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED]);
 
 /** `--source=` values: where derive, and the judge's discovery, read telemetry from. */
 export const TRACE_SOURCES = ['local', 'cloud'] as const;
@@ -61,6 +66,16 @@ export type TraceSource = typeof TRACE_SOURCES[number];
 /** Stage flags: `--source=local|cloud`, and `--days=N` for the last N UTC days. */
 export const SOURCE_FLAG = '--source=';
 export const DAYS_FLAG = '--days=';
+/** derive flag: post only records from the last N days, whatever `--days=` read. */
+export const POST_DAYS_FLAG = '--post-days=';
+
+/**
+ * How far back derive posts when nothing narrower is asked for: an unscoped
+ * run, and every populate run through `--post-days=`. Matches upload's and the
+ * span shipper's two-day window; ingest drops a re-sent id, so a record posted
+ * twice is harmless, but a wider window re-sends every run.
+ */
+export const DERIVE_POST_WINDOW_DAYS = 2;
 
 /**
  * Where populate points the judge unless told otherwise: the cloud source over
@@ -77,21 +92,69 @@ export const JUDGE_SOURCE_FLAG = '--judge-source=';
 export const JUDGE_DAYS_FLAG = '--judge-days=';
 
 /**
+ * Where populate points derive unless told otherwise: the cloud over the last
+ * seven UTC days (cloud-read Phase 1), posting only the last
+ * `DERIVE_POST_WINDOW_DAYS` of it. The read is wider than the post so a
+ * session-level record (task_completion, handoff_correctness) is built from
+ * the whole session: a session that began before the read window would score
+ * on part of its spans, and each run's slide would post it again under a new
+ * id. Seven also sets the calibration corpus, since `.calibration-state.json`
+ * is computed over every record derived. Run on its own, derive still defaults
+ * to the local source, kept as the rollback until Phase 6.
+ */
+export const DERIVE_DEFAULT_SOURCE: TraceSource = 'cloud';
+export const DERIVE_DEFAULT_DAYS = 7;
+/** populate flags that override derive's source and scope for one run. */
+export const DERIVE_SOURCE_FLAG = '--derive-source=';
+export const DERIVE_DAYS_FLAG = '--derive-days=';
+
+interface StageScope {
+  sourceFlag: string;
+  daysFlag: string;
+  defaultSource: TraceSource;
+  defaultDays: number;
+}
+
+/** A stage's `--source=` and `--days=` from its populate overrides, else its defaults. */
+function stageScopeArgs(args: readonly string[], scope: StageScope): string[] {
+  const override = (flag: string): string | undefined => args.find(a => a.startsWith(flag))?.slice(flag.length);
+  const source = override(scope.sourceFlag) ?? scope.defaultSource;
+  if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
+    throw new Error(`${scope.sourceFlag} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
+  }
+  const rawDays = override(scope.daysFlag);
+  const days = rawDays === undefined ? scope.defaultDays : Number(rawDays);
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error(`${scope.daysFlag} must be a positive integer, got "${rawDays}"`);
+  }
+  return [`${SOURCE_FLAG}${source}`, `${DAYS_FLAG}${days}`];
+}
+
+/**
  * The judge's `--source=` and `--days=` for a populate run given `args`.
  * Throws on a bad override, so populate can stop before any stage runs.
  */
 export function judgeScopeArgs(args: readonly string[]): string[] {
-  const override = (flag: string): string | undefined => args.find(a => a.startsWith(flag))?.slice(flag.length);
-  const source = override(JUDGE_SOURCE_FLAG) ?? JUDGE_DEFAULT_SOURCE;
-  if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
-    throw new Error(`${JUDGE_SOURCE_FLAG} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
-  }
-  const rawDays = override(JUDGE_DAYS_FLAG);
-  const days = rawDays === undefined ? JUDGE_DEFAULT_DAYS : Number(rawDays);
-  if (!Number.isInteger(days) || days < 1) {
-    throw new Error(`${JUDGE_DAYS_FLAG} must be a positive integer, got "${rawDays}"`);
-  }
-  return [`${SOURCE_FLAG}${source}`, `${DAYS_FLAG}${days}`];
+  return stageScopeArgs(args, {
+    sourceFlag: JUDGE_SOURCE_FLAG,
+    daysFlag: JUDGE_DAYS_FLAG,
+    defaultSource: JUDGE_DEFAULT_SOURCE,
+    defaultDays: JUDGE_DEFAULT_DAYS,
+  });
+}
+
+/**
+ * derive's `--source=`, `--days=` and `--post-days=` for a populate run given
+ * `args`. Throws on a bad override, like `judgeScopeArgs`.
+ */
+export function deriveScopeArgs(args: readonly string[]): string[] {
+  const scope = stageScopeArgs(args, {
+    sourceFlag: DERIVE_SOURCE_FLAG,
+    daysFlag: DERIVE_DAYS_FLAG,
+    defaultSource: DERIVE_DEFAULT_SOURCE,
+    defaultDays: DERIVE_DEFAULT_DAYS,
+  });
+  return [...scope, `${POST_DAYS_FLAG}${DERIVE_POST_WINDOW_DAYS}`];
 }
 
 /**

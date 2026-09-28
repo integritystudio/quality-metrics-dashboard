@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DERIVE_EXIT_POST_FAILED,
+  DERIVE_EXIT_READ_FAILED,
   DERIVE_SOFT_FAILURE_EXITS,
   JUDGE_EXIT_BILLING,
   JUDGE_EXIT_DISCOVERY_FAILED,
@@ -9,6 +10,7 @@ import {
   JUDGE_EXIT_POST_FAILED,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
+  deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
   runWithRetry,
@@ -106,6 +108,10 @@ describe('pipeline exit-code contract', () => {
     expect(DERIVE_SOFT_FAILURE_EXITS.has(1)).toBe(false);
   });
 
+  it('treats a failed derive cloud read as soft, so reading /v1/traces first does not reopen that failure', () => {
+    expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_READ_FAILED)).toBe(true);
+  });
+
   it('gives every soft code its own number, none of them 0 or the generic 1', () => {
     const codes = [
       JUDGE_EXIT_NO_SCORES,
@@ -114,6 +120,7 @@ describe('pipeline exit-code contract', () => {
       JUDGE_EXIT_POST_FAILED,
       JUDGE_EXIT_DISCOVERY_FAILED,
       DERIVE_EXIT_POST_FAILED,
+      DERIVE_EXIT_READ_FAILED,
     ];
 
     expect(new Set(codes).size).toBe(codes.length);
@@ -154,5 +161,25 @@ describe('judgeScopeArgs', () => {
     ['a day count with trailing text', ['--judge-days=7d'], /--judge-days= must be a positive integer/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => judgeScopeArgs(args)).toThrow(message);
+  });
+});
+
+describe('deriveScopeArgs', () => {
+  it('reads the cloud over seven days and posts only the last two when populate is given nothing', () => {
+    expect(deriveScopeArgs(['--limit', '100', '--batch'])).toEqual(['--source=cloud', '--days=7', '--post-days=2']);
+  });
+
+  it('takes the source and the day count from their own overrides, not the judge\'s', () => {
+    const args = ['--derive-source=local', '--derive-days=14', '--judge-source=cloud', '--judge-days=30'];
+
+    expect(deriveScopeArgs(args)).toEqual(['--source=local', '--days=14', '--post-days=2']);
+    expect(judgeScopeArgs(args)).toEqual(['--source=cloud', '--days=30']);
+  });
+
+  it.each([
+    ['an unknown source', ['--derive-source=s3'], /--derive-source= must be one of local\|cloud/],
+    ['a zero day count', ['--derive-days=0'], /--derive-days= must be a positive integer/],
+  ])('rejects %s', (_label, args, message) => {
+    expect(() => deriveScopeArgs(args)).toThrow(message);
   });
 });

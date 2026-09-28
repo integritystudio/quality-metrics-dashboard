@@ -8,7 +8,8 @@
  *   - at or after the cutover: POSTed straight to ingest (`post-evaluations.ts`),
  *     each with an `evaluationId` the worker dedups on, so re-posting is a no-op.
  *     An unscoped run posts the last two days; `--date=`/`--days=` posts the
- *     whole scope, which is how a backfill is done.
+ *     whole scope, which is how a backfill is done, unless `--post-days=N`
+ *     narrows the post to the last N days (populate passes 2).
  *   - before it: written to derived-evaluations-<date>.jsonl for
  *     `upload-evaluations`, as before. Goes away in Phase 6.
  *
@@ -19,11 +20,13 @@
  *   tsx scripts/derive-evaluations.ts --days=7
  *   tsx scripts/derive-evaluations.ts              # all dates
  *   tsx scripts/derive-evaluations.ts --source=cloud --days=7   # read /v1/traces instead
+ *   tsx scripts/derive-evaluations.ts --source=cloud --days=7 --post-days=2   # what populate runs
  *
  * `--source=cloud` reads spans from obtool-api, one query per `OBTOOL_API_KEY*`
  * account in the environment, and needs `--date=` or `--days=` (an unbounded
  * cloud read has no memory ceiling). Output is identical in shape; see
- * `derive-parity.ts` for the check that the two sources agree.
+ * `derive-parity.ts` for the check that the two sources agree. A failed cloud
+ * read exits `DERIVE_EXIT_READ_FAILED` (9) before anything is written or posted.
  *
  * The records get a file of their own (HDF5, 2026-09-27). Until then this
  * rewrote the hooks' `evaluations-<date>.jsonl`, keeping every line whose
@@ -54,7 +57,7 @@ import { canonicalizeAttributes } from '../../src/lib/observability/attribute-al
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_EXIT_POST_FAILED, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -550,26 +553,37 @@ export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
   return allEvals;
 }
 
+const MS_PER_DAY = 86_400_000;
+
+/** `--post-days=N` as a day count; `null` when absent. */
+export function resolvePostDays(args: string[]): number | null {
+  const arg = args.find(a => a.startsWith(POST_DAYS_ARG));
+  if (!arg) return null;
+  const raw = arg.slice(POST_DAYS_ARG.length);
+  const days = Number(raw);
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error(`${POST_DAYS_ARG} must be a positive integer, got "${raw}"`);
+  }
+  return days;
+}
+
+/**
+ * Earliest event time a run posts. Every run re-derives its whole read scope,
+ * so without a floor each run would re-post all of it — dropped by ingest, but
+ * sent. `--post-days=` sets the floor outright; otherwise an unscoped run gets
+ * `DERIVE_POST_WINDOW_DAYS`, and an explicit `--date=`/`--days=` posts its
+ * whole scope, which is how a backfill is done.
+ */
+export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDays: number | null = null): number {
+  if (postDays !== null) return nowMs - postDays * MS_PER_DAY;
+  return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DERIVE_POST_WINDOW_DAYS * MS_PER_DAY;
+}
+
 /**
  * Split at the Phase 3 cutover by the record's own time: earlier records still
  * go to `derived-evaluations-<date>.jsonl` for `upload-evaluations`, later ones
  * are posted directly (see `DERIVE_DIRECT_POST_SINCE_MS`).
  */
-/**
- * How far back an unscoped run posts. Every run re-derives every local date,
- * so without a floor each run would re-post the whole history since the
- * cutover — dropped by ingest, but sent. Matches upload's and the span
- * shipper's two-day window. An explicit `--date=`/`--days=` posts its whole
- * scope, which is how a backfill is done.
- */
-const DIRECT_POST_WINDOW_DAYS = 2;
-const MS_PER_DAY = 86_400_000;
-
-/** Earliest event time an unscoped run posts; no floor when the caller scoped the dates. */
-export function postFloorMs(dateScope: Set<string> | null, nowMs: number): number {
-  return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DIRECT_POST_WINDOW_DAYS * MS_PER_DAY;
-}
-
 export function splitAtCutover(records: readonly EvalRecord[]): { toFile: EvalRecord[]; toPost: EvalRecord[] } {
   const toFile: EvalRecord[] = [];
   const toPost: EvalRecord[] = [];
@@ -581,11 +595,24 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dateScope = resolveDateScope(argv);
   const source = resolveSource(argv, dateScope);
+  const postDays = resolvePostDays(argv);
   const dryRun = argv.includes(DRY_RUN_ARG);
 
-  const loaded = source === 'cloud' && dateScope
-    ? await loadCloudSpans(dateScope)
-    : loadLocalSpans(TELEMETRY_DIR, dateScope);
+  let loaded: LoadedSpans;
+  if (source === 'cloud' && dateScope) {
+    try {
+      loaded = await loadCloudSpans(dateScope);
+    } catch (err) {
+      // Nothing is derived, written or posted yet, so populate carries on
+      // without derive. The whole error, cause included, goes to stderr so
+      // populate can tell a network failure (retried) from anything else.
+      console.error('[derive] cloud read failed:', err);
+      process.exitCode = DERIVE_EXIT_READ_FAILED;
+      return;
+    }
+  } else {
+    loaded = loadLocalSpans(TELEMETRY_DIR, dateScope);
+  }
   const allEvals = deriveAll(loaded);
   // A span in an in-scope trace file can carry an out-of-scope timestamp;
   // never write or post a date the caller did not ask for.
@@ -619,7 +646,7 @@ async function main(): Promise<void> {
   const accounts = source === 'local'
     ? buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now())
     : emptyAccountIndex();
-  const floorMs = postFloorMs(dateScope, Date.now());
+  const floorMs = postFloorMs(dateScope, Date.now(), postDays);
   const inWindow = toPost.filter(ev => Date.parse(ev.timestamp) >= floorMs);
   const posted = await postEvaluationRecords(inWindow.map(toOTelRecord), { dryRun, accounts });
   console.log(`[derive]${dryRun ? ' dry-run:' : ''} posted ${formatPostSummary(posted)}`);

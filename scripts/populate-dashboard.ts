@@ -3,9 +3,12 @@
  * Single-command pipeline to populate all 7 dashboard metrics.
  *
  * Steps:
- *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion),
- *                            POSTed straight to ingest for records from 2026-09-28 on (Phase 3);
- *                            older ones still go to derived-evaluations-<date>.jsonl
+ *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
+ *                            over spans the cloud holds for the last 7 days
+ *                            (`--source=cloud --days=7 --post-days=2`, DERIVE_DEFAULT_*,
+ *                            Phase 1), POSTed straight to ingest for records from
+ *                            2026-09-28 on and the last 2 days (Phase 3); older ones
+ *                            still go to derived-evaluations-<date>.jsonl
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
  *                            (`--source=cloud --days=7`, JUDGE_DEFAULT_*), POSTed
@@ -32,6 +35,8 @@
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
  *   npm run populate -- --judge-days=30       # judge turns from the last 30 days instead of 7
  *   npm run populate -- --judge-source=local  # judge discovery from local telemetry (rollback)
+ *   npm run populate -- --derive-days=14      # derive over the last 14 days instead of 7
+ *   npm run populate -- --derive-source=local # derive from local trace files (rollback)
  *
  * Exit codes (read by the launchd wrapper, which logs FAILED for anything non-zero):
  *   0  every stage succeeded
@@ -42,7 +47,8 @@
  *   6  JUDGE_EXIT_POST_FAILED — ingest refused the judge's post; its records are in its file
  *   7  JUDGE_EXIT_DISCOVERY_FAILED — the judge could not list turns (usually the network); nothing spent
  *   8  DERIVE_EXIT_POST_FAILED — derive's post failed after the network retries; the next run re-posts it
- *   For 3-8 the remaining stages still ran.
+ *   9  DERIVE_EXIT_READ_FAILED — derive could not read /v1/traces after the network retries; nothing posted
+ *   For 3-9 the remaining stages still ran.
  *   1  any other stage failure; the pipeline stops at that stage
  *
  * derive-evaluations and sync-to-kv are retried on transient network failures
@@ -61,6 +67,7 @@ import {
   JUDGE_PER_CRITERION_FLAG,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
+  deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
   runWithRetry,
@@ -92,10 +99,13 @@ if (limitIdx !== -1) {
   limit = String(parsed);
 }
 
-// Cloud discovery over the last week unless --judge-source= / --judge-days=
-// say otherwise. Checked here so a bad override stops the run before derive.
+// Both stages read the cloud over the last week unless --derive-source= /
+// --derive-days= / --judge-source= / --judge-days= say otherwise. Checked here
+// so a bad override stops the run before derive.
+let deriveScope: string[];
 let judgeScope: string[];
 try {
+  deriveScope = deriveScopeArgs(args);
   judgeScope = judgeScopeArgs(args);
 } catch (err) {
   console.error(`[populate] Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -192,10 +202,11 @@ let pipelineExitCode = 0;
 
 async function main(): Promise<void> {
   if (!dryRun) {
-    // Derive posts to ingest (Phase 3), so it is the first stage that needs the
-    // network. A failed post loses nothing — the next run re-posts it — so once
-    // the retries are spent the run carries on (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
-    const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts');
+    // Derive reads /v1/traces (Phase 1) and posts to ingest (Phase 3), so it is
+    // the first stage that needs the network. A failed read or post loses
+    // nothing — the next run covers the same window — so once the retries are
+    // spent the run carries on (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
+    const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
     if (!derive.ok) {
       if (derive.status !== null && DERIVE_SOFT_FAILURE_EXITS.has(derive.status)) {
         console.error(`[populate] derive-evaluations exited ${derive.status}; continuing to judge, upload + sync, then exiting ${derive.status}`);

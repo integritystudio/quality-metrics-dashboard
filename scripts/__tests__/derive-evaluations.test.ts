@@ -9,6 +9,7 @@ import {
   derivedEvaluationsPath,
   deriveAll,
   deriveToolCorrectness,
+  resolvePostDays,
   resolveSource,
   scoreTask,
   sessionTasks,
@@ -524,6 +525,26 @@ describe('postFloorMs', () => {
 
   it('posts the whole scope when the caller named dates, so a backfill reaches old records', () => {
     expect(postFloorMs(new Set(['2026-09-28']), now)).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  it('posts only the last --post-days when given, however wide the read scope', () => {
+    const week = new Set(['2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01']);
+
+    expect(postFloorMs(week, now, 2)).toBe(Date.parse('2026-09-29T12:00:00.000Z'));
+  });
+});
+
+describe('resolvePostDays', () => {
+  it('is null when the flag is absent, leaving the floor to the scope', () => {
+    expect(resolvePostDays(['--days=7'])).toBeNull();
+  });
+
+  it('reads the day count', () => {
+    expect(resolvePostDays(['--days=7', '--post-days=2'])).toBe(2);
+  });
+
+  it.each(['0', '1.5', '2d', ''])('rejects "%s"', (raw) => {
+    expect(() => resolvePostDays([`--post-days=${raw}`])).toThrow('--post-days= must be a positive integer');
   });
 });
 
