@@ -74,20 +74,22 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 
 | Step | Script | Output |
 |------|--------|--------|
-| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion — written to `derived-evaluations-<date>.jsonl`, a file of its own, replaced wholesale each run (HDF5, 2026-09-27; it used to rewrite `evaluations-<date>.jsonl` and, keying its keep-filter on an attribute it no longer wrote, re-kept its own previous output every run) |
-| 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination — appended to `evaluations-<date>.jsonl` beside the hooks' records |
-| 3. Upload | `upload-evaluations.ts` | Ships local `evaluations-*.jsonl` and `derived-evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
+| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion — POSTed straight to ingest for records from 2026-09-28 on (cloud-read Phase 3). Older records go to `derived-evaluations-<date>.jsonl`, a file of its own, replaced wholesale each run (HDF5, 2026-09-27; it used to rewrite `evaluations-<date>.jsonl` and, keying its keep-filter on an attribute it no longer wrote, re-kept its own previous output every run) |
+| 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination, over turns the cloud lists for the last 7 days (`--source=cloud --days=7`; turn text is read from local transcripts) — POSTed straight to ingest (Phase 4) and appended to `evaluations-<date>.jsonl` |
+| 3. Upload | `upload-evaluations.ts` | Ships the hooks' `evaluations-*.jsonl` records and pre-cutover `derived-evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
 | 4. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
 npm run populate -- --seed          # offline (synthetic judge scores)
 npm run populate                    # full (needs a judge API key, see below)
 npm run populate -- --dry-run --seed  # preview only, no writes
-npm run populate -- --skip-judge    # rule-based + sync only
-npm run populate -- --skip-sync     # derive + judge only
+npm run populate -- --skip-judge    # rule-based + upload + sync
+npm run populate -- --skip-sync     # derive + judge + upload
 npm run populate -- --limit 5 --seed  # judge at most 5 turns
 npm run populate -- --batch         # judge through the Message Batches API: 50% off, minutes not seconds
-npx tsx scripts/judge-evaluations.ts --per-criterion  # one call per criterion (~10x cost); populate does not forward it
+npm run populate -- --per-criterion # one call per criterion (~10x cost)
+npm run populate -- --judge-days=30 # judge turns from the last 30 days instead of 7
+npm run populate -- --judge-source=local  # judge discovery from local telemetry (rollback)
 ```
 
 **Judge credentials.** The judge prefers `LLM_JUDGE_ANTHROPIC_KEY` and falls back to
@@ -104,6 +106,11 @@ carrying the turn content once plus every applicable criterion, which measured ~
 than one call per criterion but does not agree closely with the per-criterion scores — see
 `docs/judge-agreement-2026-09-22.json`. `--per-criterion` on `judge-evaluations.ts` opts out.
 
+**Which turns a run judges.** Turns already judged in the cloud, and turns whose results
+could not be delivered, are dropped before `--limit`, which then takes the oldest pending
+turns (`judge-selection.ts`). `npm run judge:parity -- --days=7` checks that the cloud and
+local sources select the same turns.
+
 Requires parent `dist/` for the sync step — run `npm run build` in the parent observability-toolkit first.
 
 ## Scripts
@@ -112,7 +119,7 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 |---------|-------------|
 | `npm run dev` | Vite dev server + Hono API |
 | `npm run build` | Production Vite build |
-| `npm run populate` | Full data pipeline (derive + judge + sync) |
+| `npm run populate` | Full data pipeline (derive + judge + upload + sync) |
 | `npm run sync` | KV sync only (`--budget=450` default, `--budget=5000` for bulk) |
 | `npm test` | Vitest for `src/` + `worker/` (Vite context) |
 | `npm run test:scripts` | Vitest for `scripts/` (separate config; a bare `npx vitest run <path>` under `scripts/__tests__` finds no tests) |
