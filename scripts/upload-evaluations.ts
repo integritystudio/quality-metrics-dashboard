@@ -64,7 +64,10 @@
  *
  * Derive records at or after `DERIVE_DIRECT_POST_SINCE_MS` are skipped here:
  * derive posts those itself (Phase 3). This script keeps shipping the hooks'
- * and the judge's `evaluations-<date>.jsonl`, and older derive files.
+ * `evaluations-<date>.jsonl` and older derive files. The judge posts its own
+ * records too (Phase 4) but still appends them to those files, so a judge
+ * record young enough to pass the age guard is sent again here, and ingest
+ * drops it on its `evaluationId`.
  *
  * `--only-keys` re-ships exactly the records a manifest names, for replacing
  * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md). Each line

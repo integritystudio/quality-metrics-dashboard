@@ -6,16 +6,17 @@
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion),
  *                            POSTed straight to ingest for records from 2026-09-28 on (Phase 3);
  *                            older ones still go to derived-evaluations-<date>.jsonl
- *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
- *                            appended to evaluations-<date>.jsonl beside the hooks' records
- *   3. upload-evaluations  → ship both local evaluations JSONL files to the cloud evaluations table
+ *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination),
+ *                            POSTed straight to ingest (Phase 4) and appended to
+ *                            evaluations-<date>.jsonl, the ledger it dedups against
+ *   3. upload-evaluations  → ship the hooks' evaluations JSONL and pre-cutover derive files
  *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
  *
- * Step 3 is not optional plumbing. Steps 1-2 write those files to
- * `TELEMETRY_DIR`, but step 4 reads the *cloud* (`CloudBackend.queryEvaluations`,
- * source `'table'`). Without an upload between them the pipeline looks healthy
- * at every stage and still computes an empty dashboard — which is exactly how
- * it ran, unnoticed, until 2026-09-15. It needs `INJECT_HMAC_SECRET`.
+ * Step 4 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
+ * `'table'`), so every record has to get there: steps 1-2 post their own, and
+ * step 3 carries what is still only on disk. Without that the pipeline looks
+ * healthy at every stage and still computes an empty dashboard — which is
+ * exactly how it ran, unnoticed, until 2026-09-15. It needs `INJECT_HMAC_SECRET`.
  *
  * Usage:
  *   npm run populate                          # full pipeline (needs ANTHROPIC_API_KEY)
@@ -33,6 +34,8 @@
  *   3  JUDGE_EXIT_NO_SCORES — the judge attempted evaluations and produced none;
  *      upload + sync still ran, so rule-based evaluations reached the dashboard
  *   4  JUDGE_EXIT_BILLING   — the judge was refused for billing; upload + sync still ran
+ *   5  JUDGE_EXIT_HIGH_FAILURE_RATE — most judge calls failed, or far fewer succeeded than last run
+ *   6  JUDGE_EXIT_POST_FAILED — ingest refused the judge's post; its records are in its file
  *   1  any other stage failure; the pipeline stops at that stage
  *
  * sync-to-kv is retried on transient network failures (DNS, reset connections)
