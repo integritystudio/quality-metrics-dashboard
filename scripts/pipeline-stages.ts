@@ -24,6 +24,20 @@ export const JUDGE_EXIT_HIGH_FAILURE_RATE = 5;
  * that file is safe, because ingest drops an evaluationId it already holds.
  */
 export const JUDGE_EXIT_POST_FAILED = 6;
+/**
+ * judge-evaluations exit: discovery failed before any turn was judged, so
+ * nothing was spent. With `--source=cloud` the cause is usually the network,
+ * and the next run picks the same turns up.
+ */
+export const JUDGE_EXIT_DISCOVERY_FAILED = 7;
+/**
+ * derive-evaluations exit: its post to ingest failed (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
+ * Nothing is lost: the next unscoped run re-posts the last two days, and ingest
+ * drops ids it already holds. Since Phase 3 derive is the first stage that
+ * needs the network, so populate waits out a transient failure and then
+ * carries on rather than losing the whole run.
+ */
+export const DERIVE_EXIT_POST_FAILED = 8;
 
 /**
  * Judge exits populate-dashboard.ts forwards to its own exit instead of
@@ -35,7 +49,11 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
   JUDGE_EXIT_NO_SCORES,
   JUDGE_EXIT_HIGH_FAILURE_RATE,
   JUDGE_EXIT_POST_FAILED,
+  JUDGE_EXIT_DISCOVERY_FAILED,
 ]);
+
+/** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
+export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED]);
 
 /** `--source=` values: where derive, and the judge's discovery, read telemetry from. */
 export const TRACE_SOURCES = ['local', 'cloud'] as const;

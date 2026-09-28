@@ -59,7 +59,7 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
 import {
   createBatchProvider,
   BATCH_POLL_INTERVAL_MS,
@@ -1661,7 +1661,17 @@ async function main() {
   // modules imports this one.
   const { resolveDateScope, resolveSource } = await import('./derive-evaluations.js');
   const dateScope = resolveDateScope(args);
-  const { turns, accounts, loadExistingKeys } = await discoverTurns(resolveSource(args, dateScope), dateScope);
+  const source = resolveSource(args, dateScope);
+  let discovery: TurnDiscovery;
+  try {
+    discovery = await discoverTurns(source, dateScope);
+  } catch (err) {
+    // Nothing is spent before this point, so populate carries on without the judge.
+    console.error(`[judge] discovery failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = JUDGE_EXIT_DISCOVERY_FAILED;
+    return;
+  }
+  const { turns, accounts, loadExistingKeys } = discovery;
   const { selectTurns, formatTurnSelection } = await import('./judge-selection.js');
   // --seed posts nothing, so only a real run skips turns it could not deliver.
   const select = (keys: Set<string>) => selectTurns(turns, keys, { limit, deliverableOnly: !seed });

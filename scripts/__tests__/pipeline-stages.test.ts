@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DERIVE_EXIT_POST_FAILED,
+  DERIVE_SOFT_FAILURE_EXITS,
   JUDGE_EXIT_BILLING,
+  JUDGE_EXIT_DISCOVERY_FAILED,
+  JUDGE_EXIT_HIGH_FAILURE_RATE,
   JUDGE_EXIT_NO_SCORES,
   JUDGE_EXIT_POST_FAILED,
   JUDGE_SOFT_FAILURE_EXITS,
@@ -97,10 +101,31 @@ describe('runWithRetry', () => {
 });
 
 describe('pipeline exit-code contract', () => {
+  it('treats a failed derive post as soft, so a network blip no longer stops judge, upload and sync', () => {
+    expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_POST_FAILED)).toBe(true);
+    expect(DERIVE_SOFT_FAILURE_EXITS.has(1)).toBe(false);
+  });
+
+  it('gives every soft code its own number, none of them 0 or the generic 1', () => {
+    const codes = [
+      JUDGE_EXIT_NO_SCORES,
+      JUDGE_EXIT_BILLING,
+      JUDGE_EXIT_HIGH_FAILURE_RATE,
+      JUDGE_EXIT_POST_FAILED,
+      JUDGE_EXIT_DISCOVERY_FAILED,
+      DERIVE_EXIT_POST_FAILED,
+    ];
+
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codes).not.toContain(0);
+    expect(codes).not.toContain(1);
+  });
+
   it('treats the judge\'s own codes as soft failures and nothing else', () => {
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BILLING)).toBe(true);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_NO_SCORES)).toBe(true);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_POST_FAILED)).toBe(true);
+    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_DISCOVERY_FAILED)).toBe(true);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(1)).toBe(false);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(0)).toBe(false);
   });

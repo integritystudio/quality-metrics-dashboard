@@ -40,19 +40,23 @@
  *   4  JUDGE_EXIT_BILLING   — the judge was refused for billing; upload + sync still ran
  *   5  JUDGE_EXIT_HIGH_FAILURE_RATE — most judge calls failed, or far fewer succeeded than last run
  *   6  JUDGE_EXIT_POST_FAILED — ingest refused the judge's post; its records are in its file
+ *   7  JUDGE_EXIT_DISCOVERY_FAILED — the judge could not list turns (usually the network); nothing spent
+ *   8  DERIVE_EXIT_POST_FAILED — derive's post failed after the network retries; the next run re-posts it
+ *   For 3-8 the remaining stages still ran.
  *   1  any other stage failure; the pipeline stops at that stage
  *
- * sync-to-kv is retried on transient network failures (DNS, reset connections)
- * with the bounded schedule in pipeline-stages.ts: the 18:00 firings on
- * 2026-09-17, 18 and 19 all died there while the laptop had no network, and
- * each left `lastSync` a day stale. Anything that is not a network failure is
- * not retried.
+ * derive-evaluations and sync-to-kv are retried on transient network failures
+ * (DNS, reset connections) with the bounded schedule in pipeline-stages.ts: the
+ * 18:00 firings on 2026-09-17, 18 and 19 all died at sync while the laptop had
+ * no network, and the 2026-09-28 06:00 firing died at derive's post. Anything
+ * that is not a network failure is not retried.
  */
 
 import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import {
+  DERIVE_SOFT_FAILURE_EXITS,
   JUDGE_BATCH_FLAG,
   JUDGE_PER_CRITERION_FLAG,
   JUDGE_SOFT_FAILURE_EXITS,
@@ -164,6 +168,21 @@ function runStep(name: string, script: string, extraArgs: string[] = [], capture
   return { ok: true, ms };
 }
 
+/**
+ * Run a stage that needs the network, waiting out transient failures (DNS,
+ * reset connections) on the schedule sized for the evening outages.
+ */
+function runWithNetworkRetry(name: string, script: string, extraArgs: string[] = []): Promise<StepOutcome> {
+  return runWithRetry<StepOutcome>({
+    attempt: () => runStep(name, script, extraArgs, true),
+    shouldRetry: outcome => !outcome.ok && isTransientNetworkFailure(outcome.stderr),
+    delaysMs: SYNC_RETRY_DELAYS_MS,
+    onRetry: (waitMs, failedAttempt, totalAttempts) => {
+      console.error(`[populate] ${name} attempt ${failedAttempt}/${totalAttempts} failed on a transient network error; retrying in ${Math.round(waitMs / MS_PER_SECOND)} s`);
+    },
+  });
+}
+
 function abort(name: string, outcome: Extract<StepOutcome, { ok: false }>): never {
   console.error(`[populate] ${name} failed with exit ${outcome.status ?? 'signal'} after ${outcome.ms} ms; stopping here`);
   process.exit(1);
@@ -173,8 +192,18 @@ let pipelineExitCode = 0;
 
 async function main(): Promise<void> {
   if (!dryRun) {
-    const derive = runStep('derive-evaluations', 'derive-evaluations.ts');
-    if (!derive.ok) abort('derive-evaluations', derive);
+    // Derive posts to ingest (Phase 3), so it is the first stage that needs the
+    // network. A failed post loses nothing — the next run re-posts it — so once
+    // the retries are spent the run carries on (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
+    const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts');
+    if (!derive.ok) {
+      if (derive.status !== null && DERIVE_SOFT_FAILURE_EXITS.has(derive.status)) {
+        console.error(`[populate] derive-evaluations exited ${derive.status}; continuing to judge, upload + sync, then exiting ${derive.status}`);
+        pipelineExitCode = derive.status;
+      } else {
+        abort('derive-evaluations', derive);
+      }
+    }
   }
 
   if (!skipJudge) {
@@ -215,14 +244,7 @@ async function main(): Promise<void> {
   if (!skipSync) {
     const syncArgs: string[] = [];
     if (dryRun) syncArgs.push('--dry-run');
-    const sync = await runWithRetry<StepOutcome>({
-      attempt: () => runStep('sync-to-kv', 'sync-to-kv.ts', syncArgs, true),
-      shouldRetry: outcome => !outcome.ok && isTransientNetworkFailure(outcome.stderr),
-      delaysMs: SYNC_RETRY_DELAYS_MS,
-      onRetry: (waitMs, failedAttempt, totalAttempts) => {
-        console.error(`[populate] sync-to-kv attempt ${failedAttempt}/${totalAttempts} failed on a transient network error; retrying in ${Math.round(waitMs / MS_PER_SECOND)} s`);
-      },
-    });
+    const sync = await runWithNetworkRetry('sync-to-kv', 'sync-to-kv.ts', syncArgs);
     if (!sync.ok) abort('sync-to-kv', sync);
   }
 

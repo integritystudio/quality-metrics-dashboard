@@ -54,7 +54,7 @@ import { canonicalizeAttributes } from '../../src/lib/observability/attribute-al
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_EXIT_POST_FAILED, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -623,7 +623,11 @@ async function main(): Promise<void> {
   const inWindow = toPost.filter(ev => Date.parse(ev.timestamp) >= floorMs);
   const posted = await postEvaluationRecords(inWindow.map(toOTelRecord), { dryRun, accounts });
   console.log(`[derive]${dryRun ? ' dry-run:' : ''} posted ${formatPostSummary(posted)}`);
-  if (posted.failure) process.exitCode = 1;
+  if (posted.failure) {
+    // stderr, so populate can tell a network failure (retried) from a rejection.
+    console.error(`[derive] post failed: ${posted.failure}`);
+    process.exitCode = DERIVE_EXIT_POST_FAILED;
+  }
 
   // Calibration step: compute per-metric percentile distributions
   // and persist to .calibration-state.json for the dashboard API to consume.
