@@ -108,6 +108,7 @@ import {
   type AccountRef,
   type TraceStamp,
 } from './account-stamps.js';
+import { UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
 
 export { buildAccountIndex, type AccountIndex, type AccountRef, type TraceStamp };
 
@@ -774,7 +775,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     shipped[file] = delivered;
     if (!ok) {
       console.error('[upload-evaluations] aborted on send failure — state saved up to the last accepted batch');
-      return 1;
+      return UPLOAD_EXIT_SEND_FAILED;
     }
   }
   } finally {

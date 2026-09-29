@@ -11,6 +11,8 @@ import {
   JUDGE_EXIT_POST_FAILED,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
+  UPLOAD_EXIT_SEND_FAILED,
+  UPLOAD_SOFT_FAILURE_EXITS,
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
@@ -117,6 +119,13 @@ describe('pipeline exit-code contract', () => {
     expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_INPUT_DRIFT)).toBe(true);
   });
 
+  // Regression: the 2026-09-28 18:00 run lost its sync to an upload that gave
+  // up on a network blip and exited 1 (UPLOAD-FAILURE-ABORTS-PIPELINE).
+  it('treats a failed upload send as soft, so sync still runs, and nothing else', () => {
+    expect(UPLOAD_SOFT_FAILURE_EXITS.has(UPLOAD_EXIT_SEND_FAILED)).toBe(true);
+    expect(UPLOAD_SOFT_FAILURE_EXITS.has(1)).toBe(false);
+  });
+
   it('gives every soft code its own number, none of them 0 or the generic 1', () => {
     const codes = [
       JUDGE_EXIT_NO_SCORES,
@@ -127,6 +136,7 @@ describe('pipeline exit-code contract', () => {
       DERIVE_EXIT_POST_FAILED,
       DERIVE_EXIT_READ_FAILED,
       DERIVE_EXIT_INPUT_DRIFT,
+      UPLOAD_EXIT_SEND_FAILED,
     ];
 
     expect(new Set(codes).size).toBe(codes.length);

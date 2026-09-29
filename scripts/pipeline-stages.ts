@@ -68,6 +68,17 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
 /** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
 export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_EXIT_INPUT_DRIFT]);
 
+/**
+ * upload-evaluations exit: a send to ingest failed. Its state is saved up to
+ * the last accepted batch, so the next run re-sends the rest and ingest drops
+ * any id it already holds. Nothing is lost, and sync-to-kv still has what
+ * derive and the judge posted themselves (UPLOAD-FAILURE-ABORTS-PIPELINE).
+ */
+export const UPLOAD_EXIT_SEND_FAILED = 11;
+
+/** Upload exits populate forwards to its own exit instead of aborting, so sync-to-kv still runs. */
+export const UPLOAD_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([UPLOAD_EXIT_SEND_FAILED]);
+
 /** `--source=` values: where derive, and the judge's discovery, read telemetry from. */
 export const TRACE_SOURCES = ['local', 'cloud'] as const;
 export type TraceSource = typeof TRACE_SOURCES[number];

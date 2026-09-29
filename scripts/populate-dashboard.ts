@@ -49,14 +49,16 @@
  *   8  DERIVE_EXIT_POST_FAILED — derive's post failed after the network retries; the next run re-posts it
  *   9  DERIVE_EXIT_READ_FAILED — derive could not read /v1/traces after the network retries; nothing posted
  *   10 DERIVE_EXIT_INPUT_DRIFT — derive delivered, but a day's spans no longer match what it reads (a hooks rename?)
- *   For 3-10 the remaining stages still ran.
+ *   11 UPLOAD_EXIT_SEND_FAILED — upload's send failed after the network retries; the next run re-sends the rest
+ *   For 3-11 the remaining stages still ran.
  *   1  any other stage failure; the pipeline stops at that stage
  *
- * derive-evaluations and sync-to-kv are retried on transient network failures
- * (DNS, reset connections) with the bounded schedule in pipeline-stages.ts: the
- * 18:00 firings on 2026-09-17, 18 and 19 all died at sync while the laptop had
- * no network, and the 2026-09-28 06:00 firing died at derive's post. Anything
- * that is not a network failure is not retried.
+ * derive-evaluations, upload-evaluations and sync-to-kv are retried on transient
+ * network failures (DNS, reset connections) with the bounded schedule in
+ * pipeline-stages.ts: the 18:00 firings on 2026-09-17, 18 and 19 all died at
+ * sync while the laptop had no network, the 2026-09-28 06:00 firing died at
+ * derive's post, and the 18:00 firing that day died at upload. Anything that is
+ * not a network failure is not retried.
  */
 
 import { spawnSync } from 'child_process';
@@ -68,6 +70,7 @@ import {
   JUDGE_PER_CRITERION_FLAG,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
+  UPLOAD_SOFT_FAILURE_EXITS,
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
@@ -249,8 +252,19 @@ async function main(): Promise<void> {
     }
     const uploadArgs: string[] = [];
     if (dryRun) uploadArgs.push('--dry-run');
-    const upload = runStep('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
-    if (!upload.ok) abort('upload-evaluations', upload);
+    // The 2026-09-28 18:00 run lost its sync to a network blip here: upload
+    // gave up after its own four quick attempts and exited 1, which aborted
+    // the run (UPLOAD-FAILURE-ABORTS-PIPELINE). Wait out a transient failure
+    // like derive and sync do, and carry on to sync if a send still fails.
+    const upload = await runWithNetworkRetry('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
+    if (!upload.ok) {
+      if (upload.status !== null && UPLOAD_SOFT_FAILURE_EXITS.has(upload.status)) {
+        console.error(`[populate] upload-evaluations exited ${upload.status}; continuing to sync, then exiting ${upload.status}`);
+        pipelineExitCode = upload.status;
+      } else {
+        abort('upload-evaluations', upload);
+      }
+    }
   }
 
   if (!skipSync) {
