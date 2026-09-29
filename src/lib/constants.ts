@@ -98,8 +98,22 @@ export const SCORE_THRESHOLD_GREEN = 0.8;
 export const SCORE_THRESHOLD_YELLOW = 0.5;
 /** Error rate fraction above which agent activity is flagged as critical. */
 export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
-/** Score below which a hallucination evaluation is flagged. */
-export const HALLUCINATION_SCORE_THRESHOLD = 0.4;
+/**
+ * Evaluation names whose score is a hallucination rate, where higher is worse: the
+ * parent's `hallucination` metric (unit `rate`, alerting `above`), and
+ * `hallucination_risk`. The same names `obs_hallucination_detection` reads.
+ */
+export const HALLUCINATION_RISK_EVALUATION_NAMES: ReadonlySet<string> = new Set(['hallucination', 'hallucination_risk']);
+/**
+ * A hallucination score at or above which one evaluation is flagged. Matches the
+ * per-evaluation cutoff `obs_hallucination_detection` uses
+ * (`DEFAULT_HALLUCINATION_THRESHOLD` in the parent's `llm-judge-constants.ts`).
+ */
+export const HALLUCINATION_RISK_THRESHOLD = 0.15;
+/** Score below which a failed evaluation also counts as a hallucination indicator (very low confidence). */
+export const LOW_CONFIDENCE_FAIL_THRESHOLD = 0.4;
+/** The score label that marks a failed evaluation. */
+export const FAIL_SCORE_LABEL = 'fail';
 export const MAX_ERROR_ROWS = 10;
 export const MAX_HALLUCINATION_ROWS = 8;
 export const MAX_FAILED_EVAL_ROWS = 6;

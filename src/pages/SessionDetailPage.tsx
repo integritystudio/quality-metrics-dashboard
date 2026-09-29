@@ -12,9 +12,8 @@ import { FreqBar } from '../components/FreqBar.js';
 import { FreqBarGrid } from '../components/FreqBarGrid.js';
 import { TruncatedList } from '../components/TruncatedList.js';
 import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore } from '../lib/quality-utils.js';
+import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore, isFailedEvaluation, isHallucinationIndicator } from '../lib/quality-utils.js';
 import {
-  HALLUCINATION_SCORE_THRESHOLD,
   MAX_ERROR_ROWS,
   MAX_HALLUCINATION_ROWS,
   MAX_FAILED_EVAL_ROWS,
@@ -80,13 +79,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const evalRows: EvalRow[] = [];
   for (const e of evaluations) {
     evalRows.push(evalToRow(e));
-    const label = (e.scoreLabel ?? '').toLowerCase();
-    const isFail = label === 'fail';
-    if (isFail) failedEvals.push(e);
-    if (
-      e.evaluationName.toLowerCase().includes('hallucin') ||
-      (isFail && typeof e.scoreValue === 'number' && e.scoreValue < HALLUCINATION_SCORE_THRESHOLD)
-    ) hallucinationEvals.push(e);
+    if (isFailedEvaluation(e)) failedEvals.push(e);
+    if (isHallucinationIndicator(e)) hallucinationEvals.push(e);
   }
   const errorCount = errorDetails.length;
   const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||

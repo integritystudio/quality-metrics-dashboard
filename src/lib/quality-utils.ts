@@ -27,7 +27,15 @@ export interface LabelOrdinal {
 }
 
 import { scaleLinear } from 'd3-scale';
-import { type Role, AGENT_PALETTE, SCORE_FORMAT_PRECISION } from './constants.js';
+import {
+  type Role,
+  AGENT_PALETTE,
+  FAIL_SCORE_LABEL,
+  HALLUCINATION_RISK_EVALUATION_NAMES,
+  HALLUCINATION_RISK_THRESHOLD,
+  LOW_CONFIDENCE_FAIL_THRESHOLD,
+  SCORE_FORMAT_PRECISION,
+} from './constants.js';
 export type FeatureRoleType = Role;
 
 export function agentColor(agentName: string, agentNames: string[]): string {
@@ -57,6 +65,34 @@ export function truncateText(text: string, max: number): string {
 export function truncateId(id: string, max = 10): string {
   if (id.length <= max) return id;
   return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+}
+
+/** The fields of an evaluation that decide whether it is a failure or a hallucination indicator. */
+export type ScoredEvaluation = {
+  evaluationName: string;
+  scoreValue?: number | null;
+  scoreLabel?: string | null;
+};
+
+/** Whether an evaluation carries the failing label. */
+export function isFailedEvaluation(evaluation: ScoredEvaluation): boolean {
+  return (evaluation.scoreLabel ?? '').toLowerCase() === FAIL_SCORE_LABEL;
+}
+
+/**
+ * Whether an evaluation indicates hallucination: a hallucination rate at or above
+ * HALLUCINATION_RISK_THRESHOLD, or a failed evaluation scored below
+ * LOW_CONFIDENCE_FAIL_THRESHOLD. A hallucination score is higher-is-worse, so a
+ * low one (no fabrication found) is not an indicator, and neither is an evaluation
+ * with no finite score.
+ */
+export function isHallucinationIndicator(evaluation: ScoredEvaluation): boolean {
+  const score = evaluation.scoreValue;
+  if (typeof score !== 'number' || !Number.isFinite(score)) return false;
+  if (HALLUCINATION_RISK_EVALUATION_NAMES.has(evaluation.evaluationName.toLowerCase())) {
+    return score >= HALLUCINATION_RISK_THRESHOLD;
+  }
+  return isFailedEvaluation(evaluation) && score < LOW_CONFIDENCE_FAIL_THRESHOLD;
 }
 
 export function formatScore(val: number | null | undefined): string {
