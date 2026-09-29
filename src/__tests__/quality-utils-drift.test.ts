@@ -30,6 +30,11 @@ import {
   ROLE_FEATURE_CONFIG,
   SCORE_COLORS,
 } from '../lib/quality-utils.js';
+import {
+  HALLUCINATION_RISK_EVALUATION_NAMES,
+  HALLUCINATION_RISK_THRESHOLD,
+  LOW_CONFIDENCE_FAIL_THRESHOLD,
+} from '../lib/constants.js';
 
 
 describe('scoreColorBand', () => {
@@ -161,6 +166,23 @@ describe('SCORE_COLORS', () => {
     expect(SCORE_COLORS.poor).toBe('#f97316');
     expect(SCORE_COLORS.failing).toBe('#f04438');
     expect(SCORE_COLORS.no_data).toBe('#6b7280');
+  });
+});
+
+// Hallucination flagging (sentinel)
+
+describe('hallucination flagging constants', () => {
+  // HALLUCINATION_RISK_THRESHOLD and the names duplicate the parent's
+  // DEFAULT_HALLUCINATION_THRESHOLD (src/lib/judge/llm-judge-constants.ts) and the
+  // names obs_hallucination_detection reads (src/tools/hallucination-detection.ts).
+  // Change them together.
+  it('pins the per-evaluation hallucination cutoff and names', () => {
+    expect(HALLUCINATION_RISK_THRESHOLD).toBe(0.15);
+    expect([...HALLUCINATION_RISK_EVALUATION_NAMES].sort()).toEqual(['hallucination', 'hallucination_risk']);
+  });
+
+  it('pins the low-confidence cutoff for failed evaluations', () => {
+    expect(LOW_CONFIDENCE_FAIL_THRESHOLD).toBe(0.4);
   });
 });
 
