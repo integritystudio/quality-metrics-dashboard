@@ -81,6 +81,8 @@ import {
   RATE_DISPLAY_PRECISION,
   HOOK_NAME,
   spanAttr,
+  renamedAttr,
+  gitRepositoryLabel,
   jsonSafe,
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
@@ -536,10 +538,10 @@ function computeSessionInfo(spans: SessionSpan[]) {
   const last = sessionStarts.at(-1) ?? first;
   return {
     projectName: spanAttr(first, 'project.name', 'string') ?? 'unknown',
-    workingDirectory: spanAttr(first, 'working.directory', 'string') ?? '',
-    gitRepository: spanAttr(first, 'vcs.repository.name', 'string') ?? '',
+    workingDirectory: renamedAttr(first, 'process.working_directory', 'working.directory') ?? '',
+    gitRepository: gitRepositoryLabel(first),
     gitBranch: spanAttr(first, 'vcs.ref.head.name', 'string') ?? '',
-    nodeVersion: spanAttr(first, 'node.version', 'string') ?? '',
+    nodeVersion: renamedAttr(first, 'process.runtime.version', 'node.version') ?? '',
     resumeCount: sessionStarts.length,
     initialMessageCount: spanAttr(first, 'context.message_count', 'number') ?? 0,
     initialContextTokens: spanAttr(first, 'context.estimated_tokens', 'number') ?? 0,

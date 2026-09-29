@@ -612,7 +612,12 @@ export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDa
   return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DERIVE_POST_WINDOW_DAYS * MS_PER_DAY;
 }
 
-/** `gen_ai.operation.name` on every span of an agent invocation, whatever the span is named. */
+/**
+ * `gen_ai.operation.name` of the synthetic `invoke_agent <agent>` span each agent
+ * invocation emits, whatever the hook spans are named. Since 2026-09-29 that span is
+ * the only one carrying it (the prepare/finalize hook spans and the code-survival
+ * seed stopped claiming the operation), so this counts one span per invocation.
+ */
 const INVOKE_AGENT_OPERATION = 'invoke_agent';
 /** Fewer tool spans than this in a day cannot tell a renamed attribute from a few hooks that failed before recording one. */
 const DRIFT_MIN_TOOL_SPANS = 20;

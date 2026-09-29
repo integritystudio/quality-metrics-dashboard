@@ -21,6 +21,8 @@ import {
   PERCENT_BASE,
   LATENCY_DISPLAY_PRECISION,
   spanAttr,
+  renamedAttr,
+  gitRepositoryLabel,
   jsonSafe,
 } from '../api-constants.js';
 import {
@@ -259,10 +261,10 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
     const sessionInfo = firstSessionStart ? {
       projectName: spanAttr(firstSessionStart, 'project.name', 'string') ?? 'unknown',
-      workingDirectory: spanAttr(firstSessionStart, 'working.directory', 'string') ?? '',
-      gitRepository: spanAttr(firstSessionStart, 'vcs.repository.name', 'string') ?? '',
+      workingDirectory: renamedAttr(firstSessionStart, 'process.working_directory', 'working.directory') ?? '',
+      gitRepository: gitRepositoryLabel(firstSessionStart),
       gitBranch: spanAttr(firstSessionStart, 'vcs.ref.head.name', 'string') ?? '',
-      nodeVersion: spanAttr(firstSessionStart, 'node.version', 'string') ?? '',
+      nodeVersion: renamedAttr(firstSessionStart, 'process.runtime.version', 'node.version') ?? '',
       resumeCount: sessionStartCount,
       initialMessageCount: spanAttr(firstSessionStart, 'context.message_count', 'number') ?? 0,
       initialContextTokens: spanAttr(firstSessionStart, 'context.estimated_tokens', 'number') ?? 0,

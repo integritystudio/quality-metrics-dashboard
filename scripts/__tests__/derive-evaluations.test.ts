@@ -790,6 +790,32 @@ describe('detectInputDrift', () => {
     ]);
   });
 
+  // Since 2026-09-29 the hook spans carry no gen_ai.operation.name; the synthetic
+  // `invoke_agent <agent>` span is the only evidence of an invocation.
+  const withoutOperation = (span: TraceSpan): TraceSpan => ({
+    ...span,
+    attributes: Object.fromEntries(Object.entries(span.attributes).filter(([key]) => key !== 'gen_ai.operation.name')),
+  });
+  const syntheticInvokeSpan: TraceSpan = {
+    ...agentHookSpan('finalize', 'Explore', 'span-i1', DAY_START_SEC + 5),
+    name: 'invoke_agent Explore',
+    attributes: { 'session.id': 'sess-agents', 'gen_ai.operation.name': 'invoke_agent', 'gen_ai.agent.name': 'Explore' },
+  };
+
+  it('is quiet when only the synthetic span carries the operation and the hook spans keep their names', () => {
+    const spans = [...agentSpans('hook:agent.operation.finalize').map(withoutOperation), syntheticInvokeSpan];
+
+    expect(detectInputDrift(spans, null)).toEqual([]);
+  });
+
+  it('still flags renamed hook spans when only the synthetic span records the invocation', () => {
+    const spans = [...agentSpans('hook:agent.lifecycle.finalize').map(withoutOperation), syntheticInvokeSpan];
+
+    expect(detectInputDrift(spans, null)).toEqual([
+      expect.stringMatching(new RegExp(`^${DAY}: 1 spans record agent invocations, but none is named`)),
+    ]);
+  });
+
   it('flags a day where most tool spans carry no success flag under the key derive reads', () => {
     const renamed = toolSpans(TOOL_SPANS_PER_DAY, { 'integritystudio.tool.succeeded': true });
 
