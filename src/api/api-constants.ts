@@ -215,9 +215,10 @@ export function renamedAttr(span: SpanLike, canonical: string, legacy: string): 
  * requires; earlier spans carry `owner/repo` in `vcs.repository.name`.
  */
 export function gitRepositoryLabel(span: SpanLike): string {
-  return [spanAttr(span, 'vcs.owner.name', 'string'), spanAttr(span, 'vcs.repository.name', 'string')]
-    .filter(Boolean)
-    .join('/');
+  const name = spanAttr(span, 'vcs.repository.name', 'string') ?? '';
+  // Already `owner/repo` (an earlier span, or another producer): never prefix the owner twice.
+  if (name.includes('/')) return name;
+  return [spanAttr(span, 'vcs.owner.name', 'string'), name].filter(Boolean).join('/');
 }
 
 export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {

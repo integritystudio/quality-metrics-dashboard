@@ -45,6 +45,11 @@ describe('gitRepositoryLabel', () => {
     expect(gitRepositoryLabel(span({ 'vcs.repository.name': 'aledlie/env-settings' }))).toBe('aledlie/env-settings');
   });
 
+  it('does not prefix the owner onto a repository name that already carries one', () => {
+    expect(gitRepositoryLabel(span({ 'vcs.owner.name': 'aledlie', 'vcs.repository.name': 'aledlie/env-settings' })))
+      .toBe('aledlie/env-settings');
+  });
+
   it('is empty when no repository was recorded', () => {
     expect(gitRepositoryLabel(span({}))).toBe('');
   });
