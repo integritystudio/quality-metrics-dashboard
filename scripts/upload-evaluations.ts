@@ -295,9 +295,10 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   // was produced, not when this batch arrived (EVAL-WEBHOOK-EVENT-TIME).
   if (!Number.isNaN(tMs)) payload.evaluatedAtMs = tMs;
 
-  // `cohort` is not a column on the evaluations table and is dropped by the
-  // table read path, so it rides in `metadata`, which the flush preserves into
-  // `attributes`. evaluatedAt keeps the ISO string form for auditability.
+  // `cohort` is not a column on the evaluations table, so it rides in
+  // `metadata`, which the flush preserves into `attributes`; the table read path
+  // reads it from there (`tableEvaluationFields` in the parent's cloud.ts).
+  // evaluatedAt keeps the ISO string form for auditability.
   const metadata: Record<string, unknown> = {};
   if (cohort) metadata.cohort = cohort;
   if (judgeModel) metadata.judgeModel = judgeModel;
