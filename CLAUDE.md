@@ -71,6 +71,7 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
     - The 7 days are also the calibration corpus: `.calibration-state.json` is computed over every record derived. The local default read every trace file (~28 days).
     - Override one run with `--derive-source=local` or `--derive-days=N`. Run directly, derive still defaults to the local source, which is the rollback until Phase 6.
     - A failed cloud read exits `DERIVE_EXIT_READ_FAILED` (9) before anything is written or posted, and is handled like a failed post.
+  - **Every run prints `[derive] records: <name>=<count> …` and checks each day's input for a hooks-side rename** (`detectInputDrift`, HOOK-RENAME-SILENT). It flags a day where spans record agent invocations but none has a name derive matches, and a day where most tool spans lack the success flag derive reads. Either one exits `DERIVE_EXIT_INPUT_DRIFT` (10), which is soft, so the launchd log shows FAILED. The last two renames each looked like a green run for weeks.
   - **Records from 2026-09-28T00:00Z on are POSTed straight to ingest** (`post-evaluations.ts`), each with an `evaluationId` the worker dedups on.
     - The cutover constant is `DERIVE_DIRECT_POST_SINCE_MS`.
     - An unscoped run posts the last two days. `--date=`/`--days=` posts the whole scope, so that is how to backfill, unless `--post-days=N` narrows it.
