@@ -682,6 +682,13 @@ describe('toOTelRecord', () => {
     expect(attrs['gen_ai.evaluation.evaluator_type']).toBeUndefined();
   });
 
+  it('writes the score unit under integritystudio.*, not gen_ai.*', () => {
+    const record = toOTelRecord(makeEvalRecord({ scoreUnit: 'seconds' })) as Record<string, unknown>;
+    const attrs = record.attributes as Record<string, unknown>;
+    expect(attrs['integritystudio.evaluation.score.unit']).toBe('seconds');
+    expect(attrs['gen_ai.evaluation.score.unit']).toBeUndefined();
+  });
+
   it('omits the judge model for a score no model produced', () => {
     const canary = makeEvalRecord({ cohort: 'canary', evaluatorKind: 'rule', judgeModel: undefined });
     const record = toOTelRecord(canary) as Record<string, unknown>;

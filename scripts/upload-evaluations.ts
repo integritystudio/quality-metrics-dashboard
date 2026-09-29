@@ -95,6 +95,7 @@ import {
   EVALUATION_ATTRS,
   EVALUATION_RESULT_EVENT,
   LEGACY_EVALUATOR_TYPE_ATTR,
+  LEGACY_SCORE_UNIT_ATTR,
   TELEMETRY_DIR,
 } from './judge-evaluations.js';
 import {
@@ -269,7 +270,8 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
     ?? 'rule';
 
   const explanation = asString(attrs[EVALUATION_ATTRS.EXPLANATION]);
-  const scoreUnit = asString(attrs[EVALUATION_ATTRS.SCORE_UNIT]);
+  // COMPAT until 2026-10-29: records written before 2026-09-29 carry the unit under the old key.
+  const scoreUnit = asString(attrs[EVALUATION_ATTRS.SCORE_UNIT]) ?? asString(attrs[LEGACY_SCORE_UNIT_ATTR]);
   // toOTelRecord puts the trace id top-level; the quality-evaluation hook puts
   // it in attributes. Read both.
   const traceId = asString(r.traceId) ?? asString(attrs['trace.id']);

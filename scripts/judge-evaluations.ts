@@ -208,19 +208,27 @@ export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09
 export const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
 
 /**
- * On-disk attribute keys. **Must stay identical to `EVALUATION_ATTRS` in
- * `hooks/lib/quality-signals.ts`** — both writers append to the same
+ * On-disk attribute keys. **Every key the hooks also write must stay identical
+ * to their `EVALUATION_ATTRS` (`hooks/lib/evaluation-attrs.ts`, re-exported by
+ * `quality-signals.ts`)** — both writers append to the same
  * `evaluations-YYYY-MM-DD.jsonl` files, so a divergence splits the corpus into
  * two shapes that no single reader handles.
  *
- * `gen_ai.evaluation.evaluator{,.type}` were dropped here (OBP16): neither is
- * in the semconv registry, so they were local fields under an OpenTelemetry
- * namespace, and between them they carried four different facts.
+ * Two optional keys here have no hooks counterpart, on purpose:
+ * - `SCORE_UNIT`: the hooks dropped theirs (OBP20) because all their scores are
+ *   `ratio_0_1`, but derive's `evaluation_latency` is in `seconds`.
+ * - `JUDGE_MODEL`: the hooks dropped theirs (OBP22) because their records link to
+ *   a judge span that carries `gen_ai.request.model`; this judge records no span.
+ *
+ * Custom keys live under `integritystudio.*`: OTel semconv defines none of them
+ * and advises against inventing keys under a namespace it owns. That is why
+ * `gen_ai.evaluation.evaluator{,.type}` were dropped here (OBP16) and the score
+ * unit moved off `gen_ai.evaluation.score.unit` on 2026-09-29.
  */
 export const EVALUATION_ATTRS = {
   NAME: 'gen_ai.evaluation.name',
   SCORE_VALUE: 'gen_ai.evaluation.score.value',
-  SCORE_UNIT: 'gen_ai.evaluation.score.unit',
+  SCORE_UNIT: 'integritystudio.evaluation.score.unit',
   EXPLANATION: 'gen_ai.evaluation.explanation',
   EVALUATOR_KIND: 'integritystudio.evaluation.evaluator.kind',
   COHORT: 'integritystudio.evaluation.cohort',
@@ -233,6 +241,9 @@ export const EVALUATION_ATTRS = {
 
 /** Legacy overloaded key, read-only — still present on every pre-OBP16 record. */
 export const LEGACY_EVALUATOR_TYPE_ATTR = 'gen_ai.evaluation.evaluator.type';
+
+/** COMPAT until 2026-10-29: the score unit's key on records written before 2026-09-29. Read-only. */
+export const LEGACY_SCORE_UNIT_ATTR = 'gen_ai.evaluation.score.unit';
 
 export const EVALUATION_RESULT_EVENT = 'gen_ai.evaluation.result';
 

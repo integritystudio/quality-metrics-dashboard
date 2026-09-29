@@ -68,6 +68,7 @@ describe('mapRecord', () => {
     expect(payload?.metadata).toMatchObject({ cohort: 'normal', evaluatedAt: '2026-09-15T11:00:00.000Z' });
   });
 
+  // COMPAT until 2026-10-29 for its score-unit half: the old gen_ai.evaluation.score.unit key.
   it('maps a derive record that carries only the legacy overloaded evaluator.type', () => {
     const { payload } = mapRecord(record({
       'gen_ai.evaluation.evaluator': 'derive-evaluations',
@@ -80,6 +81,15 @@ describe('mapRecord', () => {
       evaluatorType: 'rule',
       scoreUnit: 'ratio_0_1',
     });
+  });
+
+  it('reads the score unit from its integritystudio key, over the old gen_ai key', () => {
+    const { payload } = mapRecord(record({
+      'integritystudio.evaluation.score.unit': 'seconds',
+      'gen_ai.evaluation.score.unit': 'ratio_0_1',
+    }), NOW, MAX_AGE_MS);
+
+    expect(payload?.scoreUnit).toBe('seconds');
   });
 
   it('reads a top-level traceId, as toOTelRecord writes it', () => {
