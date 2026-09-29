@@ -43,6 +43,14 @@ export const DERIVE_EXIT_POST_FAILED = 8;
  * derived, written or posted. The next run reads the same window again.
  */
 export const DERIVE_EXIT_READ_FAILED = 9;
+/**
+ * derive-evaluations exit: records were delivered, but some day's input no
+ * longer matches what the derivations read, most likely a hooks-side rename
+ * (HOOK-RENAME-SILENT). Soft, so the run still completes, but non-zero, so
+ * the launchd wrapper logs FAILED instead of the "completed" the last two
+ * renames got for weeks.
+ */
+export const DERIVE_EXIT_INPUT_DRIFT = 10;
 
 /**
  * Judge exits populate-dashboard.ts forwards to its own exit instead of
@@ -58,7 +66,7 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
 ]);
 
 /** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
-export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED]);
+export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_EXIT_INPUT_DRIFT]);
 
 /** `--source=` values: where derive, and the judge's discovery, read telemetry from. */
 export const TRACE_SOURCES = ['local', 'cloud'] as const;

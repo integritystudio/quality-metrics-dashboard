@@ -133,6 +133,9 @@ export const HOOK_NAME = {
    */
   AGENT_PREPARE: 'agent.operation.prepare',
   AGENT_FINALIZE: 'agent.operation.finalize',
+  /** PostToolUse on a built-in tool and on an MCP tool. */
+  BUILTIN_POST_TOOL: 'builtin-post-tool',
+  MCP_POST_TOOL: 'mcp-post-tool',
   POST_COMMIT_REVIEW: 'post-commit-review',
   ALERT_EVALUATION: 'telemetry-alert-evaluation',
   CODE_STRUCTURE: 'code-structure',

@@ -57,7 +57,7 @@ import { canonicalizeAttributes } from '../../src/lib/observability/attribute-al
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -127,14 +127,25 @@ const MAX_RAW_SCORES_PER_METRIC = 500;
  */
 const AGENT_PREPARE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_PREPARE}`;
 const AGENT_FINALIZE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_FINALIZE}`;
+const BUILTIN_POST_TOOL_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.BUILTIN_POST_TOOL}`;
+const MCP_POST_TOOL_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.MCP_POST_TOOL}`;
+
+function isToolSpan(span: LocalTraceSpan): boolean {
+  return span.name === BUILTIN_POST_TOOL_SPAN || span.name === MCP_POST_TOOL_SPAN;
+}
+
+/** The success flag a tool span records, under the key its hook writes; not a boolean when absent. */
+function toolSuccessOf(span: LocalTraceSpan, attrs: Record<string, unknown>): unknown {
+  return span.name === BUILTIN_POST_TOOL_SPAN ? attrs['integritystudio.tool.success'] : attrs['mcp.success'];
+}
 
 export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   const attrs = attrsOf(span);
-  const isBuiltin = span.name === 'hook:builtin-post-tool';
-  const isMcp = span.name === 'hook:mcp-post-tool';
-  if (!isBuiltin && !isMcp) return null;
+  if (!isToolSpan(span)) return null;
+  const isBuiltin = span.name === BUILTIN_POST_TOOL_SPAN;
+  const isMcp = !isBuiltin;
 
-  const success = isBuiltin ? attrs['integritystudio.tool.success'] : attrs['mcp.success'];
+  const success = toolSuccessOf(span, attrs);
   const tool = attrString(isBuiltin ? attrs['gen_ai.tool.name'] : attrs['mcp.tool'], 'unknown');
   const errorType = attrString(isBuiltin ? attrs['integritystudio.tool.error_type'] : attrs['mcp.error_type']);
   const server = isMcp ? attrString(attrs['mcp.server']) : '';
@@ -167,8 +178,8 @@ export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
 
 export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
   const measurable = [
-    'hook:builtin-post-tool',
-    'hook:mcp-post-tool',
+    BUILTIN_POST_TOOL_SPAN,
+    MCP_POST_TOOL_SPAN,
     AGENT_FINALIZE_SPAN,
     'hook:session-start',
     'hook:tsc-check',
@@ -186,8 +197,8 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   const attrs = attrsOf(span);
 
   let hookType: string;
-  if (span.name === 'hook:builtin-post-tool') hookType = `builtin/${attrString(attrs['gen_ai.tool.name'], 'unknown')}`;
-  else if (span.name === 'hook:mcp-post-tool') hookType = `mcp/${attrString(attrs['mcp.tool'], 'unknown')}`;
+  if (span.name === BUILTIN_POST_TOOL_SPAN) hookType = `builtin/${attrString(attrs['gen_ai.tool.name'], 'unknown')}`;
+  else if (span.name === MCP_POST_TOOL_SPAN) hookType = `mcp/${attrString(attrs['mcp.tool'], 'unknown')}`;
   else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
   else hookType = span.name.replace(HOOK_SPAN_PREFIX, '');
 
@@ -234,7 +245,7 @@ export const STATUS_SCORES: { pending: number; in_progress: number; completed: n
 export { sessionTasks };
 
 export function trackTaskActivity(span: LocalTraceSpan): void {
-  if (span.name !== 'hook:builtin-post-tool') return;
+  if (span.name !== BUILTIN_POST_TOOL_SPAN) return;
   const attrs = attrsOf(span);
   const tool = attrs['gen_ai.tool.name'];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
@@ -601,6 +612,59 @@ export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDa
   return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DERIVE_POST_WINDOW_DAYS * MS_PER_DAY;
 }
 
+/** `gen_ai.operation.name` on every span of an agent invocation, whatever the span is named. */
+const INVOKE_AGENT_OPERATION = 'invoke_agent';
+/** Fewer tool spans than this in a day cannot tell a renamed attribute from a few hooks that failed before recording one. */
+const DRIFT_MIN_TOOL_SPANS = 20;
+/** A day's tool spans may lack a success flag up to this share; past it the flag has most likely been renamed. */
+const DRIFT_MAX_MISSING_SUCCESS_SHARE = 0.5;
+
+interface DayInput {
+  agentEvidence: number;
+  agentMatched: number;
+  toolSpans: number;
+  toolMissingSuccess: number;
+}
+
+/**
+ * Days whose input the derivations can no longer read (HOOK-RENAME-SILENT).
+ * Twice a hooks-side rename emptied a metric while every stage exited 0: the
+ * agent spans on 2026-08-13, silent for six weeks, and the `builtin.*` keys on
+ * 2026-09-18, which scored every tool call a failure for nine days. Each check
+ * compares a day's spans with themselves, never with a previous run, so it
+ * fires on the first run after a rename rather than once the old names have
+ * aged out of the read window, and a quiet day cannot trip it:
+ * - spans record an agent invocation, but none has a name derive matches;
+ * - most tool spans carry no success flag under the key derive reads.
+ */
+export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): string[] {
+  const days = new Map<string, DayInput>();
+  for (const span of spans) {
+    const date = toDateOnly(hrtToISO(span.startTime));
+    if (dateScope && !dateScope.has(date)) continue;
+    let day = days.get(date);
+    if (!day) days.set(date, day = { agentEvidence: 0, agentMatched: 0, toolSpans: 0, toolMissingSuccess: 0 });
+    const attrs = attrsOf(span);
+    if (attrs['gen_ai.operation.name'] === INVOKE_AGENT_OPERATION) day.agentEvidence++;
+    if (span.name === AGENT_PREPARE_SPAN || span.name === AGENT_FINALIZE_SPAN) day.agentMatched++;
+    if (isToolSpan(span)) {
+      day.toolSpans++;
+      if (typeof toolSuccessOf(span, attrs) !== 'boolean') day.toolMissingSuccess++;
+    }
+  }
+
+  const warnings: string[] = [];
+  for (const [date, day] of [...days].sort(([a], [b]) => a.localeCompare(b))) {
+    if (day.agentEvidence > 0 && day.agentMatched === 0) {
+      warnings.push(`${date}: ${day.agentEvidence} spans record agent invocations, but none is named ${AGENT_PREPARE_SPAN} or ${AGENT_FINALIZE_SPAN}, so the agent metrics are empty. Were the hook spans renamed?`);
+    }
+    if (day.toolSpans >= DRIFT_MIN_TOOL_SPANS && day.toolMissingSuccess / day.toolSpans > DRIFT_MAX_MISSING_SUCCESS_SHARE) {
+      warnings.push(`${date}: ${day.toolMissingSuccess} of ${day.toolSpans} tool spans carry no success flag, so tool_correctness scores them as failures. Was the attribute renamed?`);
+    }
+  }
+  return warnings;
+}
+
 /**
  * Split at the Phase 3 cutover by the record's own time: earlier records still
  * go to `derived-evaluations-<date>.jsonl` for `upload-evaluations`, later ones
@@ -710,11 +774,17 @@ async function main(): Promise<void> {
     console.log(`[dry-run] ${filesToWrite} file(s) would be written; nothing changed on disk.`);
   }
 
-  const byCat = new Map<string, number>();
-  for (const ev of allEvals) {
-    byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+  const byName = new Map<string, number>();
+  for (const ev of inScope) {
+    byName.set(ev.evaluationName, (byName.get(ev.evaluationName) ?? 0) + 1);
   }
-  for (const [_name, _count] of byCat) { /* logged externally */ }
+  const counts = [...byName].sort(([a], [b]) => a.localeCompare(b)).map(([name, n]) => `${name}=${n}`);
+  console.log(`[derive] records: ${counts.join(' ') || 'none'}`);
+
+  const drift = detectInputDrift(loaded.spans, dateScope);
+  for (const warning of drift) console.error(`[derive] input drift on ${warning}`);
+  // A failed post is the more urgent code; drift persists and shows on the next run.
+  if (drift.length > 0 && process.exitCode === undefined) process.exitCode = DERIVE_EXIT_INPUT_DRIFT;
 }
 
 // Only run when executed directly (not imported as module for testing)

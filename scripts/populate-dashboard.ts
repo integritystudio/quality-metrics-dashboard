@@ -48,7 +48,8 @@
  *   7  JUDGE_EXIT_DISCOVERY_FAILED — the judge could not list turns (usually the network); nothing spent
  *   8  DERIVE_EXIT_POST_FAILED — derive's post failed after the network retries; the next run re-posts it
  *   9  DERIVE_EXIT_READ_FAILED — derive could not read /v1/traces after the network retries; nothing posted
- *   For 3-9 the remaining stages still ran.
+ *   10 DERIVE_EXIT_INPUT_DRIFT — derive delivered, but a day's spans no longer match what it reads (a hooks rename?)
+ *   For 3-10 the remaining stages still ran.
  *   1  any other stage failure; the pipeline stops at that stage
  *
  * derive-evaluations and sync-to-kv are retried on transient network failures

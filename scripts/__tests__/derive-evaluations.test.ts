@@ -9,6 +9,7 @@ import {
   derivedEvaluationsPath,
   deriveAll,
   deriveToolCorrectness,
+  detectInputDrift,
   resolvePostDays,
   resolveSource,
   scoreTask,
@@ -689,6 +690,7 @@ function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId:
     status: { code: OTEL_STATUS_OK },
     attributes: {
       'session.id': 'sess-agents',
+      'gen_ai.operation.name': 'invoke_agent',
       'gen_ai.agent.name': agentName,
       'integritystudio.agent.type': agentName,
       'integritystudio.hook.name': `agent.operation.${phase}`,
@@ -742,5 +744,85 @@ describe('deriveAll over the renamed agent hook spans', () => {
       expect.stringMatching(/^Hook agent\/Explore executed in /),
       expect.stringMatching(/^Hook agent\/code-reviewer executed in /),
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectInputDrift (HOOK-RENAME-SILENT)
+//
+// Both hooks-side renames so far emptied or zeroed a metric while every stage
+// exited 0. Each check below compares a day's spans with themselves, so each
+// test builds one day of real-shaped input and changes only the name or key a
+// rename would change.
+// ---------------------------------------------------------------------------
+
+describe('detectInputDrift', () => {
+  const DAY_START_SEC = 1_790_553_600; // 2026-09-28T00:00:00Z
+  const DAY = '2026-09-28';
+  const TOOL_SPANS_PER_DAY = 25;
+
+  function toolSpans(count: number, attributes: Record<string, unknown>, fromIndex = 0): TraceSpan[] {
+    return Array.from({ length: count }, (_, i) => ({
+      ...renamedToolSpan({ 'gen_ai.tool.name': 'Read', ...attributes }),
+      spanId: `tool-${fromIndex + i}`,
+      startTime: [DAY_START_SEC + fromIndex + i, 0] as [number, number],
+    }));
+  }
+
+  function agentSpans(name: string): TraceSpan[] {
+    return [
+      { ...agentHookSpan('prepare', 'Explore', 'span-p1', DAY_START_SEC), name: name.replace('finalize', 'prepare') },
+      { ...agentHookSpan('finalize', 'Explore', 'span-f1', DAY_START_SEC + 10), name },
+    ];
+  }
+
+  it('is quiet on a day whose spans derive reads', () => {
+    const spans = [...agentSpans('hook:agent.operation.finalize'), ...toolSpans(TOOL_SPANS_PER_DAY, { 'integritystudio.tool.success': true })];
+
+    expect(detectInputDrift(spans, null)).toEqual([]);
+  });
+
+  it('flags a day whose agent spans derive no longer matches by name', () => {
+    const renamed = agentSpans('hook:agent.lifecycle.finalize');
+
+    expect(detectInputDrift(renamed, null)).toEqual([
+      expect.stringMatching(new RegExp(`^${DAY}: 2 spans record agent invocations, but none is named`)),
+    ]);
+  });
+
+  it('flags a day where most tool spans carry no success flag under the key derive reads', () => {
+    const renamed = toolSpans(TOOL_SPANS_PER_DAY, { 'integritystudio.tool.succeeded': true });
+
+    expect(detectInputDrift(renamed, null)).toEqual([
+      expect.stringMatching(new RegExp(`^${DAY}: ${TOOL_SPANS_PER_DAY} of ${TOOL_SPANS_PER_DAY} tool spans carry no success flag`)),
+    ]);
+  });
+
+  it('reads the success flag through the alias table, as derive does', () => {
+    const legacy = toolSpans(TOOL_SPANS_PER_DAY, { 'builtin.success': true });
+
+    expect(detectInputDrift(legacy, null)).toEqual([]);
+  });
+
+  it('tolerates hooks that failed before recording, up to half the day', () => {
+    const half = TOOL_SPANS_PER_DAY - 1;
+    const spans = [
+      ...toolSpans(half, { 'integritystudio.tool.success': true }),
+      ...toolSpans(half, {}, half),
+    ];
+
+    expect(detectInputDrift(spans, null)).toEqual([]);
+  });
+
+  it('ignores a day with too few tool spans to judge', () => {
+    const fewMissing = toolSpans(5, {});
+
+    expect(detectInputDrift(fewMissing, null)).toEqual([]);
+  });
+
+  it('checks only the days in scope', () => {
+    const renamed = agentSpans('hook:agent.lifecycle.finalize');
+
+    expect(detectInputDrift(renamed, new Set(['2026-09-27']))).toEqual([]);
   });
 });

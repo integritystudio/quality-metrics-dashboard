@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DERIVE_EXIT_INPUT_DRIFT,
   DERIVE_EXIT_POST_FAILED,
   DERIVE_EXIT_READ_FAILED,
   DERIVE_SOFT_FAILURE_EXITS,
@@ -112,6 +113,10 @@ describe('pipeline exit-code contract', () => {
     expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_READ_FAILED)).toBe(true);
   });
 
+  it('treats input drift as soft, so the run completes but still exits non-zero', () => {
+    expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_INPUT_DRIFT)).toBe(true);
+  });
+
   it('gives every soft code its own number, none of them 0 or the generic 1', () => {
     const codes = [
       JUDGE_EXIT_NO_SCORES,
@@ -121,6 +126,7 @@ describe('pipeline exit-code contract', () => {
       JUDGE_EXIT_DISCOVERY_FAILED,
       DERIVE_EXIT_POST_FAILED,
       DERIVE_EXIT_READ_FAILED,
+      DERIVE_EXIT_INPUT_DRIFT,
     ];
 
     expect(new Set(codes).size).toBe(codes.length);
