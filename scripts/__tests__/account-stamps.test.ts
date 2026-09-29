@@ -207,11 +207,12 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       expect(routeRecord(unknownSpan, idx).basis).toBe('join');
     });
 
-    it('forwards the response id in metadata', () => {
+    it('forwards the response id as the payload field, not in metadata', () => {
       const mapped = mapRecord(evalLine({
         attributes: { 'gen_ai.evaluation.name': 'relevance', 'gen_ai.evaluation.score.value': 0.8, 'gen_ai.response.id': 'msg_1' },
       }), NOW, MAX_AGE_MS);
-      expect(mapped.payload!.metadata).toMatchObject({ responseId: 'msg_1' });
+      expect(mapped.payload!.responseId).toBe('msg_1');
+      expect(mapped.payload!.metadata).not.toHaveProperty('responseId');
     });
 
     it('withholds a record stamped with an unmapped account', () => {

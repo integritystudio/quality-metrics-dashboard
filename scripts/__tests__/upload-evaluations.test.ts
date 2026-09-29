@@ -63,9 +63,17 @@ describe('mapRecord', () => {
       spanId: 'span-1',
       sessionId: 'sess-1',
     });
-    // Cohort and true evaluation time survive only in metadata — the row's own
-    // timestamp is overwritten by the webhook at receipt.
-    expect(payload?.metadata).toMatchObject({ cohort: 'normal', evaluatedAt: '2026-09-15T11:00:00.000Z' });
+    expect(payload?.cohort).toBe('normal');
+    // The ISO evaluation time also rides in metadata, for auditability.
+    expect(payload?.metadata).toEqual({ evaluatedAt: '2026-09-15T11:00:00.000Z' });
+  });
+
+  it('does not send a cohort outside the webhook enum, which would reject the batch', () => {
+    const { payload } = mapRecord(record({ 'integritystudio.evaluation.cohort': 'production' }), NOW, MAX_AGE_MS);
+
+    expect(payload).toBeDefined();
+    expect(payload).not.toHaveProperty('cohort');
+    expect(payload?.metadata).not.toHaveProperty('cohort');
   });
 
   // COMPAT until 2026-10-29 for its score-unit half: the old gen_ai.evaluation.score.unit key.

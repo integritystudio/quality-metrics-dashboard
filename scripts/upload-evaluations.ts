@@ -88,6 +88,7 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 
 import {
+  BACKFILL_COHORT,
   CANARY_COHORT,
   CANARY_EVALUATOR_TYPE,
   DERIVED_EVALUATIONS_FILE_PREFIX,
@@ -96,6 +97,8 @@ import {
   EVALUATION_RESULT_EVENT,
   LEGACY_EVALUATOR_TYPE_ATTR,
   LEGACY_SCORE_UNIT_ATTR,
+  NORMAL_COHORT,
+  SEED_COHORT,
   TELEMETRY_DIR,
 } from './judge-evaluations.js';
 import {
@@ -186,6 +189,9 @@ const EVALUATION_ID_LENGTH = 32;
 /** Fingerprints already shipped, grouped by source file so they prune together. */
 export type ShippedIndex = Record<string, string[]>;
 
+/** The cohorts the webhook's `cohort` field accepts (the parent's `evaluationCohortSchema`). */
+const WEBHOOK_COHORTS: ReadonlySet<string> = new Set([NORMAL_COHORT, SEED_COHORT, CANARY_COHORT, BACKFILL_COHORT]);
+
 export interface EvaluationPayload {
   evaluationName: string;
   evaluator: string;
@@ -196,7 +202,11 @@ export interface EvaluationPayload {
   traceId?: string;
   spanId?: string;
   sessionId?: string;
+  /** Provider-assigned id of the scored response (semconv `gen_ai.response.id`); a correlation id. */
+  responseId?: string;
   serviceName?: string;
+  /** Sampling population; the webhook rejects a value outside its enum. */
+  cohort?: string;
   /** Client-supplied event time (Unix ms). When set the flush dates the row to
    *  this time instead of the batch-receipt time, so period aggregations are
    *  correct for batched uploads. */
@@ -292,20 +302,18 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   if (traceId) payload.traceId = traceId;
   if (spanId) payload.spanId = spanId;
   if (sessionId) payload.sessionId = sessionId;
+  if (responseId) payload.responseId = responseId;
+  // Only the webhook's enum values: one outside it would get the whole batch rejected.
+  if (cohort && WEBHOOK_COHORTS.has(cohort)) payload.cohort = cohort;
 
   // Supply evaluatedAtMs so the flush dates the row to when the evaluation
   // was produced, not when this batch arrived (EVAL-WEBHOOK-EVENT-TIME).
   if (!Number.isNaN(tMs)) payload.evaluatedAtMs = tMs;
 
-  // `cohort` is not a column on the evaluations table, so it rides in
-  // `metadata`, which the flush preserves into `attributes`; the table read path
-  // reads it from there (`tableEvaluationFields` in the parent's cloud.ts).
-  // evaluatedAt keeps the ISO string form for auditability.
+  // Fields the webhook has no slot for ride in `metadata`, which the flush keeps
+  // in the row's `attributes`. evaluatedAt keeps the ISO string form for auditability.
   const metadata: Record<string, unknown> = {};
-  if (cohort) metadata.cohort = cohort;
   if (judgeModel) metadata.judgeModel = judgeModel;
-  // The payload has no response-id field; like `cohort`, it rides in metadata.
-  if (responseId) metadata.responseId = responseId;
   if (timestamp) metadata.evaluatedAt = timestamp;
   if (Object.keys(metadata).length > 0) payload.metadata = metadata;
   payload.evaluationId = evaluationId(r);
