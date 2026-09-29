@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { z } from 'zod';
 import { CloudBackend } from '../../src/backends/cloud.js';
+import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { computeStdDev } from '../../src/lib/quality/quality-stats.js';
 import {
   sweepDegradationParams,
@@ -253,7 +254,7 @@ async function main(): Promise<void> {
     console.error('[backtest] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
     process.exit(1);
   }
-  const backend = new CloudBackend();
+  const backend = new CloudBackend({ fetch: http1Fetch });
   const now = Date.now();
   const startMs = now - days * TIME_MS.DAY;
   const startDate = BigInt(startMs) * NANOSECONDS_PER_MILLISECOND_BIGINT;

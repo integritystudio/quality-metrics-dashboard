@@ -19,6 +19,7 @@
  */
 
 import { CloudBackend } from '../../src/backends/cloud.js';
+import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { EvaluationResult } from '../../src/backends/index.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-stamps.js';
@@ -111,7 +112,7 @@ export function transcriptsForSessions(
 async function loadJudgedRows(fromMs: number, env: NodeJS.ProcessEnv): Promise<EvaluationResult[]> {
   const rows: EvaluationResult[] = [];
   for (const ref of accountRefsFromEnv(env)) {
-    const backend = new CloudBackend({ apiKey: env[ref] });
+    const backend = new CloudBackend({ apiKey: env[ref], fetch: http1Fetch });
     for (const evaluator of JUDGE_PRODUCERS) {
       // No end bound: a receipt-time row is dated after its turn, never before.
       const found = await backend.queryEvaluations({

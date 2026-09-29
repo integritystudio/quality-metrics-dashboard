@@ -15,6 +15,12 @@ import { sessionRoutes } from './routes/sessions.js';
 import { qualityRoutes } from './routes/quality.js';
 import { codeQualityRoutes } from './routes/code-quality.js';
 import { API_HOST, API_PORT } from './config.js';
+import { setCloudBackendFetch } from './parent/backends.js';
+import { http1Fetch } from './parent/http1-fetch.js';
+
+// A long-running server: Node's built-in fetch would keep reusing a destroyed
+// HTTP/2 session and fail every later cloud read (NODE-FETCH-HTTP2-DEAD-SESSION).
+setCloudBackendFetch(http1Fetch);
 
 const app = new Hono();
 

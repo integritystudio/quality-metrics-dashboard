@@ -109,6 +109,7 @@ import {
   type TraceStamp,
 } from './account-stamps.js';
 import { UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
+import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
 
 export { buildAccountIndex, type AccountIndex, type AccountRef, type TraceStamp };
 
@@ -559,7 +560,9 @@ export interface SendResult { ok: boolean; detail: string; retryable: boolean }
  */
 async function postBatchOnce(request: SendRequest): Promise<SendResult> {
   try {
-    const response = await fetch(request.url, {
+    // HTTP/1.1: over the built-in fetch's HTTP/2 session, one destroyed
+    // session failed every later send (NODE-FETCH-HTTP2-DEAD-SESSION).
+    const response = await http1Fetch(request.url, {
       method: 'POST',
       headers: request.headers,
       body: request.body,
@@ -577,7 +580,7 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
   } catch (err) {
     return {
       ok: false,
-      detail: `transport: ${err instanceof Error ? err.message : String(err)}`,
+      detail: `transport: ${describeFetchError(err)}`,
       retryable: true,
     };
   }

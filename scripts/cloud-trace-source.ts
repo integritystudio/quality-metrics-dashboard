@@ -11,6 +11,7 @@
  */
 
 import { CloudBackend } from '../../src/backends/cloud.js';
+import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { TraceSpan } from '../../src/backends/index.js';
 import { statusCodeSchema } from '../../src/lib/otel/constants-otel.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT, NANOSECONDS_PER_SECOND_BIGINT } from '../../src/lib/core/units.js';
@@ -128,7 +129,7 @@ export async function loadCloudSpans(
   const { fromMs, toMs } = dateScopeBounds(dates);
   const perAccount: { ref: string; spans: TraceSpan[] }[] = [];
   for (const ref of refs) {
-    const backend = new CloudBackend({ apiKey: env[ref] });
+    const backend = new CloudBackend({ apiKey: env[ref], fetch: http1Fetch });
     const spans = await backend.queryTraces({
       startDate: BigInt(fromMs) * NANOSECONDS_PER_MILLISECOND_BIGINT,
       endDate: BigInt(toMs) * NANOSECONDS_PER_MILLISECOND_BIGINT,

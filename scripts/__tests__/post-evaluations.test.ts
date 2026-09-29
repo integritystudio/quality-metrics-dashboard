@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+// The transport sends through the HTTP/1.1 fetch; route it to the stubbed
+// global so these tests keep intercepting every request.
+vi.mock('../../../src/lib/core/http1-fetch.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../../src/lib/core/http1-fetch.js')>(),
+  http1Fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+}));
+
 import { emptyAccountIndex, postEvaluationRecords } from '../post-evaluations.js';
 import { evaluationId, MAX_BATCH_SIZE } from '../upload-evaluations.js';
 

@@ -20,6 +20,7 @@ import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { CloudBackend, ALL_ORGS_SCOPE } from '../../src/backends/cloud.js';
+import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import {
   computeDashboardSummary,
   computeAggregations,
@@ -839,7 +840,7 @@ export function computeSessionDetail(
 async function discoverOrgIds(now: Date): Promise<string[]> {
   const ids = new Set<string>([HOME_ORG_ID]);
   try {
-    const probe = new CloudBackend({ orgId: ALL_ORGS_SCOPE });
+    const probe = new CloudBackend({ orgId: ALL_ORGS_SCOPE, fetch: http1Fetch });
     const start = new Date(now.getTime() - MAX_DAYS_MS);
     const evals = await probe.queryEvaluations({
       startDate: BigInt(start.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
@@ -1434,7 +1435,7 @@ async function main(): Promise<void> {
   const perOrgSummaries: string[] = [];
 
   for (const orgId of orgIds) {
-    const backend = orgId ? new CloudBackend({ orgId }) : new CloudBackend();
+    const backend = new CloudBackend({ ...(orgId ? { orgId } : {}), fetch: http1Fetch });
     const isHome = orgId === null || orgId === HOME_ORG_ID;
     const res = await computeOrgEntries(backend, now, isHome);
     if (isHome) homeComputation = res;
