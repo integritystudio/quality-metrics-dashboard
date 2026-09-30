@@ -21,6 +21,8 @@ import {
   PERCENT_BASE,
   LATENCY_DISPLAY_PRECISION,
   spanAttr,
+  renamedAttr,
+  gitRepositoryLabel,
   jsonSafe,
 } from '../api-constants.js';
 import {
@@ -139,18 +141,18 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
       if (hookName === HOOK_NAME.TOKEN_METRICS) {
         tokenProgressionRaw.push({
-          messages: spanAttr(s, 'tokens.messages', 'number') ?? 0,
-          inputTokens: spanAttr(s, 'tokens.input', 'number') ?? 0,
-          outputTokens: spanAttr(s, 'tokens.output', 'number') ?? 0,
-          cacheRead: spanAttr(s, 'tokens.cache_read', 'number') ?? 0,
-          cacheCreation: spanAttr(s, 'tokens.cache_creation', 'number') ?? 0,
-          model: spanAttr(s, 'tokens.model', 'string') ?? '',
+          messages: renamedAttr(s, 'integritystudio.tokens.messages', 'tokens.messages', 'number') ?? 0,
+          inputTokens: renamedAttr(s, 'integritystudio.tokens.input', 'tokens.input', 'number') ?? 0,
+          outputTokens: renamedAttr(s, 'integritystudio.tokens.output', 'tokens.output', 'number') ?? 0,
+          cacheRead: renamedAttr(s, 'integritystudio.tokens.cache_read', 'tokens.cache_read', 'number') ?? 0,
+          cacheCreation: renamedAttr(s, 'integritystudio.tokens.cache_creation', 'tokens.cache_creation', 'number') ?? 0,
+          model: renamedAttr(s, 'integritystudio.tokens.model', 'tokens.model', 'string') ?? '',
         });
       }
 
       if (hookTrigger === 'PostToolUse') {
         if (hookType === 'builtin') incrementCount(toolUsage, spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown');
-        else if (hookType === 'mcp') incrementCount(mcpUsage, spanAttr(s, 'mcp.tool', 'string') ?? 'unknown');
+        else if (hookType === 'mcp') incrementCount(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
       }
 
       incrementCount(spanBreakdown, s.name);
@@ -195,7 +197,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       }
 
       if (hookName === HOOK_NAME.ALERT_EVALUATION) {
-        alertTotalFired += spanAttr(s, 'alerts.triggered_count', 'number') ?? 0;
+        alertTotalFired += renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number') ?? 0;
         alertStopEvents++;
       }
 
@@ -258,16 +260,16 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     } : null;
 
     const sessionInfo = firstSessionStart ? {
-      projectName: spanAttr(firstSessionStart, 'project.name', 'string') ?? 'unknown',
-      workingDirectory: spanAttr(firstSessionStart, 'working.directory', 'string') ?? '',
-      gitRepository: spanAttr(firstSessionStart, 'vcs.repository.name', 'string') ?? '',
+      projectName: renamedAttr(firstSessionStart, 'integritystudio.project.name', 'project.name', 'string') ?? 'unknown',
+      workingDirectory: renamedAttr(firstSessionStart, 'process.working_directory', 'working.directory') ?? '',
+      gitRepository: gitRepositoryLabel(firstSessionStart),
       gitBranch: spanAttr(firstSessionStart, 'vcs.ref.head.name', 'string') ?? '',
-      nodeVersion: spanAttr(firstSessionStart, 'node.version', 'string') ?? '',
+      nodeVersion: renamedAttr(firstSessionStart, 'process.runtime.version', 'node.version') ?? '',
       resumeCount: sessionStartCount,
-      initialMessageCount: spanAttr(firstSessionStart, 'context.message_count', 'number') ?? 0,
-      initialContextTokens: spanAttr(firstSessionStart, 'context.estimated_tokens', 'number') ?? 0,
-      finalMessageCount: spanAttr(lastSessionStart ?? firstSessionStart, 'context.message_count', 'number') ?? 0,
-      taskCount: spanAttr(firstSessionStart, 'tasks.active', 'number') ?? 0,
+      initialMessageCount: renamedAttr(firstSessionStart, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
+      initialContextTokens: renamedAttr(firstSessionStart, 'integritystudio.context.estimated_tokens', 'context.estimated_tokens', 'number') ?? 0,
+      finalMessageCount: renamedAttr(lastSessionStart ?? firstSessionStart, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
+      taskCount: renamedAttr(firstSessionStart, 'integritystudio.tasks.active', 'tasks.active', 'number') ?? 0,
       uncommittedAtStart: spanAttr(firstSessionStart, 'integritystudio.git.uncommitted', 'number') ?? 0,
     } : null;
 
