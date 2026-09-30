@@ -93,6 +93,23 @@ function attrsOf(span: LocalTraceSpan): Record<string, unknown> {
   return canonicalizeAttributes(span.attributes);
 }
 
+/**
+ * MCP post-tool keys as `[canonical, legacy]`. The hooks moved `mcp.*` under
+ * `integritystudio.` on 2026-09-29, and the alias table has no rows for them,
+ * so `attrsOf` leaves an older span on the unprefixed key.
+ */
+const MCP_ATTR = {
+  SUCCESS: ['integritystudio.mcp.success', 'mcp.success'],
+  TOOL: ['integritystudio.mcp.tool', 'mcp.tool'],
+  ERROR_TYPE: ['integritystudio.mcp.error_type', 'mcp.error_type'],
+  SERVER: ['integritystudio.mcp.server', 'mcp.server'],
+} as const satisfies Record<string, readonly [string, string]>;
+
+/** A renamed attribute's value: the canonical key first, then the legacy one. */
+function renamedValue(attrs: Record<string, unknown>, [canonical, legacy]: readonly [string, string]): unknown {
+  return attrs[canonical] ?? attrs[legacy];
+}
+
 function attrString(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -136,7 +153,7 @@ function isToolSpan(span: LocalTraceSpan): boolean {
 
 /** The success flag a tool span records, under the key its hook writes; not a boolean when absent. */
 function toolSuccessOf(span: LocalTraceSpan, attrs: Record<string, unknown>): unknown {
-  return span.name === BUILTIN_POST_TOOL_SPAN ? attrs['integritystudio.tool.success'] : attrs['mcp.success'];
+  return span.name === BUILTIN_POST_TOOL_SPAN ? attrs['integritystudio.tool.success'] : renamedValue(attrs, MCP_ATTR.SUCCESS);
 }
 
 export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
@@ -146,9 +163,9 @@ export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   const isMcp = !isBuiltin;
 
   const success = toolSuccessOf(span, attrs);
-  const tool = attrString(isBuiltin ? attrs['gen_ai.tool.name'] : attrs['mcp.tool'], 'unknown');
-  const errorType = attrString(isBuiltin ? attrs['integritystudio.tool.error_type'] : attrs['mcp.error_type']);
-  const server = isMcp ? attrString(attrs['mcp.server']) : '';
+  const tool = attrString(isBuiltin ? attrs['gen_ai.tool.name'] : renamedValue(attrs, MCP_ATTR.TOOL), 'unknown');
+  const errorType = attrString(isBuiltin ? attrs['integritystudio.tool.error_type'] : renamedValue(attrs, MCP_ATTR.ERROR_TYPE));
+  const server = isMcp ? attrString(renamedValue(attrs, MCP_ATTR.SERVER)) : '';
 
   const score = success === true ? 1.0 : 0.0;
   const toolLabel = server ? `${server}/${tool}` : tool;
@@ -198,7 +215,7 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
 
   let hookType: string;
   if (span.name === BUILTIN_POST_TOOL_SPAN) hookType = `builtin/${attrString(attrs['gen_ai.tool.name'], 'unknown')}`;
-  else if (span.name === MCP_POST_TOOL_SPAN) hookType = `mcp/${attrString(attrs['mcp.tool'], 'unknown')}`;
+  else if (span.name === MCP_POST_TOOL_SPAN) hookType = `mcp/${attrString(renamedValue(attrs, MCP_ATTR.TOOL), 'unknown')}`;
   else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
   else hookType = span.name.replace(HOOK_SPAN_PREFIX, '');
 
@@ -612,7 +629,12 @@ export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDa
   return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DERIVE_POST_WINDOW_DAYS * MS_PER_DAY;
 }
 
-/** `gen_ai.operation.name` on every span of an agent invocation, whatever the span is named. */
+/**
+ * `gen_ai.operation.name` of the synthetic `invoke_agent <agent>` span each agent
+ * invocation emits, whatever the hook spans are named. Since 2026-09-29 that span is
+ * the only one carrying it (the prepare/finalize hook spans and the code-survival
+ * seed stopped claiming the operation), so this counts one span per invocation.
+ */
 const INVOKE_AGENT_OPERATION = 'invoke_agent';
 /** Fewer tool spans than this in a day cannot tell a renamed attribute from a few hooks that failed before recording one. */
 const DRIFT_MIN_TOOL_SPANS = 20;

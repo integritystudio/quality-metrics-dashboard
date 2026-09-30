@@ -200,6 +200,30 @@ export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, ty
   return undefined;
 }
 
+/**
+ * An attribute of `type` under its canonical key, else under the key it had
+ * before a rename. Cloud reads resolve a legacy key through the alias table only
+ * once it has a row, raw reads never do, so readers of renamed keys ask for both.
+ * A canonical value of the wrong type falls through to the legacy key.
+ */
+export function renamedAttr(span: SpanLike, canonical: string, legacy: string): string | undefined;
+export function renamedAttr<K extends SpanAttrType>(span: SpanLike, canonical: string, legacy: string, type: K): SpanAttrValue<K> | undefined;
+export function renamedAttr(span: SpanLike, canonical: string, legacy: string, type: SpanAttrType = 'string'): SpanAttrValue<SpanAttrType> | undefined {
+  return spanAttr(span, canonical, type) ?? spanAttr(span, legacy, type);
+}
+
+/**
+ * `owner/repo` for display. Since 2026-09-29 the hooks emit the owner as
+ * `vcs.owner.name` and the repository alone as `vcs.repository.name`, as semconv
+ * requires; earlier spans carry `owner/repo` in `vcs.repository.name`.
+ */
+export function gitRepositoryLabel(span: SpanLike): string {
+  const name = spanAttr(span, 'vcs.repository.name', 'string') ?? '';
+  // Already `owner/repo` (an earlier span, or another producer): never prefix the owner twice.
+  if (name.includes('/')) return name;
+  return [spanAttr(span, 'vcs.owner.name', 'string'), name].filter(Boolean).join('/');
+}
+
 export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
   return evals
     .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
