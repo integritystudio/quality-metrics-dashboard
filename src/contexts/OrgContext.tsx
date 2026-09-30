@@ -6,7 +6,7 @@
  *   otherwise the session's server-resolved activeOrg. Threaded into every
  *   React Query key (useApiQuery) and every request header (api-client).
  * - switchOrg: POST /api/org/switch (server persists default_organization_id),
- *   then invalidates the entire React Query cache so no stale prior-org data
+ *   then removes every other org's cached queries so no stale prior-org data
  *   can render after a switch (Risk 10).
  *
  * Pre-cutover sessions (ORG_SCOPING_ENABLED=false) carry no org fields:
@@ -63,9 +63,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return false;
       setStoredOrgId(orgId);
       setChosenOrgId(orgId);
-      // Drop every cached query — prior-org data must never render under the
-      // new org, and every query key carries the org id so refetches re-scope.
-      await queryClient.invalidateQueries();
+      // Drop every other org's cached queries — prior-org data must never render
+      // under the new org. No refetch here: every query key leads with the org
+      // id, so the re-render moves each mounted query to a new-org key, which
+      // fetches once. invalidateQueries() would first refetch the old keys with
+      // the old X-Org-Id, one wasted round trip per mounted query.
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== orgId });
       return true;
     } catch {
       return false;
