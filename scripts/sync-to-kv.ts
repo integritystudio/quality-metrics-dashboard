@@ -537,16 +537,16 @@ function computeSessionInfo(spans: SessionSpan[]) {
   if (!first) return null;
   const last = sessionStarts.at(-1) ?? first;
   return {
-    projectName: spanAttr(first, 'project.name', 'string') ?? 'unknown',
+    projectName: renamedAttr(first, 'integritystudio.project.name', 'project.name', 'string') ?? 'unknown',
     workingDirectory: renamedAttr(first, 'process.working_directory', 'working.directory') ?? '',
     gitRepository: gitRepositoryLabel(first),
     gitBranch: spanAttr(first, 'vcs.ref.head.name', 'string') ?? '',
     nodeVersion: renamedAttr(first, 'process.runtime.version', 'node.version') ?? '',
     resumeCount: sessionStarts.length,
-    initialMessageCount: spanAttr(first, 'context.message_count', 'number') ?? 0,
-    initialContextTokens: spanAttr(first, 'context.estimated_tokens', 'number') ?? 0,
-    finalMessageCount: spanAttr(last, 'context.message_count', 'number') ?? 0,
-    taskCount: spanAttr(first, 'tasks.active', 'number') ?? 0,
+    initialMessageCount: renamedAttr(first, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
+    initialContextTokens: renamedAttr(first, 'integritystudio.context.estimated_tokens', 'context.estimated_tokens', 'number') ?? 0,
+    finalMessageCount: renamedAttr(last, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
+    taskCount: renamedAttr(first, 'integritystudio.tasks.active', 'tasks.active', 'number') ?? 0,
     uncommittedAtStart: spanAttr(first, 'integritystudio.git.uncommitted', 'number') ?? 0,
   };
 }
@@ -555,12 +555,12 @@ function computeTokenMetrics(spans: SessionSpan[]) {
   const tokenProgression = spans
     .filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.TOKEN_METRICS)
     .map(s => ({
-      messages: spanAttr(s, 'tokens.messages', 'number') ?? 0,
-      inputTokens: spanAttr(s, 'tokens.input', 'number') ?? 0,
-      outputTokens: spanAttr(s, 'tokens.output', 'number') ?? 0,
-      cacheRead: spanAttr(s, 'tokens.cache_read', 'number') ?? 0,
-      cacheCreation: spanAttr(s, 'tokens.cache_creation', 'number') ?? 0,
-      model: spanAttr(s, 'tokens.model', 'string') ?? '',
+      messages: renamedAttr(s, 'integritystudio.tokens.messages', 'tokens.messages', 'number') ?? 0,
+      inputTokens: renamedAttr(s, 'integritystudio.tokens.input', 'tokens.input', 'number') ?? 0,
+      outputTokens: renamedAttr(s, 'integritystudio.tokens.output', 'tokens.output', 'number') ?? 0,
+      cacheRead: renamedAttr(s, 'integritystudio.tokens.cache_read', 'tokens.cache_read', 'number') ?? 0,
+      cacheCreation: renamedAttr(s, 'integritystudio.tokens.cache_creation', 'tokens.cache_creation', 'number') ?? 0,
+      model: renamedAttr(s, 'integritystudio.tokens.model', 'tokens.model', 'string') ?? '',
     }))
     .sort((a, b) => a.messages - b.messages);
 
@@ -590,7 +590,7 @@ function computeUsageCounts(spans: SessionSpan[]) {
       const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown';
       toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
     } else if (type === 'mcp') {
-      const tool = spanAttr(s, 'mcp.tool', 'string') ?? 'unknown';
+      const tool = renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown';
       mcpUsage[tool] = (mcpUsage[tool] ?? 0) + 1;
     }
   }
@@ -776,7 +776,7 @@ export function computeSessionDetail(
 
   const alertSpans = spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.ALERT_EVALUATION);
   const alertSummary = {
-    totalFired: alertSpans.reduce((sum, s) => sum + (spanAttr(s, 'alerts.triggered_count', 'number') ?? 0), 0),
+    totalFired: alertSpans.reduce((sum, s) => sum + (renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number') ?? 0), 0),
     stopEvents: alertSpans.length,
   };
 

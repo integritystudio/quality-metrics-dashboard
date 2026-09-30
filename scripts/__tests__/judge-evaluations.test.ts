@@ -35,6 +35,7 @@ import {
   BATCH_PRICE_RATIO,
   readRunState,
   writeRunState,
+  transcriptPathOf,
   type JudgeSpend,
   type JudgeUsageTotals,
   anthropicProviderFor,
@@ -445,6 +446,35 @@ describe('extractTurns', () => {
 
     const turns = await extractTurns({ path: filepath, sessionId: 's', traceId: 't' });
     expect(turns).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// transcriptPathOf — `transcript.path` moved under `integritystudio.` (hooks 2026-09-29)
+//
+// Discovery reads raw logs-*.jsonl, which no alias table rewrites, so both
+// spellings reach it. Reading only the old key would drop every post-rename
+// session to the slower directory scan.
+// ---------------------------------------------------------------------------
+
+describe('transcriptPathOf', () => {
+  const NEW_PATH = '/home/u/.claude/projects/slug/new-session.jsonl';
+  const OLD_PATH = '/home/u/.claude/projects/slug/old-session.jsonl';
+
+  it.each([
+    ['only the canonical key', { 'integritystudio.transcript.path': NEW_PATH }, NEW_PATH],
+    ['only the legacy key', { 'transcript.path': OLD_PATH }, OLD_PATH],
+    ['both keys', { 'integritystudio.transcript.path': NEW_PATH, 'transcript.path': OLD_PATH }, NEW_PATH],
+  ])('reads the path from a record with %s', (_shape, attrs, expected) => {
+    expect(transcriptPathOf(attrs)).toBe(expected);
+  });
+
+  it('skips a non-string canonical value for the legacy one', () => {
+    expect(transcriptPathOf({ 'integritystudio.transcript.path': 42, 'transcript.path': OLD_PATH })).toBe(OLD_PATH);
+  });
+
+  it('is undefined when neither key holds a string', () => {
+    expect(transcriptPathOf({ 'transcript.path': null })).toBeUndefined();
   });
 });
 

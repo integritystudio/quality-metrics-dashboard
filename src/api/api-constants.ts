@@ -201,12 +201,15 @@ export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, ty
 }
 
 /**
- * A string attribute under its canonical key, else under the key it had before a
- * rename. Cloud reads resolve legacy keys through the alias table, raw reads do
- * not, so readers of renamed keys ask for both.
+ * An attribute of `type` under its canonical key, else under the key it had
+ * before a rename. Cloud reads resolve a legacy key through the alias table only
+ * once it has a row, raw reads never do, so readers of renamed keys ask for both.
+ * A canonical value of the wrong type falls through to the legacy key.
  */
-export function renamedAttr(span: SpanLike, canonical: string, legacy: string): string | undefined {
-  return spanAttr(span, canonical, 'string') ?? spanAttr(span, legacy, 'string');
+export function renamedAttr(span: SpanLike, canonical: string, legacy: string): string | undefined;
+export function renamedAttr<K extends SpanAttrType>(span: SpanLike, canonical: string, legacy: string, type: K): SpanAttrValue<K> | undefined;
+export function renamedAttr(span: SpanLike, canonical: string, legacy: string, type: SpanAttrType = 'string'): SpanAttrValue<SpanAttrType> | undefined {
+  return spanAttr(span, canonical, type) ?? spanAttr(span, legacy, type);
 }
 
 /**

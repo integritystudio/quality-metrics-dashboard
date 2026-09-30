@@ -618,7 +618,7 @@ describe('deriveToolCorrectness across the builtin.* rename', () => {
     expect(record?.explanation).toBe('Tool Edit failed: file_not_read');
   });
 
-  it('still reads MCP spans from their mcp.* keys, which were not renamed', () => {
+  it('still reads MCP spans from their legacy mcp.* keys', () => {
     const span = { ...renamedToolSpan({ 'mcp.server': 'github', 'mcp.tool': 'get_me', 'mcp.success': true }), name: 'hook:mcp-post-tool' };
 
     const record = deriveToolCorrectness(span);
@@ -663,6 +663,74 @@ describe('deriveAll across the builtin.* rename', () => {
       .map(r => r.scoreValue);
 
     expect(scores).toEqual([1, 1, 0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mcp.* key rename (hooks 2026-09-29)
+//
+// The hooks moved `mcp.*` under `integritystudio.`. The alias table has no rows
+// for these keys, so `attrsOf` leaves each era on its own spelling and derive
+// must read the new key, then the old one. Reading only the old key would score
+// every post-rename MCP call 0, as the builtin.* rename did.
+// ---------------------------------------------------------------------------
+
+/** An MCP post-tool span carrying `attributes`, shaped like the hooks write it. */
+function mcpToolSpan(attributes: Record<string, unknown>): TraceSpan {
+  return {
+    ...renamedToolSpan({}),
+    name: 'hook:mcp-post-tool',
+    attributes: { 'session.id': 'sess-abc', 'integritystudio.hook.name': 'mcp-post-tool', ...attributes },
+  };
+}
+
+describe('deriveToolCorrectness across the mcp.* rename', () => {
+  it.each([
+    ['canonical', { 'integritystudio.mcp.server': 'github', 'integritystudio.mcp.tool': 'get_me', 'integritystudio.mcp.success': true }],
+    ['legacy', { 'mcp.server': 'github', 'mcp.tool': 'get_me', 'mcp.success': true }],
+  ])('scores a successful call 1 from %s keys', (_era, attributes) => {
+    const record = deriveToolCorrectness(mcpToolSpan(attributes));
+
+    expect(record?.scoreValue).toBe(1);
+    expect(record?.explanation).toBe('Tool github/get_me completed successfully');
+  });
+
+  it.each([
+    ['canonical', { 'integritystudio.mcp.server': 'github', 'integritystudio.mcp.tool': 'create_issue', 'integritystudio.mcp.success': false, 'integritystudio.mcp.error_type': 'rate_limited' }],
+    ['legacy', { 'mcp.server': 'github', 'mcp.tool': 'create_issue', 'mcp.success': false, 'mcp.error_type': 'rate_limited' }],
+  ])('scores a failed call 0 with its error type from %s keys', (_era, attributes) => {
+    const record = deriveToolCorrectness(mcpToolSpan(attributes));
+
+    expect(record?.scoreValue).toBe(0);
+    expect(record?.explanation).toBe('Tool github/create_issue failed: rate_limited');
+  });
+
+  it('reads the canonical key when a span carries both, even a canonical false', () => {
+    const record = deriveToolCorrectness(mcpToolSpan({
+      'integritystudio.mcp.server': 'github',
+      'integritystudio.mcp.tool': 'create_issue',
+      'integritystudio.mcp.success': false,
+      'integritystudio.mcp.error_type': 'rate_limited',
+      'mcp.server': 'gitlab',
+      'mcp.tool': 'get_me',
+      'mcp.success': true,
+      'mcp.error_type': 'stale',
+    }));
+
+    expect(record?.scoreValue).toBe(0);
+    expect(record?.explanation).toBe('Tool github/create_issue failed: rate_limited');
+  });
+});
+
+describe('deriveEvaluationLatency across the mcp.* rename', () => {
+  it.each([
+    ['only the canonical key', { 'integritystudio.mcp.tool': 'get_me' }],
+    ['only the legacy key', { 'mcp.tool': 'get_me' }],
+    ['both keys, canonical first', { 'integritystudio.mcp.tool': 'get_me', 'mcp.tool': 'stale' }],
+  ])('names the tool from a span with %s', (_era, attributes) => {
+    const record = deriveEvaluationLatency(mcpToolSpan(attributes));
+
+    expect(record?.explanation).toMatch(/^Hook mcp\/get_me executed in /);
   });
 });
 
@@ -828,6 +896,15 @@ describe('detectInputDrift', () => {
     const legacy = toolSpans(TOOL_SPANS_PER_DAY, { 'builtin.success': true });
 
     expect(detectInputDrift(legacy, null)).toEqual([]);
+  });
+
+  it.each([
+    ['canonical', { 'integritystudio.mcp.success': true }],
+    ['legacy', { 'mcp.success': true }],
+  ])('reads the MCP success flag from %s keys', (_era, attributes) => {
+    const mcp = toolSpans(TOOL_SPANS_PER_DAY, attributes).map(span => ({ ...span, name: 'hook:mcp-post-tool' }));
+
+    expect(detectInputDrift(mcp, null)).toEqual([]);
   });
 
   it('tolerates hooks that failed before recording, up to half the day', () => {

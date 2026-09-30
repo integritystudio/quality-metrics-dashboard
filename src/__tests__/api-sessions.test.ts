@@ -220,3 +220,75 @@ describe('GET /sessions/:sessionId', () => {
     expect(res.status).toBe(500);
   });
 });
+
+// On 2026-09-29 the hooks moved these unprefixed keys under `integritystudio.`.
+// CloudBackend rewrites a legacy key only once the alias table has a row for
+// it, so the route asks for the new key and falls back to the old one. Every
+// case serves one session under one spelling and expects the same body. Hook
+// names are copied from real spans.
+describe('GET /sessions/:sessionId across the integritystudio.* key rename', () => {
+  const VENDOR_PREFIX = 'integritystudio.';
+  const DECOY_OFFSET = 1000;
+  const SESSION_START = { 'project.name': 'env-settings', 'context.message_count': 4, 'context.estimated_tokens': 9000, 'tasks.active': 2 };
+  const TOKEN_METRICS = { 'tokens.messages': 12, 'tokens.input': 100, 'tokens.output': 50, 'tokens.cache_read': 7, 'tokens.cache_creation': 3, 'tokens.model': 'claude-opus-5' };
+  const MCP_POST_TOOL = { 'mcp.tool': 'get_me' };
+  const ALERT_EVALUATION = { 'alerts.triggered_count': 3 };
+
+  type Attributes = Record<string, unknown>;
+  const withPrefix = (attrs: Attributes): Attributes =>
+    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [`${VENDOR_PREFIX}${key}`, value]));
+  const unprefixed = (attrs: Attributes): Attributes => attrs;
+  /** The unprefixed keys holding values no reader should surface when the prefixed key is present. */
+  const staleUnprefixed = (attrs: Attributes): Attributes =>
+    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [key, typeof value === 'number' ? value + DECOY_OFFSET : `stale-${String(value)}`]));
+
+  function hookSpanWire(hookName: string, spanId: string, attributes: Attributes) {
+    return {
+      ...makeSessionSpanWire(`hook:${hookName}`, { 'builtin.tool': undefined, 'integritystudio.hook.name': hookName, ...attributes }),
+      span_id: spanId,
+    };
+  }
+
+  function serveSession(write: (attrs: Attributes) => Attributes) {
+    fixture.setTraces([
+      hookSpanWire('session-start', 'span-start', write(SESSION_START)),
+      hookSpanWire('token-metrics-extraction', 'span-tokens', write(TOKEN_METRICS)),
+      hookSpanWire('mcp-post-tool', 'span-mcp', { 'integritystudio.hook.type': 'mcp', 'integritystudio.hook.trigger': 'PostToolUse', ...write(MCP_POST_TOOL) }),
+      hookSpanWire('telemetry-alert-evaluation', 'span-alert', write(ALERT_EVALUATION)),
+    ]);
+  }
+
+  async function expectSessionRead() {
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailResponse;
+
+    expect(res.status).toBe(200);
+    expect(body.sessionInfo).toMatchObject({
+      projectName: 'env-settings',
+      initialMessageCount: 4,
+      initialContextTokens: 9000,
+      finalMessageCount: 4,
+      taskCount: 2,
+    });
+    expect(body.tokenProgression).toEqual([
+      { messages: 12, inputTokens: 100, outputTokens: 50, cacheRead: 7, cacheCreation: 3, model: 'claude-opus-5' },
+    ]);
+    expect(body.mcpUsage).toEqual({ get_me: 1 });
+    expect(body.alertSummary).toMatchObject({ totalFired: 3 });
+  }
+
+  it.each([
+    ['post-rename integritystudio.*', withPrefix],
+    ['pre-rename unprefixed', unprefixed],
+  ])('reads %s keys', async (_era, write) => {
+    serveSession(write);
+
+    await expectSessionRead();
+  });
+
+  it('prefers the integritystudio.* key when a span carries both', async () => {
+    serveSession(attrs => ({ ...staleUnprefixed(attrs), ...withPrefix(attrs) }));
+
+    await expectSessionRead();
+  });
+});

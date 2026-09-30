@@ -4,8 +4,10 @@
  * On 2026-09-29 the hooks moved three session-start values onto registered
  * semconv keys: `node.version` → `process.runtime.version`, `working.directory`
  * → `process.working_directory`, and the owner out of `vcs.repository.name`
- * into `vcs.owner.name`. The session header reads spans from both sides of
- * that date, so each helper must answer the same for either shape.
+ * into `vcs.owner.name`. The same day they moved the unprefixed hook keys
+ * (`tokens.*`, `mcp.*`, `context.*`, …) under `integritystudio.`, numbers and
+ * booleans among them. The session header reads spans from both sides of that
+ * date, so each helper must answer the same for either shape.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -32,6 +34,34 @@ describe('renamedAttr', () => {
 
   it('is undefined when neither key is present', () => {
     expect(renamedAttr(span({}), 'process.runtime.version', 'node.version')).toBeUndefined();
+  });
+
+  // The 2026-09-29 `integritystudio.*` move renamed numeric and boolean keys too.
+  it.each([
+    ['only the canonical key', { 'integritystudio.tokens.input': 120 }, 120],
+    ['only the legacy key', { 'tokens.input': 80 }, 80],
+    ['both keys', { 'integritystudio.tokens.input': 120, 'tokens.input': 80 }, 120],
+  ])('reads a number from a span with %s', (_shape, attributes, expected) => {
+    expect(renamedAttr(span(attributes), 'integritystudio.tokens.input', 'tokens.input', 'number')).toBe(expected);
+  });
+
+  it.each([
+    ['only the canonical key', { 'integritystudio.mcp.success': false }, false],
+    ['only the legacy key', { 'mcp.success': true }, true],
+    ['both keys', { 'integritystudio.mcp.success': false, 'mcp.success': true }, false],
+  ])('reads a boolean from a span with %s, keeping a canonical false', (_shape, attributes, expected) => {
+    expect(renamedAttr(span(attributes), 'integritystudio.mcp.success', 'mcp.success', 'boolean')).toBe(expected);
+  });
+
+  it('skips a canonical value of the wrong type for the legacy one', () => {
+    const mistyped = span({ 'integritystudio.tokens.input': '120', 'tokens.input': 80 });
+
+    expect(renamedAttr(mistyped, 'integritystudio.tokens.input', 'tokens.input', 'number')).toBe(80);
+  });
+
+  it('is undefined when neither key holds the requested type', () => {
+    expect(renamedAttr(span({ 'tokens.input': '80' }), 'integritystudio.tokens.input', 'tokens.input', 'number'))
+      .toBeUndefined();
   });
 });
 

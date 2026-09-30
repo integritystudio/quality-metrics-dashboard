@@ -382,3 +382,66 @@ describe('computeSessionDetail after the agent hook rename', () => {
     ]);
   });
 });
+
+// On 2026-09-29 the hooks moved these unprefixed keys under `integritystudio.`.
+// Spans reach this function through CloudBackend, which rewrites a legacy key
+// only once the alias table has a row for it, so each reader asks for the new
+// key and falls back to the old one. Every case writes one session under one
+// spelling and expects the same detail. Hook names are copied from real spans.
+describe('computeSessionDetail across the integritystudio.* key rename', () => {
+  const VENDOR_PREFIX = 'integritystudio.';
+  const DECOY_OFFSET = 1000;
+  const SESSION_START = { 'project.name': 'env-settings', 'context.message_count': 4, 'context.estimated_tokens': 9000, 'tasks.active': 2 };
+  const TOKEN_METRICS = { 'tokens.messages': 12, 'tokens.input': 100, 'tokens.output': 50, 'tokens.cache_read': 7, 'tokens.cache_creation': 3, 'tokens.model': 'claude-opus-5' };
+  const MCP_POST_TOOL = { 'mcp.tool': 'get_me' };
+  const ALERT_EVALUATION = { 'alerts.triggered_count': 3 };
+
+  type Attributes = Record<string, unknown>;
+  const withPrefix = (attrs: Attributes): Attributes =>
+    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [`${VENDOR_PREFIX}${key}`, value]));
+  const unprefixed = (attrs: Attributes): Attributes => attrs;
+  /** The unprefixed keys holding values no reader should surface when the prefixed key is present. */
+  const staleUnprefixed = (attrs: Attributes): Attributes =>
+    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [key, typeof value === 'number' ? value + DECOY_OFFSET : `stale-${String(value)}`]));
+
+  function hookSpan(hookName: string, attributes: Attributes) {
+    return { name: `hook:${hookName}`, traceId: 't1', attributes: { 'integritystudio.hook.name': hookName, ...attributes } };
+  }
+
+  function sessionSpans(write: (attrs: Attributes) => Attributes) {
+    return [
+      hookSpan('session-start', write(SESSION_START)),
+      hookSpan('token-metrics-extraction', write(TOKEN_METRICS)),
+      hookSpan('mcp-post-tool', { 'integritystudio.hook.type': 'mcp', 'integritystudio.hook.trigger': 'PostToolUse', ...write(MCP_POST_TOOL) }),
+      hookSpan('telemetry-alert-evaluation', write(ALERT_EVALUATION)),
+    ];
+  }
+
+  function expectSessionRead(detail: ReturnType<typeof computeSessionDetail>) {
+    expect(detail.sessionInfo).toMatchObject({
+      projectName: 'env-settings',
+      initialMessageCount: 4,
+      initialContextTokens: 9000,
+      finalMessageCount: 4,
+      taskCount: 2,
+    });
+    expect(detail.tokenProgression).toEqual([
+      { messages: 12, inputTokens: 100, outputTokens: 50, cacheRead: 7, cacheCreation: 3, model: 'claude-opus-5' },
+    ]);
+    expect(detail.mcpUsage).toEqual({ get_me: 1 });
+    expect(detail.alertSummary.totalFired).toBe(3);
+  }
+
+  it.each([
+    ['post-rename integritystudio.*', withPrefix],
+    ['pre-rename unprefixed', unprefixed],
+  ])('reads %s keys', (_era, write) => {
+    expectSessionRead(computeSessionDetail('s1', sessionSpans(write), []));
+  });
+
+  it('prefers the integritystudio.* key when a span carries both', () => {
+    const both = (attrs: Attributes): Attributes => ({ ...staleUnprefixed(attrs), ...withPrefix(attrs) });
+
+    expectSessionRead(computeSessionDetail('s1', sessionSpans(both), []));
+  });
+});

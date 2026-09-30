@@ -431,6 +431,22 @@ function resolveTranscriptPath(originalPath: string): string | null {
   return null;
 }
 
+/** The transcript path log attribute; the hooks moved it under `integritystudio.` on 2026-09-29. */
+const TRANSCRIPT_PATH_ATTR = 'integritystudio.transcript.path';
+const LEGACY_TRANSCRIPT_PATH_ATTR = 'transcript.path';
+
+/**
+ * A token-metrics log record's transcript path, under its canonical key, else
+ * under the key older records carry. These are raw `logs-*.jsonl` lines, which
+ * no alias table rewrites, so both spellings reach this reader.
+ */
+export function transcriptPathOf(attrs: Record<string, unknown>): string | undefined {
+  const canonical = attrs[TRANSCRIPT_PATH_ATTR];
+  if (typeof canonical === 'string') return canonical;
+  const legacy = attrs[LEGACY_TRANSCRIPT_PATH_ATTR];
+  return typeof legacy === 'string' ? legacy : undefined;
+}
+
 /** Discover transcripts from telemetry logs (primary) and directory scan (fallback) */
 export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   // Track by sessionId (UUID) to deduplicate across sources
@@ -447,7 +463,7 @@ export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
       const attrs = entry.attributes;
       if (attrs?.['integritystudio.hook.name'] !== HOOK_NAME.TOKEN_METRICS) continue;
 
-      const tPath = typeof attrs['transcript.path'] === 'string' ? attrs['transcript.path'] : undefined;
+      const tPath = transcriptPathOf(attrs);
       if (!tPath) continue;
 
       const sessionId = basename(tPath, '.jsonl');
