@@ -27,8 +27,33 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v4
       - run: npm ci
-      - name: Run src tests (script tests require parent dist from observability-toolkit)
+      # Several src tests import the parent observability-toolkit through `@parent/*`
+      # (tsconfig: `../dist/*`), which a standalone checkout does not have. Without it
+      # 72 of the src tests fail and deploy-worker never runs: every push from
+      # 2026-09-28 to 09-30 failed here. The same step as ci.yml; keep the two in step.
+      - name: Build parent observability-toolkit into ../dist
+        run: |
+          GH_TOKEN=$(doppler secrets get GITHUB_TOKEN --project integrity-studio --config prd --plain)
+          echo "::add-mask::$GH_TOKEN"
+          git clone --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/integritystudio/observability-toolkit.git" \
+            "${RUNNER_TEMP}/parent"
+          npm ci --prefix "${RUNNER_TEMP}/parent"
+          npm run build --prefix "${RUNNER_TEMP}/parent"
+          # tsconfig resolves @parent/* to ../dist/* relative to this checkout.
+          # Symlink rather than copy: the parent's compiled output requires its
+          # own runtime deps (zod and friends), which Node finds by walking up
+          # from the module's REAL path. A copied dist/ has no node_modules
+          # beside it and dies with "Cannot find module 'zod'"; a symlink
+          # resolves back into the parent checkout, exactly as on a dev machine
+          # where ../dist sits inside the parent repo.
+          ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Run src tests
         run: npm test src/
 
   deploy-worker:

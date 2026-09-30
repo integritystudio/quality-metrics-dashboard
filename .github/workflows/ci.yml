@@ -22,16 +22,13 @@ jobs:
       - run: npm ci
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
-      - name: Run src tests (script tests require parent dist from observability-toolkit)
-        run: doppler run --project integrity-studio --config prd -- npm test src/
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      # The e2e API server imports the parent observability-toolkit through
-      # `@parent/*`, which tsconfig maps to `../dist/*` — the parent's build
-      # output, absent from a standalone dashboard checkout. Without it the
-      # Playwright webServer dies at startup with ERR_MODULE_NOT_FOUND and no
-      # spec runs. Clone shallow and WITHOUT submodules: the parent tracks this
-      # repo as one, and recursing would check the dashboard out inside itself.
+      # The src tests and the e2e API server import the parent observability-toolkit
+      # through `@parent/*`, which tsconfig maps to `../dist/*` — the parent's build
+      # output, absent from a standalone dashboard checkout. Without it 72 of the src
+      # tests fail, and the Playwright webServer dies at startup with
+      # ERR_MODULE_NOT_FOUND so no spec runs. deploy.yml's check job builds it the same
+      # way; keep the two in step. Clone shallow and WITHOUT submodules: the parent
+      # tracks this repo as one, and recursing would check the dashboard out inside itself.
       - name: Build parent observability-toolkit into ../dist
         run: |
           GH_TOKEN=$(doppler secrets get GITHUB_TOKEN --project integrity-studio --config prd --plain)
@@ -49,6 +46,10 @@ jobs:
           # resolves back into the parent checkout, exactly as on a dev machine
           # where ../dist sits inside the parent repo.
           ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Run src tests
+        run: doppler run --project integrity-studio --config prd -- npm test src/
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       # Specs asserting on rendered metric content skip themselves when
