@@ -109,6 +109,64 @@ first. Acceptance: the page test mocks only the page's direct children.
 Move it to an `AgentSessionPage` test file alongside the page's other coverage. Acceptance:
 `WorkflowPage.test.tsx` tests only `WorkflowPage`.
 
+### API client
+
+Deferred from the 2026-09-30 `/simplify` pass on `src/lib/api-client.ts`, which moved the shared wire
+values into `src/lib/worker-contract.ts`. Each item below is in a caller, outside that file.
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| ORG-SWITCH-REFETCHES-OLD-ORG | `switchOrg` refetches every mounted query under the old org before fetching the new one | P3 | Efficiency |
+| QUERYFN-DROPS-ABORT-SIGNAL | `useApiQuery` and `useTrace` never abort a request whose key has moved on | P3 | Efficiency |
+| AUTH-FETCHES-BYPASS-API-CLIENT | `/api/me`, `/api/logout` and `/api/activity` build `Authorization` by hand | P3 | Related: ADMIN-CV-API-CLIENT |
+| ADMIN-FETCH-DUPLICATED | `adminFetch` and `memberFetch` in `AdminPage` have identical bodies | P3 | Refactor |
+| ORG-ID-UUID-CHECKS-DISAGREE | The org-id header check and the org-id Zod schemas accept different ids | P3 | (review) Latent; production ids pass both |
+
+**ORG-SWITCH-REFETCHES-OLD-ORG.** `switchOrg` (`src/contexts/OrgContext.tsx:68`) calls
+`queryClient.invalidateQueries()` with no filter right after `setChosenOrgId`, before React re-renders.
+Its default `refetchType: 'active'` refetches every mounted query, and those are still the old org's:
+their `queryFn` closures hold the old `activeOrgId`, so each sends the old `X-Org-Id`. The re-render then
+moves every key to the new org (`useApiQuery.ts:65` and `useTrace.ts:31` both lead with the org id) and
+fetches again. Each switch therefore costs one wasted round trip per mounted query, `switchOrg` does not
+resolve until they finish, and the results are cached under keys that are reused only on a switch back.
+The comment above the call says "Drop every cached query", which is not what `invalidateQueries` does.
+Fix: `queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== orgId })`, or
+`invalidateQueries({ refetchType: 'none' })` to keep the mark-stale behaviour; the key change triggers
+the fetches that are needed, once. Acceptance: a test counting fetches across a switch sees one request
+per mounted query, each carrying the new org's `X-Org-Id`.
+
+**QUERYFN-DROPS-ABORT-SIGNAL.** The `queryFn`s in `useApiQuery` (`src/hooks/useApiQuery.ts:66`) and
+`useTrace` (`src/hooks/useTrace.ts:32`) ignore React Query's `{ signal }`, so a request whose key has
+moved on (a period or role change, a new `traceId`, an org switch) runs to completion and is parsed
+anyway. `apiFetch` already forwards `signal` through `init`. Fix:
+`queryFn: async ({ signal }) => … apiFetch(url, token, activeOrgId, { signal })`. Acceptance: a test that
+changes the key mid-flight sees the first request aborted.
+
+**AUTH-FETCHES-BYPASS-API-CLIENT.** Three fetches write `Authorization: Bearer` themselves instead of
+going through `apiFetch`: `/api/me` (`src/contexts/AuthContext.tsx:24`), `/api/logout`
+(`AuthContext.tsx:119`) and `/api/activity` (`src/lib/activity-logger.ts:19`). None sends `X-Org-Id`
+today, and `apiFetch(url, jwt, null, init)` reproduces that exactly. Until they move, a header every
+worker request needs would miss these three; `api-client.ts`'s header comment was narrowed to "every
+org-scoped fetch" on 2026-09-30 so that it stays true. ADMIN-CV-API-CLIENT's option (A) needs an
+Authorization-only fetch path too, so one helper could serve both. Acceptance: no `Bearer` template
+literal left in non-test `src/` code outside `api-client.ts`.
+
+**ADMIN-FETCH-DUPLICATED.** `adminFetch` (`src/pages/AdminPage.tsx:77`) and `memberFetch`
+(`AdminPage.tsx:189`) have identical bodies: fetch a token, call `apiFetch` with the active org, set a
+JSON content type, stringify an optional body. Fix: one hook in `AdminPage` (e.g. `useAdminFetch()`)
+that returns the function. Acceptance: one definition, used by both call sites.
+
+**ORG-ID-UUID-CHECKS-DISAGREE.** Two rules guard the same org id. The worker's `X-Org-Id` check and the
+client's stored-id check use `UUID_PATTERN` (`src/lib/worker-contract.ts`), which accepts any
+8-4-4-4-12 hex string. `OrgMembershipSummarySchema` and `OrgSwitchRequestSchema`
+(`src/lib/validation/auth-schemas.ts:61`, `:70`) use `z.string().uuid()`, which in Zod 4.4.3 also checks
+the version and variant digits. Checked 2026-09-30: `11111111-1111-1111-1111-111111111111` passes the
+pattern and fails the schema, while a v4 id passes both. An id like that would be accepted as a header
+but rejected in the switch body, and would fail the `/api/me` parse, which drops the session. Supabase
+issues v4 ids, so production is unaffected; fixtures and seeded orgs are where it would surface. Fix:
+pick one rule. `z.guid()` matches `UUID_PATTERN` exactly; alternatively, tighten the pattern to Zod's.
+Acceptance: one definition, used by both the pattern checks and the schemas.
+
 ### Admin customer view
 
 Filed 2026-09-29. A staff-only clone of the customer dashboard at `integritystudio.ai/dashboard`
