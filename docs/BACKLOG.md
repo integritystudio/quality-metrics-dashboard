@@ -116,7 +116,7 @@ values into `src/lib/worker-contract.ts`. Each item below is in a caller, outsid
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| ORG-SWITCH-REFETCHES-OLD-ORG | `switchOrg` refetches every mounted query under the old org before fetching the new one | P3 | Efficiency |
+| ~~ORG-SWITCH-REFETCHES-OLD-ORG~~ | ~~`switchOrg` refetches every mounted query under the old org before fetching the new one~~ | ~~P3~~ | Done 2026-09-30 — commit 4c4b594 |
 | QUERYFN-DROPS-ABORT-SIGNAL | `useApiQuery` and `useTrace` never abort a request whose key has moved on | P3 | Efficiency |
 | AUTH-FETCHES-BYPASS-API-CLIENT | `/api/me`, `/api/logout` and `/api/activity` build `Authorization` by hand | P3 | Related: ADMIN-CV-API-CLIENT |
 | ADMIN-FETCH-DUPLICATED | `adminFetch` and `memberFetch` in `AdminPage` have identical bodies | P3 | Refactor |
