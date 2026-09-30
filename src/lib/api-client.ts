@@ -54,3 +54,12 @@ export function apiFetch(
   const { headers, ...rest } = init ?? {};
   return fetch(url, { ...rest, headers: authHeaders(token, activeOrgId, headers) });
 }
+
+/**
+ * Whether a 404 body is the worker's no-data answer carrying `message`: the org
+ * exists but nothing has been synced for it yet. For `useApiQuery`'s `onNotFound`,
+ * so a new org reads as empty rather than as an error.
+ */
+export function isWorkerNoData(body: unknown, message: string): boolean {
+  return body !== null && typeof body === 'object' && 'error' in body && body.error === message;
+}

@@ -39,7 +39,7 @@ import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
 import { formatScore } from './lib/quality-utils.js';
-import { useDashboard } from './hooks/useDashboard.js';
+import { useDashboard, isNoDataSummary } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
@@ -57,6 +57,19 @@ const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ d
 
 const VALID_ROLES: readonly RoleViewType[] = ROLES;
 
+/** What an org with nothing synced yet sees, on the summary and on every role view. */
+function NoEvaluationData() {
+  return (
+    <div className="empty-state">
+      <h2>No Evaluation Data</h2>
+      <p>No evaluations found for the selected period.</p>
+      <p className="mt-2">
+        Run evaluations using the <code>obs_inject_evaluations</code> tool to see metrics here.
+      </p>
+    </div>
+  );
+}
+
 function DashboardPage({ period }: { period: Period }) {
   const { data, isLoading, isFetching, error } = useDashboard(period);
 
@@ -67,17 +80,7 @@ function DashboardPage({ period }: { period: Period }) {
   const dashboard = data;
   const sparklines = (data as QualityDashboardSummary & { sparklines?: Record<string, (number | null)[]> }).sparklines;
 
-  if (dashboard.overallStatus === 'no_data') {
-    return (
-      <div className="empty-state">
-        <h2>No Evaluation Data</h2>
-        <p>No evaluations found for the selected period.</p>
-        <p className="mt-2">
-          Run evaluations using the <code>obs_inject_evaluations</code> tool to see metrics here.
-        </p>
-      </div>
-    );
-  }
+  if (dashboard.overallStatus === 'no_data') return <NoEvaluationData />;
 
   return (
     <>
@@ -98,7 +101,7 @@ function DashboardPage({ period }: { period: Period }) {
   );
 }
 
-function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
+export function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
   const { session, isLoading: authLoading } = useAuth();
   const { data, isLoading, error } = useDashboard(period, role);
 
@@ -115,6 +118,9 @@ function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
 
   if (isLoading) return <MetricGridSkeleton />;
   if (error && !data) return <div className="error-state"><h2>Failed to load</h2><p>{error.message}</p></div>;
+  // A new org's no-data answer is summary-shaped; without this it fell through to
+  // the skeleton below and loaded forever.
+  if (data && isNoDataSummary(data)) return <NoEvaluationData />;
   if (!data || !('role' in data)) return <MetricGridSkeleton />;
 
   switch (data.role) {

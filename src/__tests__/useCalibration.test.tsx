@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useCalibration, getMetricCalibration } from '../hooks/useCalibration.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { API_BASE, STALE_TIME, WORKER_ERR_NO_CALIBRATION_DATA } from '../lib/constants.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 import {
   TEST_ACCESS_TOKEN,
@@ -84,8 +84,21 @@ describe('useCalibration', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a 404 (no calibration synced yet) as an error, leaving data undefined', async () => {
-    const fetchSpy = stubFetch({ error: 'ERR_NO_DATA' }, { status: HTTP_NOT_FOUND });
+  // A new org has no calibration synced; the worker says so with a 404, and that is
+  // no data, not a failure to retry.
+  it('reads the worker\'s no-calibration 404 as no data: no error, no retry', async () => {
+    const fetchSpy = stubFetch({ error: WORKER_ERR_NO_CALIBRATION_DATA }, { status: HTTP_NOT_FOUND });
+
+    const { result } = renderHook(() => useCalibration(), makeQueryWrapper());
+    await waitFor(() => { expect(result.current.isSuccess).toBe(true); });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.data).toBeUndefined();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces any other 404 as an error, leaving data undefined', async () => {
+    const fetchSpy = stubFetch({ error: 'some other reason' }, { status: HTTP_NOT_FOUND });
 
     const { result } = renderHook(() => useCalibration(), makeQueryWrapper());
     await waitFor(

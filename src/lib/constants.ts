@@ -15,6 +15,12 @@ export const enum HttpStatus {
  */
 export const WORKER_ERR_NO_DATA = 'No data available';
 
+/**
+ * The `error` string the worker returns (HTTP 404) when no calibration has been
+ * synced for the org, the worker's `ERR_NO_CALIBRATION_DATA`. A new org has none.
+ */
+export const WORKER_ERR_NO_CALIBRATION_DATA = 'No calibration data available';
+
 /** Reusable error messages for API and response validation. */
 export const enum ErrorMessage {
   InvalidResponseShape = 'Invalid response shape',

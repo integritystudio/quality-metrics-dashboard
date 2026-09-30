@@ -1,6 +1,7 @@
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
 import { API_BASE, POLL_INTERVAL_MS, STALE_TIME, RETRY_DELAY_BASE, RETRY_DELAY_CAP, WORKER_ERR_NO_DATA } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
+import { isWorkerNoData } from '../lib/api-client.js';
 
 /**
  * Return a minimal `QualityDashboardSummary` with `overallStatus: 'no_data'`
@@ -9,12 +10,7 @@ import { useApiQuery } from './useApiQuery.js';
  * the caller falls through to the standard error path.
  */
 function dashboardNotFound(body: unknown): QualityDashboardSummary | undefined {
-  if (
-    body !== null &&
-    typeof body === 'object' &&
-    'error' in body &&
-    body.error === WORKER_ERR_NO_DATA
-  ) {
+  if (isWorkerNoData(body, WORKER_ERR_NO_DATA)) {
     return {
       overallStatus: 'no_data',
       metrics: [],
@@ -24,6 +20,11 @@ function dashboardNotFound(body: unknown): QualityDashboardSummary | undefined {
     };
   }
   return undefined;
+}
+
+/** The `no_data` summary `dashboardNotFound` returns, for a role view too: there is no role payload to fake. */
+export function isNoDataSummary(data: QualityDashboardSummary | RoleView): data is QualityDashboardSummary {
+  return !('role' in data) && data.overallStatus === 'no_data';
 }
 
 export function useDashboard(period: Period, role?: RoleViewType) {
