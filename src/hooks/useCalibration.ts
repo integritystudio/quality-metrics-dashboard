@@ -1,7 +1,7 @@
 import type { PercentileDistribution } from '../lib/quality-utils.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
-import { API_BASE, STALE_TIME, WORKER_ERR_NO_CALIBRATION_DATA } from '../lib/constants.js';
-import { isWorkerNoData } from '../lib/api-client.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { isWorkerNoData, WORKER_ERR_NO_CALIBRATION_DATA } from '../lib/worker-contract.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface MetricCalibration {

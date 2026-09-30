@@ -13,7 +13,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useCalibration, getMetricCalibration } from '../hooks/useCalibration.js';
-import { API_BASE, STALE_TIME, WORKER_ERR_NO_CALIBRATION_DATA } from '../lib/constants.js';
+import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { WORKER_ERR_NO_CALIBRATION_DATA } from '../lib/worker-contract.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 import {
   TEST_ACCESS_TOKEN,
