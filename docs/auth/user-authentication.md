@@ -27,7 +27,7 @@ With `ORG_SCOPING_ENABLED = "true"` the worker refuses to serve (500) if `HOME_O
    - first membership
    - `HOME_ORG_ID` for staff with no membership
 2. **Org path** — permissions derive only from the active org's `organization_memberships.role`, mapped in `src/lib/org-rbac.ts`. Staff (`STAFF_USER_IDS`, JSON array of app user UUIDs) resolve as `owner`.
-3. **Legacy fallback** — a user with no membership but with `user_roles` rows resolves via the old global path (`user_roles → roles.permissions`, no org fields on the session). A user with neither gets 403 `No organization membership`.
+3. **No active org** — a non-staff user with no membership gets 403 `No organization membership` on every `/api/*` route but `/api/health`, whatever their `user_roles`. Until 2026-10-01 a user with `user_roles` rows fell back to the old global path and read the home org's bare keys; since the `on_user_created` trigger gives every new user a role, that meant every user who had not yet provisioned an org (`AUTH-NO-ORG-LEGACY-SESSION`). The global path (`user_roles → roles.permissions`, no org fields on the session) now applies only with `ORG_SCOPING_ENABLED` off.
 
 | Membership role | Dashboard role | Permissions |
 |---|---|---|
