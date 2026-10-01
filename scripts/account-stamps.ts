@@ -11,14 +11,14 @@
  * the stamp of the span or turn they score here and copy it onto the record
  * (Phase 1); `upload-evaluations` then routes on the record's own stamp.
  *
- * Three consumers, three lookups:
+ * Two consumers, two lookups:
  * - `derive-evaluations` scores a span it holds: `bySpan`.
  * - `judge-evaluations` scores a transcript turn, whose own spans are the
  *   session's spans between that turn and the next: `turnAccount` for its
  *   stamp and `turnSpan` for the span it is parented to (Phase 2).
- * - `upload-evaluations`: `bySpan` for a record that names its span, then, for
- *   records written before Phase 1, `byTrace` and `bySession` — the time-based
- *   join this replaces.
+ * - `upload-evaluations`: `bySpan` for a record that names its span.
+ *   The pre-Phase-1 time-based join (`byTrace`/`bySession`) was removed once
+ *   `join=0` held across all pipeline runs (TKR9, 2026-10-01).
  */
 
 import { readdirSync, readFileSync } from 'fs';
@@ -54,12 +54,6 @@ export const UNTIMED_MS = Number.MAX_SAFE_INTEGER;
 /** Account ref as stamped: a secret name, or `null` for an unmapped account. */
 export type AccountRef = string | null;
 
-/** One stamped span's start time and account. */
-export interface TraceStamp {
-  atMs: number;
-  ref: AccountRef;
-}
-
 /**
  * One span on a session's timeline. Unstamped spans are included (`ref`
  * undefined) so a turn can be anchored to its span even where no account was
@@ -79,13 +73,6 @@ export interface SpanRef {
 }
 
 export interface AccountIndex {
-  /**
-   * Every stamp a trace's spans carried, sorted by start time. A trace is one
-   * prompt, and a prompt can span a `/login`, so one trace can hold two accounts.
-   */
-  byTrace: Map<string, TraceStamp[]>;
-  /** Every ref a session's spans carried; more than one means it switched. */
-  bySession: Map<string, Set<AccountRef>>;
   /** Every span of a session, stamped or not, sorted by start time. */
   sessionSpans: Map<string, SessionSpan[]>;
   /** The stamp of one span, by span id. */
@@ -155,15 +142,20 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
  * TKR6) go only on the session timeline, so they cannot outvote a stamped one
  * in any account lookup. The judge's cloud source feeds `/v1/traces` spans
  * through here, stamped with the account whose key read them.
+ *
+ * The pre-Phase-1 `byTrace`/`bySession` time-based join was removed once
+ * `join=0` held across all pipeline runs (TKR9, 2026-10-01). A record with
+ * neither its own stamp nor a named span follows the unstamped rule, as spans
+ * do, and routes to the webhook destination.
  */
 export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
-  const index: AccountIndex = { byTrace: new Map(), bySession: new Map(), sessionSpans: new Map(), bySpan: new Map() };
+  const index: AccountIndex = { sessionSpans: new Map(), bySpan: new Map() };
   for (const parsed of records) {
     if (typeof parsed !== 'object' || parsed === null) continue;
     const span = parsed as Record<string, unknown>;
     const atMs = hrTimeToMs(span.startTime);
-    const traceId = asString(span.traceId);
     const spanId = asString(span.spanId);
+    const traceId = asString(span.traceId);
     const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
       ? span.attributes as Record<string, unknown>
       : {};
@@ -173,17 +165,10 @@ export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
     if (IDENTITY_KEY_REF_FIELD in span) {
       const raw = span[IDENTITY_KEY_REF_FIELD];
       ref = typeof raw === 'string' ? raw : null;
-      if (traceId) pushTo(index.byTrace, traceId, { atMs, ref });
       if (spanId) index.bySpan.set(spanId, ref);
-      if (sessionId) {
-        const refs = index.bySession.get(sessionId) ?? new Set<AccountRef>();
-        refs.add(ref);
-        index.bySession.set(sessionId, refs);
-      }
     }
     if (sessionId) pushTo(index.sessionSpans, sessionId, { atMs, spanId, traceId, ref });
   }
-  for (const stamps of index.byTrace.values()) stamps.sort((a, b) => a.atMs - b.atMs);
   for (const spans of index.sessionSpans.values()) spans.sort((a, b) => a.atMs - b.atMs);
   return index;
 }

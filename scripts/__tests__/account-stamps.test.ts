@@ -188,14 +188,15 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       expect(JSON.stringify(mapped.payload)).not.toContain(GMAIL_REF);
     });
 
-    it('routes on the stamp even where the time join would pick another account', () => {
-      // Evaluated at 11:30 on a trace whose last stamp is gmail: the join says
-      // gmail, but the scored turn was home's.
+    it('routes on the stamp regardless of what any join index would say (TKR9: join removed)', () => {
+      // A stamped record routes to its own stamp. An unstamped record with no
+      // spanId falls through to the webhook — the time-based join was removed
+      // once join=0 held across all pipeline runs (TKR9, 2026-10-01).
       const idx = switchedSession();
       const stamped = mapRecord(evalLine({ identityKeyRef: HOME_REF }), NOW, MAX_AGE_MS);
       expect(routeRecord(stamped, idx)).toEqual({ route: { kind: 'keyed', ref: HOME_REF }, basis: 'stamp' });
       const unstamped = mapRecord(evalLine(), NOW, MAX_AGE_MS);
-      expect(routeRecord(unstamped, idx)).toEqual({ route: { kind: 'keyed', ref: GMAIL_REF }, basis: 'join' });
+      expect(routeRecord(unstamped, idx)).toEqual({ route: { kind: 'webhook' }, basis: 'join' });
     });
 
     it("routes an unstamped record by its span's stamp before any join", () => {

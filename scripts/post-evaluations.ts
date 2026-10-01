@@ -53,7 +53,7 @@ export interface PostSummary {
 }
 
 export function emptyAccountIndex(): AccountIndex {
-  return { byTrace: new Map(), bySession: new Map(), sessionSpans: new Map(), bySpan: new Map() };
+  return { sessionSpans: new Map(), bySpan: new Map() };
 }
 
 /**

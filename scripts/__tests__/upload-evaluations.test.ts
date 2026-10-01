@@ -13,7 +13,6 @@ import {
   pruneShipped,
   windowFiles,
   buildAccountIndex,
-  resolveRoute,
   keyedRequest,
   manifestKey,
   parseKeyManifest,
@@ -318,131 +317,49 @@ describe('windowFiles', () => {
   });
 });
 
-describe('account routing (TKR7)', () => {
+describe('account index (TKR7/TKR9)', () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'eval-accounts-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
-  const HOME_REF = 'OBTOOL_API_KEY';
   const GMAIL_REF = 'OBTOOL_API_KEY_ALYSHIA_LEDLIE';
 
-  const span = (traceId: string, sessionId: string, ref?: string | null): string => JSON.stringify({
-    traceId,
+  const span = (spanId: string, sessionId: string, ref?: string | null): string => JSON.stringify({
+    spanId,
     attributes: { 'session.id': sessionId },
     ...(ref === undefined ? {} : { identityKeyRef: ref }),
   });
   const writeTraces = (name: string, lines: string[]): void =>
     writeFileSync(join(dir, name), lines.join('\n') + '\n');
-  const payload = (extra: Partial<EvaluationPayload>): EvaluationPayload => ({
-    evaluationName: 'relevance', evaluator: 'judge', evaluatorType: 'llm', scoreValue: 4, ...extra,
-  });
 
-  it('sends a record to the account that stamped its trace', () => {
-    writeTraces('traces-2026-09-15.jsonl', [span('t-gmail', 's1', GMAIL_REF)]);
+  it('indexes stamped spans by span id', () => {
+    writeTraces('traces-2026-09-15.jsonl', [span('sp1', 's1', GMAIL_REF)]);
     const index = buildAccountIndex(dir, 7, NOW);
-    expect(resolveRoute(payload({ traceId: 't-gmail', sessionId: 's1' }), index))
-      .toEqual({ kind: 'keyed', ref: GMAIL_REF });
-  });
-
-  it('prefers the trace over the session when a session switched account', () => {
-    writeTraces('traces-2026-09-15.jsonl', [span('t-home', 's1', HOME_REF), span('t-gmail', 's1', GMAIL_REF)]);
-    const index = buildAccountIndex(dir, 7, NOW);
-    expect(resolveRoute(payload({ traceId: 't-home', sessionId: 's1' }), index))
-      .toEqual({ kind: 'keyed', ref: HOME_REF });
-  });
-
-  it('falls back to the session only when it saw a single account', () => {
-    writeTraces('traces-2026-09-15.jsonl', [
-      span('t1', 'single', GMAIL_REF),
-      span('t2', 'switched', HOME_REF),
-      span('t3', 'switched', GMAIL_REF),
-    ]);
-    const index = buildAccountIndex(dir, 7, NOW);
-    expect(resolveRoute(payload({ sessionId: 'single' }), index)).toEqual({ kind: 'keyed', ref: GMAIL_REF });
-    expect(resolveRoute(payload({ sessionId: 'switched' }), index)).toEqual({ kind: 'webhook' });
-  });
-
-  describe('a trace that spans a /login', () => {
-    const T0 = Date.parse('2026-09-15T01:00:00Z');
-    const MIN = 60_000;
-    const timed = (traceId: string, ref: string, atMs: number): string => JSON.stringify({
-      traceId,
-      startTime: [Math.floor(atMs / 1000), (atMs % 1000) * 1_000_000],
-      attributes: { 'session.id': 's-switch' },
-      identityKeyRef: ref,
-    });
-    // Written out of order: the index must sort by start time, not file order.
-    const lines = [timed('t', GMAIL_REF, T0 + 10 * MIN), timed('t', HOME_REF, T0), timed('t', HOME_REF, T0 + 20 * MIN)];
-
-    it.each([
-      ['inside the gmail window', T0 + 15 * MIN, GMAIL_REF],
-      ['exactly at the switch', T0 + 10 * MIN, GMAIL_REF],
-      ['after switching back', T0 + 25 * MIN, HOME_REF],
-      ['before the switch', T0 + 5 * MIN, HOME_REF],
-    ])('routes a record %s to the account signed in at its time', (_label, evaluatedAtMs, ref) => {
-      writeTraces('traces-2026-09-15.jsonl', lines);
-      expect(resolveRoute(payload({ traceId: 't', sessionId: 's-switch', evaluatedAtMs }), buildAccountIndex(dir, 7, NOW)))
-        .toEqual({ kind: 'keyed', ref });
-    });
-
-    it.each([
-      ['has no time', undefined],
-      ['predates the first stamp', T0 - MIN],
-    ])('falls back to the webhook when the record %s', (_label, evaluatedAtMs) => {
-      writeTraces('traces-2026-09-15.jsonl', lines);
-      expect(resolveRoute(payload({ traceId: 't', sessionId: 's-switch', evaluatedAtMs }), buildAccountIndex(dir, 7, NOW)))
-        .toEqual({ kind: 'webhook' });
-    });
+    expect(index.bySpan.get('sp1')).toBe(GMAIL_REF);
   });
 
   it('skips a line that parses to something other than an object', () => {
-    // A JSONL line can hold any JSON value, and a bare string carrying the field
-    // name reaches the same code as a span does — `line.includes(...)` cannot tell
-    // them apart. `'x' in "a string"` throws, so without the object guard one
-    // malformed line takes the whole index down and every record falls back to
-    // the webhook.
+    // A JSONL line can hold any JSON value; without the object guard one
+    // malformed line takes the whole index down.
     writeTraces('traces-2026-09-15.jsonl', [
       JSON.stringify('identityKeyRef'),
-      span('t-gmail', 's1', GMAIL_REF),
-    ]);
-
-    const index = buildAccountIndex(dir, 7, NOW);
-
-    expect(resolveRoute(payload({ traceId: 't-gmail', sessionId: 's1' }), index))
-      .toEqual({ kind: 'keyed', ref: GMAIL_REF });
-  });
-
-  it('withholds a record whose account is unmapped', () => {
-    writeTraces('traces-2026-09-15.jsonl', [span('t1', 's1', null)]);
-    expect(resolveRoute(payload({ traceId: 't1' }), buildAccountIndex(dir, 7, NOW))).toEqual({ kind: 'withheld' });
-  });
-
-  it('keeps the webhook for unstamped spans, which cannot outvote a stamped one', () => {
-    writeTraces('traces-2026-09-15.jsonl', [
-      span('t-old', 's-mixed'),
-      span('t-new', 's-mixed', GMAIL_REF),
-      span('t-pre', 's-pre'),
+      span('sp1', 's1', GMAIL_REF),
     ]);
     const index = buildAccountIndex(dir, 7, NOW);
-    expect(resolveRoute(payload({ traceId: 't-old', sessionId: 's-mixed' }), index))
-      .toEqual({ kind: 'keyed', ref: GMAIL_REF });
-    expect(resolveRoute(payload({ traceId: 't-pre', sessionId: 's-pre' }), index)).toEqual({ kind: 'webhook' });
-  });
-
-  it('never reads an environment variable that is not an identity-map secret', () => {
-    writeTraces('traces-2026-09-15.jsonl', [span('t1', 's1', 'PATH')]);
-    expect(resolveRoute(payload({ traceId: 't1' }), buildAccountIndex(dir, 7, NOW))).toEqual({ kind: 'webhook' });
+    expect(index.bySpan.get('sp1')).toBe(GMAIL_REF);
   });
 
   it('ignores trace files outside the index window and evaluation files', () => {
-    writeTraces('traces-2026-08-01.jsonl', [span('t-old', 's-old', GMAIL_REF)]);
-    writeTraces('evaluations-2026-09-15.jsonl', [span('t-eval', 's-eval', GMAIL_REF)]);
+    writeTraces('traces-2026-08-01.jsonl', [span('sp-old', 's-old', GMAIL_REF)]);
+    writeTraces('evaluations-2026-09-15.jsonl', [span('sp-eval', 's-eval', GMAIL_REF)]);
     const index = buildAccountIndex(dir, 7, NOW);
-    expect(index.byTrace.size).toBe(0);
-    expect(index.bySession.size).toBe(0);
+    expect(index.bySpan.size).toBe(0);
   });
 
   it('builds a keyed backfill request the ingest drain reads line by line', () => {
+    const payload = (extra: Partial<EvaluationPayload>): EvaluationPayload => ({
+      evaluationName: 'relevance', evaluator: 'judge', evaluatorType: 'llm', scoreValue: 4, ...extra,
+    });
     const req = keyedRequest('https://ingest.example', [payload({ traceId: 'a' }), payload({ traceId: 'b' })], 'k');
     expect(req.url).toBe('https://ingest.example/v1/ingest/backfill?signal=evaluations');
     expect(req.headers).toEqual({ 'Content-Type': 'application/x-ndjson', Authorization: 'Bearer k' });

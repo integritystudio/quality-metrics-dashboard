@@ -110,12 +110,11 @@ import {
   fileInWindow,
   type AccountIndex,
   type AccountRef,
-  type TraceStamp,
 } from './account-stamps.js';
 import { UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
 import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
 
-export { buildAccountIndex, type AccountIndex, type AccountRef, type TraceStamp };
+export { buildAccountIndex, type AccountIndex, type AccountRef };
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
 export const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
@@ -478,43 +477,6 @@ export type Route =
   | { kind: 'withheld' }
   | { kind: 'webhook' };
 
-/**
- * The account a trace was under at `atMs`: its only account, or — for a trace
- * that spans a `/login` — the account of the latest stamp at or before `atMs`.
- * `undefined` when a mixed trace cannot be placed (no time, or before its first
- * stamp), so the caller falls back rather than guessing.
- *
- * Time is an approximation for a judge score produced after the turn: it lands
- * on the trace's last account. Only records written before TKR8 Phase 1 reach
- * this; stamped records route on their own stamp.
- */
-function traceAccountAt(stamps: TraceStamp[], atMs: number | undefined): AccountRef | undefined {
-  const refs = new Set(stamps.map((s) => s.ref));
-  if (refs.size === 1) return [...refs][0];
-  if (atMs === undefined) return undefined;
-  let ref: AccountRef | undefined;
-  for (const stamp of stamps) {
-    if (stamp.atMs > atMs) break;
-    ref = stamp.ref;
-  }
-  return ref;
-}
-
-/**
- * Trace id first — it pins the turn even in a session that ran `/login`.
- * A session id is used only when that session saw a single account.
- */
-export function resolveRoute(payload: EvaluationPayload, index: AccountIndex): Route {
-  let ref: AccountRef | undefined;
-  const stamps = payload.traceId ? index.byTrace.get(payload.traceId) : undefined;
-  if (stamps) ref = traceAccountAt(stamps, payload.evaluatedAtMs);
-  if (ref === undefined && payload.sessionId) {
-    const refs = index.bySession.get(payload.sessionId);
-    if (refs?.size === 1) ref = [...refs][0];
-  }
-  return ref === undefined ? { kind: 'webhook' } : routeForRef(ref);
-}
-
 function routeForRef(ref: AccountRef): Route {
   if (ref === null) return { kind: 'withheld' };
   // A ref that is not an identity-map secret name is not read from the
@@ -522,20 +484,19 @@ function routeForRef(ref: AccountRef): Route {
   return IDENTITY_KEY_REF_PATTERN.test(ref) ? { kind: 'keyed', ref } : { kind: 'webhook' };
 }
 
-/** How a record's route was decided: its own stamp, its span's stamp, or the pre-Phase-1 join. */
+/** How a record's route was decided: its own stamp, its span's stamp, or the unstamped fallback. */
 export type RouteBasis = 'stamp' | 'span' | 'join';
 
 /**
  * Route a mapped record. Its own stamp wins outright — it names the account of
- * the span or turn that was scored, which no join can improve on. Next, the
- * stamp of the span it names, which is exact too. Only a record with neither
- * falls back to `resolveRoute`.
+ * the span or turn that was scored. Next, the stamp of the span it names.
+ * A record with neither routes to the webhook destination, as spans do (TKR9).
  */
 export function routeRecord(mapped: MapResult, index: AccountIndex): { route: Route; basis: RouteBasis } {
   if (mapped.accountRef !== undefined) return { route: routeForRef(mapped.accountRef), basis: 'stamp' };
   const spanId = mapped.payload!.spanId;
   if (spanId && index.bySpan.has(spanId)) return { route: routeForRef(index.bySpan.get(spanId)!), basis: 'span' };
-  return { route: resolveRoute(mapped.payload!, index), basis: 'join' };
+  return { route: { kind: 'webhook' }, basis: 'join' };
 }
 
 function signature(payload: string, secret: string): string {
