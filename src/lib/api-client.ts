@@ -1,9 +1,11 @@
 /**
  * Shared authorized-fetch helper — the client-side org choke point (P6).
  *
- * Every org-scoped dashboard fetch (useApiQuery, useTrace, AdminPage mutations,
- * org switch) builds its headers here, so the X-Org-Id header is single-source
- * on the client. The header names the client's CHOSEN org only; the worker
+ * Every worker fetch builds its headers here, so the bearer token and the
+ * X-Org-Id header are single-source on the client. Org-scoped calls
+ * (useApiQuery, useTrace, AdminPage mutations, org switch) pass the active org;
+ * the session-level calls (/api/me, /api/logout, /api/activity) pass null and
+ * send no X-Org-Id. The header names the client's CHOSEN org only; the worker
  * validates it against the session's memberships on every request and never
  * trusts it as-is.
  */

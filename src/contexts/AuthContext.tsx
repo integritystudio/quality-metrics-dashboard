@@ -4,6 +4,7 @@ import { API_BASE } from '../lib/constants.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
+import { apiFetch } from '../lib/api-client.js';
 
 /** sessionStorage key used to prevent duplicate login events on page refresh. */
 const SESSION_LOGIN_KEY = 'obs:login_recorded';
@@ -19,11 +20,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/me`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${jwt}` },
-      signal,
-    });
+    const res = await apiFetch(`${API_BASE}/api/me`, jwt, null, { method: 'GET', signal });
     if (!res.ok) return null;
     const data: unknown = await res.json();
     const meResult = MeResponseSchema.safeParse(data);
@@ -116,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleSignOut = useCallback(async () => {
     if (session) {
       const jwt = await getAccessToken().catch(() => null);
-      if (jwt) void fetch(`${API_BASE}/api/logout`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}` } }).catch(() => undefined);
+      if (jwt) void apiFetch(`${API_BASE}/api/logout`, jwt, null, { method: 'POST' }).catch(() => undefined);
     }
     // Deliberately NO setSession(null) here. logout() resolves after CALLING
     // window.location.assign, while the page is still alive — clearing the
