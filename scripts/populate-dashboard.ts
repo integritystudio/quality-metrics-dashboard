@@ -24,7 +24,7 @@
  * exactly how it ran, unnoticed, until 2026-09-15. It needs `INJECT_HMAC_SECRET`.
  *
  * Usage:
- *   npm run populate                          # full pipeline (needs ANTHROPIC_API_KEY)
+ *   npm run populate                          # full pipeline (needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY; exits 1 without one)
  *   npm run populate -- --seed                # offline: synthetic judge scores
  *   npm run populate -- --dry-run --seed      # preview only, no writes
  *   npm run populate -- --skip-judge          # rule-based + upload + sync only
@@ -51,7 +51,8 @@
  *   10 DERIVE_EXIT_INPUT_DRIFT — derive delivered, but a day's spans no longer match what it reads (a hooks rename?)
  *   11 UPLOAD_EXIT_SEND_FAILED — upload's send failed after the network retries; the next run re-sends the rest
  *   For 3-11 the remaining stages still ran.
- *   1  any other stage failure; the pipeline stops at that stage
+ *   1  any other stage failure; the pipeline stops at that stage. Also: no judge
+ *      key and neither --seed nor --skip-judge given — nothing runs (fail closed)
  *
  * derive-evaluations, upload-evaluations and sync-to-kv are retried on transient
  * network failures (DNS, reset connections) with the bounded schedule in
@@ -76,6 +77,7 @@ import {
   judgeScopeArgs,
   runWithRetry,
 } from './pipeline-stages.js';
+import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
 
 const SCRIPTS_DIR = import.meta.dirname;
 const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
@@ -116,29 +118,30 @@ try {
   process.exit(1);
 }
 
-// Auto-fallback to --seed when no API key is present.
+// Fail closed when the judge would run with no key.
 //
-// 🔴 THIS MUST ANNOUNCE ITSELF. The branch was an empty block, so a run with no
-// ANTHROPIC_API_KEY quietly published SYNTHETIC judge scores while every stage
-// reported success — the same shape as the dead-dashboard failure the
-// INJECT_HMAC_SECRET check below was added to prevent, and harder to notice,
-// because the output is a full dashboard of plausible numbers rather than an
-// empty one. Doppler `prd` carries the key today, so the scheduled run judges
-// for real; rotate it out and this is the branch that decides, twice a day,
-// without saying so.
+// 🔴 There is no automatic --seed any more. Until 2026-09-30 this branch fell
+// back to seed mode when ANTHROPIC_API_KEY was absent — first silently (an
+// empty block), then with a warning — so a run that lost its key published
+// SYNTHETIC judge scores while every stage reported success: a full dashboard
+// of plausible numbers rather than an empty one. No evaluator vendor surveyed
+// does this; they fail visibly (Langfuse marks the run Error, LangSmith pauses
+// the evaluator). Seeded scores remain available, but only on request: pass
+// --seed, or --skip-judge to leave judge metrics out.
 //
-// Warns rather than exits, unlike its neighbour: running offline against seeded
-// scores is a legitimate local workflow (`npm run populate -- --seed` asks for
-// exactly this). What is not legitimate is doing it by accident.
-const autoSeed = !seed && !skipJudge && !process.env.ANTHROPIC_API_KEY;
-if (autoSeed) {
-  console.warn(
-    '[populate] WARNING: ANTHROPIC_API_KEY is not set — falling back to --seed, ' +
-    'so judge scores in this run are SYNTHETIC, not real. The dashboard it ' +
-    'publishes will look populated and be fabricated. Set the key (e.g. run ' +
-    'under `doppler run --project integrity-studio --config prd`), or pass ' +
-    '--skip-judge to leave judge metrics out entirely.',
+// The check goes through resolveJudgeApiKey so both credential names count —
+// the old check read ANTHROPIC_API_KEY alone and treated a run with only
+// LLM_JUDGE_ANTHROPIC_KEY set as keyless. Dry runs are exempt: the judge's own
+// --dry-run returns before its key check and spends nothing.
+if (!seed && !skipJudge && !dryRun && !resolveJudgeApiKey()) {
+  console.error(
+    `[populate] Error: neither ${JUDGE_API_KEY_ENV} nor ${DEFAULT_API_KEY_ENV} is set, so the ` +
+    'judge cannot run. Refusing to fall back to synthetic scores: a seeded dashboard looks ' +
+    'populated and is fabricated. Set the key (e.g. run under `doppler run --project ' +
+    'integrity-studio --config prd`), pass --seed to ask for synthetic scores explicitly, ' +
+    'or pass --skip-judge to leave judge metrics out.',
   );
+  process.exit(1);
 }
 
 // Preflight: dist/ must exist for sync-to-kv (imports compiled quality-metrics)
@@ -224,7 +227,7 @@ async function main(): Promise<void> {
   if (!skipJudge) {
     const judgeArgs: string[] = [...judgeScope];
     if (dryRun) judgeArgs.push('--dry-run');
-    if (seed || autoSeed) judgeArgs.push('--seed');
+    if (seed) judgeArgs.push('--seed');
     if (limit) judgeArgs.push('--limit', limit);
     if (batch) judgeArgs.push(JUDGE_BATCH_FLAG);
     if (perCriterion) judgeArgs.push(JUDGE_PER_CRITERION_FLAG);
