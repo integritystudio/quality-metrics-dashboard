@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { loadEnv } from 'vite';
 import { parentDistStub } from './vite-plugins.js';
+import { API_HOST, API_PORT } from './src/api/config.js';
 
 export default defineConfig(({ command, mode }) => {
   // Merge .env file vars with process.env VITE_* vars (process.env wins — allows CI injection)
@@ -11,6 +12,12 @@ export default defineConfig(({ command, mode }) => {
   for (const [k, v] of Object.entries(process.env)) {
     if (k.startsWith('VITE_') && v !== undefined) merged[k] = v;
   }
+  // The SPA always calls /api on its own origin; in dev this proxy forwards it
+  // server to server. API_PROXY_TARGET (shell or .env) points it at a deployed
+  // Worker instead of the local API server. It has no VITE_ prefix, so it never
+  // reaches the bundle.
+  const apiProxyTarget = loadEnv(mode, process.cwd(), 'API_PROXY_').API_PROXY_TARGET
+    || `http://${API_HOST}:${API_PORT}`;
 
   return {
     base: '/',
@@ -49,7 +56,7 @@ export default defineConfig(({ command, mode }) => {
       port: 5173,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:3001',
+          target: apiProxyTarget,
           changeOrigin: true,
         },
       },

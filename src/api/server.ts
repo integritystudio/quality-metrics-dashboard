@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { metricsRoutes } from './routes/metrics.js';
@@ -23,13 +22,6 @@ import { http1Fetch } from './parent/http1-fetch.js';
 setCloudBackendFetch(http1Fetch);
 
 const app = new Hono();
-
-const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
-if (!corsOrigin.startsWith('http://') && !corsOrigin.startsWith('https://')) {
-  console.error('Invalid CORS_ORIGIN: must start with http:// or https://', { corsOrigin });
-  throw new Error('Invalid CORS_ORIGIN: must start with http:// or https://');
-}
-app.use('/*', cors({ origin: corsOrigin }));
 
 app.route('/api', dashboardRoutes);
 app.route('/api', metricsRoutes);

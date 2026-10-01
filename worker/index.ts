@@ -244,9 +244,6 @@ app.use('/*', cors({
     'https://integritystudio.dev',
     'https://www.aledlie.com',
     'https://aledlie.com',
-    // Localhost origins for local dev (npm run dev hits deployed worker)
-    'http://localhost:5173',
-    'http://localhost:3000',
   ],
   // GET, POST, and DELETE are allowed. Bearer JWT auth on all /api/* routes prevents CSRF —
   // browsers cannot set custom Authorization headers in cross-site requests.
