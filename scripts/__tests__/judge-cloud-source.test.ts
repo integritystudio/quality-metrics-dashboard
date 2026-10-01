@@ -105,6 +105,20 @@ describe('judgedKeys', () => {
   it('skips a row with no session, which scores no transcript turn', () => {
     expect(judgedKeys([row(RELEVANCE_EVAL_NAME, { sessionId: undefined })]).size).toBe(0);
   });
+
+  it('does not mark a turn judged for Haiku when only another model judged it', () => {
+    const opus = (name: string) => row(name, { evaluatorKind: 'llm', judgeModel: 'claude-opus-5' });
+
+    expect(turnSkip(turn(), judgedKeys([opus(RELEVANCE_EVAL_NAME), opus(COHERENCE_EVAL_NAME)]), { deliverableOnly: false }))
+      .toBeUndefined();
+  });
+
+  it('does not mark a turn judged on seeded rows, which name no judge', () => {
+    const seeded = (name: string) => row(name, { evaluatorKind: 'rule', cohort: 'seed' });
+
+    expect(turnSkip(turn(), judgedKeys([seeded(RELEVANCE_EVAL_NAME), seeded(COHERENCE_EVAL_NAME)]), { deliverableOnly: false }))
+      .toBeUndefined();
+  });
 });
 
 describe('transcriptsForSessions', () => {

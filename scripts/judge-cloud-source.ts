@@ -29,6 +29,7 @@ import {
   PRODUCER,
   TIMESTAMP_TURN_KEY_LEN,
   TRANSCRIPT_DIRS,
+  addJudgedKeys,
   scanTranscriptDirs,
   type TranscriptInfo,
 } from './judge-evaluations.js';
@@ -48,7 +49,7 @@ export interface CloudJudgeDiscovery {
   transcripts: TranscriptInfo[];
   /** Built from the cloud spans; anchors turns and routes their posts. */
   accounts: AccountIndex;
-  /** `${sessionId}:${evaluationName}:${turnKey}` for every turn the cloud holds a judge row for. */
+  /** Both dedup keys (`addJudgedKeys`) for every turn the cloud holds a judge row for. */
   existingKeys: Set<string>;
   /** Sessions the cloud names that have no transcript here: judged only where they ran. */
   sessionsWithoutTranscript: number;
@@ -81,13 +82,13 @@ export function evaluationEventMs(row: EvaluationResult): number {
   return typeof legacy === 'number' ? legacy : Number(row.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
 }
 
-/** Dedup keys in `_loadExistingKeys`' shape; a row without a session scores no transcript turn. */
+/** Dedup keys in `_loadExistingKeys`' shape, plain and per judge model; a row without a session scores no transcript turn. */
 export function judgedKeys(rows: Iterable<EvaluationResult>): Set<string> {
   const keys = new Set<string>();
   for (const row of rows) {
     if (!row.sessionId) continue;
     const turnKey = new Date(evaluationEventMs(row)).toISOString().slice(0, TIMESTAMP_TURN_KEY_LEN);
-    keys.add(`${row.sessionId}:${row.evaluationName}:${turnKey}`);
+    addJudgedKeys(keys, { sessionId: row.sessionId, evaluationName: row.evaluationName, turnKey, judgeModel: row.judgeModel, cohort: row.cohort });
   }
   return keys;
 }
