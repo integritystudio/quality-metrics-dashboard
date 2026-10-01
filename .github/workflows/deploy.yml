@@ -2,8 +2,7 @@ name: Deploy Workers
 
 # integritystudio.dev is a Workers custom domain on quality-metrics-api
 # (migrated off GitHub Pages 2026-08-22). The SPA is served by the Workers
-# asset layer, and the SPA always calls /api on its own origin — no API URL
-# is built in, so none is exported here.
+# asset layer and always calls /api on its own origin.
 
 on:
   push:
