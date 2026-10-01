@@ -309,7 +309,7 @@ every call. It is also meaningless there: the viewed org travels in the path, an
 admin's active org.
 - Under option (A), add a gateway base URL (`VITE_…`, prod `https://api.integritystudio.dev`)
   and a fetch path that sends only `Authorization`. Under (B) or (C), the calls are same-origin
-  `API_BASE` calls and `apiFetch` can stay.
+  `/api` calls and `apiFetch` can stay.
 - Either way, reuse `useAuth().getAccessToken()`. The token already carries audience
   `https://api.integritystudio.dev`, the value in both `dashboard/wrangler.toml` and
   `workers/api-gateway/wrangler.toml`, on the same Auth0 tenant (prod `dev-68gg87ow4mg4kzyo`,
