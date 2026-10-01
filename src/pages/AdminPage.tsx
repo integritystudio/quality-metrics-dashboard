@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
+import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useOrgOptional } from '../contexts/OrgContext.js';
@@ -26,6 +27,10 @@ const MEMBER_TABLE_COLUMNS = [
 
 const MEMBERSHIP_ROLES: OrgMembershipRoleValue[] = ['owner', 'admin', 'billing_admin', 'member', 'viewer'];
 
+/** One key per list, so a reload after a mutation refetches in place (see onMutationEnd). */
+const USERS_QUERY_KEY = ['admin', 'users'] as const;
+const MEMBERS_QUERY_KEY = ['admin', 'members'] as const;
+
 function RoleChip({
   role,
   onRevoke,
@@ -50,6 +55,23 @@ function RoleChip({
   );
 }
 
+/**
+ * The JSON mutation fetch both admin rows use. On-choke-point (P6): it goes
+ * through the shared api-client so X-Org-Id threading is single-source on the client.
+ */
+function useAdminFetch() {
+  const { getAccessToken } = useAuth();
+  const activeOrgId = useOrgOptional()?.activeOrgId ?? null;
+  return async (path: string, method: string, body?: unknown): Promise<Response> => {
+    const token = await getAccessToken();
+    return apiFetch(`${API_BASE}${path}`, token, activeOrgId, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+  };
+}
+
 function UserRow({
   user,
   availableRoles,
@@ -64,24 +86,11 @@ function UserRow({
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getAccessToken } = useAuth();
+  const adminFetch = useAdminFetch();
 
   const assignableRoles = availableRoles.filter(
     (r) => !user.roles.some((ur) => ur.id === r.id),
   );
-
-  const org = useOrgOptional();
-
-  // On-choke-point (P6): admin mutations go through the shared api-client so
-  // X-Org-Id threading is single-source on the client.
-  async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
-    const token = await getAccessToken();
-    return apiFetch(`${API_BASE}${path}`, token, org?.activeOrgId ?? null, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
-  }
 
   async function handleAssign() {
     if (!selectedRoleId) return;
@@ -181,19 +190,9 @@ function MemberRow({
   const [selectedRole, setSelectedRole] = useState<OrgMembershipRoleValue>(member.membershipRole);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getAccessToken } = useAuth();
-  const org = useOrgOptional();
+  const adminFetch = useAdminFetch();
 
   const ownerLocked = (member.membershipRole === 'owner' || selectedRole === 'owner') && !canTouchOwner;
-
-  async function memberFetch(path: string, method: string, body?: unknown): Promise<Response> {
-    const token = await getAccessToken();
-    return apiFetch(`${API_BASE}${path}`, token, org?.activeOrgId ?? null, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
-  }
 
   async function handleRoleChange() {
     if (selectedRole === member.membershipRole) return;
@@ -201,7 +200,7 @@ function MemberRow({
     setError(null);
     const mutationId = onMutationStart();
     try {
-      const res = await memberFetch(`/api/admin/members/${member.userId}/role`, 'POST', { membershipRole: selectedRole });
+      const res = await adminFetch(`/api/admin/members/${member.userId}/role`, 'POST', { membershipRole: selectedRole });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         setError(text || 'Failed to update role');
@@ -220,7 +219,7 @@ function MemberRow({
     setError(null);
     const mutationId = onMutationStart();
     try {
-      const res = await memberFetch(`/api/admin/members/${member.userId}`, 'DELETE');
+      const res = await adminFetch(`/api/admin/members/${member.userId}`, 'DELETE');
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         setError(text || 'Failed to remove member');
@@ -282,11 +281,9 @@ function MemberRow({
  * org — this page can never read or mutate another org's memberships.
  */
 function OrgMembersSection({
-  refreshKey,
   onMutationStart,
   onMutationEnd,
 }: {
-  refreshKey: number;
   onMutationStart: () => string;
   onMutationEnd: (id: string) => void;
 }) {
@@ -294,7 +291,7 @@ function OrgMembersSection({
   const canTouchOwner = session?.isStaff === true || session?.role === 'owner';
 
   const { data: members, isLoading, error } = useApiQuery<AdminMember[]>(
-    ['admin', 'members', refreshKey],
+    MEMBERS_QUERY_KEY,
     () => `${API_BASE}/api/admin/members`,
   );
 
@@ -328,7 +325,12 @@ function OrgMembersSection({
 }
 
 export function AdminPage() {
-  const [refreshKey, setRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
+  // Org-scoped sessions (P6) manage the ACTIVE ORG's members; the legacy
+  // global user_roles table below remains for pre-cutover and staff use.
+  const org = useOrgOptional();
+  const activeOrgId = org?.activeOrgId ?? null;
+  const orgScoped = !!activeOrgId && (org?.memberships.length ?? 0) > 0;
   // Replaced numeric counter with a Set of in-flight request IDs.
   // A numeric counter gets stuck if a mutation throws before onMutationEnd;
   // a Set is self-correcting — duplicate remove() calls are safe no-ops.
@@ -344,17 +346,18 @@ export function AdminPage() {
   const onMutationEnd = useCallback((id: string) => {
     pendingMutationsRef.current.delete(id);
     if (pendingMutationsRef.current.size === 0) {
-      setRefreshKey((k) => k + 1);
+      // Refetch in place, not under a new key: a new key has no data yet, so
+      // PageShell would swap the table for a skeleton and unmount every row,
+      // discarding the error a failed mutation just set. useApiQuery leads
+      // every key with the active org.
+      for (const key of [USERS_QUERY_KEY, MEMBERS_QUERY_KEY]) {
+        void queryClient.invalidateQueries({ queryKey: [activeOrgId, ...key] });
+      }
     }
-  }, []);
-
-  // Org-scoped sessions (P6) manage the ACTIVE ORG's members; the legacy
-  // global user_roles table below remains for pre-cutover and staff use.
-  const org = useOrgOptional();
-  const orgScoped = !!org?.activeOrgId && org.memberships.length > 0;
+  }, [queryClient, activeOrgId]);
 
   const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
-    ['admin', 'users', refreshKey],
+    USERS_QUERY_KEY,
     () => `${API_BASE}/api/admin/users`,
     { enabled: !orgScoped },
   );
@@ -368,7 +371,6 @@ export function AdminPage() {
   if (orgScoped) {
     return (
       <OrgMembersSection
-        refreshKey={refreshKey}
         onMutationStart={onMutationStart}
         onMutationEnd={onMutationEnd}
       />

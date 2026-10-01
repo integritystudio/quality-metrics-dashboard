@@ -1,7 +1,7 @@
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
-import { API_BASE, POLL_INTERVAL_MS, STALE_TIME, RETRY_DELAY_BASE, RETRY_DELAY_CAP, WORKER_ERR_NO_DATA } from '../lib/constants.js';
+import { API_BASE, POLL_INTERVAL_MS, STALE_TIME, RETRY_DELAY_BASE, RETRY_DELAY_CAP } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
-import { isWorkerNoData } from '../lib/api-client.js';
+import { isWorkerNoData, WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 
 /**
  * Return a minimal `QualityDashboardSummary` with `overallStatus: 'no_data'`

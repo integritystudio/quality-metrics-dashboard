@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { RolePage } from '../App.js';
-import { WORKER_ERR_NO_DATA } from '../lib/constants.js';
+import { WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 import type { RoleViewType } from '../types.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper, stubFetch } from './support/query-harness.js';
 

@@ -1,7 +1,7 @@
 /**
  * Org switcher (P6): visible only for multi-membership users (or staff with at
  * least one membership to switch between). Persists the choice server-side via
- * POST /api/org/switch and invalidates the query cache through OrgContext.
+ * POST /api/org/switch and drops the prior org's cached queries through OrgContext.
  */
 
 import { useState } from 'react';

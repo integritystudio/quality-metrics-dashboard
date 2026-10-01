@@ -6,6 +6,7 @@ import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSumma
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
+import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { supabasePost } from '../src/lib/supabase-rest.js';
 
@@ -50,8 +51,6 @@ const ERR_INVALID_USER_ID = 'Invalid userId';
 const ERR_INVALID_ROLE_ID = 'Invalid roleId';
 const ERR_INTERNAL = 'Internal server error';
 const ERR_NO_ORG = 'No organization membership';
-const ERR_NO_DATA = 'No data available';
-const ERR_NO_CALIBRATION_DATA = 'No calibration data available';
 const ERR_ROUTING_TELEMETRY_MALFORMED = 'Routing telemetry data is malformed';
 const ERR_CALIBRATION_MALFORMED = 'Calibration data is malformed';
 const ERR_FAILED_LOAD_USER_ROLES = 'Failed to load user roles';
@@ -254,7 +253,7 @@ app.use('/*', cors({
   allowMethods: ['GET', 'POST', 'DELETE'],
   // X-Org-Id carries the client's chosen active org (P5/P6); membership-validated
   // server-side in the auth middleware, never trusted as-is.
-  allowHeaders: ['Authorization', 'Content-Type', 'X-Org-Id'],
+  allowHeaders: ['Authorization', 'Content-Type', ORG_ID_HEADER],
 }));
 
 // Cache policy: private, no-store for all /api/* (responses may contain user-specific data)
@@ -389,7 +388,7 @@ app.use('/api/*', async (c, next) => {
 
       // Resolve activeOrgId: X-Org-Id (membership-validated, or staff) →
       // default_organization_id (re-validated — Risk 15) → first membership.
-      const requestedOrg = c.req.header('X-Org-Id');
+      const requestedOrg = c.req.header(ORG_ID_HEADER);
       let activeOrgId: string | undefined;
       if (requestedOrg) {
         if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
@@ -486,8 +485,6 @@ function getSessionKv<T>(c: AppContext, key: string): Promise<T | null> {
     : null;
   return getKv<T>(c.env.DASHBOARD, orgId, key, c.env);
 }
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Both apikey and Authorization use the service role key — the anon key is for browser clients only.
 function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
@@ -599,7 +596,7 @@ app.get('/api/dashboard', async (c) => {
 
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await getSessionKv<unknown>(c,key);
-  if (!data) return c.json({ error: ERR_NO_DATA }, Http.NotFound);
+  if (!data) return c.json({ error: WORKER_ERR_NO_DATA }, Http.NotFound);
   logActivity(session.appUserId, 'dashboard_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json(data);
 });
@@ -828,7 +825,7 @@ app.get('/api/compliance/verifications', (c) => {
 app.get('/api/calibration', async (c) => {
   if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const raw = await getSessionKv<unknown>(c,'meta:calibration');
-  if (!raw) return c.json({ error: ERR_NO_CALIBRATION_DATA }, Http.NotFound);
+  if (!raw) return c.json({ error: WORKER_ERR_NO_CALIBRATION_DATA }, Http.NotFound);
   // KV can still hold a payload written by an older sync-to-kv; parse rather
   // than pass through, so drift surfaces here instead of in the frontend.
   const result = calibrationResponseSchema.safeParse(raw);

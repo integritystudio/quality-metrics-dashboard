@@ -11,7 +11,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
-import { API_BASE, WORKER_ERR_NO_DATA } from '../lib/constants.js';
+import { API_BASE } from '../lib/constants.js';
+import { WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 import {
   makeQueryWrapper,
   stubFetch,

@@ -109,6 +109,64 @@ first. Acceptance: the page test mocks only the page's direct children.
 Move it to an `AgentSessionPage` test file alongside the page's other coverage. Acceptance:
 `WorkflowPage.test.tsx` tests only `WorkflowPage`.
 
+### API client
+
+Deferred from the 2026-09-30 `/simplify` pass on `src/lib/api-client.ts`, which moved the shared wire
+values into `src/lib/worker-contract.ts`. Each item below is in a caller, outside that file.
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| ~~ORG-SWITCH-REFETCHES-OLD-ORG~~ | ~~`switchOrg` refetches every mounted query under the old org before fetching the new one~~ | ~~P3~~ | Done 2026-09-30 — commit 4c4b594 |
+| ~~QUERYFN-DROPS-ABORT-SIGNAL~~ | ~~`useApiQuery` and `useTrace` never abort a request whose key has moved on~~ | ~~P3~~ | Done 2026-09-30 — commit f767bca |
+| ~~AUTH-FETCHES-BYPASS-API-CLIENT~~ | ~~`/api/me`, `/api/logout` and `/api/activity` build `Authorization` by hand~~ | ~~P3~~ | Done 2026-09-30 — commit 1b4b9fc. `supabase-rest.ts`'s service-role `Bearer` is a different scheme and stays |
+| ~~ADMIN-FETCH-DUPLICATED~~ | ~~`adminFetch` and `memberFetch` in `AdminPage` have identical bodies~~ | ~~P3~~ | Done 2026-09-30 — commit 6d4f3aa |
+| ~~ORG-ID-UUID-CHECKS-DISAGREE~~ | ~~The org-id header check and the org-id Zod schemas accept different ids~~ | ~~P3~~ | Done 2026-09-30 — commit 81d78fd. Schemas loosened to `UUID_PATTERN` (all ids, not only org) |
+
+**ORG-SWITCH-REFETCHES-OLD-ORG.** `switchOrg` (`src/contexts/OrgContext.tsx:68`) calls
+`queryClient.invalidateQueries()` with no filter right after `setChosenOrgId`, before React re-renders.
+Its default `refetchType: 'active'` refetches every mounted query, and those are still the old org's:
+their `queryFn` closures hold the old `activeOrgId`, so each sends the old `X-Org-Id`. The re-render then
+moves every key to the new org (`useApiQuery.ts:65` and `useTrace.ts:31` both lead with the org id) and
+fetches again. Each switch therefore costs one wasted round trip per mounted query, `switchOrg` does not
+resolve until they finish, and the results are cached under keys that are reused only on a switch back.
+The comment above the call says "Drop every cached query", which is not what `invalidateQueries` does.
+Fix: `queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== orgId })`, or
+`invalidateQueries({ refetchType: 'none' })` to keep the mark-stale behaviour; the key change triggers
+the fetches that are needed, once. Acceptance: a test counting fetches across a switch sees one request
+per mounted query, each carrying the new org's `X-Org-Id`.
+
+**QUERYFN-DROPS-ABORT-SIGNAL.** The `queryFn`s in `useApiQuery` (`src/hooks/useApiQuery.ts:66`) and
+`useTrace` (`src/hooks/useTrace.ts:32`) ignore React Query's `{ signal }`, so a request whose key has
+moved on (a period or role change, a new `traceId`, an org switch) runs to completion and is parsed
+anyway. `apiFetch` already forwards `signal` through `init`. Fix:
+`queryFn: async ({ signal }) => … apiFetch(url, token, activeOrgId, { signal })`. Acceptance: a test that
+changes the key mid-flight sees the first request aborted.
+
+**AUTH-FETCHES-BYPASS-API-CLIENT.** Three fetches write `Authorization: Bearer` themselves instead of
+going through `apiFetch`: `/api/me` (`src/contexts/AuthContext.tsx:24`), `/api/logout`
+(`AuthContext.tsx:119`) and `/api/activity` (`src/lib/activity-logger.ts:19`). None sends `X-Org-Id`
+today, and `apiFetch(url, jwt, null, init)` reproduces that exactly. Until they move, a header every
+worker request needs would miss these three; `api-client.ts`'s header comment was narrowed to "every
+org-scoped fetch" on 2026-09-30 so that it stays true. ADMIN-CV-API-CLIENT's option (A) needs an
+Authorization-only fetch path too, so one helper could serve both. Acceptance: no `Bearer` template
+literal left in non-test `src/` code outside `api-client.ts`.
+
+**ADMIN-FETCH-DUPLICATED.** `adminFetch` (`src/pages/AdminPage.tsx:77`) and `memberFetch`
+(`AdminPage.tsx:189`) have identical bodies: fetch a token, call `apiFetch` with the active org, set a
+JSON content type, stringify an optional body. Fix: one hook in `AdminPage` (e.g. `useAdminFetch()`)
+that returns the function. Acceptance: one definition, used by both call sites.
+
+**ORG-ID-UUID-CHECKS-DISAGREE.** Two rules guard the same org id. The worker's `X-Org-Id` check and the
+client's stored-id check use `UUID_PATTERN` (`src/lib/worker-contract.ts`), which accepts any
+8-4-4-4-12 hex string. `OrgMembershipSummarySchema` and `OrgSwitchRequestSchema`
+(`src/lib/validation/auth-schemas.ts:61`, `:70`) use `z.string().uuid()`, which in Zod 4.4.3 also checks
+the version and variant digits. Checked 2026-09-30: `11111111-1111-1111-1111-111111111111` passes the
+pattern and fails the schema, while a v4 id passes both. An id like that would be accepted as a header
+but rejected in the switch body, and would fail the `/api/me` parse, which drops the session. Supabase
+issues v4 ids, so production is unaffected; fixtures and seeded orgs are where it would surface. Fix:
+pick one rule. `z.guid()` matches `UUID_PATTERN` exactly; alternatively, tighten the pattern to Zod's.
+Acceptance: one definition, used by both the pattern checks and the schemas.
+
 ### Admin customer view
 
 Filed 2026-09-29. A staff-only clone of the customer dashboard at `integritystudio.ai/dashboard`
@@ -473,6 +531,86 @@ Acceptance:
 - For the chosen option, a preflight and a GET from each production origin succeed.
 - The dev pairing (this app's dev origin and tenant against the gateway's dev origin and tenant)
   is documented and works.
+
+### API keys
+
+Filed 2026-09-30. Paths outside this repo are in IntegrityLandingPage (`~/code/is-public-sites/IntegrityLandingPage`).
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| ADMIN-API-KEY-ROTATION | A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route | P2 | Blocked on three `api-keys-rotate` defects (below). Cross-repo |
+
+**ADMIN-API-KEY-ROTATION.** Nobody can rotate an `obtk_` key without an operator today. The only
+rotation done so far was by hand: insert an `api_keys` row, PUT its `apikey:<sha256>` record into
+the obtool-api `AUTH` KV, then revoke the old row and DELETE its record. So a leaked key stays live
+until someone with database and Cloudflare access acts. The backend half already exists:
+`supabase/functions/api-keys-rotate` (rotates one of the caller's own active keys and returns the
+new plaintext token once) and `api-keys-list`. No app calls `api-keys-rotate` today, so this UI
+would be its first consumer; only the toolkit's e2e suite exercises it.
+
+*Blockers, in `api-keys-rotate/index.ts`.* Fix these in IntegrityLandingPage before exposing the
+function to users, or the UI hands them to everyone with a key:
+1. **The new key can land in another org.** It takes its org from the caller's
+   `organization_memberships … .limit(1)` (~84-92), an arbitrary membership, not the old key's
+   `organization_id`, which the old-key select (~95-101) does not even read. A user in two orgs who
+   rotates gets a key that ingests into, and reads from, the other tenant.
+2. **A failed rotation leaves the user with no key.** The old row is revoked and its KV record
+   deleted (~113-126) *before* the new key is inserted (~133-148); neither result is checked. If
+   the insert fails, the response is 500 and the user has no working key. Create and sync the new
+   key first, then revoke the old one.
+3. **A failed KV write still reports success.** If the new record's PUT fails (~171-181), the
+   response is 201 with a `warning`, the new key does not authenticate, and the old one is already
+   gone. With item 2's order fixed, this should fail and leave the old key in place.
+Also confirm that the function's `KV_NAMESPACE_ID` secret names the `AUTH` namespace. Doppler's
+`KV_NAMESPACE_ID` holds the *dashboard* namespace, so copying it from there would break every
+rotation silently.
+
+*Decided 2026-09-30:*
+- **Only admins rotate, by design.** The UI lives on `AdminPage`, behind `dashboard.admin`
+  (`AdminGuard`, `App.tsx`). The function rotates only the caller's own keys, so rotating another
+  member's key is out of scope.
+- **A same-origin worker route** (e.g. `POST /api/admin/keys/:keyId/rotate`), not a call from the
+  SPA. A direct call would be cross-origin, and the function's CORS allows only
+  `authorization, x-client-info, apikey, content-type`, so `apiFetch` with an active org would fail
+  the preflight on `X-Org-Id` (the ADMIN-CV-API-CLIENT trap). Through the worker the SPA uses
+  `apiFetch` as usual (`useAdminFetch`).
+
+*The route:*
+- **Gate it on the server.** `AdminGuard` only hides the page. Use `orgAdminScope(c)`
+  (`worker/index.ts`), which the member routes already use: `dashboard.admin` plus an active org,
+  else 403. `dashboard.admin` is an org-scoped grant, so allow only keys whose `organization_id` is
+  the active org. An admin of one org must not rotate their key in an org where they are only a
+  member. Check this against `api_keys` with the service key before forwarding.
+- **Forward the user's bearer token** to `api-keys-rotate`, server to server. The function derives
+  the user from it, and `supabase/config.toml` pins `verify_jwt = true`. First confirm that the
+  Supabase gateway accepts this app's Auth0 token (audience `https://api.integritystudio.dev`). If
+  it does not, the route needs another way to act as the user.
+- **Audit it** with `logAuditEvent` (`key.rotate`, old and new key ids, never the token), as the
+  member routes do.
+- **Return the token in the response only.** The worker sets `no-store` on `/api/*` already; it must
+  not log or cache the token.
+
+*UI:*
+- List the caller's active keys: prefix (`obtk_ab12cd34…`), name, tier and created date, plus last
+  used if `api-keys-list` returns it.
+- Rotate each key behind a confirm that says the old key stops working immediately (the function
+  has no grace period) and names what to update, e.g. `OBTOOL_API_KEY` wherever the hooks read it.
+- Show the new token exactly once, with a copy button. Keep it out of `localStorage` and out of the
+  React Query cache: use a mutation's result, not a query, and drop it when the user leaves the page.
+- Errors stay visible in the row. Since 099c7b9 the admin tables stay mounted across reloads.
+- Styles come from `theme.css` classes, not inline `style`.
+
+Acceptance:
+- A user rotates one of their keys. The new token authenticates against obtool-api
+  (`GET /v1/traces` → 200) and the old one is refused (401).
+- The new key belongs to the same org as the old one (blocker 1).
+- The route answers 403 to a session without `dashboard.admin`, to one with no active org, and for
+  a key outside the active org. A worker test pins all three.
+- Each rotation writes one `key.rotate` audit row, with no token in it.
+- A rotation that fails at any step leaves the old key working and shows an error (blockers 2-3).
+- The token appears once and is not found in `localStorage` or the query cache afterwards.
+- `AdminPage.test.tsx` covers success, refusal, network error and cancel, using new routes in its
+  fake worker.
 
 ### Security
 
