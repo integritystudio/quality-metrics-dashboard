@@ -194,8 +194,8 @@ export const MeResponseSchema = z.object({
     'dashboard.admin',
   ])),
   allowedViews: z.array(RoleSchema),
-  // Org-scoping fields (P5) — optional: absent when ORG_SCOPING_ENABLED is off
-  // (the legacy global path), so pre-cutover
+  // Org-scoping fields (P5) — optional: absent only when ORG_SCOPING_ENABLED is
+  // off (with it on, a session without an org is refused), so pre-cutover
   // responses validate unchanged.
   activeOrg: UuidSchema.optional(),
   memberships: z.array(OrgMembershipSummarySchema).optional(),

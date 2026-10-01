@@ -55,6 +55,22 @@ const DATA_ROUTES = [
   '/api/routing-telemetry',
 ];
 
+// The rest of /api/* (all but /api/health): refused by the same middleware branch.
+const NON_DATA_ROUTES: Array<[method: string, path: string]> = [
+  ['GET', '/api/me'],
+  ['POST', '/api/org/switch'],
+  ['POST', '/api/logout'],
+  ['POST', '/api/activity'],
+  ['GET', '/api/admin/members'],
+  ['POST', `/api/admin/members/${APP_USER_ID}/role`],
+  ['DELETE', `/api/admin/members/${APP_USER_ID}`],
+  ['GET', '/api/admin/users'],
+  ['GET', '/api/admin/roles'],
+  ['POST', `/api/admin/users/${APP_USER_ID}/roles`],
+  ['DELETE', `/api/admin/users/${APP_USER_ID}/roles/role-1`],
+];
+const HTTP_NOT_FOUND = 404;
+
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(),
   jwtVerify: vi.fn(),
@@ -97,8 +113,8 @@ function stubSupabase(memberships: unknown[]) {
   }));
 }
 
-function request(path: string, env = makeEnv()): Promise<Response> {
-  return Promise.resolve(app.request(path, { headers: { Authorization: 'Bearer mock-jwt' } }, env, makeCtx()));
+function request(path: string, env = makeEnv(), method = 'GET'): Promise<Response> {
+  return Promise.resolve(app.request(path, { method, headers: { Authorization: 'Bearer mock-jwt' } }, env, makeCtx()));
 }
 
 beforeEach(async () => {
@@ -123,8 +139,8 @@ describe('org scoping: a viewer-role user with no membership', () => {
     expect(mockKV.get).not.toHaveBeenCalled();
   });
 
-  it('gets 403 ERR_NO_ORG from /api/me', async () => {
-    const res = await request('/api/me');
+  it.each(NON_DATA_ROUTES)('gets 403 ERR_NO_ORG from %s %s', async (method, path) => {
+    const res = await request(path, makeEnv(), method);
 
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: ERR_NO_ORG });
@@ -141,7 +157,8 @@ describe('org scoping: sessions that keep access', () => {
 
     const res = await request(DASHBOARD_PATH);
 
-    expect(res.status).not.toBe(403);
+    // KV is empty, so reaching the route is a 404 ERR_NO_DATA, not the middleware's 403.
+    expect(res.status).toBe(HTTP_NOT_FOUND);
     expect(mockKV.get).toHaveBeenCalledWith(`org:${MEMBER_ORG_ID}:${BARE_DASHBOARD_KEY}`, 'json');
   });
 
@@ -161,7 +178,7 @@ describe('org scoping off', () => {
 
     const res = await request(DASHBOARD_PATH, makeEnv({ ORG_SCOPING_ENABLED: 'false' }));
 
-    expect(res.status).not.toBe(403);
+    expect(res.status).toBe(HTTP_NOT_FOUND);
     expect(mockKV.get).toHaveBeenCalledWith(BARE_DASHBOARD_KEY, 'json');
   });
 });
