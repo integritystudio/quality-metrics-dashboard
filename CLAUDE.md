@@ -155,7 +155,7 @@ All parent observability-toolkit code enters through three sanctioned surfaces �
 - **`@parent`** → `../dist` — imports from the parent observability-toolkit build, allowed only in the boundary files above. Run `npm run build` in `..` first or tests will fail without the `parentDistStub` vite plugin (active in Vitest only), which stubs `@parent` to empty modules when `../dist` is absent (standalone CI).
 - **`web-worker`** → `src/stubs/web-worker.ts` — always aliased; prevents bundler errors for worker imports.
 - **`VITE_E2E=1`** → stubs `@auth0/auth0-react` with `src/stubs/auth0-e2e.ts` for Playwright E2E runs.
-- **Vite proxy**: `/api/*` → the local Hono server (`src/api/config.ts`), or a deployed Worker when `API_PROXY_TARGET` is set (shell or `.env`; no `VITE_` prefix, so it never reaches the bundle). The SPA always calls `/api` on its own origin and there is no API URL setting, so neither the Worker nor the local server allows a localhost CORS origin.
+- **Vite proxy**: `/api/*` → the local Hono server (`src/api/config.ts`), or a deployed Worker when `API_PROXY_TARGET` is set (shell or `.env`; no `VITE_` prefix, so it never reaches the bundle). The SPA always calls `/api` on its own origin, so neither the Worker nor the local server allows a localhost CORS origin.
 
 ## Linting
 
