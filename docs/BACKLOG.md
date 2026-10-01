@@ -631,6 +631,53 @@ whatever its roles; the "no lockout" concern it guarded is gone now that every p
 membership. Acceptance: a user with a viewer role and no membership gets 403 from every data route; a test
 pins it; staff and members are unaffected.
 
+### Tooling and config
+
+Filed 2026-10-01. `npm run typecheck:scripts` fails today with three errors, from two causes. No workflow
+runs it: CI builds without the parent's `dist/`, which `tsconfig.scripts.json` includes. So both causes are
+visible only locally.
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| JUDGE-CLIENT-TEXTSTREAM | `scripts/judge-anthropic-client.ts` no longer type-checks against the parent's `@types/node` 26.6.3 | P3 | New 2026-10-01, from parent #101 |
+| SCRIPTS-TYPECHECK-WINDOW | `src/lib/api-client.ts` uses `window`, which the scripts config cannot see | P4 | Since 2026-08-14 (`0e5f0c1`) |
+| VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | (review) Blocked on tcad-scraper |
+
+**JUDGE-CLIENT-TEXTSTREAM.** `scripts/judge-anthropic-client.ts:28` fails with TS2322: undici's `Response` is
+missing `textStream`.
+- **Cause.** Parent #101 moved the parent to `@types/node` 26.6.3. Its `undici-types` 8.9 adds `textStream()`
+  to the global `Response`, and the scripts typecheck resolves that global through the parent's install. The
+  wrapped fetch returns undici 7.29.0's `Response` (this app's own copy), which lacks the method.
+- **Same defect upstream.** The parent hit it in `src/lib/core/http1-fetch.ts`, fixed it with a one-line cast
+  in #101, and then removed the cast in #103 when it moved to undici 8.
+- **Fix.** Either cast the return as #101 did, or move this app to undici 8. The judge client uses undici's own
+  `fetch` and `Agent`, so it does not hit the built-in-fetch handler break that #103 fixed in the parent.
+
+Acceptance: `typecheck:scripts` reports no error in this file.
+
+**SCRIPTS-TYPECHECK-WINDOW.** `tsconfig.scripts.json` sets `lib: ["ES2022"]` (no DOM) and includes
+`src/lib`. So `getStoredOrgId` and `setStoredOrgId` (`src/lib/api-client.ts:19`, `:31`) fail with "Cannot find
+name 'window'".
+- **Not from this session's refactor.** The pre-refactor file (`00c07e0^`) fails the same way under that
+  config, and the `window.localStorage` calls date from 2026-08-14. Dashboard #11's description attributed it
+  to the 2026-09-30 refactor.
+- **Fix.** Read the store through `globalThis.localStorage`; the existing `try`/`catch` already covers a
+  runtime without it.
+- **Alternative.** Exclude `src/lib/api-client.ts` from the scripts config, since no script imports it.
+
+Acceptance: `typecheck:scripts` reports no error in `src/lib`.
+
+**VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
+`VITE_API_URL`. It was removed from the local `.env`, but left in Doppler `integrity-studio`.
+- **Why it stayed.** tcad-scraper's production `deploy.yml` reads it from `prd`, falling back to
+  `https://api.alephatx.info/api`. Deleting it would silently move that build to the fallback.
+- **Unchecked.** The `dev_personal` and `stg` configs hold it too; their values were not checked.
+- **Fix.** Give tcad-scraper a key of its own, or its own project, then delete `VITE_API_URL` from every
+  `integrity-studio` config.
+
+Acceptance: `doppler secrets get VITE_API_URL` fails in every `integrity-studio` config, and tcad-scraper's
+production build still points at its API.
+
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.8](changelog/3.0.8/CHANGELOG.md) (2026-08-28), which closed
 `SCRIPTS-TSCONFIG-NUIA`.
