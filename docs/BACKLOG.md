@@ -120,7 +120,7 @@ values into `src/lib/worker-contract.ts`. Each item below is in a caller, outsid
 | ~~QUERYFN-DROPS-ABORT-SIGNAL~~ | ~~`useApiQuery` and `useTrace` never abort a request whose key has moved on~~ | ~~P3~~ | Done 2026-09-30 — commit f767bca |
 | ~~AUTH-FETCHES-BYPASS-API-CLIENT~~ | ~~`/api/me`, `/api/logout` and `/api/activity` build `Authorization` by hand~~ | ~~P3~~ | Done 2026-09-30 — commit 1b4b9fc. `supabase-rest.ts`'s service-role `Bearer` is a different scheme and stays |
 | ~~ADMIN-FETCH-DUPLICATED~~ | ~~`adminFetch` and `memberFetch` in `AdminPage` have identical bodies~~ | ~~P3~~ | Done 2026-09-30 — commit 6d4f3aa |
-| ORG-ID-UUID-CHECKS-DISAGREE | The org-id header check and the org-id Zod schemas accept different ids | P3 | (review) Latent; production ids pass both |
+| ~~ORG-ID-UUID-CHECKS-DISAGREE~~ | ~~The org-id header check and the org-id Zod schemas accept different ids~~ | ~~P3~~ | Done 2026-09-30 — commit 81d78fd. Schemas loosened to `UUID_PATTERN` (all ids, not only org) |
 
 **ORG-SWITCH-REFETCHES-OLD-ORG.** `switchOrg` (`src/contexts/OrgContext.tsx:68`) calls
 `queryClient.invalidateQueries()` with no filter right after `setChosenOrgId`, before React re-renders.
