@@ -411,12 +411,11 @@ app.use('/api/*', async (c, next) => {
         return next();
       }
 
-      // Legacy fallback (Risk 13, no lockout): a user with no membership but
-      // with user_roles rows resolves via the old global path — bare-key reads,
-      // legacy permission derivation, no org fields on the session.
-      if (roles.length === 0) {
-        return c.json({ error: ERR_NO_ORG }, Http.Forbidden);
-      }
+      // No active org and not staff: refuse, whatever the user's roles
+      // (AUTH-NO-ORG-LEGACY-SESSION). The on_user_created trigger gives every
+      // new user a role, so the old roles-only fallback (Risk 13) handed every
+      // user without an org a global session reading the home org's bare keys.
+      return c.json({ error: ERR_NO_ORG }, Http.Forbidden);
     }
 
     const permissions = [...permissionSet];
@@ -473,8 +472,8 @@ type AppContext = {
 
 /**
  * Session-scoped KV read used by every /api/* data route. With
- * ORG_SCOPING_ENABLED=false (or a legacy-fallback session carrying no
- * activeOrgId) this is a bare-key read — today's behavior, unchanged.
+ * ORG_SCOPING_ENABLED=false this is a bare-key read; with it on, the auth
+ * middleware refuses any session without an activeOrgId.
  */
 function getSessionKv<T>(c: AppContext, key: string): Promise<T | null> {
   const orgId = c.env.ORG_SCOPING_ENABLED === 'true'
