@@ -2,9 +2,8 @@ name: Deploy Workers
 
 # integritystudio.dev is a Workers custom domain on quality-metrics-api
 # (migrated off GitHub Pages 2026-08-22). The SPA is served by the Workers
-# asset layer, so the build uses a same-origin API base: VITE_API_URL is
-# deliberately NOT exported here — resolveApiBase falls back to '' in prod
-# builds, and the worker serves /api/* on the same origin.
+# asset layer, and the SPA always calls /api on its own origin — no API URL
+# is built in, so none is exported here.
 
 on:
   push:
@@ -68,7 +67,7 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v4
       - run: npm ci
-      - name: Build with env vars from Doppler (same-origin API — no VITE_API_URL)
+      - name: Build with env vars from Doppler (same-origin API)
         run: |
           export VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --project integrity-studio --config prd --plain)
           export VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --project integrity-studio --config prd --plain)
