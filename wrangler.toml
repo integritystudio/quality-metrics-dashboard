@@ -80,15 +80,16 @@ HOME_ORG_ID = "4fab26df-8675-47b1-9ba3-eae681c1285f"
 # measurement, not oversight). An empty allowlist means no dev user is staff,
 # which is correct: staff bypass membership checks, and nothing in dev should.
 STAFF_USER_IDS = "[]"
-# 🔴 DEV IS CUT OVER; PRODUCTION IS NOT. Dev leads deliberately — that is what
-# this environment is for — so do not read this as the state of the two
-# production workers, which are still "false" (cutover runbook P7).
+# Dev cut over first, deliberately — that is what this environment is for — and
+# the two production workers followed on 2026-09-18 (P7, `f813e0a`), so both
+# blocks now read "true". Flip them separately: dev may lead production again.
 #
 # Turning this on changes who can see what, not just which keys are read: the
 # worker now derives permissions from the ACTIVE ORG's membership role
 # (DASHBOARD_ROLE_BY_MEMBERSHIP) instead of legacy user_roles, and scopes every
 # KV read to `org:<activeOrgId>:…` with the bare-key fallback restricted to the
-# home org. The e2e users the sender mints are `owner` of their own fresh empty
+# home org, and refuses (403) any non-staff user with no org membership, whatever
+# their user_roles (AUTH-NO-ORG-LEGACY-SESSION). The e2e users the sender mints are `owner` of their own fresh empty
 # personal org, which under those rules would hand them `dashboard.admin` and
 # 404 every data route — so `createAuth0TestUser` grants them a home-org
 # `viewer` membership and pins `default_organization_id` to it. Flipping this
