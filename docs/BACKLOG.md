@@ -616,7 +616,7 @@ Acceptance:
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| AUTH-NO-ORG-LEGACY-SESSION | A signed-in user with no org membership gets a legacy global session and reads bare-key (pre-tenancy) KV data | P1 | Confirmed in code 2026-09-29, not reproduced live |
+| ~~AUTH-NO-ORG-LEGACY-SESSION~~ | ~~A signed-in user with no org membership gets a legacy global session and reads bare-key (pre-tenancy) KV data~~ | ~~P1~~ | Done 2026-10-01 — commit 6579b2c. Pinned by `worker/__tests__/org-auth-no-membership.test.ts`; live once the three workers are redeployed |
 
 **AUTH-NO-ORG-LEGACY-SESSION.** In `worker/index.ts` (~417-434) the org path is skipped when the user has
 no membership and is not staff, and the "Legacy fallback (Risk 13, no lockout)" only refuses when
