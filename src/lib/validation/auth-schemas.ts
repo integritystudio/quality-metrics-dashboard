@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
 import { RoleSchema } from '../roles.js';
+import { UUID_PATTERN } from '../worker-contract.js';
+
+/**
+ * Every Supabase id in these schemas — user, role, org. Built from the same
+ * UUID_PATTERN the worker checks X-Org-Id and path ids against, so a header the
+ * worker accepts is never rejected in a request body or a session payload.
+ * Deliberately not `UuidSchema`: Zod 4 also checks version and variant
+ * digits, which the pattern does not.
+ */
+export const UuidSchema = z.string().regex(UUID_PATTERN);
 
 /**
  * Auth0 JWT payload — result of jwtVerify() in the worker.
@@ -24,12 +34,12 @@ export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
  * public.users table row — app-level user record linked to auth.users
  */
 export const PublicUserSchema = z.object({
-  id: z.string().uuid(),
+  id: UuidSchema,
   email: z.email(),
   created_at: z.iso.datetime().optional(),
   updated_at: z.iso.datetime().optional(),
   /** Active-org preference (FK organizations.id) — read by the P5 org resolution. */
-  default_organization_id: z.string().uuid().nullable().optional(),
+  default_organization_id: UuidSchema.nullable().optional(),
 });
 
 export type PublicUser = z.infer<typeof PublicUserSchema>;
@@ -47,9 +57,9 @@ export type DashboardRoleValue = z.infer<typeof DashboardRoleSchema>;
 /** organization_memberships row joined with organizations — worker auth fetch. */
 export const OrgMembershipRowSchema = z.object({
   role: OrgMembershipRoleSchema,
-  organization_id: z.string().uuid(),
+  organization_id: UuidSchema,
   organizations: z.object({
-    id: z.string().uuid(),
+    id: UuidSchema,
     slug: z.string(),
     name: z.string(),
   }).nullable(),
@@ -58,7 +68,7 @@ export type OrgMembershipRow = z.infer<typeof OrgMembershipRowSchema>;
 
 /** Session/me-payload membership summary. */
 export const OrgMembershipSummarySchema = z.object({
-  orgId: z.string().uuid(),
+  orgId: UuidSchema,
   slug: z.string(),
   name: z.string(),
   membershipRole: OrgMembershipRoleSchema,
@@ -67,16 +77,16 @@ export const OrgMembershipSummarySchema = z.object({
 
 /** POST /api/org/switch request body. */
 export const OrgSwitchRequestSchema = z.object({
-  orgId: z.string().uuid(),
+  orgId: UuidSchema,
 });
 export type OrgSwitchRequest = z.infer<typeof OrgSwitchRequestSchema>;
 
 /** organization_memberships row joined with users — GET /api/admin/members fetch. */
 export const AdminMemberRowSchema = z.object({
-  user_id: z.string().uuid(),
+  user_id: UuidSchema,
   role: OrgMembershipRoleSchema,
   users: z.object({
-    id: z.string().uuid(),
+    id: UuidSchema,
     email: z.email().optional().nullable(),
   }).nullable(),
 });
@@ -84,7 +94,7 @@ export type AdminMemberRow = z.infer<typeof AdminMemberRowSchema>;
 
 /** Member list item returned by GET /api/admin/members. */
 export const AdminMemberSchema = z.object({
-  userId: z.string().uuid(),
+  userId: UuidSchema,
   email: z.email().optional(),
   membershipRole: OrgMembershipRoleSchema,
   dashboardRole: DashboardRoleSchema,
@@ -121,7 +131,7 @@ export const ActivityRequestSchema = z.object({
  * Role record from public.roles — used by admin endpoints
  */
 export const AdminRoleSchema = z.object({
-  id: z.string().uuid(),
+  id: UuidSchema,
   name: z.string(),
   permissions: z.array(z.string()),
 });
@@ -132,10 +142,10 @@ export type AdminRole = z.infer<typeof AdminRoleSchema>;
  * user_roles row joined with roles — used by GET /api/admin/users
  */
 export const AdminUserRoleRowSchema = z.object({
-  user_id: z.string().uuid(),
-  role_id: z.string().uuid(),
+  user_id: UuidSchema,
+  role_id: UuidSchema,
   roles: z.object({
-    id: z.string().uuid(),
+    id: UuidSchema,
     name: z.string(),
   }).nullable(),
 });
@@ -147,10 +157,10 @@ export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
  * email is optional — phone-auth or OAuth users may not have a verified email address.
  */
 export const AdminUserSchema = z.object({
-  id: z.string().uuid(),
+  id: UuidSchema,
   email: z.email().optional(),
   created_at: z.iso.datetime().optional(),
-  roles: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+  roles: z.array(z.object({ id: UuidSchema, name: z.string() })),
 });
 
 export type AdminUser = z.infer<typeof AdminUserSchema>;
@@ -159,7 +169,7 @@ export type AdminUser = z.infer<typeof AdminUserSchema>;
  * POST /api/admin/users/:userId/roles request body
  */
 export const AssignRoleRequestSchema = z.object({
-  role_id: z.string().uuid(),
+  role_id: UuidSchema,
 });
 
 export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
@@ -187,7 +197,7 @@ export const MeResponseSchema = z.object({
   // Org-scoping fields (P5) — optional: absent when ORG_SCOPING_ENABLED is off
   // or the session resolved via the legacy global path, so pre-cutover
   // responses validate unchanged.
-  activeOrg: z.string().uuid().optional(),
+  activeOrg: UuidSchema.optional(),
   memberships: z.array(OrgMembershipSummarySchema).optional(),
   role: DashboardRoleSchema.optional(),
   isStaff: z.boolean().optional(),
