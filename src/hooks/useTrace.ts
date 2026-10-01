@@ -29,7 +29,7 @@ export function useTrace(traceId: string | undefined) {
   const activeOrgId = org?.activeOrgId ?? null;
   return useQuery<TraceResponse>({
     queryKey: [activeOrgId, 'trace', traceId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!traceId) throw new Error('traceId is required');
       let token: string;
       try {
@@ -37,7 +37,7 @@ export function useTrace(traceId: string | undefined) {
       } catch {
         throw new Error('AUTH_REQUIRED');
       }
-      const res = await apiFetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId)}`, token, activeOrgId);
+      const res = await apiFetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId)}`, token, activeOrgId, { signal });
       if (!res.ok) {
         // Worker returns 404 with JSON body when trace not in KV — return empty data
         if (res.status === 404) return { traceId, spans: [], evaluations: [] };

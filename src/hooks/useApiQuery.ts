@@ -63,7 +63,9 @@ export function useApiQuery<TRaw, T = TRaw>(
   const activeOrgId = org?.activeOrgId ?? null;
   return useQuery<TRaw, Error, T>({
     queryKey: [activeOrgId, ...queryKey],
-    queryFn: async () => {
+    // Passing `signal` on lets react-query abort a request once no observer
+    // wants its key (a period, role or org change), not just discard the result.
+    queryFn: async ({ signal }) => {
       let token: string;
       try {
         token = await getAccessToken();
@@ -71,7 +73,7 @@ export function useApiQuery<TRaw, T = TRaw>(
         throw new Error('AUTH_REQUIRED');
       }
       const url = buildUrl();
-      const res = await apiFetch(url, token, activeOrgId);
+      const res = await apiFetch(url, token, activeOrgId, { signal });
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         if (res.status === NOT_FOUND_STATUS && onNotFound !== undefined) {
