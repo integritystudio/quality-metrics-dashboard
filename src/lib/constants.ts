@@ -25,12 +25,6 @@ export const enum ErrorMessage {
   InvalidSessionIdFormat = 'Invalid sessionId format',
   InvalidTraceId = 'Invalid traceId',
 }
-/**
- * API requests are always same-origin: deployed builds are served by the Worker
- * that answers /api/*, and local dev reaches the API through the Vite proxy
- * (vite.config.ts). No build setting can point a bundle at another origin.
- */
-export const API_BASE = '';
 
 /** Zod schema for coverage input key param. Single source for type, values, and default. */
 export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');

@@ -1,5 +1,4 @@
 import type { Period, MetricTrend, MetricDynamics } from '../types.js';
-import { API_BASE } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface PercentileSnapshot {
@@ -33,7 +32,7 @@ export interface TrendResponse {
 export function useTrend(metricName: string, period: Period, buckets = 7) {
   return useApiQuery<TrendResponse>(
     ['trend', metricName, period, buckets],
-    () => `${API_BASE}/api/trends/${encodeURIComponent(metricName)}?${new URLSearchParams({ period, buckets: String(buckets) })}`,
+    () => `/api/trends/${encodeURIComponent(metricName)}?${new URLSearchParams({ period, buckets: String(buckets) })}`,
     { enabled: !!metricName },
   );
 }

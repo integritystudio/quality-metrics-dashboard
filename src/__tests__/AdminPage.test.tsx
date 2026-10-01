@@ -12,7 +12,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { AdminPage } from '../pages/AdminPage.js';
 import { OrgProvider } from '../contexts/OrgContext.js';
-import { API_BASE } from '../lib/constants.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
 import type { AdminMember, AdminRole, AdminUser, OrgMembershipRoleValue } from '../lib/validation/auth-schemas.js';
 import type { AppSession, DashboardRole } from '../types/auth.js';
@@ -120,8 +119,7 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
     },
   ];
 
-  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
-    const path = url.slice(API_BASE.length);
+  vi.stubGlobal('fetch', vi.fn((path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
     requests.push({ method, path, headers: headersOf(init), body });

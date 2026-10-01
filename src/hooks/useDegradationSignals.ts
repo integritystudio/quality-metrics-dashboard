@@ -1,5 +1,4 @@
 import type { Period } from '../types.js';
-import { API_BASE } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface DegradationSignal {
@@ -40,6 +39,6 @@ export interface DegradationSignalsResponse {
 export function useDegradationSignals(period: Period) {
   return useApiQuery<DegradationSignalsResponse>(
     ['degradation-signals', period],
-    () => `${API_BASE}/api/degradation-signals?${new URLSearchParams({ period })}`,
+    () => `/api/degradation-signals?${new URLSearchParams({ period })}`,
   );
 }

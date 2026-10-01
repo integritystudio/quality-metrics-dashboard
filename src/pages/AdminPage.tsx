@@ -8,7 +8,7 @@ import { apiFetch } from '../lib/api-client.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
-import { API_BASE, SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 import type { AdminUser, AdminRole, AdminMember, OrgMembershipRoleValue } from '../lib/validation/auth-schemas.js';
 
 const ADMIN_TABLE_COLUMNS = [
@@ -64,7 +64,7 @@ function useAdminFetch() {
   const activeOrgId = useOrgOptional()?.activeOrgId ?? null;
   return async (path: string, method: string, body?: unknown): Promise<Response> => {
     const token = await getAccessToken();
-    return apiFetch(`${API_BASE}${path}`, token, activeOrgId, {
+    return apiFetch(path, token, activeOrgId, {
       method,
       headers: { 'Content-Type': 'application/json' },
       ...(body !== undefined && { body: JSON.stringify(body) }),
@@ -292,7 +292,7 @@ function OrgMembersSection({
 
   const { data: members, isLoading, error } = useApiQuery<AdminMember[]>(
     MEMBERS_QUERY_KEY,
-    () => `${API_BASE}/api/admin/members`,
+    () => `/api/admin/members`,
   );
 
   return (
@@ -358,13 +358,13 @@ export function AdminPage() {
 
   const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
     USERS_QUERY_KEY,
-    () => `${API_BASE}/api/admin/users`,
+    () => `/api/admin/users`,
     { enabled: !orgScoped },
   );
 
   const { data: roles, isLoading: rolesLoading, error: rolesError } = useApiQuery<AdminRole[]>(
     ['admin', 'roles'],
-    () => `${API_BASE}/api/admin/roles`,
+    () => `/api/admin/roles`,
     { enabled: !orgScoped },
   );
 

@@ -17,7 +17,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './AuthContext.js';
-import { API_BASE } from '../lib/constants.js';
 import { apiFetch, getStoredOrgId, setStoredOrgId } from '../lib/api-client.js';
 import type { OrgMembershipSummary } from '../types/auth.js';
 
@@ -55,7 +54,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       // target keeps the switch working when the current org just became
       // invalid (e.g. the user was removed from it) — passing the stale org
       // would 403 the very request that escapes it.
-      const res = await apiFetch(`${API_BASE}/api/org/switch`, token, orgId, {
+      const res = await apiFetch(`/api/org/switch`, token, orgId, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orgId }),

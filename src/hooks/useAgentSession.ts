@@ -1,6 +1,6 @@
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface AgentSessionResponse {
@@ -25,7 +25,7 @@ export function useAgentSession(sessionId: string | undefined) {
     ['agent-session', sessionId],
     () => {
       if (!sessionId) throw new Error('sessionId is required');
-      return `${API_BASE}/api/agents/${encodeURIComponent(sessionId)}`;
+      return `/api/agents/${encodeURIComponent(sessionId)}`;
     },
     { enabled: !!sessionId, staleTime: STALE_TIME.DETAIL },
   );

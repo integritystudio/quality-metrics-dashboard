@@ -11,7 +11,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useQualityLive } from '../hooks/useQualityLive.js';
-import { API_BASE } from '../lib/constants.js';
 import type { QualityLiveData } from '../types.js';
 import {
   TEST_ACCESS_TOKEN,
@@ -53,7 +52,7 @@ describe('useQualityLive', () => {
     await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0]![0]).toBe(`${API_BASE}/api/quality/live`);
+    expect(fetchSpy.mock.calls[0]![0]).toBe(`/api/quality/live`);
   });
 
   it('sends the access token as a bearer header', async () => {

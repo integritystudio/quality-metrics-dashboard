@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
-import { API_BASE } from '../lib/constants.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
@@ -20,7 +19,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
   try {
-    const res = await apiFetch(`${API_BASE}/api/me`, jwt, null, { method: 'GET', signal });
+    const res = await apiFetch(`/api/me`, jwt, null, { method: 'GET', signal });
     if (!res.ok) return null;
     const data: unknown = await res.json();
     const meResult = MeResponseSchema.safeParse(data);
@@ -113,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleSignOut = useCallback(async () => {
     if (session) {
       const jwt = await getAccessToken().catch(() => null);
-      if (jwt) void apiFetch(`${API_BASE}/api/logout`, jwt, null, { method: 'POST' }).catch(() => undefined);
+      if (jwt) void apiFetch(`/api/logout`, jwt, null, { method: 'POST' }).catch(() => undefined);
     }
     // Deliberately NO setSession(null) here. logout() resolves after CALLING
     // window.location.assign, while the page is still alive — clearing the

@@ -1,5 +1,5 @@
 import type { Period } from '../types.js';
-import { API_BASE, STALE_TIME, ErrorMessage } from '../lib/constants.js';
+import { STALE_TIME, ErrorMessage } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface EvalMetricSummary {
@@ -46,7 +46,7 @@ function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResp
 export function useAgentStats(period: Period) {
   return useApiQuery<unknown, AgentStatsResponse>(
     ['agent-stats', period],
-    () => `${API_BASE}/api/agents?period=${encodeURIComponent(period)}`,
+    () => `/api/agents?period=${encodeURIComponent(period)}`,
     {
       staleTime: STALE_TIME.AGGREGATE,
       select: (raw) => { assertAgentStatsResponse(raw); return raw; },

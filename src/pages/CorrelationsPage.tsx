@@ -5,7 +5,7 @@ import { MetricCompare } from '../components/MetricCompare.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
-import { API_BASE, SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
+import { SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
 import type { CorrelationFeature, Period } from '../types.js';
 
 interface CorrelationsResponse {
@@ -16,7 +16,7 @@ interface CorrelationsResponse {
 export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
   const { data, isLoading, error } = useApiQuery<CorrelationsResponse>(
     ['correlations', period],
-    () => `${API_BASE}/api/correlations?period=${period}`,
+    () => `/api/correlations?period=${period}`,
     { staleTime: STALE_TIME.AGGREGATE },
   );
 

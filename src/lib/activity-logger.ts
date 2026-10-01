@@ -1,4 +1,3 @@
-import { API_BASE } from './constants.js';
 import { apiFetch } from './api-client.js';
 import type { FrontendActivityEvent } from '../types/activity.js';
 
@@ -14,7 +13,7 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
   const timeout = setTimeout(() => controller.abort(), ACTIVITY_TIMEOUT_MS);
 
   try {
-    await apiFetch(`${API_BASE}/api/activity`, jwt, null, {
+    await apiFetch(`/api/activity`, jwt, null, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activity_type: activityType }),

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
+import { STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useOrgOptional } from '../contexts/OrgContext.js';
 import { apiFetch } from '../lib/api-client.js';
@@ -37,7 +37,7 @@ export function useTrace(traceId: string | undefined) {
       } catch {
         throw new Error('AUTH_REQUIRED');
       }
-      const res = await apiFetch(`${API_BASE}/api/traces/${encodeURIComponent(traceId)}`, token, activeOrgId, { signal });
+      const res = await apiFetch(`/api/traces/${encodeURIComponent(traceId)}`, token, activeOrgId, { signal });
       if (!res.ok) {
         // Worker returns 404 with JSON body when trace not in KV — return empty data
         if (res.status === 404) return { traceId, spans: [], evaluations: [] };

@@ -1,5 +1,4 @@
 import type { SLAComplianceResult, HumanVerificationEvent, Period } from '../types.js';
-import { API_BASE } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 interface SLAResponse {
@@ -15,13 +14,13 @@ interface VerificationResponse {
 export function useComplianceSLA(period: Period) {
   return useApiQuery<SLAResponse>(
     ['compliance-sla', period],
-    () => `${API_BASE}/api/compliance/sla?period=${period}`,
+    () => `/api/compliance/sla?period=${period}`,
   );
 }
 
 export function useComplianceVerifications(period: Period) {
   return useApiQuery<VerificationResponse>(
     ['compliance-verifications', period],
-    () => `${API_BASE}/api/compliance/verifications?period=${period}`,
+    () => `/api/compliance/verifications?period=${period}`,
   );
 }

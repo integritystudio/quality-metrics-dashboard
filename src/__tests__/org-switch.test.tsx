@@ -16,14 +16,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { OrgProvider, useOrg } from '../contexts/OrgContext.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
-import { API_BASE } from '../lib/constants.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
 import type { AppSession, OrgMembershipSummary } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf } from './support/query-harness.js';
 
 const ORG_A = 'a0000000-0000-4000-8000-00000000000a';
 const ORG_B = 'b0000000-0000-4000-8000-00000000000b';
-const SWITCH_URL = `${API_BASE}/api/org/switch`;
+const SWITCH_URL = `/api/org/switch`;
 const HTTP_OK = 200;
 
 function membership(orgId: string, name: string): OrgMembershipSummary {
@@ -64,8 +63,8 @@ function stubOrgEchoFetch() {
 
 function useTwoQueriesAndOrg() {
   const org = useOrg();
-  const first = useApiQuery<OrgEcho>(['first'], () => `${API_BASE}/api/first`);
-  const second = useApiQuery<OrgEcho>(['second'], () => `${API_BASE}/api/second`);
+  const first = useApiQuery<OrgEcho>(['first'], () => `/api/first`);
+  const second = useApiQuery<OrgEcho>(['second'], () => `/api/second`);
   return { org, first, second };
 }
 

@@ -1,6 +1,6 @@
 import type { EvalRow } from '../components/EvaluationTable.js';
 import type { Period } from '../types.js';
-import { API_BASE, DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
+import { DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 interface EvaluationsResponse {
@@ -28,7 +28,7 @@ export function useMetricEvaluations(
       const params = new URLSearchParams({ period, limit: String(limit), offset: String(offset), sortBy });
       if (scoreLabel) params.set('scoreLabel', scoreLabel);
       if (!name) throw new Error('metric name is required');
-      return `${API_BASE}/api/metrics/${encodeURIComponent(name)}/evaluations?${params}`;
+      return `/api/metrics/${encodeURIComponent(name)}/evaluations?${params}`;
     },
     { enabled: !!name && enabled },
   );

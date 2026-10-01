@@ -1,5 +1,4 @@
 import type { Period } from '../types.js';
-import { API_BASE } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface RoutingTelemetrySummary {
@@ -38,6 +37,6 @@ export interface RoutingTelemetryResponse {
 export function useRoutingTelemetry(period: Period) {
   return useApiQuery<RoutingTelemetryResponse>(
     ['routing-telemetry', period],
-    () => `${API_BASE}/api/routing-telemetry?${new URLSearchParams({ period })}`,
+    () => `/api/routing-telemetry?${new URLSearchParams({ period })}`,
   );
 }

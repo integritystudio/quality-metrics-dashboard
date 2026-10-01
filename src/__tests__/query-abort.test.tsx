@@ -13,7 +13,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useTrace } from '../hooks/useTrace.js';
-import { API_BASE } from '../lib/constants.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper } from './support/query-harness.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
@@ -44,7 +43,7 @@ function stubSlowFirstFetch() {
 }
 
 const HOOKS = [
-  { name: 'useApiQuery', use: (id: string) => useApiQuery<unknown>(['item', id], () => `${API_BASE}/api/item/${id}`) },
+  { name: 'useApiQuery', use: (id: string) => useApiQuery<unknown>(['item', id], () => `/api/item/${id}`) },
   { name: 'useTrace', use: (id: string) => useTrace(id) },
 ];
 

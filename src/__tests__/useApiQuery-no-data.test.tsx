@@ -11,7 +11,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
-import { API_BASE } from '../lib/constants.js';
 import { WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 import {
   makeQueryWrapper,
@@ -37,7 +36,7 @@ function useTestQuery(
 ) {
   return useApiQuery<{ status: string }>(
     ['test'],
-    () => `${API_BASE}/api/test`,
+    () => `/api/test`,
     { onNotFound, retry: 0 },
   );
 }

@@ -1,5 +1,5 @@
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
-import { API_BASE, STALE_TIME } from '../lib/constants.js';
+import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface SessionInfo {
@@ -134,7 +134,7 @@ export interface SessionDetailResponse {
 export function useSessionDetail(sessionId: string | undefined) {
   return useApiQuery<SessionDetailResponse>(
     ['session-detail', sessionId],
-    () => `${API_BASE}/api/sessions/${encodeURIComponent(sessionId!)}`,
+    () => `/api/sessions/${encodeURIComponent(sessionId!)}`,
     {
       enabled: !!sessionId,
       staleTime: STALE_TIME.DETAIL,

@@ -1,5 +1,5 @@
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
-import { API_BASE, POLL_INTERVAL_MS, STALE_TIME, RETRY_DELAY_BASE, RETRY_DELAY_CAP } from '../lib/constants.js';
+import { POLL_INTERVAL_MS, STALE_TIME, RETRY_DELAY_BASE, RETRY_DELAY_CAP } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 import { isWorkerNoData, WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 
@@ -33,7 +33,7 @@ export function useDashboard(period: Period, role?: RoleViewType) {
     () => {
       const params = new URLSearchParams({ period });
       if (role) params.set('role', role);
-      return `${API_BASE}/api/dashboard?${params}`;
+      return `/api/dashboard?${params}`;
     },
     {
       refetchInterval: POLL_INTERVAL_MS,
