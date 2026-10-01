@@ -532,6 +532,86 @@ Acceptance:
 - The dev pairing (this app's dev origin and tenant against the gateway's dev origin and tenant)
   is documented and works.
 
+### API keys
+
+Filed 2026-09-30. Paths outside this repo are in IntegrityLandingPage (`~/code/is-public-sites/IntegrityLandingPage`).
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| ADMIN-API-KEY-ROTATION | A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route | P2 | Blocked on three `api-keys-rotate` defects (below). Cross-repo |
+
+**ADMIN-API-KEY-ROTATION.** Nobody can rotate an `obtk_` key without an operator today. The only
+rotation done so far was by hand: insert an `api_keys` row, PUT its `apikey:<sha256>` record into
+the obtool-api `AUTH` KV, then revoke the old row and DELETE its record. So a leaked key stays live
+until someone with database and Cloudflare access acts. The backend half already exists:
+`supabase/functions/api-keys-rotate` (rotates one of the caller's own active keys and returns the
+new plaintext token once) and `api-keys-list`. No app calls `api-keys-rotate` today, so this UI
+would be its first consumer; only the toolkit's e2e suite exercises it.
+
+*Blockers, in `api-keys-rotate/index.ts`.* Fix these in IntegrityLandingPage before exposing the
+function to users, or the UI hands them to everyone with a key:
+1. **The new key can land in another org.** It takes its org from the caller's
+   `organization_memberships … .limit(1)` (~84-92), an arbitrary membership, not the old key's
+   `organization_id`, which the old-key select (~95-101) does not even read. A user in two orgs who
+   rotates gets a key that ingests into, and reads from, the other tenant.
+2. **A failed rotation leaves the user with no key.** The old row is revoked and its KV record
+   deleted (~113-126) *before* the new key is inserted (~133-148); neither result is checked. If
+   the insert fails, the response is 500 and the user has no working key. Create and sync the new
+   key first, then revoke the old one.
+3. **A failed KV write still reports success.** If the new record's PUT fails (~171-181), the
+   response is 201 with a `warning`, the new key does not authenticate, and the old one is already
+   gone. With item 2's order fixed, this should fail and leave the old key in place.
+Also confirm that the function's `KV_NAMESPACE_ID` secret names the `AUTH` namespace. Doppler's
+`KV_NAMESPACE_ID` holds the *dashboard* namespace, so copying it from there would break every
+rotation silently.
+
+*Decided 2026-09-30:*
+- **Only admins rotate, by design.** The UI lives on `AdminPage`, behind `dashboard.admin`
+  (`AdminGuard`, `App.tsx`). The function rotates only the caller's own keys, so rotating another
+  member's key is out of scope.
+- **A same-origin worker route** (e.g. `POST /api/admin/keys/:keyId/rotate`), not a call from the
+  SPA. A direct call would be cross-origin, and the function's CORS allows only
+  `authorization, x-client-info, apikey, content-type`, so `apiFetch` with an active org would fail
+  the preflight on `X-Org-Id` (the ADMIN-CV-API-CLIENT trap). Through the worker the SPA uses
+  `apiFetch` as usual (`useAdminFetch`).
+
+*The route:*
+- **Gate it on the server.** `AdminGuard` only hides the page. Use `orgAdminScope(c)`
+  (`worker/index.ts`), which the member routes already use: `dashboard.admin` plus an active org,
+  else 403. `dashboard.admin` is an org-scoped grant, so allow only keys whose `organization_id` is
+  the active org. An admin of one org must not rotate their key in an org where they are only a
+  member. Check this against `api_keys` with the service key before forwarding.
+- **Forward the user's bearer token** to `api-keys-rotate`, server to server. The function derives
+  the user from it, and `supabase/config.toml` pins `verify_jwt = true`. First confirm that the
+  Supabase gateway accepts this app's Auth0 token (audience `https://api.integritystudio.dev`). If
+  it does not, the route needs another way to act as the user.
+- **Audit it** with `logAuditEvent` (`key.rotate`, old and new key ids, never the token), as the
+  member routes do.
+- **Return the token in the response only.** The worker sets `no-store` on `/api/*` already; it must
+  not log or cache the token.
+
+*UI:*
+- List the caller's active keys: prefix (`obtk_ab12cd34…`), name, tier and created date, plus last
+  used if `api-keys-list` returns it.
+- Rotate each key behind a confirm that says the old key stops working immediately (the function
+  has no grace period) and names what to update, e.g. `OBTOOL_API_KEY` wherever the hooks read it.
+- Show the new token exactly once, with a copy button. Keep it out of `localStorage` and out of the
+  React Query cache: use a mutation's result, not a query, and drop it when the user leaves the page.
+- Errors stay visible in the row. Since 099c7b9 the admin tables stay mounted across reloads.
+- Styles come from `theme.css` classes, not inline `style`.
+
+Acceptance:
+- A user rotates one of their keys. The new token authenticates against obtool-api
+  (`GET /v1/traces` → 200) and the old one is refused (401).
+- The new key belongs to the same org as the old one (blocker 1).
+- The route answers 403 to a session without `dashboard.admin`, to one with no active org, and for
+  a key outside the active org. A worker test pins all three.
+- Each rotation writes one `key.rotate` audit row, with no token in it.
+- A rotation that fails at any step leaves the old key working and shows an error (blockers 2-3).
+- The token appears once and is not found in `localStorage` or the query cache afterwards.
+- `AdminPage.test.tsx` covers success, refusal, network error and cancel, using new routes in its
+  fake worker.
+
 ### Security
 
 | ID | Title | Priority | Notes |
