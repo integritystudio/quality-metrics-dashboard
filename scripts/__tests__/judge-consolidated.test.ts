@@ -30,6 +30,7 @@ import {
   TOOL_INTEGRATION_CRITERIA,
   PRODUCER,
   HAIKU_MODEL,
+  judgedByKey,
   type Turn,
 } from '../judge-evaluations.js';
 import { RELEVANCE_CRITERIA, COHERENCE_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
@@ -72,8 +73,9 @@ function makeTurn(overrides: Partial<Turn> = {}): Turn {
   };
 }
 
+/** The key a Haiku judgement of `name` leaves in the dedup set. */
 function keyFor(turn: Turn, name: string): string {
-  return `${turn.sessionId}:${name}:${TURN_KEY}`;
+  return judgedByKey(turn.sessionId, name, TURN_KEY, HAIKU_MODEL);
 }
 
 interface RecordedCall {
@@ -362,6 +364,14 @@ describe('evaluateTurnConsolidated', () => {
     expect(byName['hallucination']!.scoreValue).toBe(0);
     expect(byName['hallucination']!.explanation).toBe('hallucination reasoning');
     expect(byName[FAITHFULNESS_EVAL_NAME]!.scoreValue + byName['hallucination']!.scoreValue).not.toBe(1);
+  });
+
+  it('does not skip a criterion another model judged, since the dedup key is per judge model', () => {
+    const turn = makeTurn();
+    const otherModel = new Set([judgedByKey(turn.sessionId, RELEVANCE_EVAL_NAME, TURN_KEY, 'claude-opus-5')]);
+
+    expect(selectCriteria(turn, otherModel).recordNames).toContain(RELEVANCE_EVAL_NAME);
+    expect(selectCriteria(turn, otherModel, { judgeModel: 'claude-opus-5' }).recordNames).not.toContain(RELEVANCE_EVAL_NAME);
   });
 
   it('skips criteria already covered by existingKeys and emits nothing when all are', async () => {

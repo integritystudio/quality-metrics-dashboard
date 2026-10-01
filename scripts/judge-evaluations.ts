@@ -194,6 +194,37 @@ export const BATCH_MODE_JUDGE_TIMEOUT_MS = BATCH_WALL_CLOCK_MS + BATCH_POLL_INTE
 /** --batch: a retry would land in a later batch and double the wait; a failed item is counted, not retried. */
 export const BATCH_MODE_MAX_RETRIES = 0;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
+/**
+ * The dedup set holds two keys per judged criterion: the plain
+ * `${sessionId}:${evaluationName}:${turnKey}` for every row, and the same key
+ * suffixed `@<judgeModel>` for every LLM row (JUDGE-MODEL-METADATA-ONLY,
+ * 2026-10-01). The LLM paths check the suffixed key, so a turn Haiku judged is
+ * still judged by a different model; the seed path checks the plain key, so it
+ * never seeds a turn any judge scored. Rows written before the model was
+ * recorded are all Haiku 4.5, so a judge row with no model and no synthetic
+ * cohort counts as one.
+ */
+export function turnScoreKey(sessionId: string, evaluationName: string, turnKey: string): string {
+  return `${sessionId}:${evaluationName}:${turnKey}`;
+}
+
+export function judgedByKey(sessionId: string, evaluationName: string, turnKey: string, judgeModel: string): string {
+  return `${turnScoreKey(sessionId, evaluationName, turnKey)}@${judgeModel}`;
+}
+
+const SYNTHETIC_COHORTS: ReadonlySet<string> = new Set<EvaluationCohort>([SEED_COHORT, CANARY_COHORT]);
+
+/** Add both keys for one stored judge row. No model on a non-synthetic row means a pre-2026-09-30 Haiku row. */
+export function addJudgedKeys(
+  keys: Set<string>,
+  row: { sessionId: string; evaluationName: string; turnKey: string; judgeModel?: string | undefined; cohort?: string | undefined },
+): void {
+  keys.add(turnScoreKey(row.sessionId, row.evaluationName, row.turnKey));
+  const synthetic = row.cohort !== undefined && SYNTHETIC_COHORTS.has(row.cohort);
+  const judgeModel = row.judgeModel ?? (synthetic ? undefined : HAIKU_MODEL);
+  if (judgeModel) keys.add(judgedByKey(row.sessionId, row.evaluationName, row.turnKey, judgeModel));
+}
 export const JUDGE_MAX_TOKENS = 1024;
 /** Low temperature for consistent, deterministic evaluation scores */
 export const JUDGE_DEFAULT_TEMPERATURE = 0.1;
@@ -1164,7 +1195,7 @@ export async function evaluateTurn(
     return Promise.resolve();
   };
 
-  const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
+  const relKey = judgedByKey(turn.sessionId, RELEVANCE_EVAL_NAME, turnKey, HAIKU_MODEL);
   if (!existingKeys.has(relKey)) await score(async () => {
     try {
       const result = await judge.evaluateRelevance(
@@ -1189,7 +1220,7 @@ export async function evaluateTurn(
     }
   });
 
-  const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
+  const cohKey = judgedByKey(turn.sessionId, COHERENCE_EVAL_NAME, turnKey, HAIKU_MODEL);
   if (!existingKeys.has(cohKey)) await score(async () => {
     try {
       const result = await judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText });
@@ -1211,8 +1242,8 @@ export async function evaluateTurn(
   });
 
   if (turn.toolResults.length > 0) {
-    const faithKey = `${turn.sessionId}:${FAITHFULNESS_EVAL_NAME}:${turnKey}`;
-    const halKey = `${turn.sessionId}:${HALLUCINATION_EVAL_NAME}:${turnKey}`;
+    const faithKey = judgedByKey(turn.sessionId, FAITHFULNESS_EVAL_NAME, turnKey, HAIKU_MODEL);
+    const halKey = judgedByKey(turn.sessionId, HALLUCINATION_EVAL_NAME, turnKey, HAIKU_MODEL);
     const needsFaith = !existingKeys.has(faithKey);
     const needsHal = !existingKeys.has(halKey);
 
@@ -1259,7 +1290,7 @@ export async function evaluateTurn(
       }
     });
 
-    const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
+    const tcKey = judgedByKey(turn.sessionId, TOOL_CORRECTNESS_CRITERIA.name, turnKey, HAIKU_MODEL);
     if (!existingKeys.has(tcKey)) {
       const tcTestCase = {
         input: turn.userText,
@@ -1294,7 +1325,7 @@ export async function evaluateTurn(
 
       for (const config of subCriteria) {
         const { name } = config;
-        const subKey = `${turn.sessionId}:${name}:${turnKey}`;
+        const subKey = judgedByKey(turn.sessionId, name, turnKey, HAIKU_MODEL);
         if (existingKeys.has(subKey)) continue;
         await score(async () => {
           try {
@@ -1420,8 +1451,16 @@ function _loadExistingKeys(): Set<string> {
       // Turn keys are compared against ISO-prefix keys, so convert back.
       const ms = Number(record.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
       const turnKey = new Date(ms).toISOString().slice(0, TIMESTAMP_TURN_KEY_LEN);
+      const judgeModel = attrs[EVALUATION_ATTRS.JUDGE_MODEL];
+      const cohort = attrs[EVALUATION_ATTRS.COHORT];
 
-      keys.add(`${sessionId}:${metricName}:${turnKey}`);
+      addJudgedKeys(keys, {
+        sessionId,
+        evaluationName: metricName,
+        turnKey,
+        ...(typeof judgeModel === 'string' && { judgeModel }),
+        ...(typeof cohort === 'string' && { cohort }),
+      });
     }
   }
 

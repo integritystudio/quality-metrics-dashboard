@@ -13,6 +13,8 @@ import {
   isCanaryTurn,
   seedEvaluations,
   evaluateTurn,
+  judgedByKey,
+  HAIKU_MODEL,
   evaluateTurnsBatched,
   evalFailures,
   toOTelRecord,
@@ -852,12 +854,26 @@ describe('evaluateTurn', () => {
     const turn = makeTurn();
     const turnKey = turn.timestamp.slice(0, 19);
     const existingKeys = new Set([
-      `${turn.sessionId}:relevance:${turnKey}`,
-      `${turn.sessionId}:coherence:${turnKey}`,
+      judgedByKey(turn.sessionId, 'relevance', turnKey, HAIKU_MODEL),
+      judgedByKey(turn.sessionId, 'coherence', turnKey, HAIKU_MODEL),
     ]);
 
     const evals = await evaluateTurn(judge, turn, existingKeys);
     expect(evals).toHaveLength(0);
+  });
+
+  it('judges a turn again when only a different model has judged it', async () => {
+    const llm = createMockLLM(4);
+    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+    const turn = makeTurn({ toolResults: [] });
+    const turnKey = turn.timestamp.slice(0, 19);
+    const otherModel = new Set([
+      judgedByKey(turn.sessionId, 'relevance', turnKey, 'claude-opus-5'),
+      judgedByKey(turn.sessionId, 'coherence', turnKey, 'claude-opus-5'),
+    ]);
+
+    const evals = await evaluateTurn(judge, turn, otherModel);
+    expect(evals.map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
   });
 
   it('tracks failures in evalFailures on metric error', async () => {
@@ -945,7 +961,7 @@ describe('evaluateTurn faithfulness and hallucination', () => {
     const turn = makeTurn({ toolResults: ['tool output'] });
     const turnKey = turn.timestamp.slice(0, 19);
 
-    const evals = await evaluateTurn(judge, turn, new Set([`${turn.sessionId}:faithfulness:${turnKey}`]));
+    const evals = await evaluateTurn(judge, turn, new Set([judgedByKey(turn.sessionId, 'faithfulness', turnKey, HAIKU_MODEL)]));
 
     const names = evals.map(e => e.evaluationName);
     expect(names).toContain('hallucination');

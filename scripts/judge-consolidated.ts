@@ -69,6 +69,7 @@ import {
   LLM_EVALUATOR_KIND,
   NORMAL_COHORT,
   HAIKU_MODEL,
+  judgedByKey,
   JUDGE_MAX_TOKENS,
   JUDGE_DEFAULT_TEMPERATURE,
   TIMESTAMP_TURN_KEY_LEN,
@@ -191,6 +192,12 @@ export interface ConsolidatedSelection {
  */
 export interface ConsolidatedCriteriaOptions {
   /**
+   * Model this run judges with. The dedup check skips only the criteria this
+   * model already scored (`judgedByKey`), so a second model re-scores what Haiku
+   * judged. Defaults to HAIKU_MODEL, the only judge so far.
+   */
+  judgeModel?: string;
+  /**
    * Judge `hallucination` with HALLUCINATION_CRITERIA as a criterion of its own
    * in the same call, instead of inverting the faithfulness verdict. Off until
    * the eval JUDGE-HALLUCINATION-INVERTED-ON-DEFAULT gates on has run.
@@ -222,7 +229,8 @@ export function selectCriteria(
   options: ConsolidatedCriteriaOptions = {},
 ): ConsolidatedSelection {
   const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-  const missing = (name: string): boolean => !existingKeys.has(`${turn.sessionId}:${name}:${turnKey}`);
+  const judgeModel = options.judgeModel ?? HAIKU_MODEL;
+  const missing = (name: string): boolean => !existingKeys.has(judgedByKey(turn.sessionId, name, turnKey, judgeModel));
   const criteria: GEvalConfig[] = [];
   const recordNames: string[] = [];
 
