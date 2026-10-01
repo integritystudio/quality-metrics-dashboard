@@ -76,6 +76,17 @@ describe('mapRecord', () => {
     expect(payload?.metadata).not.toHaveProperty('cohort');
   });
 
+  it('sends the judge model as its own field, not inside metadata', () => {
+    const { payload } = mapRecord(record({
+      'integritystudio.evaluation.evaluator.kind': 'llm',
+      'integritystudio.evaluation.judge.model': 'claude-haiku-4-5-20251001',
+      'session.id': 'sess-1',
+    }), NOW, MAX_AGE_MS);
+
+    expect(payload?.judgeModel).toBe('claude-haiku-4-5-20251001');
+    expect(payload?.metadata).not.toHaveProperty('judgeModel');
+  });
+
   // COMPAT until 2026-10-29 for its score-unit half: the old gen_ai.evaluation.score.unit key.
   it('maps a derive record that carries only the legacy overloaded evaluator.type', () => {
     const { payload } = mapRecord(record({
