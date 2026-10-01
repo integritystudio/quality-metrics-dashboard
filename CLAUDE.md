@@ -52,7 +52,7 @@ Key libraries:
 ## Constants Architecture
 
 Two constants files with a hard module boundary — do not cross-import:
-- **`src/lib/constants.ts`** — frontend + API server shared; uses `import.meta.env` (Vite). Imported by React components, hooks, and Hono API routes.
+- **`src/lib/constants.ts`** — frontend + API server shared. Imported by React components, hooks, and Hono API routes.
 - **`src/api/api-constants.ts`** — API server only (Node context). Imported by `src/api/routes/` and `scripts/`. Cannot be imported in Vite-rendered code.
 - **`worker/index.ts`** — has its own local `Http` constants object; cannot import either file above safely.
 
@@ -124,7 +124,7 @@ To verify the declaration is load-bearing: remove it from `tsconfig.json` and `n
 
 `playwright.config.ts` starts **two** webServers — `tsx src/api/server.ts` gated on `/api/health`, and `vite --mode test` gated on the page URL. It previously ran a single `npm run dev` and waited only on vite, so specs started against a dead `/api` proxy and failed with 502s. The API port comes from `src/api/config.ts`, not a literal.
 
-- `vite.config.ts:48` still hardcodes the proxy target `http://127.0.0.1:3001`, so setting `API_PORT` desyncs the gate from the proxy.
+- The Vite proxy target also comes from `src/api/config.ts`, so `API_PORT` moves the health gate and the proxy together.
 - **`--mode test` is load-bearing**: `src/lib/auth0.ts` throws at import without `VITE_AUTH0_*`, and plain `vite` loads `.env` — untracked, so present only on developer machines. Test mode loads the tracked `.env.test` placeholders, which suffice because the SDK is stubbed under `VITE_E2E=1`.
 - **Never wrap an e2e run in `doppler run`** — the webServer's `tsx` child then never binds its port, and Playwright does *not* fail the health gate: it proceeds, and every API-backed spec fails against a dead proxy (`ECONNREFUSED 127.0.0.1:3001`). Export `OBTOOL_API_URL`/`OBTOOL_API_KEY` via `doppler secrets get … --plain` instead.
 - Seven specs assert on rendered metric content and **skip themselves** when `/api/health` reports `hasData: false` (worker-scoped fixture in `e2e/fixtures.ts`). Expect **32 passed / 7 skipped** in ~23s.
@@ -155,7 +155,7 @@ All parent observability-toolkit code enters through three sanctioned surfaces �
 - **`@parent`** → `../dist` — imports from the parent observability-toolkit build, allowed only in the boundary files above. Run `npm run build` in `..` first or tests will fail without the `parentDistStub` vite plugin (active in Vitest only), which stubs `@parent` to empty modules when `../dist` is absent (standalone CI).
 - **`web-worker`** → `src/stubs/web-worker.ts` — always aliased; prevents bundler errors for worker imports.
 - **`VITE_E2E=1`** → stubs `@auth0/auth0-react` with `src/stubs/auth0-e2e.ts` for Playwright E2E runs.
-- **Vite proxy**: `/api/*` → `http://127.0.0.1:3001` — local dev auto-forwards API requests to the Hono server; no CORS config needed.
+- **Vite proxy**: `/api/*` → the local Hono server (`src/api/config.ts`), or a deployed Worker when `API_PROXY_TARGET` is set (shell or `.env`; no `VITE_` prefix, so it never reaches the bundle). The SPA always calls `/api` on its own origin and there is no API URL setting, so neither the Worker nor the local server allows a localhost CORS origin.
 
 ## Linting
 
