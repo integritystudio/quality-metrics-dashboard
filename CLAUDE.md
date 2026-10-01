@@ -82,6 +82,7 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
   - **Which turns, and where results go** (`judge-selection.ts`, 2026-09-28):
     - Judged, withheld (`null` stamp) and held-for-key turns are dropped before `--limit`, which then takes the oldest pending turns.
     - Records are POSTed straight to ingest (`post-evaluations.ts`) and appended to `evaluations-<today>.jsonl`, the ledger the local source dedups against.
+    - The dedup set holds two keys per judged criterion since 2026-10-01: the plain one and one qualified by judge model (`judgedByKey`). The LLM paths check the qualified key, so a second model re-scores what Haiku judged; `--seed` checks the plain one and never seeds a scored turn. Rows written before the model was recorded count as Haiku.
     - A failed post exits `JUDGE_EXIT_POST_FAILED` (6), a soft code, so upload and sync still run. A failed discovery, usually the network under `--source=cloud`, exits `JUDGE_EXIT_DISCOVERY_FAILED` (7), also soft; nothing is spent before it.
   - **Before that, the scheduled judge produced nothing usable from 09-22.**
     - The dedup set was empty, because `otelEvaluationRecordSchema` rejected every post-OBP16 record.
