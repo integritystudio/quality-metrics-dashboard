@@ -50,6 +50,23 @@ function RoleChip({
   );
 }
 
+/**
+ * The JSON mutation fetch both admin rows use. On-choke-point (P6): it goes
+ * through the shared api-client so X-Org-Id threading is single-source on the client.
+ */
+function useAdminFetch() {
+  const { getAccessToken } = useAuth();
+  const activeOrgId = useOrgOptional()?.activeOrgId ?? null;
+  return async (path: string, method: string, body?: unknown): Promise<Response> => {
+    const token = await getAccessToken();
+    return apiFetch(`${API_BASE}${path}`, token, activeOrgId, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+  };
+}
+
 function UserRow({
   user,
   availableRoles,
@@ -64,24 +81,11 @@ function UserRow({
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getAccessToken } = useAuth();
+  const adminFetch = useAdminFetch();
 
   const assignableRoles = availableRoles.filter(
     (r) => !user.roles.some((ur) => ur.id === r.id),
   );
-
-  const org = useOrgOptional();
-
-  // On-choke-point (P6): admin mutations go through the shared api-client so
-  // X-Org-Id threading is single-source on the client.
-  async function adminFetch(path: string, method: string, body?: unknown): Promise<Response> {
-    const token = await getAccessToken();
-    return apiFetch(`${API_BASE}${path}`, token, org?.activeOrgId ?? null, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
-  }
 
   async function handleAssign() {
     if (!selectedRoleId) return;
@@ -181,19 +185,9 @@ function MemberRow({
   const [selectedRole, setSelectedRole] = useState<OrgMembershipRoleValue>(member.membershipRole);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getAccessToken } = useAuth();
-  const org = useOrgOptional();
+  const adminFetch = useAdminFetch();
 
   const ownerLocked = (member.membershipRole === 'owner' || selectedRole === 'owner') && !canTouchOwner;
-
-  async function memberFetch(path: string, method: string, body?: unknown): Promise<Response> {
-    const token = await getAccessToken();
-    return apiFetch(`${API_BASE}${path}`, token, org?.activeOrgId ?? null, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
-  }
 
   async function handleRoleChange() {
     if (selectedRole === member.membershipRole) return;
@@ -201,7 +195,7 @@ function MemberRow({
     setError(null);
     const mutationId = onMutationStart();
     try {
-      const res = await memberFetch(`/api/admin/members/${member.userId}/role`, 'POST', { membershipRole: selectedRole });
+      const res = await adminFetch(`/api/admin/members/${member.userId}/role`, 'POST', { membershipRole: selectedRole });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         setError(text || 'Failed to update role');
@@ -220,7 +214,7 @@ function MemberRow({
     setError(null);
     const mutationId = onMutationStart();
     try {
-      const res = await memberFetch(`/api/admin/members/${member.userId}`, 'DELETE');
+      const res = await adminFetch(`/api/admin/members/${member.userId}`, 'DELETE');
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         setError(text || 'Failed to remove member');
