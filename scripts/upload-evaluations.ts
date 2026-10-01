@@ -207,6 +207,8 @@ export interface EvaluationPayload {
   serviceName?: string;
   /** Sampling population; the webhook rejects a value outside its enum. */
   cohort?: string;
+  /** Model id of the LLM judge that produced the score. Its own field since 2026-09-30; was `metadata.judgeModel`. */
+  judgeModel?: string;
   /** Client-supplied event time (Unix ms). When set the flush dates the row to
    *  this time instead of the batch-receipt time, so period aggregations are
    *  correct for batched uploads. */
@@ -305,6 +307,9 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   if (responseId) payload.responseId = responseId;
   // Only the webhook's enum values: one outside it would get the whole batch rejected.
   if (cohort && WEBHOOK_COHORTS.has(cohort)) payload.cohort = cohort;
+  // Top-level since 2026-09-30 so readers populate EvaluationResult.judgeModel; the
+  // metadata copy it replaced was never read back (JUDGE-MODEL-METADATA-ONLY).
+  if (judgeModel) payload.judgeModel = truncate(judgeModel, WEBHOOK_MAX_NAME_LENGTH);
 
   // Supply evaluatedAtMs so the flush dates the row to when the evaluation
   // was produced, not when this batch arrived (EVAL-WEBHOOK-EVENT-TIME).
@@ -313,7 +318,6 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   // Fields the webhook has no slot for ride in `metadata`, which the flush keeps
   // in the row's `attributes`. evaluatedAt keeps the ISO string form for auditability.
   const metadata: Record<string, unknown> = {};
-  if (judgeModel) metadata.judgeModel = judgeModel;
   if (timestamp) metadata.evaluatedAt = timestamp;
   if (Object.keys(metadata).length > 0) payload.metadata = metadata;
   payload.evaluationId = evaluationId(r);
