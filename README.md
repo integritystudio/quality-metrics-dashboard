@@ -96,8 +96,8 @@ npm run populate -- --derive-source=local # derive from local trace files (rollb
 
 **Judge credentials.** The judge prefers `LLM_JUDGE_ANTHROPIC_KEY` and falls back to
 `ANTHROPIC_API_KEY`, so judge spend is attributable to its own key in the Usage and Cost
-Admin API rather than blended into a shared one. With neither set, populate falls back to
-`--seed` mode. The `[judge] summary:` line reports the key's variable name (never its
+Admin API rather than blended into a shared one. With neither set, populate fails closed
+(exit 1) rather than publishing synthetic scores; pass `--seed` explicitly for offline mode. The `[judge] summary:` line reports the key's variable name (never its
 value) alongside real `response.usage` totals, the USD they imply, and the pre-run estimate.
 
 **Judge cost modes.** `--batch` is the cheap default for unattended runs and is what
