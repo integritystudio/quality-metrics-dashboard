@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Runs repomix --compress and writes docs/repomix/repo-compressed.xml
+# Same file set as repomix.sh, reduced to tree-sitter signatures by --compress.
 set -euo pipefail
+source "$(dirname "$0")/repomix-core.sh"
 
-OUTPUT_FILE="${1:?Usage: $0 <root_dir> <output_file>}"
-
-FORCE_COLOR=0 NO_COLOR=1 timeout 120 \
-npx repomix "$ROOT" -c "$CONFIG" --compress -o "$OUTPUT_FILE" >/dev/null 2>&1
+pack "$CONFIG" "${1:-$OUT_DIR/repo-compressed.xml}" --compress

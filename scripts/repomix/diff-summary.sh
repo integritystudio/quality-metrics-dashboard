@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
+# Writes the last LOGS_COUNT commits touching the top-N tracked files by blob size.
 set -euo pipefail
+source "$(dirname "$0")/repomix-core.sh"
 
 N=20
-COMMITS="${LOGS_COUNT:-100}"
-OUT="${1:-${OUT_DIR}/gitlog-top${N}.txt}"
+DEFAULT_LOGS_COUNT=100
+COMMITS="${LOGS_COUNT:-$DEFAULT_LOGS_COUNT}"
+OUT="${1:-$OUT_DIR/gitlog-top$N.txt}"
 
 mkdir -p "$(dirname "$OUT")"
+cd "$ROOT"
 
-# Get Top-N tracked files by blob size (bytes)
-# Get Top-N tracked files by blob size (bytes) without xargs (macOS-safe)
+# Top-N tracked files by blob size (bytes), without xargs (macOS-safe)
 TOP_FILES=()
 while IFS= read -r f; do
   [[ -n "$f" ]] && TOP_FILES+=("$f")

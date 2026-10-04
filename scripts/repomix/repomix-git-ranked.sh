@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-# Generate a repomix bundle ranked by file change frequency using git metadata.
-# Output is restricted to files that appear in the selected commit window.
+# Base file set ranked by change frequency over the last SORT_COMMITS commits,
+# with working-tree diffs and the last LOG_COMMITS commit messages appended.
 set -euo pipefail
+source "$(dirname "$0")/repomix-core.sh"
 
-TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-120}"
-OUTPUT_FILE="${1}"
-GIT_CONFIG="$INPUT_DIR/repomix.git-ranked.json"
+SORT_COMMITS=50
+LOG_COMMITS=100
 
-REPOMIX_EXIT=0
-FORCE_COLOR=0 NO_COLOR=1 timeout "$TIMEOUT_SECONDS" \
-  npx repomix "$ROOT" -c "$GIT_CONFIG" -o "$OUTPUT_FILE" 2>&1 \
-  || REPOMIX_EXIT=$?
+GIT_RANKED_CONFIG="$(derive_config git-ranked '
+  .output.style = "xml"
+  | .output.git += {
+      sortByChangesMaxCommits: $sortCommits,
+      includeDiffs: true,
+      includeLogs: true,
+      includeLogsCount: $logCommits
+    }
+' --argjson sortCommits "$SORT_COMMITS" --argjson logCommits "$LOG_COMMITS")"
+
+pack "$GIT_RANKED_CONFIG" "${1:-$OUT_DIR/repomix-git-ranked.xml}"

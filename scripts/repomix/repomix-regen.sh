@@ -1,156 +1,78 @@
 #!/usr/bin/env bash
-# Wrapper: generates token tree + compressed repomix output
+# Regenerates every repomix artifact into docs/repomix/.
+# Usage: repomix-regen.sh [logs_count] [subdir]
+#   logs_count — commits read by diff-summary.sh (its default when omitted)
+#   subdir     — narrows the scan target; artifacts go to docs/repomix/<subdir>/ with a <subdir>- prefix
 set -euo pipefail
 
-# Verify root repo directory
-export ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-# Canonicalize ROOT and verify it is a git repository.
-ROOT="$(cd "$ROOT" 2>/dev/null && pwd)" \
-  || { echo "ROOT does not exist or is not accessible: ${1}" >&2; exit 1; }
-if ! git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-  echo "ROOT is not a git repository: $ROOT" >&2
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+OUTPUT_PATH="docs/repomix"
+CHARS_PER_TOKEN=4
+
+if ! git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "ROOT is not a git repository: $PROJECT_ROOT" >&2
   exit 1
 fi
+cd "$PROJECT_ROOT"
 
-# Run from repo root so repomix resolves relative paths correctly
-cd "$ROOT"
+if [[ -n "${1:-}" ]]; then
+  export LOGS_COUNT="$1"
+fi
 
-# input /output directories
-INPUT_PATH="scripts/repomix"
-OUTPUT_PATH="docs/repomix"
-export LOGS_COUNT="${1:-100}"
-
-# optional subdirectory — narrows repomix scan target, prefixes output files
 SUBDIR="${2:-}"
 FILE_PREFIX=""
+DISPLAY_PATH="$OUTPUT_PATH"
+export ROOT="$PROJECT_ROOT"
 if [[ -n "$SUBDIR" ]]; then
-  if [[ ! -d "$ROOT/$SUBDIR" ]]; then
-    echo "Subdirectory does not exist: $ROOT/$SUBDIR" >&2
+  if [[ ! -d "$PROJECT_ROOT/$SUBDIR" ]]; then
+    echo "Subdirectory does not exist: $PROJECT_ROOT/$SUBDIR" >&2
     exit 1
   fi
   FILE_PREFIX="$(basename "$SUBDIR")-"
+  DISPLAY_PATH="$OUTPUT_PATH/$(basename "$SUBDIR")"
+  ROOT="$PROJECT_ROOT/$SUBDIR"
 fi
-
-# file names
-TREE_FILE="token-tree"
-COMPRESSED_FILE="repo-compressed"
-LOSSLESS_FILE="repomix"
-DOCS_ONLY_FILE="repomix-docs"
-GIT_RANKED_FILE="repomix-git-ranked"
-DIFF_SUMMARY_STEM="diff-summary"
-GIT_TOP_20="gitlog-top20"
-GIT_RANKED="repomix-git-ranked"
-CONFIG_FILE="repomix.config.json"
-
-# output/input dirs use repo root (before ROOT override)
-SUBDIR_SUFFIX=""
-if [[ -n "$SUBDIR" ]]; then
-  SUBDIR_SUFFIX="/$(basename "$SUBDIR")"
-fi
-export OUT_DIR="$ROOT/$OUTPUT_PATH${SUBDIR_SUFFIX}"
-export INPUT_DIR="$ROOT/$INPUT_PATH"
-export CONFIG="$INPUT_DIR/$CONFIG_FILE"
-
-# output absolute filepaths (prefixed when subdirectory is set)
-TOKEN_TREE_FILE="$OUT_DIR/${FILE_PREFIX}$TREE_FILE.txt"
-COMPRESSED_REPO_FILE="$OUT_DIR/${FILE_PREFIX}$COMPRESSED_FILE.xml"
-LOSSLESS_REPO_FILE="$OUT_DIR/${FILE_PREFIX}$LOSSLESS_FILE.xml"
-DOCS_ONLY_REPO_FILE="$OUT_DIR/${FILE_PREFIX}$DOCS_ONLY_FILE.xml"
-GIT_RANKED_REPO_FILE="$OUT_DIR/${FILE_PREFIX}$GIT_RANKED_FILE.xml"
-GITLOG_TOP_FILE="$OUT_DIR/${FILE_PREFIX}$GIT_TOP_20.txt"
-DIFF_SUMMARY_FILE="$OUT_DIR/${FILE_PREFIX}$DIFF_SUMMARY_STEM.xml"
-
-# narrow ROOT to subdirectory for repomix scan target
-if [[ -n "$SUBDIR" ]]; then
-  export ROOT="$ROOT/$SUBDIR"
-fi
-TOKEN_TREE_SCRIPT="$INPUT_DIR/$TREE_FILE.sh"
-COMPRESS_SCRIPT="$INPUT_DIR/$COMPRESSED_FILE.sh"
-LOSSLESS_SCRIPT="$INPUT_DIR/$LOSSLESS_FILE.sh"
-DOCS_ONLY_SCRIPT="$INPUT_DIR/$DOCS_ONLY_FILE.sh"
-GIT_RANKED_SCRIPT="$INPUT_DIR/$GIT_RANKED.sh"
-DIFF_SUMMARY_SCRIPT="$INPUT_DIR/$DIFF_SUMMARY_STEM.sh"
-
-echo "File set up..."
-# make output dir if not exists
-mkdir -p "$OUT_DIR"
-
-# delete only the artifacts this wrapper regenerates
-rm -f \
-  "$TOKEN_TREE_FILE" \
-  "$COMPRESSED_REPO_FILE" \
-  "$LOSSLESS_REPO_FILE" \
-  "$DOCS_ONLY_REPO_FILE" \
-  "$GIT_RANKED_REPO_FILE" \
-  "$GITLOG_TOP_FILE" \
-  "$DIFF_SUMMARY_FILE"
-
-# project-level logging
+export OUT_DIR="$PROJECT_ROOT/$DISPLAY_PATH"
 PROJECT_DIR="$(basename "$ROOT")"
-# relative filepaths (for display)
-DISPLAY_PATH="$OUTPUT_PATH${SUBDIR_SUFFIX}"
-TREE_FILE="$DISPLAY_PATH/${FILE_PREFIX}$TREE_FILE.txt"
-COMPRESSED_FILE_NAME="$DISPLAY_PATH/${FILE_PREFIX}$COMPRESSED_FILE.xml"
-LOSSLESS_FILE_NAME="$DISPLAY_PATH/${FILE_PREFIX}$LOSSLESS_FILE.xml"
-DOCS_ONLY_FILE_NAME="$DISPLAY_PATH/${FILE_PREFIX}$DOCS_ONLY_FILE.xml"
-GIT_RANKED_FILE_NAME="$DISPLAY_PATH/${FILE_PREFIX}$GIT_RANKED_FILE.xml"
-GITLOG_TOP_FILE_NAME="$DISPLAY_PATH/${FILE_PREFIX}$GIT_TOP_20.txt"
-DIFF_SUMMARY_REL="$DISPLAY_PATH/${FILE_PREFIX}$DIFF_SUMMARY_STEM.xml"
 
+GENERATED=()
 
-# git-ranked runs FIRST: its config sets includeDiffs, so running it after the
-# other artifacts packs their just-rewritten diffs (and its own) as ~56% noise.
-echo "Generating git-ranked repomix file for $PROJECT_DIR at $GIT_RANKED_FILE_NAME"
-bash "$GIT_RANKED_SCRIPT" "$GIT_RANKED_REPO_FILE"
-echo "Success!"
-echo
+# generate <description> <artifact name> <script> [script args...]
+# Replaces one artifact; the output path is passed as the script's last argument.
+generate() {
+  local description="$1" name="$2" script="$3"
+  shift 3
+  local display="$DISPLAY_PATH/$FILE_PREFIX$name"
+  local output="$OUT_DIR/$FILE_PREFIX$name"
 
-echo "Generating token count tree for $PROJECT_DIR at $TREE_FILE"
-bash "$TOKEN_TREE_SCRIPT" "$TOKEN_TREE_FILE"
-echo "Success!"
-echo
-
-echo "Generating compressed repomix file for $PROJECT_DIR at $COMPRESSED_FILE_NAME"
-bash "$COMPRESS_SCRIPT" "$COMPRESSED_REPO_FILE"
-echo "Success!"
-echo
-
-echo "Generating repomix file for $PROJECT_DIR at $LOSSLESS_FILE_NAME"
-bash "$LOSSLESS_SCRIPT" "$LOSSLESS_REPO_FILE"
-echo "Success!"
-echo
-
-echo "Generating docs-only repomix file for $PROJECT_DIR at $DOCS_ONLY_FILE_NAME"
-bash "$DOCS_ONLY_SCRIPT" "$DOCS_ONLY_REPO_FILE"
-echo "Success!"
-echo
-
-echo "Generating top-file git history at $GITLOG_TOP_FILE_NAME"
-(
-  cd "$ROOT"
-  bash "$DIFF_SUMMARY_SCRIPT" "$GITLOG_TOP_FILE"
-)
-echo "Success!"
-echo
-
-echo "Artifacts:"
-
-print_artifact() {
-  local file_path="$1"
-  local display_name="$2"
-
-  if [[ -f "$file_path" ]]; then
-    chars=$(wc -c < "$file_path" | tr -d ' ')
-    tokens=$((chars / 4))
-    echo " - $display_name (~$tokens tokens, $chars chars)"
-  else
-    echo " - $display_name (missing)"
-  fi
+  echo "Generating $description for $PROJECT_DIR at $display"
+  rm -f "$output"
+  bash "$SCRIPT_DIR/$script" "$@" "$output"
+  GENERATED+=("$display")
+  echo "Success!"
+  echo
 }
 
-print_artifact "$TOKEN_TREE_FILE" "$TREE_FILE"
-print_artifact "$COMPRESSED_REPO_FILE" "$COMPRESSED_FILE_NAME"
-print_artifact "$LOSSLESS_REPO_FILE" "$LOSSLESS_FILE_NAME"
-print_artifact "$DOCS_ONLY_REPO_FILE" "$DOCS_ONLY_FILE_NAME"
-print_artifact "$GIT_RANKED_REPO_FILE" "$GIT_RANKED_FILE_NAME"
-print_artifact "$GITLOG_TOP_FILE" "$GITLOG_TOP_FILE_NAME"
+# git-ranked runs FIRST: it includes working-tree diffs, so running it after the
+# other artifacts packs their just-rewritten diffs (and its own) as ~56% noise.
+generate "git-ranked repomix file" repomix-git-ranked.xml repomix-git-ranked.sh
+generate "token count tree" token-tree.txt token-tree.sh
+generate "compressed repomix file" repo-compressed.xml repo-compressed.sh
+generate "repomix file" repomix.xml repomix.sh
+generate "docs-only repomix file" repomix-docs.xml repomix-docs.sh
+for scope in tests scripts worker; do
+  generate "$scope-only repomix file" "repomix-$scope.xml" repomix-scoped.sh "$scope"
+done
+generate "top-file git history" gitlog-top20.txt diff-summary.sh
+
+echo "Artifacts:"
+for display in "${GENERATED[@]}"; do
+  file_path="$PROJECT_ROOT/$display"
+  if [[ -f "$file_path" ]]; then
+    chars=$(wc -c < "$file_path" | tr -d ' ')
+    echo " - $display (~$((chars / CHARS_PER_TOKEN)) tokens, $chars chars)"
+  else
+    echo " - $display (missing)"
+  fi
+done

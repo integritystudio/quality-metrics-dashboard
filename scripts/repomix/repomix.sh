@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
+# Packs src/, scripts/, worker/ and e2e/ with the base config.
 set -euo pipefail
+source "$(dirname "$0")/repomix-core.sh"
 
-OUTPUT_FILE="${1:?Usage: $0 <output_file>}"
-
-FORCE_COLOR=0 NO_COLOR=1 timeout 120 \
-npx repomix "$ROOT" -c "$CONFIG" -o "$OUTPUT_FILE" >/dev/null 2>&1
+pack "$CONFIG" "${1:-$OUT_DIR/repomix.xml}"
