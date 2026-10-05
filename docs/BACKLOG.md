@@ -176,7 +176,7 @@ are in that repo unless prefixed `dashboard/`.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | ADMIN-CUSTOMER-VIEW | Epic: staff can see any org's dashboard, Billing, Usage, Quota and Entitlements exactly as the customer sees them | P2 | Parent of the items below |
-| ADMIN-CV-GATEWAY-READ | No read path lets a staff member load another org's customer data without billing that org | P2 | Blocker. Cross-repo backend decision |
+| ADMIN-CV-GATEWAY-READ | No read path lets a staff member load another org's customer data without billing that org | P2 | Blocker. Option (A) chosen 2026-10-04; routes not built |
 | ADMIN-CV-STAFF-GATE | Gate the admin customer view on `isStaff`, not `dashboard.admin` | P2 | Blocker. Security |
 | ADMIN-CV-API-CLIENT | Client and hooks for the customer-data endpoints, reusing the Auth0 token, never sending `X-Org-Id` cross-origin | P2 | Frontend plumbing |
 | ADMIN-CV-LAYOUT-NAV | Admin customer-view routes, shared layout, and back links that return to the admin hub | P2 | `PageShell` hardcodes `/` |
@@ -186,7 +186,7 @@ are in that repo unless prefixed `dashboard/`.
 | ADMIN-CV-QUOTA | Quota Status screen clone | P2 | Screen |
 | ADMIN-CV-ENTITLEMENTS | Entitlements screen clone | P2 | Screen |
 | ADMIN-CV-PARITY-TESTS | Contract and parity tests that pin the clone to the gateway's wire shapes and the Flutter behaviour | P2 | Test-only |
-| ADMIN-CV-CORS-AUDIENCE | Verify CORS, issuer and audience pairing for the chosen read path in prod and dev | P3 | Prod origins already verified live |
+| ADMIN-CV-CORS-AUDIENCE | Verify CORS, issuer and audience pairing for the chosen read path in prod and dev | P3 | Applies now (A). Dev done 2026-10-04; prod waits on an authenticated GET to the new routes |
 
 **ADMIN-CUSTOMER-VIEW.** *Goal:* staff get one place in this app to see what a customer sees on
 `integritystudio.ai/dashboard`: org list, Billing, Usage, Quota and Entitlements, for **any** org.
@@ -242,7 +242,7 @@ reasons, all verified in `workers/api-gateway/src/index.ts`:
   the customer's minute and monthly quota, and would show up in that customer's own Usage page.
   The Flutter Usage screen polls every 30 s, so one open admin tab adds about 120 rows an hour.
 - **No directory.** `GET /v1/orgs` lists only the caller's own memberships, and nothing lists all orgs.
-Options. Pick one; this item does not choose.
+Options. **Decided 2026-10-04: (A).** The other two are kept for the record.
 - **(A) Staff routes on api-gateway.** For example `GET /v1/admin/orgs` and
   `GET /v1/admin/orgs/:id/{billing-status,usage/summary,quota/status,entitlements}`, matched before
   the `/v1/orgs/:id` branch so they skip the membership pre-check, the per-org rate limit, quota
@@ -263,6 +263,12 @@ Options. Pick one; this item does not choose.
   token. Only one staff list (this worker's), same-origin for the browser, and the gateway keeps
   owning the response shapes. Both repos change. Both Workers appear to share the `alyshia-b38`
   account; confirm before relying on a service binding.
+**What choosing (A) leaves open.**
+- **Staff source inside api-gateway.** Choose one of: a second copy of `STAFF_USER_IDS` (it drifts from this worker's), an Auth0 role or permission claim, or a Supabase table. The gateway has to enforce it itself, because this app's `isStaff` check is presentation only (ADMIN-CV-STAFF-GATE).
+- **Routes.** The new routes must be matched before the `/v1/orgs/:id` branch, so they skip membership, the per-org rate limit, quota and the ledger. They must stay `GET`, because CORS allows only `GET, POST, OPTIONS`.
+- **Deploy.** api-gateway goes to production by hand with `deploy:prd`.
+- **The browser calls the gateway cross-origin.** CORS and tenant pairing therefore apply (ADMIN-CV-CORS-AUDIENCE), and the client must not send `X-Org-Id` (ADMIN-CV-API-CLIENT).
+
 Hard requirements, whichever option:
 - Staff only (see ADMIN-CV-STAFF-GATE).
 - No quota reservation, no `usage_events` row, and no per-org rate-limit consumption for the
@@ -508,29 +514,46 @@ monthlyLimit|null, minuteUsed, monthlyUsed, minuteWindowExpiresIn}`, or
   `NO_DATA_SKIP_REASON` in `e2e/fixtures.ts` for why).
 Acceptance: changing any string or threshold in the checklist fails a test.
 
-**ADMIN-CV-CORS-AUDIENCE.** This matters only under option (A), where the browser calls
-api-gateway directly.
-- **Verified 2026-09-29 by a live preflight.** `OPTIONS https://api.integritystudio.dev/v1/orgs`
-  answers `Access-Control-Allow-Origin` with the caller's own origin for both
-  `https://integritystudio.dev` and `https://www.integritystudio.dev`.
-  `Access-Control-Allow-Headers` is `Authorization, Content-Type`, so no `X-Org-Id`; see
-  ADMIN-CV-API-CLIENT.
-- **The defaults are not yet on `origin/main`.** The shared helper
-  (`workers/lib/http/cors.ts`, commit e4aec20) lists both origins in `DEFAULT_ALLOWED_ORIGINS`.
-  But e4aec20 was not on IntegrityLandingPage's `origin/main` as last fetched: local `main` was
-  42 commits ahead. So either production binds `ALLOWED_ORIGINS_JSON`, or it was deployed from an
-  unpushed tree. Confirm with `npx wrangler secret list --name api-gateway` and
-  `wrangler deployments list`.
-- **Dev.** `api-gateway-dev` sets `ALLOWED_ORIGINS_JSON = '["http://localhost:8080"]'`, so this
-  app's dev origins (`http://localhost:5173`, `quality-metrics-api-dev`) are refused.
-- **Tenants.** Pair tenants deliberately: a prod-tenant token (`dev-68gg87ow4mg4kzyo`, which this
-  app's local `.env` uses) is refused by `api-gateway-dev`, which trusts `dev-njjmghdzm23uy0p7`.
-- New admin routes in the gateway inherit CORS from the outer `fetch` wrapper, and they must stay
-  GET, since `CORS_ALLOW_METHODS` is `GET, POST, OPTIONS`.
+**ADMIN-CV-CORS-AUDIENCE.** This applies now that option (A) is chosen (2026-10-04), because the
+browser calls api-gateway directly. Checked live on 2026-10-04:
+- **Production preflight passes.** `OPTIONS https://api.integritystudio.dev/v1/orgs` returns 204
+  and echoes the caller's origin for both `https://integritystudio.dev` and
+  `https://www.integritystudio.dev`. A GET with no token returns 401 carrying the same
+  `Access-Control-Allow-Origin`, so a browser can read the error.
+  - `Access-Control-Allow-Headers` is `Authorization, Content-Type`, so there is no `X-Org-Id`;
+    see ADMIN-CV-API-CLIENT.
+  - A disallowed origin is not refused outright. It gets the first default entry,
+    `https://integritystudio.ai`, which browsers reject as a mismatch, so this is not a hole.
+- **Production runs on the built-in defaults.** The open question here was whether production
+  binds `ALLOWED_ORIGINS_JSON` or was deployed from an unpushed tree.
+  - Commit e4aec20 (`workers/lib/http/cors.ts`, `DEFAULT_ALLOWED_ORIGINS`) is now on
+    IntegrityLandingPage's `origin/main`.
+  - `wrangler secret list --name api-gateway` shows no `ALLOWED_ORIGINS_JSON`, and the
+    production `[vars]` do not set it, so the defaults apply.
+  - The last production deploy was 2026-09-30T23:45Z.
+- **Dev now admits this app.** Until 2026-10-04, `api-gateway-dev` allowed only
+  `http://localhost:8080`, the Flutter app's dev origin.
+  - It now also allows `http://localhost:5173` and
+    `https://quality-metrics-api-dev.alyshia-b38.workers.dev` (IntegrityLandingPage 683f8503,
+    deployed version `40585090`).
+  - Each dev origin's preflight now echoes that origin.
+- **Tenant pairing.**
+  - Production: this app and api-gateway both use `dev-68gg87ow4mg4kzyo`, with audience
+    `https://api.integritystudio.dev`.
+  - Dev: both use `dev-njjmghdzm23uy0p7`, with the same audience.
+  - Checked live in dev: an e2e test user's dev-tenant token, sent from the
+    `quality-metrics-api-dev` origin, gets 200 from `api-gateway-dev` with a matching
+    `Access-Control-Allow-Origin`. The same token gets 401 from production.
+  - This app's local `.env` uses the production tenant. To run locally against the dev gateway,
+    use Doppler `dev`'s `VITE_AUTH0_*` values.
+- **New admin routes** inherit CORS from the outer `fetch` wrapper, and must stay `GET`.
 Acceptance:
-- For the chosen option, a preflight and a GET from each production origin succeed.
-- The dev pairing (this app's dev origin and tenant against the gateway's dev origin and tenant)
-  is documented and works.
+- For the chosen option, a preflight and a GET from each production origin succeed. The
+  preflight is done. The authenticated GET is still to do: it waits on the admin routes, and it
+  needs a real browser session, because the production SPA has no password grant to mint a
+  token from a script.
+- ✅ The dev pairing (this app's dev origins and dev tenant against `api-gateway-dev`) is
+  documented above and works (2026-10-04).
 
 ### API keys
 
@@ -538,7 +561,7 @@ Filed 2026-09-30. Paths outside this repo are in IntegrityLandingPage (`~/code/i
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| ADMIN-API-KEY-ROTATION | A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route | P2 | Blocked on three `api-keys-rotate` defects (below). Cross-repo |
+| ~~ADMIN-API-KEY-ROTATION~~ | ~~A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route~~ | ~~P2~~ | Done 2026-10-04 — IntegrityLandingPage commit 7f35b4f1, dashboard commit 24d47cd |
 
 **ADMIN-API-KEY-ROTATION.** Nobody can rotate an `obtk_` key without an operator today. The only
 rotation done so far was by hand: insert an `api_keys` row, PUT its `apikey:<sha256>` record into
