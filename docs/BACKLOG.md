@@ -660,10 +660,13 @@ token" was skipped, and it does not.
     against dev until the dev function is redeployed.
   - Also fixed the two lint errors 24d47cd left. A rotate response with no token now shows an
     error instead of nothing (`RotateKeyResponseSchema`).
-- **Still unchecked:** that the function's `KV_NAMESPACE_ID` secret names the `AUTH` namespace
-  (see the blockers above).
+- ✅ **`KV_NAMESPACE_ID` checked 2026-10-05.** Supabase CLI `secrets list` digests, matched by sha256:
+  production's names production `AUTH` (`b5a89aed…`), and dev's names dev `AUTH` (`0b323a37…`).
+  `CLOUDFLARE_ACCOUNT_ID` matches the account in both projects, and `CLOUDFLARE_API_TOKEN` is set.
+  The Doppler `prd` Supabase token cannot read function secrets (`edge_functions_secrets_read`);
+  the CLI's own login can.
 - **To ship, in order:**
-  1. Check `KV_NAMESPACE_ID` (above).
+  1. ✅ Check `KV_NAMESPACE_ID` (above).
   2. Deploy `api-keys-rotate` to dev (`tumhmtshahktumhqqamk`, needs the CLI's keychain login; the
      Doppler `prd` token cannot reach dev) and run the toolkit's `api-key-auth` e2e under Doppler
      `dev`.
