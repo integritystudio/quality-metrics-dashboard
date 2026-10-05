@@ -9,7 +9,7 @@ import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import type { AdminUser, AdminRole, AdminMember, OrgMembershipRoleValue } from '../lib/validation/auth-schemas.js';
+import type { AdminUser, AdminRole, AdminMember, OrgMembershipRoleValue, ApiKey } from '../lib/validation/auth-schemas.js';
 
 const ADMIN_TABLE_COLUMNS = [
   { label: 'Email', align: 'left' as const },
@@ -30,6 +30,16 @@ const MEMBERSHIP_ROLES: OrgMembershipRoleValue[] = ['owner', 'admin', 'billing_a
 /** One key per list, so a reload after a mutation refetches in place (see onMutationEnd). */
 const USERS_QUERY_KEY = ['admin', 'users'] as const;
 const MEMBERS_QUERY_KEY = ['admin', 'members'] as const;
+const KEYS_QUERY_KEY = ['admin', 'keys'] as const;
+
+const KEY_TABLE_COLUMNS = [
+  { label: 'Prefix', align: 'left' as const },
+  { label: 'Name', align: 'left' as const },
+  { label: 'Tier', align: 'left' as const },
+  { label: 'Created', align: 'left' as const },
+  { label: 'Last Used', align: 'left' as const },
+  { label: 'Actions', align: 'right' as const },
+];
 
 function RoleChip({
   role,
@@ -276,6 +286,138 @@ function MemberRow({
   );
 }
 
+function KeyRow({
+  apiKey,
+  onMutationStart,
+  onMutationEnd,
+}: {
+  apiKey: ApiKey;
+  onMutationStart: () => string;
+  onMutationEnd: (id: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const adminFetch = useAdminFetch();
+
+  async function handleRotate() {
+    if (!window.confirm(
+      `Rotate key ${apiKey.prefix}…? The old key stops working immediately — update OBTOOL_API_KEY wherever the hooks read it.`,
+    )) return;
+    setBusy(true);
+    setError(null);
+    setNewToken(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(`/api/admin/keys/${apiKey.id}/rotate`, 'POST');
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || 'Failed to rotate key');
+      } else {
+        const data = await res.json() as { token?: string };
+        setNewToken(data.token ?? null);
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+
+  async function handleCopy() {
+    if (!newToken) return;
+    try {
+      await navigator.clipboard.writeText(newToken);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  return (
+    <tr className="border-b">
+      <td className="cell-pad text-left">
+        <span className="mono-sm">{apiKey.prefix}…</span>
+      </td>
+      <td className="cell-pad text-left">
+        <span className="text-xs">{apiKey.name ?? <span className="text-muted">—</span>}</span>
+      </td>
+      <td className="cell-pad text-left">
+        <span className="text-xs">{apiKey.tier}</span>
+      </td>
+      <td className="cell-pad text-left text-muted text-xs nowrap">
+        {apiKey.created_at ? format(new Date(apiKey.created_at), 'PP') : '—'}
+      </td>
+      <td className="cell-pad text-left text-muted text-xs nowrap">
+        {apiKey.last_used_at ? format(new Date(apiKey.last_used_at), 'PP') : '—'}
+      </td>
+      <td className="cell-pad text-right">
+        {newToken ? (
+          <div className="inline-flex-center gap-4">
+            <span className="mono-sm text-xs">{newToken.slice(0, 16)}…</span>
+            <button className="btn-sm" onClick={() => void handleCopy()}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        ) : (
+          <button className="btn-sm" onClick={() => void handleRotate()} disabled={busy}>
+            Rotate
+          </button>
+        )}
+        {error && <div className="text-xs text-error mt-1">{error}</div>}
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Org-scoped key management: lists the caller's active keys for their active
+ * org, and lets them rotate each one. New token is shown exactly once and is
+ * not kept in state beyond the session or in localStorage.
+ */
+function ApiKeysSection({
+  onMutationStart,
+  onMutationEnd,
+}: {
+  onMutationStart: () => string;
+  onMutationEnd: (id: string) => void;
+}) {
+  const { data: keys, isLoading, error } = useApiQuery<ApiKey[]>(
+    KEYS_QUERY_KEY,
+    () => `/api/admin/keys`,
+  );
+
+  return (
+    <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
+      <DetailPageHeader title="API Keys" />
+      <div className="card">
+        {!keys || keys.length === 0 ? (
+          <div className="empty-state text-secondary">No active keys found.</div>
+        ) : (
+          <div className="table-scroll">
+            <table className="mono-table">
+              <MonoTableHead columns={KEY_TABLE_COLUMNS} />
+              <tbody>
+                {keys.map((k) => (
+                  <KeyRow
+                    key={k.id}
+                    apiKey={k}
+                    onMutationStart={onMutationStart}
+                    onMutationEnd={onMutationEnd}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </PageShell>
+  );
+}
+
 /**
  * Org-scoped member management (P6): bound server-side to the session's active
  * org — this page can never read or mutate another org's memberships.
@@ -350,7 +492,7 @@ export function AdminPage() {
       // PageShell would swap the table for a skeleton and unmount every row,
       // discarding the error a failed mutation just set. useApiQuery leads
       // every key with the active org.
-      for (const key of [USERS_QUERY_KEY, MEMBERS_QUERY_KEY]) {
+      for (const key of [USERS_QUERY_KEY, MEMBERS_QUERY_KEY, KEYS_QUERY_KEY]) {
         void queryClient.invalidateQueries({ queryKey: [activeOrgId, ...key] });
       }
     }
@@ -370,10 +512,16 @@ export function AdminPage() {
 
   if (orgScoped) {
     return (
-      <OrgMembersSection
-        onMutationStart={onMutationStart}
-        onMutationEnd={onMutationEnd}
-      />
+      <>
+        <OrgMembersSection
+          onMutationStart={onMutationStart}
+          onMutationEnd={onMutationEnd}
+        />
+        <ApiKeysSection
+          onMutationStart={onMutationStart}
+          onMutationEnd={onMutationEnd}
+        />
+      </>
     );
   }
 

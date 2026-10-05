@@ -204,3 +204,20 @@ export const MeResponseSchema = z.object({
 });
 
 export type MeResponse = z.infer<typeof MeResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// API key management
+// ---------------------------------------------------------------------------
+
+/** A single API key row returned by GET /api/admin/keys. */
+export const ApiKeySchema = z.object({
+  id: UuidSchema,
+  prefix: z.string(),
+  name: z.string().nullable().optional(),
+  tier: z.string(),
+  status: z.string(),
+  created_at: z.iso.datetime().optional(),
+  last_used_at: z.iso.datetime().nullable().optional(),
+});
+
+export type ApiKey = z.infer<typeof ApiKeySchema>;

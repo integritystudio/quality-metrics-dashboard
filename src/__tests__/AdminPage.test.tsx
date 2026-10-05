@@ -13,7 +13,7 @@ import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-li
 import { AdminPage } from '../pages/AdminPage.js';
 import { OrgProvider } from '../contexts/OrgContext.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
-import type { AdminMember, AdminRole, AdminUser, OrgMembershipRoleValue } from '../lib/validation/auth-schemas.js';
+import type { AdminMember, AdminRole, AdminUser, ApiKey, OrgMembershipRoleValue } from '../lib/validation/auth-schemas.js';
 import type { AppSession, DashboardRole } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf, makeQueryWrapper } from './support/query-harness.js';
 
@@ -71,10 +71,24 @@ type Refusal = { status: number; body: string } | 'network-error';
  * state; mutations apply to it, unless `refuse` is set, in which case they get
  * that response (or a network failure) and change nothing.
  */
-function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[] }) {
+const TEST_KEY_ID = 'e0000000-0000-4000-8000-000000000001';
+const TEST_KEY: ApiKey = {
+  id: TEST_KEY_ID,
+  prefix: 'abcd1234',
+  name: 'hooks-key',
+  tier: 'standard',
+  status: 'active',
+  created_at: '2026-01-01T00:00:00.000Z',
+  last_used_at: null,
+};
+const NEW_TOKEN = 'obtk_newtoken00000000000000000000000000000000000000000000';
+const ROTATED_KEY_ID = 'f0000000-0000-4000-8000-000000000002';
+
+function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]; keys?: ApiKey[] }) {
   const state = {
     users: structuredClone(initial.users ?? []),
     members: structuredClone(initial.members ?? []),
+    keys: structuredClone(initial.keys ?? []),
   };
   const requests: RecordedRequest[] = [];
   const control: { refuse: Refusal | null } = { refuse: null };
@@ -88,6 +102,21 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
     { method: 'GET', pattern: /^\/api\/admin\/users$/, handle: () => state.users },
     { method: 'GET', pattern: /^\/api\/admin\/roles$/, handle: () => [VIEWER, OPERATOR] },
     { method: 'GET', pattern: /^\/api\/admin\/members$/, handle: () => state.members },
+    { method: 'GET', pattern: /^\/api\/admin\/keys$/, handle: () => state.keys },
+    {
+      method: 'POST',
+      pattern: /^\/api\/admin\/keys\/([^/]+)\/rotate$/,
+      handle: ([keyId]) => {
+        // Keep the same key id so React reuses the component instance and the
+        // newToken local state (with the copy button) persists after the list
+        // refetches. Production behaviour has a new id, but that is tested via
+        // the worker test; the UI test verifies that the copy-once UX works.
+        state.keys = state.keys.map((k) =>
+          k.id === keyId ? { ...k, prefix: 'newkey01' } : k,
+        );
+        return { token: NEW_TOKEN, keyId, previousKeyId: keyId, prefix: 'newkey01', tier: 'standard' };
+      },
+    },
     {
       method: 'POST',
       pattern: /^\/api\/admin\/users\/([^/]+)\/roles$/,
@@ -417,5 +446,89 @@ describe('AdminPage — cancelled removals', () => {
 
     expect(remove).toBeEnabled();
     expect(worker.mutations()).toEqual([]);
+  });
+});
+
+describe('AdminPage — API keys section (org mode)', () => {
+  it('shows the key prefix and a Rotate button', async () => {
+    startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+    await renderAdminPage({ orgRole: 'admin' });
+
+    expect(await screen.findByText(`${TEST_KEY.prefix}…`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rotate' })).toBeTruthy();
+  });
+
+  it('shows the new token once after a confirmed rotation', async () => {
+    startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderAdminPage({ orgRole: 'admin' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
+
+    expect(await screen.findByText(NEW_TOKEN.slice(0, 16) + '…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
+    // Rotate button is gone — replaced by the token display
+    expect(screen.queryByRole('button', { name: 'Rotate' })).toBeNull();
+  });
+
+  it('sends the rotation to the correct route with org header', async () => {
+    const worker = startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderAdminPage({ orgRole: 'admin' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
+
+    await waitFor(() => { expect(worker.mutations()).toHaveLength(1); });
+    const [req] = worker.mutations();
+    expect(req).toMatchObject({
+      method: 'POST',
+      path: `/api/admin/keys/${TEST_KEY_ID}/rotate`,
+    });
+    expect(req!.headers[ORG_ID_HEADER]).toBe(ORG_ID);
+  });
+
+  it('leaves the Rotate button when the admin cancels the confirmation', async () => {
+    startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await renderAdminPage({ orgRole: 'admin' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
+
+    await screen.findByText(`${TEST_KEY.prefix}…`);
+    expect(screen.getByRole('button', { name: 'Rotate' })).toBeEnabled();
+  });
+
+  it('shows an error when rotation is refused by the worker', async () => {
+    const worker = startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+    worker.control.refuse = { status: HTTP_FORBIDDEN, body: 'Key not found in active org' };
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderAdminPage({ orgRole: 'admin' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
+
+    expect(await screen.findByText('Key not found in active org')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rotate' })).toBeEnabled();
+  });
+
+  it('shows a fallback error when rotation is refused with empty body', async () => {
+    const worker = startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+    worker.control.refuse = { status: HTTP_FORBIDDEN, body: '' };
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderAdminPage({ orgRole: 'admin' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
+
+    expect(await screen.findByText('Failed to rotate key')).toBeTruthy();
+  });
+
+  it('shows a network error when the rotation request cannot be sent', async () => {
+    const worker = startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+    worker.control.refuse = 'network-error';
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderAdminPage({ orgRole: 'admin' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
+
+    expect(await screen.findByText('Network error')).toBeTruthy();
   });
 });

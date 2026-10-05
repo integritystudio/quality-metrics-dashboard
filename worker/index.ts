@@ -4,7 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { z } from 'zod';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
-import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema } from '../src/lib/validation/auth-schemas.js';
+import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema, ApiKeySchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
 import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
@@ -133,7 +133,7 @@ async function getGlobalKv<T>(kv: KVNamespace, key: string): Promise<T | null> {
   return readKvEnvelope<T>(kv, key);
 }
 
-type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' | 'member.remove';
+type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' | 'member.remove' | 'key.rotate';
 type SupabaseEnv = { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string };
 type WaitUntilFn = (promise: Promise<unknown>) => void;
 
@@ -1081,6 +1081,98 @@ app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
   if (!res.ok) return c.json({ error: 'Failed to revoke role' }, Http.InternalServerError);
   logAuditEvent(c.get('session').appUserId, 'role.revoke', userId, roleId, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
+});
+
+// ---------------------------------------------------------------------------
+// API key management (org-scoped admin, P6)
+// ---------------------------------------------------------------------------
+// These routes require dashboard.admin + an active org. The key list and rotation
+// are scoped to session.activeOrgId — an admin can only see and rotate keys that
+// belong to their active org, never another org's keys.
+//
+// Rotation proxies to the Supabase Edge Function api-keys-rotate (server-to-server).
+// The user's Auth0 JWT is forwarded as Authorization so the function can derive the
+// caller's identity. Requires the Supabase project to accept Auth0 JWTs (third-party
+// auth), or the function's verify_jwt set to false.
+// ---------------------------------------------------------------------------
+
+const ERR_KEY_NOT_FOUND_IN_ORG = 'Key not found in active org';
+const ERR_ROTATION_FAILED = 'Key rotation failed';
+
+app.get('/api/admin/keys', async (c) => {
+  const scope = orgAdminScope(c);
+  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const appUserId = scope.session.appUserId;
+  if (!appUserId) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/api_keys?select=id,prefix,name,tier,status,created_at,last_used_at&user_id=eq.${encodeURIComponent(appUserId)}&organization_id=eq.${encodeURIComponent(scope.orgId)}&status=eq.active&order=created_at.desc`,
+    { headers: serviceRoleHeaders(c.env) },
+  ).catch(() => null);
+  if (!res?.ok) return c.json({ error: 'Failed to fetch keys' }, Http.InternalServerError);
+
+  const rawJson: unknown = await res.json().catch(() => null);
+  const keys = safeArray(rawJson).flatMap((row) => {
+    const parsed = ApiKeySchema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return c.json(keys);
+});
+
+app.post('/api/admin/keys/:keyId/rotate', async (c) => {
+  const scope = orgAdminScope(c);
+  if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const appUserId = scope.session.appUserId;
+  if (!appUserId) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+
+  const keyId = c.req.param('keyId');
+  if (!UUID_PATTERN.test(keyId)) return c.json({ error: 'Invalid keyId' }, Http.BadRequest);
+
+  // Verify the key belongs to the caller and to their active org before forwarding.
+  const verifyRes = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/api_keys?select=id&id=eq.${encodeURIComponent(keyId)}&user_id=eq.${encodeURIComponent(appUserId)}&organization_id=eq.${encodeURIComponent(scope.orgId)}&status=eq.active&limit=1`,
+    { headers: serviceRoleHeaders(c.env) },
+  ).catch(() => null);
+  if (!verifyRes?.ok) return c.json({ error: ERR_ROTATION_FAILED }, Http.InternalServerError);
+  const rows = safeArray(await verifyRes.json().catch(() => []));
+  if (!rows.length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, Http.Forbidden);
+
+  // Forward to Supabase Edge Function. The user's bearer token is forwarded so
+  // the function can derive the caller's Auth0 sub. apikey authenticates at
+  // the gateway level; Authorization carries the user JWT for verify_jwt.
+  const userBearer = c.req.header('Authorization') ?? '';
+  const fnRes = await fetch(
+    `${c.env.SUPABASE_URL}/functions/v1/api-keys-rotate`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': c.env.SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': userBearer,
+      },
+      body: JSON.stringify({ keyId }),
+    },
+  ).catch(() => null);
+
+  if (!fnRes?.ok) {
+    const errText = fnRes ? await fnRes.text().catch(() => '') : '';
+    console.error(`[keys/rotate] function returned ${fnRes?.status ?? 'network error'}: ${errText}`);
+    return c.json({ error: ERR_ROTATION_FAILED }, Http.InternalServerError);
+  }
+
+  const result: unknown = await fnRes.json().catch(() => null);
+  logAuditEvent(
+    appUserId,
+    'key.rotate',
+    appUserId,
+    keyId,
+    c.env,
+    c.executionCtx.waitUntil.bind(c.executionCtx),
+    scope.orgId,
+  );
+  // Return the function's response verbatim. Cache-Control: private, no-store
+  // is already set by the /api/* middleware; the token must not be logged.
+  return c.json(result, Http.Ok);
 });
 
 // SPA fallback: serve static assets / index.html for non-API routes
