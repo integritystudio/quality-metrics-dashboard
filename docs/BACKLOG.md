@@ -561,7 +561,7 @@ Filed 2026-09-30. Paths outside this repo are in IntegrityLandingPage (`~/code/i
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| ~~ADMIN-API-KEY-ROTATION~~ | ~~A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route~~ | ~~P2~~ | Done 2026-10-04 — IntegrityLandingPage commit 7f35b4f1, dashboard commit 24d47cd |
+| ADMIN-API-KEY-ROTATION | A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route | P2 | Reopened 2026-10-05; fixed by option (b), the worker calls the function as a service. Code done, nothing deployed |
 
 **ADMIN-API-KEY-ROTATION.** Nobody can rotate an `obtk_` key without an operator today. The only
 rotation done so far was by hand: insert an `api_keys` row, PUT its `apikey:<sha256>` record into
@@ -604,10 +604,9 @@ rotation silently.
   else 403. `dashboard.admin` is an org-scoped grant, so allow only keys whose `organization_id` is
   the active org. An admin of one org must not rotate their key in an org where they are only a
   member. Check this against `api_keys` with the service key before forwarding.
-- **Forward the user's bearer token** to `api-keys-rotate`, server to server. The function derives
-  the user from it, and `supabase/config.toml` pins `verify_jwt = true`. First confirm that the
-  Supabase gateway accepts this app's Auth0 token (audience `https://api.integritystudio.dev`). If
-  it does not, the route needs another way to act as the user.
+- **Call `api-keys-rotate` as a service.** *Superseded 2026-10-05; this bullet said to forward the
+  user's bearer token, which Supabase cannot verify (see Reopened below).* The worker sends its
+  service key and the verified user's id; it never forwards the user's token.
 - **Audit it** with `logAuditEvent` (`key.rotate`, old and new key ids, never the token), as the
   member routes do.
 - **Return the token in the response only.** The worker sets `no-store` on `/api/*` already; it must
@@ -622,6 +621,58 @@ rotation silently.
   React Query cache: use a mutation's result, not a query, and drop it when the user leaves the page.
 - Errors stay visible in the row. Since 099c7b9 the admin tables stay mounted across reloads.
 - Styles come from `theme.css` classes, not inline `style`.
+
+*Reopened 2026-10-05.* Marked done 2026-10-04 on code that passes its tests but cannot work in
+production. The route step "first confirm that the Supabase gateway accepts this app's Auth0
+token" was skipped, and it does not.
+- **What landed.** IntegrityLandingPage 7f35b4f1 fixes all three blockers in `api-keys-rotate`.
+  Dashboard 24d47cd adds `GET /api/admin/keys`, `POST /api/admin/keys/:keyId/rotate` (gated by
+  `orgAdminScope`, checked against the active org, audited as `key.rotate`), the keys section on
+  `AdminPage`, and tests.
+- **Why it fails.** Read from the Supabase Management API on 2026-10-05, project
+  `cfrbahzzklwrnmbtqojl` has **no third-party auth providers**, and the deployed `api-keys-rotate`
+  has `verify_jwt: true`. The route forwards the user's Auth0 token, so Supabase's gateway rejects
+  it before the function runs, and every rotation returns an error. The worker tests mock the
+  function, so they cannot see this.
+- **`verify_jwt = false` was not a fix on its own.** The old handler's `getJwtSub` base64-decoded
+  the token's payload and trusted `sub` without checking a signature, so it relied entirely on the
+  gateway's check. Turning that check off without changing the handler would have let anyone forge
+  a token carrying another user's Auth0 id, revoke that user's keys and be handed a new one. The
+  fix below turns it off only together with removing that path and requiring a service key.
+- **Decided 2026-10-05: (b), the worker calls the function as a service.** Rejected: (a), enabling
+  Auth0 as a Supabase third-party provider. That is project-wide, so Auth0 tokens would reach
+  PostgREST and RLS, where today all access goes through the service key.
+  - **Function** (IntegrityLandingPage, uncommitted): `api-keys-rotate` is split into
+    `handler.ts` and `index.ts`, like `api-keys-create`.
+    - It requires a service-level key on every request (the same Auth-admin capability check as
+      `api-keys-create` and `api-keys-set-status`). It takes `{ keyId, userId }` and no longer
+      reads any JWT.
+    - `supabase/config.toml` sets `verify_jwt = false`, which Supabase documents for
+      server-to-server calls with `sb_secret_` keys.
+    - 21 tests in `supabase/tests/edge-functions/api-keys-rotate.test.ts`: the fake backend
+      learned PostgREST and KV `DELETE`, and a mutation check confirmed the credential and
+      rollback tests fail when those paths are broken.
+  - **Worker** (this repo): the route sends `serviceRoleHeaders` (the `dashboard_worker`
+    `sb_secret_` key) and `{ keyId, userId: appUserId }`. `admin-keys.test.ts` pins that the
+    user's token is never forwarded.
+  - **e2e** (observability-toolkit `services/e2e/api-key-auth.e2e.ts`): test 5 rotates through a
+    `rotateKey` helper with `SUPABASE_PROVISIONING_KEY`, as `createKey` does. It will fail
+    against dev until the dev function is redeployed.
+  - Also fixed the two lint errors 24d47cd left. A rotate response with no token now shows an
+    error instead of nothing (`RotateKeyResponseSchema`).
+- **Still unchecked:** that the function's `KV_NAMESPACE_ID` secret names the `AUTH` namespace
+  (see the blockers above).
+- **To ship, in order:**
+  1. Check `KV_NAMESPACE_ID` (above).
+  2. Deploy `api-keys-rotate` to dev (`tumhmtshahktumhqqamk`, needs the CLI's keychain login; the
+     Doppler `prd` token cannot reach dev) and run the toolkit's `api-key-auth` e2e under Doppler
+     `dev`.
+  3. Deploy it to production (`cfrbahzzklwrnmbtqojl`); the live version is 28, mid-September,
+     which predates 7f35b4f1.
+  4. Deploy the three dashboard Workers.
+  5. Rotate a real key from `/admin` and check the acceptance bullets below.
+- **Acceptance below is unmet.** In particular the first bullet: no rotation has succeeded
+  against a real function.
 
 Acceptance:
 - A user rotates one of their keys. The new token authenticates against obtool-api
