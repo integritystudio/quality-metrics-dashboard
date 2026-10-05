@@ -7,7 +7,6 @@ import {
   mapRecord,
   fingerprint,
   evaluationId,
-  isPostedByDerive,
   loadShipped,
   saveShipped,
   pruneShipped,
@@ -200,13 +199,16 @@ describe('shipped index', () => {
     const index: ShippedIndex = {
       'evaluations-2026-09-15.jsonl': ['keep'],
       'evaluations-2026-08-01.jsonl': ['drop'],
-      'derived-evaluations-2026-09-15.jsonl': ['keep-derived'],
-      'derived-evaluations-2026-08-01.jsonl': ['drop-derived'],
     };
-    expect(pruneShipped(index, 2, NOW)).toEqual({
+    expect(pruneShipped(index, 2, NOW)).toEqual({ 'evaluations-2026-09-15.jsonl': ['keep'] });
+  });
+
+  it("drops state for derive's retired files, even inside the window (Phase 6)", () => {
+    const index: ShippedIndex = {
       'evaluations-2026-09-15.jsonl': ['keep'],
-      'derived-evaluations-2026-09-15.jsonl': ['keep-derived'],
-    });
+      'derived-evaluations-2026-09-15.jsonl': ['retired'],
+    };
+    expect(pruneShipped(index, 2, NOW)).toEqual({ 'evaluations-2026-09-15.jsonl': ['keep'] });
   });
 });
 
@@ -254,23 +256,6 @@ describe('evaluationId', () => {
   });
 });
 
-describe('isPostedByDerive', () => {
-  const mapped = (evaluatedAtMs: number) => ({ payload: { evaluatedAtMs } as EvaluationPayload });
-  const cutover = Date.parse('2026-09-28T00:00:00.000Z');
-
-  it('skips derive-file records at or after the cutover, which derive posts itself', () => {
-    expect(isPostedByDerive('derived-evaluations-2026-09-28.jsonl', mapped(cutover))).toBe(true);
-  });
-
-  it('still ships derive-file records from before the cutover', () => {
-    expect(isPostedByDerive('derived-evaluations-2026-09-27.jsonl', mapped(cutover - 1))).toBe(false);
-  });
-
-  it('never skips records from the hooks or the judge', () => {
-    expect(isPostedByDerive('evaluations-2026-09-28.jsonl', mapped(cutover + 1))).toBe(false);
-  });
-});
-
 describe('windowFiles', () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'eval-upload-')); });
@@ -300,16 +285,10 @@ describe('windowFiles', () => {
     expect(windowFiles(dir, 2, NOW)).toEqual([]);
   });
 
-  it("selects derive's own files alongside the hooks' (HDF5)", () => {
-    // The cloud reads tool_correctness and evaluation_latency into the CQI, so
-    // the rule records still ship from the file they moved to.
+  it("ignores derive's retired files: derive posts its own records (Phase 6)", () => {
     write('evaluations-2026-09-15.jsonl', 10);
     write('derived-evaluations-2026-09-15.jsonl', 10);
-    write('derived-evaluations-2026-08-01.jsonl', 10);
-    expect(windowFiles(dir, 2, NOW)).toEqual([
-      'derived-evaluations-2026-09-15.jsonl',
-      'evaluations-2026-09-15.jsonl',
-    ]);
+    expect(windowFiles(dir, 2, NOW)).toEqual(['evaluations-2026-09-15.jsonl']);
   });
 
   it('returns empty for a missing directory rather than throwing', () => {

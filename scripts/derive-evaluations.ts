@@ -1,47 +1,32 @@
 #!/usr/bin/env tsx
 /**
- * Derive rule-based evaluations from trace data and deliver them to the cloud.
+ * Derive rule-based evaluations from trace data and post them to ingest.
  *
- * Reads traces-*.jsonl (or `/v1/traces` with `--source=cloud`), extracts
- * quality signals, and delivers each record by its own event time
- * (cloud-read migration Phase 3, `DERIVE_DIRECT_POST_SINCE_MS`):
- *   - at or after the cutover: POSTed straight to ingest (`post-evaluations.ts`),
- *     each with an `evaluationId` the worker dedups on, so re-posting is a no-op.
- *     An unscoped run posts the last two days; `--date=`/`--days=` posts the
- *     whole scope, which is how a backfill is done, unless `--post-days=N`
- *     narrows the post to the last N days (populate passes 2).
- *   - before it: written to derived-evaluations-<date>.jsonl for
- *     `upload-evaluations`, as before. Goes away in Phase 6.
+ * Reads spans from obtool-api (`/v1/traces`, one query per `OBTOOL_API_KEY*`
+ * account in the environment) or, with `--source=local`, from
+ * `traces-*.jsonl`. Without `--date=`/`--days=`, the cloud source reads the
+ * last `DERIVE_DEFAULT_DAYS`, as populate does, and the local source reads
+ * every trace file. `--source=local` is kept for one release as the rollback
+ * (cloud-read Phase 6); `derive-parity.ts` checks that the two sources agree.
+ * A failed cloud read exits `DERIVE_EXIT_READ_FAILED` (9) before anything is
+ * posted.
  *
- * Each target derived-evaluations-<date>.jsonl is REPLACED, not appended to,
- * so scope the run and preview it before writing:
+ * Every record is POSTed straight to ingest (`post-evaluations.ts`) with an
+ * `evaluationId` the worker dedups on, so re-posting is a no-op. An unscoped
+ * run posts the last two days; an explicit `--date=`/`--days=` posts the whole
+ * scope, which is how a backfill is done, unless `--post-days=N` narrows the
+ * post to the last N days (populate passes 2). Records dated before
+ * `DERIVE_NO_REPOST_BEFORE_MS` are never posted. Nothing is written to disk
+ * except `.calibration-state.json`.
  *
- *   tsx scripts/derive-evaluations.ts --date=2026-07-27 --dry-run
- *   tsx scripts/derive-evaluations.ts --days=7
- *   tsx scripts/derive-evaluations.ts              # all dates
- *   tsx scripts/derive-evaluations.ts --source=cloud --days=7   # read /v1/traces instead
- *   tsx scripts/derive-evaluations.ts --source=cloud --days=7 --post-days=2   # what populate runs
- *
- * `--source=cloud` reads spans from obtool-api, one query per `OBTOOL_API_KEY*`
- * account in the environment, and needs `--date=` or `--days=` (an unbounded
- * cloud read has no memory ceiling). Output is identical in shape; see
- * `derive-parity.ts` for the check that the two sources agree. A failed cloud
- * read exits `DERIVE_EXIT_READ_FAILED` (9) before anything is written or posted.
- *
- * The records get a file of their own (HDF5, 2026-09-27). Until then this
- * rewrote the hooks' `evaluations-<date>.jsonl`, keeping every line whose
- * `gen_ai.evaluation.evaluator` was not `rule` and prepending a fresh copy of
- * its own — but `toOTelRecord` had stopped writing that attribute when the
- * producer moved to `integritystudio.evaluation.producer`, so the filter kept
- * every previous run's rule lines too. Twice a day, for months: on 2026-09-22
- * the file held 57,156 lines for 4,641 distinct rule records, and the corpus
- * reached 1.1 GB against 100 MB of traces. Writing to a separate file removes
- * the preservation step, and with it the way it fails: this file is wholly
- * ours and is replaced, and nothing in `evaluations-<date>.jsonl` is ours.
+ *   tsx scripts/derive-evaluations.ts --dry-run                    # what populate runs: 7 days read, 2 posted
+ *   tsx scripts/derive-evaluations.ts --date=2026-10-01 --dry-run
+ *   tsx scripts/derive-evaluations.ts --days=3
+ *   tsx scripts/derive-evaluations.ts --source=local --days=3      # the rollback
  */
 
-import { writeFileSync, readdirSync, readFileSync, existsSync } from 'fs';
-import { basename, join } from 'path';
+import { readdirSync } from 'fs';
+import { join } from 'path';
 import {
   computeCalibrationDistributions,
   loadCalibrationState,
@@ -51,13 +36,13 @@ import {
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, DERIVED_EVALUATIONS_FILE_PREFIX, DERIVE_DIRECT_POST_SINCE_MS, datedJsonlName, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -474,26 +459,48 @@ const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
 const DRY_RUN_ARG = '--dry-run';
 
-/** `--source=local|cloud`; `local` when absent. Cloud needs a date scope. */
-export function resolveSource(args: string[], dateScope: Set<string> | null): TraceSource {
+/**
+ * `--source=local|cloud`, else `defaultSource`: `cloud` for derive and the
+ * judge since cloud-read Phase 6. `local` is kept for one release as the rollback.
+ */
+export function resolveSource(args: string[], defaultSource: TraceSource = DERIVE_DEFAULT_SOURCE): TraceSource {
   const arg = args.find(a => a.startsWith(SOURCE_ARG));
-  const source = arg ? arg.slice(SOURCE_ARG.length) : 'local';
+  const source = arg ? arg.slice(SOURCE_ARG.length) : defaultSource;
   if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
     throw new Error(`${SOURCE_ARG} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
-  }
-  if (source === 'cloud' && !dateScope) {
-    throw new Error(`${SOURCE_ARG}cloud needs ${DATE_ARG} or ${DAYS_ARG}`);
   }
   return source as TraceSource;
 }
 
+/** The last `days` UTC dates, today included. */
+export function lastUtcDays(days: number, now: Date = new Date()): Set<string> {
+  const dates = new Set<string>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - i);
+    dates.add(toDateOnly(d));
+  }
+  return dates;
+}
+
 /**
- * Restrict which date buckets are read and rewritten.
- * Returns null for "all dates" (no flag), preserving prior behavior.
- *
- * Scoping matters for safety, not just speed: the write loop below replaces
- * each `derived-evaluations-<date>.jsonl` wholesale, and any record the reader
- * fails to validate is dropped rather than preserved.
+ * The dates a run reads: the caller's `--date=`/`--days=`, else, for the cloud
+ * source, the last `defaultDays`. The cloud needs a bound because an unbounded
+ * read has no memory ceiling; an unscoped local run still reads every trace file.
+ */
+export function readScope(
+  source: TraceSource,
+  dateScope: Set<string> | null,
+  defaultDays: number,
+  now: Date = new Date(),
+): Set<string> | null {
+  return source === 'cloud' && !dateScope ? lastUtcDays(defaultDays, now) : dateScope;
+}
+
+/**
+ * The dates the caller asked for with `--date=` or `--days=`, or null when
+ * neither was given. Null is not "all dates" for the cloud source: see
+ * `readScope`. It also leaves the post window to `DERIVE_POST_WINDOW_DAYS`.
  */
 export function resolveDateScope(args: string[], now: Date = new Date()): Set<string> | null {
   const dateArg = args.find(a => a.startsWith(DATE_ARG));
@@ -511,43 +518,10 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
     if (!Number.isFinite(days) || days < 1) {
       throw new Error(`${DAYS_ARG} must be a positive integer, got "${daysArg.slice(DAYS_ARG.length)}"`);
     }
-    const dates = new Set<string>();
-    for (let i = 0; i < days; i++) {
-      const d = new Date(now);
-      d.setUTCDate(d.getUTCDate() - i);
-      dates.add(toDateOnly(d));
-    }
-    return dates;
+    return lastUtcDays(days, now);
   }
 
   return null;
-}
-
-/** Where this script's records for `date` go: a file of their own, replaced wholesale. */
-export function derivedEvaluationsPath(dir: string, date: string): string {
-  return join(dir, datedJsonlName(DERIVED_EVALUATIONS_FILE_PREFIX, date));
-}
-
-export interface DerivedWrite {
-  file: string;
-  lines: number;
-  /** Lines the file held before this write; counted only on a dry run. */
-  existing: number;
-}
-
-/**
- * Replace `derived-evaluations-<date>.jsonl` with `lines`. Nothing is read
- * back or preserved: every line in that file came from this script, so the
- * fresh set is the whole truth for the date. The hooks' `evaluations-<date>.jsonl`
- * is never opened.
- */
-export function writeDerivedEvaluations(dir: string, date: string, lines: readonly string[], dryRun: boolean): DerivedWrite {
-  const outFile = derivedEvaluationsPath(dir, date);
-  const existing = dryRun && existsSync(outFile)
-    ? readFileSync(outFile, 'utf8').split('\n').filter(l => l.trim()).length
-    : 0;
-  if (!dryRun) writeFileSync(outFile, lines.join('\n') + '\n');
-  return { file: basename(outFile), lines: lines.length, existing };
 }
 
 /** Every span in the in-scope `traces-<date>.jsonl` files, in file then line order. */
@@ -622,7 +596,8 @@ export function resolvePostDays(args: string[]): number | null {
  * so without a floor each run would re-post all of it — dropped by ingest, but
  * sent. `--post-days=` sets the floor outright; otherwise an unscoped run gets
  * `DERIVE_POST_WINDOW_DAYS`, and an explicit `--date=`/`--days=` posts its
- * whole scope, which is how a backfill is done.
+ * whole scope, which is how a backfill is done. `DERIVE_NO_REPOST_BEFORE_MS`
+ * applies on top, whatever the floor.
  */
 export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDays: number | null = null): number {
   if (postDays !== null) return nowMs - postDays * MS_PER_DAY;
@@ -688,30 +663,42 @@ export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: Re
 }
 
 /**
- * Split at the Phase 3 cutover by the record's own time: earlier records still
- * go to `derived-evaluations-<date>.jsonl` for `upload-evaluations`, later ones
- * are posted directly (see `DERIVE_DIRECT_POST_SINCE_MS`).
+ * Derive never posts a record dated before this instant, however it is scoped.
+ * D1 holds 45,887 derive rows (`evaluator = 'rule'`) dated 2026-09-16 to
+ * 2026-09-27 with no `evaluation_id`: upload shipped them before migration 0015
+ * added the column. Ingest drops a re-post only when the earlier copy carries
+ * the id, so posting any of those days again would duplicate them. Every derive
+ * row from 2026-09-28 on has an id (counted 2026-10-04 with
+ * `CLOUDFLARE_D1_READ_TOKEN`).
+ *
+ * The same instant was the Phase 3 cutover `DERIVE_DIRECT_POST_SINCE_MS`, which
+ * also sent earlier records to a file for upload. The file went in Phase 6;
+ * this is the half of the cutover that still guards something.
  */
-export function splitAtCutover(records: readonly EvalRecord[]): { toFile: EvalRecord[]; toPost: EvalRecord[] } {
-  const toFile: EvalRecord[] = [];
+export const DERIVE_NO_REPOST_BEFORE_MS = Date.parse('2026-09-28T00:00:00.000Z');
+
+/** The records derive may post, and those dated before `DERIVE_NO_REPOST_BEFORE_MS`. */
+export function splitAtRepostFloor(records: readonly EvalRecord[]): { toPost: EvalRecord[]; heldBack: EvalRecord[] } {
   const toPost: EvalRecord[] = [];
-  for (const r of records) (Date.parse(r.timestamp) >= DERIVE_DIRECT_POST_SINCE_MS ? toPost : toFile).push(r);
-  return { toFile, toPost };
+  const heldBack: EvalRecord[] = [];
+  for (const r of records) (Date.parse(r.timestamp) >= DERIVE_NO_REPOST_BEFORE_MS ? toPost : heldBack).push(r);
+  return { toPost, heldBack };
 }
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dateScope = resolveDateScope(argv);
-  const source = resolveSource(argv, dateScope);
+  const source = resolveSource(argv);
+  const scope = readScope(source, dateScope, DERIVE_DEFAULT_DAYS);
   const postDays = resolvePostDays(argv);
   const dryRun = argv.includes(DRY_RUN_ARG);
 
   let loaded: LoadedSpans;
-  if (source === 'cloud' && dateScope) {
+  if (source === 'cloud' && scope) {
     try {
-      loaded = await loadCloudSpans(dateScope);
+      loaded = await loadCloudSpans(scope);
     } catch (err) {
-      // Nothing is derived, written or posted yet, so populate carries on
+      // Nothing is derived or posted yet, so populate carries on
       // without derive. The whole error, cause included, goes to stderr so
       // populate can tell a network failure (retried) from anything else.
       console.error('[derive] cloud read failed:', err);
@@ -719,44 +706,26 @@ async function main(): Promise<void> {
       return;
     }
   } else {
-    loaded = loadLocalSpans(TELEMETRY_DIR, dateScope);
+    loaded = loadLocalSpans(TELEMETRY_DIR, scope);
   }
   const allEvals = deriveAll(loaded);
   // A span in an in-scope trace file can carry an out-of-scope timestamp;
-  // never write or post a date the caller did not ask for.
-  const inScope = dateScope ? allEvals.filter(ev => dateScope.has(toDateOnly(ev.timestamp))) : allEvals;
-  const { toFile, toPost } = splitAtCutover(inScope);
-
-  const byDate = new Map<string, EvalRecord[]>();
-  for (const ev of toFile) {
-    const date = toDateOnly(ev.timestamp);
-    let group = byDate.get(date);
-    if (!group) byDate.set(date, group = []);
-    group.push(ev);
-  }
-
-  let filesToWrite = 0;
-  for (const [date, evals] of byDate) {
-    const ruleLines = evals.map(e => JSON.stringify(toOTelRecord(e)));
-    const written = writeDerivedEvaluations(TELEMETRY_DIR, date, ruleLines, dryRun);
-    if (dryRun) {
-      const net = written.lines - written.existing;
-      console.log(
-        `[dry-run] ${written.file}: ${written.lines} rule lines`
-        + ` (currently ${written.existing}, net ${net >= 0 ? '+' : ''}${net})`,
-      );
-    }
-    filesToWrite++;
-  }
+  // never post a date the run did not read.
+  const inScope = scope ? allEvals.filter(ev => scope.has(toDateOnly(ev.timestamp))) : allEvals;
 
   // Unstamped records fall back to the local account join only when the spans
   // were local; every cloud span is stamped with the org that shipped it.
   const accounts = source === 'local'
     ? buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now())
     : emptyAccountIndex();
+  // The window comes from the caller's scope, not the defaulted read, so an
+  // unscoped run posts the last DERIVE_POST_WINDOW_DAYS of its 7-day read.
   const floorMs = postFloorMs(dateScope, Date.now(), postDays);
-  const inWindow = toPost.filter(ev => Date.parse(ev.timestamp) >= floorMs);
-  const posted = await postEvaluationRecords(inWindow.map(toOTelRecord), { dryRun, accounts });
+  const { toPost, heldBack } = splitAtRepostFloor(inScope.filter(ev => Date.parse(ev.timestamp) >= floorMs));
+  if (heldBack.length > 0) {
+    console.log(`[derive] held back ${heldBack.length} records dated before ${new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()}: D1 holds copies without an evaluationId, so a re-post would duplicate them`);
+  }
+  const posted = await postEvaluationRecords(toPost.map(toOTelRecord), { dryRun, accounts });
   console.log(`[derive]${dryRun ? ' dry-run:' : ''} posted ${formatPostSummary(posted)}`);
   if (posted.failure) {
     // stderr, so populate can tell a network failure (retried) from a rejection.
@@ -792,10 +761,6 @@ async function main(): Promise<void> {
     }
   }
 
-  if (dryRun) {
-    console.log(`[dry-run] ${filesToWrite} file(s) would be written; nothing changed on disk.`);
-  }
-
   const byName = new Map<string, number>();
   for (const ev of inScope) {
     byName.set(ev.evaluationName, (byName.get(ev.evaluationName) ?? 0) + 1);
@@ -803,7 +768,7 @@ async function main(): Promise<void> {
   const counts = [...byName].sort(([a], [b]) => a.localeCompare(b)).map(([name, n]) => `${name}=${n}`);
   console.log(`[derive] records: ${counts.join(' ') || 'none'}`);
 
-  const drift = detectInputDrift(loaded.spans, dateScope);
+  const drift = detectInputDrift(loaded.spans, scope);
   for (const warning of drift) console.error(`[derive] input drift on ${warning}`);
   // A failed post is the more urgent code; drift persists and shows on the next run.
   if (drift.length > 0 && process.exitCode === undefined) process.exitCode = DERIVE_EXIT_INPUT_DRIFT;

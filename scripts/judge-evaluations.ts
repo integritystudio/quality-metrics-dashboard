@@ -6,10 +6,12 @@
  * them using the LLM-as-Judge library (relevance, coherence, hallucination)
  * via the Anthropic API (Claude Haiku).
  *
- * Discovery reads local telemetry logs by default. `--source=cloud` takes the
- * sessions, each turn's account and the already-judged set from obtool-api
- * instead (judge-cloud-source.ts, cloud-read Phase 4); turn text is always
- * read from the local transcripts. Judged, withheld and held-for-key turns are
+ * Discovery takes the sessions, each turn's account and the already-judged set
+ * from obtool-api (judge-cloud-source.ts, cloud-read Phase 4) over the last
+ * `JUDGE_DEFAULT_DAYS` unless `--date=`/`--days=` says otherwise, the same
+ * window populate passes. `--source=local` reads local telemetry logs instead,
+ * kept for one release as the rollback (Phase 6). Turn text is always read
+ * from the local transcripts. Judged, withheld and held-for-key turns are
  * dropped before `--limit` (judge-selection.ts).
  *
  * Results are posted straight to ingest (post-evaluations.ts) and appended to
@@ -21,7 +23,7 @@
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --batch   # Message Batches API: half price, unattended
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --per-criterion   # one call per criterion (~10x cost)
- *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run --source=cloud --days=7   # cloud discovery; needs --days= or --date=
+ *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run --source=local   # the rollback: local discovery, every log file
  *
  * Scoring is consolidated by default — one call per turn carrying every
  * criterion (judge-consolidated.ts; chosen by JCP4, 2026-09-22). `--batch`
@@ -59,7 +61,7 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
 import {
   createBatchProvider,
   BATCH_POLL_INTERVAL_MS,
@@ -108,29 +110,11 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
 const HOME = process.env.HOME ?? '';
 // Must match the producer: hooks/lib/constants.ts writes telemetry here.
 export const TELEMETRY_DIR = join(HOME, '.claude-history', 'telemetry');
-/** `evaluations-YYYY-MM-DD.jsonl`: the hooks' own records and this script's judge records. */
+/**
+ * `evaluations-YYYY-MM-DD.jsonl`: the hooks' own records and this script's judge
+ * records. Derive writes no file since cloud-read Phase 6; it posts every record.
+ */
 export const EVALUATIONS_FILE_PREFIX = 'evaluations';
-/**
- * `derived-evaluations-YYYY-MM-DD.jsonl`: derive's rule records, a file of their
- * own since 2026-09-27 (HDF5). A reader that wants them opts in by name; nothing
- * but the hooks and this script writes `evaluations-<date>.jsonl` any more.
- */
-export const DERIVED_EVALUATIONS_FILE_PREFIX = 'derived-evaluations';
-/**
- * Event-time cutover for derive's records (cloud-read migration Phase 3).
- * From this instant on, `derive-evaluations` posts its records straight to
- * ingest, each carrying an `evaluationId` the worker dedups on; before it,
- * records go to `derived-evaluations-<date>.jsonl` and `upload-evaluations`
- * ships them as it always has. Split by the record's own time, not by run,
- * so the two paths are disjoint whichever version of either script runs:
- * derive writes only earlier records to files, and upload skips later ones.
- *
- * Chosen above the newest derive row in D1 when it was set (2026-09-27
- * 23:58:56Z), so nothing at or after it had been shipped without an id — a
- * direct post of an already-shipped record would duplicate it. Delete with
- * the file path (Phase 6) once every window is past it.
- */
-export const DERIVE_DIRECT_POST_SINCE_MS = Date.parse('2026-09-28T00:00:00.000Z');
 /** Dated JSONL filename for a prefix. */
 export function datedJsonlName(prefix: string, date: string): string {
   return `${prefix}-${date}.jsonl`;
@@ -1725,9 +1709,9 @@ async function main() {
 
   // Dynamic imports here and below, like judge-consolidated: each of these
   // modules imports this one.
-  const { resolveDateScope, resolveSource } = await import('./derive-evaluations.js');
-  const dateScope = resolveDateScope(args);
-  const source = resolveSource(args, dateScope);
+  const { readScope, resolveDateScope, resolveSource } = await import('./derive-evaluations.js');
+  const source = resolveSource(args, JUDGE_DEFAULT_SOURCE);
+  const dateScope = readScope(source, resolveDateScope(args), JUDGE_DEFAULT_DAYS);
   let discovery: TurnDiscovery;
   try {
     discovery = await discoverTurns(source, dateScope);

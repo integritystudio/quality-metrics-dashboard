@@ -101,8 +101,8 @@ export const DERIVE_POST_WINDOW_DAYS = 2;
  * the last seven UTC days (cloud-read Phase 4). Seven is the dashboard's
  * default period (`DEFAULT_PERIOD` in src/lib/constants.ts), so every run keeps
  * that window judged; a turn older than the scope is never picked. Run on its
- * own, judge-evaluations still defaults to the local source, kept as the
- * rollback until Phase 6.
+ * own, judge-evaluations uses the same source and window (cloud-read Phase 6);
+ * `--source=local` is the rollback for one release.
  */
 export const JUDGE_DEFAULT_SOURCE: TraceSource = 'cloud';
 export const JUDGE_DEFAULT_DAYS = 7;
@@ -118,8 +118,9 @@ export const JUDGE_DAYS_FLAG = '--judge-days=';
  * the whole session: a session that began before the read window would score
  * on part of its spans, and each run's slide would post it again under a new
  * id. Seven also sets the calibration corpus, since `.calibration-state.json`
- * is computed over every record derived. Run on its own, derive still defaults
- * to the local source, kept as the rollback until Phase 6.
+ * is computed over every record derived. Run on its own, derive uses the same
+ * source and window and posts the same two days (cloud-read Phase 6);
+ * `--source=local` is the rollback for one release.
  */
 export const DERIVE_DEFAULT_SOURCE: TraceSource = 'cloud';
 export const DERIVE_DEFAULT_DAYS = 7;

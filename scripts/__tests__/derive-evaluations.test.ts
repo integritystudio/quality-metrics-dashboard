@@ -1,26 +1,23 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   trackTaskActivity,
   deriveTaskCompletionPerSession,
   deriveEvaluationLatency,
-  derivedEvaluationsPath,
   deriveAll,
   deriveToolCorrectness,
   detectInputDrift,
   resolvePostDays,
+  readScope,
   resolveSource,
   scoreTask,
   sessionTasks,
-  splitAtCutover,
+  splitAtRepostFloor,
   postFloorMs,
-  writeDerivedEvaluations,
+  DERIVE_NO_REPOST_BEFORE_MS,
   STATUS_SCORES,
   type TraceSpan,
 } from '../derive-evaluations.js';
-import { DERIVE_DIRECT_POST_SINCE_MS, type EvalRecord } from '../judge-evaluations.js';
+import { type EvalRecord } from '../judge-evaluations.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -425,95 +422,64 @@ describe('deriveEvaluationLatency', () => {
 });
 
 // ---------------------------------------------------------------------------
-// writeDerivedEvaluations — a file of its own (HDF5)
-// ---------------------------------------------------------------------------
-
-describe('writeDerivedEvaluations', () => {
-  let dir: string;
-  const DATE = '2026-09-27';
-  const line = (n: number): string => JSON.stringify({ name: 'gen_ai.evaluation.result', n });
-
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'derive-write-')); });
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
-
-  it("writes derived-evaluations-<date>.jsonl and never opens the hooks' file", () => {
-    const hooksFile = join(dir, `evaluations-${DATE}.jsonl`);
-    writeFileSync(hooksFile, 'hooks-line\n');
-
-    const result = writeDerivedEvaluations(dir, DATE, [line(1), line(2)], false);
-
-    expect(result).toEqual({ file: `derived-evaluations-${DATE}.jsonl`, lines: 2, existing: 0 });
-    expect(readFileSync(derivedEvaluationsPath(dir, DATE), 'utf8')).toBe(`${line(1)}\n${line(2)}\n`);
-    expect(readFileSync(hooksFile, 'utf8')).toBe('hooks-line\n');
-  });
-
-  it('replaces the file wholesale, so a second run cannot accumulate the first', () => {
-    // The failure this replaced: the old write into evaluations-<date>.jsonl
-    // preserved every line whose `gen_ai.evaluation.evaluator` was not `rule`,
-    // an attribute the writer had stopped emitting, so each run kept its own
-    // previous output and prepended a fresh copy — 57,156 lines for 4,641
-    // distinct records on 2026-09-22.
-    writeDerivedEvaluations(dir, DATE, [line(1), line(2), line(3)], false);
-    writeDerivedEvaluations(dir, DATE, [line(4)], false);
-
-    expect(readFileSync(derivedEvaluationsPath(dir, DATE), 'utf8')).toBe(`${line(4)}\n`);
-  });
-
-  it('writes nothing on a dry run and reports what the file holds now', () => {
-    writeDerivedEvaluations(dir, DATE, [line(1), line(2)], false);
-
-    const result = writeDerivedEvaluations(dir, DATE, [line(3)], true);
-
-    expect(result).toEqual({ file: `derived-evaluations-${DATE}.jsonl`, lines: 1, existing: 2 });
-    expect(readFileSync(derivedEvaluationsPath(dir, DATE), 'utf8')).toBe(`${line(1)}\n${line(2)}\n`);
-  });
-
-  it('creates no file on a dry run when none exists', () => {
-    writeDerivedEvaluations(dir, DATE, [line(1)], true);
-
-    expect(existsSync(derivedEvaluationsPath(dir, DATE))).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // resolveSource
 // ---------------------------------------------------------------------------
 
 describe('resolveSource', () => {
-  const scope = new Set(['2026-09-26']);
-
-  it('defaults to local, with or without a date scope', () => {
-    expect(resolveSource([], null)).toBe('local');
-    expect(resolveSource([], scope)).toBe('local');
+  it('defaults to cloud (cloud-read Phase 6)', () => {
+    expect(resolveSource([])).toBe('cloud');
   });
 
-  it('accepts cloud with a date scope', () => {
-    expect(resolveSource(['--source=cloud'], scope)).toBe('cloud');
+  it('keeps local as the rollback', () => {
+    expect(resolveSource(['--source=local'])).toBe('local');
   });
 
-  it('refuses cloud without a date scope', () => {
-    expect(() => resolveSource(['--source=cloud'], null)).toThrow('--date= or --days=');
+  it("uses the caller's default when no flag is given", () => {
+    expect(resolveSource([], 'local')).toBe('local');
+    expect(resolveSource(['--source=cloud'], 'local')).toBe('cloud');
   });
 
   it('rejects an unknown source', () => {
-    expect(() => resolveSource(['--source=s3'], scope)).toThrow('local|cloud');
+    expect(() => resolveSource(['--source=s3'])).toThrow('local|cloud');
+  });
+});
+
+describe('readScope', () => {
+  const now = new Date('2026-10-04T12:00:00.000Z');
+  const named = new Set(['2026-09-30']);
+
+  it('bounds an unscoped cloud read to the last N UTC days, today included', () => {
+    expect(readScope('cloud', null, 3, now)).toEqual(new Set(['2026-10-02', '2026-10-03', '2026-10-04']));
+  });
+
+  it("keeps the caller's dates for either source", () => {
+    expect(readScope('cloud', named, 3, now)).toBe(named);
+    expect(readScope('local', named, 3, now)).toBe(named);
+  });
+
+  it('leaves an unscoped local read unbounded, so it reads every trace file', () => {
+    expect(readScope('local', null, 3, now)).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// splitAtCutover (cloud-read migration Phase 3)
+// splitAtRepostFloor (cloud-read migration Phase 6)
 // ---------------------------------------------------------------------------
 
-describe('splitAtCutover', () => {
+describe('splitAtRepostFloor', () => {
   const at = (ms: number): EvalRecord =>
     ({ timestamp: new Date(ms).toISOString(), evaluationName: 'tool_correctness', scoreValue: 1 }) as EvalRecord;
 
-  it('posts records at or after the cutover and files the ones before it', () => {
-    const before = at(DERIVE_DIRECT_POST_SINCE_MS - 1);
-    const exactly = at(DERIVE_DIRECT_POST_SINCE_MS);
-    const after = at(DERIVE_DIRECT_POST_SINCE_MS + 1);
+  it('holds back records before the floor, whose D1 copies carry no id', () => {
+    const before = at(DERIVE_NO_REPOST_BEFORE_MS - 1);
+    const exactly = at(DERIVE_NO_REPOST_BEFORE_MS);
+    const after = at(DERIVE_NO_REPOST_BEFORE_MS + 1);
 
-    expect(splitAtCutover([after, before, exactly])).toEqual({ toFile: [before], toPost: [after, exactly] });
+    expect(splitAtRepostFloor([after, before, exactly])).toEqual({ toPost: [after, exactly], heldBack: [before] });
+  });
+
+  it('sits where the id-less rows end: 2026-09-28T00:00Z', () => {
+    expect(new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()).toBe('2026-09-28T00:00:00.000Z');
   });
 });
 

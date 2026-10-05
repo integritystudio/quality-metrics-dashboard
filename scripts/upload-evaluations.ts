@@ -2,10 +2,9 @@
 /**
  * Ship locally-derived evaluations to the cloud `evaluations` table.
  *
- * **This closes the seam that killed the dashboard.** `judge-evaluations`
- * writes `evaluations-<date>.jsonl` into `TELEMETRY_DIR` and
- * `derive-evaluations` writes `derived-evaluations-<date>.jsonl` beside it;
- * `sync-to-kv` reads the *cloud* (`CloudBackend.queryEvaluations`, which
+ * **This closes the seam that killed the dashboard.** The hooks and the judge
+ * write `evaluations-<date>.jsonl` into `TELEMETRY_DIR`; `sync-to-kv` reads the
+ * *cloud* (`CloudBackend.queryEvaluations`, which
  * defaults to the `'table'` source — the D1 `evaluations` table). Nothing
  * connected the two: the detached span shipper
  * (`~/.claude/hooks/lib/span-shipper.ts`) matches only
@@ -48,11 +47,9 @@
  *    holds (migration 0015), so a re-send of anything shipped since then is a
  *    no-op. Rows shipped before it have no id, and re-sending one of those
  *    inserts a duplicate, since the only other key is `(r2_key, batch_index)`
- *    and every POST allocates a fresh `r2_key`. A file offset cannot be the resume point either, because
- *    `derive-evaluations` REWRITES each `derived-evaluations-<date>.jsonl`
- *    wholesale on every run, so the prefix shifts whenever the rule count
- *    changes. This tracks a content fingerprint per record instead, which is
- *    stable under rewrite.
+ *    and every POST allocates a fresh `r2_key`. This tracks a content
+ *    fingerprint per record rather than a file offset, so the resume point
+ *    does not depend on where a record sits in its file.
  *
  * Usage:
  *   tsx scripts/upload-evaluations.ts                  # ship the default window
@@ -62,12 +59,12 @@
  *   tsx scripts/upload-evaluations.ts --max-age-hours=48
  *   tsx scripts/upload-evaluations.ts --days=11 --only-keys=manifest.jsonl
  *
- * Derive records at or after `DERIVE_DIRECT_POST_SINCE_MS` are skipped here:
- * derive posts those itself (Phase 3). This script keeps shipping the hooks'
- * `evaluations-<date>.jsonl` and older derive files. The judge posts its own
- * records too (Phase 4) but still appends them to those files, so a judge
- * record young enough to pass the age guard is sent again here, and ingest
- * drops it on its `evaluationId`.
+ * Derive posts every record itself and writes no file (cloud-read Phase 6), so
+ * what this script carries is the records only it delivers:
+ * `hook:stop-session-summary`, `hook:stop-quality-evaluation` and
+ * `survival-fitness`. The judge posts its own records too (Phase 4) but still
+ * appends them to these files, so a judge record young enough to pass the age
+ * guard is sent again here, and ingest drops it on its `evaluationId`.
  *
  * `--only-keys` re-ships exactly the records a manifest names, for replacing
  * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md). Each line
@@ -91,8 +88,6 @@ import {
   BACKFILL_COHORT,
   CANARY_COHORT,
   CANARY_EVALUATOR_TYPE,
-  DERIVED_EVALUATIONS_FILE_PREFIX,
-  DERIVE_DIRECT_POST_SINCE_MS,
   EVALUATION_ATTRS,
   EVALUATION_RESULT_EVENT,
   LEGACY_EVALUATOR_TYPE_ATTR,
@@ -159,13 +154,12 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 
 /**
- * `evaluations-YYYY-MM-DD.jsonl` (the hooks and the judge) and
- * `derived-evaluations-YYYY-MM-DD.jsonl` (derive's rule records, a file of
- * their own since HDF5, 2026-09-27). Both ship: the cloud reads
- * `tool_correctness` and `evaluation_latency` into the CQI. The date is the
- * one capture group `fileInWindow` reads.
+ * `evaluations-YYYY-MM-DD.jsonl`, written by the hooks and the judge. Derive's
+ * old `derived-evaluations-<date>.jsonl` files are not read: their records are
+ * all older than the age guard. The date is the one capture group
+ * `fileInWindow` reads.
  */
-const EVAL_FILE_PATTERN = /^(?:derived-)?evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
+const EVAL_FILE_PATTERN = /^evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 /** Top-level span id a record may carry: derive and judge records (TKR8 Phase 2). */
 const SPAN_ID_FIELD = 'spanId';
 
@@ -578,18 +572,6 @@ export async function postBatch(request: SendRequest): Promise<SendResult> {
   return last;
 }
 
-const POSTED_BY_DERIVE_SKIP = 'posted-by-derive';
-
-/**
- * A derive record at or after the Phase 3 cutover: derive posts those itself
- * (`DERIVE_DIRECT_POST_SINCE_MS`). Its files only ever hold earlier ones once
- * the new derive runs, so this matters for files a pre-cutover run wrote.
- */
-export function isPostedByDerive(file: string, mapped: MapResult): boolean {
-  const at = mapped.payload?.evaluatedAtMs;
-  return file.startsWith(`${DERIVED_EVALUATIONS_FILE_PREFIX}-`) && at !== undefined && at >= DERIVE_DIRECT_POST_SINCE_MS;
-}
-
 const ONLY_KEYS_ARG = '--only-keys';
 
 interface Options {
@@ -704,13 +686,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         continue;
       }
       const mapped = mapRecord(parsed, nowMs, maxAgeMs);
-      if (isPostedByDerive(file, mapped)) {
-        // derive posted this one itself, with an evaluationId; shipping it
-        // here too would add an id-less duplicate the worker cannot drop.
-        skips[POSTED_BY_DERIVE_SKIP] = (skips[POSTED_BY_DERIVE_SKIP] ?? 0) + 1;
-        delivered.push(fp);
-        continue;
-      }
       const key = manifest && mapped.payload ? payloadManifestKey(mapped.payload) : undefined;
       if (manifest && (key === undefined || !manifest.has(key))) {
         // Not ours to touch: left unrecorded so a normal run handles it as before.

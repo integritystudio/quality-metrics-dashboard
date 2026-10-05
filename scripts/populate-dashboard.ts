@@ -6,15 +6,14 @@
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
  *                            over spans the cloud holds for the last 7 days
  *                            (`--source=cloud --days=7 --post-days=2`, DERIVE_DEFAULT_*,
- *                            Phase 1), POSTed straight to ingest for records from
- *                            2026-09-28 on and the last 2 days (Phase 3); older ones
- *                            still go to derived-evaluations-<date>.jsonl
+ *                            Phase 1), the last 2 days POSTed straight to ingest
+ *                            (Phase 3; no file since Phase 6)
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
  *                            (`--source=cloud --days=7`, JUDGE_DEFAULT_*), POSTed
  *                            straight to ingest (Phase 4) and appended to
  *                            evaluations-<date>.jsonl
- *   3. upload-evaluations  → ship the hooks' evaluations JSONL and pre-cutover derive files
+ *   3. upload-evaluations  → ship the hooks' and survival-fitness records in evaluations JSONL
  *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
  *
  * Step 4 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
