@@ -74,9 +74,9 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 
 | Step | Script | Output |
 |------|--------|--------|
-| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion, over spans the cloud holds for the last 7 days (`--source=cloud --days=7 --post-days=2`, cloud-read Phase 1) — POSTed straight to ingest for records from 2026-09-28 on and the last 2 days (Phase 3). Older records go to `derived-evaluations-<date>.jsonl`, a file of its own, replaced wholesale each run (HDF5, 2026-09-27; it used to rewrite `evaluations-<date>.jsonl` and, keying its keep-filter on an attribute it no longer wrote, re-kept its own previous output every run) |
+| 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion, over spans the cloud holds for the last 7 days (`--source=cloud --days=7 --post-days=2`, cloud-read Phase 1) — the last 2 days POSTed straight to ingest (Phase 3). No file since Phase 6, and never a record before 2026-09-28, whose D1 copies carry no id |
 | 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination, over turns the cloud lists for the last 7 days (`--source=cloud --days=7`; turn text is read from local transcripts) — POSTed straight to ingest (Phase 4) and appended to `evaluations-<date>.jsonl` |
-| 3. Upload | `upload-evaluations.ts` | Ships the hooks' `evaluations-*.jsonl` records and pre-cutover `derived-evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
+| 3. Upload | `upload-evaluations.ts` | Ships the hooks' and `survival-fitness` records in `evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
 | 4. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
