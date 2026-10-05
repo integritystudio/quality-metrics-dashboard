@@ -15,6 +15,7 @@ vi.mock('../api/parent/quality-multi-agent.js', () => ({
 }));
 
 import { sessionRoutes } from '../api/routes/sessions.js';
+import { LIMIT_EVALS_SESSION } from '../api/data-loader.js';
 import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
 import type { SessionDetailResponse } from './support/api-responses.js';
 import type { MultiAgentEvaluation } from '../types.js';
@@ -218,6 +219,36 @@ describe('GET /sessions/:sessionId', () => {
     fixture.failPath('/v1/traces');
     const res = await sessionRoutes.request('/sessions/sess-abc');
     expect(res.status).toBe(500);
+  });
+});
+
+// The route used to report only the count it got, so a session past the cap
+// looked complete. The loader now reads one row past the cap and the route
+// reports what that found (DASHBOARD-SESSION-EVALS-CAP-SILENT).
+describe('GET /sessions/:sessionId when the evaluation read hits its cap', () => {
+  function serveSessionEvaluations(count: number) {
+    fixture.setEvals(Array.from({ length: count }, (_, index) =>
+      evalToWire(makeEvaluation({ sessionId: 'sess-abc' }), index + 1)));
+  }
+
+  it('reports a session within the cap as not truncated', async () => {
+    serveSessionEvaluations(1);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailResponse;
+
+    expect(body.dataSources.evaluations).toEqual({ count: 1, truncated: false });
+    expect(body.evaluations).toHaveLength(1);
+  });
+
+  it('reports a session past the cap as truncated and returns only the cap', async () => {
+    serveSessionEvaluations(LIMIT_EVALS_SESSION + 1);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailResponse;
+
+    expect(body.dataSources.evaluations).toEqual({ count: LIMIT_EVALS_SESSION, truncated: true });
+    expect(body.evaluations).toHaveLength(LIMIT_EVALS_SESSION);
   });
 });
 

@@ -71,7 +71,17 @@ export interface AlertSummary {
 export interface DataSources {
   traces: { count: number; traceIds: number };
   logs: { count: number };
-  evaluations: { count: number };
+  evaluations: {
+    count: number;
+    /**
+     * True when the session has more evaluations than `count`, so `evaluations`
+     * and everything derived from it is a partial read. Optional because not
+     * every producer of this payload sets it: the local API route always does,
+     * while a `session:` key read from KV may predate the flag or come from a
+     * writer that never sets it. Absent reads as not truncated.
+     */
+    truncated?: boolean;
+  };
   total: number;
 }
 

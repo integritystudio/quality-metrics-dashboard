@@ -184,7 +184,12 @@ export interface AgentDetailResponse {
 /** `GET /sessions/:sessionId` — only the fields the route tests assert on are named. */
 export interface SessionDetailResponse {
   sessionId: string;
-  dataSources: { traces: unknown; logs: unknown; evaluations: unknown; total: number };
+  dataSources: {
+    traces: unknown;
+    logs: unknown;
+    evaluations: { count: number; truncated: boolean };
+    total: number;
+  };
   timespan: unknown;
   sessionInfo: unknown;
   tokenTotals: unknown;

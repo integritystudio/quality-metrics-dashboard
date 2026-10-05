@@ -97,7 +97,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const endDate = c.req.query('endDate');
 
   try {
-    const [spans, logs, evaluations] = await Promise.all([
+    const [spans, logs, { evaluations, truncated: evaluationsTruncated }] = await Promise.all([
       loadSessionSpans(sessionId, startDate, endDate),
       loadLogsBySessionId(sessionId, startDate, endDate),
       loadEvaluationsBySessionId(sessionId, startDate, endDate),
@@ -225,7 +225,9 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const dataSources = {
       traces: { count: spans.length, traceIds: traceIds.size },
       logs: { count: logs.length },
-      evaluations: { count: evaluations.length },
+      // `truncated` means the session has more evaluations than `count`: every
+      // evaluation-derived field below was then computed on a partial read.
+      evaluations: { count: evaluations.length, truncated: evaluationsTruncated },
       total: spans.length + logs.length + evaluations.length,
     };
 
