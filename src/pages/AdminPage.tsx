@@ -10,6 +10,10 @@ import { PageShell } from '../components/PageShell.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 import type { AdminUser, AdminRole, AdminMember, OrgMembershipRoleValue, ApiKey } from '../lib/validation/auth-schemas.js';
+import { RotateKeyResponseSchema } from '../lib/validation/auth-schemas.js';
+
+// The key was rotated, so the old one no longer works, but the response carried no token to show.
+const ERR_ROTATE_NO_TOKEN = 'Key rotated, but no new token was returned. Rotate it again to get one.';
 
 const ADMIN_TABLE_COLUMNS = [
   { label: 'Email', align: 'left' as const },
@@ -315,8 +319,9 @@ function KeyRow({
         const text = await res.text().catch(() => '');
         setError(text || 'Failed to rotate key');
       } else {
-        const data = await res.json() as { token?: string };
-        setNewToken(data.token ?? null);
+        const parsed = RotateKeyResponseSchema.safeParse(await res.json().catch(() => null));
+        if (parsed.success) setNewToken(parsed.data.token);
+        else setError(ERR_ROTATE_NO_TOKEN);
       }
     } catch {
       setError('Network error');

@@ -82,7 +82,6 @@ const TEST_KEY: ApiKey = {
   last_used_at: null,
 };
 const NEW_TOKEN = 'obtk_newtoken00000000000000000000000000000000000000000000';
-const ROTATED_KEY_ID = 'f0000000-0000-4000-8000-000000000002';
 
 function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]; keys?: ApiKey[] }) {
   const state = {

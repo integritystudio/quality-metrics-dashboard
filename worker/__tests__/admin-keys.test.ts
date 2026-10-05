@@ -280,7 +280,9 @@ describe('POST /api/admin/keys/:keyId/rotate', () => {
     expect(data).toMatchObject({ token: mockRotateResponse.token });
   });
 
-  it('forwards the caller\'s bearer token to the Supabase function', async () => {
+  it('calls the Supabase function with the service key and the verified user, never the user token', async () => {
+    // The function accepts only a service-level key (verify_jwt = false), and Supabase
+    // cannot verify an Auth0 token, so forwarding the caller's token would fail every rotation.
     let capturedFnInit: RequestInit | undefined;
     fetchMock.mockImplementation(withOrgAdminAuth((url, init) => {
       if (url.includes('/rest/v1/api_keys') && url.includes('id=eq.')) {
@@ -295,8 +297,11 @@ describe('POST /api/admin/keys/:keyId/rotate', () => {
 
     await rotateRequest(VALID_KEY_UUID);
 
-    const authHeader = (capturedFnInit?.headers as Record<string, string> | undefined)?.['Authorization'];
-    expect(authHeader).toBe('Bearer mock-org-admin-jwt');
+    const headers = capturedFnInit?.headers as Record<string, string> | undefined;
+    expect(headers?.['Authorization']).toBe('Bearer test-service-role-key');
+    expect(headers?.['apikey']).toBe('test-service-role-key');
+    expect(JSON.stringify(headers)).not.toContain('mock-org-admin-jwt');
+    expect(JSON.parse(capturedFnInit?.body as string)).toEqual({ keyId: VALID_KEY_UUID, userId: MOCK_APP_USER_ID });
   });
 
   it('returns 500 when the Supabase function fails', async () => {

@@ -1090,10 +1090,11 @@ app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
 // are scoped to session.activeOrgId — an admin can only see and rotate keys that
 // belong to their active org, never another org's keys.
 //
-// Rotation proxies to the Supabase Edge Function api-keys-rotate (server-to-server).
-// The user's Auth0 JWT is forwarded as Authorization so the function can derive the
-// caller's identity. Requires the Supabase project to accept Auth0 JWTs (third-party
-// auth), or the function's verify_jwt set to false.
+// Rotation proxies to the Supabase Edge Function api-keys-rotate, server to server.
+// This worker has already verified the user's Auth0 token, so it calls the function
+// with its own service key and names the user in the body. The user's token is never
+// forwarded: Supabase cannot verify Auth0 tokens (the project has no third-party
+// auth), and the function accepts only a service-level key (verify_jwt = false).
 // ---------------------------------------------------------------------------
 
 const ERR_KEY_NOT_FOUND_IN_ORG = 'Key not found in active org';
@@ -1137,20 +1138,14 @@ app.post('/api/admin/keys/:keyId/rotate', async (c) => {
   const rows = safeArray(await verifyRes.json().catch(() => []));
   if (!rows.length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, Http.Forbidden);
 
-  // Forward to Supabase Edge Function. The user's bearer token is forwarded so
-  // the function can derive the caller's Auth0 sub. apikey authenticates at
-  // the gateway level; Authorization carries the user JWT for verify_jwt.
-  const userBearer = c.req.header('Authorization') ?? '';
+  // Call the function as a service, naming the user this worker verified. The
+  // function rechecks that the key is this user's and still active.
   const fnRes = await fetch(
     `${c.env.SUPABASE_URL}/functions/v1/api-keys-rotate`,
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': c.env.SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': userBearer,
-      },
-      body: JSON.stringify({ keyId }),
+      headers: serviceRoleHeaders(c.env),
+      body: JSON.stringify({ keyId, userId: appUserId }),
     },
   ).catch(() => null);
 

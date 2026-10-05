@@ -221,3 +221,8 @@ export const ApiKeySchema = z.object({
 });
 
 export type ApiKey = z.infer<typeof ApiKeySchema>;
+
+/** POST /api/admin/keys/:keyId/rotate: the new plaintext token, returned exactly once. */
+export const RotateKeyResponseSchema = z.object({
+  token: z.string().min(1),
+});
