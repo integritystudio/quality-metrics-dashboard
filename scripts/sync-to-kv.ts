@@ -43,6 +43,7 @@ import {
   loadCalibrationState,
   type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
+import { CALIBRATION_STATE_FILE } from '../../src/lib/quality/quality-constants.js';
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
 import { buildWorkflowGraph } from '../src/lib/workflow-graph.js';
 import {
@@ -86,7 +87,7 @@ import {
   jsonSafe,
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
-import { CANARY_EVALUATOR_TYPE, CANARY_COHORT } from './judge-evaluations.js';
+import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './judge-evaluations.js';
 import { ascending, mean, quantileSorted, rollup } from 'd3-array';
 
 // Used to be exported as DEGRADATION_KV_KEY from ../../src/lib/quality/quality-constants.ts,
@@ -224,6 +225,22 @@ export const MIN_TRACE_BUDGET = 100;
 const MAX_EVAL_ROWS = 200;
 
 const TREND_BUCKETS = 10;
+
+/**
+ * The home org's `meta:calibration` entry, from the state derive writes (`CALIBRATION_STATE_DIR`).
+ * A missing file is reported loudly: until 2026-10-05 this read the wrong directory and every
+ * run was silent. An old `lastCalibrated` is not an error — derive rewrites the file only when the
+ * score distribution drifts (PSI), so a stable corpus keeps its date — so it is logged, not judged.
+ */
+export function loadCalibrationEntry(dir: string = CALIBRATION_STATE_DIR): KVEntry | null {
+  const state = loadCalibrationState(dir);
+  if (!state) {
+    console.warn(`[sync-to-kv] calibration: no ${CALIBRATION_STATE_FILE} in ${dir}; meta:calibration not written`);
+    return null;
+  }
+  console.log(`[sync-to-kv] calibration: lastCalibrated=${state.lastCalibrated} (${dir})`);
+  return buildCalibrationEntry(state);
+}
 
 export function buildCalibrationEntry(
   state: CalibrationState | null,
@@ -1196,9 +1213,10 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   }
 
   // Compute degradation signals for all periods
-  // Cloud backend has no local state dir; use the scripts directory for degradation/calibration state files.
-  // The sidecar state is the owner's own (single-tenant history) — non-home orgs compute
-  // signals statelessly (no cross-run breach continuity) and skip calibration.
+  // Degradation state is this script's own sidecar, so it lives beside the script. Calibration
+  // is derive's, read from where derive writes it (loadCalibrationEntry). Both are the owner's
+  // single-tenant history — non-home orgs compute signals statelessly (no cross-run breach
+  // continuity) and skip calibration.
   const stateDir = isHome ? (SCRIPT_DIR ?? '') : '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
@@ -1219,8 +1237,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   degradationState.lastRun = now.toISOString();
   if (stateDir && !dryRun) saveDegradationState(stateDir, degradationState);
 
-  const calibrationState = stateDir ? loadCalibrationState(stateDir) : null;
-  const calibrationEntry = buildCalibrationEntry(calibrationState);
+  const calibrationEntry = isHome ? loadCalibrationEntry() : null;
   if (calibrationEntry) entries.push(calibrationEntry);
 
   const thirtyDaysAgo = new Date(now.getTime() - MAX_DAYS_MS);

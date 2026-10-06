@@ -1,9 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { buildCalibrationEntry, computeSessionDetail, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { buildCalibrationEntry, computeSessionDetail, loadCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
+import { CALIBRATION_STATE_DIR } from '../judge-evaluations.js';
+import { loadCalibrationState, saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
+
+vi.mock('../../../src/lib/quality/qfe-percentiles.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/lib/quality/qfe-percentiles.js')>();
+  return { ...actual, loadCalibrationState: vi.fn(actual.loadCalibrationState) };
+});
 
 /**
  * Parse the entry's value as the type `useCalibration` actually receives.
@@ -443,5 +453,48 @@ describe('computeSessionDetail across the integritystudio.* key rename', () => {
     const both = (attrs: Attributes): Attributes => ({ ...staleUnprefixed(attrs), ...withPrefix(attrs) });
 
     expectSessionRead(computeSessionDetail('s1', sessionSpans(both), []));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadCalibrationEntry: sync reads the calibration state where derive writes it
+// (CALIBRATION-READ-WRONG-DIR: from 2026-04-19 to 2026-10-05 it read dashboard/scripts/,
+// found nothing, and the dashboard served March's percentiles).
+// ---------------------------------------------------------------------------
+
+describe('loadCalibrationEntry', () => {
+  let dir: string | undefined;
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = undefined;
+    vi.restoreAllMocks();
+  });
+
+  it("builds meta:calibration from the file derive's own writer produced", () => {
+    dir = mkdtempSync(join(tmpdir(), 'calibration-'));
+    saveCalibrationState(dir, makeCalibrationState({ lastCalibrated: '2026-09-29T00:01:18.387Z' }));
+
+    const entry = loadCalibrationEntry(dir);
+
+    expect(entry?.key).toBe('meta:calibration');
+    expect(JSON.parse(entry?.value ?? '{}')).toMatchObject({ lastCalibrated: '2026-09-29T00:01:18.387Z' });
+  });
+
+  it('warns and writes nothing when the file is missing, instead of failing silently', () => {
+    dir = mkdtempSync(join(tmpdir(), 'calibration-'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(loadCalibrationEntry(dir)).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('.calibration-state.json'));
+  });
+
+  it('reads from the directory derive writes to by default', () => {
+    vi.mocked(loadCalibrationState).mockClear();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    loadCalibrationEntry();
+
+    expect(vi.mocked(loadCalibrationState)).toHaveBeenCalledWith(CALIBRATION_STATE_DIR);
   });
 });

@@ -133,7 +133,7 @@ describe('GET /api/admin/users', () => {
 
   it('returns 200 with user list for admin user', async () => {
     const mockUsers = [
-      { id: VALID_USER_UUID, email: 'user@test.com', created_at: '2024-01-01T00:00:00.000Z' },
+      { id: VALID_USER_UUID, email: 'user@test.com', created_at: '2026-03-26T05:56:23.812873+00:00' }, // PostgREST format
     ];
     const mockRoleRows = [
       { user_id: VALID_USER_UUID, role_id: VALID_ROLE_UUID, roles: { id: VALID_ROLE_UUID, name: 'auditor' } },
@@ -158,6 +158,8 @@ describe('GET /api/admin/users', () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
+    // The route drops any row that fails AdminUserSchema, so an empty array is the failure mode.
+    expect(data).toEqual([expect.objectContaining({ id: VALID_USER_UUID })]);
   });
 });
 

@@ -169,8 +169,9 @@ describe('GET /api/admin/keys', () => {
         name: 'test-key',
         tier: 'standard',
         status: 'active',
-        created_at: '2026-01-01T00:00:00.000Z',
-        last_used_at: null,
+        // PostgREST's own timestamptz format: the offset is what a bare z.iso.datetime() rejected.
+        created_at: '2026-10-01T06:46:19.086694+00:00',
+        last_used_at: '2026-10-02T11:00:00+00:00',
       },
     ];
 

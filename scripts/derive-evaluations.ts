@@ -32,11 +32,12 @@ import {
   loadCalibrationState,
   saveCalibrationState,
   shouldRecalibrate,
+  type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
+import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, CALIBRATION_STATE_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
@@ -685,6 +686,20 @@ export function splitAtRepostFloor(records: readonly EvalRecord[]): { toPost: Ev
   return { toPost, heldBack };
 }
 
+/**
+ * Keep a metric's previous calibration when this run could not recompute it. A metric under
+ * `MIN_QUANTILE_SAMPLE_SIZE` samples gets no distribution, and derive calibrates over its 7-day
+ * read, so a sparse metric (task_completion, handoff_correctness) would otherwise drop out of
+ * `meta:calibration` at every rewrite. A carried entry keeps its own windowStart/windowEnd, so its
+ * age stays visible; a freshly computed one always replaces it.
+ */
+export function carryForwardDistributions(
+  previous: CalibrationState['distributions'] | undefined,
+  fresh: CalibrationState['distributions'],
+): CalibrationState['distributions'] {
+  return { ...previous, ...fresh };
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dateScope = resolveDateScope(argv);
@@ -743,16 +758,21 @@ async function main(): Promise<void> {
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
   if (Object.keys(newDistributions).length > 0) {
-    const previousState = loadCalibrationState(TELEMETRY_DIR);
+    const previousState = loadCalibrationState(CALIBRATION_STATE_DIR);
     const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
     // psiValues reflects PSI at the time of last write (when shouldWrite: true),
     // not from every check — stable runs don't update the file.
     if (shouldWrite && dryRun) {
       console.log('[dry-run] would update .calibration-state.json');
     } else if (shouldWrite) {
-      saveCalibrationState(TELEMETRY_DIR, {
+      const distributions = carryForwardDistributions(previousState?.distributions, newDistributions);
+      const carried = Object.keys(distributions).filter(metric => !(metric in newDistributions));
+      if (carried.length > 0) {
+        console.log(`[derive] calibration: kept the previous distribution for ${carried.join(', ')} (too few samples this run)`);
+      }
+      saveCalibrationState(CALIBRATION_STATE_DIR, {
         lastCalibrated: new Date().toISOString(),
-        distributions: newDistributions,
+        distributions,
         psiValues,
         rawScores: Object.fromEntries(
           Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])

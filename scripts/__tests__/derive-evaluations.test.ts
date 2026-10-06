@@ -13,6 +13,7 @@ import {
   sessionTasks,
   splitAtRepostFloor,
   postFloorMs,
+  carryForwardDistributions,
   DERIVE_NO_REPOST_BEFORE_MS,
   STATUS_SCORES,
   type TraceSpan,
@@ -480,6 +481,45 @@ describe('splitAtRepostFloor', () => {
 
   it('sits where the id-less rows end: 2026-09-28T00:00Z', () => {
     expect(new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()).toBe('2026-09-28T00:00:00.000Z');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// carryForwardDistributions — a sparse metric keeps its last calibration
+// ---------------------------------------------------------------------------
+
+describe('carryForwardDistributions', () => {
+  const entry = (p50: number, windowEnd: string) => ({
+    distribution: { p10: 0.1, p25: 0.2, p50, p75: 0.8, p90: 0.9 },
+    sampleSize: 1125,
+    windowStart: '2026-02-21T19:54:35.514Z',
+    windowEnd,
+  });
+  const MARCH = '2026-03-23T19:54:35.514Z';
+  const SEPTEMBER = '2026-09-29T00:01:18.387Z';
+
+  it('keeps the previous entry, with its own window, for a metric this run could not recompute', () => {
+    const previous = { task_completion: entry(0.5, MARCH), tool_correctness: entry(0.6, MARCH) };
+    const fresh = { tool_correctness: entry(0.7, SEPTEMBER) };
+
+    const merged = carryForwardDistributions(previous, fresh);
+
+    expect(merged.task_completion).toEqual(entry(0.5, MARCH));
+  });
+
+  it('always prefers a freshly computed entry', () => {
+    const merged = carryForwardDistributions(
+      { tool_correctness: entry(0.6, MARCH) },
+      { tool_correctness: entry(0.7, SEPTEMBER) },
+    );
+
+    expect(merged).toEqual({ tool_correctness: entry(0.7, SEPTEMBER) });
+  });
+
+  it('returns the fresh entries when there is no previous state', () => {
+    const fresh = { tool_correctness: entry(0.7, SEPTEMBER) };
+
+    expect(carryForwardDistributions(undefined, fresh)).toEqual(fresh);
   });
 });
 
