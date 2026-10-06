@@ -714,12 +714,12 @@ pins it; staff and members are unaffected.
 
 Filed 2026-10-01. `npm run typecheck:scripts` fails today with three errors, from two causes. No workflow
 runs it: CI builds without the parent's `dist/`, which `tsconfig.scripts.json` includes. So both causes are
-visible only locally.
+visible only locally. Both closed 2026-10-05; `typecheck:scripts` exits 0.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| JUDGE-CLIENT-TEXTSTREAM | `scripts/judge-anthropic-client.ts` no longer type-checks against the parent's `@types/node` 26.6.3 | P3 | New 2026-10-01, from parent #101 |
-| SCRIPTS-TYPECHECK-WINDOW | `src/lib/api-client.ts` uses `window`, which the scripts config cannot see | P4 | Since 2026-08-14 (`0e5f0c1`) |
+| ~~JUDGE-CLIENT-TEXTSTREAM~~ | ~~`scripts/judge-anthropic-client.ts` no longer type-checks against the parent's `@types/node` 26.6.3~~ | ~~P3~~ | Done 2026-10-05 — commit c719785. The #101 cast; drop it with undici 8 |
+| ~~SCRIPTS-TYPECHECK-WINDOW~~ | ~~`src/lib/api-client.ts` uses `window`, which the scripts config cannot see~~ | ~~P4~~ | Done 2026-10-05 — commit c348906. `globalThis.localStorage`; pinned by `api-client-storage.test.ts` (2bc97d8) |
 | VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | (review) Blocked on tcad-scraper |
 | LAZY-CHUNK-STALE-AFTER-DEPLOY | A tab open across a deploy fails on its next lazy route with "Failed to fetch dynamically imported module" and shows the error boundary | P3 | Seen 2026-10-06; applies to every `lazy()` page |
 
