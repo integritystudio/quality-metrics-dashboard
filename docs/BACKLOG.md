@@ -30,7 +30,7 @@ Filed 2026-09-30. Paths outside this repo are in IntegrityLandingPage (`~/code/i
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| ADMIN-API-KEY-ROTATION | A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route | P2 | Reopened 2026-10-05; fixed by option (b), the worker calls the function as a service. Code done, nothing deployed |
+| ~~ADMIN-API-KEY-ROTATION~~ | ~~A UI on `AdminPage` that lets an admin rotate their own API keys, through a same-origin worker route~~ | ~~P2~~ | Done 2026-10-05 — commits 24d47cd, 2015571, fc47e66, fa6710a; IntegrityLandingPage 982605cd, 4d16ca44. Closed on the user's production rotation; see note |
 
 **ADMIN-API-KEY-ROTATION.** Nobody can rotate an `obtk_` key without an operator today. The only
 rotation done so far was by hand: insert an `api_keys` row, PUT its `apikey:<sha256>` record into
@@ -148,8 +148,13 @@ token" was skipped, and it does not.
      Worker, which deploys by hand and is not needed for the acceptance below.
   5. Rotate a real key from `/admin` and check the acceptance bullets below. A user's action:
      the old key stops working at once, so update `OBTOOL_API_KEY` wherever it is read.
-- **Acceptance below is unmet.** Rotation works against the real dev function (step 2), but none
-  has run through the production dashboard yet.
+- **Closed 2026-10-05, on the user's word after rotating in production.** The first production
+  rotation lost its new token: the list refetch after a mutation drops the revoked key, and the row
+  holding the token unmounted with it. The test's fake worker kept the old key id, so the suite
+  passed. fa6710a (deployed by CI run 37419054202) holds the token in a panel above the table until
+  dismissed, in full with Copy, and the fake now revokes as production does. Verified in this
+  session: the dev e2e (step 2) and the UI tests. Not independently checked here: the production
+  401/200 pair and the `key.rotate` audit row.
 
 Acceptance:
 - A user rotates one of their keys. The new token authenticates against obtool-api
