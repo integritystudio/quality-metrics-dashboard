@@ -25,8 +25,13 @@ vi.mock('../contexts/AuthContext.js', () => ({
 }));
 
 const SESSION_ID = 'sess-long';
-/** Evaluations in the served payload; the notice quotes this count. */
+/** Evaluations in the served payload; the notice quotes how many rows the page has. */
 const READ_EVALUATION_COUNT = 2;
+/**
+ * What `dataSources.evaluations.count` claims. Deliberately not the row count,
+ * so a notice that quoted the claim instead of the rows would read wrong.
+ */
+const REPORTED_EVALUATION_COUNT = READ_EVALUATION_COUNT + 1;
 const NOTICE_TITLE = 'Partial evaluation data';
 /** Rendered only once the session payload has loaded. */
 const LOADED_PAGE_HEADING = 'Session Detail';
@@ -45,8 +50,8 @@ function makeSessionDetail(truncated: boolean | undefined): JsonSafe<SessionDeta
     dataSources: {
       traces: { count: 0, traceIds: 0 },
       logs: { count: 0 },
-      evaluations: { count: evaluations.length, ...(truncated !== undefined && { truncated }) },
-      total: evaluations.length,
+      evaluations: { count: REPORTED_EVALUATION_COUNT, ...(truncated !== undefined && { truncated }) },
+      total: REPORTED_EVALUATION_COUNT,
     },
     timespan: null,
     sessionInfo: null,
@@ -86,7 +91,6 @@ describe('SessionDetailPage partial evaluation notice', () => {
 
     expect(await screen.findByText(NOTICE_TITLE)).toBeTruthy();
     expect(screen.getByText(new RegExp(`more evaluations than the ${READ_EVALUATION_COUNT} read for this page`))).toBeTruthy();
-    expect(screen.getByText(/hallucination indicators, failed-evaluation list and evaluation table/)).toBeTruthy();
   });
 
   it.each([

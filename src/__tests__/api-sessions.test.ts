@@ -252,6 +252,8 @@ describe('GET /sessions/:sessionId when the evaluation read hits its cap', () =>
 
     expect(body.dataSources.evaluations).toEqual({ count: LIMIT_EVALS_SESSION, truncated: true });
     expect(body.evaluations).toHaveLength(LIMIT_EVALS_SESSION);
+    // `total` counts what was read, not what the session holds: still the partial count.
+    expect(body.dataSources.total).toBe(LIMIT_EVALS_SESSION);
   });
 });
 
