@@ -1,5 +1,5 @@
 /**
- * API route tests: /api/agents and /api/agents/:sessionId.
+ * API route tests: /api/agents, /api/agents/:sessionId and /api/agents/:sessionId/graph.
  *
  * Approach C — fixture HTTP server. The real queryTraces (with Zod validation)
  * and real data-loader run end-to-end against a local stub server. A test run
@@ -21,9 +21,10 @@ vi.mock('../api/parent/quality-multi-agent.js', () => ({
 
 import { agentRoutes } from '../api/routes/agents.js';
 import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
-import type { AgentDetailResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
+import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
 import type { MultiAgentEvaluation } from '../types.js';
 import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
+import { makeTurn } from './workflow-fixtures.js';
 
 let fixture: FixtureServer;
 
@@ -192,9 +193,55 @@ describe('GET /agents/:sessionId', () => {
     expect(body).toHaveProperty('sessionId', 'sess-001');
   });
 
+  it("requests the session's evaluations, which the /graph route skips", async () => {
+    fixture.setTraces([makeAgentSpanWire()]);
+
+    await agentRoutes.request('/agents/sess-001');
+
+    expect(fixture.requestedPaths()).toContain('/v1/evaluations');
+  });
+
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/traces');
     const res = await agentRoutes.request('/agents/sess-001');
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('GET /agents/:sessionId/graph', () => {
+  it('returns the graph and evaluation with no spans, evaluations or agentMap', async () => {
+    // The graph's nodes come from the evaluation's turns, so give it one.
+    const evaluation = { ...MOCK_MULTI_AGENT, turns: [makeTurn({ agentName: 'general-purpose' })], totalTurns: 1 };
+    vi.mocked(computeMultiAgentEvaluation).mockReturnValue(evaluation);
+    fixture.setTraces([makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' })]);
+
+    const res = await agentRoutes.request('/agents/sess-001/graph');
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as AgentGraphResponse;
+    expect(Object.keys(body).sort()).toEqual(['evaluation', 'graph', 'sessionId']);
+    expect(body.sessionId).toBe('sess-001');
+    expect(body.evaluation).toEqual(evaluation);
+    expect(body.graph.nodes.map(n => n.id)).toEqual(['general-purpose']);
+  });
+
+  it('reads the session traces and never requests evaluations', async () => {
+    fixture.setTraces([makeAgentSpanWire()]);
+
+    await agentRoutes.request('/agents/sess-001/graph');
+
+    expect(fixture.requestedPaths()).toContain('/v1/traces');
+    expect(fixture.requestedPaths()).not.toContain('/v1/evaluations');
+  });
+
+  it('returns 400 for an invalid sessionId', async () => {
+    const res = await agentRoutes.request('/agents/bad%20id/graph');
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 500 when backend throws', async () => {
+    fixture.failPath('/v1/traces');
+    const res = await agentRoutes.request('/agents/sess-001/graph');
     expect(res.status).toBe(500);
   });
 });

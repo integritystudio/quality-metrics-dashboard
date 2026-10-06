@@ -160,6 +160,36 @@ agentRoutes.get('/agents', async (c) => {
   }
 });
 
+type SessionSpans = Awaited<ReturnType<typeof loadTracesBySessionId>>;
+
+/** Maps each span index to its agent name, and collects the session's trace ids. */
+function indexSessionSpans(spans: SessionSpans) {
+  // Real spans may carry the agent name under either 'agent.name' (hooks
+  // context) or 'gen_ai.agent.name' (OTel GenAI semantic conventions). Both are
+  // checked here so the agentMap is populated regardless of which attribute the
+  // instrumentation emits. workflow-graph.ts uses 'gen_ai.agent.name' for node
+  // scoring; the agentMap built here is used by computeMultiAgentEvaluation only.
+  const agentMap = new Map<number, string>();
+  const traceIds = new Set<string>();
+  spans.forEach((span, i) => {
+    const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
+    if (agent) agentMap.set(i, agent);
+    if (span.traceId) traceIds.add(span.traceId);
+  });
+  return { agentMap, traceIds };
+}
+
+/** The session's multi-agent evaluation, and the workflow graph built from it. */
+function deriveSessionWorkflow(spans: SessionSpans, agentMap: Map<number, string>) {
+  const stepScores: StepScore[] = spans.map((span, i) => ({
+    step: i,
+    score: attrNum(span, 'evaluation.score', span.status?.code === 'ERROR' ? 0 : 1),
+    explanation: span.name,
+  }));
+  const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
+  return { evaluation, graph: buildWorkflowGraph(evaluation, spans) };
+}
+
 /**
  * GET /api/agents/:sessionId
  * Loads spans for a session, builds agentMap, computes multi-agent evaluation.
@@ -172,41 +202,40 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
 
   try {
     const spans = await loadTracesBySessionId(sessionId);
-
-    // Real spans may carry the agent name under either 'agent.name' (hooks
-    // context) or 'gen_ai.agent.name' (OTel GenAI semantic conventions). Both are
-    // checked here so the agentMap is populated regardless of which attribute the
-    // instrumentation emits. workflow-graph.ts uses 'gen_ai.agent.name' for node
-    // scoring; the agentMap built here is used by computeMultiAgentEvaluation only.
-    const agentMap = new Map<number, string>();
-    const traceIds = new Set<string>();
-    spans.forEach((span, i) => {
-      const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
-      if (agent) agentMap.set(i, agent);
-      if (span.traceId) traceIds.add(span.traceId);
-    });
-
-    const stepScores: StepScore[] = spans.map((span, i) => ({
-      step: i,
-      score: attrNum(span, 'evaluation.score', span.status?.code === 'ERROR' ? 0 : 1),
-      explanation: span.name,
-    }));
+    const { agentMap, traceIds } = indexSessionSpans(spans);
 
     const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
-    const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
+    const { evaluation, graph } = deriveSessionWorkflow(spans, agentMap);
     const evaluations = await evalPromise;
-
-    const serializedAgentMap = Object.fromEntries(agentMap);
-    const graph = buildWorkflowGraph(evaluation, spans);
 
     return c.json(jsonSafe({
       sessionId,
       spans,
       evaluation,
       evaluations,
-      agentMap: serializedAgentMap,
+      agentMap: Object.fromEntries(agentMap),
       graph,
     }));
+  } catch (err) {
+    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  }
+});
+
+/**
+ * GET /api/agents/:sessionId/graph
+ * The workflow view's payload: the graph, and the evaluation its timeline tab
+ * reads. Skips the evaluations lookup and omits spans and agentMap.
+ */
+agentRoutes.get('/agents/:sessionId/graph', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  if (!isValidParam(sessionId, PARAM_ID_RE)) {
+    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  }
+
+  try {
+    const spans = await loadTracesBySessionId(sessionId);
+    const { evaluation, graph } = deriveSessionWorkflow(spans, indexSessionSpans(spans).agentMap);
+    return c.json(jsonSafe({ sessionId, evaluation, graph }));
   } catch (err) {
     return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }

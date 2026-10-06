@@ -789,6 +789,20 @@ app.get('/api/agents/:sessionId', async (c) => {
   });
 });
 
+// The workflow view's payload: the same session key, without its evaluations.
+app.get('/api/agents/:sessionId/graph', async (c) => {
+  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  const sessionId = c.req.param('sessionId');
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
+  const session = await getSessionKv<Record<string, unknown>>(c, `session:${sessionId}`);
+  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
+  return c.json({
+    sessionId,
+    evaluation: session['multiAgentEvaluation'] ?? null,
+    graph: session['workflowGraph'] ?? null,
+  });
+});
+
 app.get('/api/compliance/sla', async (c) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);

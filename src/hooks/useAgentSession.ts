@@ -20,6 +20,24 @@ export interface AgentSessionResponse {
   graph: WorkflowGraph | null;
 }
 
+/** The workflow view's slice of a session: no spans, evaluations or agentMap. */
+export type AgentWorkflowResponse = Pick<AgentSessionResponse, 'sessionId' | 'evaluation' | 'graph'>;
+
+/**
+ * The workflow view reads `/graph`, not the full session. A node click then
+ * fetches the session page's payload cold, instead of sharing this cache entry.
+ */
+export function useAgentWorkflow(sessionId: string | undefined) {
+  return useApiQuery<AgentWorkflowResponse>(
+    ['agent-workflow', sessionId],
+    () => {
+      if (!sessionId) throw new Error('sessionId is required');
+      return `/api/agents/${encodeURIComponent(sessionId)}/graph`;
+    },
+    { enabled: !!sessionId, staleTime: STALE_TIME.DETAIL },
+  );
+}
+
 export function useAgentSession(sessionId: string | undefined) {
   return useApiQuery<AgentSessionResponse>(
     ['agent-session', sessionId],

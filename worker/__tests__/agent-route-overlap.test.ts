@@ -135,3 +135,30 @@ describe('/api/agents/:sessionId payload', () => {
     expect((await res.json() as { graph: unknown }).graph).toBeNull();
   });
 });
+
+describe('/api/agents/:sessionId/graph payload', () => {
+  const graph = { nodes: [], edges: [], rootNodeId: null, workflowShape: 'linear' };
+  const multiAgentEvaluation = { turns: [], handoffs: [], totalTurns: 0 };
+
+  it('reads the session key and serves its graph and evaluation, without its evaluations', async () => {
+    mockKV.get.mockResolvedValue({
+      workflowGraph: graph,
+      multiAgentEvaluation,
+      evaluations: [{ evaluationName: 'relevance', scoreValue: 1 }],
+    });
+
+    const res = await get(`/api/agents/${SESSION_ID}/graph`);
+
+    expect(res.status).toBe(200);
+    expect(kvKeys()).toContain(`session:${SESSION_ID}`);
+    expect(await res.json()).toEqual({ sessionId: SESSION_ID, evaluation: multiAgentEvaluation, graph });
+  });
+
+  it('answers 404 when the session has no key', async () => {
+    mockKV.get.mockResolvedValue(null);
+
+    const res = await get(`/api/agents/${SESSION_ID}/graph`);
+
+    expect(res.status).toBe(404);
+  });
+});

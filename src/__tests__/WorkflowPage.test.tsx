@@ -7,17 +7,17 @@ import type { AgentWorkflowView } from '../components/AgentWorkflowView.js';
 /**
  * Only the three fields WorkflowPage destructures off the query result —
  * typed so the mock cannot hand the page a `data` shape the real
- * `useAgentSession` could never return.
+ * `useAgentWorkflow` could never return.
  */
-interface AgentSessionQueryResult {
-  data: AgentSessionResponse | undefined;
+interface AgentWorkflowQueryResult {
+  data: AgentWorkflowResponse | undefined;
   isLoading: boolean;
   error: Error | null;
 }
 
-const mockUseAgentSession = vi.fn<(sessionId: string) => AgentSessionQueryResult>();
+const mockUseAgentWorkflow = vi.fn<(sessionId: string) => AgentWorkflowQueryResult>();
 vi.mock('../hooks/useAgentSession.js', () => ({
-  useAgentSession: (sessionId: string) => mockUseAgentSession(sessionId),
+  useAgentWorkflow: (sessionId: string) => mockUseAgentWorkflow(sessionId),
 }));
 
 // Mock wouter — capture navigate calls
@@ -75,7 +75,7 @@ vi.mock('../components/PageShell.js', () => ({
 import { WorkflowPage } from '../pages/WorkflowPage.js';
 import { makeNode, makeGraph, makeEvaluation } from './workflow-fixtures.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { AgentSessionResponse } from '../hooks/useAgentSession.js';
+import type { AgentWorkflowResponse } from '../hooks/useAgentSession.js';
 
 afterEach(() => {
   cleanup();
@@ -83,13 +83,10 @@ afterEach(() => {
 });
 
 function mockLoaded(graph: WorkflowGraph | null = makeGraph()) {
-  mockUseAgentSession.mockReturnValue({
+  mockUseAgentWorkflow.mockReturnValue({
     data: {
       sessionId: 'session-abc',
-      spans: [],
       evaluation: makeEvaluation(),
-      evaluations: [],
-      agentMap: {},
       graph,
     },
     isLoading: false,
@@ -135,9 +132,9 @@ describe('WorkflowPage', () => {
       expect(screen.getByText(/1 agent$/)).toBeInTheDocument();
     });
 
-    it('calls useAgentSession with the provided sessionId', () => {
+    it('calls useAgentWorkflow with the provided sessionId', () => {
       render(<WorkflowPage sessionId="my-session-id" />);
-      expect(mockUseAgentSession).toHaveBeenCalledWith('my-session-id');
+      expect(mockUseAgentWorkflow).toHaveBeenCalledWith('my-session-id');
     });
   });
 
@@ -153,7 +150,7 @@ describe('WorkflowPage', () => {
 
   describe('when data is undefined (initial/loading state)', () => {
     beforeEach(() => {
-      mockUseAgentSession.mockReturnValue({
+      mockUseAgentWorkflow.mockReturnValue({
         data: undefined,
         isLoading: true,
         error: null,

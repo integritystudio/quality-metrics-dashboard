@@ -181,6 +181,9 @@ export interface AgentDetailResponse {
   graph: JsonSafe<WorkflowGraph>;
 }
 
+/** `GET /agents/:sessionId/graph`. */
+export type AgentGraphResponse = Pick<AgentDetailResponse, 'sessionId' | 'evaluation' | 'graph'>;
+
 /*
  * `GET /sessions/:sessionId` — `SessionDetailResponse` in
  * `src/hooks/useSessionDetail.ts`, wrapped in `JsonSafe<…>`. Deliberately not

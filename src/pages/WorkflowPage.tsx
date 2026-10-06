@@ -1,5 +1,5 @@
 import { useLocation } from 'wouter';
-import { useAgentSession } from '../hooks/useAgentSession.js';
+import { useAgentWorkflow } from '../hooks/useAgentSession.js';
 import { AgentWorkflowView } from '../components/AgentWorkflowView.js';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
@@ -9,7 +9,7 @@ import { routes } from '../lib/routes.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function WorkflowPage({ sessionId }: { sessionId: string }) {
-  const { data, isLoading, error } = useAgentSession(sessionId);
+  const { data, isLoading, error } = useAgentWorkflow(sessionId);
   const [, navigate] = useLocation();
 
   return (

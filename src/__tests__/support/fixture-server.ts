@@ -101,7 +101,12 @@ export interface FixtureServer {
    * Used for error-path tests that need a collaborator to fail.
    */
   failPath(prefix: string): void;
-  /** Clear rows and fail-paths. Call in beforeEach. */
+  /**
+   * Paths requested since the last reset, query strings stripped. For reads a
+   * caller swallows on failure, where `failPath` cannot show they were skipped.
+   */
+  requestedPaths(): string[];
+  /** Clear rows, fail-paths and requested paths. Call in beforeEach. */
   reset(): void;
   /** Shut down the server. Call in afterAll. */
   close(): Promise<void>;
@@ -116,10 +121,12 @@ export async function createFixtureServer(): Promise<FixtureServer> {
   let traceRows: TraceWireRow[] = [];
   let logRows: LogWireRow[] = [];
   const failPaths = new Set<string>();
+  let requested: string[] = [];
 
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     const rawPath = req.url ?? '/';
     const path = rawPath.split('?')[0] ?? '/';
+    requested.push(path);
 
     for (const fp of failPaths) {
       if (path.startsWith(fp)) {
@@ -160,11 +167,13 @@ export async function createFixtureServer(): Promise<FixtureServer> {
     setTraces(rows) { traceRows = rows; },
     setLogs(rows) { logRows = rows; },
     failPath(prefix) { failPaths.add(prefix); },
+    requestedPaths() { return [...requested]; },
     reset() {
       evalRows = [];
       traceRows = [];
       logRows = [];
       failPaths.clear();
+      requested = [];
     },
     close() {
       return new Promise<void>((resolve, reject) =>
