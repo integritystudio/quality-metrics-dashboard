@@ -13,6 +13,13 @@ import { UUID_PATTERN } from '../worker-contract.js';
 export const UuidSchema = z.string().regex(UUID_PATTERN);
 
 /**
+ * A timestamptz as PostgREST serialises it, e.g. `2026-10-01T06:46:19.086694+00:00`. The offset
+ * is always present, and a bare `z.iso.datetime()` rejects any offset, so every row parsed with
+ * it was dropped: until 2026-10-05 that emptied the admin key and user lists in production.
+ */
+export const SupabaseTimestampSchema = z.iso.datetime({ offset: true });
+
+/**
  * Auth0 JWT payload — result of jwtVerify() in the worker.
  * The `sub` claim is the Auth0 subject identifier (e.g. "auth0|abc123").
  */
@@ -36,8 +43,8 @@ export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
 export const PublicUserSchema = z.object({
   id: UuidSchema,
   email: z.email(),
-  created_at: z.iso.datetime().optional(),
-  updated_at: z.iso.datetime().optional(),
+  created_at: SupabaseTimestampSchema.optional(),
+  updated_at: SupabaseTimestampSchema.optional(),
   /** Active-org preference (FK organizations.id) — read by the P5 org resolution. */
   default_organization_id: UuidSchema.nullable().optional(),
 });
@@ -159,7 +166,7 @@ export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
 export const AdminUserSchema = z.object({
   id: UuidSchema,
   email: z.email().optional(),
-  created_at: z.iso.datetime().optional(),
+  created_at: SupabaseTimestampSchema.optional(),
   roles: z.array(z.object({ id: UuidSchema, name: z.string() })),
 });
 
@@ -216,8 +223,8 @@ export const ApiKeySchema = z.object({
   name: z.string().nullable().optional(),
   tier: z.string(),
   status: z.string(),
-  created_at: z.iso.datetime().optional(),
-  last_used_at: z.iso.datetime().nullable().optional(),
+  created_at: SupabaseTimestampSchema.optional(),
+  last_used_at: SupabaseTimestampSchema.nullable().optional(),
 });
 
 export type ApiKey = z.infer<typeof ApiKeySchema>;
