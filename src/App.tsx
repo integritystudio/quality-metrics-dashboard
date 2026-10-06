@@ -394,7 +394,12 @@ export function App() {
         // login→callback redirect cycle per reload and per 2h token expiry.
         // Requires allow_offline_access on the Auth0 resource server (set on
         // both tenants 2026-08-22) and rotating refresh tokens on the SPA
-        // client (already the config in both tenants).
+        // client. Production had that; the dev client did not until
+        // 2026-10-06, and the first browser sign-in there failed the code
+        // exchange with "Failed to exchange a Rotating Refresh Token when
+        // Refresh Token Rotation is not enabled" (surfaced as "Unknown or
+        // invalid refresh token"). Auth0 issues no refresh token to a public
+        // client without rotation, so this flag needs it on every tenant.
         useRefreshTokens
         cacheLocation="localstorage"
       >
