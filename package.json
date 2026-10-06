@@ -61,7 +61,7 @@
     "shell-quote": "^1.12.0"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@cloudflare/workers-types": "^5.20260728.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
