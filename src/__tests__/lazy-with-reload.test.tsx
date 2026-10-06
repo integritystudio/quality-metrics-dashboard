@@ -85,6 +85,25 @@ describe('lazyWithReload', () => {
     expect(env.reload).not.toHaveBeenCalled();
   });
 
+  it('shows the error fallback instead of reloading when storage refuses the guard', async () => {
+    const refusing = { ...memoryStorage(), setItem: () => { throw new DOMException('quota', 'QuotaExceededError'); } };
+    const env = { storage: refusing, reload: vi.fn() };
+
+    renderPageLoad(rejectStale, env);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(STALE_CHUNK);
+    expect(env.reload).not.toHaveBeenCalled();
+  });
+
+  it('renders the page when storage refuses to clear the guard', async () => {
+    const refusing = { ...memoryStorage(), removeItem: () => { throw new DOMException('denied', 'SecurityError'); } };
+    const env = { storage: refusing, reload: vi.fn() };
+
+    renderPageLoad(resolvePage, env);
+
+    expect(await screen.findByText(PAGE_TEXT)).toBeInTheDocument();
+  });
+
   it('shows the error fallback instead of reloading when storage is unavailable', async () => {
     const env = { storage: undefined, reload: vi.fn() };
 
