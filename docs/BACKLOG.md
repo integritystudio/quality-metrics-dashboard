@@ -74,7 +74,7 @@ Deferred from the 2026-09-26 `/simplify` pass on `WorkflowPage` (commit 01f8e25)
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| WORKFLOW-GRAPH-ONLY-ENDPOINT | `WorkflowPage` fetches the full agent session to render only the graph | P3 | API + hook change |
+| ~~WORKFLOW-GRAPH-ONLY-ENDPOINT~~ | ~~`WorkflowPage` fetches the full agent session to render only the graph~~ | ~~P3~~ | Done 2026-10-05 — commits fd50a4f, 5133898. `GET /api/agents/:sessionId/graph` on the Worker (same KV key, no `evaluations`) and the local API (no evaluations lookup); see note |
 | ~~AGENT-QUERY-PARAM-UNREAD~~ | ~~`?agent=` on `/agents/:sessionId` is written by `WorkflowPage` but read by nothing~~ | ~~P3~~ | Done 2026-10-05 — commits d0845b5, 9950ec1. Decided: focus. `AgentSessionPage` highlights that agent's turns and scrolls the first into view |
 | ~~WORKFLOW-TEST-DEEP-MOCK~~ | ~~`WorkflowPage.test.tsx` mocks `WorkflowGraphView`, two levels below the page~~ | ~~P3~~ | Done 2026-10-05 — commit 403cbe6. Click forwarding moved to the `AgentWorkflowView` tests |
 | ~~AGENT-SESSION-TEST-MISPLACED~~ | ~~`AgentSessionPage`'s "View Workflow" test lives in `WorkflowPage.test.tsx`~~ | ~~P3~~ | Done 2026-10-05 — commit 22ce360. The new file mocks only `useAgentSession` |
@@ -89,6 +89,9 @@ still builds the graph from spans server-side but skips the evaluations lookup a
 query cache with `AgentSessionPage`, so a node click lands on a warm cache; a slim endpoint makes that
 click a full fetch. Acceptance: the workflow view's response carries no `spans` array, and the
 node-click drill-in still renders.
+*Closed 2026-10-05.* The description above is the local API's. In production the Worker already
+answered `spans: []` from one KV key, so there the saving is the session's `evaluations` array, not a
+storage read: the graph route reads the same `session:<id>` key and drops that array.
 
 **AGENT-QUERY-PARAM-UNREAD.** Clicking a graph node navigates to
 `routes.agentSession(sessionId, nodeId)` → `/agents/:sessionId?agent=<nodeId>`, but no page reads
