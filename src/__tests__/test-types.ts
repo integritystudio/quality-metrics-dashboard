@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { ReactNode } from 'react';
-import type { WorkflowGraph } from '../types/workflow-graph.js';
 
 // Link (wouter) component props
 
@@ -12,25 +11,6 @@ export const LinkPropsSchema = z.object({
 export type LinkProps = z.infer<typeof LinkPropsSchema> & {
   children: ReactNode;
   [key: string]: unknown;
-};
-
-
-export const WorkflowGraphViewPropsSchema = z.object({
-  graph: z.object({
-    nodes: z.array(z.object({
-      id: z.string(),
-      label: z.string(),
-    })),
-    edges: z.array(z.unknown()).optional(),
-    rootNodeId: z.string().nullable().optional(),
-    workflowShape: z.string().optional(),
-  }),
-  onNodeClick: z.custom<(nodeId: string) => void>().optional(),
-});
-
-export type WorkflowGraphViewProps = {
-  graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) => void;
 };
 
 

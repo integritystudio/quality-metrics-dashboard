@@ -1,15 +1,30 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import type { WorkflowGraphView } from '../components/WorkflowGraph.js';
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-// Mock WorkflowGraph — prevents ELK/ReactFlow instantiation in AgentWorkflowView tests
+// Mock WorkflowGraph — prevents ELK/ReactFlow instantiation in AgentWorkflowView tests.
+// Each node is a button that fires onNodeClick, so the view's forwarding is observable.
 
 vi.mock('../components/WorkflowGraph.js', () => ({
-  WorkflowGraphView: () => <div data-testid="workflow-graph-view" />,
+  WorkflowGraphView: ({ graph, onNodeClick }: ComponentProps<typeof WorkflowGraphView>) => (
+    <div data-testid="workflow-graph-view">
+      {graph.nodes.map(n => (
+        <button
+          key={n.id}
+          data-testid={`graph-node-${n.id}`}
+          onClick={() => onNodeClick?.(n.id)}
+        >
+          {n.label}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 // Imports (after mocks)
@@ -115,6 +130,16 @@ describe('AgentWorkflowView', () => {
   it('renders DAG tab panel by default', () => {
     render(<AgentWorkflowView graph={graph} />);
     expect(screen.getByTestId('workflow-graph-view')).toBeInTheDocument();
+  });
+
+  it('forwards a graph node click to onNodeClick with the node id', () => {
+    const onNodeClick = vi.fn();
+    const clickable = makeGraph({ nodes: [makeNode({ id: 'agent-node-42' })] });
+    render(<AgentWorkflowView graph={clickable} onNodeClick={onNodeClick} />);
+
+    fireEvent.click(screen.getByTestId('graph-node-agent-node-42'));
+
+    expect(onNodeClick).toHaveBeenCalledWith('agent-node-42');
   });
 
   it('renders a tablist with DAG and Timeline tabs', () => {

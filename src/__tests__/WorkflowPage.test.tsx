@@ -1,6 +1,8 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
+import type { ComponentProps } from 'react';
+import type { LinkProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
+import type { AgentWorkflowView } from '../components/AgentWorkflowView.js';
 
 /**
  * Only the three fields WorkflowPage destructures off the query result —
@@ -28,11 +30,12 @@ vi.mock('wouter', () => ({
   ),
 }));
 
-// Mock WorkflowGraphView — stub renders testid, fires onNodeClick
+// Mock AgentWorkflowView, the page's direct child — stub renders testid, fires onNodeClick.
+// Its own forwarding to the graph is covered in WorkflowTimeline.test.tsx.
 
-vi.mock('../components/WorkflowGraph.js', () => ({
-  WorkflowGraphView: ({ graph, onNodeClick }: WorkflowGraphViewProps) => (
-    <div data-testid="workflow-graph-view">
+vi.mock('../components/AgentWorkflowView.js', () => ({
+  AgentWorkflowView: ({ graph, onNodeClick }: ComponentProps<typeof AgentWorkflowView>) => (
+    <div data-testid="agent-workflow-view">
       {graph.nodes.map(n => (
         <button
           key={n.id}
@@ -98,9 +101,9 @@ describe('WorkflowPage', () => {
   describe('when data has a valid graph', () => {
     beforeEach(() => mockLoaded());
 
-    it('renders WorkflowGraphView when graph is present', () => {
+    it('renders AgentWorkflowView when graph is present', () => {
       render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByTestId('workflow-graph-view')).toBeInTheDocument();
+      expect(screen.getByTestId('agent-workflow-view')).toBeInTheDocument();
     });
 
     it('renders DetailPageHeader with title "Workflow"', () => {
@@ -144,7 +147,7 @@ describe('WorkflowPage', () => {
     it('renders an empty state instead of the graph', () => {
       render(<WorkflowPage sessionId="session-abc" />);
       expect(screen.getByText('No workflow graph for this session')).toBeInTheDocument();
-      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('agent-workflow-view')).not.toBeInTheDocument();
     });
   });
 
@@ -157,9 +160,9 @@ describe('WorkflowPage', () => {
       });
     });
 
-    it('does not render WorkflowGraphView while loading', () => {
+    it('does not render AgentWorkflowView while loading', () => {
       render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.queryByTestId('workflow-graph-view')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('agent-workflow-view')).not.toBeInTheDocument();
     });
 
     it('renders loading state via PageShell', () => {
