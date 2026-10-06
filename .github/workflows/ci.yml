@@ -20,6 +20,11 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v4
       - run: npm ci
+      # Production deps only: the Worker ships the Vite bundle and its runtime
+      # imports, never devDependencies, and braces (GHSA-vfj7-8cjw-p6xm, via
+      # repomix) has no patched release. Same gate in ci.yml and deploy.yml.
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high --omit=dev
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
       # The src tests and the e2e API server import the parent observability-toolkit

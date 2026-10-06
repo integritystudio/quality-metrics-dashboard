@@ -28,6 +28,11 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v4
       - run: npm ci
+      # Production deps only: the Worker ships the Vite bundle and its runtime
+      # imports, never devDependencies, and braces (GHSA-vfj7-8cjw-p6xm, via
+      # repomix) has no patched release. Same gate in ci.yml and deploy.yml.
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high --omit=dev
       # Several src tests import the parent observability-toolkit through `@parent/*`
       # (tsconfig: `../dist/*`), which a standalone checkout does not have. Without it
       # 72 of the src tests fail and deploy-worker never runs: every push from
