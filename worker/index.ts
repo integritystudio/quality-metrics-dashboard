@@ -1107,8 +1107,9 @@ app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
 // Rotation proxies to the Supabase Edge Function api-keys-rotate, server to server.
 // This worker has already verified the user's Auth0 token, so it calls the function
 // with its own service key and names the user in the body. The user's token is never
-// forwarded: Supabase cannot verify Auth0 tokens (the project has no third-party
-// auth), and the function accepts only a service-level key (verify_jwt = false).
+// forwarded: the function accepts only a service-level key (verify_jwt = false), and
+// the access token this worker verifies is not a Supabase credential anyway — Supabase
+// Third-Party Auth (CR62) accepts the SPA's Auth0 ID token for direct reads, nothing more.
 // ---------------------------------------------------------------------------
 
 const ERR_KEY_NOT_FOUND_IN_ORG = 'Key not found in active org';
