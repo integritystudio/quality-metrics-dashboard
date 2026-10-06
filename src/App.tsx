@@ -32,6 +32,7 @@ import { AgentSessionPage } from './pages/AgentSessionPage.js';
 import { AgentsPage } from './pages/AgentsPage.js';
 import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { AdminPage } from './pages/AdminPage.js';
+import { StaffGuard, StaffCustomersLink } from './components/StaffGuard.js';
 import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
 import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
 import { AgentCodeQualityPage } from './pages/AgentCodeQualityPage.js';
@@ -54,6 +55,13 @@ import type {
 } from './types.js';
 
 const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
+
+// The admin customer view is staff-only, so its five screens load on demand.
+const AdminCustomerHubPage = lazy(() => import('./pages/admin-customer/AdminCustomerHubPage.js').then(m => ({ default: m.AdminCustomerHubPage })));
+const AdminCustomerBillingPage = lazy(() => import('./pages/admin-customer/AdminCustomerBillingPage.js').then(m => ({ default: m.AdminCustomerBillingPage })));
+const AdminCustomerUsagePage = lazy(() => import('./pages/admin-customer/AdminCustomerUsagePage.js').then(m => ({ default: m.AdminCustomerUsagePage })));
+const AdminCustomerQuotaPage = lazy(() => import('./pages/admin-customer/AdminCustomerQuotaPage.js').then(m => ({ default: m.AdminCustomerQuotaPage })));
+const AdminCustomerEntitlementsPage = lazy(() => import('./pages/admin-customer/AdminCustomerEntitlementsPage.js').then(m => ({ default: m.AdminCustomerEntitlementsPage })));
 
 const VALID_ROLES: readonly RoleViewType[] = ROLES;
 
@@ -408,6 +416,7 @@ export function App() {
                     <RoleSelector />
                     <OrgSwitcher />
                     <AdminLink />
+                    <StaffCustomersLink />
                     <Switch>
                       <Route path="/">
                         <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
@@ -515,6 +524,60 @@ export function App() {
                             <AdminPage />
                           </AdminGuard>
                         </ErrorBoundary>
+                      </Route>
+                      {/* The admin customer view: staff only, org id in the path (ADMIN-CV-LAYOUT-NAV). */}
+                      <Route path="/admin/customers">
+                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <StaffGuard>
+                            <Suspense fallback={<div className="card skeleton skeleton-md" />}>
+                              <AdminCustomerHubPage />
+                            </Suspense>
+                          </StaffGuard>
+                        </ErrorBoundary>
+                      </Route>
+                      <Route path="/admin/customers/:orgId/billing">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <StaffGuard>
+                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
+                                <AdminCustomerBillingPage orgId={params.orgId} />
+                              </Suspense>
+                            </StaffGuard>
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/admin/customers/:orgId/usage">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <StaffGuard>
+                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
+                                <AdminCustomerUsagePage orgId={params.orgId} />
+                              </Suspense>
+                            </StaffGuard>
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/admin/customers/:orgId/quota">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <StaffGuard>
+                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
+                                <AdminCustomerQuotaPage orgId={params.orgId} />
+                              </Suspense>
+                            </StaffGuard>
+                          </ErrorBoundary>
+                        )}
+                      </Route>
+                      <Route path="/admin/customers/:orgId/entitlements">
+                        {(params) => (
+                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <StaffGuard>
+                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
+                                <AdminCustomerEntitlementsPage orgId={params.orgId} />
+                              </Suspense>
+                            </StaffGuard>
+                          </ErrorBoundary>
+                        )}
                       </Route>
                       <Route>
                         <div className="empty-state">
