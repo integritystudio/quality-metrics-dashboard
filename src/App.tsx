@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, lazy, Suspense, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, Suspense, type ReactNode } from 'react';
 import { Route, Switch, Link, useLocation, Router } from 'wouter';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
@@ -46,6 +46,7 @@ import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './contexts/CalibrationContext.js';
 import { ROLES } from './lib/constants.js';
+import { lazyWithReload } from './lib/lazy-with-reload.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -54,14 +55,14 @@ import type {
   MetricDynamics,
 } from './types.js';
 
-const WorkflowPage = lazy(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
+const WorkflowPage = lazyWithReload(() => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
 
 // The admin customer view is staff-only, so its five screens load on demand.
-const AdminCustomerHubPage = lazy(() => import('./pages/admin-customer/AdminCustomerHubPage.js').then(m => ({ default: m.AdminCustomerHubPage })));
-const AdminCustomerBillingPage = lazy(() => import('./pages/admin-customer/AdminCustomerBillingPage.js').then(m => ({ default: m.AdminCustomerBillingPage })));
-const AdminCustomerUsagePage = lazy(() => import('./pages/admin-customer/AdminCustomerUsagePage.js').then(m => ({ default: m.AdminCustomerUsagePage })));
-const AdminCustomerQuotaPage = lazy(() => import('./pages/admin-customer/AdminCustomerQuotaPage.js').then(m => ({ default: m.AdminCustomerQuotaPage })));
-const AdminCustomerEntitlementsPage = lazy(() => import('./pages/admin-customer/AdminCustomerEntitlementsPage.js').then(m => ({ default: m.AdminCustomerEntitlementsPage })));
+const AdminCustomerHubPage = lazyWithReload(() => import('./pages/admin-customer/AdminCustomerHubPage.js').then(m => ({ default: m.AdminCustomerHubPage })));
+const AdminCustomerBillingPage = lazyWithReload(() => import('./pages/admin-customer/AdminCustomerBillingPage.js').then(m => ({ default: m.AdminCustomerBillingPage })));
+const AdminCustomerUsagePage = lazyWithReload(() => import('./pages/admin-customer/AdminCustomerUsagePage.js').then(m => ({ default: m.AdminCustomerUsagePage })));
+const AdminCustomerQuotaPage = lazyWithReload(() => import('./pages/admin-customer/AdminCustomerQuotaPage.js').then(m => ({ default: m.AdminCustomerQuotaPage })));
+const AdminCustomerEntitlementsPage = lazyWithReload(() => import('./pages/admin-customer/AdminCustomerEntitlementsPage.js').then(m => ({ default: m.AdminCustomerEntitlementsPage })));
 
 const VALID_ROLES: readonly RoleViewType[] = ROLES;
 
