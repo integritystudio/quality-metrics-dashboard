@@ -71,7 +71,7 @@ function renderAt(path: string) {
 }
 
 function focusedTurnNumbers(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[aria-current="true"]')]
+  return [...container.querySelectorAll('[data-focused]')]
     .map(card => within(card as HTMLElement).getByText(/^#\d+$/).textContent);
 }
 

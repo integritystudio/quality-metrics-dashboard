@@ -44,8 +44,8 @@ export function TurnTimeline({ turns, agentNames, focusedAgent }: TurnTimelinePr
           <div
             key={turn.turnIndex}
             ref={index === firstFocusedIndex ? firstFocusedRef : undefined}
-            aria-current={focused || undefined}
-            className={focused ? 'p-4 shrink-0 turn-card turn-card--focused' : 'p-4 shrink-0 turn-card'}
+            data-focused={focused || undefined}
+            className="p-4 shrink-0 turn-card"
             style={{ '--turn-color': color } as CSSProperties}
           >
             <div className="flex-center mb-1-5 justify-between">
