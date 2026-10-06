@@ -47,7 +47,15 @@ dashboard.admin                # Admin access (bypasses all checks)
 VITE_AUTH0_DOMAIN=dev-68gg87ow4mg4kzyo.us.auth0.com
 VITE_AUTH0_CLIENT_ID=CNfd6xPPr2aLmvNyiearhmaLknAYvtnq
 VITE_AUTH0_AUDIENCE=https://api.integritystudio.dev
+VITE_SUPABASE_URL=https://cfrbahzzklwrnmbtqojl.supabase.co   # direct PostgREST reads with the Auth0 ID token (CR62)
+VITE_SUPABASE_ANON_KEY=sb_publishable_...                    # the publishable key; RLS decides what the token sees
 ```
+
+The two `VITE_SUPABASE_*` values are optional: without both, `useOwnUserRow` stays disabled and
+the header's account badge never renders. With them, the SPA makes its one direct database
+read — its own `users` row — through `src/lib/postgrest-client.ts` with the **ID token** (the
+post-login Action puts `role = authenticated` on it for this client only; the access token
+has no such claim and reads as anon). Everything else still goes through the Worker.
 
 **Worker (wrangler.toml vars + secrets):**
 ```
@@ -57,7 +65,7 @@ AUTH0_AUDIENCE=https://api.integritystudio.dev
 
 # secrets (wrangler secret put):
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...   # all DB access — Auth0 JWTs not valid for RLS
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...   # all Worker DB access; the browser's own read uses the ID token under RLS (above)
 ```
 
 > **Never set `ALLOW_TEST_BYPASS` in production.** This binding enables the `Bearer test-token` auth bypass used in worker unit tests (`makeEnv()` sets it to `'true'`). Leave the binding absent in wrangler.toml and production secrets.
