@@ -16,7 +16,7 @@ const ORG_STORAGE_KEY = 'obs.activeOrgId';
 
 export function getStoredOrgId(): string | null {
   try {
-    const stored = window.localStorage.getItem(ORG_STORAGE_KEY);
+    const stored = globalThis.localStorage.getItem(ORG_STORAGE_KEY);
     // Defense-in-depth: a corrupted/hand-edited entry must not become an
     // X-Org-Id header value. The worker rejects non-UUIDs anyway (403), but a
     // garbage value here would 403 every request until storage is cleared.
@@ -28,7 +28,7 @@ export function getStoredOrgId(): string | null {
 
 export function setStoredOrgId(orgId: string): void {
   try {
-    window.localStorage.setItem(ORG_STORAGE_KEY, orgId);
+    globalThis.localStorage.setItem(ORG_STORAGE_KEY, orgId);
   } catch {
     // Storage unavailable (private mode) — the session default still applies.
   }
