@@ -45,10 +45,10 @@ export default defineConfig(({ command, mode }) => {
     },
     resolve: {
       alias: {
-        '@parent': path.resolve(__dirname, '../dist'),
-        'web-worker': path.resolve(__dirname, 'src/stubs/web-worker.ts'),
+        '@parent': path.resolve(import.meta.dirname, '../dist'),
+        'web-worker': path.resolve(import.meta.dirname, 'src/stubs/web-worker.ts'),
         ...(process.env.VITE_E2E ? {
-          '@auth0/auth0-react': path.resolve(__dirname, 'src/stubs/auth0-e2e.ts'),
+          '@auth0/auth0-react': path.resolve(import.meta.dirname, 'src/stubs/auth0-e2e.ts'),
         } : {}),
       },
     },
