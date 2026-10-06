@@ -8,23 +8,17 @@
  * This is the critical file for ROUTE-TESTS-MOCK-FREE: the /api/agents 500
  * that ran undetected for the lifetime of the route (until PR #6, 2026-09-14)
  * would have been caught here if the real queryTraces had been running.
- * `buildWorkflowGraph` is deliberately NOT mocked — see original header note.
+ * Neither `buildWorkflowGraph` nor the parent's `computeMultiAgentEvaluation`
+ * is mocked: the graph and evaluation come from the served spans.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire, spanToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 
-vi.mock('../api/parent/quality-multi-agent.js', () => ({
-  computeMultiAgentEvaluation: vi.fn(),
-}));
-
 import { agentRoutes } from '../api/routes/agents.js';
-import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
 import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
-import type { MultiAgentEvaluation } from '../types.js';
 import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
-import { makeTurn } from './workflow-fixtures.js';
 
 let fixture: FixtureServer;
 
@@ -37,16 +31,6 @@ afterAll(async () => {
   delete process.env.OBTOOL_API_URL;
   await fixture.close();
 });
-
-const MOCK_MULTI_AGENT: MultiAgentEvaluation = {
-  handoffs: [],
-  turns: [],
-  handoffScore: null,
-  avgTurnRelevance: null,
-  conversationCompleteness: null,
-  totalTurns: 0,
-  errorPropagationTurns: 0,
-};
 
 /** Build a wire-format span with agent-specific attributes. */
 function makeAgentSpanWire(
@@ -82,9 +66,7 @@ function makeAgentSpanWire(
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
   fixture.reset();
-  vi.mocked(computeMultiAgentEvaluation).mockReturnValue(MOCK_MULTI_AGENT);
 });
 
 describe('GET /agents', () => {
@@ -210,10 +192,12 @@ describe('GET /agents/:sessionId', () => {
 
 describe('GET /agents/:sessionId/graph', () => {
   it('returns the graph and evaluation with no spans, evaluations or agentMap', async () => {
-    // The graph's nodes come from the evaluation's turns, so give it one.
-    const evaluation = { ...MOCK_MULTI_AGENT, turns: [makeTurn({ agentName: 'general-purpose' })], totalTurns: 1 };
-    vi.mocked(computeMultiAgentEvaluation).mockReturnValue(evaluation);
-    fixture.setTraces([makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' })]);
+    // The graph's nodes come from the evaluation's turns. A session with one
+    // distinct agent is scored as single-agent and names no agents, so serve two.
+    fixture.setTraces([
+      makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' }),
+      makeAgentSpanWire('trace-001', 'span-002', 'Explore', { 'session.id': 'sess-001' }),
+    ]);
 
     const res = await agentRoutes.request('/agents/sess-001/graph');
 
@@ -221,8 +205,8 @@ describe('GET /agents/:sessionId/graph', () => {
     const body = (await res.json()) as AgentGraphResponse;
     expect(Object.keys(body).sort()).toEqual(['evaluation', 'graph', 'sessionId']);
     expect(body.sessionId).toBe('sess-001');
-    expect(body.evaluation).toEqual(evaluation);
-    expect(body.graph.nodes.map(n => n.id)).toEqual(['general-purpose']);
+    expect(body.evaluation?.turns.map(t => t.agentName)).toEqual(['general-purpose', 'Explore']);
+    expect(body.graph.nodes.map(n => n.id).sort()).toEqual(['Explore', 'general-purpose']);
   });
 
   it('reads the session traces and never requests evaluations', async () => {

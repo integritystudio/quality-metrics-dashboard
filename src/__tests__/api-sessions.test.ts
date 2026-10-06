@@ -2,24 +2,18 @@
  * API route tests: /api/sessions/:sessionId.
  *
  * Approach C — fixture HTTP server. The real queryTraces (Zod validation),
- * data-loader, and CloudBackend run end-to-end. computeMultiAgentEvaluation
- * stays mocked (pure computation over loaded spans — no HTTP path).
+ * data-loader, and CloudBackend run end-to-end, as does the parent's
+ * computeMultiAgentEvaluation over the loaded spans.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire, spanToWire, logToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 
-vi.mock('../api/parent/quality-multi-agent.js', () => ({
-  computeMultiAgentEvaluation: vi.fn(),
-}));
-
 import { sessionRoutes } from '../api/routes/sessions.js';
 import { LIMIT_EVALS_SESSION } from '../api/data-loader.js';
-import { computeMultiAgentEvaluation } from '../api/parent/quality-multi-agent.js';
 import type { JsonSafe } from '../api/api-constants.js';
 import type { SessionDetailResponse } from '../hooks/useSessionDetail.js';
-import type { MultiAgentEvaluation } from '../types.js';
 import { makeEvaluation } from './support/fixtures.js';
 
 /** The route's payload as the page's hook reads it: one declaration, shared with the page test. */
@@ -36,16 +30,6 @@ afterAll(async () => {
   delete process.env.OBTOOL_API_URL;
   await fixture.close();
 });
-
-const MOCK_MULTI_AGENT: MultiAgentEvaluation = {
-  handoffs: [],
-  turns: [],
-  handoffScore: null,
-  avgTurnRelevance: null,
-  conversationCompleteness: null,
-  totalTurns: 0,
-  errorPropagationTurns: 0,
-};
 
 function makeSessionSpanWire(name = 'hook:builtin-post-tool', attrs: Record<string, unknown> = {}) {
   return spanToWire({
@@ -64,9 +48,7 @@ function makeSessionSpanWire(name = 'hook:builtin-post-tool', attrs: Record<stri
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
   fixture.reset();
-  vi.mocked(computeMultiAgentEvaluation).mockReturnValue(MOCK_MULTI_AGENT);
 });
 
 describe('GET /sessions/:sessionId', () => {
