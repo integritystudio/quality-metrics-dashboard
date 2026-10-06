@@ -87,7 +87,7 @@
     "typescript-eslint": "^8.65.0",
     "typescript7": "npm:typescript@^7.0.2",
     "vite": "^8.0.2",
-    "vitest": "^4.1.1",
+    "vitest": "^5.0.3",
     "wrangler": "^4.78.0"
   }
 }
