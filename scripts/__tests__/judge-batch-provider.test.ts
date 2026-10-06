@@ -21,6 +21,7 @@ import {
   failureClasses,
   resetFailureTracking,
   summarizeJudgeRun,
+  BATCH_MODE_JUDGE_TIMEOUT_MS,
   COHERENCE_EVAL_NAME,
   RELEVANCE_EVAL_NAME,
   type Turn,
@@ -412,6 +413,14 @@ describe('createBatchProvider at the wall clock', () => {
     expect(client.cancel).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
     expect(provider.failure).toBeUndefined();
+  });
+});
+
+describe('BATCH_MODE_JUDGE_TIMEOUT_MS', () => {
+  // Otherwise a result the provider settles inside the grace is already a
+  // per-call timeout at the judge: the discard the wall-clock change ended.
+  it('outlasts the wall clock, the grace a cancelled batch gets, and the poll that sees it end', () => {
+    expect(BATCH_MODE_JUDGE_TIMEOUT_MS).toBeGreaterThanOrEqual(BATCH_WALL_CLOCK_MS + BATCH_CANCEL_GRACE_MS + BATCH_POLL_INTERVAL_MS);
   });
 });
 
