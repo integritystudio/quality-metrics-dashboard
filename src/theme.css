@@ -1730,3 +1730,141 @@ summary.section-rail {
   gap: 0.5rem;
   margin-left: 0.75rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Admin customer view (ADMIN-CUSTOMER-VIEW): a staff-only clone of the Flutter
+   customer dashboard. One centred column, max width 600 like the Flutter
+   DashboardScaffold (lib/widgets/common/dashboard_scaffold.dart); bar and pill
+   colours follow the dashboard's status tokens. Tones and statuses are data
+   attributes so no component passes a style prop for colour.
+   --------------------------------------------------------------------------- */
+.customer-view {
+  --customer-view-max-width: 600px;
+  --customer-spinner-size: 20px;
+  max-width: var(--customer-view-max-width);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.customer-view__header { display: flex; flex-direction: column; gap: var(--space-1); }
+.customer-view__title { font-size: var(--font-size-xl); font-weight: var(--bold); }
+.customer-view__subtitle { color: var(--text-secondary); }
+.customer-view__org {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+.customer-view__org-name { color: var(--text-secondary); }
+
+/* Hub */
+.customer-org-picker { display: flex; flex-direction: column; gap: var(--space-1); }
+.customer-org-picker__label { font-size: var(--font-size-xs); color: var(--text-secondary); }
+.customer-org-picker__single { margin: 0; }
+.customer-nav { display: flex; flex-direction: column; gap: var(--space-3); }
+.customer-nav-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-primary);
+  font: inherit;
+}
+.customer-nav-card:hover { border-color: var(--border-accent); }
+.customer-nav-card__text { display: flex; flex-direction: column; gap: var(--space-px); }
+.customer-nav-card__label { font-weight: var(--bold); }
+.customer-nav-card__description { font-size: var(--font-size-xs); color: var(--text-secondary); }
+.customer-nav-card__chevron { color: var(--text-secondary); font-size: var(--font-size-xs); }
+
+/* Card */
+.customer-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.customer-card__title { font-size: var(--font-size-md); font-weight: var(--bold); }
+.customer-card__body { display: flex; flex-direction: column; gap: var(--space-3); }
+.customer-card__actions { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); }
+.customer-cta {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  border: var(--border-width-thin) dashed var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-1-5) var(--space-3);
+}
+.customer-row { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--font-size-xs); }
+.customer-row__label { color: var(--text-muted); }
+.customer-row__value { color: var(--text-secondary); }
+
+/* Pills (the Flutter StatusBadge) */
+.customer-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-px) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--light-bold);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+.customer-pill[data-tone="success"] { background: var(--bg-status-healthy); color: var(--status-healthy); }
+.customer-pill[data-tone="warning"] { background: var(--bg-status-warning); color: var(--status-warning); }
+.customer-pill[data-tone="error"]   { background: var(--bg-status-critical); color: var(--status-critical); }
+.customer-pill[data-tone="info"]    { background: var(--accent-alpha-10); color: var(--accent); }
+
+/* Bars: the tone sets the fill colour the mini-bar reads */
+.quota-bar { --bar-fill-color: var(--accent); }
+.quota-bar[data-tone="warning"] { --bar-fill-color: var(--status-warning); }
+.quota-bar[data-tone="danger"]  { --bar-fill-color: var(--status-critical); }
+
+/* Usage bar, status line and alerts */
+.usage-bar { display: flex; flex-direction: column; gap: var(--space-1-5); }
+.usage-bar__line, .usage-bar__status {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.usage-bar__level { font-size: var(--font-size-xs); color: var(--text-secondary); }
+.usage-bar__level[data-status] { color: var(--s-fg); font-weight: var(--bold); }
+.customer-alert {
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  border: var(--border-width-thin) solid var(--s-border);
+  background: var(--s-bg);
+  font-size: var(--font-size-xs);
+}
+.customer-alert__title { color: var(--s-fg); font-weight: var(--bold); margin-bottom: var(--space-1); }
+
+/* Chart and tables */
+.customer-chart__title { font-size: var(--font-size-xs); color: var(--text-muted); margin-bottom: var(--space-2); }
+.customer-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-xs); }
+.customer-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: var(--light-bold);
+  padding: var(--space-1) 0;
+  border-bottom: var(--border-width-thin) solid var(--border-subtle);
+}
+.customer-table td { padding: var(--space-1) 0; color: var(--text-secondary); }
+
+/* Loading indicator (the Flutter CircularProgressIndicator) */
+.customer-spinner {
+  width: var(--customer-spinner-size, 20px);
+  height: var(--customer-spinner-size, 20px);
+  border: var(--border-width-thin) solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: var(--radius-full);
+  animation: customer-spin 0.8s linear infinite;
+  margin-bottom: var(--space-3);
+}
+.customer-spinner--centered { margin: var(--space-6) auto; }
+@keyframes customer-spin { to { transform: rotate(360deg); } }

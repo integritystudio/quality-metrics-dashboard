@@ -1,14 +1,38 @@
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 
 import { API_HOST, API_PORT } from '../src/api/config.js';
 
 // Must match TEST_TOKEN in src/stubs/auth0-e2e.ts
-const MOCK_ME_RESPONSE = {
+export const MOCK_ME_RESPONSE = {
   email: 'test@example.com',
   roles: ['test'],
   permissions: ['dashboard.admin'],
   allowedViews: ['executive', 'operator', 'auditor'],
 };
+
+/**
+ * A staff session (ADMIN-CV-STAFF-GATE): `isStaff` is the only cross-org identity, so the
+ * default mock above — `dashboard.admin`, which every customer org owner holds — must not
+ * reach the admin customer view, and this one must.
+ */
+export const MOCK_STAFF_ME_RESPONSE = {
+  ...MOCK_ME_RESPONSE,
+  activeOrg: 'f4286657-da73-4174-9e49-937f1bb6097f',
+  memberships: [],
+  role: 'owner',
+  isStaff: true,
+};
+
+/** Replace the `/api/me` answer for one test; a later route wins over the fixture's. */
+export async function mockMe(page: Page, body: unknown): Promise<void> {
+  await page.route('**/api/me', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    })
+  );
+}
 
 const HEALTH_URL = `http://${API_HOST}:${API_PORT}/api/health`;
 
@@ -62,13 +86,7 @@ export const test = base.extend<object, WorkerFixtures>({
     // Mock /api/me so AuthContext.fetchAppSession() resolves with a valid session.
     // The Auth0 stub (active when VITE_E2E=1) calls getAccessTokenSilently() → 'test-token',
     // which AuthContext passes as Bearer to /api/me.
-    await page.route('**/api/me', route =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(MOCK_ME_RESPONSE),
-      })
-    );
+    await mockMe(page, MOCK_ME_RESPONSE);
 
     await use(page);
   },

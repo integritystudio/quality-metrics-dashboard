@@ -52,11 +52,15 @@ export const PageShellPropsSchema = z.object({
   error: z.object({
     message: z.string(),
   }).nullable(),
+  backHref: z.string().optional(),
+  backLabel: z.string().optional(),
   children: z.instanceof(Object), // ReactNode
 });
 
 export type PageShellProps = {
   isLoading: boolean;
   error: { message: string } | null;
+  backHref?: string;
+  backLabel?: string;
   children: ReactNode;
 };

@@ -74,12 +74,15 @@ AUTH0_AUDIENCE = "https://api.integritystudio.dev"
 # under it, obtool-api-dev reads it back as its default scope. Fleet-wide
 # constant — see services/obtool-ingest/wrangler.toml before changing it.
 HOME_ORG_ID = "4fab26df-8675-47b1-9ba3-eae681c1285f"
-# Still empty, and not for the same reason as HOME_ORG_ID was. The production
-# list is ten staff uuids that exist only in project cfrbahzzklwrnmbtqojl; dev
-# has no staff accounts at all (p0-apply-dev.py's STAFF_EMAILS is empty by
-# measurement, not oversight). An empty allowlist means no dev user is staff,
-# which is correct: staff bypass membership checks, and nothing in dev should.
-STAFF_USER_IDS = "[]"
+# Dev-project (tumhmtshahktumhqqamk) ids, not production's — the production ten
+# exist only in cfrbahzzklwrnmbtqojl. Empty until 2026-10-06, when the admin
+# customer view gave dev a reason to have staff: these are the two
+# @integritystudio.ai accounts in the dev project, dev-test@ and dev-signup-test@.
+# The `test+e2e<timestamp>@` rows past e2e runs left are deliberately absent:
+# each run mints a fresh user, so an old id grants nothing, and a reused one
+# would bypass the membership checks the e2e suite asserts on. Same list as
+# api-gateway's [env.dev.vars] STAFF_USER_IDS; change both together.
+STAFF_USER_IDS = '["71226e17-8969-4699-bb77-836ca2351ecf","c93fc459-e2d5-43fb-84b0-6022d32e313f"]'
 # Dev cut over first, deliberately — that is what this environment is for — and
 # the two production workers followed on 2026-09-18 (P7, `f813e0a`), so both
 # blocks now read "true". Flip them separately: dev may lead production again.

@@ -95,6 +95,8 @@ Fire-and-forget writes to `user_activity` (`USER_ACTIVITY_EVENTS` in `src/types/
 
 Admin mutations write to `audit_log`. Frontend: `AdminPage.tsx`, wrapped by `AdminGuard` (`src/App.tsx`).
 
+- **Staff only, enforced elsewhere** (`/admin/customers*`) — the admin customer view (`StaffGuard`, `src/components/StaffGuard.tsx`) is gated on `session.isStaff`, not `dashboard.admin`, and reads api-gateway's `/v1/admin/orgs*` routes directly, which enforce the gateway's own `STAFF_USER_IDS` and write `admin.org_viewed` to `audit_log` there. This worker serves none of its data. See CLAUDE.md § Admin customer view.
+
 - **Org-scoped** (`/api/admin/members`) — bound to `session.activeOrgId`, never a client parameter:
   - `GET /api/admin/members` — list members of the active org
   - `POST /api/admin/members/:userId/role` — change membership role (`member.role_change`)
