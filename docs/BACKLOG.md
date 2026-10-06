@@ -728,7 +728,7 @@ visible only locally. Both closed 2026-10-05; `typecheck:scripts` exits 0.
 |----|-------|----------|-------|
 | ~~JUDGE-CLIENT-TEXTSTREAM~~ | ~~`scripts/judge-anthropic-client.ts` no longer type-checks against the parent's `@types/node` 26.6.3~~ | ~~P3~~ | Done 2026-10-05 — commit c719785. The #101 cast; drop it with undici 8 |
 | ~~SCRIPTS-TYPECHECK-WINDOW~~ | ~~`src/lib/api-client.ts` uses `window`, which the scripts config cannot see~~ | ~~P4~~ | Done 2026-10-05 — commit c348906. `globalThis.localStorage`; pinned by `api-client-storage.test.ts` (2bc97d8) |
-| VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | (review) Blocked on tcad-scraper |
+| ~~VITE-API-URL-DOPPLER~~ | ~~Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads~~ | ~~P4~~ | ⛔ Won't Do 2026-10-05 — the value is read by a separate repo (tcad-scraper), so it is not this app's to remove |
 | ~~LAZY-CHUNK-STALE-AFTER-DEPLOY~~ | ~~A tab open across a deploy fails on its next lazy route with "Failed to fetch dynamically imported module" and shows the error boundary~~ | ~~P3~~ | Done 2026-10-05 — commits 51a4f11, 949eeca. `lazyWithReload` wraps the loader, not `vite:preloadError`, which only Vite's build-time preload helper dispatches |
 
 **LAZY-CHUNK-STALE-AFTER-DEPLOY.** Every deploy replaces the asset manifest, and chunk names carry content hashes, so a shell loaded before the deploy asks for chunk names that no longer exist. With `not_found_handling = "single-page-application"` the Worker answers such a request with `index.html`, the browser rejects HTML as a module, and `RouteErrorFallback` shows "Failed to fetch dynamically imported module". Seen the first time the admin customer view was used in production: a tab from the 03:00Z manual deploy hit the 03:01Z CI redeploy. `WorkflowPage` has been lazy since before this and had the same exposure. *Fix:* catch the failure in the lazy loaders (or at `RouteErrorFallback`) and reload the page once — Vite's `vite:preloadError` event exists for exactly this — guarded against a reload loop. *Acceptance:* a test that a rejected `import()` triggers one reload and a second rejection shows the fallback.
@@ -767,6 +767,8 @@ Acceptance: `typecheck:scripts` reports no error in `src/lib`.
 
 Acceptance: `doppler secrets get VITE_API_URL` fails in every `integrity-studio` config, and tcad-scraper's
 production build still points at its API.
+*Won't Do, 2026-10-05.* tcad-scraper's `deploy.yml` reads the `prd` value, so the key is that repo's
+dependency and is left in place. `stg` no longer holds it; `prd` holds `https://api.alephatx.info/api`.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.8](changelog/3.0.8/CHANGELOG.md) (2026-08-28), which closed
