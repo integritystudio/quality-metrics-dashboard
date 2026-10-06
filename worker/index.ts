@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
@@ -11,6 +11,26 @@ import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/
 import { supabasePost } from '../src/lib/supabase-rest.js';
 
 export type { DashboardPermission, AppSession };
+
+/**
+ * Module-level JWKS cache keyed by AUTH0_DOMAIN.
+ *
+ * `createRemoteJWKSet` maintains its key cache on the returned object, so
+ * creating a new instance per request discards the cache on every call and
+ * causes a JWKS fetch round-trip for every authenticated endpoint. Hoisted
+ * here (keyed by domain to support multi-tenant deployments), the same object
+ * is reused for the isolate lifetime and jose's key cache is preserved.
+ * (Audit finding: dashboard Worker fetches Auth0's JWKS on every request.)
+ */
+const jwksSets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+function getJwks(domain: string): ReturnType<typeof createRemoteJWKSet> {
+  let jwks = jwksSets.get(domain);
+  if (!jwks) {
+    jwks = createRemoteJWKSet(new URL(`https://${domain}/.well-known/jwks.json`));
+    jwksSets.set(domain, jwks);
+  }
+  return jwks;
+}
 
 const Http = {
   Ok: 200,
@@ -309,9 +329,7 @@ app.use('/api/*', async (c, next) => {
   const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
 
   try {
-    const JWKS = createRemoteJWKSet(
-      new URL(`https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`),
-    );
+    const JWKS = getJwks(c.env.AUTH0_DOMAIN);
     let jwtPayload: Record<string, unknown>;
     try {
       const { payload } = await jwtVerify(jwt, JWKS, {
@@ -319,7 +337,18 @@ app.use('/api/*', async (c, next) => {
         audience: c.env.AUTH0_AUDIENCE,
       });
       jwtPayload = payload;
-    } catch {
+    } catch (err) {
+      // A JWKS fetch failure is a transient upstream problem — return 503 so
+      // the client retries instead of ending the session. JWT validation
+      // failures (wrong signature, wrong issuer, expired) are 401. So is
+      // JWKSNoMatchingKey: jose raises it after refetching the key set, so it
+      // means the token's kid is not Auth0's (another tenant, or forged), not
+      // that Auth0 is unreachable.
+      if (err instanceof joseErrors.JWKSTimeout ||
+          (err instanceof Error && err.message.includes('Failed to fetch'))) {
+        console.error('[auth] JWKS fetch failed:', err instanceof Error ? err.message : String(err));
+        return c.json({ error: 'Authentication service unavailable' }, 503);
+      }
       return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
     }
     const auth0Id = typeof jwtPayload['sub'] === 'string' ? jwtPayload['sub'] : null;
