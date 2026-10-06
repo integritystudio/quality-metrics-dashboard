@@ -71,6 +71,9 @@ jobs:
           export VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --project integrity-studio --config prd --plain)
           export VITE_AUTH0_CLIENT_ID=$(doppler secrets get VITE_AUTH0_CLIENT_ID --project integrity-studio --config prd --plain)
           export VITE_AUTH0_AUDIENCE=$(doppler secrets get VITE_AUTH0_AUDIENCE --project integrity-studio --config prd --plain)
+          # api-gateway, which the admin customer view reads cross-origin (not a worker URL:
+          # the SPA's own /api stays same-origin). Doppler prd holds the production gateway.
+          export VITE_API_GATEWAY_URL=$(doppler secrets get VITE_API_GATEWAY_URL --project integrity-studio --config prd --plain)
           npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
