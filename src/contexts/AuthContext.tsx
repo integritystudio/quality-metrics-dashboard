@@ -8,6 +8,9 @@ import { apiFetch } from '../lib/api-client.js';
 /** sessionStorage key used to prevent duplicate login events on page refresh. */
 const SESSION_LOGIN_KEY = 'obs:login_recorded';
 
+/** Rejection reason when Auth0 resolves without a token (typed `string | undefined` since auth0-react 2.28). */
+const MISSING_ACCESS_TOKEN_ERROR = 'Auth0 returned no access token';
+
 interface AuthContextValue {
   session: AppSession | null;
   isLoading: boolean;
@@ -47,10 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AppSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const getAccessToken = useCallback(
-    () => getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } }),
-    [getAccessTokenSilently],
-  );
+  const getAccessToken = useCallback(async (): Promise<string> => {
+    const token = await getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } });
+    if (!token) throw new Error(MISSING_ACCESS_TOKEN_ERROR);
+    return token;
+  }, [getAccessTokenSilently]);
 
   useEffect(() => {
     if (auth0Loading) return;
