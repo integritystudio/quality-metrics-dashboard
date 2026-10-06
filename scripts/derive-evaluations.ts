@@ -29,9 +29,10 @@ import { readdirSync } from 'fs';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,
+  loadCalibrationState,
+  saveCalibrationState,
   shouldRecalibrate,
 } from '../../src/lib/quality/qfe-percentiles.js';
-import { readCalibrationState, writeCalibrationState } from './calibration-store.js';
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
@@ -684,43 +685,6 @@ export function splitAtRepostFloor(records: readonly EvalRecord[]): { toPost: Ev
   return { toPost, heldBack };
 }
 
-/**
- * Calibration step: per-metric percentile distributions over every record
- * derived, handed to sync-to-kv through `calibration-store.ts`, which is the
- * one place that says where the state is kept. The state is rewritten only
- * when a distribution has drifted (`shouldRecalibrate`), so `lastCalibrated`
- * does not advance on a stable run.
- */
-export function recalibrate(
-  evals: readonly Pick<EvalRecord, 'evaluationName' | 'scoreValue'>[],
-  opts: { dryRun: boolean; now: Date },
-): void {
-  const scoresByMetric: Record<string, number[]> = {};
-  for (const ev of evals) {
-    const metricScores = scoresByMetric[ev.evaluationName] ??= [];
-    if (Number.isFinite(ev.scoreValue)) metricScores.push(ev.scoreValue);
-  }
-
-  const newDistributions = computeCalibrationDistributions(scoresByMetric);
-  if (Object.keys(newDistributions).length === 0) return;
-  const previousState = readCalibrationState();
-  const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
-  // psiValues reflects PSI at the time of last write (when shouldWrite: true),
-  // not from every check — stable runs don't update the file.
-  if (shouldWrite && opts.dryRun) {
-    console.log('[dry-run] would update .calibration-state.json');
-  } else if (shouldWrite) {
-    writeCalibrationState({
-      lastCalibrated: opts.now.toISOString(),
-      distributions: newDistributions,
-      psiValues,
-      rawScores: Object.fromEntries(
-        Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
-      ),
-    });
-  }
-}
-
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dateScope = resolveDateScope(argv);
@@ -769,7 +733,33 @@ async function main(): Promise<void> {
     process.exitCode = DERIVE_EXIT_POST_FAILED;
   }
 
-  recalibrate(allEvals, { dryRun, now: new Date() });
+  // Calibration step: compute per-metric percentile distributions
+  // and persist to .calibration-state.json for the dashboard API to consume.
+  const scoresByMetric: Record<string, number[]> = {};
+  for (const ev of allEvals) {
+    const metricScores = scoresByMetric[ev.evaluationName] ??= [];
+    if (Number.isFinite(ev.scoreValue)) metricScores.push(ev.scoreValue);
+  }
+
+  const newDistributions = computeCalibrationDistributions(scoresByMetric);
+  if (Object.keys(newDistributions).length > 0) {
+    const previousState = loadCalibrationState(TELEMETRY_DIR);
+    const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
+    // psiValues reflects PSI at the time of last write (when shouldWrite: true),
+    // not from every check — stable runs don't update the file.
+    if (shouldWrite && dryRun) {
+      console.log('[dry-run] would update .calibration-state.json');
+    } else if (shouldWrite) {
+      saveCalibrationState(TELEMETRY_DIR, {
+        lastCalibrated: new Date().toISOString(),
+        distributions: newDistributions,
+        psiValues,
+        rawScores: Object.fromEntries(
+          Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
+        ),
+      });
+    }
+  }
 
   const byName = new Map<string, number>();
   for (const ev of inScope) {

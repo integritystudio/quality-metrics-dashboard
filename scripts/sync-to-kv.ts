@@ -40,9 +40,9 @@ import {
 } from '../../src/lib/quality/qfe-backtest.js';
 import {
   computePercentileDistribution,
+  loadCalibrationState,
   type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
-import { calibrationStalenessWarning, readCalibrationState } from './calibration-store.js';
 import { computeMultiAgentEvaluation } from '../../src/lib/quality/quality-multi-agent.js';
 import { buildWorkflowGraph } from '../src/lib/workflow-graph.js';
 import {
@@ -245,25 +245,6 @@ export function buildCalibrationEntry(
     lastCalibrated: state.lastCalibrated,
   };
   return { key: 'meta:calibration', value: toKVValue(payload) };
-}
-
-/**
- * The home org's `meta:calibration` entry, from the state derive wrote.
- *
- * Read through `calibration-store.ts`, never from a directory named here: this
- * script read its own directory from 2026-04-19, derive wrote another, and the
- * entry was silently absent from every run (CALIBRATION-READ-WRONG-DIR).
- *
- * A missing or stale state is warned about, and a stale one is still
- * published. Its age is not proof it is wrong, since derive rewrites it only on
- * drift, and an entry this run stops computing is pruned from KV, so
- * withholding it would delete the calibration the dashboard has.
- */
-export function homeCalibrationEntry(now: Date): KVEntry | null {
-  const state = readCalibrationState();
-  const warning = calibrationStalenessWarning(state, now.getTime());
-  if (warning) console.warn(`[sync-to-kv] WARNING: ${warning}`);
-  return buildCalibrationEntry(state);
 }
 
 const TRACE_PRIORITY_WEIGHTS = {
@@ -1215,7 +1196,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   }
 
   // Compute degradation signals for all periods
-  // Cloud backend has no local state dir; use the scripts directory for the degradation state file.
+  // Cloud backend has no local state dir; use the scripts directory for degradation/calibration state files.
   // The sidecar state is the owner's own (single-tenant history) — non-home orgs compute
   // signals statelessly (no cross-run breach continuity) and skip calibration.
   const stateDir = isHome ? (SCRIPT_DIR ?? '') : '';
@@ -1238,8 +1219,8 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   degradationState.lastRun = now.toISOString();
   if (stateDir && !dryRun) saveDegradationState(stateDir, degradationState);
 
-  // Calibration is derive's state, not a sidecar of this script, so it does not come from stateDir.
-  const calibrationEntry = isHome ? homeCalibrationEntry(now) : null;
+  const calibrationState = stateDir ? loadCalibrationState(stateDir) : null;
+  const calibrationEntry = buildCalibrationEntry(calibrationState);
   if (calibrationEntry) entries.push(calibrationEntry);
 
   const thirtyDaysAgo = new Date(now.getTime() - MAX_DAYS_MS);
