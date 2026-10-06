@@ -17,6 +17,9 @@ import app from '../index.js';
 const MOCK_AUTH0_ID = 'auth0|test-agents-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000003';
 const AGENTS_PERMISSIONS = ['dashboard.read', 'dashboard.agents.read'];
+const READ_ONLY_PERMISSIONS = ['dashboard.read'];
+/** The role's permissions for the next request; reset to AGENTS_PERMISSIONS before each test. */
+let rolePermissions = AGENTS_PERMISSIONS;
 const AGENT_ID = 'code-reviewer';
 const SESSION_ID = 'session-abc123';
 
@@ -51,7 +54,7 @@ function withAgentsAuth(url: string): Promise<Response> {
   }
   if (url.includes('/rest/v1/user_roles') && url.includes('roles(name,permissions)')) {
     return Promise.resolve(
-      new Response(JSON.stringify([{ roles: { name: 'viewer', permissions: AGENTS_PERMISSIONS } }]), { status: 200 }),
+      new Response(JSON.stringify([{ roles: { name: 'viewer', permissions: rolePermissions } }]), { status: 200 }),
     );
   }
   return Promise.resolve(new Response(null, { status: 200 }));
@@ -61,6 +64,7 @@ let mockExecutionCtx: { waitUntil: Mock<ExecutionContext['waitUntil']>; passThro
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  rolePermissions = AGENTS_PERMISSIONS;
   const jose = vi.mocked(await import('jose'));
   jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
   vi.stubGlobal('fetch', vi.fn(withAgentsAuth));
@@ -160,5 +164,23 @@ describe('/api/agents/:sessionId/graph payload', () => {
     const res = await get(`/api/agents/${SESSION_ID}/graph`);
 
     expect(res.status).toBe(404);
+  });
+
+  it('answers 403, without reading the session, to a role lacking dashboard.agents.read', async () => {
+    rolePermissions = READ_ONLY_PERMISSIONS;
+    mockKV.get.mockResolvedValue({ workflowGraph: graph, multiAgentEvaluation });
+
+    const res = await get(`/api/agents/${SESSION_ID}/graph`);
+
+    expect(res.status).toBe(403);
+    expect(kvKeys()).not.toContain(`session:${SESSION_ID}`);
+  });
+
+  it('answers 400 to a session id with characters outside the id pattern', async () => {
+    mockKV.get.mockResolvedValue(null);
+
+    const res = await get('/api/agents/bad%20id/graph');
+
+    expect(res.status).toBe(400);
   });
 });
