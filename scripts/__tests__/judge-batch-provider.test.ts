@@ -409,6 +409,27 @@ describe('createBatchProvider at the wall clock', () => {
     expect(client.create).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves an expired line open, to be abandoned with the rest, as it does a canceled one', async () => {
+    const { client } = fakeClient({
+      statuses: ['in_progress'],
+      afterCancel: ['ended'],
+      results: ([first, second]) => [
+        succeeded(first!.custom_id, 'kept'),
+        { custom_id: second!.custom_id, result: { type: 'expired' } },
+      ],
+    });
+    const provider = await createBatchProvider({ ...SHORT, client });
+
+    const kept = provider.generate('a');
+    const expired = rejection(provider.generate('b'));
+    await runClock(provider.flush());
+
+    expect(await kept).toEqual({ text: 'kept' });
+    const overrun = await expired;
+    expect(overrun).toBeInstanceOf(BatchWallClockExceededError);
+    expect(overrun).toMatchObject({ abandoned: 1 });
+  });
+
   it('abandons every request with the overrun, not a failure, when the ended batch\'s results cannot be read', async () => {
     const { client } = fakeClient({
       statuses: ['in_progress'],
