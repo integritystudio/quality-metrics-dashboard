@@ -5,6 +5,14 @@ import { loadEnv } from 'vite';
 import { parentDistStub } from './vite-plugins.js';
 import { API_HOST, API_PORT } from './src/api/config.js';
 
+/**
+ * data-loader keeps one CloudBackend per test file, so its circuit breaker
+ * carries one test's injected 500s (fixture `failPath`) into the next test and
+ * fails it fast with "circuit breaker is open". Route tests do not exercise the
+ * breaker, so it is held closed for them.
+ */
+const TEST_CIRCUIT_BREAKER_MAX_FAILURES = String(Number.MAX_SAFE_INTEGER);
+
 export default defineConfig(({ command, mode }) => {
   // Merge .env file vars with process.env VITE_* vars (process.env wins — allows CI injection)
   const fileEnv = loadEnv(mode, process.cwd(), 'VITE_');
@@ -65,6 +73,7 @@ export default defineConfig(({ command, mode }) => {
       name: 'src',
       environment: 'jsdom',
       setupFiles: ['./src/__tests__/setup.ts'],
+      env: { CIRCUIT_BREAKER_MAX_FAILURES: TEST_CIRCUIT_BREAKER_MAX_FAILURES },
       exclude: ['node_modules/**', 'scripts/__tests__/**', 'e2e/**', '.claude/worktrees/**'],
     },
   };
