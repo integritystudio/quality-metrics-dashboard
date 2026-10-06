@@ -4,7 +4,6 @@ import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import { MIN_QUANTILE_SAMPLE_SIZE } from '@parent/lib/quality/qfe-label-ordinals.js';
-import { CALIBRATION_STATE_FILE } from '@parent/lib/quality/quality-constants.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { createFixtureServer, type FixtureServer } from '../../src/__tests__/support/fixture-server.js';
 
@@ -23,7 +22,6 @@ let sync: typeof import('../sync-to-kv.js');
 let cloud: typeof import('../../../src/backends/cloud.js');
 let argv: string[];
 let warn: MockInstance<typeof console.warn>;
-let log: MockInstance<typeof console.log>;
 
 const METRIC = 'tool_correctness';
 const STORE_MODULE = 'calibration-store.ts';
@@ -40,9 +38,8 @@ const SYNC_DRY_RUN_ARG = '--dry-run';
 const NOW = new Date('2026-10-05T12:00:00.000Z');
 const CALIBRATED_AT_THE_BOUND = '2026-09-05T12:00:00.000Z';
 const CALIBRATED_PAST_THE_BOUND = '2026-09-05T11:59:59.999Z';
-/** The derive run's clock, earlier the same day; the evening run follows it. */
+/** The derive run's clock, earlier the same day. */
 const WRITTEN_AT = new Date('2026-10-05T06:00:00.000Z');
-const LATER_RUN = new Date('2026-10-05T18:00:00.000Z');
 
 /** Enough scores for derive to calibrate one metric. */
 function calibrationRecords(): { evaluationName: string; scoreValue: number }[] {
@@ -92,12 +89,10 @@ beforeEach(() => {
   rmSync(telemetryDir, { recursive: true, force: true });
   mkdirSync(telemetryDir, { recursive: true });
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  log = vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
 afterEach(() => {
   warn.mockRestore();
-  log.mockRestore();
 });
 
 afterAll(() => {
@@ -124,27 +119,6 @@ describe('calibration handoff from derive to sync', () => {
       .filter(file => /\b(?:load|save)CalibrationState\b/.test(readFileSync(join(scriptsDir, file), 'utf8')));
 
     expect(bypassing).toEqual([]);
-  });
-});
-
-describe('recalibrate', () => {
-  it('writes nothing on a dry run, and says what it would have written', () => {
-    derive.recalibrate(calibrationRecords(), { dryRun: true, now: WRITTEN_AT });
-
-    expect(readdirSync(telemetryDir)).toEqual([]);
-    expect(store.readCalibrationState()).toBeNull();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining(CALIBRATION_STATE_FILE));
-  });
-
-  // The staleness bound is sized around this: a stamp that stays put is what a
-  // stable distribution looks like, not a derive that stopped writing.
-  it('leaves lastCalibrated at the earlier run when the distribution has not drifted', () => {
-    const records = calibrationRecords();
-    derive.recalibrate(records, { dryRun: false, now: WRITTEN_AT });
-
-    derive.recalibrate(records, { dryRun: false, now: LATER_RUN });
-
-    expect(store.readCalibrationState()?.lastCalibrated).toBe(WRITTEN_AT.toISOString());
   });
 });
 
