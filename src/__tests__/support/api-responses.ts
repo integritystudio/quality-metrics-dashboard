@@ -181,37 +181,14 @@ export interface AgentDetailResponse {
   graph: JsonSafe<WorkflowGraph>;
 }
 
-/** `GET /sessions/:sessionId` — only the fields the route tests assert on are named. */
-export interface SessionDetailResponse {
-  sessionId: string;
-  dataSources: {
-    traces: unknown;
-    logs: unknown;
-    evaluations: { count: number; truncated: boolean };
-    total: number;
-  };
-  timespan: unknown;
-  sessionInfo: unknown;
-  tokenTotals: unknown;
-  tokenProgression: unknown;
-  toolUsage: Record<string, number>;
-  mcpUsage: Record<string, number>;
-  spanBreakdown: Record<string, number>;
-  hookLatency: unknown;
-  errors: { byCategory: Record<string, number>; details: unknown[] };
-  agentActivity: unknown;
-  fileAccess: unknown;
-  gitCommits: unknown;
-  alertSummary: unknown;
-  codeStructure: unknown;
-  evaluationBreakdown: unknown;
-  logSummary: {
-    bySeverity: Record<string, number>;
-    logs: Partial<Record<'timestamp' | 'severity' | 'traceId', unknown>>[];
-  };
-  multiAgentEvaluation: unknown;
-  evaluations: WireEvaluation[];
-}
+/*
+ * `GET /sessions/:sessionId` — `SessionDetailResponse` in
+ * `src/hooks/useSessionDetail.ts`, wrapped in `JsonSafe<…>`. Deliberately not
+ * restated here: the hook is the consumer of that payload, so the route test
+ * and the page test read it through one declaration, and a route field the
+ * page cannot see is a typecheck failure rather than a second shape to keep
+ * in step.
+ */
 
 /** `GET /evaluations/trace/:traceId`. */
 export interface TraceEvaluationsResponse {
