@@ -2,16 +2,23 @@ import { useState, Fragment } from 'react';
 import type { EvaluationResult } from '../types.js';
 import {
   createColumnHelper,
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getExpandedRowModel,
+  useTable,
+  tableFeatures,
+  columnFilteringFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
+  rowExpandingFeature,
+  rowSortingFeature,
+  createExpandedRowModel,
+  createFilteredRowModel,
+  createSortedRowModel,
+  sortFn_basic,
+  sortFn_datetime,
   flexRender,
   type SortingState,
   type ColumnFiltersState,
   type ExpandedState,
-  type SortingFn,
+  type SortFn,
   type FilterFn,
 } from '@tanstack/react-table';
 import type { CSSProperties } from 'react';
@@ -52,21 +59,35 @@ const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
   Fail: SCORE_COLORS.failing,
 };
 
-const labelSortFn: SortingFn<EvalRow> = (rowA, rowB) => {
+const features = tableFeatures({
+  columnFilteringFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
+  rowExpandingFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  expandedRowModel: createExpandedRowModel(),
+  sortFns: { basic: sortFn_basic, datetime: sortFn_datetime },
+});
+
+type Features = typeof features;
+
+const labelSortFn: SortFn<Features, EvalRow> = (rowA, rowB) => {
   const a = labelToOrdinal(rowA.original.label ?? 'unknown').ordinal;
   const b = labelToOrdinal(rowB.original.label ?? 'unknown').ordinal;
   return a - b;
 };
 
-const categoryFilterFn: FilterFn<EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) => {
+const categoryFilterFn: FilterFn<Features, EvalRow> = (row, _id, filterValue: LabelFilterCategory[]) => {
   if (filterValue.length === 0) return true;
   const category = ordinalToCategory(labelToOrdinal(row.original.label ?? 'unknown').ordinal);
   return filterValue.includes(category);
 };
 
-const columnHelper = createColumnHelper<EvalRow>();
+const columnHelper = createColumnHelper<Features, EvalRow>();
 
-const columns = [
+const columns = columnHelper.columns([
   columnHelper.display({
     id: 'expand',
     header: '',
@@ -98,7 +119,7 @@ const columns = [
         />
       );
     },
-    sortingFn: 'basic',
+    sortFn: 'basic',
   }),
   columnHelper.accessor('label', {
     header: 'Label',
@@ -111,7 +132,7 @@ const columns = [
         </ColoredChip>
       );
     },
-    sortingFn: labelSortFn,
+    sortFn: labelSortFn,
     filterFn: categoryFilterFn,
   }),
   columnHelper.display({
@@ -157,9 +178,9 @@ const columns = [
         <TimestampCell timestamp={ts} />
       );
     },
-    sortingFn: 'datetime',
+    sortFn: 'datetime',
   }),
-];
+]);
 
 export function evalToRow(e: EvaluationResult): EvalRow {
   return {
@@ -185,8 +206,8 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table returns unstable function refs; React Compiler compatibility is a known upstream issue. Component re-renders on data change so no stale refs escape.
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data: evaluations,
     columns,
     state: { sorting, columnFilters, expanded },
@@ -194,10 +215,6 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
     onColumnFiltersChange: setColumnFilters,
     onExpandedChange: setExpanded,
     getRowCanExpand: () => true,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
   });
 
   const activeCategories: LabelFilterCategory[] =

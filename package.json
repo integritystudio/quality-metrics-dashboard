@@ -37,7 +37,7 @@
     "@auth0/auth0-react": "^2.16.0",
     "@hono/node-server": "^2.0.0",
     "@tanstack/react-query": "^5.95.2",
-    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-table": "^9.2.6",
     "@xyflow/react": "^12.10.1",
     "d3-array": "^3.2.4",
     "d3-scale": "^4.0.2",
