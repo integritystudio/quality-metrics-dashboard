@@ -55,7 +55,7 @@ export interface FixtureServer {
   readonly port: number;
   /** Base URL — set `process.env.OBTOOL_API_URL` to this value. */
   readonly url: string;
-  /** Set evaluation rows returned by the next GET /v1/evaluations. */
+  /** Set evaluation rows returned by GET /v1/evaluations, narrowed by its `evaluationName` param. */
   setEvals(rows: EvalWireRow[]): void;
   /** Set trace span rows returned by the next GET /v1/traces. */
   setTraces(rows: TraceWireRow[]): void;
@@ -77,6 +77,16 @@ export interface FixtureServer {
   close(): Promise<void>;
 }
 
+/** GET /v1/evaluations query param that narrows rows to one metric, as obtool-api applies it. */
+const EVALUATION_NAME_PARAM = 'evaluationName';
+
+/** Case-insensitive, matching obtool-api's SQL LIKE on `evaluation_name`. */
+function filterEvalsByName(rows: EvalWireRow[], name: string | null): EvalWireRow[] {
+  if (!name) return rows;
+  const wanted = name.toLowerCase();
+  return rows.filter((row) => row.evaluation_name.toLowerCase() === wanted);
+}
+
 function pagedBody<T>(rows: T[]): unknown {
   return { data: rows, count: rows.length, hasMore: false };
 }
@@ -91,6 +101,7 @@ export async function createFixtureServer(): Promise<FixtureServer> {
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     const rawPath = req.url ?? '/';
     const path = rawPath.split('?')[0] ?? '/';
+    const query = new URLSearchParams(rawPath.slice(path.length + 1));
     requested.push(path);
 
     for (const fp of failPaths) {
@@ -108,7 +119,7 @@ export async function createFixtureServer(): Promise<FixtureServer> {
       res.end(JSON.stringify({ status: 'ok' }));
     } else if (path === '/v1/evaluations') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(evalRows)));
+      res.end(JSON.stringify(pagedBody(filterEvalsByName(evalRows, query.get(EVALUATION_NAME_PARAM)))));
     } else if (path === '/v1/traces') {
       res.writeHead(200);
       res.end(JSON.stringify(pagedBody(traceRows)));

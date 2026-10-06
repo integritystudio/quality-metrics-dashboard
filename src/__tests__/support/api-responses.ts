@@ -20,11 +20,13 @@ import type { JsonSafe } from '../../api/api-constants.js';
 import type { WorkflowGraph } from '../../types/workflow-graph.js';
 import type {
   CompositeQualityIndex,
+  CorrelationFeature,
   CoverageMatrix,
   EvaluationResult,
   HumanVerificationEvent,
   MetricDetailResult,
   MetricDynamics,
+  MetricTrend,
   MultiAgentEvaluation,
   PercentileDistribution,
   QualityDashboardSummary,
@@ -104,6 +106,17 @@ export interface MetricEvaluationsResponse {
   hasMore: boolean;
 }
 
+/** One `GET /trends/:name` bucket — mirrors the route's `trendData` entries. */
+export interface TrendBucket {
+  startTime: string;
+  endTime: string;
+  count: number;
+  avg: number | null;
+  percentiles: JsonSafe<PercentileDistribution> | null | undefined;
+  trend: JsonSafe<MetricTrend> | null;
+  dynamics: JsonSafe<MetricDynamics> | null;
+}
+
 /** `GET /trends/:name`. */
 export interface TrendDetailResponse {
   metric: string;
@@ -111,7 +124,7 @@ export interface TrendDetailResponse {
   bucketCount: number;
   totalEvaluations: number;
   overallPercentiles: JsonSafe<PercentileDistribution> | null | undefined;
-  trendData: unknown[];
+  trendData: TrendBucket[];
   narrowed: boolean;
 }
 
@@ -217,7 +230,7 @@ export type CoverageResponse = JsonSafe<CoverageMatrix> & { period: string };
 
 /** `GET /correlations`. */
 export interface CorrelationsResponse {
-  correlations: unknown;
+  correlations: CorrelationFeature[];
   metrics: string[];
 }
 
