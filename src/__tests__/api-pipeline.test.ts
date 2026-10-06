@@ -1,26 +1,17 @@
 /**
  * API route tests: /api/pipeline.
  *
- * Approach C — fixture HTTP server. The real data-loader and CloudBackend run;
- * computePipelineView receives an honest Map from loadEvaluationsByMetric.
+ * Approach C — fixture HTTP server. The real data-loader and CloudBackend run,
+ * and so do the parent's computeDashboardSummary and computePipelineView.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer } from './support/fixture-server.js';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createFixtureServer, evalToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 
-vi.mock('../api/parent/quality-visualization.js', () => ({
-  computePipelineView: vi.fn(),
-}));
-vi.mock('../api/parent/quality-metrics.js', () => ({
-  computeDashboardSummary: vi.fn(),
-}));
-
 import { pipelineRoutes } from '../api/routes/pipeline.js';
-import { computePipelineView } from '../api/parent/quality-visualization.js';
-import { computeDashboardSummary } from '../api/parent/quality-metrics.js';
 import type { PipelineResult } from '../types.js';
-import { makeDashboardSummary } from './support/fixtures.js';
+import { recentEvalNanos } from './support/fixtures.js';
 
 let fixture: FixtureServer;
 
@@ -34,20 +25,24 @@ afterAll(async () => {
   await fixture.close();
 });
 
-function makePipelineResult(): PipelineResult {
-  return { stages: [], dropoffs: [], overallConversionPercent: 0 };
-}
+type PipelineResponse = PipelineResult & { period: string };
+
+/** An `llm` evaluation counts as evidence; the summary drops makeEvaluation's `seed` default. */
+const EVIDENCE_EVALUATOR_TYPE = 'llm';
+/** Above relevance's warning threshold, so no stage reaches `alerted`. */
+const HEALTHY_SCORES = [0.9, 0.95, 0.92];
 
 beforeEach(() => {
-  vi.clearAllMocks();
   fixture.reset();
+  fixture.setEvals(HEALTHY_SCORES.map((scoreValue, i) => evalToWire({
+    evaluationName: 'relevance',
+    scoreValue,
+    evaluatorType: EVIDENCE_EVALUATOR_TYPE,
+    timestamp: recentEvalNanos(),
+  }, i + 1)));
 });
 
 describe('GET /pipeline', () => {
-  beforeEach(() => {
-    vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary({ metrics: [] }));
-    vi.mocked(computePipelineView).mockReturnValue(makePipelineResult());
-  });
 
   it('rejects invalid period with 400', async () => {
     const res = await pipelineRoutes.request('/pipeline?period=99d');
@@ -57,23 +52,27 @@ describe('GET /pipeline', () => {
   it('returns 200 with period and pipeline data', async () => {
     const res = await pipelineRoutes.request('/pipeline?period=7d');
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toHaveProperty('period');
-    expect(body).toHaveProperty('stages');
+    const body = await res.json() as PipelineResponse;
+    expect(body.period).toBe('7d');
+    expect(body.stages.map((stage) => stage.name)).toEqual(['ingested', 'scored', 'evaluated', 'alerted']);
   });
 
-  it('calls computeDashboardSummary then computePipelineView', async () => {
-    await pipelineRoutes.request('/pipeline?period=7d');
-    expect(vi.mocked(computeDashboardSummary)).toHaveBeenCalled();
-    expect(vi.mocked(computePipelineView)).toHaveBeenCalled();
+  it('carries every served evaluation through to evaluated, none alerted', async () => {
+    const res = await pipelineRoutes.request('/pipeline?period=7d');
+    const body = await res.json() as PipelineResponse;
+    const entryCounts = Object.fromEntries(body.stages.map((stage) => [stage.name, stage.entryCount]));
+    expect(entryCounts).toEqual({ ingested: 3, scored: 3, evaluated: 3, alerted: 0 });
+  });
+
+  it('reports empty stages when there is no data', async () => {
+    fixture.reset();
+    const res = await pipelineRoutes.request('/pipeline?period=7d');
+    const body = await res.json() as PipelineResponse;
+    expect(body.stages.every((stage) => stage.entryCount === 0)).toBe(true);
   });
 
   it('accepts all valid periods', async () => {
     for (const period of ['24h', '7d', '30d']) {
-      vi.clearAllMocks();
-      fixture.reset();
-      vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary({ metrics: [] }));
-      vi.mocked(computePipelineView).mockReturnValue(makePipelineResult());
       const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
       expect(res.status).toBe(200);
     }

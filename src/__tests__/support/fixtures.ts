@@ -15,7 +15,6 @@
 import type {
   CompositeQualityIndex,
   EvaluationResult,
-  QualityDashboardSummary,
   QualityMetricResult,
 } from '../../types.js';
 
@@ -56,25 +55,6 @@ export function makeMetricResult(overrides: Partial<QualityMetricResult> = {}): 
     sampleCount: 1,
     alerts: [],
     status: 'healthy',
-    ...overrides,
-  };
-}
-
-export function makeDashboardSummary(
-  overrides: Partial<QualityDashboardSummary> = {},
-): QualityDashboardSummary {
-  return {
-    overallStatus: 'healthy',
-    metrics: [makeMetricResult()],
-    alerts: [],
-    summary: {
-      totalMetrics: 1,
-      healthyMetrics: 1,
-      warningMetrics: 0,
-      criticalMetrics: 0,
-      noDataMetrics: 0,
-    },
-    timestamp: '2026-01-15T12:00:00.000Z',
     ...overrides,
   };
 }
