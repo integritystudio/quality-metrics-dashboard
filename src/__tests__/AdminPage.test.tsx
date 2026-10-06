@@ -82,6 +82,8 @@ const TEST_KEY: ApiKey = {
   last_used_at: null,
 };
 const NEW_TOKEN = 'obtk_newtoken00000000000000000000000000000000000000000000';
+const NEW_KEY_ID = 'e0000000-0000-4000-8000-000000000002';
+const NEW_PREFIX = 'newkey01';
 
 function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]; keys?: ApiKey[] }) {
   const state = {
@@ -106,14 +108,14 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
       method: 'POST',
       pattern: /^\/api\/admin\/keys\/([^/]+)\/rotate$/,
       handle: ([keyId]) => {
-        // Keep the same key id so React reuses the component instance and the
-        // newToken local state (with the copy button) persists after the list
-        // refetches. Production behaviour has a new id, but that is tested via
-        // the worker test; the UI test verifies that the copy-once UX works.
-        state.keys = state.keys.map((k) =>
-          k.id === keyId ? { ...k, prefix: 'newkey01' } : k,
-        );
-        return { token: NEW_TOKEN, keyId, previousKeyId: keyId, prefix: 'newkey01', tier: 'standard' };
+        // As in production: the old key is revoked, so the active-key list
+        // drops it and gains the new key under a new id. A fake that kept the
+        // old id let the token survive in its row here while production lost it.
+        const old = state.keys.find((k) => k.id === keyId)!;
+        state.keys = state.keys
+          .filter((k) => k.id !== keyId)
+          .concat({ ...old, id: NEW_KEY_ID, prefix: NEW_PREFIX });
+        return { token: NEW_TOKEN, keyId: NEW_KEY_ID, previousKeyId: keyId, prefix: NEW_PREFIX, tier: 'standard' };
       },
     },
     {
@@ -457,17 +459,64 @@ describe('AdminPage — API keys section (org mode)', () => {
     expect(screen.getByRole('button', { name: 'Rotate' })).toBeTruthy();
   });
 
-  it('shows the new token once after a confirmed rotation', async () => {
+  it('keeps the full new token and a Copy button once the list reloads without the rotated key', async () => {
     startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderAdminPage({ orgRole: 'admin' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
 
-    expect(await screen.findByText(NEW_TOKEN.slice(0, 16) + '…')).toBeTruthy();
+    // The new key's row means the list has refetched and the rotated row is gone.
+    expect(await screen.findByText(`${NEW_PREFIX}…`)).toBeTruthy();
+    expect(screen.getByText(NEW_TOKEN)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
-    // Rotate button is gone — replaced by the token display
-    expect(screen.queryByRole('button', { name: 'Rotate' })).toBeNull();
+  });
+
+  describe('the new key panel', () => {
+    function stubClipboard(writeText: (text: string) => Promise<void>) {
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    async function rotate() {
+      startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      await renderAdminPage({ orgRole: 'admin' });
+      fireEvent.click(screen.getByRole('button', { name: 'Rotate' }));
+      await screen.findByText(NEW_TOKEN);
+    }
+
+    it('copies the full token to the clipboard', async () => {
+      const writeText = vi.fn(() => Promise.resolve());
+      stubClipboard(writeText);
+      await rotate();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy();
+      expect(writeText).toHaveBeenCalledWith(NEW_TOKEN);
+    });
+
+    it('says so when the clipboard refuses, and leaves the token on screen to copy by hand', async () => {
+      stubClipboard(() => Promise.reject(new DOMException('denied', 'NotAllowedError')));
+      await rotate();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+      expect(await screen.findByText(/Copy failed/)).toBeTruthy();
+      expect(screen.getByText(NEW_TOKEN)).toBeTruthy();
+    });
+
+    it('removes the token from the page once dismissed', async () => {
+      await rotate();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+      expect(screen.queryByText(NEW_TOKEN)).toBeNull();
+    });
   });
 
   it('sends the rotation to the correct route with org header', async () => {

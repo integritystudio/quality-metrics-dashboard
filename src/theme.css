@@ -438,6 +438,16 @@ body {
 /* Turn timeline: turns of the agent named by ?agent= (a workflow graph node click) */
 .turn-card[data-focused] { box-shadow: 0 0 0 3px var(--accent); }
 
+/* Admin: a rotated key's new token, held above the key table until dismissed */
+.card.new-key-panel,
+.card.new-key-panel:hover { border-color: var(--accent); }
+.new-key-token {
+  display: block;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 /* Histogram */
 .histogram {
   display: flex;

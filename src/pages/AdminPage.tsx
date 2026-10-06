@@ -14,6 +14,15 @@ import { RotateKeyResponseSchema } from '../lib/validation/auth-schemas.js';
 
 // The key was rotated, so the old one no longer works, but the response carried no token to show.
 const ERR_ROTATE_NO_TOKEN = 'Key rotated, but no new token was returned. Rotate it again to get one.';
+const NEW_KEY_NOTICE = 'Copy it now: it is not shown again, and the old key has stopped working.';
+const ERR_COPY_FAILED = 'Copy failed. Select the key above and copy it manually.';
+const COPY_FEEDBACK_MS = 2000;
+
+/** A rotation's new token, held above the key table: the rotated row leaves the list once it refetches. */
+interface RotatedKey {
+  previousPrefix: string;
+  token: string;
+}
 
 const ADMIN_TABLE_COLUMNS = [
   { label: 'Email', align: 'left' as const },
@@ -290,19 +299,50 @@ function MemberRow({
   );
 }
 
+/** The full new token with a copy button, until the admin dismisses it or leaves the page. */
+function NewKeyPanel({ rotated, onDismiss }: { rotated: RotatedKey; onDismiss: () => void }) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(rotated.token);
+      setCopyState('copied');
+      setTimeout(() => setCopyState('idle'), COPY_FEEDBACK_MS);
+    } catch {
+      setCopyState('failed');
+    }
+  }
+
+  return (
+    <div className="card new-key-panel mb-4" role="status">
+      <div className="text-xs mb-3">
+        New key replacing <span className="mono-sm">{rotated.previousPrefix}…</span>. {NEW_KEY_NOTICE}
+      </div>
+      <code className="new-key-token">{rotated.token}</code>
+      <div className="inline-flex-center gap-4 mt-2">
+        <button className="btn-sm" onClick={() => void handleCopy()}>
+          {copyState === 'copied' ? 'Copied' : 'Copy'}
+        </button>
+        <button className="btn-sm" onClick={onDismiss}>Done</button>
+      </div>
+      {copyState === 'failed' && <div className="text-xs text-error mt-1">{ERR_COPY_FAILED}</div>}
+    </div>
+  );
+}
+
 function KeyRow({
   apiKey,
   onMutationStart,
   onMutationEnd,
+  onRotated,
 }: {
   apiKey: ApiKey;
   onMutationStart: () => string;
   onMutationEnd: (id: string) => void;
+  onRotated: (rotated: RotatedKey) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [newToken, setNewToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const adminFetch = useAdminFetch();
 
   async function handleRotate() {
@@ -311,7 +351,6 @@ function KeyRow({
     )) return;
     setBusy(true);
     setError(null);
-    setNewToken(null);
     const mutationId = onMutationStart();
     try {
       const res = await adminFetch(`/api/admin/keys/${apiKey.id}/rotate`, 'POST');
@@ -320,7 +359,7 @@ function KeyRow({
         setError(text || 'Failed to rotate key');
       } else {
         const parsed = RotateKeyResponseSchema.safeParse(await res.json().catch(() => null));
-        if (parsed.success) setNewToken(parsed.data.token);
+        if (parsed.success) onRotated({ previousPrefix: apiKey.prefix, token: parsed.data.token });
         else setError(ERR_ROTATE_NO_TOKEN);
       }
     } catch {
@@ -328,17 +367,6 @@ function KeyRow({
     } finally {
       setBusy(false);
       onMutationEnd(mutationId);
-    }
-  }
-
-  async function handleCopy() {
-    if (!newToken) return;
-    try {
-      await navigator.clipboard.writeText(newToken);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard unavailable */
     }
   }
 
@@ -360,18 +388,9 @@ function KeyRow({
         {apiKey.last_used_at ? format(new Date(apiKey.last_used_at), 'PP') : '—'}
       </td>
       <td className="cell-pad text-right">
-        {newToken ? (
-          <div className="inline-flex-center gap-4">
-            <span className="mono-sm text-xs">{newToken.slice(0, 16)}…</span>
-            <button className="btn-sm" onClick={() => void handleCopy()}>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-        ) : (
-          <button className="btn-sm" onClick={() => void handleRotate()} disabled={busy}>
-            Rotate
-          </button>
-        )}
+        <button className="btn-sm" onClick={() => void handleRotate()} disabled={busy}>
+          Rotate
+        </button>
         {error && <div className="text-xs text-error mt-1">{error}</div>}
       </td>
     </tr>
@@ -380,8 +399,10 @@ function KeyRow({
 
 /**
  * Org-scoped key management: lists the caller's active keys for their active
- * org, and lets them rotate each one. New token is shown exactly once and is
- * not kept in state beyond the session or in localStorage.
+ * org, and lets them rotate each one. A new token is held in this section's
+ * state, never in localStorage or the query cache, until it is dismissed or the
+ * page is left. It lives here, not in its row, because the list refetches after
+ * a rotation and the revoked key's row leaves it.
  */
 function ApiKeysSection({
   onMutationStart,
@@ -394,10 +415,12 @@ function ApiKeysSection({
     KEYS_QUERY_KEY,
     () => `/api/admin/keys`,
   );
+  const [rotated, setRotated] = useState<RotatedKey | null>(null);
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
       <DetailPageHeader title="API Keys" />
+      {rotated && <NewKeyPanel key={rotated.token} rotated={rotated} onDismiss={() => setRotated(null)} />}
       <div className="card">
         {!keys || keys.length === 0 ? (
           <div className="empty-state text-secondary">No active keys found.</div>
@@ -412,6 +435,7 @@ function ApiKeysSection({
                     apiKey={k}
                     onMutationStart={onMutationStart}
                     onMutationEnd={onMutationEnd}
+                    onRotated={setRotated}
                   />
                 ))}
               </tbody>
