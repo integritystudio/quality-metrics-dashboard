@@ -25,63 +25,28 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type { EvaluationRow, LogRow, TraceSpan } from '@obtool-api/types';
 
 // ── Wire-format row types ─────────────────────────────────────────────────────
+// Typed off obtool-api's own response rows (type-only import, erased at runtime),
+// so a column the API adds or retypes fails typecheck here instead of surfacing
+// as a 500 when CloudBackend's schema rejects the canned payload.
 
 /** Evaluation row as served by GET /v1/evaluations (snake_case). */
-export interface EvalWireRow {
-  org_id?: string;
-  id?: number;
-  timestamp_ns: string;
-  evaluation_name: string;
-  evaluator?: string;
-  evaluator_type?: string;
-  score_value?: number;
-  score_label?: string;
-  score_unit?: string;
-  explanation?: string;
-  error_type?: string | null;
-  trace_id?: string;
-  span_id?: string;
-  session_id?: string;
-  response_id?: string;
-  agent_id?: string;
-  agent_name?: string;
-  trajectory_length?: number;
-  service_name?: string;
-  source?: string;
-  attributes?: string;
-  r2_key?: string;
-  batch_index?: number;
-}
+export type EvalWireRow = EvaluationRow;
 
-/** Trace span row as served by GET /v1/traces (snake_case). */
-export interface TraceWireRow {
-  trace_id: string;
-  span_id: string;
-  parent_span_id?: string | null;
-  name?: string;
-  kind?: string;
-  start_time_ns: string;
-  end_time_ns?: string;
-  status_code?: string;
-  status_message?: string;
-  service_name?: string;
-  session_id?: string;
-  attributes?: string;
-  r2_key?: string;
-}
+/**
+ * Trace span row as served by GET /v1/traces (snake_case). `kind` and
+ * `status_code` also accept the enum names CloudBackend still decodes from rows
+ * flushed before ingest normalized them to ints.
+ */
+export type TraceWireRow = Omit<TraceSpan, 'kind' | 'status_code'> & {
+  kind: TraceSpan['kind'] | string;
+  status_code: TraceSpan['status_code'] | string;
+};
 
 /** Log record row as served by GET /v1/logs (snake_case). */
-export interface LogWireRow {
-  trace_id?: string;
-  span_id?: string;
-  timestamp_ns: string;
-  severity_number?: number;
-  severity_text?: string;
-  body?: string;
-  attributes?: string;
-}
+export type LogWireRow = LogRow;
 
 // ── Fixture server ────────────────────────────────────────────────────────────
 
@@ -188,6 +153,16 @@ export async function createFixtureServer(): Promise<FixtureServer> {
 const NANOS_PER_MS = 1_000_000n;
 const FIXTURE_ORG_ID = 'test-org';
 const FIXTURE_R2_KEY = 'fixture/r2/key';
+const FIXTURE_SERVICE_NAME = 'claude-code';
+const FIXTURE_EVAL_SOURCE = 'fixture';
+const FIXTURE_TIMESTAMP_NS = 1737000000000000000n;
+const FIXTURE_LOG_TIMESTAMP = '2026-01-01T00:00:00.000Z';
+const FIXTURE_LOG_SEVERITY = 'INFO';
+/** OTLP SeverityNumber for INFO. */
+const FIXTURE_LOG_SEVERITY_NUMBER = 9;
+const EMPTY_ATTRIBUTES = '{}';
+/** obtool-api serves '' (never null) for absent evaluation trace/span/session ids — migration 0006. */
+const ABSENT_EVAL_ID = '';
 
 /**
  * Convert an `EvaluationResult`-shaped object to the wire row that
@@ -213,18 +188,26 @@ export function evalToWire(
   return {
     org_id: FIXTURE_ORG_ID,
     id,
-    timestamp_ns: String(e.timestamp ?? 1737000000000000000n),
+    timestamp_ns: String(e.timestamp ?? FIXTURE_TIMESTAMP_NS),
     evaluation_name: e.evaluationName ?? 'relevance',
-    evaluator: e.evaluator,
+    evaluator: e.evaluator ?? ABSENT_EVAL_ID,
     evaluator_type: e.evaluatorType ?? 'seed',
     score_value: e.scoreValue ?? 0.85,
-    score_label: e.scoreLabel,
-    explanation: e.explanation,
-    trace_id: e.traceId,
-    span_id: e.spanId,
-    session_id: e.sessionId,
-    agent_name: e.agentName,
-    trajectory_length: e.trajectoryLength,
+    score_label: e.scoreLabel ?? null,
+    score_unit: null,
+    explanation: e.explanation ?? null,
+    error_type: null,
+    judge_model: null,
+    trace_id: e.traceId ?? ABSENT_EVAL_ID,
+    span_id: e.spanId ?? ABSENT_EVAL_ID,
+    session_id: e.sessionId ?? ABSENT_EVAL_ID,
+    response_id: null,
+    agent_id: null,
+    agent_name: e.agentName ?? null,
+    trajectory_length: e.trajectoryLength ?? null,
+    service_name: null,
+    source: FIXTURE_EVAL_SOURCE,
+    attributes: EMPTY_ATTRIBUTES,
     r2_key: FIXTURE_R2_KEY,
     batch_index: 0,
   };
@@ -235,6 +218,7 @@ export function evalToWire(
  * serves and parses back to a `TraceSpan`.
  *
  * `attributes` is JSON-stringified; timestamps stay as decimal bigint strings.
+ * An absent end time is served as the start time (zero duration).
  */
 export function spanToWire(s: {
   traceId?: string;
@@ -251,18 +235,20 @@ export function spanToWire(s: {
 }): TraceWireRow {
   const attrs = { ...(s.attributes ?? {}) };
   if (s.sessionId && !attrs['session.id']) attrs['session.id'] = s.sessionId;
+  const start = s.startTimeUnixNano ?? FIXTURE_TIMESTAMP_NS;
   return {
+    org_id: FIXTURE_ORG_ID,
     trace_id: s.traceId ?? 'trace-001',
     span_id: s.spanId ?? 'span-001',
     parent_span_id: s.parentSpanId ?? null,
     name: s.name ?? 'tool:unknown',
     kind: s.kind ?? 'INTERNAL',
-    start_time_ns: String(s.startTimeUnixNano ?? 1737000000000000000n),
-    end_time_ns: s.endTimeUnixNano !== undefined ? String(s.endTimeUnixNano) : undefined,
+    start_time_ns: String(start),
+    end_time_ns: String(s.endTimeUnixNano ?? start),
     status_code: s.status?.code ?? 'OK',
-    status_message: s.status?.message,
-    service_name: s.serviceName ?? 'claude-code',
-    session_id: (attrs['session.id'] as string | undefined) ?? s.sessionId,
+    status_message: s.status?.message ?? null,
+    service_name: s.serviceName ?? FIXTURE_SERVICE_NAME,
+    session_id: (attrs['session.id'] as string | undefined) ?? s.sessionId ?? null,
     attributes: JSON.stringify(attrs),
     r2_key: FIXTURE_R2_KEY,
   };
@@ -272,20 +258,31 @@ export function spanToWire(s: {
  * Convert a loaded-log-shaped object to the log wire row that CloudBackend
  * parses back to a log record with an ISO timestamp string.
  */
-export function logToWire(l: {
-  timestamp?: string;
-  severity?: string;
-  body?: string;
-  traceId?: string;
-  attributes?: Record<string, unknown>;
-}): LogWireRow {
-  const ts = l.timestamp ?? '2026-01-01T00:00:00.000Z';
+export function logToWire(
+  l: {
+    timestamp?: string;
+    severity?: string;
+    body?: string;
+    traceId?: string;
+    attributes?: Record<string, unknown>;
+  },
+  id = 1,
+): LogWireRow {
+  const ts = l.timestamp ?? FIXTURE_LOG_TIMESTAMP;
   const ms = BigInt(new Date(ts).getTime());
   return {
-    trace_id: l.traceId,
+    org_id: FIXTURE_ORG_ID,
+    id,
     timestamp_ns: String(ms * NANOS_PER_MS),
-    severity_text: l.severity ?? 'INFO',
-    body: l.body,
-    attributes: l.attributes ? JSON.stringify(l.attributes) : undefined,
+    severity_number: FIXTURE_LOG_SEVERITY_NUMBER,
+    severity_text: l.severity ?? FIXTURE_LOG_SEVERITY,
+    body_preview: l.body ?? null,
+    trace_id: l.traceId ?? null,
+    span_id: null,
+    service_name: FIXTURE_SERVICE_NAME,
+    session_id: null,
+    event_name: null,
+    attributes: l.attributes ? JSON.stringify(l.attributes) : EMPTY_ATTRIBUTES,
+    r2_key: FIXTURE_R2_KEY,
   };
 }

@@ -15,9 +15,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "paths": {
-      "@parent/*": ["../dist/*"]
+      "@parent/*": ["../dist/*"],
+      "@obtool-api/types": ["../services/obtool-api/src/types.ts"]
     },
-    "rootDir": "."
+    "rootDir": ".."
   },
   "include": ["src", "worker", "../dist"]
 }
