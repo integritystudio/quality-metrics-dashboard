@@ -2,7 +2,7 @@
  * DR13: Test coverage for TrendChart, TrendSeries, Sparkline, role views, API route validation.
  * Resolves backlog item DR13.
  */
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { Sparkline } from '../components/Sparkline.js';
 import { TrendChart } from '../components/TrendChart.js';
@@ -13,6 +13,8 @@ import { OperatorView } from '../components/views/OperatorView.js';
 import type { MetricTrend, MetricDynamics, ExecutiveView as ExecutiveViewType } from '../types.js';
 import type { TrendBucket } from '../hooks/useTrend.js';
 import type { ErrorResponse, TrendDetailResponse } from './support/api-responses.js';
+import { createFixtureServer } from './support/fixture-server.js';
+import type { FixtureServer } from './support/fixture-server.js';
 
 // Note: ResizeObserver stub is installed globally in setup.ts
 
@@ -493,34 +495,19 @@ describe('OperatorView', () => {
 });
 
 
-vi.mock('../api/parent/quality-metrics.js', () => ({
-  getQualityMetric: vi.fn((name: string) => name === 'relevance' ? { aggregations: ['avg'] } : null),
-  computeMetricDetail: vi.fn(() => null),
-  computeAggregations: vi.fn(() => ({})),
-  QUALITY_METRICS: { relevance: { aggregations: ['avg'] } },
-}));
-
-vi.mock('../api/parent/qfe-dynamics.js', () => ({
-  computeMetricDynamics: vi.fn(() => null),
-}));
-
-vi.mock('../api/parent/qfe-percentiles.js', () => ({
-  computePercentileDistribution: vi.fn(() => null),
-}));
-
-vi.mock('../api/parent/error-sanitizer.js', () => ({
-  sanitizeErrorForResponse: vi.fn((e: unknown) => String(e)),
-}));
-
-vi.mock('../api/data-loader.js', () => ({
-  loadEvaluationsForMetric: vi.fn(() => Promise.resolve([])),
-}));
-
 describe('trends API route validation', () => {
-  // ESM caches the module — trendRoutes is a singleton across all loadTrendRoutes() calls.
-  // Reset mock call counts after each test; implementations are preserved by vi.clearAllMocks().
-  afterEach(() => {
-    vi.clearAllMocks();
+  // The real route, data-loader and parent computations, against a fixture
+  // server that serves no evaluations.
+  let fixture: FixtureServer;
+
+  beforeAll(async () => {
+    fixture = await createFixtureServer();
+    process.env.OBTOOL_API_URL = fixture.url;
+  });
+
+  afterAll(async () => {
+    delete process.env.OBTOOL_API_URL;
+    await fixture.close();
   });
 
   async function loadTrendRoutes() {
