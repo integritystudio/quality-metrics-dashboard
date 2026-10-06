@@ -74,6 +74,11 @@ jobs:
           # api-gateway, which the admin customer view reads cross-origin (not a worker URL:
           # the SPA's own /api stays same-origin). Doppler prd holds the production gateway.
           export VITE_API_GATEWAY_URL=$(doppler secrets get VITE_API_GATEWAY_URL --project integrity-studio --config prd --plain)
+          # Supabase, read directly from the browser with the Auth0 ID token (CR62). The anon
+          # key is the publishable one; RLS decides what the token sees. Leave either unset and
+          # the SPA simply makes no such read.
+          export VITE_SUPABASE_URL=$(doppler secrets get VITE_SUPABASE_URL --project integrity-studio --config prd --plain)
+          export VITE_SUPABASE_ANON_KEY=$(doppler secrets get VITE_SUPABASE_ANON_KEY --project integrity-studio --config prd --plain)
           npm run build
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
