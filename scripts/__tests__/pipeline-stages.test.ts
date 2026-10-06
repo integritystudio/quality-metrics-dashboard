@@ -4,6 +4,7 @@ import {
   DERIVE_EXIT_POST_FAILED,
   DERIVE_EXIT_READ_FAILED,
   DERIVE_SOFT_FAILURE_EXITS,
+  JUDGE_EXIT_BATCH_WALL_CLOCK,
   JUDGE_EXIT_BILLING,
   JUDGE_EXIT_DISCOVERY_FAILED,
   JUDGE_EXIT_HIGH_FAILURE_RATE,
@@ -133,6 +134,7 @@ describe('pipeline exit-code contract', () => {
       JUDGE_EXIT_HIGH_FAILURE_RATE,
       JUDGE_EXIT_POST_FAILED,
       JUDGE_EXIT_DISCOVERY_FAILED,
+      JUDGE_EXIT_BATCH_WALL_CLOCK,
       DERIVE_EXIT_POST_FAILED,
       DERIVE_EXIT_READ_FAILED,
       DERIVE_EXIT_INPUT_DRIFT,
@@ -151,6 +153,13 @@ describe('pipeline exit-code contract', () => {
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_DISCOVERY_FAILED)).toBe(true);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(1)).toBe(false);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(0)).toBe(false);
+  });
+
+  // Regression: the 06:00 runs on 2026-09-29 and 09-30 hit the judge's batch
+  // wall clock, exited 1, and lost their upload and sync
+  // (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN).
+  it('treats the judge\'s batch wall clock as soft, so upload and sync still run', () => {
+    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BATCH_WALL_CLOCK)).toBe(true);
   });
 
   it('bounds the sync retry window to between fifteen and thirty minutes', () => {

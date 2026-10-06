@@ -61,9 +61,10 @@ import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/l
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
 import {
   createBatchProvider,
+  BATCH_CANCEL_GRACE_MS,
   BATCH_POLL_INTERVAL_MS,
   BATCH_WALL_CLOCK_MS,
   type BatchLLMProvider,
@@ -170,11 +171,13 @@ export const QAG_MODE_RECORDS = {
 export const CONCURRENCY = 3;
 export const BATCH_DELAY_MS = 500;
 /**
- * --batch: the judge's per-call budget must outlast the provider's wall clock
- * plus the poll that notices it has run out, so an overrun surfaces as the
- * provider's typed error rather than as a per-call timeout.
+ * --batch: the judge's per-call budget must outlast the provider's wall clock,
+ * the grace it gives the batch it cancels there to hand back what it had
+ * already answered, and the poll that notices. Then an overrun surfaces as
+ * the provider's typed error rather than as a per-call timeout, and a result
+ * settled inside the grace still reaches its call.
  */
-export const BATCH_MODE_JUDGE_TIMEOUT_MS = BATCH_WALL_CLOCK_MS + BATCH_POLL_INTERVAL_MS;
+export const BATCH_MODE_JUDGE_TIMEOUT_MS = BATCH_WALL_CLOCK_MS + BATCH_CANCEL_GRACE_MS + BATCH_POLL_INTERVAL_MS;
 /** --batch: a retry would land in a later batch and double the wait; a failed item is counted, not retried. */
 export const BATCH_MODE_MAX_RETRIES = 0;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -948,12 +951,19 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
 /** Track evaluation failures for summary reporting */
 export const evalFailures: Record<string, number> = {};
 
-export type JudgeFailureClass = 'billing' | 'network' | 'schema-rejection' | 'parse' | 'invalid-input' | 'other';
-export const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'other'];
+export type JudgeFailureClass = 'billing' | 'network' | 'schema-rejection' | 'parse' | 'invalid-input' | 'wall-clock' | 'other';
+export const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'wall-clock', 'other'];
 
 /** Failures by cause across all metrics — what decides the exit code. */
-export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, other: 0 };
+export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, 'wall-clock': 0, other: 0 };
 
+/**
+ * The batch provider's `BatchWallClockExceededError`: the run's wall clock ran
+ * out and the batch was cancelled before this call was answered. Nothing is
+ * wrong with the call; the next run judges the turn. Matched on the whole
+ * phrase, so a model reply quoted in some other error cannot land here.
+ */
+const WALL_CLOCK_FAILURE_PATTERN = /still processing at the \d+ms wall clock/;
 const BILLING_FAILURE_PATTERN = /credit balance|billing|payment required|insufficient (?:funds|credit)/i;
 const NETWORK_FAILURE_PATTERN = /Connection error|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|timed out/i;
 /**
@@ -966,8 +976,14 @@ const SCHEMA_REJECTION_PATTERN = /output_config|json_schema.*format|schema.*keyw
 const INVALID_INPUT_FAILURE_PATTERN = /Invalid TestCase|Invalid GEvalConfig/;
 const PARSE_FAILURE_PATTERN = /below minimum|not valid JSON|Unexpected token|Invalid normalized score|Could not (?:extract|parse)/i;
 
-/** Bucket a judge error by what would fix it: money, the network, the request schema, the parser, or the input this script built. */
+/**
+ * Bucket a judge error by what would fix it: money, the network, the request
+ * schema, the parser, the input this script built, or another run. The wall
+ * clock is checked first because its message is this pipeline's own and
+ * carries a batch id, which must not be read as anything else.
+ */
 export function classifyJudgeFailure(message: string): JudgeFailureClass {
+  if (WALL_CLOCK_FAILURE_PATTERN.test(message)) return 'wall-clock';
   if (BILLING_FAILURE_PATTERN.test(message)) return 'billing';
   if (NETWORK_FAILURE_PATTERN.test(message)) return 'network';
   if (SCHEMA_REJECTION_PATTERN.test(message)) return 'schema-rejection';
@@ -1104,7 +1120,10 @@ export interface JudgeRunSummary {
  * else in the run can be trusted and the fix is external. A run that attempted
  * evaluations and produced none is the other failure the pipeline used to
  * report as success: every scheduled run from 2026-09-16 to 09-19 did exactly
- * that while the launchd log said "completed". The spend block beside the
+ * that while the launchd log said "completed". A `--batch` run cut short by
+ * its wall clock says so with its own code, whatever share of it was scored:
+ * the run did not fail, it ran out of time, and what it scored is kept
+ * (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN). The spend block beside the
  * verdict is what the run cost from the usage the API reported, next to the
  * pre-run estimate and the NAME of the key it was billed to.
  */
@@ -1125,6 +1144,11 @@ export function summarizeJudgeRun(
   if (byClass.billing > 0) {
     exitCode = JUDGE_EXIT_BILLING;
     verdict = 'BILLING REFUSED — no judge output from this run can be trusted; top up credit before re-running';
+  } else if (byClass['wall-clock'] > 0) {
+    // Ahead of the verdicts below: abandoned evaluations count as failed, so
+    // an overrun would otherwise be reported as a failure rate.
+    exitCode = JUDGE_EXIT_BATCH_WALL_CLOCK;
+    verdict = `BATCH WALL CLOCK EXCEEDED — ${byClass['wall-clock']} evaluations were abandoned with the cancelled batch and wait for the next run; the ${succeeded} scored before it are kept`;
   } else if (attempted > 0 && succeeded === 0) {
     exitCode = JUDGE_EXIT_NO_SCORES;
     verdict = 'NO SCORES PRODUCED — every evaluation failed';
@@ -1343,8 +1367,11 @@ export async function evaluateTurn(
  * result before the batch ships — then one flush() submits them and settles
  * every promise; the calls a criterion issues after that (G-Eval's scoring
  * step, QAG's questions and answers) ride the provider's later rounds and its
- * idle auto-flush. A wall-clock overrun is thrown, never returned as partial
- * records.
+ * idle auto-flush. Running out of wall clock is not thrown: the provider
+ * settles what the batch it cancels had already answered and rejects the
+ * rest, so each turn comes back with the records that were scored and its
+ * other criteria counted as `wall-clock` failures. Only a provider `failure`
+ * throws.
  */
 export async function evaluateTurnsBatched(
   provider: BatchLLMProvider,

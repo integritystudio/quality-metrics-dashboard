@@ -31,6 +31,16 @@ export const JUDGE_EXIT_POST_FAILED = 6;
  */
 export const JUDGE_EXIT_DISCOVERY_FAILED = 7;
 /**
+ * judge-evaluations exit: `--batch` ran out of wall clock with a batch still
+ * processing (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN). The batch was cancelled, the
+ * scores it had already produced were kept and posted, and the rest of the
+ * run's requests were abandoned; the next run picks those turns up again.
+ * Until 2026-10-05 this was an exit 1 that cost the run its upload and sync,
+ * as at 06:00 on 09-29 and 09-30. Numbered after the upload code because
+ * 8 to 11 were taken.
+ */
+export const JUDGE_EXIT_BATCH_WALL_CLOCK = 12;
+/**
  * derive-evaluations exit: its post to ingest failed (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
  * Nothing is lost: the next unscoped run re-posts the last two days, and ingest
  * drops ids it already holds. Since Phase 3 derive is the first stage that
@@ -63,6 +73,7 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
   JUDGE_EXIT_HIGH_FAILURE_RATE,
   JUDGE_EXIT_POST_FAILED,
   JUDGE_EXIT_DISCOVERY_FAILED,
+  JUDGE_EXIT_BATCH_WALL_CLOCK,
 ]);
 
 /** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */

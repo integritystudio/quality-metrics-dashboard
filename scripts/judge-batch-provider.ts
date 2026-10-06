@@ -16,6 +16,13 @@
  * The same idle window arms an auto-flush on every `generate()`, so a caller
  * that awaits one call before issuing the next can never hang the run — it
  * just pays for more, smaller batches.
+ *
+ * The run has a wall clock. When it runs out with a batch still processing,
+ * the batch is cancelled. A cancelled batch keeps the results of the requests
+ * it had already answered, readable once it reaches `ended`, so those are
+ * settled like any others and only the remainder is abandoned. That is the
+ * run's deadline, not a failure: `flush()` resolves and the caller keeps every
+ * result that came back (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN).
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -40,6 +47,14 @@ export const BATCH_IDLE_FLUSH_MS = DURATION_MS.FIVE_SECONDS;
  * to cover it, so a call is bounded by the run, not by the batch it lands in.
  */
 export const BATCH_WALL_CLOCK_MS = 3 * TIME_MS.HOUR;
+/**
+ * How long a batch cancelled at the wall clock gets to reach `ended`, which is
+ * when the results of the requests it had already answered become readable.
+ * The API finishes the requests it cannot interrupt before it ends the batch,
+ * and documents no limit on how long that takes; this is the limit. Past it
+ * the batch's results go unread and every open request is abandoned.
+ */
+export const BATCH_CANCEL_GRACE_MS = DURATION_MS.TEN_MINUTES;
 /** Requests per Message Batch the API accepts. */
 export const MAX_REQUESTS_PER_BATCH = 100_000;
 /** The judge's own key wins; the shared key is the fallback. */
@@ -63,8 +78,18 @@ export class BatchRequestFailedError extends Error {
   }
 }
 
-/** The run's wall clock ran out with a batch still processing; the batch was cancelled and the run is over. */
+/**
+ * The run's wall clock ran out with a batch still processing. The batch was
+ * cancelled and the run is over: every request left unanswered rejects with
+ * this, and so does every later `generate()`.
+ */
 export class BatchWallClockExceededError extends Error {
+  /**
+   * Requests rejected with this error: the ones the cancelled batch never
+   * answered, and any queued behind it. Counted once the batch's own results
+   * have been settled.
+   */
+  abandoned = 0;
   constructor(readonly batchId: string, wallClockMs: number) {
     super(`Message batch ${batchId} still processing at the ${wallClockMs}ms wall clock; cancelled`);
     this.name = 'BatchWallClockExceededError';
@@ -88,18 +113,26 @@ export interface BatchProviderOptions {
   pollIntervalMs?: number;
   idleFlushMs?: number;
   wallClockMs?: number;
+  /** How long a batch cancelled at the wall clock gets to end; `BATCH_CANCEL_GRACE_MS` when absent. */
+  cancelGraceMs?: number;
   /** Receives each succeeded result's `usage`, so batch runs feed the same totals as the sync provider. */
   onUsage?: (usage: ProviderUsage) => void;
 }
 
 export interface BatchLLMProvider extends LLMProvider {
   generate(prompt: string, options?: BatchGenerateOptions): Promise<GenerateResult>;
-  /** Ship everything queued and settle every promise handed out, in as many rounds as it takes. */
+  /**
+   * Ship everything queued and settle every promise handed out, in as many
+   * rounds as it takes. Running out of wall clock does not reject it: by then
+   * every promise is settled, the abandoned ones with
+   * {@link BatchWallClockExceededError}.
+   */
   flush(): Promise<void>;
   /**
-   * The error that ended the run, once one has. Set by whichever flush hit it —
+   * The error that broke the run, once one has. Set by whichever flush hit it —
    * including the idle auto-flush, which nobody awaits — so a caller that only
-   * awaited its own `flush()` can still tell the run failed.
+   * awaited its own `flush()` can still tell the run failed. The wall clock is
+   * a deadline, not a failure, and never sets it.
    */
   readonly failure: Error | undefined;
 }
@@ -153,6 +186,8 @@ interface Pending {
 
 class MessageBatchProvider implements BatchLLMProvider {
   failure: Error | undefined;
+  /** Set when the wall clock runs out; from then on the run takes no new requests. */
+  private overrun: BatchWallClockExceededError | undefined;
   private readonly pending = new Map<string, Pending>();
   private queued: BatchRequest[] = [];
   private sequence = 0;
@@ -162,15 +197,18 @@ class MessageBatchProvider implements BatchLLMProvider {
   private readonly pollIntervalMs: number;
   private readonly idleFlushMs: number;
   private readonly wallClockMs: number;
+  private readonly cancelGraceMs: number;
 
   constructor(private readonly client: BatchClient, private readonly options: BatchProviderOptions) {
     this.pollIntervalMs = options.pollIntervalMs ?? BATCH_POLL_INTERVAL_MS;
     this.idleFlushMs = options.idleFlushMs ?? BATCH_IDLE_FLUSH_MS;
     this.wallClockMs = options.wallClockMs ?? BATCH_WALL_CLOCK_MS;
+    this.cancelGraceMs = options.cancelGraceMs ?? BATCH_CANCEL_GRACE_MS;
   }
 
   generate(prompt: string, options?: BatchGenerateOptions): Promise<GenerateResult> {
-    if (this.failure) return Promise.reject(this.failure);
+    const over = this.failure ?? this.overrun;
+    if (over) return Promise.reject(over);
     const customId = `${CUSTOM_ID_PREFIX}-${++this.sequence}`;
     const promise = new Promise<GenerateResult>((resolve, reject) => {
       this.pending.set(customId, { resolve, reject });
@@ -207,8 +245,9 @@ class MessageBatchProvider implements BatchLLMProvider {
         requests = await this.awaitQueued();
       }
     } catch (error) {
-      // Whatever went wrong, nothing may be left waiting: the wall-clock path
-      // has already abandoned the run, anything else does so here.
+      // Whatever went wrong, nothing may be left waiting. Running out of wall
+      // clock does not come through here: that path settles every promise
+      // itself and returns.
       this.abandon(toError(error));
       throw error;
     }
@@ -238,16 +277,10 @@ class MessageBatchProvider implements BatchLLMProvider {
     }
     while (batch.processing_status !== 'ended') {
       if (Date.now() - this.startedAt >= this.wallClockMs) {
-        return this.cancelAndAbandon(batch.id);
+        return this.closeAtWallClock(batch.id);
       }
       await sleep(this.pollIntervalMs);
-      try {
-        batch = await this.client.retrieve(batch.id);
-      } catch (error) {
-        // The batch is still running server-side; a poll lost to the network
-        // is simply retried next tick, and the wall clock bounds how long.
-        console.warn(`${LOG_PREFIX} poll of ${batch.id} failed: ${toError(error).message}`);
-      }
+      batch = await this.poll(batch);
     }
     try {
       for await (const line of await this.client.results(batch.id)) {
@@ -276,24 +309,87 @@ class MessageBatchProvider implements BatchLLMProvider {
     pending.reject(new BatchRequestFailedError(custom_id, result.type, detail));
   }
 
-  private async cancelAndAbandon(batchId: string): Promise<never> {
-    const error = new BatchWallClockExceededError(batchId, this.wallClockMs);
+  /** The batch as the API now reports it. A poll lost to the network returns the last state seen. */
+  private async poll(batch: MessageBatch): Promise<MessageBatch> {
     try {
-      await this.client.cancel(batchId);
-    } catch (cancelError) {
-      console.warn(`${LOG_PREFIX} cancel of ${batchId} failed: ${toError(cancelError).message}`);
+      return await this.client.retrieve(batch.id);
+    } catch (error) {
+      // The batch is still running server-side; a poll lost to the network
+      // is simply retried next tick, and the wall clock bounds how long.
+      console.warn(`${LOG_PREFIX} poll of ${batch.id} failed: ${toError(error).message}`);
+      return batch;
     }
-    this.abandon(error);
-    throw error;
   }
 
-  /** Ends the run: every open promise rejects with `error`, and so does every later call. */
+  /**
+   * The wall clock ran out with `batchId` still processing: cancel it, settle
+   * what it had already answered, and abandon the rest. That ends the run
+   * without failing it, so the caller keeps every result that came back.
+   */
+  private async closeAtWallClock(batchId: string): Promise<void> {
+    const overrun = new BatchWallClockExceededError(batchId, this.wallClockMs);
+    // Recorded first, so a call that follows from a result settled below is
+    // refused instead of queued for a batch that will never ship.
+    this.overrun = overrun;
+    const open = this.pending.size;
+    if (await this.cancelAndAwaitEnd(batchId)) await this.settleAnswered(batchId);
+    const settled = open - this.pending.size;
+    overrun.abandoned = this.rejectOpen(overrun);
+    console.warn(`${LOG_PREFIX} ${overrun.message}; settled ${settled} results it had already produced, abandoned ${overrun.abandoned} requests`);
+  }
+
+  /**
+   * Cancels the batch and waits for the cancellation to finish. The results of
+   * a cancelled batch are readable only once it reaches `ended`; true when it
+   * got there within the grace.
+   */
+  private async cancelAndAwaitEnd(batchId: string): Promise<boolean> {
+    let batch: MessageBatch;
+    try {
+      batch = await this.client.cancel(batchId);
+    } catch (error) {
+      console.warn(`${LOG_PREFIX} cancel of ${batchId} failed: ${toError(error).message}`);
+      return false;
+    }
+    const deadline = Date.now() + this.cancelGraceMs;
+    while (batch.processing_status !== 'ended' && Date.now() < deadline) {
+      await sleep(this.pollIntervalMs);
+      batch = await this.poll(batch);
+    }
+    if (batch.processing_status === 'ended') return true;
+    console.warn(`${LOG_PREFIX} ${batchId} had not ended ${this.cancelGraceMs}ms after the cancel; its results go unread`);
+    return false;
+  }
+
+  /**
+   * Settles the lines a cancelled batch answered: a message, or the API's own
+   * error. A `canceled` line is a request it never ran, and never billed; that
+   * one stays open, to be abandoned with the rest.
+   */
+  private async settleAnswered(batchId: string): Promise<void> {
+    try {
+      for await (const line of await this.client.results(batchId)) {
+        if (line.result.type === 'succeeded' || line.result.type === 'errored') this.settleOne(line);
+      }
+    } catch (error) {
+      console.warn(`${LOG_PREFIX} results of ${batchId} could not be read: ${toError(error).message}`);
+    }
+  }
+
+  /** Fails the run: every open promise rejects with `error`, and so does every later call. */
   private abandon(error: Error): void {
     this.failure ??= error;
+    this.rejectOpen(error);
+  }
+
+  /** Rejects every open promise with `error` and drops the queue. Returns how many promises that was. */
+  private rejectOpen(error: Error): number {
     this.disarmIdleFlush();
     this.queued = [];
+    const open = this.pending.size;
     for (const pending of this.pending.values()) pending.reject(error);
     this.pending.clear();
+    return open;
   }
 
   private rejectAll(requests: BatchRequest[], error: Error): void {
