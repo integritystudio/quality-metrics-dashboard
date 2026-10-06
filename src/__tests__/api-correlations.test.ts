@@ -3,20 +3,14 @@
  *
  * Approach C — fixture HTTP server. The real data-loader (isoToNs, grouping
  * by evaluationName) runs against CloudBackend pointing at the local fixture,
- * so computeCorrelationMatrix receives an honest Map.
+ * and the real computeCorrelationMatrix correlates what it loads.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 
-vi.mock('../api/parent/qfe-correlation.js', () => ({
-  computeCorrelationMatrix: vi.fn(),
-}));
-
 import { correlationRoutes } from '../api/routes/correlations.js';
-import { computeCorrelationMatrix } from '../api/parent/qfe-correlation.js';
-import type { CorrelationFeature } from '../types.js';
 import { makeEvaluation } from './support/fixtures.js';
 import type { CorrelationsResponse } from './support/api-responses.js';
 
@@ -32,26 +26,7 @@ afterAll(async () => {
   await fixture.close();
 });
 
-function makeCorrelation(overrides: Partial<CorrelationFeature> = {}): CorrelationFeature {
-  return {
-    featureVersion: '3.1',
-    metricA: 'coherence',
-    metricB: 'relevance',
-    pearsonR: 0.5,
-    spearmanR: 0.5,
-    effectSize: 0.2,
-    lagHours: 0,
-    significant: false,
-    pValue: null,
-    causalConfidence: 'correlation',
-    coOccurrenceRate: 0,
-    isKnownToxicCombo: false,
-    ...overrides,
-  };
-}
-
 beforeEach(() => {
-  vi.clearAllMocks();
   fixture.reset();
 });
 
@@ -61,7 +36,6 @@ describe('GET /correlations', () => {
       evalToWire(makeEvaluation({ evaluationName: 'relevance', scoreValue: 0.8, traceId: 't1' }), 1),
       evalToWire(makeEvaluation({ evaluationName: 'coherence', scoreValue: 0.9, traceId: 't1' }), 2),
     ]);
-    vi.mocked(computeCorrelationMatrix).mockReturnValue([makeCorrelation()]);
   });
 
   it('rejects invalid period with 400', async () => {
@@ -80,13 +54,26 @@ describe('GET /correlations', () => {
   it('metrics array contains metric names from data', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
     const body = await res.json() as CorrelationsResponse;
-    expect(Array.isArray(body.metrics)).toBe(true);
+    expect([...body.metrics].sort()).toEqual(['coherence', 'relevance']);
+  });
+
+  it('correlates each metric pair once, in name order', async () => {
+    const res = await correlationRoutes.request('/correlations?period=7d');
+    const body = await res.json() as CorrelationsResponse;
+    expect(body.correlations).toHaveLength(1);
+    expect(body.correlations[0]).toMatchObject({ metricA: 'coherence', metricB: 'relevance' });
+  });
+
+  it('returns no correlations when there is no data', async () => {
+    fixture.reset();
+    const res = await correlationRoutes.request('/correlations?period=7d');
+    const body = await res.json() as CorrelationsResponse;
+    expect(body).toEqual({ correlations: [], metrics: [] });
   });
 
   it('accepts all valid periods', async () => {
     for (const period of ['24h', '7d', '30d']) {
       fixture.reset();
-      vi.mocked(computeCorrelationMatrix).mockReturnValue([makeCorrelation()]);
       const res = await correlationRoutes.request(`/correlations?period=${period}`);
       expect(res.status).toBe(200);
     }
