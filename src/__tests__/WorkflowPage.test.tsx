@@ -3,8 +3,8 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { LinkProps, WorkflowGraphViewProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 
 /**
- * Only the three fields WorkflowPage/AgentSessionPage destructure off the query
- * result — typed so the mock cannot hand the pages a `data` shape the real
+ * Only the three fields WorkflowPage destructures off the query result —
+ * typed so the mock cannot hand the page a `data` shape the real
  * `useAgentSession` could never return.
  */
 interface AgentSessionQueryResult {
@@ -70,7 +70,6 @@ vi.mock('../components/PageShell.js', () => ({
 // Imports (after mocks)
 
 import { WorkflowPage } from '../pages/WorkflowPage.js';
-import { AgentSessionPage } from '../pages/AgentSessionPage.js';
 import { makeNode, makeGraph, makeEvaluation } from './workflow-fixtures.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { AgentSessionResponse } from '../hooks/useAgentSession.js';
@@ -80,10 +79,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mockLoaded(graph: WorkflowGraph | null = makeGraph(), sessionId = 'session-abc') {
+function mockLoaded(graph: WorkflowGraph | null = makeGraph()) {
   mockUseAgentSession.mockReturnValue({
     data: {
-      sessionId,
+      sessionId: 'session-abc',
       spans: [],
       evaluation: makeEvaluation(),
       evaluations: [],
@@ -187,17 +186,5 @@ describe('WorkflowPage', () => {
         '/agents/session%2Fwith%2Fslashes?agent=node%20with%20spaces'
       );
     });
-  });
-});
-
-// AgentSessionPage — "View Workflow" nav link
-
-describe('AgentSessionPage', () => {
-  it('links "View Workflow" to /workflows/{sessionId}', () => {
-    const sessionId = 'session-xyz';
-    mockLoaded(makeGraph(), sessionId);
-    render(<AgentSessionPage sessionId={sessionId} />);
-    expect(screen.getByRole('link', { name: /view workflow/i }))
-      .toHaveAttribute('href', `/workflows/${sessionId}`);
   });
 });
