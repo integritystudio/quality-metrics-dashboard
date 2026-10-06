@@ -27,11 +27,15 @@ afterAll(async () => {
 
 const METRIC = 'relevance';
 const ONE_DAY_MS = 86_400_000;
-/** Scores spread over three days of the 7d window, so they land in distinct buckets. */
+/**
+ * Scores spread over three days of the 7d window. Buckets are one day wide and
+ * anchored at the request's now, so mid-day offsets keep each score clear of a
+ * bucket edge.
+ */
 const SCORES_BY_DAYS_AGO = [
-  { daysAgo: 5, score: 0.6 },
-  { daysAgo: 3, score: 0.7 },
-  { daysAgo: 1, score: 0.9 },
+  { daysAgo: 5.5, score: 0.6 },
+  { daysAgo: 3.5, score: 0.7 },
+  { daysAgo: 1.5, score: 0.9 },
 ] as const;
 
 /** One score mid-day on each of the last 7 days, so every bucket is scored and follows a scored one. */
