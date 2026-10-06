@@ -672,15 +672,20 @@ token" was skipped, and it does not.
   the CLI's own login can.
 - **To ship, in order:**
   1. ✅ Check `KV_NAMESPACE_ID` (above).
-  2. Deploy `api-keys-rotate` to dev (`tumhmtshahktumhqqamk`, needs the CLI's keychain login; the
+  2. ✅ Deploy `api-keys-rotate` to dev (`tumhmtshahktumhqqamk`, needs the CLI's keychain login; the
      Doppler `prd` token cannot reach dev) and run the toolkit's `api-key-auth` e2e under Doppler
-     `dev`.
-  3. Deploy it to production (`cfrbahzzklwrnmbtqojl`); the live version is 28, mid-September,
-     which predates 7f35b4f1.
-  4. Deploy the three dashboard Workers.
-  5. Rotate a real key from `/admin` and check the acceptance bullets below.
-- **Acceptance below is unmet.** In particular the first bullet: no rotation has succeeded
-  against a real function.
+     `dev`. Live as version 10 since 2026-10-05 19:02Z, `verify_jwt: false` (`supabase functions
+     list`). The e2e ran 2026-10-05: 11 passed, none skipped, including rotate (5), old token 401
+     (6) and new token 200 (7) against the deployed dev function and dev API Worker.
+  3. ✅ Deploy it to production (`cfrbahzzklwrnmbtqojl`). Live as version 30 since 2026-10-05
+     19:05Z, `verify_jwt: false`, six minutes after 982605cd.
+  4. ✅ for production: CI's deploy of `b62012d` (2026-10-06 04:16Z) shipped both production
+     Workers, and the route's service call (2015571, fc47e66) predates it. Unchecked: the dev
+     Worker, which deploys by hand and is not needed for the acceptance below.
+  5. Rotate a real key from `/admin` and check the acceptance bullets below. A user's action:
+     the old key stops working at once, so update `OBTOOL_API_KEY` wherever it is read.
+- **Acceptance below is unmet.** Rotation works against the real dev function (step 2), but none
+  has run through the production dashboard yet.
 
 Acceptance:
 - A user rotates one of their keys. The new token authenticates against obtool-api
