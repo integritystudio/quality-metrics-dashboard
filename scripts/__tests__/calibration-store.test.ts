@@ -5,6 +5,7 @@ import { join, resolve } from 'path';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import { MIN_QUANTILE_SAMPLE_SIZE } from '@parent/lib/quality/qfe-label-ordinals.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
+import { createFixtureServer, type FixtureServer } from '../../src/__tests__/support/fixture-server.js';
 
 /**
  * The store's location hangs off HOME and is fixed when judge-evaluations.ts is
@@ -18,15 +19,35 @@ let telemetryDir: string;
 let store: typeof import('../calibration-store.js');
 let derive: typeof import('../derive-evaluations.js');
 let sync: typeof import('../sync-to-kv.js');
+let cloud: typeof import('../../../src/backends/cloud.js');
+let argv: string[];
 let warn: MockInstance<typeof console.warn>;
 
 const METRIC = 'tool_correctness';
 const STORE_MODULE = 'calibration-store.ts';
+/** The key sync-to-kv publishes the calibration under; the worker serves it by this name. */
+const CALIBRATION_KEY = 'meta:calibration';
+/**
+ * sync-to-kv reads its flags at import. Its degradation pass keeps a sidecar
+ * in scripts/ itself, not under HOME, and this flag is what stops it writing
+ * there when `computeOrgEntries` runs below.
+ */
+const SYNC_DRY_RUN_ARG = '--dry-run';
 
 /** The sync run's clock. The bound is 30 days, so the two stamps below sit on either side of it. */
 const NOW = new Date('2026-10-05T12:00:00.000Z');
 const CALIBRATED_AT_THE_BOUND = '2026-09-05T12:00:00.000Z';
 const CALIBRATED_PAST_THE_BOUND = '2026-09-05T11:59:59.999Z';
+/** The derive run's clock, earlier the same day. */
+const WRITTEN_AT = new Date('2026-10-05T06:00:00.000Z');
+
+/** Enough scores for derive to calibrate one metric. */
+function calibrationRecords(): { evaluationName: string; scoreValue: number }[] {
+  return Array.from({ length: MIN_QUANTILE_SAMPLE_SIZE }, (_, i) => ({
+    evaluationName: METRIC,
+    scoreValue: i / (MIN_QUANTILE_SAMPLE_SIZE - 1),
+  }));
+}
 
 function stateCalibratedAt(lastCalibrated: string): CalibrationState {
   return {
@@ -50,6 +71,8 @@ function publishedPayload(entry: { value: string } | null): CalibrationResponse 
 beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), 'calibration-store-'));
   vi.stubEnv('HOME', home);
+  argv = process.argv;
+  process.argv = [...argv, SYNC_DRY_RUN_ARG];
   vi.resetModules();
   const judge = await import('../judge-evaluations.js');
   if (!judge.TELEMETRY_DIR.startsWith(home)) {
@@ -59,6 +82,7 @@ beforeAll(async () => {
   store = await import('../calibration-store.js');
   derive = await import('../derive-evaluations.js');
   sync = await import('../sync-to-kv.js');
+  cloud = await import('../../../src/backends/cloud.js');
 });
 
 beforeEach(() => {
@@ -73,21 +97,16 @@ afterEach(() => {
 
 afterAll(() => {
   vi.unstubAllEnvs();
+  process.argv = argv;
   rmSync(home, { recursive: true, force: true });
 });
 
 describe('calibration handoff from derive to sync', () => {
   it('sync publishes the state derive wrote', () => {
-    const writtenAt = new Date('2026-10-05T06:00:00.000Z');
-    const records = Array.from({ length: MIN_QUANTILE_SAMPLE_SIZE }, (_, i) => ({
-      evaluationName: METRIC,
-      scoreValue: i / (MIN_QUANTILE_SAMPLE_SIZE - 1),
-    }));
-
-    derive.recalibrate(records, { dryRun: false, now: writtenAt });
+    derive.recalibrate(calibrationRecords(), { dryRun: false, now: WRITTEN_AT });
     const payload = publishedPayload(sync.homeCalibrationEntry(NOW));
 
-    expect(payload.lastCalibrated).toBe(writtenAt.toISOString());
+    expect(payload.lastCalibrated).toBe(WRITTEN_AT.toISOString());
     expect(payload.sampleCounts).toEqual({ [METRIC]: MIN_QUANTILE_SAMPLE_SIZE });
     expect(warn).not.toHaveBeenCalled();
   });
@@ -100,6 +119,47 @@ describe('calibration handoff from derive to sync', () => {
       .filter(file => /\b(?:load|save)CalibrationState\b/.test(readFileSync(join(scriptsDir, file), 'utf8')));
 
     expect(bypassing).toEqual([]);
+  });
+});
+
+/**
+ * The call site that was the bug: sync computed every org's entries and asked
+ * the wrong directory for the calibration, so `meta:calibration` was simply
+ * absent from the home org's list while every run reported success. Reads an
+ * empty cloud through the real backend; the calibration is derive's file, not
+ * the cloud's data.
+ */
+describe('computeOrgEntries', () => {
+  let fixture: FixtureServer;
+  let backend: InstanceType<typeof cloud.CloudBackend>;
+  const scriptsDir = resolve(__dirname, '..');
+
+  beforeAll(async () => {
+    fixture = await createFixtureServer();
+    backend = new cloud.CloudBackend({ baseUrl: fixture.url });
+  });
+
+  afterAll(async () => {
+    await fixture.close();
+  });
+
+  it('publishes the calibration derive wrote among the home org entries, and writes nothing into scripts/', async () => {
+    derive.recalibrate(calibrationRecords(), { dryRun: false, now: WRITTEN_AT });
+    const scriptsBefore = readdirSync(scriptsDir);
+
+    const { allEntries } = await sync.computeOrgEntries(backend, NOW, true);
+
+    const entry = allEntries.find(e => e.key === CALIBRATION_KEY) ?? null;
+    expect(publishedPayload(entry).lastCalibrated).toBe(WRITTEN_AT.toISOString());
+    expect(readdirSync(scriptsDir)).toEqual(scriptsBefore);
+  });
+
+  it('publishes no calibration entry for an org that is not the home org', async () => {
+    derive.recalibrate(calibrationRecords(), { dryRun: false, now: WRITTEN_AT });
+
+    const { allEntries } = await sync.computeOrgEntries(backend, NOW, false);
+
+    expect(allEntries.map(e => e.key)).not.toContain(CALIBRATION_KEY);
   });
 });
 
