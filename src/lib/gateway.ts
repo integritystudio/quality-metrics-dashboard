@@ -13,7 +13,8 @@ import { CUSTOMER_VIEW } from './admin-customer-strings.js';
 /** Production api-gateway; the build sets VITE_API_GATEWAY_URL to point elsewhere (dev: api-gateway-dev). */
 export const DEFAULT_API_GATEWAY_URL = 'https://api.integritystudio.dev';
 
-const configuredGatewayUrl = ((import.meta.env.VITE_API_GATEWAY_URL as string | undefined) ?? '').replace(/\/$/, '');
+// Trimmed: a Doppler value with a stray space around it must not become part of every URL.
+const configuredGatewayUrl = ((import.meta.env.VITE_API_GATEWAY_URL as string | undefined) ?? '').trim().replace(/\/$/, '');
 export const API_GATEWAY_URL = configuredGatewayUrl.length > 0 ? configuredGatewayUrl : DEFAULT_API_GATEWAY_URL;
 
 /** `DashboardService`'s guard: an org id that could alter the path or query is never sent. */
