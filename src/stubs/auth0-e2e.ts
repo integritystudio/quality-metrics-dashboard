@@ -3,6 +3,7 @@
 import { type ReactNode, createElement } from 'react';
 
 const TEST_TOKEN = 'test-token';
+const TEST_ID_TOKEN = 'test-id-token';
 
 export function Auth0Provider({ children }: { children: ReactNode }) {
   return createElement('div', { 'data-testid': 'auth0-stub' }, children);
@@ -14,6 +15,7 @@ export function useAuth0() {
     isAuthenticated: true,
     user: { email: 'test@example.com', sub: 'test-user-id' },
     getAccessTokenSilently: () => Promise.resolve(TEST_TOKEN),
+    getIdTokenClaims: () => Promise.resolve({ __raw: TEST_ID_TOKEN }),
     logout: () => Promise.resolve(),
     loginWithRedirect: () => Promise.resolve(),
   };

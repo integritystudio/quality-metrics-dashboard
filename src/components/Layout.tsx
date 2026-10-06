@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactNode } from 'react';
 import type { Period } from '../types.js';
 import { ShortcutOverlay } from './ShortcutOverlay.js';
 import { useAuth } from '../contexts/AuthContext.js';
+import { AccountBadge } from './AccountBadge.js';
 
 const PERIODS: Period[] = ['24h', '7d', '30d'];
 
@@ -38,6 +39,7 @@ export function Layout({
               </button>
             ))}
           </div>
+          <AccountBadge />
           <button className="btn-xs logout-btn" disabled={isLoggingOut} onClick={handleLogout}>
             {isLoggingOut ? 'Logging out…' : 'Log out'}
           </button>

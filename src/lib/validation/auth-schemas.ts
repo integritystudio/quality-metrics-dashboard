@@ -51,6 +51,24 @@ export const PublicUserSchema = z.object({
 
 export type PublicUser = z.infer<typeof PublicUserSchema>;
 
+/**
+ * The caller's own `public.users` row as the browser reads it through PostgREST with its
+ * Auth0 ID token (CR62, `OWN_USER_SELECT`). Profile columns are nullable in the table and
+ * absent when the select omits them.
+ */
+export const OwnUserRowSchema = z.object({
+  id: UuidSchema,
+  email: z.email(),
+  name: z.string().nullable().optional(),
+  email_verified: z.boolean().nullable().optional(),
+  login_count: z.number().int().nullable().optional(),
+  last_login: SupabaseTimestampSchema.nullable().optional(),
+});
+
+export const OwnUserRowsSchema = z.array(OwnUserRowSchema);
+
+export type OwnUserRow = z.infer<typeof OwnUserRowSchema>;
+
 // ---------------------------------------------------------------------------
 // Org-scoped RBAC (P5) — membership rows, session summaries, org switch
 // ---------------------------------------------------------------------------
