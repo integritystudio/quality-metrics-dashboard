@@ -15,14 +15,24 @@
 import type {
   CompositeQualityIndex,
   EvaluationResult,
-  ExecutiveView,
-  OperatorView,
   QualityDashboardSummary,
   QualityMetricResult,
 } from '../../types.js';
 
 /** Epoch nanoseconds. `EvaluationResult.timestamp` is a `bigint`, never an ISO string. */
 export const EVAL_NANOS = 1737000000000000000n;
+
+const NANOS_PER_MS = 1_000_000n;
+const ONE_HOUR_MS = 3_600_000;
+
+/**
+ * Epoch nanoseconds `agoMs` before now. Routes window evaluations to the
+ * requested period, so real computation over `EVAL_NANOS` (January 2025)
+ * sees an empty period.
+ */
+export function recentEvalNanos(agoMs = ONE_HOUR_MS): bigint {
+  return BigInt(Date.now() - agoMs) * NANOS_PER_MS;
+}
 
 export function makeEvaluation(overrides: Partial<EvaluationResult> = {}): EvaluationResult {
   return {
@@ -79,37 +89,3 @@ export function makeCQI(overrides: Partial<CompositeQualityIndex> = {}): Composi
   };
 }
 
-/**
- * `RoleView` is a discriminated union on `role`, not a dashboard summary with a
- * `role` field bolted on — the previous `{ ...makeMockDashboard(), role }` stub
- * shared almost no fields with either real variant.
- */
-export function makeExecutiveView(overrides: Partial<ExecutiveView> = {}): ExecutiveView {
-  return {
-    role: 'executive',
-    overallStatus: 'healthy',
-    summary: {
-      totalMetrics: 1,
-      healthyMetrics: 1,
-      warningMetrics: 0,
-      criticalMetrics: 0,
-      noDataMetrics: 0,
-    },
-    metricStatuses: [{ name: 'relevance', displayName: 'Relevance', status: 'healthy' }],
-    alertCounts: { info: 0, warning: 0, critical: 0 },
-    topIssues: [],
-    cqi: makeCQI(),
-    ...overrides,
-  };
-}
-
-export function makeOperatorView(overrides: Partial<OperatorView> = {}): OperatorView {
-  return {
-    role: 'operator',
-    overallStatus: 'healthy',
-    prioritizedAlerts: [],
-    alertingMetrics: [],
-    degradingTrends: [],
-    ...overrides,
-  };
-}

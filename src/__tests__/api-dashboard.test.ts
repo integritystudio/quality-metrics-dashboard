@@ -1,33 +1,16 @@
 /**
  * API route tests: /api/dashboard and /api/quality/live.
  *
- * Approach C — fixture HTTP server. The real data-loader and CloudBackend run;
- * pure computation functions (computeDashboardSummary, computeRoleView, computeCQI)
- * stay mocked because they receive EvaluationResult arrays, not HTTP payloads.
+ * Approach C — fixture HTTP server. The real data-loader and CloudBackend run,
+ * and so do the parent's computeDashboardSummary, computeRoleView and computeCQI.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 
-vi.mock('../api/parent/quality-metrics.js', () => ({
-  QUALITY_METRICS: {},
-  computeDashboardSummary: vi.fn(),
-}));
-
-vi.mock('../api/parent/quality-views.js', () => ({
-  computeRoleView: vi.fn(),
-}));
-
-vi.mock('../api/parent/qfe-cqi.js', () => ({
-  computeCQI: vi.fn(),
-}));
-
 import { dashboardRoutes } from '../api/routes/dashboard.js';
 import { qualityRoutes } from '../api/routes/quality.js';
-import { computeDashboardSummary } from '../api/parent/quality-metrics.js';
-import { computeRoleView } from '../api/parent/quality-views.js';
-import { computeCQI } from '../api/parent/qfe-cqi.js';
 import type {
   DashboardResponse,
   ErrorResponse,
@@ -35,14 +18,7 @@ import type {
   QualityLiveResponse,
   RoleViewResponse,
 } from './support/api-responses.js';
-import {
-  EVAL_NANOS,
-  makeCQI,
-  makeDashboardSummary,
-  makeEvaluation,
-  makeExecutiveView,
-  makeOperatorView,
-} from './support/fixtures.js';
+import { EVAL_NANOS, makeEvaluation, recentEvalNanos } from './support/fixtures.js';
 
 let fixture: FixtureServer;
 
@@ -56,13 +32,14 @@ afterAll(async () => {
   await fixture.close();
 });
 
+/** An `llm` evaluation: the dashboard summary drops the `seed` cohort makeEvaluation defaults to. */
+const EVIDENCE_EVALUATOR_TYPE = 'llm';
+
 function makeMockEval(name = 'relevance', score = 0.85, timestamp = EVAL_NANOS) {
-  return makeEvaluation({ evaluationName: name, scoreValue: score, timestamp });
+  return makeEvaluation({ evaluationName: name, scoreValue: score, timestamp, evaluatorType: EVIDENCE_EVALUATOR_TYPE });
 }
 
-// Clear all mocks between every test
 beforeEach(() => {
-  vi.clearAllMocks();
   fixture.reset();
 });
 
@@ -70,9 +47,7 @@ beforeEach(() => {
 
 describe('GET /dashboard', () => {
   beforeEach(() => {
-    fixture.setEvals([evalToWire(makeMockEval())]);
-    vi.mocked(computeDashboardSummary).mockReturnValue(makeDashboardSummary());
-    vi.mocked(computeCQI).mockReturnValue(makeCQI());
+    fixture.setEvals([evalToWire(makeMockEval('relevance', 0.85, recentEvalNanos()))]);
   });
 
   it('rejects invalid period with 400', async () => {
@@ -96,8 +71,10 @@ describe('GET /dashboard', () => {
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('cqi');
     expect(body).toHaveProperty('sparklines');
-    expect(body.cqi?.value).toBeCloseTo(0.82, 3);
-    expect(body.cqi).toHaveProperty('contributions');
+    const relevance = body.metrics.find((m) => m.name === 'relevance');
+    expect(relevance?.values.avg).toBeCloseTo(0.85, 3);
+    expect(relevance?.sampleCount).toBe(1);
+    expect(body.cqi?.contributions.map((entry) => entry.metric)).toEqual(['relevance']);
   });
 
   it('accepts 24h period', async () => {
@@ -110,22 +87,19 @@ describe('GET /dashboard', () => {
     expect(res.status).toBe(200);
   });
 
-  it('calls computeRoleView for executive role and includes cqi', async () => {
-    vi.mocked(computeRoleView).mockReturnValue(makeExecutiveView());
-
+  it('returns the executive view with cqi for executive role', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=executive');
     expect(res.status).toBe(200);
-    expect(vi.mocked(computeRoleView)).toHaveBeenCalled();
     const body = await res.json() as RoleViewResponse;
+    expect(body.role).toBe('executive');
     expect(body).toHaveProperty('cqi');
   });
 
-  it('calls computeRoleView for operator role without cqi', async () => {
-    vi.mocked(computeRoleView).mockReturnValue(makeOperatorView());
-
+  it('returns the operator view without cqi for operator role', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=operator');
     expect(res.status).toBe(200);
     const body = await res.json() as RoleViewResponse;
+    expect(body.role).toBe('operator');
     expect(body).not.toHaveProperty('cqi');
   });
 
