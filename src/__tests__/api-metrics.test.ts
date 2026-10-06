@@ -1,40 +1,21 @@
 /**
  * API route tests: /api/metrics/:name and /api/metrics/:name/evaluations.
  *
- * Approach C — fixture HTTP server. The real data-loader and CloudBackend run;
- * pure computation functions stay mocked because they receive EvaluationResult
- * arrays, not HTTP payloads.
+ * Approach C — fixture HTTP server. The real data-loader and CloudBackend run,
+ * and so do the parent's metric registry, aggregation, detail and dynamics
+ * computations.
+ *
+ * The fixture ignores the date window, so `/metrics/:name`'s current- and
+ * previous-period loads receive the same rows: with data the trend is `stable`.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 
-vi.mock('../api/parent/quality-metrics.js', () => ({
-  getQualityMetric: vi.fn(),
-  computeAggregations: vi.fn(),
-}));
-
-vi.mock('../api/parent/quality-views.js', () => ({
-  computeMetricDetail: vi.fn(),
-}));
-
-vi.mock('../api/parent/qfe-dynamics.js', () => ({
-  computeMetricDynamics: vi.fn(),
-}));
-
 import { metricsRoutes } from '../api/routes/metrics.js';
-import { getQualityMetric, computeAggregations } from '../api/parent/quality-metrics.js';
-import { computeMetricDetail } from '../api/parent/quality-views.js';
-import { computeMetricDynamics } from '../api/parent/qfe-dynamics.js';
 import type { ErrorResponse, MetricDetailResponse, MetricEvaluationsResponse } from './support/api-responses.js';
-import type {
-  EvaluationResult,
-  MetricDetailResult,
-  MetricDynamics,
-  MetricTrend,
-  QualityMetricConfig,
-} from '../types.js';
+import type { EvaluationResult } from '../types.js';
 
 let fixture: FixtureServer;
 
@@ -54,24 +35,6 @@ afterAll(async () => {
 const EVAL_NANOS = 1737000000000000000n;
 const ONE_HOUR_NANOS = 3_600_000_000_000n;
 
-function makeMockConfig(): QualityMetricConfig {
-  return {
-    name: 'relevance',
-    displayName: 'Relevance',
-    description: 'How relevant the response is',
-    aggregations: ['avg', 'min', 'p50'],
-    alerts: [{
-      aggregation: 'p50',
-      value: 0.7,
-      direction: 'below',
-      severity: 'warning',
-      message: 'Relevance below threshold',
-    }],
-    range: { min: 0, max: 1 },
-    unit: 'score',
-  };
-}
-
 function makeMockEval(overrides: Partial<EvaluationResult> = {}): EvaluationResult {
   return {
     evaluationName: 'relevance',
@@ -90,54 +53,15 @@ function makeMockEval(overrides: Partial<EvaluationResult> = {}): EvaluationResu
   };
 }
 
-const MOCK_TREND: MetricTrend = {
-  direction: 'stable',
-  delta: 0,
-  percentChange: 0,
-  previousValue: 0.85,
-  currentValue: 0.85,
-  aggregation: 'avg',
-};
-
-function makeMockDetail(): MetricDetailResult {
-  return {
-    name: 'relevance',
-    displayName: 'Relevance',
-    values: { avg: 0.85, min: 0.7, p50: 0.85, max: null, count: 1, p95: null, p99: null },
-    sampleCount: 1,
-    alerts: [],
-    status: 'healthy',
-    trend: MOCK_TREND,
-    scoreDistribution: [{ bucket: '0.8-0.9', count: 1 }],
-    worstEvaluations: [],
-    bestEvaluations: [],
-  };
-}
-
-const MOCK_DYNAMICS: MetricDynamics = {
-  featureVersion: 'test',
-  velocity: 0,
-  acceleration: 0,
-  inflectionDetected: false,
-  projectedStatus: 'healthy',
-  confidence: 0.5,
-};
-
 // /metrics/:name route
 
 describe('GET /metrics/:name', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     fixture.reset();
     fixture.setEvals([evalToWire(makeMockEval())]);
-    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
-    vi.mocked(computeAggregations).mockReturnValue(makeMockDetail().values);
-    vi.mocked(computeMetricDetail).mockReturnValue(makeMockDetail());
-    vi.mocked(computeMetricDynamics).mockReturnValue(MOCK_DYNAMICS);
   });
 
   it('returns 404 for unknown metric', async () => {
-    vi.mocked(getQualityMetric).mockReturnValue(undefined);
     const res = await metricsRoutes.request('/metrics/nonexistent?period=7d');
     expect(res.status).toBe(404);
     const body = await res.json() as ErrorResponse;
@@ -168,34 +92,27 @@ describe('GET /metrics/:name', () => {
     expect(body).toHaveProperty('name', 'relevance');
     expect(body).toHaveProperty('values');
     expect(body).toHaveProperty('sampleCount');
-    expect(body).toHaveProperty('scoreDistribution');
-    expect(body).toHaveProperty('trend');
+    expect(body.values.avg).toBeCloseTo(0.85, 3);
+    expect(body.sampleCount).toBe(1);
   });
 
-  it('includes dynamics when trend is present', async () => {
+  it('includes dynamics with a numeric velocity when trend is present', async () => {
+    // A velocity of null is what the route returned in production while it
+    // passed the previous trend where computeMetricDynamics takes the period length.
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
     const body = await res.json() as MetricDetailResponse;
-    expect(body).toHaveProperty('dynamics');
+    expect(body.trend?.direction).toBe('stable');
+    expect(typeof body.dynamics?.velocity).toBe('number');
   });
 
-  it('passes the period length as the second argument, not a previous trend', async () => {
-    // computeMetricDynamics takes (currentTrend, periodHours, options?). The
-    // old positional form put previousTrend second; it type-errors but only
-    // after the parent rebuilds, and the mock here accepts anything — so the
-    // route silently returned velocity: null in production. Pin the shape.
-    await metricsRoutes.request('/metrics/relevance?period=7d');
-
-    const [, periodHours] = vi.mocked(computeMetricDynamics).mock.calls[0]!;
-    expect(typeof periodHours).toBe('number');
-  });
-
-  it('omits dynamics when trend is absent', async () => {
-    vi.mocked(computeMetricDetail).mockReturnValue({ ...makeMockDetail(), trend: undefined });
-
+  it('omits trend and dynamics when there is no data', async () => {
+    fixture.reset();
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(200);
     const body = await res.json() as MetricDetailResponse;
+    expect(body.sampleCount).toBe(0);
+    expect(body.trend).toBeUndefined();
     expect(body.dynamics).toBeUndefined();
   });
 
@@ -217,14 +134,11 @@ describe('GET /metrics/:name/evaluations', () => {
   ];
 
   beforeEach(() => {
-    vi.clearAllMocks();
     fixture.reset();
-    vi.mocked(getQualityMetric).mockReturnValue(makeMockConfig());
     fixture.setEvals(evals.map((e, i) => evalToWire(e, i + 1)));
   });
 
   it('returns 404 for unknown metric', async () => {
-    vi.mocked(getQualityMetric).mockReturnValue(undefined);
     const res = await metricsRoutes.request('/metrics/nonexistent/evaluations?period=7d');
     expect(res.status).toBe(404);
   });
@@ -261,15 +175,13 @@ describe('GET /metrics/:name/evaluations', () => {
   it('sorts score_asc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_asc');
     const body = await res.json() as MetricEvaluationsResponse;
-    const scores = body.rows.map((r) => r.score);
-    expect(scores[0]!).toBeLessThanOrEqual(scores[scores.length - 1]!);
+    expect(body.rows.map((r) => r.score)).toEqual([0.3, 0.6, 0.9]);
   });
 
   it('sorts score_desc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_desc');
     const body = await res.json() as MetricEvaluationsResponse;
-    const scores = body.rows.map((r) => r.score);
-    expect(scores[0]!).toBeGreaterThanOrEqual(scores[scores.length - 1]!);
+    expect(body.rows.map((r) => r.score)).toEqual([0.9, 0.6, 0.3]);
   });
 
   it('pagination with limit and offset', async () => {
