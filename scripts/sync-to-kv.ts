@@ -946,7 +946,7 @@ async function computeCodeQuality(backend: CloudBackend, now: Date) {
   return summarizeCodeQuality(checkpointSpans, invocationSpans);
 }
 
-export async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
+async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
   const entries: KVEntry[] = [];
 
   const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
