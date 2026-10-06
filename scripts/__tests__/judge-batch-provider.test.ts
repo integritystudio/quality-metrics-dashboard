@@ -40,6 +40,12 @@ const BATCH_ID = 'msgbatch_test';
 /** Real timers, kept short: the provider's intervals are injectable. */
 const FAST_MS = 5;
 const BASE = { model: MODEL, maxTokens: MAX_TOKENS, temperature: TEMPERATURE, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
+/**
+ * A 2xx whose body is no batch: the SDK resolves it, and the provider has
+ * nothing to read a status from. The one thing the fake can hand back that
+ * escapes every per-call catch, which is what breaks a run rather than a batch.
+ */
+const NO_BATCH = null as unknown as MessageBatch;
 
 function makeBatch(status: MessageBatch['processing_status']): MessageBatch {
   return {
@@ -216,6 +222,22 @@ describe('createBatchProvider', () => {
 
     expect(classifyJudgeFailure((await lost).message)).toBe('network');
     expect(provider.failure).toBeUndefined();
+  });
+
+  it('records an error that escapes a batch as the failure, rejects every open call with it, and refuses every later call', async () => {
+    const { client } = fakeClient({ results: echo, create: () => Promise.resolve(NO_BATCH) });
+    const provider = await createBatchProvider({ ...BASE, client });
+
+    const lost = rejection(provider.generate('lost'));
+    const alsoLost = rejection(provider.generate('also lost'));
+    const failure = await rejection(provider.flush());
+
+    expect(await lost).toBe(failure);
+    expect(await alsoLost).toBe(failure);
+    expect(provider.failure).toBe(failure);
+    await expect(provider.generate('after')).rejects.toBe(failure);
+    await expect(provider.flush()).rejects.toBe(failure);
+    expect(client.create).toHaveBeenCalledTimes(1);
   });
 
   it('maps a jsonSchema option onto output_config', async () => {
