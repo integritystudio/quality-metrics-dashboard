@@ -1,4 +1,4 @@
-import { Link } from 'wouter';
+import { Link, useSearch } from 'wouter';
 import { useAgentSession } from '../hooks/useAgentSession.js';
 import { TurnTimeline } from '../components/TurnTimeline.js';
 import { HandoffCard } from '../components/HandoffCard.js';
@@ -7,11 +7,12 @@ import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { plural } from '../lib/quality-utils.js';
-import { routes } from '../lib/routes.js';
+import { AGENT_SESSION_AGENT_PARAM, routes } from '../lib/routes.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useAgentSession(sessionId);
+  const focusedAgent = new URLSearchParams(useSearch()).get(AGENT_SESSION_AGENT_PARAM) ?? undefined;
 
   if (!isLoading && !error && !data) return null;
 
@@ -45,7 +46,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
 
           <ViewSection title="Turn Timeline">
             <div className="card">
-              <TurnTimeline turns={turns} agentNames={agentNames} />
+              <TurnTimeline turns={turns} agentNames={agentNames} focusedAgent={focusedAgent} />
             </div>
           </ViewSection>
 

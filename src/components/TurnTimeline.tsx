@@ -1,15 +1,30 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { scoreColor, agentColor } from '../lib/quality-utils.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult } from '../types.js';
 
+const UNKNOWN_AGENT = 'unknown';
+// The timeline scrolls sideways: bring the first focused turn to the row's start without jumping the page.
+const FOCUS_SCROLL_OPTIONS: ScrollIntoViewOptions = { block: 'nearest', inline: 'start' };
+
 interface TurnTimelineProps {
   turns: TurnLevelResult[];
   agentNames: string[];
+  /** Highlights this agent's turns and scrolls the first one into view. */
+  focusedAgent?: string;
 }
 
-export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
+export function TurnTimeline({ turns, agentNames, focusedAgent }: TurnTimelineProps) {
+  const firstFocusedRef = useRef<HTMLDivElement>(null);
+  const firstFocusedIndex = focusedAgent === undefined
+    ? -1
+    : turns.findIndex(turn => (turn.agentName ?? UNKNOWN_AGENT) === focusedAgent);
+
+  useEffect(() => {
+    firstFocusedRef.current?.scrollIntoView(FOCUS_SCROLL_OPTIONS);
+  }, [focusedAgent, firstFocusedIndex]);
+
   if (turns.length === 0) {
     return <EmptyState message="No turns to display." />;
   }
@@ -19,15 +34,18 @@ export function TurnTimeline({ turns, agentNames }: TurnTimelineProps) {
 
   return (
     <div className="d-flex gap-2 overflow-x-auto py-2">
-      {turns.map((turn) => {
-        const agent = turn.agentName ?? 'unknown';
+      {turns.map((turn, index) => {
+        const agent = turn.agentName ?? UNKNOWN_AGENT;
         const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
         const bandColor = scoreColor(turn.relevance);
+        const focused = agent === focusedAgent;
 
         return (
           <div
             key={turn.turnIndex}
-            className="p-4 shrink-0 turn-card"
+            ref={index === firstFocusedIndex ? firstFocusedRef : undefined}
+            aria-current={focused || undefined}
+            className={focused ? 'p-4 shrink-0 turn-card turn-card--focused' : 'p-4 shrink-0 turn-card'}
             style={{ '--turn-color': color } as CSSProperties}
           >
             <div className="flex-center mb-1-5 justify-between">

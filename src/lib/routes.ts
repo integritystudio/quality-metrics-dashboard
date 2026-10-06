@@ -2,11 +2,13 @@ const ADMIN_PATH = '/admin';
 const ADMIN_CUSTOMERS_PATH = `${ADMIN_PATH}/customers`;
 /** The hub's query key for the org to reselect on return (Flutter's `DashboardArgs.initialOrgId`). */
 export const ADMIN_CUSTOMERS_ORG_PARAM = 'org';
+/** The agent session page's query key for the agent to focus (a workflow graph node click). */
+export const AGENT_SESSION_AGENT_PARAM = 'agent';
 
 export const routes = {
   agentSession: (sessionId: string, agentId?: string) =>
     agentId
-      ? `/agents/${encodeURIComponent(sessionId)}?agent=${encodeURIComponent(agentId)}`
+      ? `/agents/${encodeURIComponent(sessionId)}?${AGENT_SESSION_AGENT_PARAM}=${encodeURIComponent(agentId)}`
       : `/agents/${encodeURIComponent(sessionId)}`,
   evaluationDetail: (traceId: string, metric?: string) =>
     metric
