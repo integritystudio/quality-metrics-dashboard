@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { compareDiscoveries, turnKey } from '../judge-parity.js';
-import { COHERENCE_EVAL_NAME, RELEVANCE_EVAL_NAME, type Turn } from '../judge-evaluations.js';
+import { COHERENCE_EVAL_NAME, HAIKU_MODEL, RELEVANCE_EVAL_NAME, judgedByKey, type Turn } from '../judge-evaluations.js';
 
 const ENV = { OBTOOL_API_KEY: 'k' };
 const LIMIT = 10;
@@ -20,7 +20,8 @@ function turn(session: string, second: number, extra: Partial<Turn> = {}): Turn 
 }
 
 function judged(t: Turn): Set<string> {
-  return new Set([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME].map((n) => `${t.sessionId}:${n}:${t.timestamp.slice(0, 19)}`));
+  const tk = t.timestamp.slice(0, 19);
+  return new Set([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME].map((n) => judgedByKey(t.sessionId, n, tk, HAIKU_MODEL)));
 }
 
 const side = (turns: Turn[], judgedSet = new Set<string>(), sessions = ['s1']) =>

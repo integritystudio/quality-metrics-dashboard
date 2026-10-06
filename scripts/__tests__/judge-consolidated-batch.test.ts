@@ -10,6 +10,8 @@ import {
 import {
   estimateJudgeRun,
   resetFailureTracking,
+  judgedByKey,
+  HAIKU_MODEL,
   RELEVANCE_EVAL_NAME,
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
@@ -154,7 +156,7 @@ describe('evaluateTurnsConsolidatedBatched', () => {
     const { client, submitted } = fakeClient();
     const batch = await createBatchProvider({ ...BASE, client });
     const turn = makeTurn();
-    const existing = new Set([`${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN)}`]);
+    const existing = new Set([judgedByKey(turn.sessionId, RELEVANCE_EVAL_NAME, turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN), HAIKU_MODEL)]);
 
     const [records] = await evaluateTurnsConsolidatedBatched(batch, [turn], existing);
 
