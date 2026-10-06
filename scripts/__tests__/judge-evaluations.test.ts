@@ -52,7 +52,7 @@ import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 import type { BatchLLMProvider } from '../judge-batch-provider.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE } from '../pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION, type ModelPricingEntry } from '../../../src/lib/core/constants-models.js';
 
@@ -1034,6 +1034,8 @@ describe('classifyJudgeFailure', () => {
     ['parse', 'Generated evaluation steps below minimum (got 0, require 3)'],
     ['parse', "Unexpected token '`', \"```json\" is not valid JSON"],
     ['invalid-input', 'Invalid TestCase: [ { "code": "too_big" } ]'],
+    // The batch provider's BatchWallClockExceededError, as the 09-29 and 09-30 06:00 runs logged it.
+    ['wall-clock', 'Message batch msgbatch_01HkcTjaV5uDC8jWR4ZsDV8d still processing at the 10800000ms wall clock; cancelled'],
     ['other', 'something nobody anticipated'],
   ])('classifies as %s: %s', (expected, message) => {
     expect(classifyJudgeFailure(message)).toBe(expected);
@@ -1043,11 +1045,40 @@ describe('classifyJudgeFailure', () => {
     // billing wins because BILLING_FAILURE_PATTERN is checked first
     expect(classifyJudgeFailure('credit balance is too low; output_config ignored')).toBe('billing');
   });
+
+  it('does not read a reply that merely mentions a wall clock as an overrun', () => {
+    expect(classifyJudgeFailure('Could not parse verdict for coherence: "the wall clock time was not measured"')).toBe('parse');
+  });
 });
 
 describe('summarizeJudgeRun', () => {
-  const noFailures: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, other: 0 };
+  const noFailures: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, 'wall-clock': 0, other: 0 };
   const noSpend: JudgeSpend = { usage: createUsageTotals(), estimatedUsd: 0, keySource: DEFAULT_API_KEY_ENV };
+
+  // JUDGE-BATCH-WALLCLOCK-ABORTS-RUN: until 2026-10-05 an overrun threw out of
+  // main and exited 1, which cost the 09-29 and 09-30 06:00 runs their sync.
+  it('exits JUDGE_EXIT_BATCH_WALL_CLOCK, a soft code, when the batch wall clock abandoned evaluations', () => {
+    // 60% abandoned would otherwise read as a high failure rate.
+    const summary = summarizeJudgeRun(40, { relevance: 30, coherence: 30 }, { ...noFailures, 'wall-clock': 60 }, noSpend);
+
+    expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
+    expect(JUDGE_SOFT_FAILURE_EXITS.has(summary.exitCode)).toBe(true);
+    expect(summary.line).toMatch(/BATCH WALL CLOCK EXCEEDED — 60 evaluations were abandoned/);
+    expect(summary.line).toContain('the 40 scored before it are kept');
+    expect(summary.line).toContain('wall-clock=60');
+  });
+
+  it('exits JUDGE_EXIT_BATCH_WALL_CLOCK, not JUDGE_EXIT_NO_SCORES, when the wall clock abandoned every evaluation', () => {
+    const summary = summarizeJudgeRun(0, { relevance: 100 }, { ...noFailures, 'wall-clock': 100 }, noSpend);
+
+    expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
+  });
+
+  it('JUDGE_EXIT_BILLING still wins over the wall clock', () => {
+    const summary = summarizeJudgeRun(3, { coherence: 20 }, { ...noFailures, billing: 10, 'wall-clock': 10 }, noSpend);
+
+    expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
+  });
 
   it('exits 0 with a one-line summary when scores were produced', () => {
     // 200 successes, 40 failures = 17% failure rate — well below the 50% threshold
@@ -1406,14 +1437,17 @@ describe('evaluateTurnsBatched', () => {
     expect(evalFailures).toEqual({});
   });
 
+  // A run failure, not the wall clock: the wall clock settles what it can and
+  // resolves flush() (see judge-batch-provider.test.ts); only an error that
+  // escapes a batch rejects it and is recorded as the provider's failure.
   it('throws when flush() fails, and when the provider records a failure, instead of returning partial records', async () => {
-    const wallClock = new Error('wall clock');
+    const runFailure = new Error('a batch response the provider could not read');
     const judge = (provider: BatchLLMProvider) => new LLMJudge(provider, { timeoutMs: 5000, maxRetries: 0 });
 
-    const failingFlush = batchProvider({ flush: vi.fn(() => Promise.reject(wallClock)) });
-    await expect(evaluateTurnsBatched(failingFlush, judge(failingFlush), [makeTurn()], new Set())).rejects.toBe(wallClock);
+    const failingFlush = batchProvider({ flush: vi.fn(() => Promise.reject(runFailure)) });
+    await expect(evaluateTurnsBatched(failingFlush, judge(failingFlush), [makeTurn()], new Set())).rejects.toBe(runFailure);
 
-    const recorded = batchProvider({ failure: wallClock });
-    await expect(evaluateTurnsBatched(recorded, judge(recorded), [makeTurn()], new Set())).rejects.toBe(wallClock);
+    const recorded = batchProvider({ failure: runFailure });
+    await expect(evaluateTurnsBatched(recorded, judge(recorded), [makeTurn()], new Set())).rejects.toBe(runFailure);
   });
 });

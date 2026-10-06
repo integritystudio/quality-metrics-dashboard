@@ -82,6 +82,9 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
     if (isFailedEvaluation(e)) failedEvals.push(e);
     if (isHallucinationIndicator(e)) hallucinationEvals.push(e);
   }
+  // The flag is absent on payloads whose producer does not set it (see
+  // DataSources); only an explicit `true` marks the read as partial.
+  const evaluationsTruncated = dataSources.evaluations.truncated === true;
   const errorCount = errorDetails.length;
   const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
     hallucinationEvals.length > 0 || failedEvals.length > 0;
@@ -156,6 +159,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           </>
         )}
       </div>
+
+      {evaluationsTruncated && (
+        <div className="mt-3">
+          <IssueCallout severity="warning" title="Partial evaluation data">
+            This session has more evaluations than the {evaluations.length.toLocaleString()} read for this page.
+            The hallucination indicators, failed-evaluation list and evaluation table below
+            are computed from that partial read and may undercount.
+          </IssueCallout>
+        </div>
+      )}
 
       <Section
         title="Issues & Anomalies"

@@ -49,7 +49,9 @@
  *   9  DERIVE_EXIT_READ_FAILED — derive could not read /v1/traces after the network retries; nothing posted
  *   10 DERIVE_EXIT_INPUT_DRIFT — derive delivered, but a day's spans no longer match what it reads (a hooks rename?)
  *   11 UPLOAD_EXIT_SEND_FAILED — upload's send failed after the network retries; the next run re-sends the rest
- *   For 3-11 the remaining stages still ran.
+ *   12 JUDGE_EXIT_BATCH_WALL_CLOCK — the judge's --batch run hit its wall clock; the scores its cancelled
+ *      batch had already produced were kept, the rest wait for the next run
+ *   For 3-12 the remaining stages still ran.
  *   1  any other stage failure; the pipeline stops at that stage. Also: no judge
  *      key and neither --seed nor --skip-judge given — nothing runs (fail closed)
  *

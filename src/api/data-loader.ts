@@ -21,7 +21,14 @@ const LIMIT_EVALS_METRIC = 10_000;
  * future metric expansion without risking unbounded reads.
  */
 const LIMIT_EVALS_PER_TRACE = 1_000;
-const LIMIT_EVALS_SESSION = 10_000;
+/**
+ * Most evaluations returned for one session. {@link loadEvaluationsBySessionId}
+ * reads {@link TRUNCATION_PROBE_ROWS} past it, so a longer session comes back
+ * flagged `truncated` instead of cut off with no signal.
+ */
+export const LIMIT_EVALS_SESSION = 10_000;
+/** Rows read past a limit: getting one back is the only evidence that more exist. */
+const TRUNCATION_PROBE_ROWS = 1;
 const LIMIT_TRACES = 500;
 const LIMIT_LOGS = 1_000;
 const LIMIT_HEALTH_PROBE = 1;
@@ -203,19 +210,30 @@ export async function loadLogsBySessionId(
   return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
 }
 
+export interface SessionEvaluations {
+  /** At most {@link LIMIT_EVALS_SESSION} rows, in the order the backend returned them. */
+  evaluations: EvaluationResult[];
+  /** True when the session has more evaluations in the window than `evaluations` holds. */
+  truncated: boolean;
+}
+
 export async function loadEvaluationsBySessionId(
   sessionId: string,
   startDate?: string,
   endDate?: string,
-): Promise<EvaluationResult[]> {
+): Promise<SessionEvaluations> {
   const be = getBackend();
   const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
-  return be.queryEvaluations({
+  const rows = await be.queryEvaluations({
     sessionId,
     startDate: isoToNs(startDate ?? start),
     endDate: isoToNs(endDate ?? end),
-    limit: LIMIT_EVALS_SESSION,
+    limit: LIMIT_EVALS_SESSION + TRUNCATION_PROBE_ROWS,
   });
+  return {
+    evaluations: rows.slice(0, LIMIT_EVALS_SESSION),
+    truncated: rows.length > LIMIT_EVALS_SESSION,
+  };
 }
 
 export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
