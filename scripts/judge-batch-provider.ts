@@ -299,14 +299,20 @@ class MessageBatchProvider implements BatchLLMProvider {
   private settleOne({ custom_id, result }: BatchResultLine): void {
     const pending = this.takePending(custom_id);
     if (!pending) return;
-    if (result.type === 'succeeded') {
-      // `usage` is required on a succeeded message; only the callback is optional.
-      this.options.onUsage?.(result.message.usage);
-      pending.resolve({ text: textOf(result.message) });
-      return;
+    // Guard: if onUsage or textOf throws, the entry is already removed from
+    // pending. Without this catch the promise would never settle.
+    try {
+      if (result.type === 'succeeded') {
+        // `usage` is required on a succeeded message; only the callback is optional.
+        this.options.onUsage?.(result.message.usage);
+        pending.resolve({ text: textOf(result.message) });
+        return;
+      }
+      const detail = result.type === 'errored' ? `${result.error.error.type}: ${result.error.error.message}` : undefined;
+      pending.reject(new BatchRequestFailedError(custom_id, result.type, detail));
+    } catch (err) {
+      pending.reject(err instanceof Error ? err : new Error(String(err)));
     }
-    const detail = result.type === 'errored' ? `${result.error.error.type}: ${result.error.error.message}` : undefined;
-    pending.reject(new BatchRequestFailedError(custom_id, result.type, detail));
   }
 
   /** The batch as the API now reports it. A poll lost to the network returns the last state seen. */

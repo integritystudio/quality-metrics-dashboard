@@ -262,6 +262,17 @@ describe('createBatchProvider', () => {
     await structured;
     expect(submitted[0]![0]!.params.output_config).toEqual({ format: { type: 'json_schema', schema } });
   });
+
+  it('rejects a succeeded request when the onUsage callback throws, instead of leaving it pending (JUDGE-BATCH-SETTLE-THROW-LEAVES-PENDING)', async () => {
+    const callbackError = new Error('usage callback failed');
+    const { client } = fakeClient({ results: echo });
+    const provider = await createBatchProvider({ ...BASE, client, onUsage: () => { throw callbackError; } });
+
+    const result = rejection(provider.generate('q'));
+    await provider.flush();
+
+    expect(await result).toBe(callbackError);
+  });
 });
 
 // ---------------------------------------------------------------------------
