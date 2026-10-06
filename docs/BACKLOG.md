@@ -76,7 +76,7 @@ Deferred from the 2026-09-26 `/simplify` pass on `WorkflowPage` (commit 01f8e25)
 |----|-------|----------|-------|
 | WORKFLOW-GRAPH-ONLY-ENDPOINT | `WorkflowPage` fetches the full agent session to render only the graph | P3 | API + hook change |
 | AGENT-QUERY-PARAM-UNREAD | `?agent=` on `/agents/:sessionId` is written by `WorkflowPage` but read by nothing | P3 | Behaviour decision |
-| WORKFLOW-TEST-DEEP-MOCK | `WorkflowPage.test.tsx` mocks `WorkflowGraphView`, two levels below the page | P3 | Test-only |
+| ~~WORKFLOW-TEST-DEEP-MOCK~~ | ~~`WorkflowPage.test.tsx` mocks `WorkflowGraphView`, two levels below the page~~ | ~~P3~~ | Done 2026-10-05 — commit 403cbe6. Click forwarding moved to the `AgentWorkflowView` tests |
 | ~~AGENT-SESSION-TEST-MISPLACED~~ | ~~`AgentSessionPage`'s "View Workflow" test lives in `WorkflowPage.test.tsx`~~ | ~~P3~~ | Done 2026-10-05 — commit 22ce360. The new file mocks only `useAgentSession` |
 
 **WORKFLOW-GRAPH-ONLY-ENDPOINT.** `useAgentSession` calls `GET /api/agents/:sessionId`
