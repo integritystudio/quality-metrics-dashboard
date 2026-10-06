@@ -55,7 +55,7 @@ export interface FixtureServer {
   readonly port: number;
   /** Base URL — set `process.env.OBTOOL_API_URL` to this value. */
   readonly url: string;
-  /** Set evaluation rows returned by GET /v1/evaluations, narrowed by its `evaluationName` param. */
+  /** Set evaluation rows returned by GET /v1/evaluations, narrowed by its `evaluationName` and `traceId` params. */
   setEvals(rows: EvalWireRow[]): void;
   /** Set trace span rows returned by the next GET /v1/traces. */
   setTraces(rows: TraceWireRow[]): void;
@@ -67,24 +67,40 @@ export interface FixtureServer {
    */
   failPath(prefix: string): void;
   /**
+   * Make requests to `path` whose query has `param=value` return HTTP 500, for
+   * error paths where one of several parallel reads must fail.
+   */
+  failQuery(path: string, param: string, value: string): void;
+  /**
    * Paths requested since the last reset, query strings stripped. For reads a
    * caller swallows on failure, where `failPath` cannot show they were skipped.
    */
   requestedPaths(): string[];
+  /** Requests since the last reset, with their query strings. */
+  requests(): FixtureRequest[];
   /** Clear rows, fail-paths and requested paths. Call in beforeEach. */
   reset(): void;
   /** Shut down the server. Call in afterAll. */
   close(): Promise<void>;
 }
 
-/** GET /v1/evaluations query param that narrows rows to one metric, as obtool-api applies it. */
+/** GET /v1/evaluations query params the fixture applies, as obtool-api does. */
 const EVALUATION_NAME_PARAM = 'evaluationName';
+const TRACE_ID_PARAM = 'traceId';
 
-/** Case-insensitive, matching obtool-api's SQL LIKE on `evaluation_name`. */
-function filterEvalsByName(rows: EvalWireRow[], name: string | null): EvalWireRow[] {
-  if (!name) return rows;
-  const wanted = name.toLowerCase();
-  return rows.filter((row) => row.evaluation_name.toLowerCase() === wanted);
+/** `evaluationName` case-insensitively (obtool-api's SQL LIKE); `traceId` exactly. */
+function filterEvals(rows: EvalWireRow[], query: URLSearchParams): EvalWireRow[] {
+  const name = query.get(EVALUATION_NAME_PARAM)?.toLowerCase();
+  const traceId = query.get(TRACE_ID_PARAM);
+  return rows.filter((row) =>
+    (!name || row.evaluation_name.toLowerCase() === name)
+    && (!traceId || row.trace_id === traceId));
+}
+
+/** A request the fixture received: its path and parsed query string. */
+export interface FixtureRequest {
+  path: string;
+  query: URLSearchParams;
 }
 
 function pagedBody<T>(rows: T[]): unknown {
@@ -96,20 +112,21 @@ export async function createFixtureServer(): Promise<FixtureServer> {
   let traceRows: TraceWireRow[] = [];
   let logRows: LogWireRow[] = [];
   const failPaths = new Set<string>();
-  let requested: string[] = [];
+  let failQueries: { path: string; param: string; value: string }[] = [];
+  let requested: FixtureRequest[] = [];
 
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     const rawPath = req.url ?? '/';
     const path = rawPath.split('?')[0] ?? '/';
     const query = new URLSearchParams(rawPath.slice(path.length + 1));
-    requested.push(path);
+    requested.push({ path, query });
 
-    for (const fp of failPaths) {
-      if (path.startsWith(fp)) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'fixture failure' }));
-        return;
-      }
+    const failed = [...failPaths].some((fp) => path.startsWith(fp))
+      || failQueries.some((fq) => fq.path === path && query.get(fq.param) === fq.value);
+    if (failed) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'fixture failure' }));
+      return;
     }
 
     res.setHeader('Content-Type', 'application/json');
@@ -119,7 +136,7 @@ export async function createFixtureServer(): Promise<FixtureServer> {
       res.end(JSON.stringify({ status: 'ok' }));
     } else if (path === '/v1/evaluations') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(filterEvalsByName(evalRows, query.get(EVALUATION_NAME_PARAM)))));
+      res.end(JSON.stringify(pagedBody(filterEvals(evalRows, query))));
     } else if (path === '/v1/traces') {
       res.writeHead(200);
       res.end(JSON.stringify(pagedBody(traceRows)));
@@ -143,12 +160,15 @@ export async function createFixtureServer(): Promise<FixtureServer> {
     setTraces(rows) { traceRows = rows; },
     setLogs(rows) { logRows = rows; },
     failPath(prefix) { failPaths.add(prefix); },
-    requestedPaths() { return [...requested]; },
+    failQuery(path, param, value) { failQueries.push({ path, param, value }); },
+    requestedPaths() { return requested.map((r) => r.path); },
+    requests() { return [...requested]; },
     reset() {
       evalRows = [];
       traceRows = [];
       logRows = [];
       failPaths.clear();
+      failQueries = [];
       requested = [];
     },
     close() {
