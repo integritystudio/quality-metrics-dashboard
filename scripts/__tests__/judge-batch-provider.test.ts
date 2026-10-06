@@ -18,15 +18,18 @@ import {
   classifyJudgeFailure,
   createUsageTotals,
   evalFailures,
+  evaluateTurnsBatched,
   failureClasses,
   resetFailureTracking,
   summarizeJudgeRun,
   BATCH_MODE_JUDGE_TIMEOUT_MS,
+  BATCH_MODE_MAX_RETRIES,
   COHERENCE_EVAL_NAME,
   RELEVANCE_EVAL_NAME,
   type Turn,
 } from '../judge-evaluations.js';
 import { evaluateTurnsConsolidatedBatched } from '../judge-consolidated.js';
+import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import { DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 
@@ -585,6 +588,57 @@ describe('a consolidated --batch run cut short by the wall clock', () => {
     expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(summary.exitCode)).toBe(true);
     expect(summary.line).toContain('attempted=4 succeeded=2 failed=2 classes: wall-clock=2');
+  });
+});
+
+/** A G-Eval verdict as the score schema asks for it. */
+const VERDICT_TEXT = JSON.stringify({ reasoning: 'ok', score: VERDICT_SCORE });
+
+describe('a per-criterion --batch run cut short by the wall clock', () => {
+  let warn: MockInstance<typeof console.warn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    resetFailureTracking();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    warn.mockRestore();
+    resetFailureTracking();
+  });
+
+  it('keeps each turn\'s scored criteria, counts the rest as wall-clock, and resolves rather than throwing', async () => {
+    // Each criterion is two calls: evaluation steps, then a schema-bound score.
+    // The steps batch ends on its first poll; the score batch is still
+    // processing at the wall clock, with one turn's scores answered. The marker
+    // sits in the assistant's text: coherence judges the output alone, so that
+    // is the one field every criterion's score prompt carries.
+    const { client, submitted } = fakeClient({
+      statuses: ['ended', 'in_progress'],
+      afterCancel: ['ended'],
+      results: requests => requests.map((request): ResultLine => {
+        if (!request.params.output_config) return succeeded(request.custom_id, STEPS_TEXT);
+        if (!promptOf(request).includes(SCORED_MARKER)) return { custom_id: request.custom_id, result: { type: 'canceled' } };
+        return succeeded(request.custom_id, VERDICT_TEXT);
+      }),
+    });
+    const batch = await createBatchProvider({ ...SHORT, client });
+    const judge = new LLMJudge(batch, { timeoutMs: BATCH_MODE_JUDGE_TIMEOUT_MS, maxRetries: BATCH_MODE_MAX_RETRIES });
+    const turns = [
+      makeTurn({ sessionId: 'scored00-session', assistantText: `It is ${SCORED_MARKER}.` }),
+      makeTurn({ sessionId: 'abandon0-session' }),
+    ];
+
+    const perTurn = await runClock(evaluateTurnsBatched(batch, judge, turns, new Set()));
+
+    expect(submitted).toHaveLength(2);
+    expect(client.cancel).toHaveBeenCalledTimes(1);
+    expect(perTurn.map(records => records.map(r => r.evaluationName).sort())).toEqual([[COHERENCE_EVAL_NAME, RELEVANCE_EVAL_NAME], []]);
+    expect(failureClasses).toMatchObject({ 'wall-clock': 2, other: 0 });
+    expect(evalFailures).toEqual({ [RELEVANCE_EVAL_NAME]: 1, [COHERENCE_EVAL_NAME]: 1 });
+    expect(batch.failure).toBeUndefined();
   });
 });
 

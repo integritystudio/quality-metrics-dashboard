@@ -1437,14 +1437,17 @@ describe('evaluateTurnsBatched', () => {
     expect(evalFailures).toEqual({});
   });
 
+  // A run failure, not the wall clock: the wall clock settles what it can and
+  // resolves flush() (see judge-batch-provider.test.ts); only an error that
+  // escapes a batch rejects it and is recorded as the provider's failure.
   it('throws when flush() fails, and when the provider records a failure, instead of returning partial records', async () => {
-    const wallClock = new Error('wall clock');
+    const runFailure = new Error('a batch response the provider could not read');
     const judge = (provider: BatchLLMProvider) => new LLMJudge(provider, { timeoutMs: 5000, maxRetries: 0 });
 
-    const failingFlush = batchProvider({ flush: vi.fn(() => Promise.reject(wallClock)) });
-    await expect(evaluateTurnsBatched(failingFlush, judge(failingFlush), [makeTurn()], new Set())).rejects.toBe(wallClock);
+    const failingFlush = batchProvider({ flush: vi.fn(() => Promise.reject(runFailure)) });
+    await expect(evaluateTurnsBatched(failingFlush, judge(failingFlush), [makeTurn()], new Set())).rejects.toBe(runFailure);
 
-    const recorded = batchProvider({ failure: wallClock });
-    await expect(evaluateTurnsBatched(recorded, judge(recorded), [makeTurn()], new Set())).rejects.toBe(wallClock);
+    const recorded = batchProvider({ failure: runFailure });
+    await expect(evaluateTurnsBatched(recorded, judge(recorded), [makeTurn()], new Set())).rejects.toBe(runFailure);
   });
 });
