@@ -86,12 +86,15 @@ function rejection(promise: Promise<unknown>): Promise<Error> {
   );
 }
 
+/** What one poll reports: the batch's status, or the error the poll fails with. */
+type PollOutcome = MessageBatch['processing_status'] | Error;
+
 interface FakeClientOptions {
   /** What `retrieve` reports, in order; the last entry repeats. */
-  statuses?: MessageBatch['processing_status'][];
+  statuses?: PollOutcome[];
   /** What `retrieve` reports once `cancel` has been called, in order; the last entry repeats. A batch that never ends by default. */
-  afterCancel?: MessageBatch['processing_status'][];
-  /** Results for the most recently submitted batch. */
+  afterCancel?: PollOutcome[];
+  /** Results for the most recently submitted batch; a throw here is a results read that fails. */
   results: (requests: BatchRequests) => ResultLine[];
   create?: () => Promise<MessageBatch>;
   cancel?: () => Promise<MessageBatch>;
@@ -106,9 +109,12 @@ function fakeClient(options: FakeClientOptions) {
       submitted.push(params.requests);
       return options.create ? options.create() : Promise.resolve(makeBatch('in_progress'));
     }),
-    retrieve: vi.fn(() => Promise.resolve(makeBatch(statuses[Math.min(polls++, statuses.length - 1)]!))),
+    retrieve: vi.fn(() => {
+      const outcome = statuses[Math.min(polls++, statuses.length - 1)]!;
+      return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(makeBatch(outcome));
+    }),
     // A stream, as the SDK's JSONL decoder is: the results file is read line by line.
-    results: vi.fn(() => Promise.resolve(Readable.from(options.results(submitted.at(-1)!)))),
+    results: vi.fn(() => Promise.resolve().then(() => Readable.from(options.results(submitted.at(-1)!)))),
     cancel: vi.fn(() => {
       statuses = options.afterCancel ?? ['canceling'];
       polls = 0;
@@ -270,6 +276,9 @@ const SHORT = {
   cancelGraceMs: POLLS_OF_GRACE * BATCH_POLL_INTERVAL_MS,
 };
 
+/** A poll lost to the network. */
+const POLL_LOST = new Error('Connection error.');
+
 /** Runs the fake clock, one poll interval at a time, until `work` settles. */
 async function runClock<T>(work: Promise<T>): Promise<T> {
   let settled = false;
@@ -398,6 +407,65 @@ describe('createBatchProvider at the wall clock', () => {
     expect(overrun).toMatchObject({ abandoned: 0 });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('settled 1 results it had already produced, abandoned 0 requests'));
     expect(client.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('abandons every request with the overrun, not a failure, when the ended batch\'s results cannot be read', async () => {
+    const { client } = fakeClient({
+      statuses: ['in_progress'],
+      afterCancel: ['ended'],
+      results: () => { throw new Error('Connection error.'); },
+    });
+    const provider = await createBatchProvider({ ...SHORT, client });
+
+    const first = rejection(provider.generate('a'));
+    const second = rejection(provider.generate('b'));
+    await runClock(provider.flush());
+
+    const overrun = await first;
+    expect(overrun).toBeInstanceOf(BatchWallClockExceededError);
+    expect(await second).toBe(overrun);
+    expect(overrun).toMatchObject({ abandoned: 2 });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not be read'));
+    expect(provider.failure).toBeUndefined();
+  });
+
+  it('keeps polling past a poll lost during the grace, and reads the results once the next one sees the batch end', async () => {
+    const { client } = fakeClient({
+      statuses: ['in_progress'],
+      afterCancel: [POLL_LOST, 'ended'],
+      results: ([first]) => [succeeded(first!.custom_id, 'kept')],
+    });
+    const provider = await createBatchProvider({ ...SHORT, client });
+
+    const kept = provider.generate('a');
+    await runClock(provider.flush());
+
+    expect(await kept).toEqual({ text: 'kept' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(POLL_LOST.message));
+    expect(client.results).toHaveBeenCalledTimes(1);
+    expect(provider.failure).toBeUndefined();
+  });
+
+  it('abandons every request unread once the grace runs out when every poll in it is lost', async () => {
+    let cancelledAt = 0;
+    const { client } = fakeClient({
+      statuses: ['in_progress'],
+      afterCancel: [POLL_LOST],
+      results: echo,
+      cancel: () => {
+        cancelledAt = Date.now();
+        return Promise.resolve(makeBatch('canceling'));
+      },
+    });
+    const provider = await createBatchProvider({ ...SHORT, client });
+
+    const open = rejection(provider.generate('never'));
+    await runClock(provider.flush());
+
+    expect(Date.now() - cancelledAt).toBeGreaterThanOrEqual(SHORT.cancelGraceMs);
+    expect(client.results).not.toHaveBeenCalled();
+    expect(await open).toMatchObject({ name: 'BatchWallClockExceededError', abandoned: 1 });
+    expect(provider.failure).toBeUndefined();
   });
 
   it('reads a batch that ends on the last poll inside the wall clock as before, without cancelling', async () => {
