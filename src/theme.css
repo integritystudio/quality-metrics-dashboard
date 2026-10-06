@@ -577,6 +577,13 @@ body {
   align-items: center;
   gap: var(--space-3);
 }
+.account-badge {
+  color: var(--text-secondary);
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .logout-btn {
   color: var(--text-secondary);
 }
