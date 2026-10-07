@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
 import { selectTurns, turnSkip, WEBHOOK_SECRET_ENV } from '../judge-selection.js';
-import { COHERENCE_EVAL_NAME, HAIKU_MODEL, RELEVANCE_EVAL_NAME, judgedByKey, type Turn } from '../judge-evaluations.js';
+import { COHERENCE_EVAL_NAME, HAIKU_MODEL, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
+import { judgedByKey } from '../judge-dedup.js';
+import { type Turn } from '../judge-turns.js';
 
 const KEY_REF = 'OBTOOL_API_KEY_TEST';
 const ENV = { [KEY_REF]: 'k', [WEBHOOK_SECRET_ENV]: 's' };

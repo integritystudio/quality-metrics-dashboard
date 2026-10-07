@@ -21,7 +21,7 @@ import {
   main,
 } from '../upload-evaluations.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
-import { toOTelRecord } from '../judge-evaluations.js';
+import { toOTelRecord } from '../eval-record.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const MAX_AGE_MS = 36 * 3_600_000;

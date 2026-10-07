@@ -33,19 +33,19 @@ import { LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.j
 import {
   _discoverTranscripts,
   extractTurns,
-  evaluateTurn,
-  processBatch,
   fitContextForJudge,
-  resetFailureTracking,
-  PRODUCER,
+  type Turn,
+  type TranscriptInfo,
+} from './judge-turns.js';
+import { evaluateTurn, processBatch } from './judge-evaluations.js';
+import { resetFailureTracking } from './judge-failures.js';
+import { PRODUCER, type EvalRecord } from './eval-record.js';
+import {
   HAIKU_MODEL,
   JUDGE_MAX_TOKENS,
   JUDGE_DEFAULT_TEMPERATURE,
   FAITHFULNESS_EVAL_NAME,
-  type Turn,
-  type EvalRecord,
-  type TranscriptInfo,
-} from './judge-evaluations.js';
+} from './judge-criteria.js';
 import {
   createConsolidatedProvider,
   evaluateTurnConsolidated,

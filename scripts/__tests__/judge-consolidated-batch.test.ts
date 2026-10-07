@@ -7,18 +7,16 @@ import {
   evaluateTurnsConsolidatedBatched,
   CONSOLIDATED_MAX_TOKENS,
 } from '../judge-consolidated.js';
+import { estimateJudgeRun, BATCH_PRICE_RATIO } from '../judge-usage.js';
+import { resetFailureTracking } from '../judge-failures.js';
+import { judgedByKey, TIMESTAMP_TURN_KEY_LEN } from '../judge-dedup.js';
 import {
-  estimateJudgeRun,
-  resetFailureTracking,
-  judgedByKey,
   HAIKU_MODEL,
   RELEVANCE_EVAL_NAME,
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
-  TIMESTAMP_TURN_KEY_LEN,
-  BATCH_PRICE_RATIO,
-  type Turn,
-} from '../judge-evaluations.js';
+} from '../judge-criteria.js';
+import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../../src/lib/validation/dashboard-schemas.js';
 
 type MessageBatch = Anthropic.Messages.MessageBatch;

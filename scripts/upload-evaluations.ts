@@ -85,16 +85,14 @@ import { pathToFileURL } from 'url';
 
 import {
   BACKFILL_COHORT,
-  CANARY_COHORT,
-  CANARY_EVALUATOR_TYPE,
   EVALUATION_ATTRS,
   EVALUATION_RESULT_EVENT,
   LEGACY_EVALUATOR_TYPE_ATTR,
   LEGACY_SCORE_UNIT_ATTR,
   NORMAL_COHORT,
   SEED_COHORT,
-  TELEMETRY_DIR,
-} from './judge-evaluations.js';
+} from './eval-record.js';
+import { CANARY_COHORT, CANARY_EVALUATOR_TYPE, TELEMETRY_DIR } from './evaluation-constants.js';
 import {
   ACCOUNT_INDEX_WINDOW_DAYS,
   IDENTITY_KEY_REF_FIELD,

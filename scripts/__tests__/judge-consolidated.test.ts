@@ -17,10 +17,8 @@ import {
   type ConsolidatedGenerateOptions,
   type EvaluationStepsCache,
 } from '../judge-consolidated.js';
+import { evalFailures, failureClasses, resetFailureTracking } from '../judge-failures.js';
 import {
-  evalFailures,
-  failureClasses,
-  resetFailureTracking,
   RELEVANCE_EVAL_NAME,
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
@@ -28,11 +26,11 @@ import {
   TOOL_SELECTION_CRITERIA,
   TOOL_ARGUMENTS_CRITERIA,
   TOOL_INTEGRATION_CRITERIA,
-  PRODUCER,
   HAIKU_MODEL,
-  judgedByKey,
-  type Turn,
-} from '../judge-evaluations.js';
+} from '../judge-criteria.js';
+import { PRODUCER } from '../eval-record.js';
+import { judgedByKey } from '../judge-dedup.js';
+import { type Turn } from '../judge-turns.js';
 import { RELEVANCE_CRITERIA, COHERENCE_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { G_EVAL_MAX_SCORE, G_EVAL_MIN_SCORE } from '../../../src/lib/judge/llm-judge-constants.js';
 

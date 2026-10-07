@@ -33,38 +33,19 @@
  * judge spend is attributable to its own key (see judge-credentials.ts).
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, readdirSync, openSync, closeSync, statSync, constants } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, openSync, closeSync, statSync, constants } from 'fs';
 import { createHash } from 'crypto';
-import { join, basename } from 'path';
-import type AnthropicSdk from '@anthropic-ai/sdk';
-import type { LLMProvider, GEvalConfig, ResponseJsonSchema, QagVerificationMode } from '../../src/lib/judge/llm-as-judge.js';
-import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import {
-  LLMJudge,
-  COHERENCE_CRITERIA,
-} from '../../src/lib/judge/llm-judge-config.js';
-import {
-  // Local hook JSONL uses HRT tuples, not the backend's epoch-nanos fields.
-  // `backend-schemas.ts` exports a `traceSpanSchema` for the latter; importing
-  // that one here would reject every line. See the note on LocalTraceSpan.
-  localTraceSpanSchema,
-  otelLogEntrySchema,
-  transcriptEntrySchema,
-  otelEvaluationRecordSchema,
-  type EvaluatorType,
-  type EvaluatorKind,
-  type EvaluationCohort,
-  HALLUCINATION_EVAL_NAME,
-  LLM_EVALUATOR_TYPE,
-} from '../../src/lib/validation/dashboard-schemas.js';
-import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
-import { TELEMETRY_DIR, CALIBRATION_STATE_DIR, CANARY_EVALUATOR_TYPE, CANARY_COHORT } from './evaluation-constants.js';
-import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
-import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
-import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, type TraceSource } from './pipeline-stages.js';
-import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { join } from 'path';
 import { pathToFileURL } from 'node:url';
+import type AnthropicSdk from '@anthropic-ai/sdk';
+import pLimit from 'p-limit';
+import type { LLMProvider, ResponseJsonSchema, QagVerificationMode } from '../../src/lib/judge/llm-as-judge.js';
+import { LLMJudge, COHERENCE_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
+import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE, type EvaluatorKind, type EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+import { TELEMETRY_DIR, CANARY_COHORT } from './evaluation-constants.js';
+import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, type TraceSource } from './pipeline-stages.js';
+import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 import {
   createBatchProvider,
   BATCH_CANCEL_GRACE_MS,
@@ -72,102 +53,59 @@ import {
   BATCH_WALL_CLOCK_MS,
   type BatchLLMProvider,
 } from './judge-batch-provider.js';
-import { HOOK_NAME, toDateOnly } from '../src/api/api-constants.js';
-import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey, type JudgeApiKeySource } from './judge-credentials.js';
-import pLimit from 'p-limit';
-import {
-  ACCOUNT_INDEX_WINDOW_DAYS,
-  IDENTITY_KEY_REF_FIELD,
-  buildAccountIndex,
-  turnAccount,
-  turnSpan,
-  type AccountIndex,
-  type AccountRef,
-} from './account-stamps.js';
+import { toDateOnly } from '../src/api/api-constants.js';
+import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
+import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, type AccountIndex } from './account-stamps.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { sleep } from './sleep.js';
+import { discoverFromCloud } from './judge-cloud-source.js';
+import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched } from './judge-consolidated.js';
+import { readScope, resolveDateScope, resolveSource } from './derive-evaluations.js';
+import { selectTurns, formatTurnSelection } from './judge-selection.js';
+import { formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
+import {
+  BACKFILL_COHORT,
+  LLM_EVALUATOR_KIND,
+  NORMAL_COHORT,
+  PRODUCER,
+  SCORE_PREVIEW_DECIMALS,
+  SEED_COHORT,
+  SESSION_ID_PREVIEW_LEN,
+  SYNTHETIC_EVALUATOR_KIND,
+  TRACE_BACKFILL_EVALUATOR_TYPE,
+  EVAL_SCORE_PRECISION,
+  legacyEvaluatorType,
+  normalizeScore,
+  toOTelRecord,
+  type EvalRecord,
+} from './eval-record.js';
+import {
+  COHERENCE_EVAL_NAME,
+  FAITHFULNESS_EVAL_NAME,
+  HAIKU_MODEL,
+  JUDGE_DEFAULT_TEMPERATURE,
+  JUDGE_MAX_TOKENS,
+  QAG_MODE_RECORDS,
+  RELEVANCE_EVAL_NAME,
+  TOOL_ARGUMENTS_CRITERIA,
+  TOOL_CORRECTNESS_CRITERIA,
+  TOOL_INTEGRATION_CRITERIA,
+  TOOL_SELECTION_CRITERIA,
+} from './judge-criteria.js';
+import { TIMESTAMP_TURN_KEY_LEN, _loadExistingKeys, judgedByKey } from './judge-dedup.js';
+import {
+  _discoverTranscripts,
+  anchorTurns,
+  discoverSessionsFromTraces,
+  extractTurns,
+  fitContextForJudge,
+  turnSourceFields,
+  type Turn,
+} from './judge-turns.js';
+import { createUsageTotals, estimateJudgeRun, recordUsage, type JudgeUsageTotals, type ProviderUsage } from './judge-usage.js';
+import { evalFailures, failureClasses, readRunState, resetFailureTracking, summarizeJudgeRun, trackFailure, writeRunState } from './judge-failures.js';
+import { EVALUATIONS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';
 
-export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
-  name: 'tool_correctness',
-  criteria: 'Evaluate whether the assistant used the correct tools with appropriate arguments and whether tool results were properly incorporated into the response. Consider: (1) Were the right tools selected for the task? (2) Were tool arguments reasonable? (3) Were tool results accurately reflected in the response?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-
-/** Tool correctness sub-criteria for structured evaluation */
-export const TOOL_SELECTION_CRITERIA: GEvalConfig = {
-  name: 'tool_selection',
-  criteria: 'Evaluate whether the assistant selected the appropriate tools for the given task. Were the chosen tools the best fit for the user request? Were unnecessary tools avoided? Were any required tools missing that should have been used?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-
-export const TOOL_ARGUMENTS_CRITERIA: GEvalConfig = {
-  name: 'tool_arguments',
-  criteria: 'Evaluate whether the tool arguments provided by the assistant were correct and appropriate. Were all required parameters provided with accurate values? Were parameter formats and types correct? Were optional parameters used effectively when beneficial?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-
-export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
-  name: 'tool_integration',
-  criteria: 'Evaluate whether tool results were properly incorporated into the assistant response. Were results accurately reflected without distortion? Was relevant information extracted and presented clearly? Were errors or unexpected results handled appropriately?',
-  evaluationParams: ['input', 'output', 'context'],
-};
-
-const HOME = process.env.HOME ?? '';
-export { TELEMETRY_DIR, CALIBRATION_STATE_DIR, CANARY_EVALUATOR_TYPE, CANARY_COHORT };
-/**
- * `evaluations-YYYY-MM-DD.jsonl`: the hooks' own records and this script's judge
- * records. Derive writes no file since cloud-read Phase 6; it posts every record.
- */
-const EVALUATIONS_FILE_PREFIX = 'evaluations';
-/** Dated JSONL filename for a prefix. */
-function datedJsonlName(prefix: string, date: string): string {
-  return `${prefix}-${date}.jsonl`;
-}
-export const SESSION_ID_PREVIEW_LEN = 8;
-export const EVAL_SCORE_PRECISION = 4;
-/** Decimal places in a record's fallback reason line. Restated here rather than
- * imported from `src/lib/constants.ts`, which is Vite-only and unreachable from scripts. */
-export const SCORE_PREVIEW_DECIMALS = 2;
-/** Producer recorded on every record this script writes. */
-export const PRODUCER = 'dashboard:judge-evaluations';
-const SEED_EVALUATOR_TYPE = 'seed';
-export const RULE_EVALUATOR_TYPE = 'rule';
-const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
-
-/**
- * A seeded or canary score is a SHA-256 of the session and turn key mapped into
- * a range — deterministic and reproducible, with no model and no relationship
- * to the content being scored. That makes its *kind* `rule`; what marks it as
- * not-real-data is the cohort, never the kind (OBP16).
- */
-export const SYNTHETIC_EVALUATOR_KIND: EvaluatorKind = 'rule';
-export const LLM_EVALUATOR_KIND: EvaluatorKind = 'llm';
-
-/**
- * The legacy `evaluatorType` value for a kind, or `undefined` when the kind has
- * none. Three of the four kinds are also members of the older enum; the fourth,
- * `ground_truth`, is not, and is left unset rather than coerced.
- */
-function legacyEvaluatorType(kind: EvaluatorKind): EvaluatorType | undefined {
-  return kind === 'ground_truth' ? undefined : kind;
-}
-export const NORMAL_COHORT: EvaluationCohort = 'normal';
-export const SEED_COHORT: EvaluationCohort = 'seed';
-export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
-export const RELEVANCE_EVAL_NAME = 'relevance';
-export const COHERENCE_EVAL_NAME = 'coherence';
-export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
-
-/**
- * How each QAG verification mode is recorded. The judge names the modes after what
- * they measure; the dashboard names the metrics after what they mean, and
- * `fabrication` is recorded as `hallucination` because that is the series every
- * consumer already reads.
- */
-const QAG_MODE_RECORDS = {
-  faithfulness: { evalName: FAITHFULNESS_EVAL_NAME, label: 'Faithfulness' },
-  fabrication: { evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination' },
-} as const satisfies Record<QagVerificationMode, { evalName: string; label: string }>;
 const CONCURRENCY = 3;
 const BATCH_DELAY_MS = 500;
 /**
@@ -184,94 +122,8 @@ export const BATCH_MODE_MAX_RETRIES = 0;
 const SYNC_MODE_MAX_RETRIES = 2;
 /** Sessions listed in a --dry-run's turn-count breakdown. */
 const DRY_RUN_TOP_SESSIONS = 10;
-export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
-/**
- * The dedup set holds two keys per judged criterion: the plain
- * `${sessionId}:${evaluationName}:${turnKey}` for every row, and the same key
- * suffixed `@<judgeModel>` for every LLM row (JUDGE-MODEL-METADATA-ONLY,
- * 2026-10-01). The LLM paths check the suffixed key, so a turn Haiku judged is
- * still judged by a different model; the seed path checks the plain key, so it
- * never seeds a turn any judge scored. Rows written before the model was
- * recorded are all Haiku 4.5, so a judge row with no model and no synthetic
- * cohort counts as one.
- */
-function turnScoreKey(sessionId: string, evaluationName: string, turnKey: string): string {
-  return `${sessionId}:${evaluationName}:${turnKey}`;
-}
-
-export function judgedByKey(sessionId: string, evaluationName: string, turnKey: string, judgeModel: string): string {
-  return `${turnScoreKey(sessionId, evaluationName, turnKey)}@${judgeModel}`;
-}
-
-const SYNTHETIC_COHORTS: ReadonlySet<string> = new Set<EvaluationCohort>([SEED_COHORT, CANARY_COHORT]);
-
-/** Add both keys for one stored judge row. No model on a non-synthetic row means a pre-2026-09-30 Haiku row. */
-export function addJudgedKeys(
-  keys: Set<string>,
-  row: { sessionId: string; evaluationName: string; turnKey: string; judgeModel?: string | undefined; cohort?: string | undefined },
-): void {
-  keys.add(turnScoreKey(row.sessionId, row.evaluationName, row.turnKey));
-  const synthetic = row.cohort !== undefined && SYNTHETIC_COHORTS.has(row.cohort);
-  const judgeModel = row.judgeModel ?? (synthetic ? undefined : HAIKU_MODEL);
-  if (judgeModel) keys.add(judgedByKey(row.sessionId, row.evaluationName, row.turnKey, judgeModel));
-}
-export const JUDGE_MAX_TOKENS = 1024;
-/** Low temperature for consistent, deterministic evaluation scores */
-export const JUDGE_DEFAULT_TEMPERATURE = 0.1;
-/** Maximum characters per turn to prevent oversized LLM prompts and token explosion */
-export const MAX_TURN_TEXT_LEN = 8000;
-/** Maximum tool context items to balance quality vs cost in evaluations */
-export const MAX_TOOL_CONTEXT_ITEMS = 10;
-/** Maximum tool results to include per turn in evaluation context */
-const MAX_TOOL_RESULTS_PER_TURN = 20;
 const MAX_TURN_LIMIT = 10_000;
-export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09T01:11:15"
-const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
-
-/**
- * On-disk attribute keys. **Every key the hooks also write must stay identical
- * to their `EVALUATION_ATTRS` (`hooks/lib/evaluation-attrs.ts`, re-exported by
- * `quality-signals.ts`)** — both writers append to the same
- * `evaluations-YYYY-MM-DD.jsonl` files, so a divergence splits the corpus into
- * two shapes that no single reader handles.
- *
- * Two optional keys here have no hooks counterpart, on purpose:
- * - `SCORE_UNIT`: the hooks dropped theirs (OBP20) because all their scores are
- *   `ratio_0_1`, but derive's `evaluation_latency` is in `seconds`.
- * - `JUDGE_MODEL`: the hooks dropped theirs (OBP22) because their records link to
- *   a judge span that carries `gen_ai.request.model`; this judge records no span.
- *
- * Custom keys live under `integritystudio.*`: OTel semconv defines none of them
- * and advises against inventing keys under a namespace it owns. That is why
- * `gen_ai.evaluation.evaluator{,.type}` were dropped here (OBP16) and the score
- * unit moved off `gen_ai.evaluation.score.unit` on 2026-09-29.
- */
-export const EVALUATION_ATTRS = {
-  NAME: 'gen_ai.evaluation.name',
-  SCORE_VALUE: 'gen_ai.evaluation.score.value',
-  SCORE_UNIT: 'integritystudio.evaluation.score.unit',
-  EXPLANATION: 'gen_ai.evaluation.explanation',
-  EVALUATOR_KIND: 'integritystudio.evaluation.evaluator.kind',
-  COHORT: 'integritystudio.evaluation.cohort',
-  PRODUCER: 'integritystudio.evaluation.producer',
-  JUDGE_MODEL: 'integritystudio.evaluation.judge.model',
-  SESSION_ID: 'session.id',
-  /** Semconv fallback link to the scored response when no span id is known (TKR8 Phase 2). */
-  RESPONSE_ID: 'gen_ai.response.id',
-} as const;
-
-/** Legacy overloaded key, read-only — still present on every pre-OBP16 record. */
-export const LEGACY_EVALUATOR_TYPE_ATTR = 'gen_ai.evaluation.evaluator.type';
-
-/** COMPAT until 2026-10-29: the score unit's key on records written before 2026-09-29. Read-only. */
-export const LEGACY_SCORE_UNIT_ATTR = 'gen_ai.evaluation.score.unit';
-
-export const EVALUATION_RESULT_EVENT = 'gen_ai.evaluation.result';
-
-export function normalizeScore(score: number): number {
-  return Math.round(score * 10000) / 10000;
-}
 
 /**
  * Build one record.
@@ -306,467 +158,12 @@ function createEvalRecord(
   };
 }
 
-/**
- * What a record built from a turn carries to link it to that turn: its span
- * (Phase 2), the response id when no span is known, and its account stamp
- * (Phase 1).
- *
- * Spread, not assigned: an unstamped turn must yield a record with no
- * `identityKeyRef` key at all, which upload reads as "fall back to the join";
- * `null` is a real stamp (unmapped account, withheld). The response id follows
- * the semconv rule literally — it is set only "when span id is not available".
- */
-export function turnSourceFields(turn: Turn): Pick<EvalRecord, 'identityKeyRef' | 'spanId' | 'responseId'> {
-  return {
-    ...(turn.spanId ? { spanId: turn.spanId } : turn.responseId ? { responseId: turn.responseId } : {}),
-    ...(turn.identityKeyRef !== undefined && { identityKeyRef: turn.identityKeyRef }),
-  };
-}
-
-/**
- * Anchor each turn to its own spans: the session's spans between the turn's
- * start and the next turn's. The first of them gives the turn its trace and
- * the span its evaluations are parented to (Phase 2); the first stamped one
- * gives its account (Phase 1).
- *
- * Never from the transcript's trace id. A transcript's turns all share the
- * trace id of whichever prompt the token-metrics log recorded first, so it
- * names the wrong prompt for every turn but one — `extractTurns` no longer
- * copies it. And never from the account signed in now: the judge runs hours
- * after the turn, often under another account.
- */
-export function anchorTurns(turns: Turn[], index: AccountIndex): void {
-  const bySession = new Map<string, Turn[]>();
-  for (const turn of turns) {
-    const group = bySession.get(turn.sessionId) ?? [];
-    group.push(turn);
-    bySession.set(turn.sessionId, group);
-  }
-  for (const [sessionId, group] of bySession) {
-    const timed = group
-      .map((turn) => ({ turn, atMs: Date.parse(turn.timestamp) }))
-      .sort((a, b) => a.atMs - b.atMs);
-    timed.forEach(({ turn, atMs }, i) => {
-      const nextMs = timed[i + 1]?.atMs;
-      const ref = turnAccount(index, sessionId, atMs, nextMs);
-      if (ref !== undefined) turn.identityKeyRef = ref;
-      const span = turnSpan(index, sessionId, atMs, nextMs);
-      if (span) {
-        turn.traceId = span.traceId;
-        turn.spanId = span.spanId;
-      }
-    });
-  }
-}
-
-export interface TranscriptInfo {
-  path: string;
-  sessionId: string;
-  traceId: string;
-}
-
-export interface Turn {
-  sessionId: string;
-  traceId: string;
-  timestamp: string;
-  userText: string;
-  assistantText: string;
-  toolResults: string[];
-  /** Account the turn ran under (`anchorTurns`); absent when no stamped span covers it. */
-  identityKeyRef?: AccountRef;
-  /** The turn's first span (`anchorTurns`), which its evaluations are parented to. */
-  spanId?: string;
-  /** API response id of the turn's assistant message — semconv `gen_ai.response.id`. */
-  responseId?: string;
-}
-
-/** Canonical evaluation record. Also used by derive-evaluations.ts. */
-export interface EvalRecord {
-  timestamp: string;
-  evaluationName: string;
-  scoreValue: number;
-  /** e.g. 'seconds', 'ratio_0_1'; omitted when the score is unitless. */
-  scoreUnit?: string;
-  explanation: string;
-  /** Producer — which component wrote this. Never a model id (OBP16). */
-  evaluator: string;
-  /**
-   * @deprecated Overloaded field, kept so the query/export surface keeps
-   * filtering. Mirrors `evaluatorKind` where the two enums overlap, and is
-   * omitted for `ground_truth`, which has no legacy value — mapping it onto one
-   * would be the same misstatement OBP16 removed.
-   */
-  evaluatorType?: EvaluatorType;
-  /** How the score was produced. */
-  evaluatorKind: EvaluatorKind;
-  /** Whether the score describes real data. */
-  cohort: EvaluationCohort;
-  /** Judge model — omitted for any score no model produced. */
-  judgeModel?: string;
-  traceId: string;
-  sessionId: string;
-  /**
-   * Account of the span or turn this scores, copied from its hook stamp (TKR8
-   * Phase 1): a secret name, `null` for an unmapped account, absent when the
-   * source carried none. Written as a record field, never an attribute, so it
-   * routes the upload and is never shipped.
-   */
-  identityKeyRef?: AccountRef;
-  /**
-   * The span this scores (TKR8 Phase 2): written top-level beside `traceId`, as
-   * an OTel log record's span context, so the evaluation is parented to it.
-   */
-  spanId?: string;
-  /** The scored response's id, set only when `spanId` is unknown (semconv fallback). */
-  responseId?: string;
-}
-
-/**
- * Alternate directories where session transcripts may exist.
- * Checked in order when a log-referenced path is missing, and scanned
- * directly to discover transcripts not referenced in logs at all.
- */
-export const TRANSCRIPT_DIRS: readonly string[] = [
-  join(HOME, '.claude', 'projects'),
-  join(HOME, 'claude-tool-use', 'projects'),
-  join(HOME, '.claude-history', 'projects'),
-  // Root-level slug dirs (transcripts stored outside projects/ subdirectory)
-  join(HOME, 'claude-tool-use'),
-  join(HOME, '.claude-history'),
-];
-
-/** Try to resolve a missing transcript path by checking alternate directories */
-function resolveTranscriptPath(originalPath: string): string | null {
-  if (existsSync(originalPath)) return originalPath;
-
-  const projectsIdx = originalPath.indexOf('/projects/');
-  if (projectsIdx === -1) return null;
-  const suffix = originalPath.slice(projectsIdx + '/projects/'.length);
-
-  for (const dir of TRANSCRIPT_DIRS) {
-    const candidate = join(dir, suffix);
-    if (candidate !== originalPath && existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
-/** The transcript path log attribute; the hooks moved it under `integritystudio.` on 2026-09-29. */
-const TRANSCRIPT_PATH_ATTR = 'integritystudio.transcript.path';
-const LEGACY_TRANSCRIPT_PATH_ATTR = 'transcript.path';
-
-/**
- * A token-metrics log record's transcript path, under its canonical key, else
- * under the key older records carry. These are raw `logs-*.jsonl` lines, which
- * no alias table rewrites, so both spellings reach this reader.
- */
-export function transcriptPathOf(attrs: Record<string, unknown>): string | undefined {
-  const canonical = attrs[TRANSCRIPT_PATH_ATTR];
-  if (typeof canonical === 'string') return canonical;
-  const legacy = attrs[LEGACY_TRANSCRIPT_PATH_ATTR];
-  return typeof legacy === 'string' ? legacy : undefined;
-}
-
-/** Discover transcripts from telemetry logs (primary) and directory scan (fallback) */
-export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
-  // Track by sessionId (UUID) to deduplicate across sources
-  const seen = new Set<string>();
-  const transcripts: TranscriptInfo[] = [];
-
-  const logFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('logs-') && f.endsWith('.jsonl'))
-    .sort();
-
-  for (const file of logFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
-      const attrs = entry.attributes;
-      if (attrs?.['integritystudio.hook.name'] !== HOOK_NAME.TOKEN_METRICS) continue;
-
-      const tPath = transcriptPathOf(attrs);
-      if (!tPath) continue;
-
-      const sessionId = basename(tPath, '.jsonl');
-      if (seen.has(sessionId)) continue;
-
-      const resolved = resolveTranscriptPath(tPath);
-      if (!resolved) continue;
-
-      seen.add(sessionId);
-      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
-      transcripts.push({ path: resolved, sessionId, traceId });
-    }
-  }
-
-  transcripts.push(...scanTranscriptDirs(TRANSCRIPT_DIRS, seen));
-  return transcripts;
-}
-
-/**
- * Transcripts found by listing `<dir>/<slug>/<sessionId>.jsonl` under each of
- * `dirs`, first directory winning. Session ids already in `seen` are skipped;
- * the rest are added to it. Reads no telemetry, so the cloud source uses it to
- * find the transcript of a session the cloud named.
- */
-export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS, seen = new Set<string>()): TranscriptInfo[] {
-  const transcripts: TranscriptInfo[] = [];
-  for (const dir of dirs) {
-    if (!existsSync(dir)) continue;
-    let slugDirs: string[];
-    try {
-      slugDirs = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const slug of slugDirs) {
-      const slugPath = join(dir, slug);
-      let files: string[];
-      try {
-        files = readdirSync(slugPath);
-      } catch {
-        continue;
-      }
-      for (const f of files) {
-        if (!f.endsWith('.jsonl')) continue;
-        const sessionId = basename(f, '.jsonl');
-        // Skip non-UUID filenames (memory files, etc.)
-        if (!UUID_PREFIX_REGEX.test(sessionId)) continue;
-        if (seen.has(sessionId)) continue;
-        seen.add(sessionId);
-        transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
-      }
-    }
-  }
-  return transcripts;
-}
-
-interface TraceSession {
-  sessionId: string;
-  traceId: string;
-  earliestTime: number; // epoch seconds
-  spanCount: number;
-}
-
-/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
-async function discoverSessionsFromTraces(): Promise<Turn[]> {
-  const traceFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith('traces-') && f.endsWith('.jsonl'))
-    .sort();
-
-  const sessions = new Map<string, TraceSession>();
-
-  for (const file of traceFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-
-    for await (const span of streamJsonlWithValidation(filepath, localTraceSpanSchema)) {
-      const attrs = span.attributes;
-
-      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
-      if (!sessionId) continue;
-
-      const startTime = Array.isArray(span.startTime) ? span.startTime[0] : 0;
-      const traceId = span.traceId || '';
-
-      const existing = sessions.get(sessionId);
-      if (!existing) {
-        sessions.set(sessionId, { sessionId, traceId, earliestTime: startTime, spanCount: 1 });
-      } else {
-        existing.spanCount++;
-        if (startTime < existing.earliestTime) {
-          existing.earliestTime = startTime;
-          existing.traceId = traceId;
-        }
-      }
-    }
-  }
-
-  const turns: Turn[] = [];
-  for (const s of sessions.values()) {
-    const timestamp = new Date(s.earliestTime * TIME_MS.SECOND).toISOString();
-    turns.push({
-      sessionId: s.sessionId,
-      traceId: s.traceId,
-      timestamp,
-      userText: '[trace-backfill]',
-      assistantText: '[trace-backfill]',
-      toolResults: [],
-    });
-  }
-
-  return turns;
-}
-
-export interface TextBlock { type: 'text'; text: string }
-export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
-export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
-export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
-
-function isContentBlock(value: unknown): value is ContentBlock {
-  if (typeof value !== 'object' || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return obj.type === 'text' || obj.type === 'tool_result' || obj.type === 'tool_use';
-}
-
-function asContentBlocks(content: unknown): ContentBlock[] {
-  if (!Array.isArray(content)) return [];
-  return content.filter(isContentBlock);
-}
-
-export function isSystemPrompt(text: string): boolean {
-  if (typeof text !== 'string') return false;
-  const trimmed = text.trimStart();
-  return trimmed.startsWith('<system-reminder>') || trimmed.startsWith('Stop hook feedback:');
-}
-
-export function isToolResultOnly(content: unknown): boolean {
-  if (!Array.isArray(content)) return false;
-  const blocks = asContentBlocks(content);
-  return blocks.length > 0 && blocks.every(b => b.type === 'tool_result');
-}
-
-export function extractTextFromContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  return asContentBlocks(content)
-    .filter((b): b is TextBlock => b.type === 'text')
-    .map(b => b.text)
-    .join('\n')
-    .trim();
-}
-
-export function extractToolResults(content: unknown): string[] {
-  return asContentBlocks(content)
-    .filter((b): b is ToolResultBlock => b.type === 'tool_result')
-    .map(b => {
-      if (typeof b.content === 'string') return b.content;
-      return b.content
-        .filter((inner): inner is TextBlock => inner.type === 'text')
-        .map(inner => inner.text)
-        .join('\n');
-    })
-    .filter(Boolean);
-}
-
-export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
-  const turns: Turn[] = [];
-
-  let pendingUser: { text: string; timestamp: string } | null = null;
-  // Anchoring (`anchorTurns`) gives each turn its own trace; `info.traceId` is
-  // one prompt's trace for the whole transcript, so it is not copied (TKR8).
-  const accumulatedToolResults: string[] = [];
-
-  for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
-    const type = entry.type;
-    if (type === 'progress' || type === 'file-history-snapshot') continue;
-
-    const message = entry.message;
-    if (!message) continue;
-
-    const role = message.role;
-    const content = message.content;
-
-    if (type === 'user' && role === 'user') {
-      const toolRes = extractToolResults(content);
-      if (toolRes.length > 0) {
-        accumulatedToolResults.push(...toolRes);
-      }
-
-      if (isToolResultOnly(content)) continue;
-
-      const userText = extractTextFromContent(content);
-      if (!userText || isSystemPrompt(userText)) continue;
-
-      // Skip entries without valid timestamp (required for correlation)
-      const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : null;
-      if (!timestamp) continue;
-
-      // Sanitize text before LLM evaluation to mitigate prompt injection
-      const sanitizedUser = sanitizeForPrompt(userText, MAX_TURN_TEXT_LEN);
-      if (!sanitizedUser.trim()) continue;
-
-      pendingUser = {
-        text: sanitizedUser,
-        timestamp,
-      };
-    }
-
-    if (type === 'assistant' && role === 'assistant' && pendingUser) {
-      const assistantText = extractTextFromContent(content);
-      if (!assistantText) continue;
-
-      turns.push({
-        sessionId: info.sessionId,
-        traceId: '',
-        timestamp: pendingUser.timestamp,
-        userText: pendingUser.text,
-        assistantText: sanitizeForPrompt(assistantText, MAX_TURN_TEXT_LEN),
-        toolResults: accumulatedToolResults.slice(-MAX_TOOL_RESULTS_PER_TURN),
-        ...(message.id && { responseId: message.id }),
-      });
-
-      pendingUser = null;
-      accumulatedToolResults.length = 0;
-    }
-  }
-
-  return turns;
-}
-
 // ---------------------------------------------------------------------------
 // Usage accounting
 // ---------------------------------------------------------------------------
 // The dry-run's TOKENS_PER_CHAR estimate is not what a run costs. Every
 // response carries `usage`; the provider folds each one into the totals the
 // summary line prints beside the estimate.
-
-/** Cache reads bill at a tenth of the input rate. */
-export const CACHE_READ_INPUT_PRICE_RATIO = 0.1;
-/** Cache writes bill at 1.25x the input rate. */
-export const CACHE_CREATION_INPUT_PRICE_RATIO = 1.25;
-/** Message Batches API bills at half the synchronous rate. */
-export const BATCH_PRICE_RATIO = 0.5;
-
-/** Token totals folded from every `response.usage` a run saw. Field names match the API. */
-export interface JudgeUsageTotals {
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
-}
-
-/** The `usage` of one Messages API response; cache counts are null on models without caching. */
-export interface ProviderUsage {
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_input_tokens?: number | null;
-  cache_creation_input_tokens?: number | null;
-}
-
-export function createUsageTotals(): JudgeUsageTotals {
-  return { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
-}
-
-/** Fold one response's usage into the run totals. */
-export function recordUsage(totals: JudgeUsageTotals, usage: ProviderUsage): void {
-  totals.input_tokens += usage.input_tokens;
-  totals.output_tokens += usage.output_tokens;
-  totals.cache_read_input_tokens += usage.cache_read_input_tokens ?? 0;
-  totals.cache_creation_input_tokens += usage.cache_creation_input_tokens ?? 0;
-}
-
-/** List pricing for the judge model; throws rather than pricing a run at $0. */
-export function judgePricing(): ModelPricingEntry {
-  const pricing = MODEL_PRICING[HAIKU_MODEL];
-  if (!pricing) throw new Error(`No pricing data for model ${HAIKU_MODEL}`);
-  return pricing;
-}
-
-/** USD the totals imply at list rates: input and output as billed, cache reads and writes at their ratios. */
-export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntry): number {
-  const inputUsd = (totals.input_tokens / TOKENS_PER_MILLION) * pricing.input;
-  const outputUsd = (totals.output_tokens / TOKENS_PER_MILLION) * pricing.output;
-  const cacheReadUsd = (totals.cache_read_input_tokens / TOKENS_PER_MILLION) * pricing.input * CACHE_READ_INPUT_PRICE_RATIO;
-  const cacheCreationUsd = (totals.cache_creation_input_tokens / TOKENS_PER_MILLION) * pricing.input * CACHE_CREATION_INPUT_PRICE_RATIO;
-  return inputUsd + outputUsd + cacheReadUsd + cacheCreationUsd;
-}
 
 /** `output_config.format.type` for a response constrained by a JSON Schema (structured outputs). */
 const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
@@ -948,229 +345,6 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
   return { evals, canaryCount };
 }
 
-/** Track evaluation failures for summary reporting */
-export const evalFailures: Record<string, number> = {};
-
-export type JudgeFailureClass = 'billing' | 'network' | 'schema-rejection' | 'parse' | 'invalid-input' | 'wall-clock' | 'other';
-const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'wall-clock', 'other'];
-
-/** Failures by cause across all metrics — what decides the exit code. */
-export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, 'wall-clock': 0, other: 0 };
-
-/**
- * The batch provider's `BatchWallClockExceededError`: the run's wall clock ran
- * out and the batch was cancelled before this call was answered. Nothing is
- * wrong with the call; the next run judges the turn. Matched on the whole
- * phrase, so a model reply quoted in some other error cannot land here.
- */
-const WALL_CLOCK_FAILURE_PATTERN = /still processing at the \d+ms wall clock/;
-const BILLING_FAILURE_PATTERN = /credit balance|billing|payment required|insufficient (?:funds|credit)/i;
-const NETWORK_FAILURE_PATTERN = /Connection error|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|timed out/i;
-/**
- * Matches API 400s that rejected the request because of the output_config JSON
- * schema — e.g. unsupported keywords like minimum/maximum on an integer field.
- * Distinct from `parse` failures, which are about decoding the model's output;
- * this class means the request shape was wrong.
- */
-const SCHEMA_REJECTION_PATTERN = /output_config|json_schema.*format|schema.*keyword|unsupported.*schema/i;
-const INVALID_INPUT_FAILURE_PATTERN = /Invalid TestCase|Invalid GEvalConfig/;
-const PARSE_FAILURE_PATTERN = /below minimum|not valid JSON|Unexpected token|Invalid normalized score|Could not (?:extract|parse)/i;
-
-/**
- * Bucket a judge error by what would fix it: money, the network, the request
- * schema, the parser, the input this script built, or another run. The wall
- * clock is checked first because its message is this pipeline's own and
- * carries a batch id, which must not be read as anything else.
- */
-export function classifyJudgeFailure(message: string): JudgeFailureClass {
-  if (WALL_CLOCK_FAILURE_PATTERN.test(message)) return 'wall-clock';
-  if (BILLING_FAILURE_PATTERN.test(message)) return 'billing';
-  if (NETWORK_FAILURE_PATTERN.test(message)) return 'network';
-  if (SCHEMA_REJECTION_PATTERN.test(message)) return 'schema-rejection';
-  if (INVALID_INPUT_FAILURE_PATTERN.test(message)) return 'invalid-input';
-  if (PARSE_FAILURE_PATTERN.test(message)) return 'parse';
-  return 'other';
-}
-
-export function resetFailureTracking(): void {
-  for (const key of Object.keys(evalFailures)) delete evalFailures[key];
-  for (const cls of JUDGE_FAILURE_CLASSES) failureClasses[cls] = 0;
-}
-
-function trackFailure(metric: string, err: unknown): void {
-  evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
-  failureClasses[classifyJudgeFailure(err instanceof Error ? err.message : String(err))] += 1;
-}
-
-/** Appended when a context item is cut to fit the judge's schema. */
-export const CONTEXT_TRUNCATION_MARKER = '\n…[truncated to fit the judge input cap]';
-
-/**
- * Fit tool results to what `testCaseSchema` accepts: at most the smaller of
- * MAX_TOOL_CONTEXT_ITEMS / MAX_CONTEXT_ITEMS entries, each at most
- * MAX_TEXT_LENGTH characters, so one oversized tool result cannot fail every
- * metric for its turn with "Invalid TestCase … too_big".
- */
-export function fitContextForJudge(toolResults: readonly string[]): string[] {
-  const itemLimit = Math.min(MAX_TOOL_CONTEXT_ITEMS, MAX_CONTEXT_ITEMS);
-  return toolResults.slice(0, itemLimit).map(item =>
-    item.length <= MAX_TEXT_LENGTH
-      ? item
-      : item.slice(0, MAX_TEXT_LENGTH - CONTEXT_TRUNCATION_MARKER.length) + CONTEXT_TRUNCATION_MARKER,
-  );
-}
-
-/** Estimated tokens per evaluation response — the judge answers with a short JSON verdict. */
-export const EST_OUTPUT_TOKENS_PER_EVAL = 200;
-/** Criteria in one consolidated prompt: relevance and coherence, always. */
-const CONSOLIDATED_BASE_CRITERIA = 2;
-/** Added with tool results: faithfulness, tool_correctness and its three sub-criteria. */
-const CONSOLIDATED_TOOL_CRITERIA = 5;
-
-export interface JudgeRunEstimate {
-  evals: number;
-  inputTokens: number;
-  outputTokens: number;
-  costUsd: number;
-}
-
-/**
- * What the run should cost before it spends anything, priced from content
- * length (TOKENS_PER_CHAR). The dry-run prints it; a real run prints it beside
- * the usage the API reported, which is how a $1.80 estimate was found to be
- * a ~$3.30 bill. Pass `batch: true` when `--batch` is set — Message Batches
- * bill at BATCH_PRICE_RATIO (half list rates). Pass `consolidated: true` for
- * the default mode, which sends each turn's content once and answers every
- * criterion in that one call.
- */
-export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolidated = false): JudgeRunEstimate {
-  if (consolidated) return estimateConsolidatedRun(turns, batch);
-  // 2 base evals (relevance, coherence) + 2 with tools (tool_correctness, and one
-  // QAG sweep that scores faithfulness and hallucination together — hallucination
-  // is no longer a paid call of its own).
-  const evals = turns.reduce((sum, t) =>
-    sum + 2 + (t.toolResults.length > 0 ? 2 : 0), 0);
-  // Estimate tokens from actual content length (~4 chars/token)
-  const inputTokens = turns.reduce((sum, t) => {
-    const contentChars = t.userText.length + t.assistantText.length
-      + t.toolResults.reduce((s, r) => s + r.length, 0);
-    const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
-    return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
-  }, 0);
-  const outputTokens = evals * EST_OUTPUT_TOKENS_PER_EVAL;
-  const pricing = judgePricing();
-  const listCostUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
-    + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
-  const costUsd = batch ? listCostUsd * BATCH_PRICE_RATIO : listCostUsd;
-  return { evals, inputTokens, outputTokens, costUsd };
-}
-
-/**
- * One call per turn: content once, every criterion's reasoning in the reply.
- * The per-criterion steps calls (one per criterion per run) are left out —
- * at most seven short calls, noise beside the verdicts.
- */
-function estimateConsolidatedRun(turns: readonly Turn[], batch: boolean): JudgeRunEstimate {
-  let inputTokens = 0;
-  let outputTokens = 0;
-  for (const t of turns) {
-    const contentChars = t.userText.length + t.assistantText.length
-      + fitContextForJudge(t.toolResults).reduce((s, r) => s + r.length, 0);
-    inputTokens += Math.ceil(contentChars * TOKENS_PER_CHAR);
-    const criteria = CONSOLIDATED_BASE_CRITERIA + (t.toolResults.length > 0 ? CONSOLIDATED_TOOL_CRITERIA : 0);
-    outputTokens += criteria * EST_OUTPUT_TOKENS_PER_EVAL;
-  }
-  const pricing = judgePricing();
-  const listCostUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
-    + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
-  const costUsd = batch ? listCostUsd * BATCH_PRICE_RATIO : listCostUsd;
-  return { evals: turns.length, inputTokens, outputTokens, costUsd };
-}
-
-/** What a run spent, for the summary line. */
-export interface JudgeSpend {
-  /** Totals folded from every `response.usage` the run saw. */
-  usage: JudgeUsageTotals;
-  /** What estimateJudgeRun said before the run spent anything. */
-  estimatedUsd: number;
-  /** Environment variable NAME the key came from — never the value. */
-  keySource: JudgeApiKeySource;
-}
-
-export interface JudgeRunSummary {
-  attempted: number;
-  succeeded: number;
-  failed: number;
-  byClass: Record<JudgeFailureClass, number>;
-  /** Token totals the API reported, and what they cost at list rates. */
-  usage: JudgeUsageTotals;
-  estimatedUsd: number;
-  actualUsd: number;
-  /** Environment variable NAME the key came from — never the value. */
-  keySource: JudgeApiKeySource;
-  /** 0 when the run produced scores and saw no billing refusal. */
-  exitCode: number;
-  /** The one line the log gets, verdict included. */
-  line: string;
-}
-
-/**
- * What the run did and how loudly to say so. A billing refusal wins — nothing
- * else in the run can be trusted and the fix is external. A run that attempted
- * evaluations and produced none is a failure too, never a success. A `--batch`
- * run cut short by its wall clock says so with its own code, whatever share of
- * it was scored: the run did not fail, it ran out of time, and what it scored
- * is kept (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN). The spend block beside the
- * verdict is what the run cost from the usage the API reported, next to the
- * pre-run estimate and the NAME of the key it was billed to.
- */
-export function summarizeJudgeRun(
-  succeeded: number,
-  byMetric: Record<string, number>,
-  byClass: Record<JudgeFailureClass, number>,
-  spend: JudgeSpend,
-  prev?: JudgeRunState,
-): JudgeRunSummary {
-  const failed = Object.values(byMetric).reduce((sum, n) => sum + n, 0);
-  const attempted = succeeded + failed;
-  const successRate = attempted > 0 ? succeeded / attempted : 0;
-  const prevRate = prev && prev.attempted > 0 ? prev.succeeded / prev.attempted : undefined;
-  const classes = JUDGE_FAILURE_CLASSES.filter(c => byClass[c] > 0).map(c => `${c}=${byClass[c]}`).join(' ') || 'none';
-  let exitCode = 0;
-  let verdict = 'ok';
-  if (byClass.billing > 0) {
-    exitCode = JUDGE_EXIT_BILLING;
-    verdict = 'BILLING REFUSED — no judge output from this run can be trusted; top up credit before re-running';
-  } else if (byClass['wall-clock'] > 0) {
-    // Ahead of the verdicts below: abandoned evaluations count as failed, so
-    // an overrun would otherwise be reported as a failure rate.
-    exitCode = JUDGE_EXIT_BATCH_WALL_CLOCK;
-    verdict = `BATCH WALL CLOCK EXCEEDED — ${byClass['wall-clock']} evaluations were abandoned with the cancelled batch and wait for the next run; the ${succeeded} scored before it are kept`;
-  } else if (attempted > 0 && succeeded === 0) {
-    exitCode = JUDGE_EXIT_NO_SCORES;
-    verdict = 'NO SCORES PRODUCED — every evaluation failed';
-  } else if (attempted > 0 && failed / attempted > HIGH_FAILURE_RATE_THRESHOLD) {
-    exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * PERCENT_MULTIPLIER).toFixed(1)}%); check failure classes above`;
-  } else if (
-    prev !== undefined &&
-    prevRate !== undefined &&
-    prev.attempted >= RATE_COMPARISON_MIN_ATTEMPTS &&
-    attempted >= RATE_COMPARISON_MIN_ATTEMPTS &&
-    prevRate - successRate > SUCCESS_RATE_DROP_THRESHOLD
-  ) {
-    // Rates, not counts: a run with fewer new turns scores fewer evaluations
-    // without anything having failed, and a count comparison called that a drop.
-    exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `SUCCESS RATE DROP — ${(successRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${attempted} succeeded vs ${(prevRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${prev.attempted} on the previous run; check for a new failure class`;
-  }
-  const { usage, estimatedUsd, keySource } = spend;
-  const actualUsd = usageCostUsd(usage, judgePricing());
-  const spent = `usage: in=${usage.input_tokens} out=${usage.output_tokens} cache_read=${usage.cache_read_input_tokens} cache_creation=${usage.cache_creation_input_tokens} est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=${keySource}`;
-  const line = `[judge] summary: attempted=${attempted} succeeded=${succeeded} failed=${failed} classes: ${classes} ${spent} — ${verdict}`;
-  return { attempted, succeeded, failed, byClass: { ...byClass }, usage: { ...usage }, estimatedUsd, actualUsd, keySource, exitCode, line };
-}
-
 export interface EvaluateTurnOptions {
   /**
    * Issue every criterion at once instead of one after another. Required by
@@ -1294,98 +468,6 @@ export async function evaluateTurnsBatched(
   return perTurn;
 }
 
-export function toOTelRecord(ev: EvalRecord): object {
-  const attrs: Record<string, unknown> = {
-    [EVALUATION_ATTRS.NAME]: ev.evaluationName,
-    [EVALUATION_ATTRS.SCORE_VALUE]: ev.scoreValue,
-    [EVALUATION_ATTRS.EXPLANATION]: ev.explanation,
-    [EVALUATION_ATTRS.EVALUATOR_KIND]: ev.evaluatorKind,
-    [EVALUATION_ATTRS.COHORT]: ev.cohort,
-    [EVALUATION_ATTRS.PRODUCER]: ev.evaluator,
-    ...(ev.judgeModel && { [EVALUATION_ATTRS.JUDGE_MODEL]: ev.judgeModel }),
-  };
-  if (ev.scoreUnit) attrs[EVALUATION_ATTRS.SCORE_UNIT] = ev.scoreUnit;
-  if (ev.responseId) attrs[EVALUATION_ATTRS.RESPONSE_ID] = ev.responseId;
-  if (ev.sessionId) attrs[EVALUATION_ATTRS.SESSION_ID] = ev.sessionId;
-  return {
-    timestamp: ev.timestamp,
-    name: EVALUATION_RESULT_EVENT,
-    attributes: attrs,
-    // Omit rather than emit '' — TraceIdSchema is optional but rejects an
-    // empty string, so a written '' is silently dropped on read.
-    ...(ev.traceId && { traceId: ev.traceId }),
-    // Org-scoping P4: local derive/judge read the owner's own telemetry JSONL,
-    // which carries no org dimension — everything they emit is by definition
-    // the home org's data, so stamp the constant rather than "group by org"
-    // (docs/roadmap/org-scoped-multi-tenancy.md, Phase 4). Omitted when the
-    // env is unset so pre-tenancy behavior is byte-identical.
-    ...(process.env.HOME_ORG_ID && { org_id: process.env.HOME_ORG_ID }),
-    // `spanId` then the stamp, last and in this order, so upload's fingerprint
-    // can drop both and recover the exact line this record serialized to
-    // before either existed (derive rewrites its records every run).
-    ...(ev.spanId && { spanId: ev.spanId }),
-    ...(ev.identityKeyRef !== undefined && { [IDENTITY_KEY_REF_FIELD]: ev.identityKeyRef }),
-  };
-}
-
-/**
- * Whether a record on disk is one this script produced, and therefore counts
- * toward dedup.
- *
- * **Dual-read, deliberately.** The 780,921 records written before OBP16 carry
- * the overloaded `gen_ai.evaluation.evaluator.type`, holding a kind for judged
- * rows and a cohort for seeded ones; records written after it carry
- * `integritystudio.evaluation.cohort` instead. Neither set is being
- * backfilled, so a reader that knows only one shape either re-judges every
- * historical turn or re-seeds every new one — both duplicate silently.
- */
-function isThisScriptsRecord(attrs: Record<string, unknown>): boolean {
-  const cohort = attrs[EVALUATION_ATTRS.COHORT];
-  if (typeof cohort === 'string') {
-    // Post-OBP16: judged rows are the NORMAL cohort, the rest are ours by cohort.
-    return cohort === NORMAL_COHORT || cohort === SEED_COHORT || cohort === BACKFILL_COHORT;
-  }
-  const legacy = attrs[LEGACY_EVALUATOR_TYPE_ATTR];
-  return legacy === LLM_EVALUATOR_TYPE
-    || legacy === SEED_EVALUATOR_TYPE
-    || legacy === TRACE_BACKFILL_EVALUATOR_TYPE;
-}
-
-function _loadExistingKeys(): Set<string> {
-  const keys = new Set<string>();
-  const evalFiles = readdirSync(TELEMETRY_DIR)
-    .filter(f => f.startsWith(`${EVALUATIONS_FILE_PREFIX}-`) && f.endsWith('.jsonl'));
-
-  for (const file of evalFiles) {
-    const filepath = join(TELEMETRY_DIR, file);
-    const records = readJsonlWithValidationSync(filepath, otelEvaluationRecordSchema);
-
-    for (const record of records) {
-      const attrs = record.attributes;
-      if (!isThisScriptsRecord(attrs)) continue;
-
-      const sessionId = attrs[EVALUATION_ATTRS.SESSION_ID] as string || '';
-      const metricName = attrs[EVALUATION_ATTRS.NAME] as string || '';
-      // record.timestamp is epoch nanos (bigint) — the schema decodes ISO to nanos.
-      // Turn keys are compared against ISO-prefix keys, so convert back.
-      const ms = Number(record.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
-      const turnKey = new Date(ms).toISOString().slice(0, TIMESTAMP_TURN_KEY_LEN);
-      const judgeModel = attrs[EVALUATION_ATTRS.JUDGE_MODEL];
-      const cohort = attrs[EVALUATION_ATTRS.COHORT];
-
-      addJudgedKeys(keys, {
-        sessionId,
-        evaluationName: metricName,
-        turnKey,
-        ...(typeof judgeModel === 'string' && { judgeModel }),
-        ...(typeof cohort === 'string' && { cohort }),
-      });
-    }
-  }
-
-  return keys;
-}
-
 export interface TurnDiscovery {
   /** Anchored, then restricted to the date scope when there is one. */
   turns: Turn[];
@@ -1403,7 +485,7 @@ export interface TurnDiscovery {
 export async function discoverTurns(source: TraceSource, dateScope: ReadonlySet<string> | null): Promise<TurnDiscovery> {
   if (source === 'cloud' && !dateScope) throw new Error('the cloud source needs a date scope');
   const cloud = source === 'cloud' && dateScope
-    ? await (await import('./judge-cloud-source.js')).discoverFromCloud(dateScope)
+    ? await discoverFromCloud(dateScope)
     : undefined;
   const transcripts = cloud?.transcripts ?? await _discoverTranscripts();
 
@@ -1422,19 +504,6 @@ export async function discoverTurns(source: TraceSource, dateScope: ReadonlySet<
 }
 
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
-/** Path to the sidecar that records each run's succeeded count for the drop check. */
-const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json');
-/** Failure rate above which a run is flagged as JUDGE_EXIT_HIGH_FAILURE_RATE. */
-const HIGH_FAILURE_RATE_THRESHOLD = 0.5;
-/**
- * Success-rate fall, in absolute points, that flags a run against the previous
- * one. Above the whole pre-fix failure rate (18–22%) and far above its
- * run-to-run swing (81.5% → 78.2% on 2026-09-21), so returning from a clean run
- * to that old baseline stays quiet.
- */
-const SUCCESS_RATE_DROP_THRESHOLD = 0.25;
-/** Attempts both runs need before their rates are compared; at 50, one failure moves the rate 2 points. */
-const RATE_COMPARISON_MIN_ATTEMPTS = 50;
 
 function acquireLock(): boolean {
   // Atomic create via O_CREAT | O_EXCL eliminates TOCTOU race
@@ -1500,45 +569,6 @@ function releaseLock(): void {
 function safeExit(code: number): never {
   releaseLock();
   process.exit(code);
-}
-
-export interface JudgeRunState {
-  succeeded: number;
-  attempted: number;
-  timestamp?: string;
-}
-
-/**
- * Read the previous run's state from the sidecar file. Returns undefined when
- * the file is absent (first run), unreadable, or written before `attempted` was
- * recorded — a count alone cannot give a rate. Never throws.
- */
-export function readRunState(path: string = JUDGE_RUN_STATE_FILE): JudgeRunState | undefined {
-  try {
-    const raw = readFileSync(path, 'utf-8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'succeeded' in parsed &&
-      typeof (parsed as JudgeRunState).succeeded === 'number' &&
-      'attempted' in parsed &&
-      typeof (parsed as JudgeRunState).attempted === 'number'
-    ) {
-      return parsed as JudgeRunState;
-    }
-  } catch { /* file missing, unreadable, or corrupt — first run or interrupted */ }
-  return undefined;
-}
-
-/**
- * Persist this run's counts for the rate comparison on the next run. Best-effort —
- * a write failure must not fail the pipeline.
- */
-export function writeRunState(succeeded: number, attempted: number, path: string = JUDGE_RUN_STATE_FILE): void {
-  try {
-    writeFileSync(path, JSON.stringify({ succeeded, attempted, timestamp: new Date().toISOString() }), 'utf-8');
-  } catch { /* best effort; drop check will be skipped next run */ }
 }
 
 /** Append to today's file and return its path; each record keeps its turn time. */
@@ -1673,15 +703,14 @@ async function judgeTurns(
   // synchronous provider gets the judge key and the run's usage totals, so it
   // bills and reports exactly as the per-criterion path does; under --batch
   // it rides the same batch provider (JCP3).
-  const consolidatedModule = consolidated ? await import('./judge-consolidated.js') : undefined;
   let allEvals: EvalRecord[][];
   if (batchProvider) {
-    allEvals = consolidatedModule
-      ? await consolidatedModule.evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys)
+    allEvals = consolidated
+      ? await evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys)
       : await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys);
   } else {
-    const evaluate = consolidatedModule
-      ? await consolidatedModule.createConsolidatedTurnEvaluator(existingKeys, {
+    const evaluate = consolidated
+      ? await createConsolidatedTurnEvaluator(existingKeys, {
           apiKey: judgeKey.apiKey,
           onUsage: (u) => recordUsage(usage, {
             input_tokens: u.inputTokens,
@@ -1737,9 +766,6 @@ async function main() {
     return;
   }
 
-  // Dynamic imports here and below, like judge-consolidated: each of these
-  // modules imports this one.
-  const { readScope, resolveDateScope, resolveSource } = await import('./derive-evaluations.js');
   const source = resolveSource(args, JUDGE_DEFAULT_SOURCE);
   const dateScope = readScope(source, resolveDateScope(args), JUDGE_DEFAULT_DAYS);
   let discovery: TurnDiscovery;
@@ -1752,7 +778,6 @@ async function main() {
     return;
   }
   const { turns, accounts, loadExistingKeys } = discovery;
-  const { selectTurns, formatTurnSelection } = await import('./judge-selection.js');
   // --seed posts nothing, so only a real run skips turns it could not deliver.
   const select = (keys: Set<string>) => selectTurns(turns, keys, { limit, deliverableOnly: !seed });
 
@@ -1800,7 +825,6 @@ async function main() {
     const outFile = writeEvaluations(flatEvals);
 
     if (judgeKey) {
-      const { formatPostSummary, postEvaluationRecords } = await import('./post-evaluations.js');
       const posted = await postEvaluationRecords(flatEvals.map(toOTelRecord), { dryRun: false, accounts });
       console.log(`[judge] posted ${formatPostSummary(posted)}`);
       if (posted.failure) {

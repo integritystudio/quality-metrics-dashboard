@@ -25,14 +25,9 @@ import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js'
 import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-stamps.js';
 import { accountRefsFromEnv, dateScopeBounds, loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
-import {
-  PRODUCER,
-  TIMESTAMP_TURN_KEY_LEN,
-  TRANSCRIPT_DIRS,
-  addJudgedKeys,
-  scanTranscriptDirs,
-  type TranscriptInfo,
-} from './judge-evaluations.js';
+import { PRODUCER } from './eval-record.js';
+import { TIMESTAMP_TURN_KEY_LEN, addJudgedKeys } from './judge-dedup.js';
+import { TRANSCRIPT_DIRS, scanTranscriptDirs, type TranscriptInfo } from './judge-turns.js';
 
 /** Every producer the judge has written under: per-criterion and consolidated. */
 const JUDGE_PRODUCERS = [PRODUCER, CONSOLIDATED_PRODUCER] as const;

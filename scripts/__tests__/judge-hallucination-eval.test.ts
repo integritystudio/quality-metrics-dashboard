@@ -17,7 +17,8 @@ import {
   RESULTS_PREFIX,
 } from '../judge-hallucination-eval.js';
 import type { ReferenceSummary } from '../judge-quality-eval.js';
-import { RELEVANCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, type Turn } from '../judge-evaluations.js';
+import { RELEVANCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
+import { type Turn } from '../judge-turns.js';
 
 const HALLUCINATION = 'hallucination';
 const PRICING = { input: 1.0, output: 5.0, provider: 'anthropic' } as const;

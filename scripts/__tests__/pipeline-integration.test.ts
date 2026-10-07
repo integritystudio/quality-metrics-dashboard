@@ -22,12 +22,9 @@ import {
 } from '../derive-evaluations.js';
 
 // judge-evaluations exports
-import {
-  seedEvaluations,
-  toOTelRecord,
-  type Turn,
-  type EvalRecord,
-} from '../judge-evaluations.js';
+import { seedEvaluations } from '../judge-evaluations.js';
+import { toOTelRecord, type EvalRecord } from '../eval-record.js';
+import { type Turn } from '../judge-turns.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 
 // ---------------------------------------------------------------------------

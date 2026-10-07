@@ -24,7 +24,7 @@
 
 import { asString } from './account-stamps.js';
 import { selectCriteria } from './judge-consolidated.js';
-import type { Turn } from './judge-evaluations.js';
+import type { Turn } from './judge-turns.js';
 
 /** Signs the webhook, which is where an unstamped turn's records go. */
 export const WEBHOOK_SECRET_ENV = 'INJECT_HMAC_SECRET';

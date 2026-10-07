@@ -38,11 +38,11 @@ import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-sche
 import {
   _discoverTranscripts,
   extractTurns,
-  processBatch,
   fitContextForJudge,
-  FAITHFULNESS_EVAL_NAME,
   type Turn,
-} from './judge-evaluations.js';
+} from './judge-turns.js';
+import { processBatch } from './judge-evaluations.js';
+import { FAITHFULNESS_EVAL_NAME } from './judge-criteria.js';
 import {
   buildConsolidatedPrompt,
   buildConsolidatedSchema,

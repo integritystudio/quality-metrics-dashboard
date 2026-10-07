@@ -24,7 +24,8 @@ import {
   type TurnScores,
   type TurnOutcome,
 } from '../judge-agreement.js';
-import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, type Turn } from '../judge-evaluations.js';
+import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
+import { type Turn } from '../judge-turns.js';
 import { RESULTS_SUFFIX } from '../one-shot-eval.js';
 
 const PRICING = { input: 1.0, output: 5.0, provider: 'anthropic' } as const;

@@ -25,7 +25,8 @@
  */
 
 import { pathToFileURL } from 'url';
-import { discoverTurns, type Turn } from './judge-evaluations.js';
+import { discoverTurns } from './judge-evaluations.js';
+import { type Turn } from './judge-turns.js';
 import { resolveDateScope } from './derive-evaluations.js';
 import { parseCli, positiveIntArg } from './cli-args.js';
 import { selectTurns } from './judge-selection.js';

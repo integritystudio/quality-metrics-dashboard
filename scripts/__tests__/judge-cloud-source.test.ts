@@ -11,7 +11,8 @@ import {
   spanScopeDates,
   transcriptsForSessions,
 } from '../judge-cloud-source.js';
-import { anchorTurns, RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, type Turn } from '../judge-evaluations.js';
+import { anchorTurns, type Turn } from '../judge-turns.js';
+import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME } from '../judge-criteria.js';
 import { turnSkip } from '../judge-selection.js';
 
 const TRACE_ID = '0123456789abcdef0123456789abcdef';

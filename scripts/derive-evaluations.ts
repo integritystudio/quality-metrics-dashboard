@@ -37,7 +37,18 @@ import {
 import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
-import { normalizeScore, EVAL_SCORE_PRECISION, TELEMETRY_DIR, CALIBRATION_STATE_DIR, SESSION_ID_PREVIEW_LEN, RULE_EVALUATOR_TYPE, SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND, NORMAL_COHORT, TOOL_CORRECTNESS_CRITERIA, toOTelRecord, type EvalRecord } from './judge-evaluations.js';
+import {
+  normalizeScore,
+  EVAL_SCORE_PRECISION,
+  SESSION_ID_PREVIEW_LEN,
+  RULE_EVALUATOR_TYPE,
+  SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND,
+  NORMAL_COHORT,
+  toOTelRecord,
+  type EvalRecord,
+} from './eval-record.js';
+import { TELEMETRY_DIR, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
+import { TOOL_CORRECTNESS_CRITERIA } from './judge-criteria.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
@@ -47,10 +58,10 @@ import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERI
 import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_SECOND, TIME_MS } from '../../src/lib/core/units.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 
-// EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
+// EvalRecord and toOTelRecord live in eval-record.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
 // ended up needing the same fix twice. Re-exported for existing importers.
-export type { EvalRecord } from './judge-evaluations.js';
+export type { EvalRecord } from './eval-record.js';
 
 /** Span attributes are `unknown`-valued; render primitives, never objects. */
 /**

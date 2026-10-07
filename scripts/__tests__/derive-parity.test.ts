@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { EvalRecord } from '../judge-evaluations.js';
+import type { EvalRecord } from '../eval-record.js';
 import { compareRecords } from '../derive-parity.js';
 
 function record(spanId: string, scoreValue: number, overrides: Partial<EvalRecord> = {}): EvalRecord {

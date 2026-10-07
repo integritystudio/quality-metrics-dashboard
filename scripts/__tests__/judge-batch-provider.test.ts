@@ -13,18 +13,15 @@ import {
 } from '../judge-batch-provider.js';
 import {
   classifyJudgeFailure,
-  createUsageTotals,
   evalFailures,
-  evaluateTurnsBatched,
   failureClasses,
   resetFailureTracking,
   summarizeJudgeRun,
-  BATCH_MODE_JUDGE_TIMEOUT_MS,
-  BATCH_MODE_MAX_RETRIES,
-  COHERENCE_EVAL_NAME,
-  RELEVANCE_EVAL_NAME,
-  type Turn,
-} from '../judge-evaluations.js';
+} from '../judge-failures.js';
+import { createUsageTotals } from '../judge-usage.js';
+import { evaluateTurnsBatched, BATCH_MODE_JUDGE_TIMEOUT_MS, BATCH_MODE_MAX_RETRIES } from '../judge-evaluations.js';
+import { COHERENCE_EVAL_NAME, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
+import { type Turn } from '../judge-turns.js';
 import { evaluateTurnsConsolidatedBatched } from '../judge-consolidated.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import { DEFAULT_API_KEY_ENV } from '../judge-credentials.js';

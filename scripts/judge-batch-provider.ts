@@ -27,7 +27,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
-import type { ProviderUsage } from './judge-evaluations.js';
+import type { ProviderUsage } from './judge-usage.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey } from './judge-credentials.js';

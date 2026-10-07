@@ -21,7 +21,8 @@
  */
 
 import { pathToFileURL } from 'url';
-import { EVAL_SCORE_PRECISION, TELEMETRY_DIR, type EvalRecord } from './judge-evaluations.js';
+import { EVAL_SCORE_PRECISION, type EvalRecord } from './eval-record.js';
+import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { deriveAll, loadLocalSpans, resolveDateScope } from './derive-evaluations.js';
 import { loadCloudSpans } from './cloud-trace-source.js';
 import { toDateOnly } from '../src/api/api-constants.js';

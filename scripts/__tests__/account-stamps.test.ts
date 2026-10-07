@@ -4,7 +4,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { buildAccountIndex, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
-import { anchorTurns, turnSourceFields, toOTelRecord, type EvalRecord, type Turn } from '../judge-evaluations.js';
+import { anchorTurns, turnSourceFields, type Turn } from '../judge-turns.js';
+import { toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { deriveEvaluationLatency, setSpanAccounts, type TraceSpan } from '../derive-evaluations.js';
 import { fingerprint, mapRecord, routeRecord } from '../upload-evaluations.js';
 

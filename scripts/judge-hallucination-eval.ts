@@ -36,16 +36,11 @@ import { LLMJudge, HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-
 import { MODEL_PRICING, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
-import {
-  evaluateTurn,
-  processBatch,
-  fitContextForJudge,
-  resetFailureTracking,
-  FAITHFULNESS_EVAL_NAME,
-  HAIKU_MODEL,
-  PRODUCER,
-  type Turn,
-} from './judge-evaluations.js';
+import { evaluateTurn, processBatch } from './judge-evaluations.js';
+import { fitContextForJudge, type Turn } from './judge-turns.js';
+import { resetFailureTracking } from './judge-failures.js';
+import { FAITHFULNESS_EVAL_NAME, HAIKU_MODEL } from './judge-criteria.js';
+import { PRODUCER } from './eval-record.js';
 import {
   buildConsolidatedPrompt,
   buildConsolidatedSchema,

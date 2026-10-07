@@ -56,9 +56,16 @@ import {
   LLM_TEMPERATURE_EVALUATION,
 } from '../../src/lib/judge/llm-judge-constants.js';
 import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
+import { type Turn, fitContextForJudge, turnSourceFields } from './judge-turns.js';
 import {
-  type Turn,
   type EvalRecord,
+  LLM_EVALUATOR_KIND,
+  NORMAL_COHORT,
+  SESSION_ID_PREVIEW_LEN,
+  SCORE_PREVIEW_DECIMALS,
+  normalizeScore,
+} from './eval-record.js';
+import {
   RELEVANCE_EVAL_NAME,
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
@@ -66,22 +73,12 @@ import {
   TOOL_SELECTION_CRITERIA,
   TOOL_ARGUMENTS_CRITERIA,
   TOOL_INTEGRATION_CRITERIA,
-  LLM_EVALUATOR_KIND,
-  NORMAL_COHORT,
   HAIKU_MODEL,
-  judgedByKey,
   JUDGE_MAX_TOKENS,
   JUDGE_DEFAULT_TEMPERATURE,
-  TIMESTAMP_TURN_KEY_LEN,
-  SESSION_ID_PREVIEW_LEN,
-  SCORE_PREVIEW_DECIMALS,
-  normalizeScore,
-  fitContextForJudge,
-  evalFailures,
-  failureClasses,
-  classifyJudgeFailure,
-  turnSourceFields,
-} from './judge-evaluations.js';
+} from './judge-criteria.js';
+import { judgedByKey, TIMESTAMP_TURN_KEY_LEN } from './judge-dedup.js';
+import { evalFailures, failureClasses, classifyJudgeFailure } from './judge-failures.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 
 // ---------------------------------------------------------------------------

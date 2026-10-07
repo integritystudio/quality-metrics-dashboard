@@ -18,7 +18,7 @@ import {
   STATUS_SCORES,
   type TraceSpan,
 } from '../derive-evaluations.js';
-import { type EvalRecord } from '../judge-evaluations.js';
+import { type EvalRecord } from '../eval-record.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
