@@ -44,7 +44,7 @@ import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type Acc
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
+import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_SECOND, TIME_MS } from '../../src/lib/core/units.js';
 import { CliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
@@ -109,13 +109,16 @@ function attrString(value: unknown, fallback = ''): string {
 // through localTraceSpanSchema cannot arrive malformed — zod rejects both NaN and a
 // missing tuple — but deriveEvaluationLatency is exported and directly callable, and its
 // contract is to return null on malformed input, never to throw.
+/** Earliest start a real hook span can have: 2001-09-09, the first 10-digit Unix second. */
+const MIN_PLAUSIBLE_EPOCH_SECONDS = 1_000_000_000;
+
 function hrtToSeconds(hrt: [number, number]): number {
   if (!Array.isArray(hrt)) return NaN;
-  return hrt[0] + hrt[1] / 1e9;
+  return hrt[0] + hrt[1] / NANOSECONDS_PER_SECOND;
 }
 
 function hrtToISO(hrt: [number, number]): string {
-  return new Date(hrt[0] * 1000 + hrt[1] / 1e6).toISOString();
+  return new Date(hrt[0] * TIME_MS.SECOND + hrt[1] / NANOSECONDS_PER_MILLISECOND).toISOString();
 }
 
 /** Maximum raw scores to persist per metric in calibration state (bounds file size) */
@@ -194,7 +197,7 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   // Guard malformed startTime — a valid Unix timestamp has seconds > 1e9 (after 2001).
   // Spans with epoch-ish startTime (e.g. [2, 0]) are empty input spans, not hook runs.
   const [startSec] = span.startTime;
-  if (startSec < 1_000_000_000) return null;
+  if (startSec < MIN_PLAUSIBLE_EPOCH_SECONDS) return null;
 
   const attrs = attrsOf(span);
 

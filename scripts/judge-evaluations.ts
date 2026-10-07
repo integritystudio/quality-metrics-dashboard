@@ -580,7 +580,7 @@ async function discoverSessionsFromTraces(): Promise<Turn[]> {
 
   const turns: Turn[] = [];
   for (const s of sessions.values()) {
-    const timestamp = new Date(s.earliestTime * 1000).toISOString();
+    const timestamp = new Date(s.earliestTime * TIME_MS.SECOND).toISOString();
     turns.push({
       sessionId: s.sessionId,
       traceId: s.traceId,
