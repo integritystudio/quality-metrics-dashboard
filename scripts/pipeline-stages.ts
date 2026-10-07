@@ -90,6 +90,22 @@ export const UPLOAD_EXIT_SEND_FAILED = 11;
 /** Upload exits populate forwards to its own exit instead of aborting, so sync-to-kv still runs. */
 export const UPLOAD_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([UPLOAD_EXIT_SEND_FAILED]);
 
+/** Stage name used in `nextStepAfter`. */
+export type PipelineStage = 'derive' | 'judge' | 'upload';
+
+/**
+ * Returns true when the pipeline should continue to the next step after
+ * `stage` exits with `exitCode`. Centralises the per-stage soft-failure sets so
+ * callers do not take a direct dependency on them.
+ */
+export function nextStepAfter(stage: PipelineStage, exitCode: number): boolean {
+  switch (stage) {
+    case 'derive': return DERIVE_SOFT_FAILURE_EXITS.has(exitCode);
+    case 'judge': return JUDGE_SOFT_FAILURE_EXITS.has(exitCode);
+    case 'upload': return UPLOAD_SOFT_FAILURE_EXITS.has(exitCode);
+  }
+}
+
 /** `--source=` values: where derive, and the judge's discovery, read telemetry from. */
 export const TRACE_SOURCES = ['local', 'cloud'] as const;
 export type TraceSource = typeof TRACE_SOURCES[number];

@@ -1425,12 +1425,12 @@ describe('evaluateTurn in concurrent mode', () => {
 describe('evaluateTurnsBatched', () => {
   function batchProvider(overrides: Partial<BatchLLMProvider> = {}): BatchLLMProvider {
     const mock = createMockLLM();
-    return { generate: (prompt: string) => mock.generate(prompt), flush: vi.fn(() => Promise.resolve()), failure: undefined, ...overrides };
+    return { generate: (prompt: string) => mock.generate(prompt), flush: vi.fn(() => Promise.resolve({ settled: 0, abandoned: 0 })), failure: undefined, ...overrides };
   }
 
   it('flushes the provider exactly once for a small run and scores every turn', async () => {
     resetFailureTracking();
-    const flush = vi.fn(() => Promise.resolve());
+    const flush = vi.fn(() => Promise.resolve({ settled: 0, abandoned: 0 }));
     const provider = batchProvider({ flush });
     const judge = new LLMJudge(provider, { timeoutMs: 5000, maxRetries: 0 });
     const turns = [makeTurn({ sessionId: 'batch-1' }), makeTurn({ sessionId: 'batch-2', toolResults: ['ctx'] })];

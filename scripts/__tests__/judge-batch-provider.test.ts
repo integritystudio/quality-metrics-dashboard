@@ -330,7 +330,7 @@ describe('createBatchProvider at the wall clock', () => {
     const refused = rejection(provider.generate('b'));
     const cancelled = rejection(provider.generate('c'));
     const unmentioned = rejection(provider.generate('d'));
-    await runClock(provider.flush());
+    const flushResult = await runClock(provider.flush());
 
     expect(await kept).toEqual({ text: 'kept' });
     expect(onUsage).toHaveBeenCalledTimes(1);
@@ -340,7 +340,7 @@ describe('createBatchProvider at the wall clock', () => {
     expect(await unmentioned).toBe(overrun);
     expect(overrun).toMatchObject({ batchId: BATCH_ID, abandoned: 2 });
     expect(classifyJudgeFailure(overrun.message)).toBe('wall-clock');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('settled 2 results it had already produced, abandoned 2 requests'));
+    expect(flushResult).toMatchObject({ settled: 2, abandoned: 2, overrun: expect.any(BatchWallClockExceededError) });
     expect(client.cancel).toHaveBeenCalledTimes(1);
     // Read once, and only after the poll that saw the batch end.
     expect(client.results).toHaveBeenCalledTimes(1);
@@ -374,7 +374,7 @@ describe('createBatchProvider at the wall clock', () => {
     expect(overrun).toMatchObject({ abandoned: 1 });
     expect(provider.failure).toBeUndefined();
     await expect(provider.generate('after')).rejects.toBe(overrun);
-    await expect(runClock(provider.flush())).resolves.toBeUndefined();
+    await expect(runClock(provider.flush())).resolves.toMatchObject({ settled: 0, abandoned: 0 });
   });
 
   it('abandons every request without waiting when the cancel itself fails', async () => {

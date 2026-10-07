@@ -103,8 +103,32 @@ export interface FixtureRequest {
   query: URLSearchParams;
 }
 
-function pagedBody<T>(rows: T[]): unknown {
-  return { data: rows, count: rows.length, hasMore: false };
+/**
+ * Cursor encoding: a decimal offset into the row set, held as a plain decimal
+ * string (e.g. `"1000"`). Simple enough for the fixture; decodes without Base64
+ * so tests can read the query string directly.
+ */
+const CURSOR_RADIX = 10;
+
+function pagedBody<T>(rows: T[], query?: URLSearchParams): unknown {
+  const limitStr = query?.get('limit');
+  const cursorStr = query?.get('cursor');
+
+  const limit = limitStr ? parseInt(limitStr, CURSOR_RADIX) : undefined;
+  const offset = cursorStr ? (parseInt(cursorStr, CURSOR_RADIX) || 0) : 0;
+
+  const validLimit = limit !== undefined && !isNaN(limit) && limit > 0 ? limit : undefined;
+  const pageEnd = validLimit !== undefined ? offset + validLimit : rows.length;
+  const pageRows = rows.slice(offset, pageEnd);
+  const hasMore = pageEnd < rows.length;
+  const nextCursor = hasMore ? String(pageEnd) : undefined;
+
+  return {
+    data: pageRows,
+    count: pageRows.length,
+    hasMore,
+    ...(nextCursor !== undefined && { nextCursor }),
+  };
 }
 
 export async function createFixtureServer(): Promise<FixtureServer> {
@@ -136,13 +160,13 @@ export async function createFixtureServer(): Promise<FixtureServer> {
       res.end(JSON.stringify({ status: 'ok' }));
     } else if (path === '/v1/evaluations') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(filterEvals(evalRows, query))));
+      res.end(JSON.stringify(pagedBody(filterEvals(evalRows, query), query)));
     } else if (path === '/v1/traces') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(traceRows)));
+      res.end(JSON.stringify(pagedBody(traceRows, query)));
     } else if (path === '/v1/logs') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(logRows)));
+      res.end(JSON.stringify(pagedBody(logRows, query)));
     } else {
       res.writeHead(404);
       res.end(JSON.stringify({ error: 'not found' }));

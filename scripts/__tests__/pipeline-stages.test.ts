@@ -17,6 +17,7 @@ import {
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
+  nextStepAfter,
   runWithRetry,
 } from '../pipeline-stages.js';
 
@@ -167,6 +168,32 @@ describe('pipeline exit-code contract', () => {
 
     expect(total).toBeGreaterThanOrEqual(15 * MS_PER_MINUTE);
     expect(total).toBeLessThanOrEqual(30 * MS_PER_MINUTE);
+  });
+});
+
+describe('nextStepAfter', () => {
+  it.each([
+    ['derive', DERIVE_EXIT_POST_FAILED],
+    ['derive', DERIVE_EXIT_READ_FAILED],
+    ['derive', DERIVE_EXIT_INPUT_DRIFT],
+    ['judge', JUDGE_EXIT_BILLING],
+    ['judge', JUDGE_EXIT_NO_SCORES],
+    ['judge', JUDGE_EXIT_HIGH_FAILURE_RATE],
+    ['judge', JUDGE_EXIT_POST_FAILED],
+    ['judge', JUDGE_EXIT_DISCOVERY_FAILED],
+    ['judge', JUDGE_EXIT_BATCH_WALL_CLOCK],
+    ['upload', UPLOAD_EXIT_SEND_FAILED],
+  ] as const)('returns true for soft %s exit %i', (stage, code) => {
+    expect(nextStepAfter(stage, code)).toBe(true);
+  });
+
+  it.each([
+    ['derive', 1],
+    ['judge', 1],
+    ['judge', 0],
+    ['upload', 1],
+  ] as const)('returns false for hard %s exit %i', (stage, code) => {
+    expect(nextStepAfter(stage, code)).toBe(false);
   });
 });
 

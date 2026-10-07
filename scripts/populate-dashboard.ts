@@ -61,18 +61,16 @@ import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import {
-  DERIVE_SOFT_FAILURE_EXITS,
   DRY_RUN_FLAG,
   JUDGE_BATCH_FLAG,
   JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
   JUDGE_SEED_FLAG,
-  JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
-  UPLOAD_SOFT_FAILURE_EXITS,
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
+  nextStepAfter,
   runWithRetry,
 } from './pipeline-stages.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
@@ -208,7 +206,7 @@ async function main(): Promise<void> {
     // spent the run carries on (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
     const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
     if (!derive.ok) {
-      if (derive.status !== null && DERIVE_SOFT_FAILURE_EXITS.has(derive.status)) {
+      if (derive.status !== null && nextStepAfter('derive', derive.status)) {
         console.error(`[populate] derive-evaluations exited ${derive.status}; continuing to judge, upload + sync, then exiting ${derive.status}`);
         pipelineExitCode = derive.status;
       } else {
@@ -226,7 +224,7 @@ async function main(): Promise<void> {
     if (perCriterion) judgeArgs.push(JUDGE_PER_CRITERION_FLAG);
     const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
     if (!judge.ok) {
-      if (judge.status !== null && JUDGE_SOFT_FAILURE_EXITS.has(judge.status)) {
+      if (judge.status !== null && nextStepAfter('judge', judge.status)) {
         // The judge has already said on its own stderr why it produced nothing.
         // The rule-based evaluations from derive still deserve to reach the
         // cloud, so keep going — and carry the code to the exit, so the launchd
@@ -252,7 +250,7 @@ async function main(): Promise<void> {
     // sync if a send still fails (UPLOAD-FAILURE-ABORTS-PIPELINE).
     const upload = await runWithNetworkRetry('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
     if (!upload.ok) {
-      if (upload.status !== null && UPLOAD_SOFT_FAILURE_EXITS.has(upload.status)) {
+      if (upload.status !== null && nextStepAfter('upload', upload.status)) {
         console.error(`[populate] upload-evaluations exited ${upload.status}; continuing to sync, then exiting ${upload.status}`);
         pipelineExitCode = upload.status;
       } else {

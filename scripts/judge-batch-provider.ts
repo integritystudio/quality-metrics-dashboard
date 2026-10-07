@@ -95,6 +95,19 @@ export class BatchWallClockExceededError extends Error {
   }
 }
 
+/**
+ * What `flush()` reports once every promise is settled. For a normal run
+ * `settled` and `abandoned` are zero — they count only the requests
+ * {@link closeAtWallClock} force-settled or discarded. `overrun` is set when
+ * the run was ended by the wall clock so callers can inspect it without
+ * consulting the `console.warn` output.
+ */
+export interface FlushResult {
+  settled: number;
+  abandoned: number;
+  overrun?: BatchWallClockExceededError;
+}
+
 /** The four calls this provider makes. `client.messages.batches` satisfies it; so does a fake. */
 export interface BatchClient {
   create(params: { requests: BatchRequest[] }): Promise<MessageBatch>;
@@ -124,9 +137,10 @@ export interface BatchLLMProvider extends LLMProvider {
    * Ship everything queued and settle every promise handed out, in as many
    * rounds as it takes. Running out of wall clock does not reject it: by then
    * every promise is settled, the abandoned ones with
-   * {@link BatchWallClockExceededError}.
+   * {@link BatchWallClockExceededError}. The result carries the wall-clock
+   * stats so callers do not have to scrape `console.warn` output.
    */
-  flush(): Promise<void>;
+  flush(): Promise<FlushResult>;
   /**
    * The error that broke the run, once one has. Set by whichever flush hit it —
    * including the idle auto-flush, which nobody awaits — so a caller that only
@@ -177,7 +191,7 @@ class MessageBatchProvider implements BatchLLMProvider {
   private readonly pending = new Map<string, Pending>();
   private queued: BatchRequest[] = [];
   private sequence = 0;
-  private draining: Promise<void> | undefined;
+  private draining: Promise<FlushResult> | undefined;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private startedAt: number | undefined;
   private readonly pollIntervalMs: number;
@@ -204,7 +218,7 @@ class MessageBatchProvider implements BatchLLMProvider {
     return promise;
   }
 
-  flush(): Promise<void> {
+  flush(): Promise<FlushResult> {
     this.disarmIdleFlush();
     if (this.failure) return Promise.reject(this.failure);
     this.draining ??= this.drain().finally(() => {
@@ -223,13 +237,15 @@ class MessageBatchProvider implements BatchLLMProvider {
     };
   }
 
-  private async drain(): Promise<void> {
+  private async drain(): Promise<FlushResult> {
     try {
       let requests = await this.awaitQueued();
       while (requests.length > 0) {
-        await this.runBatch(requests);
+        const result = await this.runBatch(requests);
+        if (result) return result;
         requests = await this.awaitQueued();
       }
+      return { settled: 0, abandoned: 0 };
     } catch (error) {
       // Whatever went wrong, nothing may be left waiting. Running out of wall
       // clock does not come through here: that path settles every promise
@@ -249,7 +265,7 @@ class MessageBatchProvider implements BatchLLMProvider {
     return this.queued.splice(0, MAX_REQUESTS_PER_BATCH);
   }
 
-  private async runBatch(requests: BatchRequest[]): Promise<void> {
+  private async runBatch(requests: BatchRequest[]): Promise<FlushResult | undefined> {
     this.startedAt ??= Date.now();
     let batch: MessageBatch;
     try {
@@ -259,7 +275,7 @@ class MessageBatchProvider implements BatchLLMProvider {
       // items fail with the API's own message so the judge's failure classes
       // count them, and the run carries on.
       this.rejectAll(requests, toError(error));
-      return;
+      return undefined;
     }
     while (batch.processing_status !== 'ended') {
       if (Date.now() - this.startedAt >= this.wallClockMs) {
@@ -274,12 +290,13 @@ class MessageBatchProvider implements BatchLLMProvider {
       }
     } catch (error) {
       this.rejectAll(requests, toError(error));
-      return;
+      return undefined;
     }
     // The API writes one line per request; a request without one must not wait forever.
     for (const { custom_id } of requests) {
       this.takePending(custom_id)?.reject(new BatchRequestFailedError(custom_id, 'missing'));
     }
+    return undefined;
   }
 
   private settleOne({ custom_id, result }: BatchResultLine): void {
@@ -318,7 +335,7 @@ class MessageBatchProvider implements BatchLLMProvider {
    * what it had already answered, and abandon the rest. That ends the run
    * without failing it, so the caller keeps every result that came back.
    */
-  private async closeAtWallClock(batchId: string): Promise<void> {
+  private async closeAtWallClock(batchId: string): Promise<FlushResult> {
     const overrun = new BatchWallClockExceededError(batchId, this.wallClockMs);
     // Recorded first, so a call that follows from a result settled below is
     // refused instead of queued for a batch that will never ship.
@@ -328,6 +345,7 @@ class MessageBatchProvider implements BatchLLMProvider {
     const settled = open - this.pending.size;
     overrun.abandoned = this.rejectOpen(overrun);
     console.warn(`${LOG_PREFIX} ${overrun.message}; settled ${settled} results it had already produced, abandoned ${overrun.abandoned} requests`);
+    return { settled, abandoned: overrun.abandoned, overrun };
   }
 
   /**
