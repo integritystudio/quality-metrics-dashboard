@@ -33,10 +33,9 @@
  * judge spend is attributable to its own key (see judge-credentials.ts).
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, openSync, closeSync, statSync, constants } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, openSync, closeSync, statSync, constants } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';
-import { pathToFileURL } from 'node:url';
 import type AnthropicSdk from '@anthropic-ai/sdk';
 import pLimit from 'p-limit';
 import type { LLMProvider, ResponseJsonSchema, QagVerificationMode } from '../../src/lib/judge/llm-as-judge.js';
@@ -45,7 +44,7 @@ import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE, type EvaluatorKind, type E
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { TELEMETRY_DIR, CANARY_COHORT } from './evaluation-constants.js';
 import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, type TraceSource } from './pipeline-stages.js';
-import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import {
   createBatchProvider,
   BATCH_CANCEL_GRACE_MS,
@@ -457,71 +456,69 @@ export async function discoverTurns(source: TraceSource, dateScope: ReadonlySet<
 
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 
-function acquireLock(): boolean {
-  // Atomic create via O_CREAT | O_EXCL eliminates TOCTOU race
+/** Lock file mode: owner read/write only. */
+const LOCK_FILE_MODE = 0o600;
+
+/** Create the lock file holding this pid, atomically (O_CREAT | O_EXCL); false when it already exists. */
+function tryCreateLock(): boolean {
   try {
-    const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+    const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, LOCK_FILE_MODE);
     writeFileSync(fd, String(process.pid));
     closeSync(fd);
     return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
-    // Lock file exists — check if owning process is still alive
-    try {
-      const lockContent = readFileSync(LOCK_FILE, 'utf-8').trim();
-      const lockPid = parseInt(lockContent, 10);
-      if (!isNaN(lockPid) && lockPid > 0) {
-        try {
-          process.kill(lockPid, 0);
-          return false; // Process alive, lock held
-        } catch (killErr) {
-          // EPERM = process exists but we can't signal it — lock is valid
-          if ((killErr as NodeJS.ErrnoException).code === 'EPERM') return false;
-          // Process dead — stale lock, continue to age check
-        }
-      }
-    } catch {
-      return false;
-    }
-
-    // Also check lock age — stale if older than 1 hour regardless of PID
-    let stale = false;
-    {
-      try {
-        const lockStat = statSync(LOCK_FILE);
-        const lockAgeMs = Date.now() - lockStat.mtimeMs;
-        if (lockAgeMs > TIME_MS.HOUR) {
-          console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
-          stale = true;
-        }
-      } catch { /* stat failed, leave stale as-is */ }
-    }
-
-    if (stale) {
-      // Remove stale lock and re-acquire atomically (no recursive retry)
-      try { unlinkSync(LOCK_FILE); } catch { /* another process may have removed it */ }
-      try {
-        const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
-        writeFileSync(fd, String(process.pid));
-        closeSync(fd);
-        return true;
-      } catch {
-        return false; // Another process won the race
-      }
-    }
+  } catch {
     return false;
   }
+}
+
+/** Whether the pid in the lock file belongs to a live process (EPERM: alive, not ours to signal). */
+function lockOwnerAlive(): boolean {
+  const lockPid = parseInt(readFileSync(LOCK_FILE, 'utf-8').trim(), 10);
+  if (isNaN(lockPid) || lockPid <= 0) return false;
+  try {
+    process.kill(lockPid, 0);
+    return true;
+  } catch (killErr) {
+    return (killErr as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/** Stale if older than {@link TIME_MS.HOUR}, whatever its pid says. */
+function lockExpired(): boolean {
+  try {
+    const lockAgeMs = Date.now() - statSync(LOCK_FILE).mtimeMs;
+    if (lockAgeMs <= TIME_MS.HOUR) return false;
+    console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function acquireLock(): boolean {
+  if (tryCreateLock()) return true;
+  try {
+    if (!existsSync(LOCK_FILE) || lockOwnerAlive()) return false;
+  } catch {
+    return false;
+  }
+  if (!lockExpired()) return false;
+  // Remove the stale lock and re-acquire atomically; losing the race means another process holds it.
+  try { unlinkSync(LOCK_FILE); } catch { /* another process may have removed it */ }
+  return tryCreateLock();
+}
+
+/** Take the lock or exit 1: two runs must not append to the ledger at once. */
+function acquireLockOrExit(): void {
+  if (acquireLock()) return;
+  console.error('Error: Another judge-evaluations process is running (lockfile exists)');
+  process.exit(1);
 }
 
 function releaseLock(): void {
   try { unlinkSync(LOCK_FILE); } catch { /* ignore */ }
 }
 
-/** Safe exit that always attempts lock cleanup */
-function safeExit(code: number): never {
-  releaseLock();
-  process.exit(code);
-}
 
 /** Append to today's file and return its path; each record keeps its turn time. */
 function writeEvaluations(evals: EvalRecord[]): string {
@@ -555,10 +552,7 @@ async function runBackfill(): Promise<void> {
   anchorTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
   console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
 
-  if (!acquireLock()) {
-    console.error('Error: Another judge-evaluations process is running (lockfile exists)');
-    process.exit(1);
-  }
+  acquireLockOrExit();
 
   try {
     const existingKeys = _loadExistingKeys();
@@ -743,10 +737,7 @@ async function main() {
   }
 
   // Acquire lock to prevent concurrent writes
-  if (!acquireLock()) {
-    console.error('Error: Another judge-evaluations process is running (lockfile exists)');
-    process.exit(1);
-  }
+  acquireLockOrExit();
 
   try {
     const existingKeys = loadExistingKeys();
@@ -786,9 +777,4 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(err => {
-    console.error('[judge] fatal:', err);
-    safeExit(1);
-  });
-}
+runIfMain(import.meta.url, main, '[judge]');

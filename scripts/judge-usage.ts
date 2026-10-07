@@ -106,6 +106,14 @@ export const CONSOLIDATED_BASE_CRITERIA = 2;
 /** Added with tool results: faithfulness, tool_correctness and its three sub-criteria. */
 export const CONSOLIDATED_TOOL_CRITERIA = 5;
 
+/** Per-criterion calls every turn costs: relevance and coherence. */
+const PER_CRITERION_BASE_CALLS = 2;
+/**
+ * Added with tool results: tool_correctness, and one QAG sweep that scores
+ * faithfulness and hallucination together.
+ */
+const PER_CRITERION_TOOL_CALLS = 2;
+
 export interface JudgeRunEstimate {
   evals: number;
   inputTokens: number;
@@ -124,18 +132,16 @@ export interface JudgeRunEstimate {
  */
 export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolidated = false): JudgeRunEstimate {
   if (consolidated) return estimateConsolidatedRun(turns, batch);
-  // 2 base evals (relevance, coherence) + 2 with tools (tool_correctness, and one
-  // QAG sweep that scores faithfulness and hallucination together — hallucination
-  // is no longer a paid call of its own).
-  const evals = turns.reduce((sum, t) =>
-    sum + 2 + (t.toolResults.length > 0 ? 2 : 0), 0);
-  // Estimate tokens from actual content length (~4 chars/token)
-  const inputTokens = turns.reduce((sum, t) => {
+  let evals = 0;
+  let inputTokens = 0;
+  for (const t of turns) {
+    const turnEvals = PER_CRITERION_BASE_CALLS + (t.toolResults.length > 0 ? PER_CRITERION_TOOL_CALLS : 0);
     const contentChars = t.userText.length + t.assistantText.length
       + t.toolResults.reduce((s, r) => s + r.length, 0);
-    const evalsPerTurn = 2 + (t.toolResults.length > 0 ? 2 : 0);
-    return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
-  }, 0);
+    evals += turnEvals;
+    // Every per-criterion call resends the turn's content.
+    inputTokens += Math.ceil(contentChars * TOKENS_PER_CHAR) * turnEvals;
+  }
   const outputTokens = evals * EST_OUTPUT_TOKENS_PER_EVAL;
   const costUsd = estimateCostUsd(inputTokens, outputTokens, batch);
   return { evals, inputTokens, outputTokens, costUsd };

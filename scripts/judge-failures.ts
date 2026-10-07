@@ -2,6 +2,7 @@
 
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { z } from 'zod';
 import { PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK } from './pipeline-stages.js';
 import type { JudgeApiKeySource } from './judge-credentials.js';
@@ -12,12 +13,16 @@ import { judgePricing, usageCostUsd, type JudgeUsageTotals } from './judge-usage
 /** Track evaluation failures for summary reporting */
 export const evalFailures: Record<string, number> = {};
 
-export type JudgeFailureClass = 'billing' | 'network' | 'schema-rejection' | 'parse' | 'invalid-input' | 'wall-clock' | 'other';
+export const JUDGE_FAILURE_CLASSES = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'wall-clock', 'other'] as const;
 
-export const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'wall-clock', 'other'];
+export type JudgeFailureClass = typeof JUDGE_FAILURE_CLASSES[number];
+
+function zeroFailureClasses(): Record<JudgeFailureClass, number> {
+  return Object.fromEntries(JUDGE_FAILURE_CLASSES.map(cls => [cls, 0])) as Record<JudgeFailureClass, number>;
+}
 
 /** Failures by cause across all metrics — what decides the exit code. */
-export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, 'wall-clock': 0, other: 0 };
+export const failureClasses: Record<JudgeFailureClass, number> = zeroFailureClasses();
 
 /**
  * The batch provider's `BatchWallClockExceededError`: the run's wall clock ran
@@ -170,11 +175,13 @@ export function summarizeJudgeRun(
   return { attempted, succeeded, failed, byClass: { ...byClass }, usage: { ...usage }, estimatedUsd, actualUsd, keySource, exitCode, line };
 }
 
-export interface JudgeRunState {
-  succeeded: number;
-  attempted: number;
-  timestamp?: string;
-}
+const judgeRunStateSchema = z.object({
+  succeeded: z.number(),
+  attempted: z.number(),
+  timestamp: z.string().optional(),
+});
+
+export type JudgeRunState = z.infer<typeof judgeRunStateSchema>;
 
 /**
  * Read the previous run's state from the sidecar file. Returns undefined when
@@ -183,18 +190,8 @@ export interface JudgeRunState {
  */
 export function readRunState(path: string = JUDGE_RUN_STATE_FILE): JudgeRunState | undefined {
   try {
-    const raw = readFileSync(path, 'utf-8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'succeeded' in parsed &&
-      typeof (parsed as JudgeRunState).succeeded === 'number' &&
-      'attempted' in parsed &&
-      typeof (parsed as JudgeRunState).attempted === 'number'
-    ) {
-      return parsed as JudgeRunState;
-    }
+    const parsed = judgeRunStateSchema.safeParse(JSON.parse(readFileSync(path, 'utf-8')));
+    if (parsed.success) return parsed.data;
   } catch { /* file missing, unreadable, or corrupt — first run or interrupted */ }
   return undefined;
 }
