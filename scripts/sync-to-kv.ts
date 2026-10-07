@@ -546,7 +546,7 @@ function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
   group.push(value);
 }
 
-function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[]) {
+function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated = false) {
   const traceIdSet = new Set<string>();
   for (const s of spans) {
     if (s.traceId) traceIdSet.add(s.traceId);
@@ -554,7 +554,7 @@ function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[
   return {
     traces: { count: spans.length, traceIds: traceIdSet.size },
     logs: { count: 0 },
-    evaluations: { count: evaluations.length },
+    evaluations: { count: evaluations.length, ...(evaluationsTruncated && { truncated: true }) },
     total: spans.length + evaluations.length,
   };
 }
@@ -777,8 +777,10 @@ export function computeSessionDetail(
   sessionId: string,
   spans: SessionSpan[],
   evaluations: EvaluationResult[],
+  /** When the global evaluation read was cut at QUERY_LIMIT, every session is marked partial. */
+  evaluationsTruncated = false,
 ) {
-  const dataSources = computeDataSources(spans, evaluations);
+  const dataSources = computeDataSources(spans, evaluations, evaluationsTruncated);
   const timespan = computeTimespan(evaluations);
   const sessionInfo = computeSessionInfo(spans);
   const { tokenProgression, tokenTotals } = computeTokenMetrics(spans);
@@ -1243,11 +1245,19 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   if (calibrationEntry) entries.push(calibrationEntry);
 
   const queryWindowStart = new Date(now.getTime() - MAX_DAYS_MS);
-  const allEvals = await backend.queryEvaluations({
+  // Read one extra row to detect truncation (KV-SESSION-EVALS-TRUNCATION-UNFLAGGED).
+  const allEvalsRaw = await backend.queryEvaluations({
     startDate: BigInt(queryWindowStart.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-    limit: QUERY_LIMIT,
+    limit: QUERY_LIMIT + 1,
   });
+  const evaluationsTruncated = allEvalsRaw.length > QUERY_LIMIT;
+  const allEvals = evaluationsTruncated ? allEvalsRaw.slice(0, QUERY_LIMIT) : allEvalsRaw;
+  if (evaluationsTruncated) {
+    console.warn(
+      `[sync-to-kv] Evaluation query returned ${QUERY_LIMIT} results — session evaluations may be incomplete; all sessions marked partial`,
+    );
+  }
   const evalsByTrace = new Map<string, EvaluationResult[]>();
   for (const ev of allEvals) {
     if (!ev.traceId) continue;
@@ -1293,7 +1303,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   const sessionEntries: KVEntry[] = [];
   for (const [sessionId, sessionSpans] of spansBySession) {
     const evaluations = evalsBySession.get(sessionId) ?? [];
-    const detail = computeSessionDetail(sessionId, sessionSpans, evaluations);
+    const detail = computeSessionDetail(sessionId, sessionSpans, evaluations, evaluationsTruncated);
     sessionEntries.push({
       key: `session:${sessionId}`,
       value: toKVValue({
@@ -1424,7 +1434,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     spanCount: allSpans.length,
     periodCounts: periodQueryResults.map(r => `${r.period}:${r.evals.length}`).join(' '),
     hitCap: periodQueryResults.some(r => r.evals.length >= QUERY_LIMIT) ||
-      allEvals.length >= QUERY_LIMIT ||
+      evaluationsTruncated ||
       allSpans.length >= SPAN_QUERY_LIMIT,
   };
 }
@@ -1555,6 +1565,12 @@ async function main(): Promise<void> {
   for (const key of staleKeys) newState.delete(key);
   if (!dryRun) saveSyncState(newState);
 
+  // Compute the final deferred count here — before coverage — so it can be
+  // surfaced in meta:syncCoverage where the dashboard or an alert can read it
+  // (KV-SYNC-DEFERRED-BACKLOG).
+  const limitDeferred = Math.max(0, toWrite.length - metaEntries.length - written);
+  const actualDeferred = deferred + limitDeferred;
+
   // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
   // It may over-count if a prior wrangler write failed silently.
   const syncedTraceKeys = [...newState.keys()].filter(k => k.startsWith(TRACE_KEY_PREFIX));
@@ -1569,13 +1585,16 @@ async function main(): Promise<void> {
     runsRemaining: traceBudget > 0
       ? Math.ceil(Math.max(0, traceChanged.length - traceBudget) / traceBudget)
       : (traceChanged.length > 0 ? null : 0),
+    /** Entries computed this run that were not written because they exceed the KV budget. */
+    deferred: actualDeferred,
     // timestamp: when stable coverage numbers were last computed/changed (not updated on no-op runs)
     timestamp: now.toISOString(),
     // lastChecked: when sync last ran regardless of whether data changed (refreshed even on no-op runs)
     lastChecked: now.toISOString(),
   };
   // Exclude lastChecked (and timestamp) from the change-detection hash so a new timestamp alone
-  // does not burn a KV write every run. Only the stable numeric fields gate whether we write.
+  // does not burn a KV write every run. `deferred` is intentionally included — a change in the
+  // backlog size triggers a write so the latest count is always visible.
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
   const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: toKVValue(coverage) };
@@ -1588,9 +1607,6 @@ async function main(): Promise<void> {
   }
   // Persist coverage data so the early-return path can refresh lastChecked without recomputing.
   if (!dryRun) saveLastCoverage(coverage);
-
-  const limitDeferred = Math.max(0, toWrite.length - metaEntries.length - written);
-  const actualDeferred = deferred + limitDeferred;
 
   // KV write-budget instrumentation (P4): total and per-scope counts, so the
   // free-tier ~1000/day cap can be checked against a concrete number

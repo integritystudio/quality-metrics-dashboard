@@ -498,3 +498,25 @@ describe('loadCalibrationEntry', () => {
     expect(vi.mocked(loadCalibrationState)).toHaveBeenCalledWith(CALIBRATION_STATE_DIR);
   });
 });
+
+// KV-SESSION-EVALS-TRUNCATION-UNFLAGGED: evaluationsTruncated threads into dataSources
+describe('computeSessionDetail evaluation truncation', () => {
+  const fakeEval = (): EvaluationResult => ({
+    evaluationName: 'test',
+    scoreValue: 1,
+    timestamp: 0n,
+  });
+
+  it('sets dataSources.evaluations.truncated when the global eval read was cut', () => {
+    const detail = computeSessionDetail('s1', [], [fakeEval()], true);
+
+    expect(detail.dataSources.evaluations).toMatchObject({ count: 1, truncated: true });
+  });
+
+  it('omits dataSources.evaluations.truncated when the read was not cut', () => {
+    const detail = computeSessionDetail('s1', [], [fakeEval()]);
+
+    expect(detail.dataSources.evaluations).toEqual({ count: 1 });
+    expect((detail.dataSources.evaluations as Record<string, unknown>).truncated).toBeUndefined();
+  });
+});
