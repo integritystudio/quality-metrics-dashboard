@@ -29,7 +29,7 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-hallucination-eval.ts --yes
  */
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync, constants } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { LLMJudge, HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
@@ -67,9 +67,6 @@ import {
   usageToUsd,
   DOCS_DIR,
   JUDGE_MAX_RETRIES,
-  RESULTS_SUFFIX,
-  YES_REQUIRED_ERROR,
-  oneShotArgError,
   type UsageReport,
   type UsageTotals,
 } from './judge-agreement.js';
@@ -87,8 +84,20 @@ import {
   type ReferenceSummary,
 } from './judge-quality-eval.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
-import { toDateOnly } from '../src/api/api-constants.js';
 import { parseCli } from './cli-args.js';
+import {
+  EXIT_REFUSED,
+  JSON_INDENT,
+  NO_BATCH_DELAY_MS,
+  TABLE_NAME_WIDTH,
+  USD_DECIMALS,
+  YES_FLAG,
+  YES_REQUIRED_ERROR,
+  createRunGuard,
+  formatDiff,
+  oneShotArgError,
+  padCell,
+} from './one-shot-eval.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,7 +112,7 @@ export const PRIOR_REFERENCE_PATH = join(DOCS_DIR, 'judge-quality-2026-09-22.jso
  */
 export const MAX_ESTIMATED_SPEND_USD = 8;
 export const MAX_MEASURED_SPEND_USD = 8;
-export const YES_FLAG = '--yes';
+export { YES_FLAG };
 export const REFERENCE_FLAG = '--reference';
 export const MARKER_FILENAME = '.judge-hallucination.started';
 export const RESULTS_PREFIX = 'judge-hallucination-';
@@ -114,12 +123,6 @@ const DIRECT_OPTIONS: ConsolidatedCriteriaOptions = { directHallucination: true 
 const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDirect'] as const;
 export type Configuration = typeof CONFIGURATIONS[number];
 
-const JSON_INDENT = 2;
-const EXIT_REFUSED = 1;
-const NO_BATCH_DELAY_MS = 0;
-const DIFF_DECIMALS = 3;
-const USD_DECIMALS = 4;
-const TABLE_NAME_WIDTH = 18;
 const TABLE_CELL_WIDTH = 12;
 const TIE = 'tie';
 
@@ -161,33 +164,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   return parsed;
 }
 
-export function listResultsFiles(docsDir: string): string[] {
-  if (!existsSync(docsDir)) return [];
-  return readdirSync(docsDir)
-    .filter(f => f.startsWith(RESULTS_PREFIX) && f.endsWith(RESULTS_SUFFIX))
-    .sort();
-}
-
-export function resultsFilePath(docsDir: string, date: Date): string {
-  return join(docsDir, `${RESULTS_PREFIX}${toDateOnly(date)}${RESULTS_SUFFIX}`);
-}
-
-/** Why the run must not start, or undefined when it may. */
-export function refusalReason(docsDir: string): string | undefined {
-  const marker = join(docsDir, MARKER_FILENAME);
-  if (existsSync(marker)) return `marker exists: ${marker} — a run already started; this eval runs once`;
-  const results = listResultsFiles(docsDir);
-  if (results.length > 0) return `results already exist: ${results.join(', ')} — this eval runs once`;
-  return undefined;
-}
-
-/** O_CREAT | O_EXCL: two concurrent starts cannot both win. */
-function writeMarker(docsDir: string, payload: object): void {
-  mkdirSync(docsDir, { recursive: true });
-  const fd = openSync(join(docsDir, MARKER_FILENAME), constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
-  writeFileSync(fd, JSON.stringify(payload, null, JSON_INDENT) + '\n');
-  closeSync(fd);
-}
+const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[hallucination]', noun: 'eval' });
+export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
+const { writeMarker, refuse } = runGuard;
 
 export function readPriorReference(path: string): QualityTurn[] {
   const parsed = JSON.parse(readFileSync(path, 'utf8')) as { turns?: { reference?: unknown }[] };
@@ -285,11 +264,7 @@ async function scoreReferenceHallucination(
 // ---------------------------------------------------------------------------
 
 function cell(value: string | number): string {
-  return String(value).padStart(TABLE_CELL_WIDTH);
-}
-
-function formatDiff(diff: number | null | undefined): string {
-  return diff === null || diff === undefined ? '-' : diff.toFixed(DIFF_DECIMALS);
+  return padCell(value, TABLE_CELL_WIDTH);
 }
 
 function printTable(
@@ -314,11 +289,6 @@ function printTable(
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-
-function refuse(message: string): void {
-  console.error(`[hallucination] refused: ${message}`);
-  process.exitCode = EXIT_REFUSED;
-}
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));

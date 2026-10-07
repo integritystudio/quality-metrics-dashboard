@@ -29,7 +29,7 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-quality-eval.ts --yes
  */
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync, constants } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
@@ -65,17 +65,27 @@ import {
   toFivePointScale,
   usageToUsd,
   DOCS_DIR,
-  RESULTS_SUFFIX,
-  YES_REQUIRED_ERROR,
-  oneShotArgError,
   type CriterionAgreement,
   type UsageReport,
   type UsageTotals,
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
-import { toDateOnly } from '../src/api/api-constants.js';
 import { parseCli } from './cli-args.js';
+import {
+  EXIT_REFUSED,
+  JSON_INDENT,
+  NO_BATCH_DELAY_MS,
+  TABLE_NAME_WIDTH,
+  USD_DECIMALS,
+  YES_FLAG,
+  YES_REQUIRED_ERROR,
+  createRunGuard,
+  formatDiff,
+  formatRate,
+  oneShotArgError,
+  padCell,
+} from './one-shot-eval.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -98,7 +108,7 @@ export const MAX_MEASURED_SPEND_USD = 9.5;
 export const OUTPUT_TOKENS_PER_CALL_ESTIMATE = 1_500;
 /** Estimate only: criterion text, steps and anchoring added to the turn content. */
 export const PROMPT_OVERHEAD_TOKENS_ESTIMATE = 600;
-export const YES_FLAG = '--yes';
+export { YES_FLAG };
 export const AGREEMENT_FLAG = '--agreement';
 export const MARKER_FILENAME = '.judge-quality.started';
 export const RESULTS_PREFIX = 'judge-quality-';
@@ -107,14 +117,6 @@ export const FROZEN_TURNS_PATH = join(dirname(fileURLToPath(import.meta.url)), '
 const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
 const MAX_TOKENS_STOP_REASON = 'max_tokens';
 const REFUSAL_STOP_REASON = 'refusal';
-const JSON_INDENT = 2;
-const EXIT_REFUSED = 1;
-const NO_BATCH_DELAY_MS = 0;
-const PERCENT = 100;
-const RATE_DECIMALS = 1;
-const DIFF_DECIMALS = 3;
-const USD_DECIMALS = 4;
-const TABLE_NAME_WIDTH = 18;
 const TABLE_CELL_WIDTH = 11;
 
 // ---------------------------------------------------------------------------
@@ -180,25 +182,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   return parsed;
 }
 
-export function listResultsFiles(docsDir: string): string[] {
-  if (!existsSync(docsDir)) return [];
-  return readdirSync(docsDir)
-    .filter(f => f.startsWith(RESULTS_PREFIX) && f.endsWith(RESULTS_SUFFIX))
-    .sort();
-}
-
-export function resultsFilePath(docsDir: string, date: Date): string {
-  return join(docsDir, `${RESULTS_PREFIX}${toDateOnly(date)}${RESULTS_SUFFIX}`);
-}
-
-/** Why the run must not start, or undefined when it may. */
-export function refusalReason(docsDir: string): string | undefined {
-  const marker = join(docsDir, MARKER_FILENAME);
-  if (existsSync(marker)) return `marker exists: ${marker} — a run already started; this eval runs once`;
-  const results = listResultsFiles(docsDir);
-  if (results.length > 0) return `results already exist: ${results.join(', ')} — this eval runs once`;
-  return undefined;
-}
+const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[quality]', noun: 'eval' });
+export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
+const { writeMarker, refuse } = runGuard;
 
 /** The newest judge-agreement results file, unless one was named. */
 export function resolveAgreementPath(docsDir: string, explicit?: string): string | undefined {
@@ -206,14 +192,6 @@ export function resolveAgreementPath(docsDir: string, explicit?: string): string
   const files = listAgreementFiles(docsDir);
   const latest = files[files.length - 1];
   return latest ? join(docsDir, latest) : undefined;
-}
-
-/** O_CREAT | O_EXCL: two concurrent starts cannot both win. */
-function writeMarker(docsDir: string, payload: object): void {
-  mkdirSync(docsDir, { recursive: true });
-  const fd = openSync(join(docsDir, MARKER_FILENAME), constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
-  writeFileSync(fd, JSON.stringify(payload, null, JSON_INDENT) + '\n');
-  closeSync(fd);
 }
 
 export function readAgreementTurns(path: string): AgreementTurn[] {
@@ -438,15 +416,7 @@ async function scoreTurnWithReference(
 // ---------------------------------------------------------------------------
 
 function cell(value: string | number, width = TABLE_CELL_WIDTH): string {
-  return String(value).padStart(width);
-}
-
-function formatRate(rate: number | null): string {
-  return rate === null ? '-' : `${(rate * PERCENT).toFixed(RATE_DECIMALS)}%`;
-}
-
-function formatDiff(diff: number | null): string {
-  return diff === null ? '-' : diff.toFixed(DIFF_DECIMALS);
+  return padCell(value, width);
 }
 
 function printTable(
@@ -483,11 +453,6 @@ function printTable(
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-
-function refuse(message: string): void {
-  console.error(`[quality] refused: ${message}`);
-  process.exitCode = EXIT_REFUSED;
-}
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));

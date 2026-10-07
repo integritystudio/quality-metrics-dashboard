@@ -21,7 +21,7 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-agreement.ts --limit 30 --yes
  */
 
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, writeFileSync, constants } from 'fs';
+import { writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { LLMJudge } from '../../src/lib/judge/llm-judge-config.js';
@@ -56,8 +56,21 @@ import {
 } from './judge-consolidated.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
-import { toDateOnly } from '../src/api/api-constants.js';
-import { CliArgError, parseCli, positiveIntArg } from './cli-args.js';
+import { parseCli, positiveIntArg } from './cli-args.js';
+import {
+  EXIT_REFUSED,
+  JSON_INDENT,
+  NO_BATCH_DELAY_MS,
+  TABLE_NAME_WIDTH,
+  USD_DECIMALS,
+  YES_FLAG,
+  YES_REQUIRED_ERROR,
+  createRunGuard,
+  formatDiff,
+  formatRate,
+  oneShotArgError,
+  padCell,
+} from './one-shot-eval.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -72,29 +85,20 @@ const TURNS_PER_TRANSCRIPT_CAP = 3;
 const MAX_SAMPLE_TURN_TOKENS = 12_000;
 /** Refuse — before the marker and before any API call — when the up-front estimate exceeds this. */
 export const MAX_ESTIMATED_SPEND_USD = 8;
-export const YES_FLAG = '--yes';
+export { YES_FLAG };
 export const LIMIT_FLAG = '--limit';
 export const MARKER_FILENAME = '.judge-agreement.started';
 export const RESULTS_PREFIX = 'judge-agreement-';
-export const RESULTS_SUFFIX = '.json';
 export const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
 
-const JSON_INDENT = 2;
-const EXIT_REFUSED = 1;
 /** Mirrors the pipeline's LLMJudge config. */
 export const JUDGE_MAX_RETRIES = 2;
-const NO_BATCH_DELAY_MS = 0;
 /** Estimate only: QAG answers one question per statement, each carrying the context. */
 const QAG_STATEMENTS_ESTIMATE = MAX_STATEMENTS / 2;
 /** Estimate only: same figure the pipeline's --dry-run uses per call. */
 const OUTPUT_TOKENS_PER_CALL_ESTIMATE = 200;
 /** Steps prompt + eval prompt per G-Eval criterion. */
 const GEVAL_CALLS_PER_CRITERION = 2;
-const PERCENT = 100;
-const RATE_DECIMALS = 1;
-const DIFF_DECIMALS = 3;
-const USD_DECIMALS = 4;
-const TABLE_NAME_WIDTH = 18;
 const TABLE_CELL_WIDTH = 10;
 
 // ---------------------------------------------------------------------------
@@ -164,18 +168,6 @@ export interface SpendEstimate {
 // Arguments and key
 // ---------------------------------------------------------------------------
 
-/** Appended to an unknown-argument refusal: the one-shot evals have no override. */
-const NO_FORCE_HINT = '(there is no --force; remove the marker and results file by hand if you mean it)';
-
-/** A one-shot eval's refusal for a bad command line; rethrows anything else. */
-export function oneShotArgError(err: unknown): string {
-  if (!(err instanceof CliArgError)) throw err;
-  return err.kind === 'unknown' ? `${err.message} ${NO_FORCE_HINT}` : err.message;
-}
-
-/** The refusal for a run without `--yes`. */
-export const YES_REQUIRED_ERROR = `${YES_FLAG} is required: this run spends real API money`;
-
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const parsed: ParsedArgs = { yes: false, limit: DEFAULT_LIMIT };
   try {
@@ -194,33 +186,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 // Marker and results files
 // ---------------------------------------------------------------------------
 
-export function listResultsFiles(docsDir: string): string[] {
-  if (!existsSync(docsDir)) return [];
-  return readdirSync(docsDir)
-    .filter(f => f.startsWith(RESULTS_PREFIX) && f.endsWith(RESULTS_SUFFIX))
-    .sort();
-}
+const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[agreement]', noun: 'check' });
+export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
+const { writeMarker, refuse } = runGuard;
 
-export function resultsFilePath(docsDir: string, date: Date): string {
-  return join(docsDir, `${RESULTS_PREFIX}${toDateOnly(date)}${RESULTS_SUFFIX}`);
-}
-
-/** Why the run must not start, or undefined when it may. */
-export function refusalReason(docsDir: string): string | undefined {
-  const marker = join(docsDir, MARKER_FILENAME);
-  if (existsSync(marker)) return `marker exists: ${marker} — a run already started; this check runs once`;
-  const results = listResultsFiles(docsDir);
-  if (results.length > 0) return `results already exist: ${results.join(', ')} — this check runs once`;
-  return undefined;
-}
-
-/** O_CREAT | O_EXCL: two concurrent starts cannot both win. */
-function writeMarker(docsDir: string, payload: object): void {
-  mkdirSync(docsDir, { recursive: true });
-  const fd = openSync(join(docsDir, MARKER_FILENAME), constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
-  writeFileSync(fd, JSON.stringify(payload, null, JSON_INDENT) + '\n');
-  closeSync(fd);
-}
 
 // ---------------------------------------------------------------------------
 // Sampling and estimate
@@ -445,16 +414,8 @@ export function scoresByName(records: readonly EvalRecord[]): Record<string, num
 // Output
 // ---------------------------------------------------------------------------
 
-function cell(value: string | number, width = TABLE_CELL_WIDTH): string {
-  return String(value).padStart(width);
-}
-
-function formatRate(rate: number | null): string {
-  return rate === null ? '-' : `${(rate * PERCENT).toFixed(RATE_DECIMALS)}%`;
-}
-
-function formatDiff(diff: number | null): string {
-  return diff === null ? '-' : diff.toFixed(DIFF_DECIMALS);
+function cell(value: string | number): string {
+  return padCell(value, TABLE_CELL_WIDTH);
 }
 
 function printTable(summary: AgreementSummary, configurations: Record<string, UsageReport>, turnsEvaluated: number): void {
@@ -483,11 +444,6 @@ function printTable(summary: AgreementSummary, configurations: Record<string, Us
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-
-function refuse(message: string): void {
-  console.error(`[agreement] refused: ${message}`);
-  process.exitCode = EXIT_REFUSED;
-}
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
