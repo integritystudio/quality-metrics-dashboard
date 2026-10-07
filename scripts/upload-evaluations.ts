@@ -106,7 +106,8 @@ import {
   type AccountIndex,
   type AccountRef,
 } from './account-stamps.js';
-import { UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
+import { DRY_RUN_FLAG, UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
+import { CliArgError, parseCli, positiveIntArg, positiveNumberArg, type CliSpec } from './cli-args.js';
 import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 
@@ -582,23 +583,31 @@ interface Options {
   onlyKeysPath?: string;
 }
 
+const DAYS_ARG = '--days';
+const MAX_AGE_HOURS_ARG = '--max-age-hours';
+const LIMIT_ARG = '--limit';
+const UPLOAD_CLI: CliSpec = { values: [DAYS_ARG, MAX_AGE_HOURS_ARG, LIMIT_ARG, ONLY_KEYS_ARG], switches: [DRY_RUN_FLAG] };
+
 function parseArgs(argv: string[]): Options {
-  const numeric = (flag: string, fallback: number): number => {
-    const raw = argv.find((a) => a.startsWith(`${flag}=`))?.split('=')[1];
-    const parsed = raw === undefined ? NaN : Number(raw);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-  };
+  const cli = parseCli(argv, UPLOAD_CLI);
   return {
-    dryRun: argv.includes('--dry-run'),
-    windowDays: numeric('--days', DEFAULT_WINDOW_DAYS),
-    maxAgeMs: numeric('--max-age-hours', DEFAULT_MAX_AGE_HOURS) * TIME_MS.HOUR,
-    limit: numeric('--limit', Number.POSITIVE_INFINITY),
-    onlyKeysPath: argv.find((a) => a.startsWith(`${ONLY_KEYS_ARG}=`))?.slice(ONLY_KEYS_ARG.length + 1),
+    dryRun: cli.has(DRY_RUN_FLAG),
+    windowDays: positiveIntArg(DAYS_ARG, cli.value(DAYS_ARG)) ?? DEFAULT_WINDOW_DAYS,
+    maxAgeMs: (positiveNumberArg(MAX_AGE_HOURS_ARG, cli.value(MAX_AGE_HOURS_ARG)) ?? DEFAULT_MAX_AGE_HOURS) * TIME_MS.HOUR,
+    limit: positiveIntArg(LIMIT_ARG, cli.value(LIMIT_ARG)) ?? Number.POSITIVE_INFINITY,
+    onlyKeysPath: cli.value(ONLY_KEYS_ARG),
   };
 }
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
-  const opts = parseArgs(argv);
+  let opts: Options;
+  try {
+    opts = parseArgs(argv);
+  } catch (err) {
+    if (!(err instanceof CliArgError)) throw err;
+    console.error(`[upload-evaluations] ${err.message}`);
+    return 1;
+  }
   const secret = process.env.INJECT_HMAC_SECRET;
   if (!secret && !opts.dryRun) {
     console.error('[upload-evaluations] INJECT_HMAC_SECRET is not set — nothing can be signed. Run under `doppler run --project integrity-studio --config prd`.');

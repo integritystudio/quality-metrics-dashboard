@@ -30,6 +30,7 @@ import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCEN
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
 import { toDateOnly } from '../src/api/api-constants.js';
+import { nonNegativeNumberArg, parseCli, type CliSpec } from './cli-args.js';
 
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_SETTLE_MINUTES = 60;
@@ -240,21 +241,20 @@ interface CliOptions {
   jsonPath?: string;
 }
 
-function numberFlag(args: readonly string[], flag: string, fallback: number): number {
-  const i = args.indexOf(flag);
-  if (i === -1) return fallback;
-  const value = Number(args[i + 1]);
-  if (!Number.isFinite(value) || value < 0) throw new Error(`${flag} needs a non-negative number`);
-  return value;
-}
+const DAYS_FLAG = '--days';
+const SETTLE_MINUTES_FLAG = '--settle-minutes';
+const MIN_COVERAGE_FLAG = '--min-coverage';
+const JSON_FLAG = '--json';
+const TRACE_COVERAGE_CLI: CliSpec = { values: [DAYS_FLAG, SETTLE_MINUTES_FLAG, MIN_COVERAGE_FLAG, JSON_FLAG] };
 
 export function parseArgs(args: readonly string[]): CliOptions {
-  const jsonIndex = args.indexOf('--json');
+  const cli = parseCli(args, TRACE_COVERAGE_CLI);
+  const number = (flag: string, fallback: number): number => nonNegativeNumberArg(flag, cli.value(flag)) ?? fallback;
   return {
-    days: Math.max(1, Math.floor(numberFlag(args, '--days', DEFAULT_WINDOW_DAYS))),
-    settleMinutes: numberFlag(args, '--settle-minutes', DEFAULT_SETTLE_MINUTES),
-    minCoverage: Math.min(MAX_COVERAGE, numberFlag(args, '--min-coverage', DEFAULT_MIN_COVERAGE)),
-    jsonPath: jsonIndex === -1 ? undefined : args[jsonIndex + 1],
+    days: Math.max(1, Math.floor(number(DAYS_FLAG, DEFAULT_WINDOW_DAYS))),
+    settleMinutes: number(SETTLE_MINUTES_FLAG, DEFAULT_SETTLE_MINUTES),
+    minCoverage: Math.min(MAX_COVERAGE, number(MIN_COVERAGE_FLAG, DEFAULT_MIN_COVERAGE)),
+    jsonPath: cli.value(JSON_FLAG),
   };
 }
 

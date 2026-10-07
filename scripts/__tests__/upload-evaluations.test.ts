@@ -18,6 +18,7 @@ import {
   payloadManifestKey,
   type ShippedIndex,
   type EvaluationPayload,
+  main,
 } from '../upload-evaluations.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
 import { toOTelRecord } from '../judge-evaluations.js';
@@ -469,4 +470,13 @@ describe('payloadManifestKey', () => {
   it('is undefined for a payload with no event time', () => {
     expect(payloadManifestKey({ evaluationName: 'x', evaluator: 'rule', evaluatorType: 'rule', scoreValue: 1 })).toBeUndefined();
   });
+});
+
+describe('main command line', () => {
+  it.each([['--days=abc'], ['--limit=0'], ['--max-age-hours=-1'], ['--dry-run=1']])(
+    'refuses %s with exit 1 before reading or sending anything',
+    async (flag) => {
+      expect(await main([flag])).toBe(1);
+    },
+  );
 });
