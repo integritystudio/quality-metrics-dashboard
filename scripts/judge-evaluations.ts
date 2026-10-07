@@ -92,7 +92,7 @@ import {
   TOOL_INTEGRATION_CRITERIA,
   TOOL_SELECTION_CRITERIA,
 } from './judge-criteria.js';
-import { TIMESTAMP_TURN_KEY_LEN, _loadExistingKeys, judgedByKey } from './judge-dedup.js';
+import { _loadExistingKeys, judgedByKey, turnKeyOf, turnScoreKey } from './judge-dedup.js';
 import {
   _discoverTranscripts,
   anchorTurns,
@@ -219,15 +219,20 @@ export function anthropicProviderFor(client: JudgeMessagesClient, usage: JudgeUs
   };
 }
 
+/** Largest value of the two hash bytes a seeded score is read from. */
+const UINT16_MAX = 0xFFFF;
+/** Share of turns `isCanaryTurn` marks for intentionally low scores. */
+const CANARY_TURN_RATE = 0.02;
+
 export function hashToScore(input: string, min: number, max: number): number {
   const hash = createHash('sha256').update(input).digest();
-  const value = hash.readUInt16BE(0) / 0xFFFF; // 0-1
+  const value = hash.readUInt16BE(0) / UINT16_MAX;
   return normalizeScore(min + value * (max - min));
 }
 
 /** Deterministic canary check — ~2% of turns get intentionally low scores */
 export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
-  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < 0.02;
+  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < CANARY_TURN_RATE;
 }
 
 export interface SeedResult {
@@ -235,110 +240,57 @@ export interface SeedResult {
   canaryCount: number;
 }
 
+type ScoreRange = readonly [min: number, max: number];
+
+interface SeedMetric {
+  evalName: string;
+  label: string;
+  /** Prefix of the hashed input, so each metric draws its own score. */
+  hashKey: string;
+  normal: ScoreRange;
+  canary: ScoreRange;
+  /** Seeded only for turns with tool results. */
+  needsTools?: boolean;
+}
+
+/** Hallucination's draw; faithfulness is seeded as its complement. */
+const SEED_HALLUCINATION: SeedMetric = {
+  evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination', hashKey: 'hal', normal: [0.0, 0.09], canary: [0.50, 0.80],
+};
+
+/** In record order. */
+const SEED_METRICS: readonly SeedMetric[] = [
+  { evalName: RELEVANCE_EVAL_NAME, label: 'Relevance', hashKey: 'rel', normal: [0.70, 1.0], canary: [0.10, 0.35] },
+  { evalName: COHERENCE_EVAL_NAME, label: 'Coherence', hashKey: 'coh', normal: [0.75, 1.0], canary: [0.15, 0.40] },
+  { ...SEED_HALLUCINATION, evalName: FAITHFULNESS_EVAL_NAME, label: 'Faithfulness' },
+  SEED_HALLUCINATION,
+  { evalName: TOOL_CORRECTNESS_CRITERIA.name, label: 'Tool correctness', hashKey: 'tc', normal: [0.75, 1.0], canary: [0.10, 0.30], needsTools: true },
+];
+
 export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
   const evals: EvalRecord[] = [];
   let canaryCount = 0;
 
   for (const turn of turns) {
-    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
+    const turnKey = turnKeyOf(turn.timestamp);
     const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
     const canary = isCanaryTurn(turn.sessionId, turnKey);
     if (canary) canaryCount++;
 
-    const relKey = `${turn.sessionId}:${RELEVANCE_EVAL_NAME}:${turnKey}`;
-    if (!existingKeys.has(relKey)) {
-      evals.push(
-        createEvalRecord(
-          turn,
-          RELEVANCE_EVAL_NAME,
-          canary
-            ? hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.10, 0.35)
-            : hashToScore(`rel:${turn.sessionId}:${turnKey}`, 0.70, 1.0),
-          canary
-            ? `Relevance (canary) for session ${sessionPreview}`
-            : `Relevance (seeded) for session ${sessionPreview}`,
-          SYNTHETIC_EVALUATOR_KIND,
-          canary ? CANARY_COHORT : SEED_COHORT,
-        ),
-      );
-    }
-
-    const cohKey = `${turn.sessionId}:${COHERENCE_EVAL_NAME}:${turnKey}`;
-    if (!existingKeys.has(cohKey)) {
-      evals.push(
-        createEvalRecord(
-          turn,
-          COHERENCE_EVAL_NAME,
-          canary
-            ? hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.15, 0.40)
-            : hashToScore(`coh:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-          canary
-            ? `Coherence (canary) for session ${sessionPreview}`
-            : `Coherence (seeded) for session ${sessionPreview}`,
-          SYNTHETIC_EVALUATOR_KIND,
-          canary ? CANARY_COHORT : SEED_COHORT,
-        ),
-      );
-    }
-
-    {
-      const halScore = canary
-        ? hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.50, 0.80)
-        : hashToScore(`hal:${turn.sessionId}:${turnKey}`, 0.0, 0.09);
-      const faithScore = normalizeScore(1 - halScore);
-
-      const faithKey = `${turn.sessionId}:${FAITHFULNESS_EVAL_NAME}:${turnKey}`;
-      if (!existingKeys.has(faithKey)) {
-        evals.push(
-          createEvalRecord(
-            turn,
-            FAITHFULNESS_EVAL_NAME,
-            faithScore,
-            canary
-              ? `Faithfulness (canary) for session ${sessionPreview}`
-              : `Faithfulness (seeded) for session ${sessionPreview}`,
-            SYNTHETIC_EVALUATOR_KIND,
-            canary ? CANARY_COHORT : SEED_COHORT,
-          ),
-        );
-      }
-
-      const halKey = `${turn.sessionId}:${HALLUCINATION_EVAL_NAME}:${turnKey}`;
-      if (!existingKeys.has(halKey)) {
-        evals.push(
-          createEvalRecord(
-            turn,
-            HALLUCINATION_EVAL_NAME,
-            halScore,
-            canary
-              ? `Hallucination (canary) for session ${sessionPreview}`
-              : `Hallucination (seeded) for session ${sessionPreview}`,
-            SYNTHETIC_EVALUATOR_KIND,
-            canary ? CANARY_COHORT : SEED_COHORT,
-          ),
-        );
-      }
-    }
-
-    // Only evaluate tool correctness when tool results exist
-    if (turn.toolResults.length > 0) {
-      const tcKey = `${turn.sessionId}:${TOOL_CORRECTNESS_CRITERIA.name}:${turnKey}`;
-      if (!existingKeys.has(tcKey)) {
-        evals.push(
-          createEvalRecord(
-            turn,
-            TOOL_CORRECTNESS_CRITERIA.name,
-            canary
-              ? hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.10, 0.30)
-              : hashToScore(`tc:${turn.sessionId}:${turnKey}`, 0.75, 1.0),
-            canary
-              ? `Tool correctness (canary) for session ${sessionPreview}`
-              : `Tool correctness (seeded) for session ${sessionPreview}`,
-            SYNTHETIC_EVALUATOR_KIND,
-            canary ? CANARY_COHORT : SEED_COHORT,
-          ),
-        );
-      }
+    for (const metric of SEED_METRICS) {
+      if (metric.needsTools && turn.toolResults.length === 0) continue;
+      if (existingKeys.has(turnScoreKey(turn.sessionId, metric.evalName, turnKey))) continue;
+      const [min, max] = canary ? metric.canary : metric.normal;
+      const drawn = hashToScore(`${metric.hashKey}:${turn.sessionId}:${turnKey}`, min, max);
+      const score = metric.evalName === FAITHFULNESS_EVAL_NAME ? normalizeScore(1 - drawn) : drawn;
+      evals.push(createEvalRecord(
+        turn,
+        metric.evalName,
+        score,
+        `${metric.label} (${canary ? 'canary' : 'seeded'}) for session ${sessionPreview}`,
+        SYNTHETIC_EVALUATOR_KIND,
+        canary ? CANARY_COHORT : SEED_COHORT,
+      ));
     }
   }
 
@@ -362,7 +314,7 @@ export async function evaluateTurn(
   options: EvaluateTurnOptions = {},
 ): Promise<EvalRecord[]> {
   const evals: EvalRecord[] = [];
-  const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
+  const turnKey = turnKeyOf(turn.timestamp);
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = fitContextForJudge(turn.toolResults);
   // Every criterion catches its own failure, so a collected promise can only
@@ -612,10 +564,9 @@ async function runBackfill(): Promise<void> {
     const existingKeys = _loadExistingKeys();
 
     // Checking only hallucination would skip sessions with partial coverage.
-    const SEED_METRICS = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, HALLUCINATION_EVAL_NAME] as const;
     const newTurns = traceTurns.filter(t => {
-      const turnKey = t.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-      return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
+      const turnKey = turnKeyOf(t.timestamp);
+      return SEED_METRICS.some(m => !m.needsTools && !existingKeys.has(turnScoreKey(t.sessionId, m.evalName, turnKey)));
     });
     console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
 

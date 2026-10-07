@@ -10,6 +10,12 @@ import { EVALUATIONS_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.j
 
 export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09T01:11:15"
 
+/** A turn's dedup key: its ISO timestamp (or epoch ms) cut to the second. */
+export function turnKeyOf(at: string | number): string {
+  const iso = typeof at === 'number' ? new Date(at).toISOString() : at;
+  return iso.slice(0, TIMESTAMP_TURN_KEY_LEN);
+}
+
 /**
  * The dedup set holds two keys per judged criterion: the plain
  * `${sessionId}:${evaluationName}:${turnKey}` for every row, and the same key
@@ -78,7 +84,7 @@ export function _loadExistingKeys(): Set<string> {
       // record.timestamp is epoch nanos (bigint) — the schema decodes ISO to nanos.
       // Turn keys are compared against ISO-prefix keys, so convert back.
       const ms = Number(record.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
-      const turnKey = new Date(ms).toISOString().slice(0, TIMESTAMP_TURN_KEY_LEN);
+      const turnKey = turnKeyOf(ms);
       const judgeModel = attrs[EVALUATION_ATTRS.JUDGE_MODEL];
       const cohort = attrs[EVALUATION_ATTRS.COHORT];
 

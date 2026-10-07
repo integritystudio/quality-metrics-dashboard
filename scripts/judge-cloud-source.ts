@@ -26,7 +26,7 @@ import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './a
 import { accountRefsFromEnv, dateScopeBounds, loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
 import { PRODUCER } from './eval-record.js';
-import { TIMESTAMP_TURN_KEY_LEN, addJudgedKeys } from './judge-dedup.js';
+import { turnKeyOf, addJudgedKeys } from './judge-dedup.js';
 import { TRANSCRIPT_DIRS, scanTranscriptDirs, type TranscriptInfo } from './judge-turns.js';
 
 /** Every producer the judge has written under: per-criterion and consolidated. */
@@ -82,7 +82,7 @@ export function judgedKeys(rows: Iterable<EvaluationResult>): Set<string> {
   const keys = new Set<string>();
   for (const row of rows) {
     if (!row.sessionId) continue;
-    const turnKey = new Date(evaluationEventMs(row)).toISOString().slice(0, TIMESTAMP_TURN_KEY_LEN);
+    const turnKey = turnKeyOf(evaluationEventMs(row));
     addJudgedKeys(keys, { sessionId: row.sessionId, evaluationName: row.evaluationName, turnKey, judgeModel: row.judgeModel, cohort: row.cohort });
   }
   return keys;

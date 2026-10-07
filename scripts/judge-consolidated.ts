@@ -77,7 +77,7 @@ import {
   JUDGE_MAX_TOKENS,
   JUDGE_DEFAULT_TEMPERATURE,
 } from './judge-criteria.js';
-import { judgedByKey, TIMESTAMP_TURN_KEY_LEN } from './judge-dedup.js';
+import { judgedByKey, turnKeyOf } from './judge-dedup.js';
 import { evalFailures, failureClasses, classifyJudgeFailure } from './judge-failures.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 
@@ -225,7 +225,7 @@ export function selectCriteria(
   existingKeys: Set<string>,
   options: ConsolidatedCriteriaOptions = {},
 ): ConsolidatedSelection {
-  const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
+  const turnKey = turnKeyOf(turn.timestamp);
   const judgeModel = options.judgeModel ?? HAIKU_MODEL;
   const missing = (name: string): boolean => !existingKeys.has(judgedByKey(turn.sessionId, name, turnKey, judgeModel));
   const criteria: GEvalConfig[] = [];
