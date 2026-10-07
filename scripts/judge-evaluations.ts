@@ -58,6 +58,7 @@ import {
   LLM_EVALUATOR_TYPE,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import { readJsonlWithValidationSync, streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
+import { TELEMETRY_DIR, CALIBRATION_STATE_DIR, CANARY_EVALUATOR_TYPE, CANARY_COHORT } from './evaluation-constants.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
@@ -109,15 +110,7 @@ export const TOOL_INTEGRATION_CRITERIA: GEvalConfig = {
 };
 
 const HOME = process.env.HOME ?? '';
-// Must match the producer: hooks/lib/constants.ts writes telemetry here.
-export const TELEMETRY_DIR = join(HOME, '.claude-history', 'telemetry');
-/**
- * Where `.calibration-state.json` lives: derive writes it, and sync-to-kv reads it to build
- * `meta:calibration`. One constant for both, because they disagreed: from 231e91d (2026-04-19)
- * to 2026-10-05 sync read `dashboard/scripts/`, found nothing, wrote nothing, and the
- * dashboard served the percentiles from 2026-03-23 (CALIBRATION-READ-WRONG-DIR).
- */
-export const CALIBRATION_STATE_DIR = TELEMETRY_DIR;
+export { TELEMETRY_DIR, CALIBRATION_STATE_DIR, CANARY_EVALUATOR_TYPE, CANARY_COHORT };
 /**
  * `evaluations-YYYY-MM-DD.jsonl`: the hooks' own records and this script's judge
  * records. Derive writes no file since cloud-read Phase 6; it posts every record.
@@ -135,7 +128,6 @@ export const SCORE_PREVIEW_DECIMALS = 2;
 /** Producer recorded on every record this script writes. */
 export const PRODUCER = 'dashboard:judge-evaluations';
 export const SEED_EVALUATOR: EvaluatorType = 'seed';
-export const CANARY_EVALUATOR_TYPE = 'canary';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
 export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
@@ -159,7 +151,6 @@ function legacyEvaluatorType(kind: EvaluatorKind): EvaluatorType | undefined {
 }
 export const NORMAL_COHORT: EvaluationCohort = 'normal';
 export const SEED_COHORT: EvaluationCohort = 'seed';
-export const CANARY_COHORT: EvaluationCohort = 'canary';
 export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
 export const RELEVANCE_EVAL_NAME = 'relevance';
 export const COHERENCE_EVAL_NAME = 'coherence';

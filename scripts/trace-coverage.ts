@@ -27,7 +27,7 @@ import { pathToFileURL } from 'url';
 import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
-import { TELEMETRY_DIR } from './judge-evaluations.js';
+import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
 
 const DEFAULT_WINDOW_DAYS = 7;

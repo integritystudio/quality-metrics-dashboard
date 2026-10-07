@@ -88,7 +88,7 @@ import {
   jsonSafe,
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
-import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './judge-evaluations.js';
+import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { ascending, mean, quantileSorted, rollup } from 'd3-array';
 
 // Used to be exported as DEGRADATION_KV_KEY from ../../src/lib/quality/quality-constants.ts,

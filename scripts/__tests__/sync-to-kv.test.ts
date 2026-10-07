@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { buildCalibrationEntry, computeSessionDetail, loadCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
-import { CALIBRATION_STATE_DIR } from '../judge-evaluations.js';
+import { CALIBRATION_STATE_DIR } from '../evaluation-constants.js';
 import { loadCalibrationState, saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
