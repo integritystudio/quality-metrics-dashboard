@@ -72,7 +72,7 @@ import {
   type BatchLLMProvider,
 } from './judge-batch-provider.js';
 import { HOOK_NAME, toDateOnly } from '../src/api/api-constants.js';
-import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKeySource } from './judge-credentials.js';
+import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey, type JudgeApiKeySource } from './judge-credentials.js';
 import pLimit from 'p-limit';
 import {
   ACCOUNT_INDEX_WINDOW_DAYS,
@@ -1575,6 +1575,150 @@ export async function processBatch<T, R>(
   return settled.filter(r => r.status === 'fulfilled').map(r => r.value);
 }
 
+/** --backfill: seed evaluations from trace data for sessions with no transcript. */
+async function runBackfill(): Promise<void> {
+  const traceTurns = await discoverSessionsFromTraces();
+  anchorTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
+  console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
+
+  if (!acquireLock()) {
+    console.error('Error: Another judge-evaluations process is running (lockfile exists)');
+    process.exit(1);
+  }
+
+  try {
+    const existingKeys = _loadExistingKeys();
+
+    // Checking only hallucination would skip sessions with partial coverage.
+    const SEED_METRICS = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, HALLUCINATION_EVAL_NAME] as const;
+    const newTurns = traceTurns.filter(t => {
+      const turnKey = t.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
+      return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
+    });
+    console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
+
+    if (newTurns.length === 0) return;
+
+    const seedResult = seedEvaluations(newTurns, existingKeys);
+    // Backfilled data is not organic seed, so re-cohort it. The cohort axis
+    // owns this now — `evaluatorType` keeps the kind and is left alone
+    // (OBP16); previously this line overwrote a kind with a cohort value.
+    for (const ev of seedResult.evals) {
+      if (ev.cohort === SEED_COHORT) {
+        ev.cohort = BACKFILL_COHORT;
+        ev.evaluatorType = TRACE_BACKFILL_EVALUATOR_TYPE;
+      }
+    }
+
+    if (seedResult.evals.length > 0) {
+      writeEvaluations(seedResult.evals);
+      const byCat = new Map<string, number>();
+      for (const ev of seedResult.evals) {
+        byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+      }
+      console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
+      for (const [name, count] of byCat) {
+        console.log(`  ${name}: ${count}`);
+      }
+    }
+  } finally {
+    releaseLock();
+  }
+}
+
+/** --dry-run: what a run over `allTurns` would cost, and where its turns come from. */
+function printDryRun(allTurns: Turn[], batch: boolean, consolidated: boolean): void {
+  const est = estimateJudgeRun(allTurns, batch, consolidated);
+
+  console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} ${consolidated ? 'consolidated calls' : 'evals'}`);
+  console.log(`[dry-run] ~${est.inputTokens.toLocaleString()} input tokens, ~${est.outputTokens.toLocaleString()} output tokens`);
+  console.log(`[dry-run] estimated cost: $${est.costUsd.toFixed(EVAL_SCORE_PRECISION)}${batch ? ' (batch rate, 50% off list)' : ''}`);
+
+  const bySession = new Map<string, number>();
+  for (const t of allTurns) {
+    const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
+    bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
+  }
+  const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, DRY_RUN_TOP_SESSIONS);
+  console.log('[dry-run] top sessions by turn count:');
+  for (const [sid, count] of sorted) {
+    console.log(`  ${sid}: ${count} turns`);
+  }
+}
+
+/**
+ * Score `allTurns` with the LLM judge — consolidated unless --per-criterion,
+ * through the Message Batches API under --batch — and report the run's
+ * summary, setting a failing exit code when it flags one.
+ */
+async function judgeTurns(
+  allTurns: Turn[],
+  existingKeys: Set<string>,
+  judgeKey: JudgeApiKey,
+  { batch, consolidated }: { batch: boolean; consolidated: boolean },
+): Promise<EvalRecord[]> {
+  const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated).costUsd;
+  const usage = createUsageTotals();
+  const batchProvider = batch
+    ? await createBatchProvider({
+        model: HAIKU_MODEL,
+        maxTokens: JUDGE_MAX_TOKENS,
+        temperature: JUDGE_DEFAULT_TEMPERATURE,
+        onUsage: (u) => recordUsage(usage, u),
+      })
+    : undefined;
+  const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
+  const judge = new LLMJudge(llm, {
+    timeoutMs: batchProvider ? BATCH_MODE_JUDGE_TIMEOUT_MS : TIME_MS.MINUTE,
+    maxRetries: batchProvider ? BATCH_MODE_MAX_RETRIES : SYNC_MODE_MAX_RETRIES,
+    evaluator: PRODUCER,
+    evaluatorType: LLM_EVALUATOR_TYPE,
+    logger: {
+      warn: (msg) => console.warn(`  [warn] ${msg}`),
+      error: (msg) => console.error(`  [error] ${msg}`),
+    },
+  });
+  // Consolidated (the default): one call per turn, judge-consolidated.ts. Its
+  // synchronous provider gets the judge key and the run's usage totals, so it
+  // bills and reports exactly as the per-criterion path does; under --batch
+  // it rides the same batch provider (JCP3).
+  const consolidatedModule = consolidated ? await import('./judge-consolidated.js') : undefined;
+  let allEvals: EvalRecord[][];
+  if (batchProvider) {
+    allEvals = consolidatedModule
+      ? await consolidatedModule.evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys)
+      : await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys);
+  } else {
+    const evaluate = consolidatedModule
+      ? await consolidatedModule.createConsolidatedTurnEvaluator(existingKeys, {
+          apiKey: judgeKey.apiKey,
+          onUsage: (u) => recordUsage(usage, {
+            input_tokens: u.inputTokens,
+            output_tokens: u.outputTokens,
+            cache_read_input_tokens: u.cacheReadInputTokens,
+            cache_creation_input_tokens: u.cacheCreationInputTokens,
+          }),
+        })
+      : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
+    allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);
+  }
+
+  const flatEvals = allEvals.flat();
+
+  const prevState = readRunState();
+  const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source }, prevState);
+  (summary.exitCode === 0 ? console.log : console.error)(summary.line);
+  // Every run that attempted something becomes the baseline, flagged or not:
+  // keeping only clean runs let one flagged run hold the alarm on for good.
+  if (summary.attempted > 0) writeRunState(summary.succeeded, summary.attempted);
+  if (summary.exitCode !== 0) {
+    // Set rather than exit: main's finally must still release the lock,
+    // and populate-dashboard.ts reads this code to keep upload + sync running.
+    process.exitCode = summary.exitCode;
+  }
+  return flatEvals;
+}
+
 /** Generate seed evaluations from trace data for sessions with no transcript. */
 const BACKFILL_FLAG = '--backfill';
 /** Flags judge-evaluations reads itself; --source=/--days=/--date= are read by derive's resolvers. */
@@ -1597,55 +1741,8 @@ async function main() {
   const consolidated = !cli.has(JUDGE_PER_CRITERION_FLAG);
   const limit = requestedLimit === undefined ? Infinity : Math.min(requestedLimit, MAX_TURN_LIMIT);
 
-  // --backfill: generate seed evals from trace data for sessions missing transcripts
   if (backfill) {
-    const traceTurns = await discoverSessionsFromTraces();
-    anchorTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
-    console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
-
-    if (!acquireLock()) {
-      console.error('Error: Another judge-evaluations process is running (lockfile exists)');
-      process.exit(1);
-    }
-
-    try {
-      const existingKeys = _loadExistingKeys();
-
-      // Checking only hallucination would skip sessions with partial coverage.
-      const SEED_METRICS = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, HALLUCINATION_EVAL_NAME] as const;
-      const newTurns = traceTurns.filter(t => {
-        const turnKey = t.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-        return SEED_METRICS.some(m => !existingKeys.has(`${t.sessionId}:${m}:${turnKey}`));
-      });
-      console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
-
-      if (newTurns.length === 0) return;
-
-      const seedResult = seedEvaluations(newTurns, existingKeys);
-      // Backfilled data is not organic seed, so re-cohort it. The cohort axis
-      // owns this now — `evaluatorType` keeps the kind and is left alone
-      // (OBP16); previously this line overwrote a kind with a cohort value.
-      for (const ev of seedResult.evals) {
-        if (ev.cohort === SEED_COHORT) {
-          ev.cohort = BACKFILL_COHORT;
-          ev.evaluatorType = TRACE_BACKFILL_EVALUATOR_TYPE;
-        }
-      }
-
-      if (seedResult.evals.length > 0) {
-        writeEvaluations(seedResult.evals);
-        const byCat = new Map<string, number>();
-        for (const ev of seedResult.evals) {
-          byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
-        }
-        console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
-        for (const [name, count] of byCat) {
-          console.log(`  ${name}: ${count}`);
-        }
-      }
-    } finally {
-      releaseLock();
-    }
+    await runBackfill();
     return;
   }
 
@@ -1671,23 +1768,7 @@ async function main() {
   if (dryRun) {
     const selection = select(loadExistingKeys());
     console.log(`[dry-run] turns: ${formatTurnSelection(selection)}`);
-    const allTurns = selection.selected;
-    const est = estimateJudgeRun(allTurns, batch, consolidated);
-
-    console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} ${consolidated ? 'consolidated calls' : 'evals'}`);
-    console.log(`[dry-run] ~${est.inputTokens.toLocaleString()} input tokens, ~${est.outputTokens.toLocaleString()} output tokens`);
-    console.log(`[dry-run] estimated cost: $${est.costUsd.toFixed(EVAL_SCORE_PRECISION)}${batch ? ' (batch rate, 50% off list)' : ''}`);
-
-    const bySession = new Map<string, number>();
-    for (const t of allTurns) {
-      const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
-      bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
-    }
-    const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, DRY_RUN_TOP_SESSIONS);
-    console.log('[dry-run] top sessions by turn count:');
-    for (const [sid, count] of sorted) {
-      console.log(`  ${sid}: ${count} turns`);
-    }
+    printDryRun(selection.selected, batch, consolidated);
     return;
   }
 
@@ -1713,73 +1794,10 @@ async function main() {
 
     resetFailureTracking();
 
-    let flatEvals: EvalRecord[];
-
-    if (!judgeKey) {
-      // No key means --seed; the guard above exited otherwise.
-      const seedResult = seedEvaluations(allTurns, existingKeys);
-      flatEvals = seedResult.evals;
-    } else {
-      const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated).costUsd;
-      const usage = createUsageTotals();
-      const batchProvider = batch
-        ? await createBatchProvider({
-            model: HAIKU_MODEL,
-            maxTokens: JUDGE_MAX_TOKENS,
-            temperature: JUDGE_DEFAULT_TEMPERATURE,
-            onUsage: (u) => recordUsage(usage, u),
-          })
-        : undefined;
-      const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
-      const judge = new LLMJudge(llm, {
-        timeoutMs: batchProvider ? BATCH_MODE_JUDGE_TIMEOUT_MS : TIME_MS.MINUTE,
-        maxRetries: batchProvider ? BATCH_MODE_MAX_RETRIES : SYNC_MODE_MAX_RETRIES,
-        evaluator: PRODUCER,
-        evaluatorType: LLM_EVALUATOR_TYPE,
-        logger: {
-          warn: (msg) => console.warn(`  [warn] ${msg}`),
-          error: (msg) => console.error(`  [error] ${msg}`),
-        },
-      });
-      // Consolidated (the default): one call per turn, judge-consolidated.ts. Its
-      // synchronous provider gets the judge key and the run's usage totals, so it
-      // bills and reports exactly as the per-criterion path does; under --batch
-      // it rides the same batch provider (JCP3).
-      const consolidatedModule = consolidated ? await import('./judge-consolidated.js') : undefined;
-      let allEvals: EvalRecord[][];
-      if (batchProvider) {
-        allEvals = consolidatedModule
-          ? await consolidatedModule.evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys)
-          : await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys);
-      } else {
-        const evaluate = consolidatedModule
-          ? await consolidatedModule.createConsolidatedTurnEvaluator(existingKeys, {
-              apiKey: judgeKey.apiKey,
-              onUsage: (u) => recordUsage(usage, {
-                input_tokens: u.inputTokens,
-                output_tokens: u.outputTokens,
-                cache_read_input_tokens: u.cacheReadInputTokens,
-                cache_creation_input_tokens: u.cacheCreationInputTokens,
-              }),
-            })
-          : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
-        allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);
-      }
-
-      flatEvals = allEvals.flat();
-
-      const prevState = readRunState();
-      const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source }, prevState);
-      (summary.exitCode === 0 ? console.log : console.error)(summary.line);
-      // Every run that attempted something becomes the baseline, flagged or not:
-      // keeping only clean runs let one flagged run hold the alarm on for good.
-      if (summary.attempted > 0) writeRunState(summary.succeeded, summary.attempted);
-      if (summary.exitCode !== 0) {
-        // Set rather than exit: the finally below must still release the lock,
-        // and populate-dashboard.ts reads this code to keep upload + sync running.
-        process.exitCode = summary.exitCode;
-      }
-    }
+    // No key means --seed; the guard above exited otherwise.
+    const flatEvals = judgeKey
+      ? await judgeTurns(allTurns, existingKeys, judgeKey, { batch, consolidated })
+      : seedEvaluations(allTurns, existingKeys).evals;
 
     if (flatEvals.length === 0) {
       return;
