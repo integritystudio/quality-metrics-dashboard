@@ -40,7 +40,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             This session has not been synced to the dashboard KV store yet.
             Data is synced periodically &mdash; check back after the next pipeline run.
           </div>
-          <div className="mono-xs text-muted mt-3 break-all">{sessionId}</div>
+          <div className="mono-xs-muted mt-3 break-all">{sessionId}</div>
         </div>
       </div>
     );

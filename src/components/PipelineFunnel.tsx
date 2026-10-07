@@ -33,7 +33,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
 
           return (
             <div key={stage.name}>
-              <div className="flex-center gap-3">
+              <div className="flex-center-gap-3">
                 <div
                   className="d-flex funnel-bar"
                   style={{

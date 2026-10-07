@@ -209,7 +209,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                       {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
                         <div className="border-b-subtle mb-1 pad-panel-section">
-                          <div className="flex-center gap-3">
+                          <div className="flex-center-gap-3">
                             <div className="text-xs text-muted uppercase shrink-0">
                               Daily Activity
                             </div>

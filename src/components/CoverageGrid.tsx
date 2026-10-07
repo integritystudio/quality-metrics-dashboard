@@ -42,7 +42,7 @@ function CoverageGridInner({ matrix }: CoverageGridProps) {
 
   return (
     <div role="region" aria-label="Evaluation coverage heatmap">
-      <div className="flex-center mb-3 gap-3">
+      <div className="flex-center-gap-3 mb-3">
         <span className="mono-xl font-semibold">
           {formatPercent(overallCoveragePercent)}
         </span>

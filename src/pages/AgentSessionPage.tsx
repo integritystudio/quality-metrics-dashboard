@@ -36,7 +36,7 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
             <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
             {evaluation.errorPropagationTurns > 0 && (
               <div className="text-center">
-                <div className="mono-xs text-muted mb-1 uppercase">Error Propagation</div>
+                <div className="mono-xs-muted mb-1 uppercase">Error Propagation</div>
                 <span className="mono text-md text-critical">
                   {plural(evaluation.errorPropagationTurns, 'turn')}
                 </span>

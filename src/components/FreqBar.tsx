@@ -11,7 +11,7 @@ export function FreqBar({ label, count, max, color }: { label: string; count: nu
         color={color ?? 'var(--accent)'}
         trackColor="var(--bg-elevated)"
       />
-      <div className="mono-xs text-muted text-right">{count}</div>
+      <div className="mono-xs-muted text-right">{count}</div>
     </div>
   );
 }

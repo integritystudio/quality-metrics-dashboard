@@ -10,7 +10,7 @@ interface HealthBannerProps {
 export function HealthBanner({ status, message, children }: HealthBannerProps) {
   return (
     <div className="health-banner flex-center" data-status={status}>
-      <div className="flex-center gap-3">
+      <div className="flex-center-gap-3">
         <StatusBadge status={status} />
         {message}
       </div>

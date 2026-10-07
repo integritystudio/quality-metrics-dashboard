@@ -7,7 +7,7 @@ interface HandoffCardProps {
 
 export function HandoffCard({ handoff }: HandoffCardProps) {
   return (
-    <div className="flex-center gap-3 surface-elevated-card">
+    <div className="flex-center-gap-3 surface-elevated-card">
       <span className="mono-xs font-semibold">
         {handoff.sourceAgent}
       </span>
