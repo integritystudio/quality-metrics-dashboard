@@ -287,6 +287,23 @@ function RouteErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   );
 }
 
+/** Per-route error boundary; resets when the location changes. */
+function RouteBoundary({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  return <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>{children}</ErrorBoundary>;
+}
+
+/** The admin customer screens: staff only, loaded on demand. */
+function StaffRoute({ children }: { children: ReactNode }) {
+  return (
+    <RouteBoundary>
+      <StaffGuard>
+        <Suspense fallback={<div className="card skeleton skeleton-md" />}>{children}</Suspense>
+      </StaffGuard>
+    </RouteBoundary>
+  );
+}
+
 function AdminLink() {
   const { session } = useAuth();
   if (!session?.permissions.includes('dashboard.admin')) return null;
@@ -369,7 +386,7 @@ const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '') || '';
 
 export function App() {
   const [period, setPeriod] = useState<Period>('30d');
-  const [location, navigate] = useLocation();
+  const [, navigate] = useLocation();
 
   // Restore the deep link LoginPage carried through Auth0 as
   // appState.returnTo; without this the code exchange always landed on '/'.
@@ -425,165 +442,127 @@ export function App() {
                     <StaffCustomersLink />
                     <Switch>
                       <Route path="/">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <DashboardPage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/role/:roleName">
                         {(params) => {
                           const role = VALID_ROLES.find(r => r === params.roleName);
                           if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
                           return (
-                            <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                            <RouteBoundary>
                               <RolePage role={role} period={period} />
-                            </ErrorBoundary>
+                            </RouteBoundary>
                           );
                         }}
                       </Route>
                       <Route path="/metrics/:metricName">
                         {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <RouteBoundary>
                             <MetricDetailPage name={params.metricName} period={period} />
-                          </ErrorBoundary>
+                          </RouteBoundary>
                         )}
                       </Route>
                       <Route path="/evaluations/trace/:traceId">
                         {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <RouteBoundary>
                             <EvaluationDetailPage traceId={params.traceId} />
-                          </ErrorBoundary>
+                          </RouteBoundary>
                         )}
                       </Route>
                       <Route path="/correlations">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <CorrelationsPage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/coverage">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <CoveragePage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/pipeline">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <PipelinePage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/compliance">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <CompliancePage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/agents">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <AgentsPage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/traces/:traceId">
                         {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <RouteBoundary>
                             <TraceDetailPage traceId={params.traceId} />
-                          </ErrorBoundary>
+                          </RouteBoundary>
                         )}
                       </Route>
                       <Route path="/agents/:sessionId">
                         {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <RouteBoundary>
                             <AgentSessionPage sessionId={params.sessionId} />
-                          </ErrorBoundary>
+                          </RouteBoundary>
                         )}
                       </Route>
                       <Route path="/sessions/:sessionId">
                         {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <RouteBoundary>
                             <SessionDetailPage sessionId={params.sessionId} />
-                          </ErrorBoundary>
+                          </RouteBoundary>
                         )}
                       </Route>
                       <Route path="/workflows/:sessionId">
                         {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                          <RouteBoundary>
                             <Suspense fallback={<div className="card skeleton skeleton-xl" />}>
                               <WorkflowPage sessionId={params.sessionId} />
                             </Suspense>
-                          </ErrorBoundary>
+                          </RouteBoundary>
                         )}
                       </Route>
                       <Route path="/routing-telemetry">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <RoutingTelemetryPage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/degradation-signals">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <DegradationSignalsPage period={period} />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/code-quality">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <AgentCodeQualityPage />
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       <Route path="/admin">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
+                        <RouteBoundary>
                           <AdminGuard>
                             <AdminPage />
                           </AdminGuard>
-                        </ErrorBoundary>
+                        </RouteBoundary>
                       </Route>
                       {/* The admin customer view: staff only, org id in the path (ADMIN-CV-LAYOUT-NAV). */}
                       <Route path="/admin/customers">
-                        <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                          <StaffGuard>
-                            <Suspense fallback={<div className="card skeleton skeleton-md" />}>
-                              <AdminCustomerHubPage />
-                            </Suspense>
-                          </StaffGuard>
-                        </ErrorBoundary>
+                        <StaffRoute><AdminCustomerHubPage /></StaffRoute>
                       </Route>
                       <Route path="/admin/customers/:orgId/billing">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <StaffGuard>
-                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
-                                <AdminCustomerBillingPage orgId={params.orgId} />
-                              </Suspense>
-                            </StaffGuard>
-                          </ErrorBoundary>
-                        )}
+                        {(params) => <StaffRoute><AdminCustomerBillingPage orgId={params.orgId} /></StaffRoute>}
                       </Route>
                       <Route path="/admin/customers/:orgId/usage">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <StaffGuard>
-                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
-                                <AdminCustomerUsagePage orgId={params.orgId} />
-                              </Suspense>
-                            </StaffGuard>
-                          </ErrorBoundary>
-                        )}
+                        {(params) => <StaffRoute><AdminCustomerUsagePage orgId={params.orgId} /></StaffRoute>}
                       </Route>
                       <Route path="/admin/customers/:orgId/quota">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <StaffGuard>
-                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
-                                <AdminCustomerQuotaPage orgId={params.orgId} />
-                              </Suspense>
-                            </StaffGuard>
-                          </ErrorBoundary>
-                        )}
+                        {(params) => <StaffRoute><AdminCustomerQuotaPage orgId={params.orgId} /></StaffRoute>}
                       </Route>
                       <Route path="/admin/customers/:orgId/entitlements">
-                        {(params) => (
-                          <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>
-                            <StaffGuard>
-                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
-                                <AdminCustomerEntitlementsPage orgId={params.orgId} />
-                              </Suspense>
-                            </StaffGuard>
-                          </ErrorBoundary>
-                        )}
+                        {(params) => <StaffRoute><AdminCustomerEntitlementsPage orgId={params.orgId} /></StaffRoute>}
                       </Route>
                       <Route>
                         <div className="empty-state">
