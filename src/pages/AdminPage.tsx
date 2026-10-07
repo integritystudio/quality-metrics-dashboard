@@ -15,6 +15,7 @@ import { RotateKeyResponseSchema } from '../lib/validation/auth-schemas.js';
 // The key was rotated, so the old one no longer works, but the response carried no token to show.
 const ERR_ROTATE_NO_TOKEN = 'Key rotated, but no new token was returned. Rotate it again to get one.';
 const NEW_KEY_NOTICE = 'Copy it now: it is not shown again, and the old key has stopped working.';
+const ERR_NETWORK = 'Network error';
 const ERR_COPY_FAILED = 'Copy failed. Select the key above and copy it manually.';
 const COPY_FEEDBACK_MS = 2000;
 
@@ -95,6 +96,48 @@ function useAdminFetch() {
   };
 }
 
+interface RowMutation {
+  path: string;
+  method: string;
+  body?: unknown;
+  /** Shown when the response is not ok and carries no text. */
+  failureMessage: string;
+  onOk?: (res: Response) => Promise<void> | void;
+}
+
+/**
+ * One row's busy/error state and the mutation lifecycle every admin row shares:
+ * clear the error, bracket the request with onMutationStart/End, and surface the
+ * response text, the fallback message, or a network error.
+ */
+function useRowMutation(onMutationStart: () => string, onMutationEnd: (id: string) => void) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const adminFetch = useAdminFetch();
+
+  async function run({ path, method, body, failureMessage, onOk }: RowMutation) {
+    setBusy(true);
+    setError(null);
+    const mutationId = onMutationStart();
+    try {
+      const res = await adminFetch(path, method, body);
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || failureMessage);
+      } else {
+        await onOk?.(res);
+      }
+    } catch {
+      setError(ERR_NETWORK);
+    } finally {
+      setBusy(false);
+      onMutationEnd(mutationId);
+    }
+  }
+
+  return { busy, error, setError, run };
+}
+
 function UserRow({
   user,
   availableRoles,
@@ -107,9 +150,7 @@ function UserRow({
   onMutationEnd: (id: string) => void;
 }) {
   const [selectedRoleId, setSelectedRoleId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const adminFetch = useAdminFetch();
+  const { busy, error, run } = useRowMutation(onMutationStart, onMutationEnd);
 
   const assignableRoles = availableRoles.filter(
     (r) => !user.roles.some((ur) => ur.id === r.id),
@@ -117,42 +158,18 @@ function UserRow({
 
   async function handleAssign() {
     if (!selectedRoleId) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles`, 'POST', { role_id: selectedRoleId });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to assign role');
-      } else {
-        setSelectedRoleId('');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
+    await run({
+      path: `/api/admin/users/${user.id}/roles`,
+      method: 'POST',
+      body: { role_id: selectedRoleId },
+      failureMessage: 'Failed to assign role',
+      onOk: () => setSelectedRoleId(''),
+    });
   }
 
   async function handleRevoke(roleId: string, roleName: string) {
     if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/users/${user.id}/roles/${roleId}`, 'DELETE');
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to revoke role');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
+    await run({ path: `/api/admin/users/${user.id}/roles/${roleId}`, method: 'DELETE', failureMessage: 'Failed to revoke role' });
   }
 
   return (
@@ -211,48 +228,23 @@ function MemberRow({
   onMutationEnd: (id: string) => void;
 }) {
   const [selectedRole, setSelectedRole] = useState<OrgMembershipRoleValue>(member.membershipRole);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const adminFetch = useAdminFetch();
+  const { busy, error, run } = useRowMutation(onMutationStart, onMutationEnd);
 
   const ownerLocked = (member.membershipRole === 'owner' || selectedRole === 'owner') && !canTouchOwner;
 
   async function handleRoleChange() {
     if (selectedRole === member.membershipRole) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/members/${member.userId}/role`, 'POST', { membershipRole: selectedRole });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to update role');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
+    await run({
+      path: `/api/admin/members/${member.userId}/role`,
+      method: 'POST',
+      body: { membershipRole: selectedRole },
+      failureMessage: 'Failed to update role',
+    });
   }
 
   async function handleRemove() {
     if (!window.confirm(`Remove ${member.email ?? member.userId} from this organization?`)) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/members/${member.userId}`, 'DELETE');
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to remove member');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
+    await run({ path: `/api/admin/members/${member.userId}`, method: 'DELETE', failureMessage: 'Failed to remove member' });
   }
 
   return (
@@ -341,33 +333,22 @@ function KeyRow({
   onMutationEnd: (id: string) => void;
   onRotated: (rotated: RotatedKey) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const adminFetch = useAdminFetch();
+  const { busy, error, setError, run } = useRowMutation(onMutationStart, onMutationEnd);
 
   async function handleRotate() {
     if (!window.confirm(
       `Rotate key ${apiKey.prefix}…? The old key stops working immediately — update OBTOOL_API_KEY wherever the hooks read it.`,
     )) return;
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(`/api/admin/keys/${apiKey.id}/rotate`, 'POST');
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || 'Failed to rotate key');
-      } else {
+    await run({
+      path: `/api/admin/keys/${apiKey.id}/rotate`,
+      method: 'POST',
+      failureMessage: 'Failed to rotate key',
+      onOk: async (res) => {
         const parsed = RotateKeyResponseSchema.safeParse(await res.json().catch(() => null));
         if (parsed.success) onRotated({ previousPrefix: apiKey.prefix, token: parsed.data.token });
         else setError(ERR_ROTATE_NO_TOKEN);
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
+      },
+    });
   }
 
   return (
