@@ -68,8 +68,11 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import {
   DERIVE_SOFT_FAILURE_EXITS,
+  DRY_RUN_FLAG,
   JUDGE_BATCH_FLAG,
+  JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
+  JUDGE_SEED_FLAG,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
   UPLOAD_SOFT_FAILURE_EXITS,
@@ -79,6 +82,7 @@ import {
   runWithRetry,
 } from './pipeline-stages.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
+import { parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 
 const SCRIPTS_DIR = import.meta.dirname;
 const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
@@ -86,38 +90,48 @@ const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
 const STDERR_CAPTURE_MAX_BYTES = 16 * 1024 * 1024;
 const MS_PER_SECOND = 1000;
 
-const args = process.argv.slice(2);
-const skipJudge = args.includes('--skip-judge');
-const skipUpload = args.includes('--skip-upload');
-const skipSync = args.includes('--skip-sync');
-const dryRun = args.includes('--dry-run');
-const seed = args.includes('--seed');
-const batch = args.includes(JUDGE_BATCH_FLAG);
-const perCriterion = args.includes(JUDGE_PER_CRITERION_FLAG);
-const limitIdx = args.indexOf('--limit');
-let limit: string | undefined;
-if (limitIdx !== -1) {
-  const raw = args[limitIdx + 1];
-  const parsed = parseInt(raw ?? '', 10);
-  if (!raw || isNaN(parsed) || parsed < 1) {
-    console.error('[populate] Error: --limit requires a positive integer');
-    process.exit(1);
-  }
-  limit = String(parsed);
+const SKIP_JUDGE_FLAG = '--skip-judge';
+const SKIP_UPLOAD_FLAG = '--skip-upload';
+const SKIP_SYNC_FLAG = '--skip-sync';
+const POPULATE_CLI: CliSpec = {
+  values: [JUDGE_LIMIT_FLAG],
+  switches: [
+    SKIP_JUDGE_FLAG, SKIP_UPLOAD_FLAG, SKIP_SYNC_FLAG, DRY_RUN_FLAG,
+    JUDGE_SEED_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
+  ],
+};
+
+/**
+ * The run's switches and each stage's scope. Both stages read the cloud over
+ * the last week unless --derive-source= / --derive-days= / --judge-source= /
+ * --judge-days= say otherwise. Read before any stage runs, so a bad flag stops
+ * the run before derive.
+ */
+function readArgs(argv: readonly string[]) {
+  const cli = parseCli(argv, POPULATE_CLI);
+  const limit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
+  return {
+    skipJudge: cli.has(SKIP_JUDGE_FLAG),
+    skipUpload: cli.has(SKIP_UPLOAD_FLAG),
+    skipSync: cli.has(SKIP_SYNC_FLAG),
+    dryRun: cli.has(DRY_RUN_FLAG),
+    seed: cli.has(JUDGE_SEED_FLAG),
+    batch: cli.has(JUDGE_BATCH_FLAG),
+    perCriterion: cli.has(JUDGE_PER_CRITERION_FLAG),
+    limit: limit === undefined ? undefined : String(limit),
+    deriveScope: deriveScopeArgs(argv),
+    judgeScope: judgeScopeArgs(argv),
+  };
 }
 
-// Both stages read the cloud over the last week unless --derive-source= /
-// --derive-days= / --judge-source= / --judge-days= say otherwise. Checked here
-// so a bad override stops the run before derive.
-let deriveScope: string[];
-let judgeScope: string[];
+let options: ReturnType<typeof readArgs>;
 try {
-  deriveScope = deriveScopeArgs(args);
-  judgeScope = judgeScopeArgs(args);
+  options = readArgs(process.argv.slice(2));
 } catch (err) {
   console.error(`[populate] Error: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 }
+const { skipJudge, skipUpload, skipSync, dryRun, seed, batch, perCriterion, limit, deriveScope, judgeScope } = options;
 
 // Fail closed when the judge would run with no key.
 //
@@ -227,9 +241,9 @@ async function main(): Promise<void> {
 
   if (!skipJudge) {
     const judgeArgs: string[] = [...judgeScope];
-    if (dryRun) judgeArgs.push('--dry-run');
-    if (seed) judgeArgs.push('--seed');
-    if (limit) judgeArgs.push('--limit', limit);
+    if (dryRun) judgeArgs.push(DRY_RUN_FLAG);
+    if (seed) judgeArgs.push(JUDGE_SEED_FLAG);
+    if (limit) judgeArgs.push(JUDGE_LIMIT_FLAG, limit);
     if (batch) judgeArgs.push(JUDGE_BATCH_FLAG);
     if (perCriterion) judgeArgs.push(JUDGE_PER_CRITERION_FLAG);
     const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
@@ -255,7 +269,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const uploadArgs: string[] = [];
-    if (dryRun) uploadArgs.push('--dry-run');
+    if (dryRun) uploadArgs.push(DRY_RUN_FLAG);
     // The 2026-09-28 18:00 run lost its sync to a network blip here: upload
     // gave up after its own four quick attempts and exited 1, which aborted
     // the run (UPLOAD-FAILURE-ABORTS-PIPELINE). Wait out a transient failure
@@ -273,7 +287,7 @@ async function main(): Promise<void> {
 
   if (!skipSync) {
     const syncArgs: string[] = [];
-    if (dryRun) syncArgs.push('--dry-run');
+    if (dryRun) syncArgs.push(DRY_RUN_FLAG);
     const sync = await runWithNetworkRetry('sync-to-kv', 'sync-to-kv.ts', syncArgs);
     if (!sync.ok) abort('sync-to-kv', sync);
   }

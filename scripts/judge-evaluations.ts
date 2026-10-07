@@ -62,7 +62,8 @@ import { TELEMETRY_DIR, CALIBRATION_STATE_DIR, CANARY_EVALUATOR_TYPE, CANARY_COH
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_PER_CRITERION_FLAG, type TraceSource } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, type TraceSource } from './pipeline-stages.js';
+import { CliArgError, parseCli, positiveIntArg, type CliArgs, type CliSpec } from './cli-args.js';
 import {
   createBatchProvider,
   BATCH_CANCEL_GRACE_MS,
@@ -1656,24 +1657,33 @@ export async function processBatch<T, R>(
   return settled.filter(r => r.status === 'fulfilled').map(r => r.value);
 }
 
+/** Generate seed evaluations from trace data for sessions with no transcript. */
+const BACKFILL_FLAG = '--backfill';
+/** Flags judge-evaluations reads itself; --source=/--days=/--date= are read by derive's resolvers. */
+const JUDGE_CLI: CliSpec = {
+  values: [JUDGE_LIMIT_FLAG],
+  switches: [DRY_RUN_FLAG, JUDGE_SEED_FLAG, BACKFILL_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
+};
+
 async function main() {
   const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
-  const seed = args.includes('--seed');
-  const backfill = args.includes('--backfill');
-  const batch = args.includes(JUDGE_BATCH_FLAG);
-  // Consolidated is the default (JCP4); --per-criterion opts out.
-  const consolidated = !args.includes(JUDGE_PER_CRITERION_FLAG);
-  const limitIdx = args.indexOf('--limit');
-  let limit = Infinity;
-  if (limitIdx !== -1) {
-    const parsed = parseInt(args[limitIdx + 1] ?? '', 10);
-    if (isNaN(parsed) || parsed < 1) {
-      console.error('Error: --limit must be a positive integer');
-      process.exit(1);
-    }
-    limit = Math.min(parsed, MAX_TURN_LIMIT);
+  let cli: CliArgs;
+  let requestedLimit: number | undefined;
+  try {
+    cli = parseCli(args, JUDGE_CLI);
+    requestedLimit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
+  } catch (err) {
+    if (!(err instanceof CliArgError)) throw err;
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
   }
+  const dryRun = cli.has(DRY_RUN_FLAG);
+  const seed = cli.has(JUDGE_SEED_FLAG);
+  const backfill = cli.has(BACKFILL_FLAG);
+  const batch = cli.has(JUDGE_BATCH_FLAG);
+  // Consolidated is the default (JCP4); --per-criterion opts out.
+  const consolidated = !cli.has(JUDGE_PER_CRITERION_FLAG);
+  const limit = requestedLimit === undefined ? Infinity : Math.min(requestedLimit, MAX_TURN_LIMIT);
 
   // --backfill: generate seed evals from trace data for sessions missing transcripts
   if (backfill) {

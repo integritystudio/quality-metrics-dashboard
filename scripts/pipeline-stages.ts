@@ -199,6 +199,11 @@ export const JUDGE_BATCH_FLAG = '--batch';
  * kept for comparison runs and as the way back if the default regresses.
  */
 export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
+/** judge-evaluations flags populate forwards: synthetic scores, and a cap on turns judged. */
+export const JUDGE_SEED_FLAG = '--seed';
+export const JUDGE_LIMIT_FLAG = '--limit';
+/** Every stage's preview switch: compute and report, write nothing. */
+export const DRY_RUN_FLAG = '--dry-run';
 
 /**
  * Waits between sync-to-kv attempts, in order — five retries, ~30 minutes in

@@ -43,7 +43,7 @@ import { canonicalizeAttributes } from '../../src/lib/observability/attribute-al
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { CliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 
@@ -460,9 +460,8 @@ const TRACE_FILE_PREFIX = 'traces-';
 const DATE_ONLY_LEN = 10; // YYYY-MM-DD
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
-const DRY_RUN_ARG = '--dry-run';
 /** Every flag derive reads; judge-evaluations and the parity scripts reuse the readers below. */
-const DERIVE_CLI: CliSpec = { values: [SOURCE_ARG, DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_ARG] };
+const DERIVE_CLI: CliSpec = { values: [SOURCE_ARG, DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_FLAG] };
 
 /**
  * `--source=local|cloud`, else `defaultSource`: `cloud` for derive and the
@@ -693,7 +692,7 @@ async function main(): Promise<void> {
   const source = resolveSource(argv);
   const scope = readScope(source, dateScope, DERIVE_DEFAULT_DAYS);
   const postDays = resolvePostDays(argv);
-  const dryRun = parseCli(argv, DERIVE_CLI).has(DRY_RUN_ARG);
+  const dryRun = parseCli(argv, DERIVE_CLI).has(DRY_RUN_FLAG);
 
   let loaded: LoadedSpans;
   if (source === 'cloud' && scope) {

@@ -27,6 +27,7 @@
 import { pathToFileURL } from 'url';
 import { discoverTurns, type Turn } from './judge-evaluations.js';
 import { resolveDateScope } from './derive-evaluations.js';
+import { parseCli, positiveIntArg } from './cli-args.js';
 import { selectTurns } from './judge-selection.js';
 
 const CLI_PREFIX = '[judge:parity]';
@@ -119,11 +120,7 @@ export function compareDiscoveries(
 }
 
 function parseLimit(argv: readonly string[]): number {
-  const i = argv.indexOf(LIMIT_ARG);
-  if (i === -1) return DEFAULT_LIMIT;
-  const n = parseInt(argv[i + 1] ?? '', 10);
-  if (!Number.isFinite(n) || n < 1) throw new Error(`${LIMIT_ARG} must be a positive integer`);
-  return n;
+  return positiveIntArg(LIMIT_ARG, parseCli(argv, { values: [LIMIT_ARG] }).value(LIMIT_ARG)) ?? DEFAULT_LIMIT;
 }
 
 async function main(): Promise<number> {
