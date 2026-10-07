@@ -1206,58 +1206,40 @@ export async function evaluateTurn(
     return Promise.resolve();
   };
 
-  const relKey = judgedByKey(turn.sessionId, RELEVANCE_EVAL_NAME, turnKey, HAIKU_MODEL);
-  if (!existingKeys.has(relKey)) await score(async () => {
-    try {
-      const result = await judge.evaluateRelevance(
-        turn.userText,
-        turn.assistantText,
-        toolContext,
-      );
-      evals.push(
-        createEvalRecord(
-          turn,
-          RELEVANCE_EVAL_NAME,
-          result.score,
-          result.reason ?? `Relevance: ${result.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
-          LLM_EVALUATOR_KIND,
-          NORMAL_COHORT,
-          HAIKU_MODEL,
-        ),
-      );
-    } catch (err) {
-      trackFailure(RELEVANCE_EVAL_NAME, err);
-      console.warn(`  [${RELEVANCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
-    }
-  });
+  const isJudged = (evalName: string): boolean =>
+    existingKeys.has(judgedByKey(turn.sessionId, evalName, turnKey, HAIKU_MODEL));
+  const record = (evalName: string, value: number, reason: string): void => {
+    evals.push(createEvalRecord(turn, evalName, value, reason, LLM_EVALUATOR_KIND, NORMAL_COHORT, HAIKU_MODEL));
+  };
+  const fail = (evalName: string, err: unknown): void => {
+    trackFailure(evalName, err);
+    console.warn(`  [${evalName}] Error for ${sessionPreview}: ${(err as Error).message}`);
+  };
+  const fallbackReason = (label: string, value: number): string =>
+    `${label}: ${value.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`;
+  /** One criterion, unless already judged; a failure is tracked and logged, never thrown. */
+  const scoreCriterion = (
+    evalName: string,
+    label: string,
+    run: () => Promise<{ score: number; reason?: string }>,
+  ): Promise<void> => {
+    if (isJudged(evalName)) return Promise.resolve();
+    return score(async () => {
+      try {
+        const result = await run();
+        record(evalName, result.score, result.reason ?? fallbackReason(label, result.score));
+      } catch (err) {
+        fail(evalName, err);
+      }
+    });
+  };
 
-  const cohKey = judgedByKey(turn.sessionId, COHERENCE_EVAL_NAME, turnKey, HAIKU_MODEL);
-  if (!existingKeys.has(cohKey)) await score(async () => {
-    try {
-      const result = await judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText });
-      evals.push(
-        createEvalRecord(
-          turn,
-          COHERENCE_EVAL_NAME,
-          result.score,
-          result.reason ?? `Coherence: ${result.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
-          LLM_EVALUATOR_KIND,
-          NORMAL_COHORT,
-          HAIKU_MODEL,
-        ),
-      );
-    } catch (err) {
-      trackFailure(COHERENCE_EVAL_NAME, err);
-      console.warn(`  [${COHERENCE_EVAL_NAME}] Error for ${sessionPreview}: ${(err as Error).message}`);
-    }
-  });
+  await scoreCriterion(RELEVANCE_EVAL_NAME, 'Relevance',
+    () => judge.evaluateRelevance(turn.userText, turn.assistantText, toolContext));
+  await scoreCriterion(COHERENCE_EVAL_NAME, 'Coherence',
+    () => judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText }));
 
   if (turn.toolResults.length > 0) {
-    const faithKey = judgedByKey(turn.sessionId, FAITHFULNESS_EVAL_NAME, turnKey, HAIKU_MODEL);
-    const halKey = judgedByKey(turn.sessionId, HALLUCINATION_EVAL_NAME, turnKey, HAIKU_MODEL);
-    const needsFaith = !existingKeys.has(faithKey);
-    const needsHal = !existingKeys.has(halKey);
-
     // One QAG sweep answers both. 'faithfulness' counts the statements the tool
     // results support; 'fabrication' counts the ones they contradict — and the two
     // do not sum to 1, because a statement the context cannot settle belongs to
@@ -1265,98 +1247,29 @@ export async function evaluateTurn(
     // call, to a different evaluator, whose inversion scored every inconclusive
     // statement as a fabrication.
     const qagModes: QagVerificationMode[] = [
-      ...(needsFaith ? (['faithfulness'] as const) : []),
-      ...(needsHal ? (['fabrication'] as const) : []),
+      ...(isJudged(FAITHFULNESS_EVAL_NAME) ? [] : (['faithfulness'] as const)),
+      ...(isJudged(HALLUCINATION_EVAL_NAME) ? [] : (['fabrication'] as const)),
     ];
     if (qagModes.length > 0) await score(async () => {
       try {
-        const { scores } = await judge.qagEvaluateModes(
-          turn.userText,
-          turn.assistantText,
-          toolContext,
-          qagModes,
-        );
+        const { scores } = await judge.qagEvaluateModes(turn.userText, turn.assistantText, toolContext, qagModes);
         for (const mode of qagModes) {
           const { evalName, label } = QAG_MODE_RECORDS[mode];
-          evals.push(
-            createEvalRecord(
-              turn,
-              evalName,
-              scores[mode],
-              `${label}: ${scores[mode].toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
-              LLM_EVALUATOR_KIND,
-              NORMAL_COHORT,
-              HAIKU_MODEL,
-            ),
-          );
+          record(evalName, scores[mode], fallbackReason(label, scores[mode]));
         }
       } catch (err) {
         // The sweep is shared, so its failure is every requested mode's failure —
         // counting it once would under-report the metric that asked for it too.
-        for (const mode of qagModes) {
-          const { evalName } = QAG_MODE_RECORDS[mode];
-          trackFailure(evalName, err);
-          console.warn(`  [${evalName}] Error for ${sessionPreview}: ${(err as Error).message}`);
-        }
+        for (const mode of qagModes) fail(QAG_MODE_RECORDS[mode].evalName, err);
       }
     });
 
-    const tcKey = judgedByKey(turn.sessionId, TOOL_CORRECTNESS_CRITERIA.name, turnKey, HAIKU_MODEL);
-    if (!existingKeys.has(tcKey)) {
-      const tcTestCase = {
-        input: turn.userText,
-        output: turn.assistantText,
-        context: toolContext,
-      };
-      await score(async () => {
-        try {
-          const tcResult = await judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase);
-          evals.push(
-            createEvalRecord(
-              turn,
-              TOOL_CORRECTNESS_CRITERIA.name,
-              tcResult.score,
-              tcResult.reason ?? `Tool correctness: ${tcResult.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
-              LLM_EVALUATOR_KIND,
-              NORMAL_COHORT,
-              HAIKU_MODEL,
-            ),
-          );
-        } catch (err) {
-          trackFailure(TOOL_CORRECTNESS_CRITERIA.name, err);
-          console.warn(`  [${TOOL_CORRECTNESS_CRITERIA.name}] Error for ${sessionPreview}: ${(err as Error).message}`);
-        }
-      });
-
-      const subCriteria = [
-        TOOL_SELECTION_CRITERIA,
-        TOOL_ARGUMENTS_CRITERIA,
-        TOOL_INTEGRATION_CRITERIA,
-      ] as const;
-
-      for (const config of subCriteria) {
-        const { name } = config;
-        const subKey = judgedByKey(turn.sessionId, name, turnKey, HAIKU_MODEL);
-        if (existingKeys.has(subKey)) continue;
-        await score(async () => {
-          try {
-            const result = await judge.gEval(config, tcTestCase);
-            evals.push(
-              createEvalRecord(
-                turn,
-                name,
-                result.score,
-                result.reason ?? `${name}: ${result.score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`,
-                LLM_EVALUATOR_KIND,
-                NORMAL_COHORT,
-                HAIKU_MODEL,
-              ),
-            );
-          } catch (err) {
-            trackFailure(name, err);
-            console.warn(`  [${name}] Error for ${sessionPreview}: ${(err as Error).message}`);
-          }
-        });
+    if (!isJudged(TOOL_CORRECTNESS_CRITERIA.name)) {
+      const tcTestCase = { input: turn.userText, output: turn.assistantText, context: toolContext };
+      await scoreCriterion(TOOL_CORRECTNESS_CRITERIA.name, 'Tool correctness',
+        () => judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase));
+      for (const config of [TOOL_SELECTION_CRITERIA, TOOL_ARGUMENTS_CRITERIA, TOOL_INTEGRATION_CRITERIA]) {
+        await scoreCriterion(config.name, config.name, () => judge.gEval(config, tcTestCase));
       }
     }
   }
