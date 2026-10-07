@@ -43,7 +43,7 @@ export type { HandoffEvaluation, TurnLevelResult, MultiAgentEvaluation } from '@
 export type { HumanVerificationEvent } from '@parent/lib/audit/verification-events.js';
 export type { SLAEvaluationResult } from '@parent/lib/quality/quality-sla.js';
 
-export type Period = '24h' | '7d' | '30d';
+export type { Period } from './lib/constants.js';
 
 export type OverallStatus = 'healthy' | 'warning' | 'critical' | 'no_data';
 

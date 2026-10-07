@@ -5,8 +5,6 @@ import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import {
-  COMMIT_BODY_START_LINE_INDEX,
-  COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
   FILE_ACCESS_TOP_N,
   HOOK_NAME,
   incrementCount,
@@ -25,6 +23,7 @@ import {
   gitRepositoryLabel,
   jsonSafe,
 } from '../api-constants.js';
+import { isSpanError, extractGitCommit } from '../session-detail.js';
 import {
   loadEvaluationsBySessionId,
   loadLogsBySessionId,
@@ -79,7 +78,7 @@ const LIMIT_SESSION_SPANS = 1000;
 async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
   const now = new Date();
   const end = endDate ?? formatISO(now, { representation: 'date' });
-  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']!), { representation: 'date' });
+  const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
   return loadTracesByFilter(
     { 'session.id': sessionId },
     toIsoWindowBound(start, 'start'),
@@ -114,7 +113,17 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     const hookDurations: Record<string, number[]> = {};
     const errorsByCategory: Record<string, number> = {};
     const errorDetails: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
-    const agentAcc = Object.create(null) as Record<string, { invocations: number; errors: number; hasRateLimit: boolean; totalOutputSize: number }>;
+    const agentAcc = Object.create(null) as Record<string, {
+      invocations: number;
+      errors: number;
+      hasRateLimit: boolean;
+      rateLimitEvents: number;
+      totalOutputSize: number;
+      durationSum: number;
+      durationCount: number;
+      truncatedCount: number;
+      emptyCount: number;
+    }>;
     const fileCount: Record<string, number> = {};
     const gitCommits: Array<{ subject: string; body: string; files: string }> = [];
     let alertTotalFired = 0;
@@ -161,10 +170,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
         (hookDurations[s.name] ??= []).push(ms);
       }
 
-      const hasError = spanAttr(s, 'integritystudio.tool.has_error', 'boolean') === true
-        || spanAttr(s, 'integritystudio.agent.has_error', 'boolean') === true
-        || s.status?.code === 'ERROR';
-      if (hasError) {
+      if (isSpanError(s)) {
         const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
         const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
         incrementCount(errorsByCategory, `${tool} -> ${errType}`);
@@ -173,27 +179,30 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
 
       if (hookName === HOOK_NAME.AGENT_FINALIZE) {
         const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
-        const agentEntry = (agentAcc[name] ??= { invocations: 0, errors: 0, hasRateLimit: false, totalOutputSize: 0 });
+        const agentEntry = (agentAcc[name] ??= {
+          invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
+          totalOutputSize: 0, durationSum: 0, durationCount: 0,
+          truncatedCount: 0, emptyCount: 0,
+        });
         agentEntry.invocations++;
         if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) agentEntry.errors++;
-        if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) agentEntry.hasRateLimit = true;
+        if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
+          agentEntry.hasRateLimit = true;
+          agentEntry.rateLimitEvents++;
+        }
         agentEntry.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
+        const dur = s.durationMs ?? 0;
+        if (dur > 0) { agentEntry.durationSum += dur; agentEntry.durationCount++; }
+        if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) agentEntry.truncatedCount++;
+        if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) agentEntry.emptyCount++;
       }
 
       const fp = spanAttr(s, 'file.path', 'string');
       if (fp) incrementCount(fileCount, fp);
 
       if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
-        const raw = spanAttr(s, 'integritystudio.git.command', 'string') ?? '';
-        const filesMatch = raw.match(/git add (.+?)(?:\s+&&)/s);
-        const files = filesMatch ? (filesMatch[1] ?? '').trim() : '';
-        const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
-        const fullMessage = msgMatch ? msgMatch[1] : '';
-        gitCommits.push({
-          subject: fullMessage ? (fullMessage.split('\n')[0] ?? '').trim() : raw.slice(0, COMMIT_SUBJECT_FALLBACK_MAX_CHARS),
-          body: fullMessage ? fullMessage.split('\n').slice(COMMIT_BODY_START_LINE_INDEX).join('\n').trim() : '',
-          files,
-        });
+        const commit = extractGitCommit(s);
+        if (commit) gitCommits.push(commit);
       }
 
       if (hookName === HOOK_NAME.ALERT_EVALUATION) {
@@ -217,7 +226,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       if (agent) agentMapForEval.set(i, agent);
       stepScores.push({
         step: i,
-        score: spanAttr(s, 'evaluation.score', 'number') ?? (s.status?.code === 'ERROR' ? 0 : 1),
+        score: spanAttr(s, 'evaluation.score', 'number') ?? (isSpanError(s) ? 0 : 1),
         explanation: s.name,
       });
     }
@@ -299,7 +308,12 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       invocations: d.invocations,
       errors: d.errors,
       hasRateLimit: d.hasRateLimit,
+      rateLimitEvents: d.rateLimitEvents,
+      totalOutputSize: d.totalOutputSize,
       avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+      avgDurationMs: d.durationCount > 0 ? Math.round(d.durationSum / d.durationCount) : 0,
+      truncatedCount: d.truncatedCount,
+      emptyCount: d.emptyCount,
     }));
 
     const fileAccess = Object.entries(fileCount)

@@ -522,6 +522,24 @@ export function keyedRequest(baseUrl: string, batch: EvaluationPayload[], apiKey
 
 export interface SendResult { ok: boolean; detail: string; retryable: boolean }
 
+/** `{ k=v … }` summary for a counts record; yields `'none'` for an empty map. */
+export function formatCounts(counts: Record<string, number>): string {
+  return Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
+}
+
+/** Destination key for a route: the env-var ref for keyed routes, or `WEBHOOK_DESTINATION`. */
+export function destinationFor(route: Route): string {
+  return route.kind === 'keyed' ? route.ref : WEBHOOK_DESTINATION;
+}
+
+/** Resolve the ingest base URL and HMAC secret from the environment. */
+export function resolveSendConfig(): { baseUrl: string; secret: string | undefined } {
+  return {
+    baseUrl: asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL,
+    secret: asString(process.env.INJECT_HMAC_SECRET),
+  };
+}
+
 /**
  * One POST attempt. Never throws.
  *
@@ -726,7 +744,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         heldForKey[route.ref] = (heldForKey[route.ref] ?? 0) + 1;
         continue;
       }
-      const destination = route.kind === 'keyed' ? route.ref : WEBHOOK_DESTINATION;
+      const destination = destinationFor(route);
       const batch = batches.get(destination) ?? [];
       batch.push({ payload: mapped.payload!, fp });
       batches.set(destination, batch);
@@ -747,14 +765,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     if (!opts.dryRun) saveShipped(TELEMETRY_DIR, shipped);
   }
 
-  const summarize = (counts: Record<string, number>): string =>
-    Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
   console.log(
     `[upload-evaluations]${opts.dryRun ? ' dry-run:' : ''} ` +
-    `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${summarize(skips)}]` +
-    ` byDestination[${summarize(sentByDestination)}] withheld=${withheld}` +
-    ` routedBy[${summarize(routedBy)}]` +
-    (Object.keys(heldForKey).length ? ` heldForKey[${summarize(heldForKey)}]` : '') +
+    `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${formatCounts(skips)}]` +
+    ` byDestination[${formatCounts(sentByDestination)}] withheld=${withheld}` +
+    ` routedBy[${formatCounts(routedBy)}]` +
+    (Object.keys(heldForKey).length ? ` heldForKey[${formatCounts(heldForKey)}]` : '') +
     (parseErrors ? ` parseErrors=${parseErrors}` : '') +
     (manifest ? ` onlyKeys[matched=${matchedKeys.size} of ${manifest.size} notInManifest=${notInManifest}]` : ''),
   );

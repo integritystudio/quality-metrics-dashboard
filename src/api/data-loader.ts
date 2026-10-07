@@ -8,8 +8,8 @@ import { queryLogs } from './parent/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toIsoWindowBound, NANOS_TO_MS } from './api-constants.js';
 
-const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d']!;
-const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d']!;
+const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
+const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
 const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
 
 const LIMIT_EVALS_BULK = 100_000;

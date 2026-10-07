@@ -184,10 +184,10 @@ describe('judgeScopeArgs', () => {
   });
 
   it.each([
-    ['an unknown source', ['--judge-source=s3'], /--judge-source= must be one of local\|cloud/],
-    ['a zero day count', ['--judge-days=0'], /--judge-days= must be a positive integer/],
-    ['a fractional day count', ['--judge-days=1.5'], /--judge-days= must be a positive integer/],
-    ['a day count with trailing text', ['--judge-days=7d'], /--judge-days= must be a positive integer/],
+    ['an unknown source', ['--judge-source=s3'], /--judge-source must be one of local\|cloud/],
+    ['a zero day count', ['--judge-days=0'], /--judge-days must be a positive integer/],
+    ['a fractional day count', ['--judge-days=1.5'], /--judge-days must be a positive integer/],
+    ['a day count with trailing text', ['--judge-days=7d'], /--judge-days must be a positive integer/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => judgeScopeArgs(args)).toThrow(message);
   });
@@ -206,8 +206,8 @@ describe('deriveScopeArgs', () => {
   });
 
   it.each([
-    ['an unknown source', ['--derive-source=s3'], /--derive-source= must be one of local\|cloud/],
-    ['a zero day count', ['--derive-days=0'], /--derive-days= must be a positive integer/],
+    ['an unknown source', ['--derive-source=s3'], /--derive-source must be one of local\|cloud/],
+    ['a zero day count', ['--derive-days=0'], /--derive-days must be a positive integer/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => deriveScopeArgs(args)).toThrow(message);
   });

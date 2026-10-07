@@ -552,7 +552,7 @@ describe('resolvePostDays', () => {
   });
 
   it.each(['0', '1.5', '2d', ''])('rejects "%s"', (raw) => {
-    expect(() => resolvePostDays([`--post-days=${raw}`])).toThrow('--post-days= must be a positive integer');
+    expect(() => resolvePostDays([`--post-days=${raw}`])).toThrow('--post-days must be a positive integer');
   });
 });
 

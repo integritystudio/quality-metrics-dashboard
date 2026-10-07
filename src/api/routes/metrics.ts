@@ -10,7 +10,7 @@ import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
 import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam, jsonSafe } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus, type Period } from '../../lib/constants.js';
 
 const DYNAMICS_BUCKET_HOURS_HOURLY = 1;
 const DYNAMICS_BUCKET_HOURS_DAILY = 24;
@@ -48,7 +48,7 @@ metricsRoutes.get('/metrics/:name', async (c) => {
 
   try {
     const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d']!;
+    const periodMs = PERIOD_MS[periodResult.data as Period];
     const start = subMilliseconds(now, periodMs);
     const prevStart = subMilliseconds(start, periodMs);
 
@@ -112,7 +112,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
 
   try {
     const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data] ?? PERIOD_MS['7d']!;
+    const periodMs = PERIOD_MS[periodResult.data as Period];
     const start = subMilliseconds(now, periodMs);
 
     const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());

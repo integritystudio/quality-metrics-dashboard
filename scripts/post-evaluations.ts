@@ -16,13 +16,15 @@
  */
 
 import {
-  DEFAULT_INGEST_URL,
   INTER_BATCH_DELAY_MS,
   MAX_BATCH_SIZE,
   WEBHOOK_DESTINATION,
+  destinationFor,
+  formatCounts,
   keyedRequest,
   mapRecord,
   postBatch,
+  resolveSendConfig,
   routeRecord,
   webhookRequest,
   type EvaluationPayload,
@@ -94,19 +96,17 @@ export async function postEvaluationRecords(
       summary.heldForKey[route.ref] = (summary.heldForKey[route.ref] ?? 0) + 1;
       continue;
     }
-    const destination = route.kind === 'keyed' ? route.ref : WEBHOOK_DESTINATION;
+    const destination = destinationFor(route);
     const batch = batches.get(destination) ?? [];
     batch.push(mapped.payload!);
     batches.set(destination, batch);
   }
 
-  const secret = asString(process.env.INJECT_HMAC_SECRET);
+  const { baseUrl, secret } = resolveSendConfig();
   if (!opts.dryRun && batches.has(WEBHOOK_DESTINATION) && !secret) {
     summary.failure = 'INJECT_HMAC_SECRET is not set, so unstamped records cannot be signed';
     return summary;
   }
-  // asString, not `??`: an empty OBTOOL_INGEST_URL must fall back to the default.
-  const baseUrl = asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL;
 
   for (const [destination, payloads] of batches) {
     for (let i = 0; i < payloads.length; i += MAX_BATCH_SIZE) {
@@ -131,10 +131,8 @@ export async function postEvaluationRecords(
 
 /** One log line in the same `k=v` shape as upload's summary. */
 export function formatPostSummary(summary: PostSummary): string {
-  const kv = (counts: Record<string, number>): string =>
-    Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(' ') || 'none';
-  return `sent=${summary.sent} byDestination[${kv(summary.byDestination)}] skipped[${kv(summary.skipped)}]`
-    + ` withheld=${summary.withheld} routedBy[${kv(summary.routedBy)}]`
-    + (Object.keys(summary.heldForKey).length ? ` heldForKey[${kv(summary.heldForKey)}]` : '')
+  return `sent=${summary.sent} byDestination[${formatCounts(summary.byDestination)}] skipped[${formatCounts(summary.skipped)}]`
+    + ` withheld=${summary.withheld} routedBy[${formatCounts(summary.routedBy)}]`
+    + (Object.keys(summary.heldForKey).length ? ` heldForKey[${formatCounts(summary.heldForKey)}]` : '')
     + (summary.failure ? ` failure=${summary.failure}` : '');
 }

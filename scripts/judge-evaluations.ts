@@ -64,6 +64,7 @@ import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from 
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, type TraceSource } from './pipeline-stages.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { pathToFileURL } from 'node:url';
 import {
   createBatchProvider,
   BATCH_CANCEL_GRACE_MS,
@@ -1815,12 +1816,9 @@ async function main() {
   }
 }
 
-// Only run when executed directly (not imported as module for testing)
-const isDirectRun = process.argv[1]?.endsWith('judge-evaluations.ts') ||
-  process.argv[1]?.endsWith('judge-evaluations.js');
-if (isDirectRun) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(err => {
-    console.error('Fatal error:', err);
+    console.error('[judge] fatal:', err);
     safeExit(1);
   });
 }

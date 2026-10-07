@@ -33,7 +33,7 @@ import type {
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { importMetaDirname } from '../src/lib/dashboard-file-utils.js';
-import { exitOnCliArgError, parseCli, positiveIntArg } from './cli-args.js';
+import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain } from './cli-args.js';
 
 const INCIDENTS_FILE = join(import.meta.dirname, '.degradation-incidents.json');
 /** F1 improvement above which best config triggers graduation recommendation */
@@ -98,12 +98,12 @@ function loadIncidents(): LabeledIncident[] {
 
 // ---- Time-series construction ----
 
-interface DailyBucket {
+export interface DailyBucket {
   timestamp: number;
   scores: number[];
 }
 
-function buildDailyBuckets(
+export function buildDailyBuckets(
   evaluations: Array<{ timestamp: bigint; scoreValue: number }>,
   startMs: number,
   bucketCount: number,
@@ -123,7 +123,7 @@ function buildDailyBuckets(
   return buckets;
 }
 
-type TimeSeriesPoint = {
+export type TimeSeriesPoint = {
   timestamp: number;
   currentStdDev: number;
   baselineStdDev: number;
@@ -147,7 +147,7 @@ type TimeSeriesPoint = {
  *
  * Uses running accumulators to avoid O(n²) repeated slicing.
  */
-function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
+export function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
   const cumulativeScores: number[] = [];
   const baselineScores: number[] = [];
   let baselineEnd = 0;
@@ -342,11 +342,4 @@ async function main(): Promise<void> {
   }
 }
 
-const isDirectRun = process.argv[1]?.endsWith('backtest-degradation.ts') ||
-  process.argv[1]?.endsWith('backtest-degradation.js');
-if (isDirectRun) {
-  main().catch(err => {
-    console.error(err);
-    process.exit(1);
-  });
-}
+runIfMain(import.meta.url, main, '[backtest]');

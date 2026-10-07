@@ -13,8 +13,8 @@ if [ ! -f "$TREE_PATH" ]; then
   exit 1
 fi
 
-# Extract total tokens from first line
-total_tokens=$(head -1 "$TREE_PATH" | grep -oE '[0-9,]+ tokens' | cut -d' ' -f1)
+# Extract total tokens from the first line that has a count (skipping any header line).
+total_tokens=$(grep -oE '[0-9,]+ tokens' "$TREE_PATH" | head -1 | cut -d' ' -f1)
 if [ -z "$total_tokens" ]; then
   total_tokens="unknown"
 fi

@@ -7,6 +7,7 @@
  */
 
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 const FLAG_PREFIX = '--';
 const INLINE_VALUE_SEPARATOR = '=';
@@ -116,11 +117,16 @@ export function exitOnCliArgError<T>(logPrefix: string, read: () => T): T {
   }
 }
 
+/** Strip a trailing `=` from a flag label so error messages read `--days` not `--days=`. */
+function displayLabel(label: string): string {
+  return label.endsWith(INLINE_VALUE_SEPARATOR) ? label.slice(0, -INLINE_VALUE_SEPARATOR.length) : label;
+}
+
 /** `raw` as a positive integer; `undefined` when absent. Throws `CliArgError` when it is not one. */
 export function positiveIntArg(label: string, raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;
   const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) throw new CliArgError(`${label} must be a positive integer, got "${raw}"`);
+  if (!Number.isInteger(value) || value < 1) throw new CliArgError(`${displayLabel(label)} must be a positive integer, got "${raw}"`);
   return value;
 }
 
@@ -128,7 +134,7 @@ export function positiveIntArg(label: string, raw: string | undefined): number |
 export function positiveNumberArg(label: string, raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;
   const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) throw new CliArgError(`${label} must be a positive number, got "${raw}"`);
+  if (!Number.isFinite(value) || value <= 0) throw new CliArgError(`${displayLabel(label)} must be a positive number, got "${raw}"`);
   return value;
 }
 
@@ -136,6 +142,28 @@ export function positiveNumberArg(label: string, raw: string | undefined): numbe
 export function nonNegativeNumberArg(label: string, raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;
   const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) throw new CliArgError(`${label} must be a non-negative number, got "${raw}"`);
+  if (!Number.isFinite(value) || value < 0) throw new CliArgError(`${displayLabel(label)} must be a non-negative number, got "${raw}"`);
   return value;
+}
+
+/**
+ * Run `main()` only when this module is the entry point. Replaces the fragile
+ * `process.argv[1]?.endsWith('foo.ts')` pattern used in several scripts.
+ *
+ * @param moduleUrl  Pass `import.meta.url` from the calling module.
+ * @param main       Async entry point; may return an exit code.
+ * @param logPrefix  Prefix for fatal error messages, e.g. `'[sync]'`.
+ */
+export function runIfMain(
+  moduleUrl: string,
+  main: () => Promise<unknown>,
+  logPrefix: string,
+): void {
+  if (!process.argv[1] || moduleUrl !== pathToFileURL(process.argv[1]).href) return;
+  main()
+    .then(code => { if (typeof code === 'number') process.exit(code); })
+    .catch((err: unknown) => {
+      console.error(`${logPrefix} fatal:`, err);
+      process.exit(1);
+    });
 }

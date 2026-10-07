@@ -45,7 +45,7 @@ import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './p
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_SECOND, TIME_MS } from '../../src/lib/core/units.js';
-import { CliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -786,12 +786,4 @@ async function main(): Promise<void> {
   if (drift.length > 0 && process.exitCode === undefined) process.exitCode = DERIVE_EXIT_INPUT_DRIFT;
 }
 
-// Only run when executed directly (not imported as module for testing)
-const isDirectRun = process.argv[1]?.endsWith('derive-evaluations.ts') ||
-  process.argv[1]?.endsWith('derive-evaluations.js');
-if (isDirectRun) {
-  main().catch((err: unknown) => {
-    console.error('[derive] fatal:', err);
-    process.exitCode = 1;
-  });
-}
+runIfMain(import.meta.url, main, '[derive]');

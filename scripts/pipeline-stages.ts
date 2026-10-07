@@ -151,7 +151,8 @@ function stageScopeArgs(args: readonly string[], scope: StageScope): string[] {
   const cli = parseCli(args, { values: [scope.sourceFlag, scope.daysFlag] });
   const source = cli.value(scope.sourceFlag) ?? scope.defaultSource;
   if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
-    throw new CliArgError(`${scope.sourceFlag} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
+    const label = scope.sourceFlag.endsWith('=') ? scope.sourceFlag.slice(0, -1) : scope.sourceFlag;
+    throw new CliArgError(`${label} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
   }
   const days = positiveIntArg(scope.daysFlag, cli.value(scope.daysFlag)) ?? scope.defaultDays;
   return [`${SOURCE_FLAG}${source}`, `${DAYS_FLAG}${days}`];

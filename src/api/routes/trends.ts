@@ -12,7 +12,7 @@ import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
 import { computePercentileDistribution } from '../parent/qfe-percentiles.js';
 import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS, type Period } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam, timestampToMs } from '../api-constants.js';
 import { extent, mean } from 'd3-array';
 
@@ -50,7 +50,7 @@ trendRoutes.get('/trends/:name', async (c) => {
     const now = new Date();
     const period = periodResult.data;
     const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period] ?? PERIOD_MS['7d']!;
+    const periodMs = PERIOD_MS[period as Period];
     const periodStart = new Date(now.getTime() - periodMs);
 
     const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());

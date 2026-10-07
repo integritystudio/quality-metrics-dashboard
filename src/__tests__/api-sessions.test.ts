@@ -166,6 +166,21 @@ describe('GET /sessions/:sessionId', () => {
     expect(body.fileAccess).toEqual([{ path: '/repo/src/a.ts', count: 1 }]);
   });
 
+  // SESSION-DETAIL-DRIFT: a span with a numeric OTel status code (2 = ERROR) on the
+  // wire must count as an error after CloudBackend coerces it to the string 'ERROR'.
+  it('counts a span with numeric status_code 2 as an error', async () => {
+    const span = makeSessionSpanWire('hook:builtin-post-tool', {
+      'builtin.tool': undefined,
+      'gen_ai.tool.name': 'Bash',
+    });
+    fixture.setTraces([{ ...span, status_code: 2 }]);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailBody;
+
+    expect(body.errors.byCategory).toEqual({ 'Bash -> unknown': 1 });
+  });
+
   // Regression: the hooks renamed `agent-post-tool` to `agent.operation.finalize`
   // on 2026-08-13 and this route kept matching the old hook name, so every
   // session reported no agent activity. The name is copied from a real span.
@@ -185,7 +200,18 @@ describe('GET /sessions/:sessionId', () => {
     const body = await res.json() as SessionDetailBody;
 
     expect(body.agentActivity).toEqual([
-      { agentName: 'Explore', invocations: 2, errors: 1, hasRateLimit: false, avgOutputSize: 300 },
+      {
+        agentName: 'Explore',
+        invocations: 2,
+        errors: 1,
+        hasRateLimit: false,
+        rateLimitEvents: 0,
+        totalOutputSize: 600,
+        avgOutputSize: 300,
+        avgDurationMs: 1000,
+        truncatedCount: 0,
+        emptyCount: 0,
+      },
     ]);
   });
 

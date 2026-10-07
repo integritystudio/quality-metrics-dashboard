@@ -52,20 +52,29 @@ export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d':
 export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
 /** Zod enum for period values, derived from VALID_PERIODS keys. */
 export const PeriodEnum = z.enum(PERIOD_KEYS);
+/** Union of the three valid period strings. Hardcoded to avoid the `[string, ...string[]]`
+ *  widening that `z.infer<typeof PeriodEnum>` produces when `PERIOD_KEYS` carries no literals. */
+export type Period = '24h' | '7d' | '30d';
 /** Default client-side period for list/evaluation queries. */
 export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
 /** Default client-side period for metric detail views (wider window). */
 export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
 /** Shared Zod schema for period query param validation (default: '7d'). */
 export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
-/** Period string → milliseconds, derived from VALID_PERIODS. */
-export const PERIOD_MS: Record<string, number> = Object.fromEntries(
-  Object.entries(VALID_PERIODS).map(([k, days]) => [k, days * TIME_MS.DAY]),
-);
-/** Compute { start, end } ISO strings for a validated period key (e.g. '7d'). */
+/**
+ * Period string → milliseconds. Concrete object (not an index-signature Record) so
+ * `noUncheckedIndexedAccess` does not widen access to `number | undefined`.
+ */
+export const PERIOD_MS = {
+  '24h': 1 * TIME_MS.DAY,
+  '7d': 7 * TIME_MS.DAY,
+  '30d': 30 * TIME_MS.DAY,
+} satisfies Record<Period, number>;
+/** Compute { start, end } ISO strings for a validated period key (e.g. '7d').
+ *  Callers must have already validated `period` through `PeriodSchema`. */
 export function computePeriodDates(period: string): { start: string; end: string } {
   const now = new Date();
-  const start = new Date(now.getTime() - (PERIOD_MS[period] ?? PERIOD_MS['7d']!));
+  const start = new Date(now.getTime() - PERIOD_MS[period as Period]);
   return { start: start.toISOString(), end: now.toISOString() };
 }
 
