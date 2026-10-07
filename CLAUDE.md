@@ -69,8 +69,6 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 
 `npm run populate` runs: derive → judge → upload → sync-to-kv
 
-`scripts/generate-token-tree.js` is an orphaned compiled copy of `generate-token-tree.sh` (what `npm run filetree` runs); nothing references it.
-
 Per-stage detail, exit codes and history: [`docs/data-pipeline.md`](docs/data-pipeline.md). The rules:
 
 - **`derive-evaluations.ts`** — rule-based metrics (tool_correctness, evaluation_latency, task_completion). Reads `/v1/traces` over 7 days and POSTs the last 2 (`--source=cloud --days=7 --post-days=2`, `DERIVE_DEFAULT_*` in `pipeline-stages.ts`); writes no file. Never posts a record dated before 2026-09-28 (`DERIVE_NO_REPOST_BEFORE_MS`; older D1 rows have no `evaluation_id`, so a re-post duplicates). Backfill with `--date=`/`--days=`. Exit 10 (`DERIVE_EXIT_INPUT_DRIFT`) means a hooks-side rename, not a flake.
