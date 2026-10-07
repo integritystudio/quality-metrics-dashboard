@@ -108,10 +108,10 @@ export const REFERENCE_FLAG = '--reference';
 export const MARKER_FILENAME = '.judge-hallucination.started';
 export const RESULTS_PREFIX = 'judge-hallucination-';
 /** A turn whose faithfulness and hallucination sum to 1 within this is inferring, not measuring. */
-export const COMPLEMENT_EPSILON = 1e-9;
-export const DIRECT_OPTIONS: ConsolidatedCriteriaOptions = { directHallucination: true };
+const COMPLEMENT_EPSILON = 1e-9;
+const DIRECT_OPTIONS: ConsolidatedCriteriaOptions = { directHallucination: true };
 
-export const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDirect'] as const;
+const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDirect'] as const;
 export type Configuration = typeof CONFIGURATIONS[number];
 
 const JSON_INDENT = 2;

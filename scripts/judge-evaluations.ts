@@ -117,9 +117,9 @@ export { TELEMETRY_DIR, CALIBRATION_STATE_DIR, CANARY_EVALUATOR_TYPE, CANARY_COH
  * `evaluations-YYYY-MM-DD.jsonl`: the hooks' own records and this script's judge
  * records. Derive writes no file since cloud-read Phase 6; it posts every record.
  */
-export const EVALUATIONS_FILE_PREFIX = 'evaluations';
+const EVALUATIONS_FILE_PREFIX = 'evaluations';
 /** Dated JSONL filename for a prefix. */
-export function datedJsonlName(prefix: string, date: string): string {
+function datedJsonlName(prefix: string, date: string): string {
   return `${prefix}-${date}.jsonl`;
 }
 export const SESSION_ID_PREVIEW_LEN = 8;
@@ -129,9 +129,9 @@ export const EVAL_SCORE_PRECISION = 4;
 export const SCORE_PREVIEW_DECIMALS = 2;
 /** Producer recorded on every record this script writes. */
 export const PRODUCER = 'dashboard:judge-evaluations';
-export const SEED_EVALUATOR_TYPE = 'seed';
+const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
-export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
+const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
 
 /**
  * A seeded or canary score is a SHA-256 of the session and turn key mapped into
@@ -163,12 +163,12 @@ export const FAITHFULNESS_EVAL_NAME = 'faithfulness';
  * `fabrication` is recorded as `hallucination` because that is the series every
  * consumer already reads.
  */
-export const QAG_MODE_RECORDS = {
+const QAG_MODE_RECORDS = {
   faithfulness: { evalName: FAITHFULNESS_EVAL_NAME, label: 'Faithfulness' },
   fabrication: { evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination' },
 } as const satisfies Record<QagVerificationMode, { evalName: string; label: string }>;
-export const CONCURRENCY = 3;
-export const BATCH_DELAY_MS = 500;
+const CONCURRENCY = 3;
+const BATCH_DELAY_MS = 500;
 /**
  * --batch: the judge's per-call budget must outlast the provider's wall clock,
  * the grace it gives the batch it cancels there to hand back what it had
@@ -195,7 +195,7 @@ export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
  * recorded are all Haiku 4.5, so a judge row with no model and no synthetic
  * cohort counts as one.
  */
-export function turnScoreKey(sessionId: string, evaluationName: string, turnKey: string): string {
+function turnScoreKey(sessionId: string, evaluationName: string, turnKey: string): string {
   return `${sessionId}:${evaluationName}:${turnKey}`;
 }
 
@@ -223,10 +223,10 @@ export const MAX_TURN_TEXT_LEN = 8000;
 /** Maximum tool context items to balance quality vs cost in evaluations */
 export const MAX_TOOL_CONTEXT_ITEMS = 10;
 /** Maximum tool results to include per turn in evaluation context */
-export const MAX_TOOL_RESULTS_PER_TURN = 20;
-export const MAX_TURN_LIMIT = 10_000;
+const MAX_TOOL_RESULTS_PER_TURN = 20;
+const MAX_TURN_LIMIT = 10_000;
 export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09T01:11:15"
-export const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
+const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
 
 /**
  * On-disk attribute keys. **Every key the hooks also write must stay identical
@@ -785,7 +785,7 @@ export type JudgeMessagesClient = {
  * `output_config` constraining the response to `jsonSchema`, or nothing when
  * the caller gave no schema so the request is unchanged from before.
  */
-export function judgeOutputConfig(
+function judgeOutputConfig(
   jsonSchema: ResponseJsonSchema | undefined
 ): Pick<AnthropicSdk.MessageCreateParamsNonStreaming, 'output_config'> {
   return jsonSchema ? { output_config: { format: { type: JSON_SCHEMA_OUTPUT_FORMAT, schema: jsonSchema } } } : {};
@@ -955,7 +955,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
 export const evalFailures: Record<string, number> = {};
 
 export type JudgeFailureClass = 'billing' | 'network' | 'schema-rejection' | 'parse' | 'invalid-input' | 'wall-clock' | 'other';
-export const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'wall-clock', 'other'];
+const JUDGE_FAILURE_CLASSES: readonly JudgeFailureClass[] = ['billing', 'network', 'schema-rejection', 'parse', 'invalid-input', 'wall-clock', 'other'];
 
 /** Failures by cause across all metrics — what decides the exit code. */
 export const failureClasses: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, 'wall-clock': 0, other: 0 };
@@ -1027,9 +1027,9 @@ export function fitContextForJudge(toolResults: readonly string[]): string[] {
 /** Estimated tokens per evaluation response — the judge answers with a short JSON verdict. */
 export const EST_OUTPUT_TOKENS_PER_EVAL = 200;
 /** Criteria in one consolidated prompt: relevance and coherence, always. */
-export const CONSOLIDATED_BASE_CRITERIA = 2;
+const CONSOLIDATED_BASE_CRITERIA = 2;
 /** Added with tool results: faithfulness, tool_correctness and its three sub-criteria. */
-export const CONSOLIDATED_TOOL_CRITERIA = 5;
+const CONSOLIDATED_TOOL_CRITERIA = 5;
 
 export interface JudgeRunEstimate {
   evals: number;
@@ -1518,7 +1518,7 @@ export async function discoverTurns(source: TraceSource, dateScope: ReadonlySet<
 
 const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 /** Path to the sidecar that records each run's succeeded count for the drop check. */
-export const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json');
+const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json');
 /** Failure rate above which a run is flagged as JUDGE_EXIT_HIGH_FAILURE_RATE. */
 const HIGH_FAILURE_RATE_THRESHOLD = 0.5;
 /**

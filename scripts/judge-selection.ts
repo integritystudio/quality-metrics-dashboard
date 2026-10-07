@@ -51,7 +51,7 @@ export interface TurnSelection {
 }
 
 /** The secret a turn's records are sent with: its account's key, or the webhook's. */
-export function deliverySecret(turn: Turn): string | null {
+function deliverySecret(turn: Turn): string | null {
   if (turn.identityKeyRef === null) return null;
   return turn.identityKeyRef ?? WEBHOOK_SECRET_ENV;
 }

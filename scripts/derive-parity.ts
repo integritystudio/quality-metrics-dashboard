@@ -52,7 +52,7 @@ export interface ParityReport {
   clean: boolean;
 }
 
-export function recordKey(r: EvalRecord): string {
+function recordKey(r: EvalRecord): string {
   return [r.evaluationName, r.traceId, r.spanId, r.sessionId].join('|');
 }
 

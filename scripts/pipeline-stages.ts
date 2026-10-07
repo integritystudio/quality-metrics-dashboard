@@ -121,8 +121,8 @@ export const DERIVE_POST_WINDOW_DAYS = 2;
 export const JUDGE_DEFAULT_SOURCE: TraceSource = 'cloud';
 export const JUDGE_DEFAULT_DAYS = 7;
 /** populate flags that override the judge's source and scope for one run. */
-export const JUDGE_SOURCE_FLAG = '--judge-source=';
-export const JUDGE_DAYS_FLAG = '--judge-days=';
+const JUDGE_SOURCE_FLAG = '--judge-source=';
+const JUDGE_DAYS_FLAG = '--judge-days=';
 
 /**
  * Where populate points derive unless told otherwise: the cloud over the last
@@ -139,8 +139,8 @@ export const JUDGE_DAYS_FLAG = '--judge-days=';
 export const DERIVE_DEFAULT_SOURCE: TraceSource = 'cloud';
 export const DERIVE_DEFAULT_DAYS = 7;
 /** populate flags that override derive's source and scope for one run. */
-export const DERIVE_SOURCE_FLAG = '--derive-source=';
-export const DERIVE_DAYS_FLAG = '--derive-days=';
+const DERIVE_SOURCE_FLAG = '--derive-source=';
+const DERIVE_DAYS_FLAG = '--derive-days=';
 
 interface StageScope {
   sourceFlag: string;

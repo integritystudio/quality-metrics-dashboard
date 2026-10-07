@@ -42,7 +42,7 @@ type GenerateResult = Awaited<ReturnType<LLMProvider['generate']>>;
 /** Polling cadence while a batch is `in_progress`. */
 export const BATCH_POLL_INTERVAL_MS = 25 * TIME_MS.SECOND;
 /** Quiet time after the last `generate()` before the queue ships on its own. */
-export const BATCH_IDLE_FLUSH_MS = DURATION_MS.FIVE_SECONDS;
+const BATCH_IDLE_FLUSH_MS = DURATION_MS.FIVE_SECONDS;
 /**
  * How long the run may keep batches open, measured from the first submission.
  * Every batch in the run shares it: the judge's own per-call timeout is sized
@@ -58,7 +58,7 @@ export const BATCH_WALL_CLOCK_MS = 3 * TIME_MS.HOUR;
  */
 export const BATCH_CANCEL_GRACE_MS = DURATION_MS.TEN_MINUTES;
 /** Requests per Message Batch the API accepts. */
-export const MAX_REQUESTS_PER_BATCH = 100_000;
+const MAX_REQUESTS_PER_BATCH = 100_000;
 const CUSTOM_ID_PREFIX = 'judge';
 const LOG_PREFIX = '[judge-batch]';
 

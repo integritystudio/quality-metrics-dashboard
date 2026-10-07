@@ -35,10 +35,10 @@ import {
 } from './judge-evaluations.js';
 
 /** Every producer the judge has written under: per-criterion and consolidated. */
-export const JUDGE_PRODUCERS = [PRODUCER, CONSOLIDATED_PRODUCER] as const;
+const JUDGE_PRODUCERS = [PRODUCER, CONSOLIDATED_PRODUCER] as const;
 
 /** Upper bound on evaluation rows held per account and producer; a run writes ~500. */
-export const CLOUD_EVALUATION_LIMIT = 200_000;
+const CLOUD_EVALUATION_LIMIT = 200_000;
 
 const DATE_ONLY_LEN = 'YYYY-MM-DD'.length;
 const CLI_PREFIX = '[judge:cloud]';
@@ -77,7 +77,7 @@ export function indexCloudSpans(loaded: LoadedSpans): AccountIndex {
 }
 
 /** When the scored turn happened: the row's event time, or the legacy attribute on a receipt-time row. */
-export function evaluationEventMs(row: EvaluationResult): number {
+function evaluationEventMs(row: EvaluationResult): number {
   const legacy = row.attributes?.[LEGACY_EVENT_TIME_ATTR];
   return typeof legacy === 'number' ? legacy : Number(row.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
 }

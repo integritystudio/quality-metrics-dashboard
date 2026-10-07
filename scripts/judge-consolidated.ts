@@ -351,7 +351,7 @@ export function buildConsolidatedPrompt(
 // Evaluation steps
 // ---------------------------------------------------------------------------
 
-export async function generateEvaluationSteps(provider: ConsolidatedProvider, config: GEvalConfig): Promise<string> {
+async function generateEvaluationSteps(provider: ConsolidatedProvider, config: GEvalConfig): Promise<string> {
   const response = await provider.generate(
     buildStepsPrompt(sanitizeForPrompt(config.criteria)),
     { temperature: config.temperature ?? LLM_TEMPERATURE_EVALUATION },

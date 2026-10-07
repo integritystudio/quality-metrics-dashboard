@@ -47,7 +47,7 @@ const SPAN_SESSION_ID_ATTR = 'session.id';
  * or before an evaluation's time, so it can decide only a single-account trace.
  * Finite on purpose — `Infinity - Infinity` is `NaN`, which breaks the sort.
  */
-export const UNTIMED_MS = Number.MAX_SAFE_INTEGER;
+const UNTIMED_MS = Number.MAX_SAFE_INTEGER;
 
 /** Account ref as stamped: a secret name, or `null` for an unmapped account. */
 export type AccountRef = string | null;

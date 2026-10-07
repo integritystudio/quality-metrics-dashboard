@@ -238,8 +238,8 @@ interface SessionTaskData {
 
 const sessionTasks = new Map<string, SessionTaskData>();
 
-export const RULE_EVALUATOR: EvaluatorType = 'rule';
-export const TASK_COMPLETION_EVAL_NAME = 'task_completion';
+const RULE_EVALUATOR: EvaluatorType = 'rule';
+const TASK_COMPLETION_EVAL_NAME = 'task_completion';
 
 export const STATUS_SCORES: { pending: number; in_progress: number; completed: number } = {
   pending: 0.0,
@@ -476,7 +476,7 @@ export function resolveSource(args: string[], defaultSource: TraceSource = DERIV
 }
 
 /** The last `days` UTC dates, today included. */
-export function lastUtcDays(days: number, now: Date = new Date()): Set<string> {
+function lastUtcDays(days: number, now: Date = new Date()): Set<string> {
   const dates = new Set<string>();
   for (let i = 0; i < days; i++) {
     const d = new Date(now);

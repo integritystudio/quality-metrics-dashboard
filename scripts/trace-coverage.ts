@@ -46,9 +46,9 @@ const SESSION_ID_ATTR = 'session.id';
 const NO_SESSION = '(none)';
 const CLI_PREFIX = '[trace-coverage]';
 
-export const EXIT_OK = 0;
-export const EXIT_BELOW_THRESHOLD = 1;
-export const EXIT_CONFIG = 2;
+const EXIT_OK = 0;
+const EXIT_BELOW_THRESHOLD = 1;
+const EXIT_CONFIG = 2;
 
 /** One local span, reduced to what the comparison needs. */
 export interface LocalSpan {
@@ -84,7 +84,7 @@ export function spanKey(traceId: string, spanId: string): string {
   return `${traceId}:${spanId}`;
 }
 
-export function utcDay(ms: number): string {
+function utcDay(ms: number): string {
   return toDateOnly(new Date(ms));
 }
 

@@ -65,11 +65,11 @@ import { CliArgError, parseCli, positiveIntArg } from './cli-args.js';
 
 export const DEFAULT_LIMIT = 30;
 export const MAX_LIMIT = 40;
-export const AGREEMENT_CONCURRENCY = 4;
+const AGREEMENT_CONCURRENCY = 4;
 /** Spread the sample across sessions instead of taking one transcript's first N turns. */
-export const TURNS_PER_TRANSCRIPT_CAP = 3;
+const TURNS_PER_TRANSCRIPT_CAP = 3;
 /** A turn whose content estimates above this is skipped: the per-criterion path re-sends it ~20 times. */
-export const MAX_SAMPLE_TURN_TOKENS = 12_000;
+const MAX_SAMPLE_TURN_TOKENS = 12_000;
 /** Refuse — before the marker and before any API call — when the up-front estimate exceeds this. */
 export const MAX_ESTIMATED_SPEND_USD = 8;
 export const YES_FLAG = '--yes';
@@ -165,7 +165,7 @@ export interface SpendEstimate {
 // ---------------------------------------------------------------------------
 
 /** Appended to an unknown-argument refusal: the one-shot evals have no override. */
-export const NO_FORCE_HINT = '(there is no --force; remove the marker and results file by hand if you mean it)';
+const NO_FORCE_HINT = '(there is no --force; remove the marker and results file by hand if you mean it)';
 
 /** A one-shot eval's refusal for a bad command line; rethrows anything else. */
 export function oneShotArgError(err: unknown): string {

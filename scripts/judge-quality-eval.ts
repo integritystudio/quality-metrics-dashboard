@@ -85,7 +85,7 @@ export const REFERENCE_MODEL = 'claude-opus-5';
 /** Intelligence-sensitive grading: do not trade reference quality for cost. */
 export const REFERENCE_EFFORT = 'high';
 /** Thinking counts against max_tokens; non-streaming stays under the SDK timeout at this size. */
-export const REFERENCE_MAX_TOKENS = 16_000;
+const REFERENCE_MAX_TOKENS = 16_000;
 export const REFERENCE_CONCURRENCY = 4;
 /**
  * Spend approved for this run on 2026-09-22 was $10. The measured cap is
