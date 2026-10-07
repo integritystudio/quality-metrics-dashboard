@@ -1,6 +1,6 @@
 # Quality Metrics Dashboard
 
-v3.0.5
+v3.0.9
 
 React 19 + Vite 8 dashboard with Hono API, backed by a Cloudflare Worker. Displays 7 quality metrics derived from Claude Code session telemetry. **Auth: Auth0 Universal Login with role-based access control backed by Supabase DB.**
 
@@ -72,7 +72,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...   # all Worker DB access; the browser's own
 
 ### Integration Tests
 
-`e2e/integration/` tests hit the deployed worker with real Auth0 JWTs. A permanent test account (`AUTH0_TEST_EMAIL` in Doppler) is used — Auth0 ROPC via the `integritystudio-dashboard` SPA client (`password` grant, `Username-Password-Authentication` connection). Test DB rows are upserted on setup and deleted on teardown; the Auth0 user is never touched.
+`e2e/integration/` tests hit the deployed worker with real Auth0 JWTs. A permanent test account (`AUTH0_TEST_EMAIL` in Doppler `dev`) is used — Auth0 ROPC against the **dev** tenant via the `integritystudio-dashboard-dev` SPA client (`password` grant, `Username-Password-Authentication` connection). The production SPA client has no `password` grant. Test DB rows are upserted on setup and deleted on teardown; the Auth0 user is never touched.
 
 Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration/sentry-reporter.ts`.
 
@@ -133,26 +133,33 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run sync` | KV sync only (`--budget=450` default, `--budget=5000` for bulk) |
 | `npm test` | Vitest for `src/` + `worker/` (Vite context) |
 | `npm run test:scripts` | Vitest for `scripts/` (separate config; a bare `npx vitest run <path>` under `scripts/__tests__` finds no tests) |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint (`src/`, `scripts/`, `worker/`) |
+| `npm run typecheck` | TS 7 `tsc --noEmit` (not bare `npx tsc`, which is TS 6) |
 | `npm run typecheck:scripts` | TS 7 against `scripts/` (`tsconfig.scripts.json`); pass `-- --pretty false` to make the output greppable |
 | `npm run test:e2e` | Playwright E2E tests (mocked auth, Chromium) |
 | `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration` | Auth0 integration tests against deployed worker |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
 | `npm run deploy:secrets` | Sync secrets from Doppler to both workers |
+| `npm run derive` / `judge:parity` / `derive:parity` / `upload` | Run one pipeline stage or a local/cloud parity check |
+| `npm run trace-coverage` | Trace coverage report |
+| `npm run dev:worker` | `wrangler dev` (local Worker) |
+| `npm run filetree` | Regenerate the Project Structure section below |
+| `npm run repomix` | Regenerate the repomix packs in `docs/repomix/` (gitignored) |
 
-## AlephAuto Integration
+## Scheduling
 
-The populate pipeline is also available as an AlephAuto job at `~/code/jobs`, running twice daily via cron (6 AM / 6 PM):
+The scheduled run is the launchd agent `ai.integritystudio.dashboard-pipeline`, which fires `../scripts/run-dashboard-pipeline.sh` at 06:00 and 18:00 local with `--limit 100 --batch` (wrapper tracked at `../scripts/launchd/`).
+
+The pipeline is also available as an AlephAuto job at `~/code/jobs` (`sidequest/pipeline-runners/dashboard-populate-pipeline.ts`):
 
 ```bash
 cd ~/code/jobs
-npm run dashboard:populate             # seed (offline)
-npm run dashboard:populate:full        # real LLM judge (needs ANTHROPIC_API_KEY)
+npm run dashboard:populate             # run now
+npm run dashboard:populate:seed        # run now, synthetic judge scores
+npm run dashboard:populate:full        # run now, real LLM judge
 npm run dashboard:populate:dry         # dry run preview
-npm run dashboard:populate:schedule    # start cron scheduler
+npm run dashboard:populate:schedule    # start the AlephAuto cron scheduler
 ```
-
-See `~/code/jobs/docs/components/dashboard-populate.md` for full details.
 
 ## API Routes (Worker)
 
@@ -161,6 +168,7 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | Route | Auth | Description |
 |-------|------|-------------|
 | `GET /api/me` | ✓ | Current user session (`email`, `roles`, `permissions`, `allowedViews`) |
+| `POST /api/org/switch` | ✓ | Switch the active org; returns the updated `me` payload (403 until org scoping is enabled) |
 | `POST /api/logout` | ✓ | Logout + activity logging |
 | `POST /api/activity` | ✓ | Log user activity event |
 | `GET /api/dashboard` | ✓ | Dashboard summary (`?period=7d&role=executive`) |
@@ -177,6 +185,8 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | `GET /api/agents` | ✓ | Cross-session agent list (all agents, sorted by invocations) |
 | `GET /api/agents/detail/:agentId` | ✓ | Cross-session agent stats (RED metrics, output quality, last 20 sessions) |
 | `GET /api/agents/:sessionId` | ✓ | Per-session agent activity |
+| `GET /api/agents/:sessionId/graph` | ✓ | Workflow view payload (session graph without evaluations) |
+| `GET /api/code-quality` | ✓ | Agent code-quality summary (survival by agent window, version rollout) |
 | `GET /api/compliance/sla` | ✓ | SLA compliance (`?period=7d`) |
 | `GET /api/compliance/verifications` | ✓ | Human verifications (`?period=7d`) |
 | `GET /api/calibration` | ✓ | Score calibration metadata |
@@ -185,86 +195,112 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | `GET /api/admin/roles` | admin | List available roles |
 | `POST /api/admin/users/:userId/roles` | admin | Assign role to user |
 | `DELETE /api/admin/users/:userId/roles/:roleId` | admin | Remove role from user |
+| `GET /api/admin/members` | org admin | List members of the active org |
+| `POST /api/admin/members/:userId/role` | org admin | Change a member's role in the active org |
+| `DELETE /api/admin/members/:userId` | org admin | Remove a member from the active org |
+| `GET /api/admin/keys` | org admin | List the active org's API keys |
+| `POST /api/admin/keys/:keyId/rotate` | org admin | Rotate an API key in the active org |
 | `GET /api/health` | ✗ | Health check + last sync timestamp |
 
-## Project Structure (142,125 tokens)
+## Project Structure (192,544 tokens)
 
 ```
-└── src/ (142,125 tokens)
-    ├── App.tsx (5,342 tokens)
+└── src/ (192,544 tokens)
+    ├── App.tsx (7,106 tokens)
     ├── main.tsx (325 tokens)
-    ├── theme.css (19,165 tokens)
-    ├── types.ts (585 tokens)
+    ├── theme.css (21,535 tokens)
+    ├── types.ts (626 tokens)
     ├── vite-env.d.ts (11 tokens)
-    ├── api/ (21,521 tokens)
-    │   ├── api-constants.ts (1,594 tokens)
+    ├── api/ (27,846 tokens)
+    │   ├── api-constants.ts (3,116 tokens)
+    │   ├── code-quality-summary.ts (2,328 tokens)
     │   ├── config.ts (34 tokens)
-    │   ├── data-loader.ts (2,453 tokens)
-    │   ├── server.ts (499 tokens)
-    │   └── routes/ (16,941 tokens)
-    │       ├── agents.ts (2,685 tokens)
-    │       ├── metrics.ts (2,059 tokens)
-    │       ├── quality.ts (1,480 tokens)
-    │       ├── sessions.ts (4,789 tokens)
-    │       ├── trends.ts (2,253 tokens)
-    ├── ... (7 more)
-    ├── components/ (51,931 tokens)
+    │   ├── data-loader.ts (3,065 tokens)
+    │   ├── server.ts (491 tokens)
+    │   ├── parent/ (761 tokens)
+    │   │   ├── bucket-utils.ts (47 tokens)
+    │   │   ├── qfe-backtest.ts (64 tokens)
+    │   │   ├── quality-metrics.ts (69 tokens)
+    │   │   ├── quality-views.ts (45 tokens)
+    │   │   ├── quality-visualization.ts (51 tokens)
+    ├── ... (12 more)
+    │   └── routes/ (18,051 tokens)
+    │       ├── agents.ts (3,166 tokens)
+    │       ├── metrics.ts (2,052 tokens)
+    │       ├── quality.ts (1,469 tokens)
+    │       ├── sessions.ts (4,949 tokens)
+    │       ├── trends.ts (2,232 tokens)
+    ├── ... (8 more)
+    ├── components/ (57,037 tokens)
     │   ├── AgentActivityPanel.tsx (3,621 tokens)
     │   ├── AgentWorkflowView.tsx (2,886 tokens)
-    │   ├── EvaluationTable.tsx (2,925 tokens)
+    │   ├── EvaluationTable.tsx (3,005 tokens)
     │   ├── WorkflowGraph.tsx (5,919 tokens)
     │   ├── WorkflowTimeline.tsx (3,113 tokens)
-    ├── ... (52 more)
+    ├── ... (55 more)
+    │   ├── admin-customer/ (3,193 tokens)
+    │   │   ├── CustomerCard.tsx (806 tokens)
+    │   │   ├── CustomerPageScaffold.tsx (645 tokens)
+    │   │   ├── DailyUsageChart.tsx (986 tokens)
+    │   │   ├── NavCard.tsx (421 tokens)
+    │   │   └── QuotaBar.tsx (335 tokens)
     │   └── views/ (1,683 tokens)
     │       ├── AuditorView.tsx (418 tokens)
     │       ├── ExecutiveView.tsx (732 tokens)
     │       └── OperatorView.tsx (533 tokens)
-    ├── context/ (325 tokens)
-    │   └── CalibrationContext.tsx (325 tokens)
-    ├── contexts/ (3,447 tokens)
-    │   ├── AuthContext.tsx (1,122 tokens)
+    ├── contexts/ (5,525 tokens)
+    │   ├── AuthContext.tsx (1,635 tokens)
+    │   ├── CalibrationContext.tsx (339 tokens)
     │   ├── KeyboardNavContext.tsx (1,716 tokens)
+    │   ├── OrgContext.tsx (1,226 tokens)
     │   └── RoleContext.tsx (609 tokens)
-    ├── hooks/ (6,312 tokens)
-    │   ├── useAgentStats.ts (516 tokens)
-    │   ├── useApiQuery.ts (734 tokens)
-    │   ├── useMetricEvaluations.ts (384 tokens)
-    │   ├── useSessionDetail.ts (1,225 tokens)
-    │   ├── useTrace.ts (468 tokens)
-    ├── ... (12 more)
-    ├── lib/ (15,018 tokens)
-    │   ├── activity-logger.ts (350 tokens)
-    │   ├── constants.ts (2,776 tokens)
-    │   ├── dashboard-file-utils.ts (1,669 tokens)
-    │   ├── quality-utils.ts (3,853 tokens)
+    ├── hooks/ (10,444 tokens)
+    │   ├── useAdminCustomer.ts (1,909 tokens)
+    │   ├── useApiQuery.ts (1,353 tokens)
+    │   ├── useDashboard.ts (573 tokens)
+    │   ├── useSessionDetail.ts (1,338 tokens)
+    │   ├── useTrace.ts (566 tokens)
+    ├── ... (15 more)
+    ├── lib/ (31,085 tokens)
+    │   ├── admin-customer.ts (2,507 tokens)
+    │   ├── constants.ts (3,028 tokens)
+    │   ├── dashboard-file-utils.ts (1,805 tokens)
+    │   ├── quality-utils.ts (4,699 tokens)
     │   ├── workflow-graph.ts (3,180 tokens)
-    ├── ... (5 more)
-    │   └── validation/ (2,062 tokens)
-    │       ├── auth-schemas.ts (1,202 tokens)
-    │       └── dashboard-schemas.ts (860 tokens)
-    ├── pages/ (16,988 tokens)
-    │   ├── AdminPage.tsx (2,316 tokens)
-    │   ├── DegradationSignalsPage.tsx (897 tokens)
+    ├── ... (15 more)
+    │   └── validation/ (5,958 tokens)
+    │       ├── admin-customer-schemas.ts (1,736 tokens)
+    │       ├── auth-schemas.ts (2,636 tokens)
+    │       └── dashboard-schemas.ts (1,586 tokens)
+    ├── pages/ (29,486 tokens)
+    │   ├── AdminPage.tsx (6,354 tokens)
+    │   ├── AgentCodeQualityPage.tsx (2,098 tokens)
     │   ├── EvaluationDetailPage.tsx (1,294 tokens)
     │   ├── RoutingTelemetryPage.tsx (1,838 tokens)
-    │   ├── SessionDetailPage.tsx (5,816 tokens)
-    ├── ... (9 more)
-    ├── stubs/ (262 tokens)
-    │   ├── auth0-e2e.ts (226 tokens)
+    │   ├── SessionDetailPage.tsx (5,920 tokens)
+    ├── ... (10 more)
+    │   └── admin-customer/ (5,911 tokens)
+    │       ├── AdminCustomerBillingPage.tsx (838 tokens)
+    │       ├── AdminCustomerEntitlementsPage.tsx (776 tokens)
+    │       ├── AdminCustomerHubPage.tsx (1,282 tokens)
+    │       ├── AdminCustomerQuotaPage.tsx (860 tokens)
+    │       └── AdminCustomerUsagePage.tsx (2,155 tokens)
+    ├── stubs/ (294 tokens)
+    │   ├── auth0-e2e.ts (258 tokens)
     │   └── web-worker.ts (36 tokens)
-    └── types/ (893 tokens)
+    └── types/ (1,224 tokens)
         ├── activity.ts (109 tokens)
-        ├── auth.ts (267 tokens)
+        ├── auth.ts (598 tokens)
         └── workflow-graph.ts (517 tokens)
 ```
 
 ## Production Deployment
 
 ```bash
-npm run build                          # Build frontend
-npm run deploy:worker                  # Deploy API worker
-npx wrangler pages deploy dist \
-  --project-name=integritystudio-ai    # Deploy frontend to Pages
+npm run build                          # Build frontend (served by the Worker via [assets])
+npx wrangler deploy                    # obs-toolkit-quality-metrics-api
+npx wrangler deploy --name quality-metrics-api   # production (integritystudio.dev)
+doppler run --project integrity-studio --config dev -- npx wrangler deploy --env dev
 npx tsx scripts/sync-to-kv.ts \
   --budget=5000                        # Bulk sync to KV (default 450)
 ```
