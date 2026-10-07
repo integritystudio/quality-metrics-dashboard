@@ -7,10 +7,10 @@
  * via the Anthropic API (Claude Haiku).
  *
  * Discovery takes the sessions, each turn's account and the already-judged set
- * from obtool-api (judge-cloud-source.ts, cloud-read Phase 4) over the last
- * `JUDGE_DEFAULT_DAYS` unless `--date=`/`--days=` says otherwise, the same
- * window populate passes. `--source=local` reads local telemetry logs instead,
- * kept for one release as the rollback (Phase 6). Turn text is always read
+ * from obtool-api (judge-cloud-source.ts) over the last `JUDGE_DEFAULT_DAYS`
+ * unless `--date=`/`--days=` says otherwise, the same window populate passes.
+ * `--source=local` reads local telemetry logs instead, kept for one release
+ * as the rollback. Turn text is always read
  * from the local transcripts. Judged, withheld and held-for-key turns are
  * dropped before `--limit` (judge-selection.ts).
  *
@@ -26,7 +26,7 @@
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run --source=local   # the rollback: local discovery, every log file
  *
  * Scoring is consolidated by default — one call per turn carrying every
- * criterion (judge-consolidated.ts; chosen by JCP4, 2026-09-22). `--batch`
+ * criterion (judge-consolidated.ts). `--batch`
  * applies to either mode.
  *
  * LLM_JUDGE_ANTHROPIC_KEY, when set, is used instead of ANTHROPIC_API_KEY so
@@ -275,12 +275,9 @@ export function normalizeScore(score: number): number {
 /**
  * Build one record.
  *
- * `kind` and `cohort` are separate arguments on purpose (OBP16). This function
- * previously took `(evaluator, evaluatorType)` and every caller passed a value
- * that was sometimes a kind and sometimes a cohort — so a hashed canary score
- * was written as `evaluator: 'llm'`, indistinguishable from a judged one. The
- * two axes cannot now be confused, and `judgeModel` is omitted for any score no
- * model produced.
+ * `kind` and `cohort` are separate arguments on purpose (OBP16), so a hashed
+ * canary score can never be written as a judged one. `judgeModel` is omitted
+ * for any score no model produced.
  */
 function createEvalRecord(
   turn: Turn,
@@ -715,10 +712,9 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
 // ---------------------------------------------------------------------------
 // Usage accounting
 // ---------------------------------------------------------------------------
-// The dry-run prices a run from TOKENS_PER_CHAR, and that estimate used to be
-// the only cost figure the run ever reported ($1.80 estimated against ~$3.30
-// billed). Every response carries `usage`; the provider folds each one into
-// the totals the summary line prints beside the estimate.
+// The dry-run's TOKENS_PER_CHAR estimate is not what a run costs. Every
+// response carries `usage`; the provider folds each one into the totals the
+// summary line prints beside the estimate.
 
 /** Cache reads bill at a tenth of the input rate. */
 export const CACHE_READ_INPUT_PRICE_RATIO = 0.1;
@@ -1011,9 +1007,8 @@ export const CONTEXT_TRUNCATION_MARKER = '\n…[truncated to fit the judge input
 /**
  * Fit tool results to what `testCaseSchema` accepts: at most the smaller of
  * MAX_TOOL_CONTEXT_ITEMS / MAX_CONTEXT_ITEMS entries, each at most
- * MAX_TEXT_LENGTH characters. Before this, one oversized tool result failed
- * every metric for its turn with "Invalid TestCase … too_big" — 60 of the 480
- * failures in every scheduled run from 2026-09-16 on.
+ * MAX_TEXT_LENGTH characters, so one oversized tool result cannot fail every
+ * metric for its turn with "Invalid TestCase … too_big".
  */
 export function fitContextForJudge(toolResults: readonly string[]): string[] {
   const itemLimit = Math.min(MAX_TOOL_CONTEXT_ITEMS, MAX_CONTEXT_ITEMS);
@@ -1121,12 +1116,10 @@ export interface JudgeRunSummary {
 /**
  * What the run did and how loudly to say so. A billing refusal wins — nothing
  * else in the run can be trusted and the fix is external. A run that attempted
- * evaluations and produced none is the other failure the pipeline used to
- * report as success: every scheduled run from 2026-09-16 to 09-19 did exactly
- * that while the launchd log said "completed". A `--batch` run cut short by
- * its wall clock says so with its own code, whatever share of it was scored:
- * the run did not fail, it ran out of time, and what it scored is kept
- * (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN). The spend block beside the
+ * evaluations and produced none is a failure too, never a success. A `--batch`
+ * run cut short by its wall clock says so with its own code, whatever share of
+ * it was scored: the run did not fail, it ran out of time, and what it scored
+ * is kept (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN). The spend block beside the
  * verdict is what the run cost from the usage the API reported, next to the
  * pre-run estimate and the NAME of the key it was billed to.
  */
@@ -1243,9 +1236,7 @@ export async function evaluateTurn(
     // One QAG sweep answers both. 'faithfulness' counts the statements the tool
     // results support; 'fabrication' counts the ones they contradict — and the two
     // do not sum to 1, because a statement the context cannot settle belongs to
-    // neither. Hallucination used to be `1 - gEval(faithfulness)`: a second paid
-    // call, to a different evaluator, whose inversion scored every inconclusive
-    // statement as a fabrication.
+    // neither, so hallucination is not `1 - faithfulness`.
     const qagModes: QagVerificationMode[] = [
       ...(isJudged(FAITHFULNESS_EVAL_NAME) ? [] : (['faithfulness'] as const)),
       ...(isJudged(HALLUCINATION_EVAL_NAME) ? [] : (['fabrication'] as const)),
@@ -1600,9 +1591,8 @@ async function runBackfill(): Promise<void> {
     if (newTurns.length === 0) return;
 
     const seedResult = seedEvaluations(newTurns, existingKeys);
-    // Backfilled data is not organic seed, so re-cohort it. The cohort axis
-    // owns this now — `evaluatorType` keeps the kind and is left alone
-    // (OBP16); previously this line overwrote a kind with a cohort value.
+    // Backfilled data is not organic seed, so re-cohort it; the cohort axis
+    // owns this (OBP16).
     for (const ev of seedResult.evals) {
       if (ev.cohort === SEED_COHORT) {
         ev.cohort = BACKFILL_COHORT;
@@ -1805,8 +1795,7 @@ async function main() {
 
     // The file stays the local ledger `_loadExistingKeys` reads. The records
     // also go straight to ingest, because `upload-evaluations` refuses anything
-    // older than --max-age-hours and a judged turn is usually weeks old: from
-    // 2026-09-22 every judge record was skipped there as too-old.
+    // older than --max-age-hours and a judged turn is usually weeks old.
     const outFile = writeEvaluations(flatEvals);
 
     if (judgeKey) {
