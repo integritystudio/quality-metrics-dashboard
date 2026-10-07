@@ -39,7 +39,12 @@ export interface SessionAgentStat {
   invocations: number;
   errors: number;
   hasRateLimit: boolean;
+  rateLimitEvents: number;
+  totalOutputSize: number;
   avgOutputSize: number;
+  avgDurationMs: number;
+  truncatedCount: number;
+  emptyCount: number;
 }
 
 export interface FileAccessEntry {
