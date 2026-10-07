@@ -88,8 +88,6 @@ export const HALLUCINATION_RISK_EVALUATION_NAMES: ReadonlySet<string> = new Set(
  * (`DEFAULT_HALLUCINATION_THRESHOLD` in the parent's `llm-judge-constants.ts`).
  */
 export const HALLUCINATION_RISK_THRESHOLD = 0.15;
-/** Score below which a failed evaluation also counts as a hallucination indicator (very low confidence). */
-export const LOW_CONFIDENCE_FAIL_THRESHOLD = 0.4;
 /** The score label that marks a failed evaluation. */
 export const FAIL_SCORE_LABEL = 'fail';
 export const MAX_ERROR_ROWS = 10;

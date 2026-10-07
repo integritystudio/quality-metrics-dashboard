@@ -33,7 +33,6 @@ import {
   FAIL_SCORE_LABEL,
   HALLUCINATION_RISK_EVALUATION_NAMES,
   HALLUCINATION_RISK_THRESHOLD,
-  LOW_CONFIDENCE_FAIL_THRESHOLD,
   SCORE_FORMAT_PRECISION,
 } from './constants.js';
 export type FeatureRoleType = Role;
@@ -81,18 +80,16 @@ export function isFailedEvaluation(evaluation: ScoredEvaluation): boolean {
 
 /**
  * Whether an evaluation indicates hallucination: a hallucination rate at or above
- * HALLUCINATION_RISK_THRESHOLD, or a failed evaluation scored below
- * LOW_CONFIDENCE_FAIL_THRESHOLD. A hallucination score is higher-is-worse, so a
+ * HALLUCINATION_RISK_THRESHOLD. A hallucination score is higher-is-worse, so a
  * low one (no fabrication found) is not an indicator, and neither is an evaluation
- * with no finite score.
+ * with no finite score. Other metrics never are, however low or failed: a failed
+ * evaluation belongs in the failed list (isFailedEvaluation), not here.
  */
 export function isHallucinationIndicator(evaluation: ScoredEvaluation): boolean {
   const score = evaluation.scoreValue;
   if (typeof score !== 'number' || !Number.isFinite(score)) return false;
-  if (HALLUCINATION_RISK_EVALUATION_NAMES.has(evaluation.evaluationName.toLowerCase())) {
-    return score >= HALLUCINATION_RISK_THRESHOLD;
-  }
-  return isFailedEvaluation(evaluation) && score < LOW_CONFIDENCE_FAIL_THRESHOLD;
+  return HALLUCINATION_RISK_EVALUATION_NAMES.has(evaluation.evaluationName.toLowerCase())
+    && score >= HALLUCINATION_RISK_THRESHOLD;
 }
 
 export function formatScore(val: number | null | undefined): string {

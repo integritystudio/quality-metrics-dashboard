@@ -217,7 +217,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         {hallucinationEvals.length > 0 && (
           <IssueCallout severity="critical" title={`${plural(hallucinationEvals.length, 'hallucination indicator')} detected`}>
             <div className="mb-2">
-              Evaluations flagging potential hallucination or very low confidence:
+              Evaluations flagging potential hallucination:
             </div>
             <TruncatedList
               items={hallucinationEvals}

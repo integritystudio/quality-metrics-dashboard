@@ -33,7 +33,6 @@ import {
 import {
   HALLUCINATION_RISK_EVALUATION_NAMES,
   HALLUCINATION_RISK_THRESHOLD,
-  LOW_CONFIDENCE_FAIL_THRESHOLD,
 } from '../lib/constants.js';
 
 
@@ -179,10 +178,6 @@ describe('hallucination flagging constants', () => {
   it('pins the per-evaluation hallucination cutoff and names', () => {
     expect(HALLUCINATION_RISK_THRESHOLD).toBe(0.15);
     expect([...HALLUCINATION_RISK_EVALUATION_NAMES].sort()).toEqual(['hallucination', 'hallucination_risk']);
-  });
-
-  it('pins the low-confidence cutoff for failed evaluations', () => {
-    expect(LOW_CONFIDENCE_FAIL_THRESHOLD).toBe(0.4);
   });
 });
 
