@@ -57,6 +57,7 @@ import {
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { toDateOnly } from '../src/api/api-constants.js';
+import { CliArgError, parseCli, positiveIntArg } from './cli-args.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -78,7 +79,6 @@ export const RESULTS_PREFIX = 'judge-agreement-';
 export const RESULTS_SUFFIX = '.json';
 export const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
 
-const KNOWN_FLAGS: ReadonlySet<string> = new Set([YES_FLAG, LIMIT_FLAG]);
 const JSON_INDENT = 2;
 const EXIT_REFUSED = 1;
 /** Mirrors the pipeline's LLMJudge config. */
@@ -164,25 +164,29 @@ export interface SpendEstimate {
 // Arguments and key
 // ---------------------------------------------------------------------------
 
+/** Appended to an unknown-argument refusal: the one-shot evals have no override. */
+export const NO_FORCE_HINT = '(there is no --force; remove the marker and results file by hand if you mean it)';
+
+/** A one-shot eval's refusal for a bad command line; rethrows anything else. */
+export function oneShotArgError(err: unknown): string {
+  if (!(err instanceof CliArgError)) throw err;
+  return err.kind === 'unknown' ? `${err.message} ${NO_FORCE_HINT}` : err.message;
+}
+
+/** The refusal for a run without `--yes`. */
+export const YES_REQUIRED_ERROR = `${YES_FLAG} is required: this run spends real API money`;
+
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const parsed: ParsedArgs = { yes: false, limit: DEFAULT_LIMIT };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!;
-    if (arg === YES_FLAG) {
-      parsed.yes = true;
-      continue;
-    }
-    if (arg === LIMIT_FLAG) {
-      const value = parseInt(argv[i + 1] ?? '', 10);
-      if (isNaN(value) || value < 1) return { ...parsed, error: `${LIMIT_FLAG} must be a positive integer` };
-      if (value > MAX_LIMIT) return { ...parsed, error: `${LIMIT_FLAG} ${value} exceeds the hard maximum of ${MAX_LIMIT}` };
-      parsed.limit = value;
-      i++;
-      continue;
-    }
-    if (!KNOWN_FLAGS.has(arg)) return { ...parsed, error: `Unknown argument: ${arg} (there is no --force; remove the marker and results file by hand if you mean it)` };
+  try {
+    const cli = parseCli(argv, { values: [LIMIT_FLAG], switches: [YES_FLAG] }, { allowUnknown: false });
+    parsed.yes = cli.has(YES_FLAG);
+    parsed.limit = positiveIntArg(LIMIT_FLAG, cli.value(LIMIT_FLAG)) ?? DEFAULT_LIMIT;
+  } catch (err) {
+    return { ...parsed, error: oneShotArgError(err) };
   }
-  if (!parsed.yes) return { ...parsed, error: `${YES_FLAG} is required: this run spends real API money` };
+  if (parsed.limit > MAX_LIMIT) return { ...parsed, error: `${LIMIT_FLAG} ${parsed.limit} exceeds the hard maximum of ${MAX_LIMIT}` };
+  if (!parsed.yes) return { ...parsed, error: YES_REQUIRED_ERROR };
   return parsed;
 }
 

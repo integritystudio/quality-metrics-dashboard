@@ -68,7 +68,7 @@ describe('parseArgs', () => {
   });
 
   it('rejects --agreement without a value', () => {
-    expect(parseArgs([AGREEMENT_FLAG, YES_FLAG]).error).toContain('needs a path');
+    expect(parseArgs([AGREEMENT_FLAG, YES_FLAG]).error).toContain('needs a value');
   });
 
   it('rejects unknown flags, including --force', () => {

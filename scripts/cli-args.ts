@@ -11,9 +11,16 @@ import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 const FLAG_PREFIX = '--';
 const INLINE_VALUE_SEPARATOR = '=';
 
+/** `unknown`: a flag or argument the script does not take. `invalid`: a known flag used wrongly. */
+export type CliArgErrorKind = 'unknown' | 'invalid';
+
 /** A command line the user can fix: callers print the message and exit non-zero. */
 export class CliArgError extends Error {
   override name = 'CliArgError';
+
+  constructor(message: string, readonly kind: CliArgErrorKind = 'invalid') {
+    super(message);
+  }
 }
 
 /** The flags a script reads: `values` take an argument, `switches` do not. */
@@ -25,7 +32,8 @@ export interface CliSpec {
 export interface CliParseOptions {
   /**
    * Ignore flags missing from the spec (the default): several scripts share a
-   * command line, each reading its own flags. `false` rejects them.
+   * command line, each reading its own flags. `false` rejects them, and any
+   * positional argument too.
    */
   allowUnknown?: boolean;
 }
@@ -48,7 +56,7 @@ function optionName(flag: string): string {
  * Parse `argv` against `spec`. Throws `CliArgError` when a value flag has no
  * argument (including `--limit --dry-run`, which `parseArgs` would read as the
  * value `--dry-run`), when a switch is given a value, and, with
- * `allowUnknown: false`, on an undeclared flag.
+ * `allowUnknown: false`, on an undeclared flag or a positional argument.
  */
 export function parseCli(argv: readonly string[], spec: CliSpec, { allowUnknown = true }: CliParseOptions = {}): CliArgs {
   const valueNames = new Set((spec.values ?? []).map(optionName));
@@ -73,9 +81,11 @@ export function parseCli(argv: readonly string[], spec: CliSpec, { allowUnknown 
     } else if (switchNames.has(token.name)) {
       if (token.value !== undefined) throw new CliArgError(`${token.rawName} takes no value`);
     } else if (!allowUnknown) {
-      throw new CliArgError(`Unknown argument: ${token.rawName}`);
+      throw new CliArgError(`Unknown argument: ${token.rawName}`, 'unknown');
     }
   }
+  const [positional] = positionals;
+  if (!allowUnknown && positional !== undefined) throw new CliArgError(`Unknown argument: ${positional}`, 'unknown');
 
   const declared = (flag: string, names: ReadonlySet<string>): string => {
     const name = optionName(flag);

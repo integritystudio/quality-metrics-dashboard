@@ -50,8 +50,14 @@ describe('parseCli', () => {
     expect(() => parseCli(['--dry-run=yes'], SPEC)).toThrow('--dry-run takes no value');
   });
 
-  it('rejects an undeclared flag when asked to', () => {
+  it('rejects an undeclared flag or a positional when asked to, as an unknown argument', () => {
     expect(() => parseCli(['--force'], SPEC, { allowUnknown: false })).toThrow('Unknown argument: --force');
+    expect(() => parseCli(['extra'], SPEC, { allowUnknown: false })).toThrow(new CliArgError('Unknown argument: extra', 'unknown'));
+  });
+
+  it('marks a misused known flag as invalid, not unknown', () => {
+    expect(() => parseCli(['--limit'], SPEC, { allowUnknown: false }))
+      .toThrow(expect.objectContaining({ kind: 'invalid' }));
   });
 
   it('throws a programming error when reading a flag the spec does not declare', () => {

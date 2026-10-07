@@ -57,7 +57,7 @@ describe('parseArgs', () => {
 
   it('takes an explicit reference path and refuses a missing or unknown one', () => {
     expect(parseArgs([YES_FLAG, REFERENCE_FLAG, 'x.json']).referencePath).toBe('x.json');
-    expect(parseArgs([YES_FLAG, REFERENCE_FLAG]).error).toMatch('needs a path');
+    expect(parseArgs([YES_FLAG, REFERENCE_FLAG]).error).toMatch('needs a value');
     expect(parseArgs([YES_FLAG, '--force']).error).toMatch('Unknown argument');
   });
 });

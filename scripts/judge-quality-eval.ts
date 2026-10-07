@@ -66,6 +66,8 @@ import {
   usageToUsd,
   DOCS_DIR,
   RESULTS_SUFFIX,
+  YES_REQUIRED_ERROR,
+  oneShotArgError,
   type CriterionAgreement,
   type UsageReport,
   type UsageTotals,
@@ -73,6 +75,7 @@ import {
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { toDateOnly } from '../src/api/api-constants.js';
+import { parseCli } from './cli-args.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -101,7 +104,6 @@ export const MARKER_FILENAME = '.judge-quality.started';
 export const RESULTS_PREFIX = 'judge-quality-';
 export const FROZEN_TURNS_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'local', 'judge-quality-turns.json');
 
-const KNOWN_FLAGS: ReadonlySet<string> = new Set([YES_FLAG, AGREEMENT_FLAG]);
 const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
 const MAX_TOKENS_STOP_REASON = 'max_tokens';
 const REFUSAL_STOP_REASON = 'refusal';
@@ -166,22 +168,15 @@ export interface ReferenceSummary {
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const parsed: ParsedArgs = { yes: false };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!;
-    if (arg === YES_FLAG) {
-      parsed.yes = true;
-      continue;
-    }
-    if (arg === AGREEMENT_FLAG) {
-      const value = argv[i + 1];
-      if (!value || value.startsWith('--')) return { ...parsed, error: `${AGREEMENT_FLAG} needs a path` };
-      parsed.agreementPath = value;
-      i++;
-      continue;
-    }
-    if (!KNOWN_FLAGS.has(arg)) return { ...parsed, error: `Unknown argument: ${arg} (there is no --force; remove the marker and results file by hand if you mean it)` };
+  try {
+    const cli = parseCli(argv, { values: [AGREEMENT_FLAG], switches: [YES_FLAG] }, { allowUnknown: false });
+    parsed.yes = cli.has(YES_FLAG);
+    const agreementPath = cli.value(AGREEMENT_FLAG);
+    if (agreementPath !== undefined) parsed.agreementPath = agreementPath;
+  } catch (err) {
+    return { ...parsed, error: oneShotArgError(err) };
   }
-  if (!parsed.yes) return { ...parsed, error: `${YES_FLAG} is required: this run spends real API money` };
+  if (!parsed.yes) return { ...parsed, error: YES_REQUIRED_ERROR };
   return parsed;
 }
 

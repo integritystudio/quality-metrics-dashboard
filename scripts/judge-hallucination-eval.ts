@@ -68,6 +68,8 @@ import {
   DOCS_DIR,
   JUDGE_MAX_RETRIES,
   RESULTS_SUFFIX,
+  YES_REQUIRED_ERROR,
+  oneShotArgError,
   type UsageReport,
   type UsageTotals,
 } from './judge-agreement.js';
@@ -86,6 +88,7 @@ import {
 } from './judge-quality-eval.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { toDateOnly } from '../src/api/api-constants.js';
+import { parseCli } from './cli-args.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -111,7 +114,6 @@ export const DIRECT_OPTIONS: ConsolidatedCriteriaOptions = { directHallucination
 export const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDirect'] as const;
 export type Configuration = typeof CONFIGURATIONS[number];
 
-const KNOWN_FLAGS: ReadonlySet<string> = new Set([YES_FLAG, REFERENCE_FLAG]);
 const JSON_INDENT = 2;
 const EXIT_REFUSED = 1;
 const NO_BATCH_DELAY_MS = 0;
@@ -148,22 +150,14 @@ export interface ComplementCount {
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const parsed: ParsedArgs = { yes: false, referencePath: PRIOR_REFERENCE_PATH };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!;
-    if (arg === YES_FLAG) {
-      parsed.yes = true;
-      continue;
-    }
-    if (arg === REFERENCE_FLAG) {
-      const value = argv[i + 1];
-      if (!value || value.startsWith('--')) return { ...parsed, error: `${REFERENCE_FLAG} needs a path` };
-      parsed.referencePath = value;
-      i++;
-      continue;
-    }
-    if (!KNOWN_FLAGS.has(arg)) return { ...parsed, error: `Unknown argument: ${arg} (there is no --force; remove the marker and results file by hand if you mean it)` };
+  try {
+    const cli = parseCli(argv, { values: [REFERENCE_FLAG], switches: [YES_FLAG] }, { allowUnknown: false });
+    parsed.yes = cli.has(YES_FLAG);
+    parsed.referencePath = cli.value(REFERENCE_FLAG) ?? PRIOR_REFERENCE_PATH;
+  } catch (err) {
+    return { ...parsed, error: oneShotArgError(err) };
   }
-  if (!parsed.yes) return { ...parsed, error: `${YES_FLAG} is required: this run spends real API money` };
+  if (!parsed.yes) return { ...parsed, error: YES_REQUIRED_ERROR };
   return parsed;
 }
 
