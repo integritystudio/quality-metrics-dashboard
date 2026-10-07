@@ -81,6 +81,7 @@ import {
   LATENCY_DISPLAY_PRECISION,
   RATE_DISPLAY_PRECISION,
   HOOK_NAME,
+  incrementCount,
   spanAttr,
   renamedAttr,
   gitRepositoryLabel,
@@ -118,14 +119,18 @@ function parseIntArg(args: string[], flag: string, defaultValue: number): number
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
+const DEFAULT_DAYS = 30;
+const DEFAULT_WRITE_BUDGET = 450;
+const DEFAULT_MAX_WRITES_PER_RUN = 500;
+
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
-const maxDays = parseIntArg(args, 'days', 30);
+const maxDays = parseIntArg(args, 'days', DEFAULT_DAYS);
 const MAX_DAYS_MS = maxDays * TIME_MS.DAY;
-const WRITE_BUDGET = parseIntArg(args, 'budget', 450);
+const WRITE_BUDGET = parseIntArg(args, 'budget', DEFAULT_WRITE_BUDGET);
 // Per-run write warning threshold: half the ~1000/day free-tier cap, matching
 // the twice-daily AlephAuto cron (P4 write-budget instrumentation).
-const MAX_WRITES_PER_RUN = parseIntArg(args, 'max-writes', 500);
+const MAX_WRITES_PER_RUN = parseIntArg(args, 'max-writes', DEFAULT_MAX_WRITES_PER_RUN);
 
 const PERIODS = ['24h', '7d', '30d'] as const;
 
@@ -135,6 +140,21 @@ const MAX_RECENT_SESSIONS = 20;
 
 const META_LAST_SYNC_KEY = 'meta:lastSync';
 const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
+const META_CALIBRATION_KEY = 'meta:calibration';
+const META_AGENTS_KEY = 'meta:agents';
+const TRACE_KEY_PREFIX = 'trace:';
+const TRACE_EVALS_KEY_PREFIX = 'evaluations:trace:';
+/** Hex chars of the sha256 kept as the delta-sync content hash. */
+const HASH_PREFIX_CHARS = 16;
+/** wrangler stderr markers for the KV free-tier daily write limit. */
+const KV_WRITE_LIMIT_MARKERS = ['free usage limit', 'code: 10048'] as const;
+const STDERR_SNIPPET_CHARS = 300;
+const STDERR_DETAIL_CHARS = 500;
+/** Coverage percentages keep two decimals. */
+const COVERAGE_PERCENT_FACTOR = 100;
+const COVERAGE_ROUND_SCALE = PERCENT_MULTIPLIER * COVERAGE_PERCENT_FACTOR;
+/** Score assigned to traces with no evaluations, so they sort last. */
+const UNEVALUATED_TRACE_SCORE = 1;
 /** Input axes the coverage matrix is built for — one KV key per (period, axis). */
 const COVERAGE_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 /**
@@ -221,6 +241,9 @@ export const SESSION_KEY_TTL_SECONDS = SECONDS.DAY * 90;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
+/** Budget headroom above MIN_TRACE_BUDGET for meta and dashboard entries before a warning. */
+const HIGH_PRIORITY_HEADROOM = 10;
+const RECOMMENDED_MIN_BUDGET = MIN_TRACE_BUDGET + HIGH_PRIORITY_HEADROOM;
 
 const MAX_EVAL_ROWS = 200;
 
@@ -261,7 +284,7 @@ export function buildCalibrationEntry(
     sampleCounts,
     lastCalibrated: state.lastCalibrated,
   };
-  return { key: 'meta:calibration', value: toKVValue(payload) };
+  return { key: META_CALIBRATION_KEY, value: toKVValue(payload) };
 }
 
 const TRACE_PRIORITY_WEIGHTS = {
@@ -314,8 +337,15 @@ function saveLastCoverage(coverage: CoverageHeatmap): void {
   writeFileSync(COVERAGE_FILE, JSON.stringify(coverage));
 }
 
+/** `part / whole` as a two-decimal percentage; an empty `whole` is full coverage. */
+function coveragePercent(part: number, whole: number): number {
+  return whole > 0
+    ? Math.round(part / whole * COVERAGE_ROUND_SCALE) / COVERAGE_PERCENT_FACTOR
+    : PERCENT_MULTIPLIER;
+}
+
 function hashValue(value: string): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, 16);
+  return createHash('sha256').update(value).digest('hex').slice(0, HASH_PREFIX_CHARS);
 }
 
 function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
@@ -351,14 +381,14 @@ function kvBulkPut(entries: KVEntry[]): number {
       } catch (err) {
         const stderr = (err as { stderr?: Buffer } | null)?.stderr?.toString() ?? '';
         const stdout = (err as { stdout?: Buffer } | null)?.stdout?.toString() ?? '';
-        if (stderr.includes('free usage limit') || stderr.includes('code: 10048')) {
-          console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred. stderr: ${stderr.slice(0, 300)}`);
+        if (KV_WRITE_LIMIT_MARKERS.some(m => stderr.includes(m))) {
+          console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred. stderr: ${stderr.slice(0, STDERR_SNIPPET_CHARS)}`);
           return written;
         }
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
-        if (stderr) console.error(`[sync-to-kv] stderr: ${stderr.slice(0, 500)}`);
-        if (stdout) console.error(`[sync-to-kv] stdout: ${stdout.slice(0, 500)}`);
+        if (stderr) console.error(`[sync-to-kv] stderr: ${stderr.slice(0, STDERR_DETAIL_CHARS)}`);
+        if (stdout) console.error(`[sync-to-kv] stdout: ${stdout.slice(0, STDERR_DETAIL_CHARS)}`);
         throw new Error(`Wrangler KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
       }
       written += batch.length;
@@ -399,7 +429,7 @@ export function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): void 
         console.warn(
           `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
           `${err instanceof Error ? err.message : String(err)}` +
-          (stderr ? ` — stderr: ${stderr.slice(0, 300)}` : ''),
+          (stderr ? ` — stderr: ${stderr.slice(0, STDERR_SNIPPET_CHARS)}` : ''),
         );
       }
     } finally {
@@ -412,8 +442,8 @@ function extractTraceId(key: string): string | null {
   // Org-prefixed and bare trace keys group under the same traceId, so a home-org
   // dual-written trace moves through the priority budget as one unit.
   const bare = stripOrgPrefix(key);
-  if (bare.startsWith('evaluations:trace:')) return bare.slice('evaluations:trace:'.length);
-  if (bare.startsWith('trace:')) return bare.slice('trace:'.length);
+  if (bare.startsWith(TRACE_EVALS_KEY_PREFIX)) return bare.slice(TRACE_EVALS_KEY_PREFIX.length);
+  if (bare.startsWith(TRACE_KEY_PREFIX)) return bare.slice(TRACE_KEY_PREFIX.length);
   return null;
 }
 
@@ -458,7 +488,7 @@ export function prioritizeTraces(
       .filter(isValidScore);
     const worstScore = scores.length > 0
       ? scores.reduce((min, v) => v < min ? v : min, Infinity)
-      : 1.0; // unevaluated traces get lowest priority
+      : UNEVALUATED_TRACE_SCORE;
 
     const timestamps = evals.map(e => Number(e.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT)).filter(Number.isFinite);
     const latestTimestamp = timestamps.length > 0
@@ -585,7 +615,7 @@ function computeTokenMetrics(spans: SessionSpan[]) {
     tokenTotals.cacheRead += t.cacheRead;
     tokenTotals.cacheCreation += t.cacheCreation;
     tokenTotals.messages += t.messages;
-    if (t.model) tokenTotals.models[t.model] = (tokenTotals.models[t.model] ?? 0) + 1;
+    if (t.model) incrementCount(tokenTotals.models, t.model);
   }
   return { tokenProgression, tokenTotals };
 }
@@ -598,11 +628,9 @@ function computeUsageCounts(spans: SessionSpan[]) {
     if (trigger !== 'PostToolUse') continue;
     const type = spanAttr(s, 'integritystudio.hook.type', 'string');
     if (type === 'builtin') {
-      const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown';
-      toolUsage[tool] = (toolUsage[tool] ?? 0) + 1;
+      incrementCount(toolUsage, spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown');
     } else if (type === 'mcp') {
-      const tool = renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown';
-      mcpUsage[tool] = (mcpUsage[tool] ?? 0) + 1;
+      incrementCount(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
     }
   }
   return { toolUsage, mcpUsage };
@@ -620,8 +648,8 @@ function computeSpanLatency(spans: SessionSpan[]) {
     hookLatency[name] = {
       count: sorted.length,
       avg: +(mean(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      p50: +(quantileSorted(sorted, LATENCY_P50 / 100) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      p95: +(quantileSorted(sorted, LATENCY_P95 / 100) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
+      p50: +(quantileSorted(sorted, LATENCY_P50 / PERCENT_MULTIPLIER) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
+      p95: +(quantileSorted(sorted, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
       max: +(sorted[sorted.length - 1] ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
     };
   }
@@ -638,8 +666,7 @@ function computeErrorSummary(spans: SessionSpan[]) {
     if (!hasError) continue;
     const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
     const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
-    const key = `${tool} -> ${errType}`;
-    byCategory[key] = (byCategory[key] ?? 0) + 1;
+    incrementCount(byCategory, `${tool} -> ${errType}`);
     details.push({
       spanName: s.name,
       tool,
@@ -765,7 +792,7 @@ export function computeSessionDetail(
   const fileCount: Record<string, number> = {};
   for (const s of spans) {
     const fp = spanAttr(s, 'file.path', 'string');
-    if (fp) fileCount[fp] = (fileCount[fp] ?? 0) + 1;
+    if (fp) incrementCount(fileCount, fp);
   }
   const fileAccess = Object.entries(fileCount)
     .map(([path, count]) => ({ path, count }))
@@ -895,12 +922,12 @@ export function buildTraceEntries(
     const traceEvals = evalsByTrace.get(traceId) ?? [];
     const spans = spansByTrace.get(traceId) ?? [];
     traceEntries.push({
-      key: `evaluations:trace:${traceId}`,
+      key: `${TRACE_EVALS_KEY_PREFIX}${traceId}`,
       value: toKVValue({ evaluations: traceEvals }),
       expirationTtl: TRACE_KEY_TTL_SECONDS,
     });
     traceEntries.push({
-      key: `trace:${traceId}`,
+      key: `${TRACE_KEY_PREFIX}${traceId}`,
       value: toKVValue({ traceId, spans, evaluations: traceEvals }),
       expirationTtl: TRACE_KEY_TTL_SECONDS,
     });
@@ -1385,7 +1412,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       avgDurationMs: acc.totalInvocations > 0
         ? Math.round(acc.weightedDurationSum / acc.totalInvocations)
         : 0,
-      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(quantileSorted(sortedSessionDurations, LATENCY_P95 / 100) ?? 0) : 0,
+      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(quantileSorted(sortedSessionDurations, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0) : 0,
       truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
       emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
       lastSeen,
@@ -1404,7 +1431,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   }
 
   agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
-  agentEntries.push({ key: 'meta:agents', value: toKVValue(agentSummaryList) });
+  agentEntries.push({ key: META_AGENTS_KEY, value: toKVValue(agentSummaryList) });
 
   return {
     allEntries: [...entries, ...sessionEntries, ...traceEntries, ...agentEntries],
@@ -1425,8 +1452,8 @@ async function main(): Promise<void> {
     console.error('[sync-to-kv] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
     process.exit(1);
   }
-  if (WRITE_BUDGET < MIN_TRACE_BUDGET + 10) {
-    console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${MIN_TRACE_BUDGET + 10}); high-priority entries may be skipped`);
+  if (WRITE_BUDGET < RECOMMENDED_MIN_BUDGET) {
+    console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${RECOMMENDED_MIN_BUDGET}); high-priority entries may be skipped`);
   }
   console.log(
     `[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}` +
@@ -1509,7 +1536,7 @@ async function main(): Promise<void> {
 
   const isTraceKey = (e: KVEntry) => {
     const bare = stripOrgPrefix(e.key);
-    return bare.startsWith('trace:') || bare.startsWith('evaluations:trace:');
+    return bare.startsWith(TRACE_KEY_PREFIX) || bare.startsWith(TRACE_EVALS_KEY_PREFIX);
   };
   const highPriority = changed.filter(e => !isTraceKey(e));
   const traceChanged = changed.filter(isTraceKey);
@@ -1548,18 +1575,14 @@ async function main(): Promise<void> {
 
   // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
   // It may over-count if a prior wrangler write failed silently.
-  const syncedTraceKeys = [...newState.keys()].filter(k => k.startsWith('trace:'));
+  const syncedTraceKeys = [...newState.keys()].filter(k => k.startsWith(TRACE_KEY_PREFIX));
   const syncedReferencedCount = syncedTraceKeys
-    .filter(k => referencedTraceIds.has(k.slice('trace:'.length))).length;
+    .filter(k => referencedTraceIds.has(k.slice(TRACE_KEY_PREFIX.length))).length;
   const coverage = {
     totalTraces: traceIds.length,
     syncedTraces: syncedTraceKeys.length,
-    coveragePercent: traceIds.length > 0
-      ? Math.round(syncedTraceKeys.length / traceIds.length * 10000) / 100
-      : 100,
-    referencedCoverage: referencedTraceIds.size > 0
-      ? Math.round(syncedReferencedCount / referencedTraceIds.size * 10000) / 100
-      : 100,
+    coveragePercent: coveragePercent(syncedTraceKeys.length, traceIds.length),
+    referencedCoverage: coveragePercent(syncedReferencedCount, referencedTraceIds.size),
     // runsRemaining: additional runs after this one needed to drain the trace backlog
     runsRemaining: traceBudget > 0
       ? Math.ceil(Math.max(0, traceChanged.length - traceBudget) / traceBudget)
