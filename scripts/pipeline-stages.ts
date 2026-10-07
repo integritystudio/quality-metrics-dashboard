@@ -8,6 +8,8 @@
  * clock instead of a real thirty-minute wait.
  */
 
+import { CliArgError, parseCli, positiveIntArg } from './cli-args.js';
+
 /** judge-evaluations exit: calls were refused for billing (credit balance). Nothing to retry; the fix is external. */
 export const JUDGE_EXIT_BILLING = 4;
 /** judge-evaluations exit: evaluations were attempted and none produced a score. */
@@ -148,16 +150,12 @@ interface StageScope {
 
 /** A stage's `--source=` and `--days=` from its populate overrides, else its defaults. */
 function stageScopeArgs(args: readonly string[], scope: StageScope): string[] {
-  const override = (flag: string): string | undefined => args.find(a => a.startsWith(flag))?.slice(flag.length);
-  const source = override(scope.sourceFlag) ?? scope.defaultSource;
+  const cli = parseCli(args, { values: [scope.sourceFlag, scope.daysFlag] });
+  const source = cli.value(scope.sourceFlag) ?? scope.defaultSource;
   if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
-    throw new Error(`${scope.sourceFlag} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
+    throw new CliArgError(`${scope.sourceFlag} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
   }
-  const rawDays = override(scope.daysFlag);
-  const days = rawDays === undefined ? scope.defaultDays : Number(rawDays);
-  if (!Number.isInteger(days) || days < 1) {
-    throw new Error(`${scope.daysFlag} must be a positive integer, got "${rawDays}"`);
-  }
+  const days = positiveIntArg(scope.daysFlag, cli.value(scope.daysFlag)) ?? scope.defaultDays;
   return [`${SOURCE_FLAG}${source}`, `${DAYS_FLAG}${days}`];
 }
 

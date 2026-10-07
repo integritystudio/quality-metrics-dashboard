@@ -45,6 +45,7 @@ import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './p
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
+import { CliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -460,16 +461,17 @@ const DATE_ONLY_LEN = 10; // YYYY-MM-DD
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
 const DRY_RUN_ARG = '--dry-run';
+/** Every flag derive reads; judge-evaluations and the parity scripts reuse the readers below. */
+const DERIVE_CLI: CliSpec = { values: [SOURCE_ARG, DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_ARG] };
 
 /**
  * `--source=local|cloud`, else `defaultSource`: `cloud` for derive and the
  * judge since cloud-read Phase 6. `local` is kept for one release as the rollback.
  */
 export function resolveSource(args: string[], defaultSource: TraceSource = DERIVE_DEFAULT_SOURCE): TraceSource {
-  const arg = args.find(a => a.startsWith(SOURCE_ARG));
-  const source = arg ? arg.slice(SOURCE_ARG.length) : defaultSource;
+  const source = parseCli(args, DERIVE_CLI).value(SOURCE_ARG) ?? defaultSource;
   if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
-    throw new Error(`${SOURCE_ARG} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
+    throw new CliArgError(`${SOURCE_ARG} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
   }
   return source as TraceSource;
 }
@@ -505,25 +507,17 @@ export function readScope(
  * `readScope`. It also leaves the post window to `DERIVE_POST_WINDOW_DAYS`.
  */
 export function resolveDateScope(args: string[], now: Date = new Date()): Set<string> | null {
-  const dateArg = args.find(a => a.startsWith(DATE_ARG));
-  if (dateArg) {
-    const date = dateArg.slice(DATE_ARG.length);
+  const cli = parseCli(args, DERIVE_CLI);
+  const date = cli.value(DATE_ARG);
+  if (date !== undefined) {
     if (!ISO_DATE_ONLY_PATTERN.test(date)) {
-      throw new Error(`${DATE_ARG} must be YYYY-MM-DD, got "${date}"`);
+      throw new CliArgError(`${DATE_ARG} must be YYYY-MM-DD, got "${date}"`);
     }
     return new Set([date]);
   }
 
-  const daysArg = args.find(a => a.startsWith(DAYS_ARG));
-  if (daysArg) {
-    const days = parseInt(daysArg.slice(DAYS_ARG.length), 10);
-    if (!Number.isFinite(days) || days < 1) {
-      throw new Error(`${DAYS_ARG} must be a positive integer, got "${daysArg.slice(DAYS_ARG.length)}"`);
-    }
-    return lastUtcDays(days, now);
-  }
-
-  return null;
+  const days = positiveIntArg(DAYS_ARG, cli.value(DAYS_ARG));
+  return days === undefined ? null : lastUtcDays(days, now);
 }
 
 /** Every span in the in-scope `traces-<date>.jsonl` files, in file then line order. */
@@ -582,14 +576,7 @@ export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
 
 /** `--post-days=N` as a day count; `null` when absent. */
 export function resolvePostDays(args: string[]): number | null {
-  const arg = args.find(a => a.startsWith(POST_DAYS_ARG));
-  if (!arg) return null;
-  const raw = arg.slice(POST_DAYS_ARG.length);
-  const days = Number(raw);
-  if (!Number.isInteger(days) || days < 1) {
-    throw new Error(`${POST_DAYS_ARG} must be a positive integer, got "${raw}"`);
-  }
-  return days;
+  return positiveIntArg(POST_DAYS_ARG, parseCli(args, DERIVE_CLI).value(POST_DAYS_ARG)) ?? null;
 }
 
 /**
@@ -706,7 +693,7 @@ async function main(): Promise<void> {
   const source = resolveSource(argv);
   const scope = readScope(source, dateScope, DERIVE_DEFAULT_DAYS);
   const postDays = resolvePostDays(argv);
-  const dryRun = argv.includes(DRY_RUN_ARG);
+  const dryRun = parseCli(argv, DERIVE_CLI).has(DRY_RUN_ARG);
 
   let loaded: LoadedSpans;
   if (source === 'cloud' && scope) {

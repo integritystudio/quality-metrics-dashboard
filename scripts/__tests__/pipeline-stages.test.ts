@@ -179,6 +179,10 @@ describe('judgeScopeArgs', () => {
     expect(judgeScopeArgs(['--judge-source=local', '--judge-days=30'])).toEqual(['--source=local', '--days=30']);
   });
 
+  it('reads an override given as the next argument', () => {
+    expect(judgeScopeArgs(['--judge-source', 'local', '--judge-days', '30'])).toEqual(['--source=local', '--days=30']);
+  });
+
   it.each([
     ['an unknown source', ['--judge-source=s3'], /--judge-source= must be one of local\|cloud/],
     ['a zero day count', ['--judge-days=0'], /--judge-days= must be a positive integer/],

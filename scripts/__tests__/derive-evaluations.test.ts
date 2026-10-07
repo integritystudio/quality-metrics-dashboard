@@ -548,6 +548,7 @@ describe('resolvePostDays', () => {
 
   it('reads the day count', () => {
     expect(resolvePostDays(['--days=7', '--post-days=2'])).toBe(2);
+    expect(resolvePostDays(['--post-days', '2'])).toBe(2);
   });
 
   it.each(['0', '1.5', '2d', ''])('rejects "%s"', (raw) => {
