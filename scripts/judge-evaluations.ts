@@ -127,7 +127,6 @@ export const EVAL_SCORE_PRECISION = 4;
 export const SCORE_PREVIEW_DECIMALS = 2;
 /** Producer recorded on every record this script writes. */
 export const PRODUCER = 'dashboard:judge-evaluations';
-export const SEED_EVALUATOR: EvaluatorType = 'seed';
 export const SEED_EVALUATOR_TYPE = 'seed';
 export const RULE_EVALUATOR_TYPE = 'rule';
 export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
@@ -1676,10 +1675,6 @@ async function main() {
     limit = Math.min(parsed, MAX_TURN_LIMIT);
   }
 
-  // Optional dataset scoping: --dataset-id <uuid>
-  const datasetIdx = args.indexOf('--dataset-id');
-  const datasetId = datasetIdx !== -1 ? args[datasetIdx + 1] : undefined;
-
   // --backfill: generate seed evals from trace data for sessions missing transcripts
   if (backfill) {
     const traceTurns = await discoverSessionsFromTraces();
@@ -1884,12 +1879,6 @@ async function main() {
         // Soft, so populate still runs upload + sync; this outranks a summary code.
         process.exitCode = JUDGE_EXIT_POST_FAILED;
       }
-    }
-
-    if (datasetId) {
-      // --dataset-id scoping: dataset run recording is not yet supported by the cloud backend API.
-      // Evaluations are written to JSONL above; run metadata is skipped.
-      console.warn(`[judge] --dataset-id=${datasetId}: dataset run recording not supported in cloud backend; evaluations written to JSONL only.`);
     }
 
   } finally {
