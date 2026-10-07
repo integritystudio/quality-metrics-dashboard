@@ -93,10 +93,7 @@ import { ascending, mean, quantileSorted, rollup } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 
-// Used to be exported as DEGRADATION_KV_KEY from ../../src/lib/quality/quality-constants.ts,
-// deleted there as a "dead export" (parent commit f518715) — the dashboard, a separate git
-// repo, was the only consumer and wasn't swept by that change. Value matches the literal
-// `worker/index.ts` still reads at GET /api/degradation-signals.
+/** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
 const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
 
 function resolveNamespaceId(): string {
@@ -259,8 +256,8 @@ const TREND_BUCKETS = 10;
 
 /**
  * The home org's `meta:calibration` entry, from the state derive writes (`CALIBRATION_STATE_DIR`).
- * A missing file is reported loudly: until 2026-10-05 this read the wrong directory and every
- * run was silent. An old `lastCalibrated` is not an error — derive rewrites the file only when the
+ * A missing file is reported loudly: a silent miss leaves the dashboard on stale percentiles
+ * (CALIBRATION-READ-WRONG-DIR). An old `lastCalibrated` is not an error — derive rewrites the file only when the
  * score distribution drifts (PSI), so a stable corpus keeps its date — so it is logged, not judged.
  */
 export function loadCalibrationEntry(dir: string = CALIBRATION_STATE_DIR): KVEntry | null {
@@ -1006,10 +1003,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
     }
     groupedByPeriod.set(period, grouped);
 
-    // Options object, not positional: the parent moved computeDashboardSummary
-    // to `(evaluationsByMetric, options?)`, so the old third argument was being
-    // dropped on the floor and every dashboard summary was computed with no
-    // period attached. `dates` is already `{ start, end }` ISO — a `TimeRange`.
+    // `dates` is already `{ start, end }` ISO — a `TimeRange`.
     const dashboard = computeDashboardSummary(grouped, { period: dates });
     entries.push({ key: `dashboard:${period}`, value: toKVValue(dashboard) });
 
@@ -1204,10 +1198,6 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
           : undefined;
         let dynamics: MetricDynamics | undefined;
         if (detail?.trend) {
-          // Signature is `(currentTrend, periodHours, options?)`. The old
-          // positional call passed `previousTrend` (an object) as periodHours
-          // and `periodHours` (a number) as the options bag, so every trend
-          // bucket's dynamics were computed from NaN with no previous trend.
           dynamics = computeMetricDynamics(detail.trend, periodHours, { previousTrend });
           previousTrend = detail.trend;
         }

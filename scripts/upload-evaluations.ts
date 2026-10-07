@@ -9,9 +9,8 @@
  * connected the two: the detached span shipper
  * (`~/.claude/hooks/lib/span-shipper.ts`) matches only
  * `(traces|logs|metrics)-<date>.jsonl`, and the `evaluations` table is fed
- * solely by the HMAC webhook and `obs_inject_evaluations`. So local
- * evaluations accumulated on disk forever, `/v1/evaluations` held nothing but
- * its 2026-07-28 e2e fixtures, and every sync run computed an empty dashboard.
+ * solely by the HMAC webhook and `obs_inject_evaluations`. Without this stage
+ * local evaluations stay on disk and every sync computes an empty dashboard.
  *
  * Transport is chosen per record by the account that produced it (TKR7). The
  * hooks stamp every span with `identityKeyRef` — the identity map's secret name

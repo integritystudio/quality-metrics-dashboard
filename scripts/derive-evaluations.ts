@@ -118,9 +118,6 @@ function hrtToISO(hrt: [number, number]): string {
   return new Date(hrt[0] * 1000 + hrt[1] / 1e6).toISOString();
 }
 
-// Used to be exported as MAX_RAW_SCORES_PER_METRIC from ../../src/lib/quality/quality-constants.ts,
-// deleted there as a "dead export" (parent commit f518715) — the dashboard, a separate git repo,
-// was the only consumer and wasn't swept by that change.
 /** Maximum raw scores to persist per metric in calibration state (bounds file size) */
 const MAX_RAW_SCORES_PER_METRIC = 500;
 
@@ -612,9 +609,8 @@ interface DayInput {
 
 /**
  * Days whose input the derivations can no longer read (HOOK-RENAME-SILENT).
- * Twice a hooks-side rename emptied a metric while every stage exited 0: the
- * agent spans on 2026-08-13, silent for six weeks, and the `builtin.*` keys on
- * 2026-09-18, which scored every tool call a failure for nine days. Each check
+ * A hooks-side rename can empty a metric while every stage exits 0 (twice so
+ * far: docs/data-pipeline.md § Historical incidents). Each check
  * compares a day's spans with themselves, never with a previous run, so it
  * fires on the first run after a rename rather than once the old names have
  * aged out of the read window, and a quiet day cannot trip it:
