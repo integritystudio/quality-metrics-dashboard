@@ -51,7 +51,7 @@ export function addJudgedKeys(
  * Whether a record on disk is one this script produced, and therefore counts
  * toward dedup.
  *
- * **Dual-read, deliberately.** The 780,921 records written before OBP16 carry
+ * **Dual-read, deliberately.** Records written before OBP16 carry
  * the overloaded `gen_ai.evaluation.evaluator.type`, holding a kind for judged
  * rows and a cohort for seeded ones; records written after it carry
  * `integritystudio.evaluation.cohort` instead. Neither set is being

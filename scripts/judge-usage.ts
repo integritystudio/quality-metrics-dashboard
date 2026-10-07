@@ -124,8 +124,7 @@ export interface JudgeRunEstimate {
 /**
  * What the run should cost before it spends anything, priced from content
  * length (TOKENS_PER_CHAR). The dry-run prints it; a real run prints it beside
- * the usage the API reported, which is how a $1.80 estimate was found to be
- * a ~$3.30 bill. Pass `batch: true` when `--batch` is set — Message Batches
+ * the usage the API reported, which can run well above it. Pass `batch: true` when `--batch` is set — Message Batches
  * bill at BATCH_PRICE_RATIO (half list rates). Pass `consolidated: true` for
  * the default mode, which sends each turn's content once and answers every
  * criterion in that one call.
