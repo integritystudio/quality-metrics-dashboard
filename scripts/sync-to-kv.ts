@@ -90,6 +90,8 @@ import {
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { ascending, mean, quantileSorted, rollup } from 'd3-array';
+import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { DRY_RUN_FLAG } from './pipeline-stages.js';
 
 // Used to be exported as DEGRADATION_KV_KEY from ../../src/lib/quality/quality-constants.ts,
 // deleted there as a "dead export" (parent commit f518715) — the dashboard, a separate git
@@ -117,24 +119,26 @@ function getNamespaceId(): string {
   return namespaceId ??= resolveNamespaceId();
 }
 
-function parseIntArg(args: string[], flag: string, defaultValue: number): number {
-  const match = args.find(a => a.startsWith(`--${flag}=`));
-  const parsed = match ? parseInt(match.split('=')[1] ?? '', 10) : defaultValue;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
-}
-
 const DEFAULT_DAYS = 30;
 const DEFAULT_WRITE_BUDGET = 450;
 const DEFAULT_MAX_WRITES_PER_RUN = 500;
+const DAYS_FLAG = '--days';
+const BUDGET_FLAG = '--budget';
+const MAX_WRITES_FLAG = '--max-writes';
+const SYNC_CLI: CliSpec = { values: [DAYS_FLAG, BUDGET_FLAG, MAX_WRITES_FLAG], switches: [DRY_RUN_FLAG] };
 
-const args = process.argv.slice(2);
-const dryRun = args.includes('--dry-run');
-const maxDays = parseIntArg(args, 'days', DEFAULT_DAYS);
+const { dryRun, maxDays, WRITE_BUDGET, MAX_WRITES_PER_RUN } = exitOnCliArgError('[sync-to-kv]', () => {
+  const cli = parseCli(process.argv.slice(2), SYNC_CLI);
+  return {
+    dryRun: cli.has(DRY_RUN_FLAG),
+    maxDays: positiveIntArg(DAYS_FLAG, cli.value(DAYS_FLAG)) ?? DEFAULT_DAYS,
+    WRITE_BUDGET: positiveIntArg(BUDGET_FLAG, cli.value(BUDGET_FLAG)) ?? DEFAULT_WRITE_BUDGET,
+    // Per-run write warning threshold: half the ~1000/day free-tier cap, matching
+    // the twice-daily AlephAuto cron (P4 write-budget instrumentation).
+    MAX_WRITES_PER_RUN: positiveIntArg(MAX_WRITES_FLAG, cli.value(MAX_WRITES_FLAG)) ?? DEFAULT_MAX_WRITES_PER_RUN,
+  };
+});
 const MAX_DAYS_MS = maxDays * TIME_MS.DAY;
-const WRITE_BUDGET = parseIntArg(args, 'budget', DEFAULT_WRITE_BUDGET);
-// Per-run write warning threshold: half the ~1000/day free-tier cap, matching
-// the twice-daily AlephAuto cron (P4 write-budget instrumentation).
-const MAX_WRITES_PER_RUN = parseIntArg(args, 'max-writes', DEFAULT_MAX_WRITES_PER_RUN);
 
 const PERIODS = ['24h', '7d', '30d'] as const;
 

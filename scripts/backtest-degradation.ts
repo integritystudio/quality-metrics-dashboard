@@ -33,6 +33,7 @@ import type {
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { importMetaDirname } from '../src/lib/dashboard-file-utils.js';
+import { exitOnCliArgError, parseCli, positiveIntArg } from './cli-args.js';
 
 const INCIDENTS_FILE = join(import.meta.dirname, '.degradation-incidents.json');
 /** F1 improvement above which best config triggers graduation recommendation */
@@ -42,24 +43,20 @@ const MIN_INCIDENTS_WARN = 5;
 
 // ---- CLI args ----
 
-function parseIntArg(argList: string[], flag: string, defaultValue: number): number {
-  const match = argList.find(a => a.startsWith(`--${flag}=`));
-  const eqIdx = match ? match.indexOf('=') : -1;
-  const parsed = eqIdx !== -1 ? parseInt(match!.slice(eqIdx + 1), 10) : defaultValue;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
-}
+const DEFAULT_BACKTEST_DAYS = 90;
+const DEFAULT_OUTPUT_FILE = 'backtest-results.json';
+const DAYS_FLAG = '--days';
+const METRIC_FLAG = '--metric';
+const OUTPUT_FLAG = '--output';
 
-function parseStringArg(argList: string[], flag: string): string | null {
-  const match = argList.find(a => a.startsWith(`--${flag}=`));
-  if (!match) return null;
-  const eqIdx = match.indexOf('=');
-  return eqIdx === -1 ? null : match.slice(eqIdx + 1);
-}
-
-const cliArgs = process.argv.slice(2);
-const days = parseIntArg(cliArgs, 'days', 90);
-const metricFilter = parseStringArg(cliArgs, 'metric');
-const outputFile = basename(parseStringArg(cliArgs, 'output') ?? 'backtest-results.json');
+const { days, metricFilter, outputFile } = exitOnCliArgError('[backtest]', () => {
+  const cli = parseCli(process.argv.slice(2), { values: [DAYS_FLAG, METRIC_FLAG, OUTPUT_FLAG] });
+  return {
+    days: positiveIntArg(DAYS_FLAG, cli.value(DAYS_FLAG)) ?? DEFAULT_BACKTEST_DAYS,
+    metricFilter: cli.value(METRIC_FLAG) ?? null,
+    outputFile: basename(cli.value(OUTPUT_FLAG) ?? DEFAULT_OUTPUT_FILE),
+  };
+});
 
 if (metricFilter !== null && !(metricFilter in QUALITY_METRICS)) {
   console.error(`Unknown metric: "${metricFilter}". Valid: ${Object.keys(QUALITY_METRICS).join(', ')}`);
