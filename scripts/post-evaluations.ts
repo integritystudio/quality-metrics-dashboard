@@ -29,6 +29,7 @@ import {
   type RouteBasis,
 } from './upload-evaluations.js';
 import { asString, type AccountIndex } from './account-stamps.js';
+import { sleep } from './sleep.js';
 
 export interface PostOptions {
   dryRun: boolean;
@@ -119,7 +120,7 @@ export async function postEvaluationRecords(
           summary.failure = `POST to ${destination} failed: ${res.detail}`;
           return summary;
         }
-        await new Promise((r) => setTimeout(r, INTER_BATCH_DELAY_MS));
+        await sleep(INTER_BATCH_DELAY_MS);
       }
       summary.sent += chunk.length;
       summary.byDestination[destination] = (summary.byDestination[destination] ?? 0) + chunk.length;

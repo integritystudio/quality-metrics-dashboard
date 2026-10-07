@@ -31,6 +31,7 @@ import type { ProviderUsage } from './judge-evaluations.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey } from './judge-credentials.js';
+import { sleep } from './sleep.js';
 
 type BatchRequest = Anthropic.Messages.BatchCreateParams.Request;
 type MessageBatch = Anthropic.Messages.MessageBatch;
@@ -151,10 +152,6 @@ export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate'
 export function toOutputConfig(options?: BatchGenerateOptions): Pick<MessageParams, 'output_config'> {
   if (!options?.jsonSchema) return {};
   return { output_config: { format: { type: 'json_schema', schema: options.jsonSchema } } };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function toError(value: unknown): Error {

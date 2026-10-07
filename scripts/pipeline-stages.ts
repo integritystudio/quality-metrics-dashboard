@@ -9,6 +9,7 @@
  */
 
 import { CliArgError, parseCli, positiveIntArg } from './cli-args.js';
+import { sleep } from './sleep.js';
 
 /** judge-evaluations exit: calls were refused for billing (credit balance). Nothing to retry; the fix is external. */
 export const JUDGE_EXIT_BILLING = 4;
@@ -250,7 +251,6 @@ export interface RetryOptions<T> {
   sleep?: (ms: number) => Promise<void>;
 }
 
-const realSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Run `attempt` up to `delaysMs.length + 1` times, waiting `delaysMs[i]` before
@@ -260,13 +260,13 @@ const realSleep = (ms: number): Promise<void> => new Promise(resolve => setTimeo
  */
 export async function runWithRetry<T>(options: RetryOptions<T>): Promise<T> {
   const delays = options.delaysMs ?? SYNC_RETRY_DELAYS_MS;
-  const sleep = options.sleep ?? realSleep;
+  const wait = options.sleep ?? sleep;
   const totalAttempts = delays.length + 1;
   let outcome = await options.attempt(1);
   for (let retry = 0; retry < delays.length && options.shouldRetry(outcome); retry++) {
     const waitMs = delays[retry]!;
     options.onRetry?.(waitMs, retry + 1, totalAttempts);
-    await sleep(waitMs);
+    await wait(waitMs);
     outcome = await options.attempt(retry + 2);
   }
   return outcome;

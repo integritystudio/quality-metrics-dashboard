@@ -84,6 +84,7 @@ import {
   type AccountRef,
 } from './account-stamps.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { sleep } from './sleep.js';
 
 export const TOOL_CORRECTNESS_CRITERIA: GEvalConfig = {
   name: 'tool_correctness',
@@ -1650,7 +1651,7 @@ export async function processBatch<T, R>(
   const settled = await Promise.allSettled(
     items.map(item => limit(async () => {
       const result = await fn(item);
-      if (delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs));
+      if (delayMs > 0) await sleep(delayMs);
       return result;
     })),
   );

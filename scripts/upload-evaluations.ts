@@ -110,6 +110,7 @@ import { DRY_RUN_FLAG, UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
 import { CliArgError, parseCli, positiveIntArg, positiveNumberArg, type CliSpec } from './cli-args.js';
 import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
+import { sleep } from './sleep.js';
 
 export { buildAccountIndex, type AccountIndex, type AccountRef };
 
@@ -566,7 +567,7 @@ export async function postBatch(request: SendRequest): Promise<SendResult> {
     if (attempt < MAX_SEND_ATTEMPTS) {
       const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
       console.warn(`[upload-evaluations] attempt ${attempt}/${MAX_SEND_ATTEMPTS} failed (${last.detail}) — retrying in ${delay}ms`);
-      await new Promise((r) => setTimeout(r, delay));
+      await sleep(delay);
     }
   }
   console.error(`[upload-evaluations] giving up after ${MAX_SEND_ATTEMPTS} attempts: ${last.detail}`);
@@ -676,7 +677,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       // errs toward a duplicate rather than toward silent data loss.
       for (const b of batch) delivered.push(b.fp);
       batches.delete(destination);
-      if (!opts.dryRun) await new Promise((r) => setTimeout(r, INTER_BATCH_DELAY_MS));
+      if (!opts.dryRun) await sleep(INTER_BATCH_DELAY_MS);
       return true;
     };
     const pendingCount = (): number => [...batches.values()].reduce((n, b) => n + b.length, 0);
