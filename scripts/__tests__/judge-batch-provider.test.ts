@@ -4,14 +4,11 @@ import type Anthropic from '@anthropic-ai/sdk';
 import {
   createBatchProvider,
   toOutputConfig,
-  resolveJudgeApiKey,
   BatchRequestFailedError,
   BatchWallClockExceededError,
   BATCH_CANCEL_GRACE_MS,
   BATCH_POLL_INTERVAL_MS,
   BATCH_WALL_CLOCK_MS,
-  LLM_JUDGE_KEY_ENV,
-  ANTHROPIC_KEY_ENV,
   type BatchClient,
 } from '../judge-batch-provider.js';
 import {
@@ -653,10 +650,3 @@ describe('a per-criterion --batch run cut short by the wall clock', () => {
   });
 });
 
-describe('resolveJudgeApiKey', () => {
-  it('prefers the judge key, falls back to the shared key, and yields undefined with neither', () => {
-    expect(resolveJudgeApiKey({ [LLM_JUDGE_KEY_ENV]: 'judge-key', [ANTHROPIC_KEY_ENV]: 'shared-key' })).toBe('judge-key');
-    expect(resolveJudgeApiKey({ [ANTHROPIC_KEY_ENV]: 'shared-key' })).toBe('shared-key');
-    expect(resolveJudgeApiKey({ [LLM_JUDGE_KEY_ENV]: '' })).toBeUndefined();
-  });
-});

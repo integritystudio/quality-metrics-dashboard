@@ -55,6 +55,7 @@ import {
   type JudgeTokenUsage,
 } from './judge-consolidated.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -71,8 +72,6 @@ export const MAX_SAMPLE_TURN_TOKENS = 12_000;
 export const MAX_ESTIMATED_SPEND_USD = 8;
 export const YES_FLAG = '--yes';
 export const LIMIT_FLAG = '--limit';
-export const PRIMARY_KEY_ENV = 'LLM_JUDGE_ANTHROPIC_KEY';
-export const FALLBACK_KEY_ENV = 'ANTHROPIC_API_KEY';
 export const MARKER_FILENAME = '.judge-agreement.started';
 export const RESULTS_PREFIX = 'judge-agreement-';
 export const RESULTS_SUFFIX = '.json';
@@ -185,15 +184,6 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   }
   if (!parsed.yes) return { ...parsed, error: `${YES_FLAG} is required: this run spends real API money` };
   return parsed;
-}
-
-/** The key and which variable supplied it. The value is never logged. */
-export function resolveApiKey(env: NodeJS.ProcessEnv): { key: string; source: string } | undefined {
-  const primary = env[PRIMARY_KEY_ENV];
-  if (primary) return { key: primary, source: PRIMARY_KEY_ENV };
-  const fallback = env[FALLBACK_KEY_ENV];
-  if (fallback) return { key: fallback, source: FALLBACK_KEY_ENV };
-  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -502,9 +492,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const credential = resolveApiKey(process.env);
+  const credential = resolveJudgeApiKey();
   if (!credential) {
-    refuse(`no API key: set ${PRIMARY_KEY_ENV} (or ${FALLBACK_KEY_ENV})`);
+    refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
     return;
   }
   console.log(`[agreement] API key from ${credential.source}`);
@@ -557,7 +547,7 @@ async function main(): Promise<void> {
 
   const perCriterionTotals = createUsageTotals();
   const consolidatedTotals = createUsageTotals();
-  const llm = await createPerCriterionProvider(credential.key, usage => addUsage(perCriterionTotals, usage));
+  const llm = await createPerCriterionProvider(credential.apiKey, usage => addUsage(perCriterionTotals, usage));
   const judge = new LLMJudge(llm, {
     timeoutMs: TIME_MS.MINUTE,
     maxRetries: JUDGE_MAX_RETRIES,
@@ -569,7 +559,7 @@ async function main(): Promise<void> {
     },
   });
   const provider = await createConsolidatedProvider({
-    apiKey: credential.key,
+    apiKey: credential.apiKey,
     onUsage: usage => addUsage(consolidatedTotals, usage),
   });
   const stepsCache: EvaluationStepsCache = new Map();

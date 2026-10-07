@@ -62,18 +62,16 @@ import {
   computeAgreement,
   createUsageTotals,
   listResultsFiles as listAgreementFiles,
-  resolveApiKey,
   toFivePointScale,
   usageToUsd,
   DOCS_DIR,
-  PRIMARY_KEY_ENV,
-  FALLBACK_KEY_ENV,
   RESULTS_SUFFIX,
   type CriterionAgreement,
   type UsageReport,
   type UsageTotals,
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -503,9 +501,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const credential = resolveApiKey(process.env);
+  const credential = resolveJudgeApiKey();
   if (!credential) {
-    refuse(`no API key: set ${PRIMARY_KEY_ENV} (or ${FALLBACK_KEY_ENV})`);
+    refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
     return;
   }
   console.log(`[quality] API key from ${credential.source}`);
@@ -561,7 +559,7 @@ async function main(): Promise<void> {
   console.log(`[quality] marker written: ${join(DOCS_DIR, MARKER_FILENAME)} — API calls start now`);
 
   const totals: UsageTotals = createUsageTotals();
-  const provider = await createReferenceProvider(credential.key, usage => addUsage(totals, usage));
+  const provider = await createReferenceProvider(credential.apiKey, usage => addUsage(totals, usage));
   const canSpend = (): boolean => usageToUsd(totals, pricing) < MAX_MEASURED_SPEND_USD;
   const stepsCache: EvaluationStepsCache = new Map();
   const turnErrors: { sessionId: string; timestamp: string; errors: string[] }[] = [];

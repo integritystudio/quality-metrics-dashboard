@@ -30,6 +30,7 @@ import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import type { ProviderUsage } from './judge-evaluations.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { resolveJudgeApiKey } from './judge-credentials.js';
 
 type BatchRequest = Anthropic.Messages.BatchCreateParams.Request;
 type MessageBatch = Anthropic.Messages.MessageBatch;
@@ -57,9 +58,6 @@ export const BATCH_WALL_CLOCK_MS = 3 * TIME_MS.HOUR;
 export const BATCH_CANCEL_GRACE_MS = DURATION_MS.TEN_MINUTES;
 /** Requests per Message Batch the API accepts. */
 export const MAX_REQUESTS_PER_BATCH = 100_000;
-/** The judge's own key wins; the shared key is the fallback. */
-export const LLM_JUDGE_KEY_ENV = 'LLM_JUDGE_ANTHROPIC_KEY';
-export const ANTHROPIC_KEY_ENV = 'ANTHROPIC_API_KEY';
 const CUSTOM_ID_PREFIX = 'judge';
 const LOG_PREFIX = '[judge-batch]';
 
@@ -153,15 +151,6 @@ export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate'
 export function toOutputConfig(options?: BatchGenerateOptions): Pick<MessageParams, 'output_config'> {
   if (!options?.jsonSchema) return {};
   return { output_config: { format: { type: 'json_schema', schema: options.jsonSchema } } };
-}
-
-/** The judge's own key when set, else the shared key; `undefined` lets the SDK resolve its own. */
-export function resolveJudgeApiKey(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  for (const name of [LLM_JUDGE_KEY_ENV, ANTHROPIC_KEY_ENV]) {
-    const value = env[name];
-    if (value) return value;
-  }
-  return undefined;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -426,7 +415,7 @@ class MessageBatchProvider implements BatchLLMProvider {
 }
 
 async function createBatchClient(): Promise<BatchClient> {
-  return (await createJudgeAnthropicClient({ apiKey: resolveJudgeApiKey() })).messages.batches;
+  return (await createJudgeAnthropicClient({ apiKey: resolveJudgeApiKey()?.apiKey })).messages.batches;
 }
 
 export async function createBatchProvider(options: BatchProviderOptions): Promise<BatchLLMProvider> {

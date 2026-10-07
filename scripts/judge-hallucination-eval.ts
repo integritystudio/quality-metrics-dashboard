@@ -63,13 +63,10 @@ import {
   createPerCriterionProvider,
   createUsageTotals,
   estimateSpend,
-  resolveApiKey,
   scoresByName,
   usageToUsd,
   DOCS_DIR,
   JUDGE_MAX_RETRIES,
-  PRIMARY_KEY_ENV,
-  FALLBACK_KEY_ENV,
   RESULTS_SUFFIX,
   type UsageReport,
   type UsageTotals,
@@ -87,6 +84,7 @@ import {
   type QualityTurn,
   type ReferenceSummary,
 } from './judge-quality-eval.js';
+import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -332,8 +330,8 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.error) return refuse(args.error);
 
-  const credential = resolveApiKey(process.env);
-  if (!credential) return refuse(`no API key: set ${PRIMARY_KEY_ENV} (or ${FALLBACK_KEY_ENV})`);
+  const credential = resolveJudgeApiKey();
+  if (!credential) return refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
   console.log(`[hallucination] API key from ${credential.source}`);
 
   const reason = refusalReason(DOCS_DIR);
@@ -372,7 +370,7 @@ async function main(): Promise<void> {
     reference: createUsageTotals(),
   };
   const judge = new LLMJudge(
-    await createPerCriterionProvider(credential.key, usage => addUsage(totals.perCriterion, usage)),
+    await createPerCriterionProvider(credential.apiKey, usage => addUsage(totals.perCriterion, usage)),
     {
       timeoutMs: TIME_MS.MINUTE,
       maxRetries: JUDGE_MAX_RETRIES,
@@ -384,9 +382,9 @@ async function main(): Promise<void> {
       },
     },
   );
-  const consolidated = await createConsolidatedProvider({ apiKey: credential.key, onUsage: u => addUsage(totals.consolidated, u) });
-  const direct = await createConsolidatedProvider({ apiKey: credential.key, onUsage: u => addUsage(totals.consolidatedDirect, u) });
-  const reference = await createReferenceProvider(credential.key, u => addUsage(totals.reference, u));
+  const consolidated = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addUsage(totals.consolidated, u) });
+  const direct = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addUsage(totals.consolidatedDirect, u) });
+  const reference = await createReferenceProvider(credential.apiKey, u => addUsage(totals.reference, u));
   const caches: Record<'consolidated' | 'consolidatedDirect' | 'reference', EvaluationStepsCache> = {
     consolidated: new Map(),
     consolidatedDirect: new Map(),

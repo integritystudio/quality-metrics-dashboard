@@ -4,7 +4,6 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   parseArgs,
-  resolveApiKey,
   refusalReason,
   listResultsFiles,
   resultsFilePath,
@@ -20,8 +19,6 @@ import {
   MAX_LIMIT,
   YES_FLAG,
   LIMIT_FLAG,
-  PRIMARY_KEY_ENV,
-  FALLBACK_KEY_ENV,
   MARKER_FILENAME,
   RESULTS_PREFIX,
   RESULTS_SUFFIX,
@@ -64,14 +61,6 @@ describe('parseArgs', () => {
 
   it('has no --force flag', () => {
     expect(parseArgs([YES_FLAG, '--force']).error).toMatch(/Unknown argument: --force/);
-  });
-});
-
-describe('resolveApiKey', () => {
-  it('prefers the judge key and falls back to the general one, naming the source only', () => {
-    expect(resolveApiKey({ [PRIMARY_KEY_ENV]: 'a', [FALLBACK_KEY_ENV]: 'b' })).toEqual({ key: 'a', source: PRIMARY_KEY_ENV });
-    expect(resolveApiKey({ [FALLBACK_KEY_ENV]: 'b' })).toEqual({ key: 'b', source: FALLBACK_KEY_ENV });
-    expect(resolveApiKey({})).toBeUndefined();
   });
 });
 
