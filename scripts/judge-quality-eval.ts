@@ -72,6 +72,7 @@ import {
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
+import { toDateOnly } from '../src/api/api-constants.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,7 +105,6 @@ const KNOWN_FLAGS: ReadonlySet<string> = new Set([YES_FLAG, AGREEMENT_FLAG]);
 const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
 const MAX_TOKENS_STOP_REASON = 'max_tokens';
 const REFUSAL_STOP_REASON = 'refusal';
-const ISO_DATE_LEN = 10;
 const JSON_INDENT = 2;
 const EXIT_REFUSED = 1;
 const NO_BATCH_DELAY_MS = 0;
@@ -193,7 +193,7 @@ export function listResultsFiles(docsDir: string): string[] {
 }
 
 export function resultsFilePath(docsDir: string, date: Date): string {
-  return join(docsDir, `${RESULTS_PREFIX}${date.toISOString().slice(0, ISO_DATE_LEN)}${RESULTS_SUFFIX}`);
+  return join(docsDir, `${RESULTS_PREFIX}${toDateOnly(date)}${RESULTS_SUFFIX}`);
 }
 
 /** Why the run must not start, or undefined when it may. */

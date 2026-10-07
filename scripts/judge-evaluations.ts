@@ -1633,7 +1633,7 @@ export function writeRunState(succeeded: number, attempted: number, path: string
 
 /** Append to today's file and return its path; each record keeps its turn time. */
 function writeEvaluations(evals: EvalRecord[]): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateOnly(new Date());
   const outFile = join(TELEMETRY_DIR, datedJsonlName(EVALUATIONS_FILE_PREFIX, today));
   const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
   appendFileSync(outFile, content);

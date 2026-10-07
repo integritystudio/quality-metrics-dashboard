@@ -85,6 +85,7 @@ import {
   type ReferenceSummary,
 } from './judge-quality-eval.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
+import { toDateOnly } from '../src/api/api-constants.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -111,7 +112,6 @@ export const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDire
 export type Configuration = typeof CONFIGURATIONS[number];
 
 const KNOWN_FLAGS: ReadonlySet<string> = new Set([YES_FLAG, REFERENCE_FLAG]);
-const ISO_DATE_LEN = 10;
 const JSON_INDENT = 2;
 const EXIT_REFUSED = 1;
 const NO_BATCH_DELAY_MS = 0;
@@ -175,7 +175,7 @@ export function listResultsFiles(docsDir: string): string[] {
 }
 
 export function resultsFilePath(docsDir: string, date: Date): string {
-  return join(docsDir, `${RESULTS_PREFIX}${date.toISOString().slice(0, ISO_DATE_LEN)}${RESULTS_SUFFIX}`);
+  return join(docsDir, `${RESULTS_PREFIX}${toDateOnly(date)}${RESULTS_SUFFIX}`);
 }
 
 /** Why the run must not start, or undefined when it may. */

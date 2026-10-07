@@ -29,6 +29,7 @@ import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
+import { toDateOnly } from '../src/api/api-constants.js';
 
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_SETTLE_MINUTES = 60;
@@ -40,7 +41,6 @@ const CLOUD_SPAN_LIMIT = 500_000;
 const TOP_MISSING_SESSIONS = 10;
 const COVERAGE_DECIMALS = 2;
 const JSON_INDENT = 2;
-const ISO_DATE_LENGTH = 10;
 const SESSION_ID_ATTR = 'session.id';
 const NO_SESSION = '(none)';
 const CLI_PREFIX = '[trace-coverage]';
@@ -84,7 +84,7 @@ export function spanKey(traceId: string, spanId: string): string {
 }
 
 export function utcDay(ms: number): string {
-  return new Date(ms).toISOString().slice(0, ISO_DATE_LENGTH);
+  return toDateOnly(new Date(ms));
 }
 
 /** Window start is the UTC midnight `days - 1` days before `nowMs`, so today counts as one. */
