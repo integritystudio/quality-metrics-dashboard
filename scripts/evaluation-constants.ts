@@ -10,7 +10,9 @@ import type { EvaluationCohort } from '../../src/lib/validation/dashboard-schema
 
 const HOME = process.env.HOME ?? '';
 // Must match the producer: hooks/lib/constants.ts writes telemetry here.
-export const TELEMETRY_DIR = join(HOME, '.claude-history', 'telemetry');
+// `TELEMETRY_DIR` overrides it, as it does for the other scripts that read
+// telemetry, so a run can be pointed at a scratch directory.
+export const TELEMETRY_DIR = process.env.TELEMETRY_DIR || join(HOME, '.claude-history', 'telemetry');
 /**
  * Where `.calibration-state.json` lives: derive writes it, and sync-to-kv reads it to build
  * `meta:calibration`. One constant for both, because they disagreed: from 231e91d (2026-04-19)
