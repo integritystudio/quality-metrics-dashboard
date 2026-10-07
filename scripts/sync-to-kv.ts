@@ -111,7 +111,11 @@ function resolveNamespaceId(): string {
   }
   throw new Error('KV_NAMESPACE_ID env var not set and could not resolve from wrangler.toml');
 }
-const NAMESPACE_ID = resolveNamespaceId();
+let namespaceId: string | undefined;
+/** Resolved on first wrangler call, so importing this module or a dry run needs no namespace. */
+function getNamespaceId(): string {
+  return namespaceId ??= resolveNamespaceId();
+}
 
 function parseIntArg(args: string[], flag: string, defaultValue: number): number {
   const match = args.find(a => a.startsWith(`--${flag}=`));
@@ -375,7 +379,7 @@ function kvBulkPut(entries: KVEntry[]): number {
         continue;
       }
       try {
-        execFileSync('npx', ['wrangler', 'kv', 'bulk', 'put', tmpFile, '--namespace-id', NAMESPACE_ID, '--remote'], {
+        execFileSync('npx', ['wrangler', 'kv', 'bulk', 'put', tmpFile, '--namespace-id', getNamespaceId(), '--remote'], {
           stdio: ['ignore', 'pipe', 'pipe'],
         });
       } catch (err) {
@@ -421,7 +425,7 @@ export function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): void 
       try {
         execFileSync(
           'npx',
-          ['wrangler', 'kv', 'bulk', 'delete', tmpFile, '--namespace-id', NAMESPACE_ID, '--remote', '--force'],
+          ['wrangler', 'kv', 'bulk', 'delete', tmpFile, '--namespace-id', getNamespaceId(), '--remote', '--force'],
           { stdio: ['ignore', 'pipe', 'pipe'] },
         );
       } catch (err) {

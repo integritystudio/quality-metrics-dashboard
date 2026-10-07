@@ -17,7 +17,7 @@ import { writeFileSync, unlinkSync } from 'fs';
 
 vi.mock('child_process', () => ({ execFileSync: vi.fn() }));
 
-// Keep real fs for resolveNamespaceId() at module load (uses existsSync + readFileSync);
+// Keep real fs for resolveNamespaceId() on the first wrangler call (existsSync + readFileSync);
 // only stub the write/delete side-effects exercised by kvBulkDelete.
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
