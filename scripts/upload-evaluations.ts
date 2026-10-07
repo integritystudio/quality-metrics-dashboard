@@ -108,6 +108,7 @@ import {
 } from './account-stamps.js';
 import { UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
 import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
 
 export { buildAccountIndex, type AccountIndex, type AccountRef };
 
@@ -139,7 +140,6 @@ const DEFAULT_WINDOW_DAYS = 2;
  */
 const DEFAULT_MAX_AGE_HOURS = 36;
 
-const MS_PER_HOUR = 3_600_000;
 
 /** Pause between batches so a large first run does not burst the worker. */
 export const INTER_BATCH_DELAY_MS = 250;
@@ -591,7 +591,7 @@ function parseArgs(argv: string[]): Options {
   return {
     dryRun: argv.includes('--dry-run'),
     windowDays: numeric('--days', DEFAULT_WINDOW_DAYS),
-    maxAgeMs: numeric('--max-age-hours', DEFAULT_MAX_AGE_HOURS) * MS_PER_HOUR,
+    maxAgeMs: numeric('--max-age-hours', DEFAULT_MAX_AGE_HOURS) * TIME_MS.HOUR,
     limit: numeric('--limit', Number.POSITIVE_INFINITY),
     onlyKeysPath: argv.find((a) => a.startsWith(`${ONLY_KEYS_ARG}=`))?.slice(ONLY_KEYS_ARG.length + 1),
   };

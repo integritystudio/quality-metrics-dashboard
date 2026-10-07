@@ -23,6 +23,7 @@
 
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { NANOSECONDS_PER_MILLISECOND, TIME_MS } from '../../src/lib/core/units.js';
 
 /**
  * Trace files read for the account index, in days. Wider than the upload
@@ -41,9 +42,6 @@ export const IDENTITY_KEY_REF_FIELD = 'identityKeyRef';
 export const TRACE_FILE_PATTERN = /^traces-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 
 const SPAN_SESSION_ID_ATTR = 'session.id';
-const MS_PER_DAY = 86_400_000;
-const MS_PER_S = 1_000;
-const NS_PER_MS = 1_000_000;
 /**
  * Start time given to a stamp whose span has none: it sorts last and is never at
  * or before an evaluation's time, so it can decide only a single-account trace.
@@ -89,7 +87,7 @@ export function fileInWindow(file: string, pattern: RegExp, windowDays: number, 
   if (!m) return false;
   // Compare on the date in the name, never mtime: derive rewrites evaluation
   // files wholesale, so mtime says nothing about which day's records are inside.
-  return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * MS_PER_DAY;
+  return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
 }
 
 /** OTel `[seconds, nanoseconds]` start time to epoch ms; `UNTIMED_MS` when absent or malformed. */
@@ -98,7 +96,7 @@ function hrTimeToMs(value: unknown): number {
   // Array.isArray narrows `unknown` to `any[]`, so name the element type rather
   // than destructure `any`; the typeof guards below still do the real checking.
   const [s, ns] = value as [unknown, unknown];
-  return typeof s === 'number' && typeof ns === 'number' ? s * MS_PER_S + ns / NS_PER_MS : UNTIMED_MS;
+  return typeof s === 'number' && typeof ns === 'number' ? s * TIME_MS.SECOND + ns / NANOSECONDS_PER_MILLISECOND : UNTIMED_MS;
 }
 
 function pushTo<T>(map: Map<string, T[]>, key: string, value: T): void {

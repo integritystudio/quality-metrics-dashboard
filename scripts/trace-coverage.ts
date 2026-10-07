@@ -26,7 +26,7 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
+import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
 
@@ -40,10 +40,6 @@ const CLOUD_SPAN_LIMIT = 500_000;
 const TOP_MISSING_SESSIONS = 10;
 const COVERAGE_DECIMALS = 2;
 const JSON_INDENT = 2;
-const MS_PER_S = 1_000;
-const MS_PER_MINUTE = 60_000;
-const MS_PER_DAY = 86_400_000;
-const NS_PER_MS = 1_000_000;
 const ISO_DATE_LENGTH = 10;
 const SESSION_ID_ATTR = 'session.id';
 const NO_SESSION = '(none)';
@@ -94,13 +90,13 @@ export function utcDay(ms: number): string {
 /** Window start is the UTC midnight `days - 1` days before `nowMs`, so today counts as one. */
 export function coverageWindow(nowMs: number, days: number, settleMinutes: number): CoverageWindow {
   const todayStart = Date.parse(`${utcDay(nowMs)}T00:00:00.000Z`);
-  return { fromMs: todayStart - (days - 1) * MS_PER_DAY, toMs: nowMs - settleMinutes * MS_PER_MINUTE };
+  return { fromMs: todayStart - (days - 1) * TIME_MS.DAY, toMs: nowMs - settleMinutes * TIME_MS.MINUTE };
 }
 
 function hrTimeToMs(value: unknown): number | undefined {
   if (!Array.isArray(value) || value.length !== 2) return undefined;
   const [s, ns] = value as [unknown, unknown];
-  return typeof s === 'number' && typeof ns === 'number' ? s * MS_PER_S + ns / NS_PER_MS : undefined;
+  return typeof s === 'number' && typeof ns === 'number' ? s * TIME_MS.SECOND + ns / NANOSECONDS_PER_MILLISECOND : undefined;
 }
 
 /** Parse one local JSONL line; `undefined` for blank, malformed or out-of-window lines. */

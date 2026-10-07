@@ -44,6 +44,7 @@ import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type Acc
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
 
 // EvalRecord and toOTelRecord live in judge-evaluations.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -578,7 +579,6 @@ export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
   return allEvals;
 }
 
-const MS_PER_DAY = 86_400_000;
 
 /** `--post-days=N` as a day count; `null` when absent. */
 export function resolvePostDays(args: string[]): number | null {
@@ -601,8 +601,8 @@ export function resolvePostDays(args: string[]): number | null {
  * applies on top, whatever the floor.
  */
 export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDays: number | null = null): number {
-  if (postDays !== null) return nowMs - postDays * MS_PER_DAY;
-  return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DERIVE_POST_WINDOW_DAYS * MS_PER_DAY;
+  if (postDays !== null) return nowMs - postDays * TIME_MS.DAY;
+  return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DERIVE_POST_WINDOW_DAYS * TIME_MS.DAY;
 }
 
 /**
