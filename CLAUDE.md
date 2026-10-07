@@ -10,10 +10,13 @@ npm run dev:worker   # wrangler dev (local Worker)
 npm test             # Vitest — src/__tests__ + worker/__tests__
 npm run test:scripts # Vitest for scripts/ (separate config)
 npm run typecheck    # TS 7 — use this, NOT bare `npx tsc` (see TypeScript versions)
-npm run typecheck:scripts    # TS 7 against scripts/ (tsconfig.scripts.json)
+npm run typecheck:scripts    # TS 7 against scripts/ (tsconfig.scripts.json); add `-- --pretty false` for greppable output
 npm run lint         # ESLint (src/, scripts/, worker/)
 npm run build        # Production build
-npm run populate -- --seed   # Data pipeline (offline)
+npm run populate -- --seed   # Data pipeline (offline, synthetic judge scores)
+npm run populate             # Data pipeline (real judge; needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY)
+npm run test:e2e             # Playwright, chromium project (Auth0 stubbed; see E2E)
+npm run sync                 # KV sync only (--budget=450 default)
 npm run deploy:worker        # Deploy Cloudflare Worker
 doppler run --project integrity-studio --config dev -- npm run test:e2e:integration  # Auth0 integration tests
 ```
@@ -37,6 +40,7 @@ The parent observability-toolkit is unaffected — it has its own `node_modules`
   - **Default role = `provisioned-dashboard-viewer`** (all views, non-admin). Assigned two ways: the `on_user_created`/`assign_default_role()` DB trigger on signup, and `grantDashboardAccess` in the api-provisioning-receiver worker at API-key provisioning (insert-or-ignore dedupes). Replaced the former `read` role (PROV-RBAC, 2026-07-17).
   - **Migration caveat**: the migration capturing this (`IntegrityLandingPage/supabase/migrations/20260717000000_provisioned_dashboard_viewer_default_role.sql`) was authored to mirror a state already applied directly to **prd**, so it has NOT been run through the migration tooling (it's a no-op on prd). Applying migrations to other environments (staging/fresh) will bring them into line there.
 - **Validation**: Zod schemas in `src/lib/validation/` for all auth and dashboard types
+- **Org scoping** (`ORG_SCOPING_ENABLED = "true"` in `wrangler.toml`): `OrgContext.tsx` holds the active org and `OrgSwitcher.tsx` changes it through `POST /api/org/switch`, which persists `default_organization_id` and returns an updated `me` payload. `src/lib/org-rbac.ts` maps an org membership role to a dashboard role and that role to its permissions.
 - **Styling**: No inline styles — use CSS classes defined in `src/theme.css` or component-level selectors. Never pass `style={{...}}` props.
 - **React Compiler**: `babel-plugin-react-compiler` is installed but NOT configured (not wired into vite.config.ts). The compiler is inactive. If `react-hooks/incompatible-library` flags a TanStack Table hook, suppress it with `// eslint-disable-next-line react-hooks/incompatible-library -- <reason>` (none are needed since the v9 migration).
 
@@ -64,6 +68,8 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 ## Data Pipeline (`scripts/`)
 
 `npm run populate` runs: derive → judge → upload → sync-to-kv
+
+`scripts/generate-token-tree.js` is an orphaned compiled copy of `generate-token-tree.sh` (what `npm run filetree` runs); nothing references it.
 
 - `derive-evaluations.ts` — rule-based metrics (tool_correctness, evaluation_latency, task_completion).
   - **`populate`, and so the schedule, passes `--source=cloud --days=7 --post-days=2`** (`DERIVE_DEFAULT_*` in `pipeline-stages.ts`, cloud-read Phase 1, 2026-09-28).
