@@ -38,16 +38,14 @@ export const JUDGE_EXIT_DISCOVERY_FAILED = 7;
  * processing (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN). The batch was cancelled, the
  * scores it had already produced were kept and posted, and the rest of the
  * run's requests were abandoned; the next run picks those turns up again.
- * Until 2026-10-05 this was an exit 1 that cost the run its upload and sync,
- * as at 06:00 on 09-29 and 09-30. Numbered after the upload code because
- * 8 to 11 were taken.
+ * Numbered after the upload code because 8 to 11 were taken.
  */
 export const JUDGE_EXIT_BATCH_WALL_CLOCK = 12;
 /**
  * derive-evaluations exit: its post to ingest failed (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
  * Nothing is lost: the next unscoped run re-posts the last two days, and ingest
- * drops ids it already holds. Since Phase 3 derive is the first stage that
- * needs the network, so populate waits out a transient failure and then
+ * drops ids it already holds. Derive is the first stage that needs the
+ * network, so populate waits out a transient failure and then
  * carries on rather than losing the whole run.
  */
 export const DERIVE_EXIT_POST_FAILED = 8;
@@ -60,8 +58,7 @@ export const DERIVE_EXIT_READ_FAILED = 9;
  * derive-evaluations exit: records were delivered, but some day's input no
  * longer matches what the derivations read, most likely a hooks-side rename
  * (HOOK-RENAME-SILENT). Soft, so the run still completes, but non-zero, so
- * the launchd wrapper logs FAILED instead of the "completed" the last two
- * renames got for weeks.
+ * the launchd wrapper logs FAILED.
  */
 export const DERIVE_EXIT_INPUT_DRIFT = 10;
 
@@ -208,10 +205,9 @@ export const DRY_RUN_FLAG = '--dry-run';
 
 /**
  * Waits between sync-to-kv attempts, in order — five retries, ~30 minutes in
- * total. Sized to the outages seen at the 18:00 firing on 2026-09-17, 18 and
- * 19: fifteen to thirty-five minutes of no DNS or reset connections on the
- * laptop, each of which left `lastSync` a day stale because the stage ran
- * once and gave up. Bounded so a real code failure cannot hold a run open.
+ * total, sized to the 15–35 minute laptop network outages seen in practice
+ * (docs/data-pipeline.md § Historical incidents). Bounded so a real code
+ * failure cannot hold a run open.
  */
 export const SYNC_RETRY_DELAYS_MS: readonly number[] = [60_000, 120_000, 240_000, 480_000, 900_000];
 

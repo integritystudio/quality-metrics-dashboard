@@ -4,23 +4,20 @@
  *
  * Steps:
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
- *                            over spans the cloud holds for the last 7 days
- *                            (`--source=cloud --days=7 --post-days=2`, DERIVE_DEFAULT_*,
- *                            Phase 1), the last 2 days POSTed straight to ingest
- *                            (Phase 3; no file since Phase 6)
+ *                            over the cloud's last 7 days of spans, the last 2 days
+ *                            POSTed to ingest (`--source=cloud --days=7 --post-days=2`)
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
- *                            (`--source=cloud --days=7`, JUDGE_DEFAULT_*), POSTed
- *                            straight to ingest (Phase 4) and appended to
- *                            evaluations-<date>.jsonl
+ *                            (`--source=cloud --days=7`), POSTed to ingest and
+ *                            appended to evaluations-<date>.jsonl
  *   3. upload-evaluations  → ship the hooks' and survival-fitness records in evaluations JSONL
  *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
  *
  * Step 4 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
  * `'table'`), so every record has to get there: steps 1-2 post their own, and
  * step 3 carries what is still only on disk. Without that the pipeline looks
- * healthy at every stage and still computes an empty dashboard — which is
- * exactly how it ran, unnoticed, until 2026-09-15. It needs `INJECT_HMAC_SECRET`.
+ * healthy at every stage and still computes an empty dashboard
+ * (docs/data-pipeline.md § Historical incidents). It needs `INJECT_HMAC_SECRET`.
  *
  * Usage:
  *   npm run populate                          # full pipeline (needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY; exits 1 without one)
@@ -57,10 +54,7 @@
  *
  * derive-evaluations, upload-evaluations and sync-to-kv are retried on transient
  * network failures (DNS, reset connections) with the bounded schedule in
- * pipeline-stages.ts: the 18:00 firings on 2026-09-17, 18 and 19 all died at
- * sync while the laptop had no network, the 2026-09-28 06:00 firing died at
- * derive's post, and the 18:00 firing that day died at upload. Anything that is
- * not a network failure is not retried.
+ * pipeline-stages.ts. Anything that is not a network failure is not retried.
  */
 
 import { spawnSync } from 'child_process';
@@ -127,21 +121,11 @@ function readArgs(argv: readonly string[]) {
 const { skipJudge, skipUpload, skipSync, dryRun, seed, batch, perCriterion, limit, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
-// Fail closed when the judge would run with no key.
-//
-// 🔴 There is no automatic --seed any more. Until 2026-09-30 this branch fell
-// back to seed mode when ANTHROPIC_API_KEY was absent — first silently (an
-// empty block), then with a warning — so a run that lost its key published
-// SYNTHETIC judge scores while every stage reported success: a full dashboard
-// of plausible numbers rather than an empty one. No evaluator vendor surveyed
-// does this; they fail visibly (Langfuse marks the run Error, LangSmith pauses
-// the evaluator). Seeded scores remain available, but only on request: pass
-// --seed, or --skip-judge to leave judge metrics out.
-//
-// The check goes through resolveJudgeApiKey so both credential names count —
-// the old check read ANTHROPIC_API_KEY alone and treated a run with only
-// LLM_JUDGE_ANTHROPIC_KEY set as keyless. Dry runs are exempt: the judge's own
-// --dry-run returns before its key check and spends nothing.
+// Fail closed when the judge would run with no key: never fall back to
+// synthetic scores, which fill the dashboard with plausible numbers while every
+// stage reports success. Seeded scores only on request (--seed), or --skip-judge
+// to leave judge metrics out. resolveJudgeApiKey counts both credential names.
+// Dry runs are exempt: the judge's own --dry-run spends nothing.
 if (!seed && !skipJudge && !dryRun && !resolveJudgeApiKey()) {
   console.error(
     `[populate] Error: neither ${JUDGE_API_KEY_ENV} nor ${DEFAULT_API_KEY_ENV} is set, so the ` +
@@ -218,8 +202,8 @@ let pipelineExitCode = 0;
 
 async function main(): Promise<void> {
   if (!dryRun) {
-    // Derive reads /v1/traces (Phase 1) and posts to ingest (Phase 3), so it is
-    // the first stage that needs the network. A failed read or post loses
+    // Derive reads /v1/traces and posts to ingest, so it is the first stage
+    // that needs the network. A failed read or post loses
     // nothing — the next run covers the same window — so once the retries are
     // spent the run carries on (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
     const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
@@ -246,7 +230,7 @@ async function main(): Promise<void> {
         // The judge has already said on its own stderr why it produced nothing.
         // The rule-based evaluations from derive still deserve to reach the
         // cloud, so keep going — and carry the code to the exit, so the launchd
-        // wrapper logs FAILED instead of the "completed" these runs used to get.
+        // wrapper logs FAILED.
         console.error(`[populate] judge-evaluations exited ${judge.status}; continuing to upload + sync, then exiting ${judge.status}`);
         pipelineExitCode = judge.status;
       } else {
@@ -264,10 +248,8 @@ async function main(): Promise<void> {
     }
     const uploadArgs: string[] = [];
     if (dryRun) uploadArgs.push(DRY_RUN_FLAG);
-    // The 2026-09-28 18:00 run lost its sync to a network blip here: upload
-    // gave up after its own four quick attempts and exited 1, which aborted
-    // the run (UPLOAD-FAILURE-ABORTS-PIPELINE). Wait out a transient failure
-    // like derive and sync do, and carry on to sync if a send still fails.
+    // Wait out a transient failure like derive and sync do, and carry on to
+    // sync if a send still fails (UPLOAD-FAILURE-ABORTS-PIPELINE).
     const upload = await runWithNetworkRetry('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
     if (!upload.ok) {
       if (upload.status !== null && UPLOAD_SOFT_FAILURE_EXITS.has(upload.status)) {
