@@ -49,13 +49,11 @@ import {
   cachedEvaluationSteps,
   parseConsolidatedResponse,
   selectCriteria,
-  toJudgeTokenUsage,
   toNormalizedScore,
   type ConsolidatedGenerateOptions,
   type ConsolidatedProvider,
   type ConsolidatedResponse,
   type EvaluationStepsCache,
-  type JudgeTokenUsage,
 } from './judge-consolidated.js';
 import {
   addUsage,
@@ -63,7 +61,6 @@ import {
   createUsageTotals,
   listResultsFiles as listAgreementFiles,
   toFivePointScale,
-  usageToUsd,
   DOCS_DIR,
   type CriterionAgreement,
   type UsageReport,
@@ -86,6 +83,7 @@ import {
   oneShotArgError,
   padCell,
 } from './one-shot-eval.js';
+import { tokenUsageCostUsd, toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -264,7 +262,7 @@ export function estimateReferenceSpend(
     }
   }
   const outputTokens = calls * OUTPUT_TOKENS_PER_CALL_ESTIMATE;
-  const usd = usageToUsd(
+  const usd = tokenUsageCostUsd(
     { inputTokens, outputTokens, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
     pricing,
   );
@@ -520,7 +518,7 @@ async function main(): Promise<void> {
 
   const totals: UsageTotals = createUsageTotals();
   const provider = await createReferenceProvider(credential.apiKey, usage => addUsage(totals, usage));
-  const canSpend = (): boolean => usageToUsd(totals, pricing) < MAX_MEASURED_SPEND_USD;
+  const canSpend = (): boolean => tokenUsageCostUsd(totals, pricing) < MAX_MEASURED_SPEND_USD;
   const stepsCache: EvaluationStepsCache = new Map();
   const turnErrors: { sessionId: string; timestamp: string; errors: string[] }[] = [];
 
@@ -530,14 +528,14 @@ async function main(): Promise<void> {
     const reference = await scoreTurnWithReference(provider, byKey.get(turnKey(turn))!, stepsCache, canSpend, errors);
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });
     completed++;
-    console.log(`[quality] ${completed}/${matched.length} turns done ($${usageToUsd(totals, pricing).toFixed(USD_DECIMALS)} so far)`);
+    console.log(`[quality] ${completed}/${matched.length} turns done ($${tokenUsageCostUsd(totals, pricing).toFixed(USD_DECIMALS)} so far)`);
     return { ...turn, reference };
   });
 
   const perCriterion = compareToReference(scored, 'perCriterion');
   const consolidated = compareToReference(scored, 'consolidated');
   const verdict = closerConfiguration(perCriterion, consolidated);
-  const referenceUsage: UsageReport = { ...totals, usd: usageToUsd(totals, pricing) };
+  const referenceUsage: UsageReport = { ...totals, usd: tokenUsageCostUsd(totals, pricing) };
 
   const results = {
     generatedAt: new Date().toISOString(),

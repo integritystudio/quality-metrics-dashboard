@@ -80,6 +80,7 @@ import {
 import { judgedByKey, turnKeyOf } from './judge-dedup.js';
 import { evalFailures, failureClasses, classifyJudgeFailure } from './judge-failures.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -137,13 +138,6 @@ const PARAM_LABELS: Record<GEvalConfig['evaluationParams'][number], string> = {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface JudgeTokenUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationInputTokens: number;
-  cacheReadInputTokens: number;
-}
 
 export type JsonSchemaObject = Record<string, unknown>;
 
@@ -527,22 +521,6 @@ export interface ConsolidatedProviderOptions {
   apiKey?: string;
   /** Called with every response's usage — how judge-agreement.ts totals tokens. */
   onUsage?: (usage: JudgeTokenUsage) => void;
-}
-
-interface AnthropicUsageLike {
-  input_tokens: number;
-  output_tokens: number;
-  cache_creation_input_tokens: number | null;
-  cache_read_input_tokens: number | null;
-}
-
-export function toJudgeTokenUsage(usage: AnthropicUsageLike): JudgeTokenUsage {
-  return {
-    inputTokens: usage.input_tokens,
-    outputTokens: usage.output_tokens,
-    cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
-    cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
-  };
 }
 
 export async function createConsolidatedProvider(options: ConsolidatedProviderOptions = {}): Promise<ConsolidatedProvider> {

@@ -29,6 +29,32 @@ export interface ProviderUsage {
   cache_creation_input_tokens?: number | null;
 }
 
+/** One response's usage in the camelCase shape the consolidated and one-shot scripts total. */
+export interface JudgeTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+}
+
+export function toJudgeTokenUsage(usage: ProviderUsage): JudgeTokenUsage {
+  return {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
+    cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
+  };
+}
+
+export function toProviderUsage(usage: JudgeTokenUsage): ProviderUsage {
+  return {
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    cache_creation_input_tokens: usage.cacheCreationInputTokens,
+    cache_read_input_tokens: usage.cacheReadInputTokens,
+  };
+}
+
 export function createUsageTotals(): JudgeUsageTotals {
   return { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 }
@@ -48,13 +74,27 @@ export function judgePricing(): ModelPricingEntry {
   return pricing;
 }
 
-/** USD the totals imply at list rates: input and output as billed, cache reads and writes at their ratios. */
+/**
+ * USD a usage implies at list rates: input and output as billed, cache reads
+ * and writes at their ratios. The one place judge spend is priced.
+ */
+export function tokenUsageCostUsd(usage: JudgeTokenUsage, pricing: ModelPricingEntry): number {
+  const perToken = (tokens: number, rate: number): number => (tokens / TOKENS_PER_MILLION) * rate;
+  return perToken(usage.inputTokens, pricing.input)
+    + perToken(usage.outputTokens, pricing.output)
+    + perToken(usage.cacheReadInputTokens, pricing.input * CACHE_READ_INPUT_PRICE_RATIO)
+    + perToken(usage.cacheCreationInputTokens, pricing.input * CACHE_CREATION_INPUT_PRICE_RATIO);
+}
+
+/** {@link tokenUsageCostUsd} for the run totals. */
 export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntry): number {
-  const inputUsd = (totals.input_tokens / TOKENS_PER_MILLION) * pricing.input;
-  const outputUsd = (totals.output_tokens / TOKENS_PER_MILLION) * pricing.output;
-  const cacheReadUsd = (totals.cache_read_input_tokens / TOKENS_PER_MILLION) * pricing.input * CACHE_READ_INPUT_PRICE_RATIO;
-  const cacheCreationUsd = (totals.cache_creation_input_tokens / TOKENS_PER_MILLION) * pricing.input * CACHE_CREATION_INPUT_PRICE_RATIO;
-  return inputUsd + outputUsd + cacheReadUsd + cacheCreationUsd;
+  return tokenUsageCostUsd(toJudgeTokenUsage(totals), pricing);
+}
+
+/** List cost of an estimate's tokens, at the batch rate when `batch`. */
+function estimateCostUsd(inputTokens: number, outputTokens: number, batch: boolean): number {
+  const listUsd = tokenUsageCostUsd({ inputTokens, outputTokens, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }, judgePricing());
+  return batch ? listUsd * BATCH_PRICE_RATIO : listUsd;
 }
 
 /** Estimated tokens per evaluation response — the judge answers with a short JSON verdict. */
@@ -97,10 +137,7 @@ export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolid
     return sum + Math.ceil(contentChars * TOKENS_PER_CHAR) * evalsPerTurn;
   }, 0);
   const outputTokens = evals * EST_OUTPUT_TOKENS_PER_EVAL;
-  const pricing = judgePricing();
-  const listCostUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
-    + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
-  const costUsd = batch ? listCostUsd * BATCH_PRICE_RATIO : listCostUsd;
+  const costUsd = estimateCostUsd(inputTokens, outputTokens, batch);
   return { evals, inputTokens, outputTokens, costUsd };
 }
 
@@ -119,9 +156,6 @@ export function estimateConsolidatedRun(turns: readonly Turn[], batch: boolean):
     const criteria = CONSOLIDATED_BASE_CRITERIA + (t.toolResults.length > 0 ? CONSOLIDATED_TOOL_CRITERIA : 0);
     outputTokens += criteria * EST_OUTPUT_TOKENS_PER_EVAL;
   }
-  const pricing = judgePricing();
-  const listCostUsd = (inputTokens / TOKENS_PER_MILLION) * pricing.input
-    + (outputTokens / TOKENS_PER_MILLION) * pricing.output;
-  const costUsd = batch ? listCostUsd * BATCH_PRICE_RATIO : listCostUsd;
+  const costUsd = estimateCostUsd(inputTokens, outputTokens, batch);
   return { evals: turns.length, inputTokens, outputTokens, costUsd };
 }

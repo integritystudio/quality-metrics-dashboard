@@ -10,7 +10,6 @@ import {
   toFivePointScale,
   computeAgreement,
   countMissing,
-  usageToUsd,
   createUsageTotals,
   addUsage,
   estimateTurnTokens,
@@ -27,6 +26,7 @@ import {
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
 import { RESULTS_SUFFIX } from '../one-shot-eval.js';
+import { tokenUsageCostUsd, CACHE_CREATION_INPUT_PRICE_RATIO, CACHE_READ_INPUT_PRICE_RATIO } from '../judge-usage.js';
 
 const PRICING = { input: 1.0, output: 5.0, provider: 'anthropic' } as const;
 const ONE_MILLION = 1_000_000;
@@ -132,7 +132,13 @@ describe('agreement math', () => {
 describe('usage and cost', () => {
   it('prices input and output tokens per million at the model rate', () => {
     const usage = { inputTokens: ONE_MILLION, outputTokens: ONE_MILLION / 5, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
-    expect(usageToUsd(usage, PRICING)).toBeCloseTo(2);
+    expect(tokenUsageCostUsd(usage, PRICING)).toBeCloseTo(2);
+  });
+
+  it('prices cache reads and writes at their input-rate ratios', () => {
+    const usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: ONE_MILLION, cacheReadInputTokens: ONE_MILLION };
+    const expected = PRICING.input * (CACHE_CREATION_INPUT_PRICE_RATIO + CACHE_READ_INPUT_PRICE_RATIO);
+    expect(tokenUsageCostUsd(usage, PRICING)).toBeCloseTo(expected);
   });
 
   it('accumulates usage and call counts', () => {

@@ -26,7 +26,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { LLMJudge } from '../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
-import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import { MODEL_PRICING, TOKENS_PER_CHAR, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE, MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
@@ -50,9 +50,7 @@ import {
   createConsolidatedProvider,
   evaluateTurnConsolidated,
   selectCriteria,
-  toJudgeTokenUsage,
   type EvaluationStepsCache,
-  type JudgeTokenUsage,
 } from './judge-consolidated.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
@@ -71,6 +69,7 @@ import {
   oneShotArgError,
   padCell,
 } from './one-shot-eval.js';
+import { tokenUsageCostUsd, toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -222,11 +221,6 @@ async function sampleTurns(transcripts: readonly TranscriptInfo[], limit: number
   return { turns, transcriptsScanned, skippedOversize };
 }
 
-export function usageToUsd(usage: JudgeTokenUsage, pricing: ModelPricingEntry): number {
-  return (usage.inputTokens / TOKENS_PER_MILLION) * pricing.input
-    + (usage.outputTokens / TOKENS_PER_MILLION) * pricing.output;
-}
-
 /**
  * Rough, documented up-front estimate. Per criterion: every G-Eval criterion
  * re-sends the content once (its steps call is content-free), and QAG
@@ -262,13 +256,13 @@ export function estimateSpend(turns: readonly Turn[], pricing: ModelPricingEntry
     }
   }
 
-  const perCriterionUsd = usageToUsd({
+  const perCriterionUsd = tokenUsageCostUsd({
     inputTokens: perCriterionInputTokens,
     outputTokens: perCriterionCalls * OUTPUT_TOKENS_PER_CALL_ESTIMATE,
     cacheCreationInputTokens: 0,
     cacheReadInputTokens: 0,
   }, pricing);
-  const consolidatedUsd = usageToUsd({
+  const consolidatedUsd = tokenUsageCostUsd({
     inputTokens: consolidatedInputTokens,
     outputTokens: consolidatedCalls * OUTPUT_TOKENS_PER_CALL_ESTIMATE,
     cacheCreationInputTokens: 0,
@@ -548,8 +542,8 @@ async function main(): Promise<void> {
 
   const summary = computeAgreement(outcomes);
   const configurations: Record<string, UsageReport> = {
-    perCriterion: { ...perCriterionTotals, usd: usageToUsd(perCriterionTotals, pricing) },
-    consolidated: { ...consolidatedTotals, usd: usageToUsd(consolidatedTotals, pricing) },
+    perCriterion: { ...perCriterionTotals, usd: tokenUsageCostUsd(perCriterionTotals, pricing) },
+    consolidated: { ...consolidatedTotals, usd: tokenUsageCostUsd(consolidatedTotals, pricing) },
   };
   const results = {
     generatedAt: new Date().toISOString(),

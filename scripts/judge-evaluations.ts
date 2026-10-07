@@ -102,7 +102,7 @@ import {
   turnSourceFields,
   type Turn,
 } from './judge-turns.js';
-import { createUsageTotals, estimateJudgeRun, recordUsage, type JudgeUsageTotals, type ProviderUsage } from './judge-usage.js';
+import { createUsageTotals, estimateJudgeRun, recordUsage, toProviderUsage, type JudgeUsageTotals, type ProviderUsage } from './judge-usage.js';
 import { evalFailures, failureClasses, readRunState, resetFailureTracking, summarizeJudgeRun, trackFailure, writeRunState } from './judge-failures.js';
 import { EVALUATIONS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';
 
@@ -663,12 +663,7 @@ async function judgeTurns(
     const evaluate = consolidated
       ? await createConsolidatedTurnEvaluator(existingKeys, {
           apiKey: judgeKey.apiKey,
-          onUsage: (u) => recordUsage(usage, {
-            input_tokens: u.inputTokens,
-            output_tokens: u.outputTokens,
-            cache_read_input_tokens: u.cacheReadInputTokens,
-            cache_creation_input_tokens: u.cacheCreationInputTokens,
-          }),
+          onUsage: (u) => recordUsage(usage, toProviderUsage(u)),
         })
       : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
     allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);

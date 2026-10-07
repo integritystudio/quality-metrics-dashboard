@@ -59,7 +59,6 @@ import {
   createUsageTotals,
   estimateSpend,
   scoresByName,
-  usageToUsd,
   DOCS_DIR,
   JUDGE_MAX_RETRIES,
   type UsageReport,
@@ -93,6 +92,7 @@ import {
   oneShotArgError,
   padCell,
 } from './one-shot-eval.js';
+import { tokenUsageCostUsd } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -185,7 +185,7 @@ export function estimateRunSpend(
   const haikuUsd = haiku.perCriterionUsd + 2 * haiku.consolidatedUsd;
   const toolTurns = turns.filter(t => t.toolResults.length > 0);
   const inputTokens = toolTurns.reduce((sum, t) => sum + estimateCallInputTokens(t, HALLUCINATION_CRITERIA), 0);
-  const referenceUsd = usageToUsd({
+  const referenceUsd = tokenUsageCostUsd({
     inputTokens,
     outputTokens: toolTurns.length * REFERENCE_OUTPUT_TOKENS_PER_CALL,
     cacheCreationInputTokens: 0,
@@ -350,8 +350,8 @@ async function main(): Promise<void> {
     reference: new Map(),
   };
 
-  const spentUsd = (): number => CONFIGURATIONS.reduce((sum, c) => sum + usageToUsd(totals[c], haikuPricing), 0)
-    + usageToUsd(totals.reference, referencePricing);
+  const spentUsd = (): number => CONFIGURATIONS.reduce((sum, c) => sum + tokenUsageCostUsd(totals[c], haikuPricing), 0)
+    + tokenUsageCostUsd(totals.reference, referencePricing);
   const canSpend = (): boolean => spentUsd() < MAX_MEASURED_SPEND_USD;
   const turnErrors: { sessionId: string; timestamp: string; errors: string[] }[] = [];
   resetFailureTracking();
@@ -402,7 +402,7 @@ async function main(): Promise<void> {
   ) as Record<Configuration | 'reference', ComplementCount>;
   const usage = Object.fromEntries(Object.entries(totals).map(([name, t]) => [
     name,
-    { ...t, usd: usageToUsd(t, name === 'reference' ? referencePricing : haikuPricing) } satisfies UsageReport,
+    { ...t, usd: tokenUsageCostUsd(t, name === 'reference' ? referencePricing : haikuPricing) } satisfies UsageReport,
   ]));
 
   const results = {
