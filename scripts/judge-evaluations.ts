@@ -179,6 +179,10 @@ export const BATCH_DELAY_MS = 500;
 export const BATCH_MODE_JUDGE_TIMEOUT_MS = BATCH_WALL_CLOCK_MS + BATCH_CANCEL_GRACE_MS + BATCH_POLL_INTERVAL_MS;
 /** --batch: a retry would land in a later batch and double the wait; a failed item is counted, not retried. */
 export const BATCH_MODE_MAX_RETRIES = 0;
+/** Synchronous path: retries per judge call before the item counts as failed. */
+const SYNC_MODE_MAX_RETRIES = 2;
+/** Sessions listed in a --dry-run's turn-count breakdown. */
+const DRY_RUN_TOP_SESSIONS = 10;
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
 /**
@@ -1766,7 +1770,7 @@ async function main() {
       const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
       bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
     }
-    const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, DRY_RUN_TOP_SESSIONS);
     console.log('[dry-run] top sessions by turn count:');
     for (const [sid, count] of sorted) {
       console.log(`  ${sid}: ${count} turns`);
@@ -1816,7 +1820,7 @@ async function main() {
       const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
       const judge = new LLMJudge(llm, {
         timeoutMs: batchProvider ? BATCH_MODE_JUDGE_TIMEOUT_MS : TIME_MS.MINUTE,
-        maxRetries: batchProvider ? BATCH_MODE_MAX_RETRIES : 2,
+        maxRetries: batchProvider ? BATCH_MODE_MAX_RETRIES : SYNC_MODE_MAX_RETRIES,
         evaluator: PRODUCER,
         evaluatorType: LLM_EVALUATOR_TYPE,
         logger: {

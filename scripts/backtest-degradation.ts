@@ -44,6 +44,10 @@ const MIN_INCIDENTS_WARN = 5;
 // ---- CLI args ----
 
 const DEFAULT_BACKTEST_DAYS = 90;
+/** Configurations printed in the console summary. */
+const SUMMARY_TOP_CONFIGS = 5;
+/** Configurations per metric kept in the results file. */
+const RESULTS_TOP_CONFIGS = 10;
 const DEFAULT_OUTPUT_FILE = 'backtest-results.json';
 const DAYS_FLAG = '--days';
 const METRIC_FLAG = '--metric';
@@ -198,7 +202,7 @@ function printSummaryTable(metricName: string, result: BacktestSweepResult, eval
   const top5 = results
     .slice()
     .sort((a, b) => b.tapr.f1 - a.tapr.f1)
-    .slice(0, 5);
+    .slice(0, SUMMARY_TOP_CONFIGS);
 
   for (let rank = 0; rank < top5.length; rank++) {
     const r = top5[rank];
@@ -324,7 +328,7 @@ async function main(): Promise<void> {
           top10ByF1: sweepResult.results
             .slice()
             .sort((a, b) => b.tapr.f1 - a.tapr.f1)
-            .slice(0, 10),
+            .slice(0, RESULTS_TOP_CONFIGS),
         },
       ])
     ),

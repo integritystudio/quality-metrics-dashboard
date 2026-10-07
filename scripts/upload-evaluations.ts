@@ -145,6 +145,8 @@ const DEFAULT_MAX_AGE_HOURS = 36;
 
 /** Pause between batches so a large first run does not burst the worker. */
 export const INTER_BATCH_DELAY_MS = 250;
+/** Response body kept in a failed send's log line. */
+const RESPONSE_SNIPPET_CHARS = 300;
 
 /** Transient-failure retry budget per batch (429, 5xx, and transport errors). */
 const MAX_SEND_ATTEMPTS = 4;
@@ -544,7 +546,7 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
     const text = await response.text();
     return {
       ok: response.ok,
-      detail: `${response.status} ${text.slice(0, 300)}`,
+      detail: `${response.status} ${text.slice(0, RESPONSE_SNIPPET_CHARS)}`,
       // 4xx other than 429 is a payload problem — retrying re-sends the same
       // bytes to the same verdict, so only throttling and server faults retry.
       retryable: response.status === 429 || response.status >= 500,
