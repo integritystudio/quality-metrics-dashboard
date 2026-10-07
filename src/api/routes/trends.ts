@@ -10,11 +10,11 @@ import { type MetricTrend } from '../../types.js';
 import { computeMetricDetail } from '../parent/quality-views.js';
 import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
 import { computePercentileDistribution } from '../parent/qfe-percentiles.js';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS, type Period } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam, timestampToMs } from '../api-constants.js';
 import { extent, mean } from 'd3-array';
+import { parseParam, handleRouteError } from '../route-errors.js';
 
 const TRENDS_CONCURRENCY = 5;
 
@@ -26,6 +26,7 @@ const TREND_PADDING_MIN_MS = 60_000;
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(7);
 
 export const trendRoutes = new Hono();
+trendRoutes.onError(handleRouteError);
 
 trendRoutes.get('/trends/:name', async (c) => {
   const name = c.req.param('name');
@@ -37,120 +38,108 @@ trendRoutes.get('/trends/:name', async (c) => {
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+  const bucketCount = parseParam(BucketsSchema, c.req.query('buckets'), ErrorMessage.InvalidBuckets);
+
+  const now = new Date();
+  const periodMs = PERIOD_MS[period as Period];
+  const periodStart = new Date(now.getTime() - periodMs);
+
+  const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
+
+  const validTs = evaluations
+    .map(ev => ({ ev, ts: timestampToMs(ev.timestamp) }))
+    .filter(({ ts }) => Number.isFinite(ts));
+
+  const tsValues = validTs.map(({ ts }) => ts);
+  const [extentMin, extentMax] = validTs.length > 0 ? (extent(tsValues) as [number, number]) : [periodStart.getTime(), now.getTime()];
+  const dataMin = extentMin;
+  const dataMax = extentMax;
+  const dataSpan = dataMax - dataMin;
+  const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
+  const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
+  const start = narrowed ? new Date(dataMin - pad) : periodStart;
+  const end = narrowed ? new Date(dataMax + pad) : now;
+  const rangeMs = end.getTime() - start.getTime();
+  const bucketMs = rangeMs / bucketCount;
+
+  // single pass — avoids O(n*buckets) re-filter later
+  type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
+  const buckets: BucketEntry[] = [];
+
+  for (let i = 0; i < bucketCount; i++) {
+    const bucketStart = new Date(start.getTime() + i * bucketMs);
+    const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
+    buckets.push({
+      startTime: bucketStart.toISOString(),
+      endTime: bucketEnd.toISOString(),
+      scores: [],
+      evals: [],
+    });
   }
-  const bucketsResult = BucketsSchema.safeParse(c.req.query('buckets'));
-  if (!bucketsResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBuckets }, HttpStatus.BadRequest);
-  }
 
-  try {
-    const now = new Date();
-    const period = periodResult.data;
-    const bucketCount = bucketsResult.data;
-    const periodMs = PERIOD_MS[period as Period];
-    const periodStart = new Date(now.getTime() - periodMs);
-
-    const evaluations = await loadEvaluationsForMetric(name, periodStart.toISOString(), now.toISOString());
-
-    const validTs = evaluations
-      .map(ev => ({ ev, ts: timestampToMs(ev.timestamp) }))
-      .filter(({ ts }) => Number.isFinite(ts));
-
-    const tsValues = validTs.map(({ ts }) => ts);
-    const [extentMin, extentMax] = validTs.length > 0 ? (extent(tsValues) as [number, number]) : [periodStart.getTime(), now.getTime()];
-    const dataMin = extentMin;
-    const dataMax = extentMax;
-    const dataSpan = dataMax - dataMin;
-    const narrowed = validTs.length > 1 && dataSpan < periodMs * CONCENTRATION_THRESHOLD;
-    const pad = narrowed ? Math.max(dataSpan * TREND_PADDING_RATIO, TREND_PADDING_MIN_MS) : 0;
-    const start = narrowed ? new Date(dataMin - pad) : periodStart;
-    const end = narrowed ? new Date(dataMax + pad) : now;
-    const rangeMs = end.getTime() - start.getTime();
-    const bucketMs = rangeMs / bucketCount;
-
-    // single pass — avoids O(n*buckets) re-filter later
-    type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-    const buckets: BucketEntry[] = [];
-
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-      buckets.push({
-        startTime: bucketStart.toISOString(),
-        endTime: bucketEnd.toISOString(),
-        scores: [],
-        evals: [],
-      });
-    }
-
-    for (const { ev, ts } of validTs) {
-      const bucketIdx = Math.min(
-        Math.floor((ts - start.getTime()) / bucketMs),
-        bucketCount - 1,
-      );
-      if (bucketIdx >= 0) {
-        const bucket = buckets[bucketIdx];
-        if (bucket) {
-          bucket.evals.push(ev);
-          if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-            bucket.scores.push(ev.scoreValue);
-          }
+  for (const { ev, ts } of validTs) {
+    const bucketIdx = Math.min(
+      Math.floor((ts - start.getTime()) / bucketMs),
+      bucketCount - 1,
+    );
+    if (bucketIdx >= 0) {
+      const bucket = buckets[bucketIdx];
+      if (bucket) {
+        bucket.evals.push(ev);
+        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+          bucket.scores.push(ev.scoreValue);
         }
       }
     }
-
-    const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
-    let previousTrend: MetricTrend | undefined;
-
-    const trendData = buckets.map((bucket, idx) => {
-      const scores = bucket.scores;
-      const percentiles = computePercentileDistribution(scores);
-      const avg = scores.length > 0 ? (mean(scores) ?? null) : null;
-      const count = scores.length;
-
-      const prevBucket = idx > 0 ? buckets[idx - 1] : undefined;
-      const previousValues = (prevBucket && prevBucket.scores.length > 0)
-        ? computeAggregations(prevBucket.scores, config.aggregations)
-        : undefined;
-
-      const detail = bucket.evals.length > 0
-        ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-        : undefined;
-
-      const dynamics = detail?.trend
-        ? computeMetricDynamics(detail.trend, periodHours, { previousTrend })
-        : undefined;
-      if (detail?.trend) previousTrend = detail.trend;
-
-      return {
-        startTime: bucket.startTime,
-        endTime: bucket.endTime,
-        count,
-        avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-        percentiles,
-        trend: detail?.trend ?? null,
-        dynamics: dynamics ?? null,
-      };
-    });
-
-    const allScores = extractFiniteScores(evaluations);
-    const overallPercentiles = computePercentileDistribution(allScores);
-
-    return c.json({
-      metric: name,
-      period,
-      bucketCount,
-      totalEvaluations: allScores.length,
-      overallPercentiles,
-      trendData,
-      narrowed,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
+
+  const periodHours = rangeMs / (bucketCount * TIME_MS.HOUR);
+  let previousTrend: MetricTrend | undefined;
+
+  const trendData = buckets.map((bucket, idx) => {
+    const scores = bucket.scores;
+    const percentiles = computePercentileDistribution(scores);
+    const avg = scores.length > 0 ? (mean(scores) ?? null) : null;
+    const count = scores.length;
+
+    const prevBucket = idx > 0 ? buckets[idx - 1] : undefined;
+    const previousValues = (prevBucket && prevBucket.scores.length > 0)
+      ? computeAggregations(prevBucket.scores, config.aggregations)
+      : undefined;
+
+    const detail = bucket.evals.length > 0
+      ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
+      : undefined;
+
+    const dynamics = detail?.trend
+      ? computeMetricDynamics(detail.trend, periodHours, { previousTrend })
+      : undefined;
+    if (detail?.trend) previousTrend = detail.trend;
+
+    return {
+      startTime: bucket.startTime,
+      endTime: bucket.endTime,
+      count,
+      avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
+      percentiles,
+      trend: detail?.trend ?? null,
+      dynamics: dynamics ?? null,
+    };
+  });
+
+  const allScores = extractFiniteScores(evaluations);
+  const overallPercentiles = computePercentileDistribution(allScores);
+
+  return c.json({
+    metric: name,
+    period,
+    bucketCount,
+    totalEvaluations: allScores.length,
+    overallPercentiles,
+    trendData,
+    narrowed,
+  });
 });
 
 /**
@@ -158,33 +147,25 @@ trendRoutes.get('/trends/:name', async (c) => {
  * Returns trend summary for all metrics (latest percentiles + count).
  */
 trendRoutes.get('/trends', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
 
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
+  const { start, end } = computePeriodDates(period);
 
-    const metricNames = Object.keys(QUALITY_METRICS);
-    const limit = pLimit(TRENDS_CONCURRENCY);
-    const summaries = await Promise.all(
-      metricNames.map((name: string) =>
-        limit(async () => {
-          const evals = await loadEvaluationsForMetric(name, start, end);
-          const scores = extractFiniteScores(evals);
-          return {
-            metric: name,
-            count: scores.length,
-            percentiles: computePercentileDistribution(scores) ?? null,
-          };
-        }),
-      ),
-    );
+  const metricNames = Object.keys(QUALITY_METRICS);
+  const limit = pLimit(TRENDS_CONCURRENCY);
+  const summaries = await Promise.all(
+    metricNames.map((name: string) =>
+      limit(async () => {
+        const evals = await loadEvaluationsForMetric(name, start, end);
+        const scores = extractFiniteScores(evals);
+        return {
+          metric: name,
+          count: scores.length,
+          percentiles: computePercentileDistribution(scores) ?? null,
+        };
+      }),
+    ),
+  );
 
-    return c.json({ period, metrics: summaries });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json({ period, metrics: summaries });
 });

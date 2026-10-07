@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { computeCoverageMatrix } from '../parent/quality-visualization.js';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import type { EvaluationResult } from '../../types.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, InputKeySchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+import { PeriodSchema, InputKeySchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
+import { parseParam, handleRouteError } from '../route-errors.js';
 
 /** Filter out rule-based per-span evaluations; they have incompatible
  *  traceId granularity that inflates the coverage input universe.
@@ -22,6 +22,7 @@ function filterJudgeEvaluations(
 }
 
 export const coverageRoutes = new Hono();
+coverageRoutes.onError(handleRouteError);
 
 /**
  * GET /api/coverage
@@ -33,30 +34,19 @@ export const coverageRoutes = new Hono();
  *   inputKey: 'traceId' | 'sessionId' (default: 'traceId')
  */
 coverageRoutes.get('/coverage', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const inputKeyResult = InputKeySchema.safeParse(c.req.query('inputKey'));
-  if (!inputKeyResult.success) {
-    return c.json({ error: ErrorMessage.InvalidInputKey }, HttpStatus.BadRequest);
-  }
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+  const inputKey = parseParam(InputKeySchema, c.req.query('inputKey'), ErrorMessage.InvalidInputKey);
 
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
+  const { start, end } = computePeriodDates(period);
 
-    const allEvaluations = await loadEvaluationsByMetric(start, end);
-    const evaluationsByMetric = filterJudgeEvaluations(allEvaluations);
+  const allEvaluations = await loadEvaluationsByMetric(start, end);
+  const evaluationsByMetric = filterJudgeEvaluations(allEvaluations);
 
-    // Columnar, matching what sync-to-kv writes to KV and the Worker serves, so
-    // the dev server and production hand the grid the same shape (CVG-1).
-    const matrix = computeCoverageMatrix(evaluationsByMetric, {
-      inputKey: inputKeyResult.data,
-    });
+  // Columnar, matching what sync-to-kv writes to KV and the Worker serves, so
+  // the dev server and production hand the grid the same shape (CVG-1).
+  const matrix = computeCoverageMatrix(evaluationsByMetric, {
+    inputKey,
+  });
 
-    return c.json({ period, ...matrix });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json({ period, ...matrix });
 });

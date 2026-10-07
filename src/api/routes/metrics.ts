@@ -7,10 +7,10 @@ import {
 } from '../parent/quality-metrics.js';
 import { computeMetricDetail } from '../parent/quality-views.js';
 import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam, jsonSafe } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus, type Period } from '../../lib/constants.js';
+import { parseParam, handleRouteError } from '../route-errors.js';
 
 const DYNAMICS_BUCKET_HOURS_HOURLY = 1;
 const DYNAMICS_BUCKET_HOURS_DAILY = 24;
@@ -22,6 +22,7 @@ const OffsetSchema = z.coerce.number().int().min(0).default(0);
 const ScoreLabelSchema = z.string().max(100).optional();
 
 export const metricsRoutes = new Hono();
+metricsRoutes.onError(handleRouteError);
 
 metricsRoutes.get('/metrics/:name', async (c) => {
   const name = c.req.param('name');
@@ -33,48 +34,35 @@ metricsRoutes.get('/metrics/:name', async (c) => {
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const topNResult = TopNSchema.safeParse(c.req.query('topN'));
-  if (!topNResult.success) {
-    return c.json({ error: ErrorMessage.InvalidTopN }, HttpStatus.BadRequest);
-  }
-  const bucketResult = BucketCountSchema.safeParse(c.req.query('bucketCount'));
-  if (!bucketResult.success) {
-    return c.json({ error: ErrorMessage.InvalidBucketCount }, HttpStatus.BadRequest);
-  }
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+  const topN = parseParam(TopNSchema, c.req.query('topN'), ErrorMessage.InvalidTopN);
+  const bucketCount = parseParam(BucketCountSchema, c.req.query('bucketCount'), ErrorMessage.InvalidBucketCount);
 
-  try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data as Period];
-    const start = subMilliseconds(now, periodMs);
-    const prevStart = subMilliseconds(start, periodMs);
+  const now = new Date();
+  const periodMs = PERIOD_MS[period as Period];
+  const start = subMilliseconds(now, periodMs);
+  const prevStart = subMilliseconds(start, periodMs);
 
-    const [evaluations, prevEvaluations] = await Promise.all([
-      loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
-      loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
-    ]);
+  const [evaluations, prevEvaluations] = await Promise.all([
+    loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
+    loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
+  ]);
 
-    const previousValues = prevEvaluations.length > 0
-      ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
-      : undefined;
+  const previousValues = prevEvaluations.length > 0
+    ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
+    : undefined;
 
-    const detail = computeMetricDetail(evaluations, config, {
-      topN: topNResult.data,
-      bucketCount: bucketResult.data,
-      previousValues,
-    });
+  const detail = computeMetricDetail(evaluations, config, {
+    topN,
+    bucketCount,
+    previousValues,
+  });
 
-    const dynamics = detail.trend
-      ? computeMetricDynamics(detail.trend, periodResult.data === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
-      : undefined;
+  const dynamics = detail.trend
+    ? computeMetricDynamics(detail.trend, period === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
+    : undefined;
 
-    return c.json(jsonSafe({ ...detail, dynamics }));
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json(jsonSafe({ ...detail, dynamics }));
 });
 
 metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
@@ -87,72 +75,49 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
-  const limitResult = LimitSchema.safeParse(c.req.query('limit'));
-  if (!limitResult.success) {
-    return c.json({ error: ErrorMessage.InvalidLimit }, HttpStatus.BadRequest);
-  }
-  const offsetResult = OffsetSchema.safeParse(c.req.query('offset'));
-  if (!offsetResult.success) {
-    return c.json({ error: ErrorMessage.InvalidOffset }, HttpStatus.BadRequest);
-  }
-  const sortByResult = SortBySchema.safeParse(c.req.query('sortBy'));
-  if (!sortByResult.success) {
-    return c.json({ error: ErrorMessage.InvalidSortBy }, HttpStatus.BadRequest);
-  }
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+  const limit = parseParam(LimitSchema, c.req.query('limit'), ErrorMessage.InvalidLimit);
+  const offset = parseParam(OffsetSchema, c.req.query('offset'), ErrorMessage.InvalidOffset);
+  const sortBy = parseParam(SortBySchema, c.req.query('sortBy'), ErrorMessage.InvalidSortBy);
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string must map to undefined for optional schema
-  const scoreLabelResult = ScoreLabelSchema.safeParse(c.req.query('scoreLabel') || undefined);
-  if (!scoreLabelResult.success) {
-    return c.json({ error: ErrorMessage.InvalidScoreLabel }, HttpStatus.BadRequest);
-  }
-  const scoreLabel = scoreLabelResult.data;
+  const scoreLabel = parseParam(ScoreLabelSchema, c.req.query('scoreLabel') || undefined, ErrorMessage.InvalidScoreLabel);
 
-  try {
-    const now = new Date();
-    const periodMs = PERIOD_MS[periodResult.data as Period];
-    const start = subMilliseconds(now, periodMs);
+  const now = new Date();
+  const periodMs = PERIOD_MS[period as Period];
+  const start = subMilliseconds(now, periodMs);
 
-    const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
-    const sortBy = sortByResult.data;
-    const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
-      .slice().sort((a, b) => {
-      if (sortBy === 'score_asc' || sortBy === 'score_desc') {
-        const aVal = a.scoreValue ?? null;
-        const bVal = b.scoreValue ?? null;
-        if (aVal === null && bVal === null) return 0;
-        if (aVal === null) return 1;
-        if (bVal === null) return -1;
-        return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
-      }
-      return a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0;
-    });
+  const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
+  const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
+    .slice().sort((a, b) => {
+    if (sortBy === 'score_asc' || sortBy === 'score_desc') {
+      const aVal = a.scoreValue ?? null;
+      const bVal = b.scoreValue ?? null;
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+      return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
+    }
+    return a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0;
+  });
 
-    const total = evaluations.length;
-    const limit = limitResult.data;
-    const offset = offsetResult.data;
-    const page = evaluations.slice(offset, offset + limit);
+  const total = evaluations.length;
+  const page = evaluations.slice(offset, offset + limit);
 
-    const rows = page.map(e => ({
-      score: e.scoreValue ?? 0,
-      explanation: e.explanation,
-      traceId: e.traceId,
-      timestamp: e.timestamp,
-      evaluator: e.evaluator,
-      label: e.scoreLabel,
-      evaluatorType: e.evaluatorType,
-      spanId: e.spanId,
-      sessionId: e.sessionId,
-      agentName: e.agentName,
-      trajectoryLength: e.trajectoryLength,
-      stepScores: e.stepScores,
-      toolVerifications: e.toolVerifications,
-    }));
+  const rows = page.map(e => ({
+    score: e.scoreValue ?? 0,
+    explanation: e.explanation,
+    traceId: e.traceId,
+    timestamp: e.timestamp,
+    evaluator: e.evaluator,
+    label: e.scoreLabel,
+    evaluatorType: e.evaluatorType,
+    spanId: e.spanId,
+    sessionId: e.sessionId,
+    agentName: e.agentName,
+    trajectoryLength: e.trajectoryLength,
+    stepScores: e.stepScores,
+    toolVerifications: e.toolVerifications,
+  }));
 
-    return c.json(jsonSafe({ rows, total, limit, offset, hasMore: offset + limit < total }));
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json(jsonSafe({ rows, total, limit, offset, hasMore: offset + limit < total }));
 });

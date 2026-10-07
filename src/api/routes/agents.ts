@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds, loadTracesByFilter } from '../data-loader.js';
 import type { StepScore } from '../../types.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs, jsonSafe } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { mean } from 'd3-array';
+import { handleRouteError } from '../route-errors.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 
@@ -45,6 +45,7 @@ function createAgentAccumulator(periodDays: number): AgentAcc {
 }
 
 export const agentRoutes = new Hono();
+agentRoutes.onError(handleRouteError);
 
 agentRoutes.get('/agents', async (c) => {
   const periodParam = c.req.query('period') ?? '30d';
@@ -58,106 +59,102 @@ agentRoutes.get('/agents', async (c) => {
   const endDate = toDateOnly(now);
   const startDate = toDateOnly(windowStart);
 
-  try {
-    // OBP7b: CloudBackend canonicalizes attribute keys on read (legacy pre-cutover
-    // D1 rows included) and applies non-sessionId attributeFilter entries
-    // client-side, so a single canonical-key query covers every row era.
-    //
-    // queryTraces types startDate/endDate as `string | bigint` but validates the
-    // string arm as a full ISO *datetime* — a date-only 'YYYY-MM-DD' type-checks
-    // and then fails Zod at runtime, which made this route a guaranteed 500.
-    // Pass the datetimes; the date-only values above stay for buckets/response.
-    const agentSpans = await loadTracesByFilter(
-      { 'integritystudio.hook.name': HOOK_NAME.AGENT_FINALIZE },
-      windowStart.toISOString(),
-      now.toISOString(),
-      LIMIT_AGENT_SPANS,
-    );
+  // OBP7b: CloudBackend canonicalizes attribute keys on read (legacy pre-cutover
+  // D1 rows included) and applies non-sessionId attributeFilter entries
+  // client-side, so a single canonical-key query covers every row era.
+  //
+  // queryTraces types startDate/endDate as `string | bigint` but validates the
+  // string arm as a full ISO *datetime* — a date-only 'YYYY-MM-DD' type-checks
+  // and then fails Zod at runtime, which made this route a guaranteed 500.
+  // Pass the datetimes; the date-only values above stay for buckets/response.
+  const agentSpans = await loadTracesByFilter(
+    { 'integritystudio.hook.name': HOOK_NAME.AGENT_FINALIZE },
+    windowStart.toISOString(),
+    now.toISOString(),
+    LIMIT_AGENT_SPANS,
+  );
 
-    const dateBuckets: string[] = [];
-    const bucketIndex = new Map<string, number>();
-    for (let d = 0; d < periodDays; d++) {
-      const day = toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY));
-      dateBuckets.push(day);
-      bucketIndex.set(day, d);
-    }
-
-    const acc = Object.create(null) as Record<string, AgentAcc>;
-
-    const traceToAgents = new Map<string, Set<string>>();
-
-    for (const span of agentSpans) {
-      const name = attrStr(span, 'gen_ai.agent.name');
-      const entry = (acc[name] ??= createAgentAccumulator(periodDays));
-      entry.invocations++;
-      if (span.startTimeUnixNano) {
-        const dayKey = toDateOnly(new Date(timestampToMs(span.startTimeUnixNano)));
-        const idx = bucketIndex.get(dayKey);
-        if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
-      }
-      if (spanAttr(span, 'integritystudio.agent.has_error', 'boolean')) entry.errors++;
-      if (spanAttr(span, 'integritystudio.agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
-      entry.totalOutputSize += attrNum(span, 'integritystudio.agent.output_size');
-      const sid = attrStr(span, 'session.id', '');
-      if (sid) entry.sessions.add(sid);
-      if (span.traceId) {
-        entry.traceIds.add(span.traceId);
-        let agentSet = traceToAgents.get(span.traceId);
-        if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
-        agentSet.add(name);
-      }
-      const rawSrc = attrStr(span, 'integritystudio.agent.source_type');
-      const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
-      incrementCount(entry.sourceTypes, src);
-    }
-
-    const allTraceIds = [...traceToAgents.keys()];
-    const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
-
-    const agentEvalAcc = Object.create(null) as Record<string, Record<string, number[]>>;
-    for (const ev of evaluations) {
-      if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
-      const agentNames = traceToAgents.get(ev.traceId);
-      if (!agentNames) continue;
-      for (const agent of agentNames) {
-        const metrics = (agentEvalAcc[agent] ??= Object.create(null));
-        (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
-      }
-    }
-
-    const agents = Object.entries(acc).map(([agentName, d]) => {
-      const evalMetrics = agentEvalAcc[agentName] ?? {};
-      const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
-      for (const [metric, scores] of Object.entries(evalMetrics)) {
-        evalSummary[metric] = computeEvalMetricSummary(scores);
-      }
-
-      const sessionIdList = [...d.sessions];
-      const traceIdList = [...d.traceIds];
-
-      return {
-        agentName,
-        invocations: d.invocations,
-        errors: d.errors,
-        errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
-        rateLimitCount: d.rateLimitCount,
-        avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-        sessionCount: d.sessions.size,  // total unique sessions (invariant: >= sessionIds.length)
-        sessionIds: sessionIdList.slice(0, MAX_IDS),
-        sessionIdsTruncated: sessionIdList.length > MAX_IDS,
-        traceIdsTotal: traceIdList.length,
-        traceIds: traceIdList.slice(0, MAX_IDS),
-        traceIdsTruncated: traceIdList.length > MAX_IDS,
-        sourceTypes: d.sourceTypes,
-        dailyCounts: d.dailyCounts,
-        evalSummary,
-      };
-    }).sort((a, b) => b.invocations - a.invocations);
-
-    return c.json({ period: periodParam, startDate, endDate, agents });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+  const dateBuckets: string[] = [];
+  const bucketIndex = new Map<string, number>();
+  for (let d = 0; d < periodDays; d++) {
+    const day = toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY));
+    dateBuckets.push(day);
+    bucketIndex.set(day, d);
   }
+
+  const acc = Object.create(null) as Record<string, AgentAcc>;
+
+  const traceToAgents = new Map<string, Set<string>>();
+
+  for (const span of agentSpans) {
+    const name = attrStr(span, 'gen_ai.agent.name');
+    const entry = (acc[name] ??= createAgentAccumulator(periodDays));
+    entry.invocations++;
+    if (span.startTimeUnixNano) {
+      const dayKey = toDateOnly(new Date(timestampToMs(span.startTimeUnixNano)));
+      const idx = bucketIndex.get(dayKey);
+      if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
+    }
+    if (spanAttr(span, 'integritystudio.agent.has_error', 'boolean')) entry.errors++;
+    if (spanAttr(span, 'integritystudio.agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
+    entry.totalOutputSize += attrNum(span, 'integritystudio.agent.output_size');
+    const sid = attrStr(span, 'session.id', '');
+    if (sid) entry.sessions.add(sid);
+    if (span.traceId) {
+      entry.traceIds.add(span.traceId);
+      let agentSet = traceToAgents.get(span.traceId);
+      if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
+      agentSet.add(name);
+    }
+    const rawSrc = attrStr(span, 'integritystudio.agent.source_type');
+    const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
+    incrementCount(entry.sourceTypes, src);
+  }
+
+  const allTraceIds = [...traceToAgents.keys()];
+  const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
+
+  const agentEvalAcc = Object.create(null) as Record<string, Record<string, number[]>>;
+  for (const ev of evaluations) {
+    if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
+    const agentNames = traceToAgents.get(ev.traceId);
+    if (!agentNames) continue;
+    for (const agent of agentNames) {
+      const metrics = (agentEvalAcc[agent] ??= Object.create(null));
+      (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
+    }
+  }
+
+  const agents = Object.entries(acc).map(([agentName, d]) => {
+    const evalMetrics = agentEvalAcc[agentName] ?? {};
+    const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
+    for (const [metric, scores] of Object.entries(evalMetrics)) {
+      evalSummary[metric] = computeEvalMetricSummary(scores);
+    }
+
+    const sessionIdList = [...d.sessions];
+    const traceIdList = [...d.traceIds];
+
+    return {
+      agentName,
+      invocations: d.invocations,
+      errors: d.errors,
+      errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
+      rateLimitCount: d.rateLimitCount,
+      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+      sessionCount: d.sessions.size,  // total unique sessions (invariant: >= sessionIds.length)
+      sessionIds: sessionIdList.slice(0, MAX_IDS),
+      sessionIdsTruncated: sessionIdList.length > MAX_IDS,
+      traceIdsTotal: traceIdList.length,
+      traceIds: traceIdList.slice(0, MAX_IDS),
+      traceIdsTruncated: traceIdList.length > MAX_IDS,
+      sourceTypes: d.sourceTypes,
+      dailyCounts: d.dailyCounts,
+      evalSummary,
+    };
+  }).sort((a, b) => b.invocations - a.invocations);
+
+  return c.json({ period: periodParam, startDate, endDate, agents });
 });
 
 type SessionSpans = Awaited<ReturnType<typeof loadTracesBySessionId>>;
@@ -200,25 +197,21 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
     return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
   }
 
-  try {
-    const spans = await loadTracesBySessionId(sessionId);
-    const { agentMap, traceIds } = indexSessionSpans(spans);
+  const spans = await loadTracesBySessionId(sessionId);
+  const { agentMap, traceIds } = indexSessionSpans(spans);
 
-    const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
-    const { evaluation, graph } = deriveSessionWorkflow(spans, agentMap);
-    const evaluations = await evalPromise;
+  const evalPromise = loadEvaluationsByTraceIds([...traceIds]);
+  const { evaluation, graph } = deriveSessionWorkflow(spans, agentMap);
+  const evaluations = await evalPromise;
 
-    return c.json(jsonSafe({
-      sessionId,
-      spans,
-      evaluation,
-      evaluations,
-      agentMap: Object.fromEntries(agentMap),
-      graph,
-    }));
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json(jsonSafe({
+    sessionId,
+    spans,
+    evaluation,
+    evaluations,
+    agentMap: Object.fromEntries(agentMap),
+    graph,
+  }));
 });
 
 /**
@@ -232,11 +225,7 @@ agentRoutes.get('/agents/:sessionId/graph', async (c) => {
     return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
   }
 
-  try {
-    const spans = await loadTracesBySessionId(sessionId);
-    const { evaluation, graph } = deriveSessionWorkflow(spans, indexSessionSpans(spans).agentMap);
-    return c.json(jsonSafe({ sessionId, evaluation, graph }));
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  const spans = await loadTracesBySessionId(sessionId);
+  const { evaluation, graph } = deriveSessionWorkflow(spans, indexSessionSpans(spans).agentMap);
+  return c.json(jsonSafe({ sessionId, evaluation, graph }));
 });

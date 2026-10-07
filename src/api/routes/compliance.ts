@@ -1,36 +1,29 @@
 import { Hono } from 'hono';
 import { computeDashboardSummary } from '../parent/quality-metrics.js';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
-import { PeriodSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+import { PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
+import { parseParam, handleRouteError } from '../route-errors.js';
 
 export const complianceRoutes = new Hono();
+complianceRoutes.onError(handleRouteError);
 
 /**
  * GET /api/compliance/sla
  * Returns SLA compliance from the dashboard summary.
  */
 complianceRoutes.get('/compliance/sla', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
 
-  try {
-    const period = periodResult.data;
-    const dates = computePeriodDates(period);
+  const dates = computePeriodDates(period);
 
-    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const summary = computeDashboardSummary(evaluationsByMetric, { period: dates });
+  const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
+  const summary = computeDashboardSummary(evaluationsByMetric, { period: dates });
 
-    return c.json({
-      period,
-      results: summary.slaCompliance ?? [],
-      noSLAsConfigured: !summary.slaCompliance || summary.slaCompliance.length === 0,
-    });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json({
+    period,
+    results: summary.slaCompliance ?? [],
+    noSLAsConfigured: !summary.slaCompliance || summary.slaCompliance.length === 0,
+  });
 });
 
 /**
@@ -38,22 +31,14 @@ complianceRoutes.get('/compliance/sla', async (c) => {
  * Returns human verification events for the given period.
  */
 complianceRoutes.get('/compliance/verifications', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
 
-  try {
-    const period = periodResult.data;
-    const { start, end } = computePeriodDates(period);
+  const { start, end } = computePeriodDates(period);
 
-    const verifications = await loadVerifications({
-      startDate: start,
-      endDate: end,
-    });
+  const verifications = await loadVerifications({
+    startDate: start,
+    endDate: end,
+  });
 
-    return c.json({ period, count: verifications.length, verifications });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json({ period, count: verifications.length, verifications });
 });

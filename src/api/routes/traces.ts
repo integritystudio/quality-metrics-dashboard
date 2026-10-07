@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { HttpStatus, ErrorMessage } from '../../lib/constants.js';
 import { PARAM_ID_RE, isValidParam, jsonSafe } from '../api-constants.js';
 import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../data-loader.js';
+import { handleRouteError } from '../route-errors.js';
 
 export const traceRoutes = new Hono();
+traceRoutes.onError(handleRouteError);
 
 /**
  * GET /api/traces/:traceId
@@ -16,14 +17,10 @@ traceRoutes.get('/traces/:traceId', async (c) => {
     return c.json({ error: ErrorMessage.InvalidTraceId }, HttpStatus.BadRequest);
   }
 
-  try {
-    const [spans, evaluations] = await Promise.all([
-      loadTracesByTraceId(traceId),
-      loadEvaluationsByTraceId(traceId),
-    ]);
+  const [spans, evaluations] = await Promise.all([
+    loadTracesByTraceId(traceId),
+    loadEvaluationsByTraceId(traceId),
+  ]);
 
-    return c.json(jsonSafe({ traceId, spans, evaluations }));
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  return c.json(jsonSafe({ traceId, spans, evaluations }));
 });

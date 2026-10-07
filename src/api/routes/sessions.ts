@@ -2,7 +2,6 @@ import { min, max, mean, quantileSorted } from 'd3-array';
 import { Hono } from 'hono';
 import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { HttpStatus, PERIOD_MS, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import {
   FILE_ACCESS_TOP_N,
@@ -30,8 +29,10 @@ import {
   loadTracesByFilter,
 } from '../data-loader.js';
 import type { StepScore } from '../../types.js';
+import { handleRouteError } from '../route-errors.js';
 
 export const sessionRoutes = new Hono();
+sessionRoutes.onError(handleRouteError);
 
 // Max ms value safe for Date.toISOString() — ±100,000,000 days from epoch (ECMAScript spec).
 const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
@@ -95,274 +96,270 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
   const startDate = c.req.query('startDate');
   const endDate = c.req.query('endDate');
 
-  try {
-    const [spans, logs, { evaluations, truncated: evaluationsTruncated }] = await Promise.all([
-      loadSessionSpans(sessionId, startDate, endDate),
-      loadLogsBySessionId(sessionId, startDate, endDate),
-      loadEvaluationsBySessionId(sessionId, startDate, endDate),
-    ]);
+  const [spans, logs, { evaluations, truncated: evaluationsTruncated }] = await Promise.all([
+    loadSessionSpans(sessionId, startDate, endDate),
+    loadLogsBySessionId(sessionId, startDate, endDate),
+    loadEvaluationsBySessionId(sessionId, startDate, endDate),
+  ]);
 
-    const traceIds = new Set<string>();
-    let firstSessionStart: (typeof spans)[0] | undefined;
-    let lastSessionStart: (typeof spans)[0] | undefined;
-    let sessionStartCount = 0;
-    const tokenProgressionRaw: Array<{ messages: number; inputTokens: number; outputTokens: number; cacheRead: number; cacheCreation: number; model: string }> = [];
-    const toolUsage: Record<string, number> = {};
-    const mcpUsage: Record<string, number> = {};
-    const spanBreakdown: Record<string, number> = {};
-    const hookDurations: Record<string, number[]> = {};
-    const errorsByCategory: Record<string, number> = {};
-    const errorDetails: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
-    const agentAcc = Object.create(null) as Record<string, {
-      invocations: number;
-      errors: number;
-      hasRateLimit: boolean;
-      rateLimitEvents: number;
-      totalOutputSize: number;
-      durationSum: number;
-      durationCount: number;
-      truncatedCount: number;
-      emptyCount: number;
-    }>;
-    const fileCount: Record<string, number> = {};
-    const gitCommits: Array<{ subject: string; body: string; files: string }> = [];
-    let alertTotalFired = 0;
-    let alertStopEvents = 0;
-    const codeStructure: Array<{ file: string; lines: number; exports: number; functions: number; hasTypes: boolean; score: number; tool: string }> = [];
-    // Check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
-    const agentMapForEval = new Map<number, string>();
-    const stepScores: StepScore[] = [];
+  const traceIds = new Set<string>();
+  let firstSessionStart: (typeof spans)[0] | undefined;
+  let lastSessionStart: (typeof spans)[0] | undefined;
+  let sessionStartCount = 0;
+  const tokenProgressionRaw: Array<{ messages: number; inputTokens: number; outputTokens: number; cacheRead: number; cacheCreation: number; model: string }> = [];
+  const toolUsage: Record<string, number> = {};
+  const mcpUsage: Record<string, number> = {};
+  const spanBreakdown: Record<string, number> = {};
+  const hookDurations: Record<string, number[]> = {};
+  const errorsByCategory: Record<string, number> = {};
+  const errorDetails: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
+  const agentAcc = Object.create(null) as Record<string, {
+    invocations: number;
+    errors: number;
+    hasRateLimit: boolean;
+    rateLimitEvents: number;
+    totalOutputSize: number;
+    durationSum: number;
+    durationCount: number;
+    truncatedCount: number;
+    emptyCount: number;
+  }>;
+  const fileCount: Record<string, number> = {};
+  const gitCommits: Array<{ subject: string; body: string; files: string }> = [];
+  let alertTotalFired = 0;
+  let alertStopEvents = 0;
+  const codeStructure: Array<{ file: string; lines: number; exports: number; functions: number; hasTypes: boolean; score: number; tool: string }> = [];
+  // Check both 'agent.name' (hooks context) and 'gen_ai.agent.name' (OTel GenAI).
+  const agentMapForEval = new Map<number, string>();
+  const stepScores: StepScore[] = [];
 
-    for (let i = 0; i < spans.length; i++) {
-      const s = spans[i];
-      if (!s) continue;
-      const hookName = spanAttr(s, 'integritystudio.hook.name', 'string');
-      const hookType = spanAttr(s, 'integritystudio.hook.type', 'string');
-      const hookTrigger = spanAttr(s, 'integritystudio.hook.trigger', 'string');
+  for (let i = 0; i < spans.length; i++) {
+    const s = spans[i];
+    if (!s) continue;
+    const hookName = spanAttr(s, 'integritystudio.hook.name', 'string');
+    const hookType = spanAttr(s, 'integritystudio.hook.type', 'string');
+    const hookTrigger = spanAttr(s, 'integritystudio.hook.trigger', 'string');
 
-      if (s.traceId) traceIds.add(s.traceId);
+    if (s.traceId) traceIds.add(s.traceId);
 
-      if (hookName === HOOK_NAME.SESSION_START) {
-        firstSessionStart ??= s;
-        lastSessionStart = s;
-        sessionStartCount++;
-      }
+    if (hookName === HOOK_NAME.SESSION_START) {
+      firstSessionStart ??= s;
+      lastSessionStart = s;
+      sessionStartCount++;
+    }
 
-      if (hookName === HOOK_NAME.TOKEN_METRICS) {
-        tokenProgressionRaw.push({
-          messages: renamedAttr(s, 'integritystudio.tokens.messages', 'tokens.messages', 'number') ?? 0,
-          inputTokens: renamedAttr(s, 'integritystudio.tokens.input', 'tokens.input', 'number') ?? 0,
-          outputTokens: renamedAttr(s, 'integritystudio.tokens.output', 'tokens.output', 'number') ?? 0,
-          cacheRead: renamedAttr(s, 'integritystudio.tokens.cache_read', 'tokens.cache_read', 'number') ?? 0,
-          cacheCreation: renamedAttr(s, 'integritystudio.tokens.cache_creation', 'tokens.cache_creation', 'number') ?? 0,
-          model: renamedAttr(s, 'integritystudio.tokens.model', 'tokens.model', 'string') ?? '',
-        });
-      }
-
-      if (hookTrigger === 'PostToolUse') {
-        if (hookType === 'builtin') incrementCount(toolUsage, spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown');
-        else if (hookType === 'mcp') incrementCount(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
-      }
-
-      incrementCount(spanBreakdown, s.name);
-      const ms = s.durationMs ?? 0;
-      if (ms > 0) {
-        (hookDurations[s.name] ??= []).push(ms);
-      }
-
-      if (isSpanError(s)) {
-        const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
-        const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
-        incrementCount(errorsByCategory, `${tool} -> ${errType}`);
-        errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr(s, 'file.path', 'string') });
-      }
-
-      if (hookName === HOOK_NAME.AGENT_FINALIZE) {
-        const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
-        const agentEntry = (agentAcc[name] ??= {
-          invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
-          totalOutputSize: 0, durationSum: 0, durationCount: 0,
-          truncatedCount: 0, emptyCount: 0,
-        });
-        agentEntry.invocations++;
-        if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) agentEntry.errors++;
-        if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
-          agentEntry.hasRateLimit = true;
-          agentEntry.rateLimitEvents++;
-        }
-        agentEntry.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
-        const dur = s.durationMs ?? 0;
-        if (dur > 0) { agentEntry.durationSum += dur; agentEntry.durationCount++; }
-        if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) agentEntry.truncatedCount++;
-        if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) agentEntry.emptyCount++;
-      }
-
-      const fp = spanAttr(s, 'file.path', 'string');
-      if (fp) incrementCount(fileCount, fp);
-
-      if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
-        const commit = extractGitCommit(s);
-        if (commit) gitCommits.push(commit);
-      }
-
-      if (hookName === HOOK_NAME.ALERT_EVALUATION) {
-        alertTotalFired += renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number') ?? 0;
-        alertStopEvents++;
-      }
-
-      if (hookName === HOOK_NAME.CODE_STRUCTURE) {
-        codeStructure.push({
-          file: spanAttr(s, 'integritystudio.code.structure.file', 'string') ?? '',
-          lines: spanAttr(s, 'integritystudio.code.structure.lines', 'number') ?? 0,
-          exports: spanAttr(s, 'integritystudio.code.structure.exports', 'number') ?? 0,
-          functions: spanAttr(s, 'integritystudio.code.structure.functions', 'number') ?? 0,
-          hasTypes: spanAttr(s, 'integritystudio.code.structure.has_types', 'boolean') ?? false,
-          score: spanAttr(s, 'integritystudio.code.structure.score', 'number') ?? 0,
-          tool: spanAttr(s, 'integritystudio.code.structure.tool', 'string') ?? '',
-        });
-      }
-
-      const agent = spanAttr(s, 'agent.name', 'string') ?? spanAttr(s, 'gen_ai.agent.name', 'string');
-      if (agent) agentMapForEval.set(i, agent);
-      stepScores.push({
-        step: i,
-        score: spanAttr(s, 'evaluation.score', 'number') ?? (isSpanError(s) ? 0 : 1),
-        explanation: s.name,
+    if (hookName === HOOK_NAME.TOKEN_METRICS) {
+      tokenProgressionRaw.push({
+        messages: renamedAttr(s, 'integritystudio.tokens.messages', 'tokens.messages', 'number') ?? 0,
+        inputTokens: renamedAttr(s, 'integritystudio.tokens.input', 'tokens.input', 'number') ?? 0,
+        outputTokens: renamedAttr(s, 'integritystudio.tokens.output', 'tokens.output', 'number') ?? 0,
+        cacheRead: renamedAttr(s, 'integritystudio.tokens.cache_read', 'tokens.cache_read', 'number') ?? 0,
+        cacheCreation: renamedAttr(s, 'integritystudio.tokens.cache_creation', 'tokens.cache_creation', 'number') ?? 0,
+        model: renamedAttr(s, 'integritystudio.tokens.model', 'tokens.model', 'string') ?? '',
       });
     }
 
-    const dataSources = {
-      traces: { count: spans.length, traceIds: traceIds.size },
-      logs: { count: logs.length },
-      // `truncated` means the session has more evaluations than `count`: every
-      // evaluation-derived field below was then computed on a partial read.
-      evaluations: { count: evaluations.length, truncated: evaluationsTruncated },
-      total: spans.length + logs.length + evaluations.length,
-    };
+    if (hookTrigger === 'PostToolUse') {
+      if (hookType === 'builtin') incrementCount(toolUsage, spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown');
+      else if (hookType === 'mcp') incrementCount(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
+    }
 
-    let tsMin = Infinity;
-    let tsMax = -Infinity;
-    const evalByName = Object.create(null) as Record<string, { count: number; scores: number[] }>;
-    for (const ev of evaluations) {
-      const t = parseTimestamp(ev.timestamp);
-      if (t !== null) {
-        if (t < tsMin) tsMin = t;
-        if (t > tsMax) tsMax = t;
+    incrementCount(spanBreakdown, s.name);
+    const ms = s.durationMs ?? 0;
+    if (ms > 0) {
+      (hookDurations[s.name] ??= []).push(ms);
+    }
+
+    if (isSpanError(s)) {
+      const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
+      const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
+      incrementCount(errorsByCategory, `${tool} -> ${errType}`);
+      errorDetails.push({ spanName: s.name, tool, errorType: errType, filePath: spanAttr(s, 'file.path', 'string') });
+    }
+
+    if (hookName === HOOK_NAME.AGENT_FINALIZE) {
+      const name = spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown';
+      const agentEntry = (agentAcc[name] ??= {
+        invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
+        totalOutputSize: 0, durationSum: 0, durationCount: 0,
+        truncatedCount: 0, emptyCount: 0,
+      });
+      agentEntry.invocations++;
+      if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) agentEntry.errors++;
+      if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
+        agentEntry.hasRateLimit = true;
+        agentEntry.rateLimitEvents++;
       }
-      const entry = (evalByName[ev.evaluationName] ??= { count: 0, scores: [] });
-      entry.count++;
-      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-        entry.scores.push(ev.scoreValue);
-      }
-    }
-    const logBySeverity = Object.create(null) as Record<string, number>;
-    for (const l of logs) {
-      const t = parseTimestamp(l.timestamp);
-      if (t !== null) {
-        if (t < tsMin) tsMin = t;
-        if (t > tsMax) tsMax = t;
-      }
-      incrementCount(logBySeverity, l.severity);
-    }
-    const timespan = tsMin < Infinity ? {
-      start: new Date(tsMin).toISOString(),
-      end: new Date(tsMax).toISOString(),
-      durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
-    } : null;
-
-    const sessionInfo = firstSessionStart ? {
-      projectName: renamedAttr(firstSessionStart, 'integritystudio.project.name', 'project.name', 'string') ?? 'unknown',
-      workingDirectory: renamedAttr(firstSessionStart, 'process.working_directory', 'working.directory') ?? '',
-      gitRepository: gitRepositoryLabel(firstSessionStart),
-      gitBranch: spanAttr(firstSessionStart, 'vcs.ref.head.name', 'string') ?? '',
-      nodeVersion: renamedAttr(firstSessionStart, 'process.runtime.version', 'node.version') ?? '',
-      resumeCount: sessionStartCount,
-      initialMessageCount: renamedAttr(firstSessionStart, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
-      initialContextTokens: renamedAttr(firstSessionStart, 'integritystudio.context.estimated_tokens', 'context.estimated_tokens', 'number') ?? 0,
-      finalMessageCount: renamedAttr(lastSessionStart ?? firstSessionStart, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
-      taskCount: renamedAttr(firstSessionStart, 'integritystudio.tasks.active', 'tasks.active', 'number') ?? 0,
-      uncommittedAtStart: spanAttr(firstSessionStart, 'integritystudio.git.uncommitted', 'number') ?? 0,
-    } : null;
-
-    const tokenProgression = tokenProgressionRaw.slice().sort((a, b) => a.messages - b.messages);
-    const tokenTotals = {
-      input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
-      models: {} as Record<string, number>,
-    };
-    for (const t of tokenProgression) {
-      tokenTotals.input += t.inputTokens;
-      tokenTotals.output += t.outputTokens;
-      tokenTotals.cacheRead += t.cacheRead;
-      tokenTotals.cacheCreation += t.cacheCreation;
-      tokenTotals.messages += t.messages;
-      if (t.model) incrementCount(tokenTotals.models, t.model);
+      agentEntry.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
+      const dur = s.durationMs ?? 0;
+      if (dur > 0) { agentEntry.durationSum += dur; agentEntry.durationCount++; }
+      if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) agentEntry.truncatedCount++;
+      if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) agentEntry.emptyCount++;
     }
 
-    const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
-    for (const [name, durations] of Object.entries(hookDurations)) {
-      hookLatency[name] = computeLatencyStats(durations);
+    const fp = spanAttr(s, 'file.path', 'string');
+    if (fp) incrementCount(fileCount, fp);
+
+    if (hookName === HOOK_NAME.POST_COMMIT_REVIEW) {
+      const commit = extractGitCommit(s);
+      if (commit) gitCommits.push(commit);
     }
 
-    const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
-      agentName,
-      invocations: d.invocations,
-      errors: d.errors,
-      hasRateLimit: d.hasRateLimit,
-      rateLimitEvents: d.rateLimitEvents,
-      totalOutputSize: d.totalOutputSize,
-      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-      avgDurationMs: d.durationCount > 0 ? Math.round(d.durationSum / d.durationCount) : 0,
-      truncatedCount: d.truncatedCount,
-      emptyCount: d.emptyCount,
-    }));
+    if (hookName === HOOK_NAME.ALERT_EVALUATION) {
+      alertTotalFired += renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number') ?? 0;
+      alertStopEvents++;
+    }
 
-    const fileAccess = Object.entries(fileCount)
-      .map(([path, count]) => ({ path, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, FILE_ACCESS_TOP_N);
+    if (hookName === HOOK_NAME.CODE_STRUCTURE) {
+      codeStructure.push({
+        file: spanAttr(s, 'integritystudio.code.structure.file', 'string') ?? '',
+        lines: spanAttr(s, 'integritystudio.code.structure.lines', 'number') ?? 0,
+        exports: spanAttr(s, 'integritystudio.code.structure.exports', 'number') ?? 0,
+        functions: spanAttr(s, 'integritystudio.code.structure.functions', 'number') ?? 0,
+        hasTypes: spanAttr(s, 'integritystudio.code.structure.has_types', 'boolean') ?? false,
+        score: spanAttr(s, 'integritystudio.code.structure.score', 'number') ?? 0,
+        tool: spanAttr(s, 'integritystudio.code.structure.tool', 'string') ?? '',
+      });
+    }
 
-    const alertSummary = { totalFired: alertTotalFired, stopEvents: alertStopEvents };
-
-    const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
-      const { avg, min, max } = computeScoreStats(d.scores);
-      return { name, count: d.count, avg, min, max };
+    const agent = spanAttr(s, 'agent.name', 'string') ?? spanAttr(s, 'gen_ai.agent.name', 'string');
+    if (agent) agentMapForEval.set(i, agent);
+    stepScores.push({
+      step: i,
+      score: spanAttr(s, 'evaluation.score', 'number') ?? (isSpanError(s) ? 0 : 1),
+      explanation: s.name,
     });
-
-    const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
-
-    return c.json(jsonSafe({
-      sessionId,
-      dataSources,
-      timespan,
-      sessionInfo,
-      tokenTotals,
-      tokenProgression,
-      toolUsage,
-      mcpUsage,
-      spanBreakdown,
-      hookLatency,
-      errors: { byCategory: errorsByCategory, details: errorDetails },
-      agentActivity,
-      fileAccess,
-      gitCommits,
-      alertSummary,
-      codeStructure,
-      evaluationBreakdown,
-      logSummary: {
-        bySeverity: logBySeverity,
-        logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
-          const entry: SafeLogEntry = {};
-          for (const key of logSummaryFieldSchema.options) {
-            const val = l[key];
-            if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
-          }
-          return entry;
-        }),
-      },
-      multiAgentEvaluation,
-      evaluations,
-    }));
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
   }
+
+  const dataSources = {
+    traces: { count: spans.length, traceIds: traceIds.size },
+    logs: { count: logs.length },
+    // `truncated` means the session has more evaluations than `count`: every
+    // evaluation-derived field below was then computed on a partial read.
+    evaluations: { count: evaluations.length, truncated: evaluationsTruncated },
+    total: spans.length + logs.length + evaluations.length,
+  };
+
+  let tsMin = Infinity;
+  let tsMax = -Infinity;
+  const evalByName = Object.create(null) as Record<string, { count: number; scores: number[] }>;
+  for (const ev of evaluations) {
+    const t = parseTimestamp(ev.timestamp);
+    if (t !== null) {
+      if (t < tsMin) tsMin = t;
+      if (t > tsMax) tsMax = t;
+    }
+    const entry = (evalByName[ev.evaluationName] ??= { count: 0, scores: [] });
+    entry.count++;
+    if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+      entry.scores.push(ev.scoreValue);
+    }
+  }
+  const logBySeverity = Object.create(null) as Record<string, number>;
+  for (const l of logs) {
+    const t = parseTimestamp(l.timestamp);
+    if (t !== null) {
+      if (t < tsMin) tsMin = t;
+      if (t > tsMax) tsMax = t;
+    }
+    incrementCount(logBySeverity, l.severity);
+  }
+  const timespan = tsMin < Infinity ? {
+    start: new Date(tsMin).toISOString(),
+    end: new Date(tsMax).toISOString(),
+    durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(LATENCY_DISPLAY_PRECISION),
+  } : null;
+
+  const sessionInfo = firstSessionStart ? {
+    projectName: renamedAttr(firstSessionStart, 'integritystudio.project.name', 'project.name', 'string') ?? 'unknown',
+    workingDirectory: renamedAttr(firstSessionStart, 'process.working_directory', 'working.directory') ?? '',
+    gitRepository: gitRepositoryLabel(firstSessionStart),
+    gitBranch: spanAttr(firstSessionStart, 'vcs.ref.head.name', 'string') ?? '',
+    nodeVersion: renamedAttr(firstSessionStart, 'process.runtime.version', 'node.version') ?? '',
+    resumeCount: sessionStartCount,
+    initialMessageCount: renamedAttr(firstSessionStart, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
+    initialContextTokens: renamedAttr(firstSessionStart, 'integritystudio.context.estimated_tokens', 'context.estimated_tokens', 'number') ?? 0,
+    finalMessageCount: renamedAttr(lastSessionStart ?? firstSessionStart, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
+    taskCount: renamedAttr(firstSessionStart, 'integritystudio.tasks.active', 'tasks.active', 'number') ?? 0,
+    uncommittedAtStart: spanAttr(firstSessionStart, 'integritystudio.git.uncommitted', 'number') ?? 0,
+  } : null;
+
+  const tokenProgression = tokenProgressionRaw.slice().sort((a, b) => a.messages - b.messages);
+  const tokenTotals = {
+    input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
+    models: {} as Record<string, number>,
+  };
+  for (const t of tokenProgression) {
+    tokenTotals.input += t.inputTokens;
+    tokenTotals.output += t.outputTokens;
+    tokenTotals.cacheRead += t.cacheRead;
+    tokenTotals.cacheCreation += t.cacheCreation;
+    tokenTotals.messages += t.messages;
+    if (t.model) incrementCount(tokenTotals.models, t.model);
+  }
+
+  const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
+  for (const [name, durations] of Object.entries(hookDurations)) {
+    hookLatency[name] = computeLatencyStats(durations);
+  }
+
+  const agentActivity = Object.entries(agentAcc).map(([agentName, d]) => ({
+    agentName,
+    invocations: d.invocations,
+    errors: d.errors,
+    hasRateLimit: d.hasRateLimit,
+    rateLimitEvents: d.rateLimitEvents,
+    totalOutputSize: d.totalOutputSize,
+    avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+    avgDurationMs: d.durationCount > 0 ? Math.round(d.durationSum / d.durationCount) : 0,
+    truncatedCount: d.truncatedCount,
+    emptyCount: d.emptyCount,
+  }));
+
+  const fileAccess = Object.entries(fileCount)
+    .map(([path, count]) => ({ path, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, FILE_ACCESS_TOP_N);
+
+  const alertSummary = { totalFired: alertTotalFired, stopEvents: alertStopEvents };
+
+  const evaluationBreakdown = Object.entries(evalByName).map(([name, d]) => {
+    const { avg, min, max } = computeScoreStats(d.scores);
+    return { name, count: d.count, avg, min, max };
+  });
+
+  const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
+
+  return c.json(jsonSafe({
+    sessionId,
+    dataSources,
+    timespan,
+    sessionInfo,
+    tokenTotals,
+    tokenProgression,
+    toolUsage,
+    mcpUsage,
+    spanBreakdown,
+    hookLatency,
+    errors: { byCategory: errorsByCategory, details: errorDetails },
+    agentActivity,
+    fileAccess,
+    gitCommits,
+    alertSummary,
+    codeStructure,
+    evaluationBreakdown,
+    logSummary: {
+      bySeverity: logBySeverity,
+      logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {
+        const entry: SafeLogEntry = {};
+        for (const key of logSummaryFieldSchema.options) {
+          const val = l[key];
+          if (val !== undefined) (entry as Record<string, unknown>)[key] = val;
+        }
+        return entry;
+      }),
+    },
+    multiAgentEvaluation,
+    evaluations,
+  }));
 });

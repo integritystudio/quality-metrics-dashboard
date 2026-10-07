@@ -4,10 +4,10 @@ import { computeDashboardSummary } from '../parent/quality-metrics.js';
 import { computeRoleView } from '../parent/quality-views.js';
 import type { EvaluationResult } from '../../types.js';
 import { computeCQI } from '../parent/qfe-cqi.js';
-import { sanitizeErrorForResponse } from '../parent/error-sanitizer.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
 import { NANOS_TO_MS } from '../api-constants.js';
-import { PeriodSchema, RoleSchema, ErrorMessage, HttpStatus, computePeriodDates } from '../../lib/constants.js';
+import { PeriodSchema, RoleSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
+import { parseParam, handleRouteError } from '../route-errors.js';
 
 const SPARKLINE_BUCKET_COUNT = 24;
 
@@ -31,52 +31,37 @@ function computeSparklineData(
 }
 
 export const dashboardRoutes = new Hono();
+dashboardRoutes.onError(handleRouteError);
 
 dashboardRoutes.get('/dashboard', async (c) => {
-  const periodResult = PeriodSchema.safeParse(c.req.query('period'));
-  if (!periodResult.success) {
-    return c.json({ error: ErrorMessage.InvalidPeriod }, HttpStatus.BadRequest);
-  }
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string must map to undefined for optional schema
-  const roleResult = RoleSchema.optional().safeParse(c.req.query('role') || undefined);
-  if (!roleResult.success) {
-    return c.json({ error: ErrorMessage.InvalidRole }, HttpStatus.BadRequest);
+  const role = parseParam(RoleSchema.optional(), c.req.query('role') || undefined, ErrorMessage.InvalidRole);
+
+  const dates = computePeriodDates(period);
+  const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
+  const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
+  const cqi = computeCQI(dashboard.metrics);
+
+  const startMs = new Date(dates.start).getTime();
+  const endMs = new Date(dates.end).getTime();
+  const sparklines: Record<string, (number | null)[]> = {};
+  for (const [metricName, evals] of evaluationsByMetric) {
+    sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
   }
 
-  try {
-    const period = periodResult.data;
-    const role = roleResult.data;
-    const dates = computePeriodDates(period);
-    const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-    const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
-    const cqi = computeCQI(dashboard.metrics);
-
-    const startMs = new Date(dates.start).getTime();
-    const endMs = new Date(dates.end).getTime();
-    const sparklines: Record<string, (number | null)[]> = {};
-    for (const [metricName, evals] of evaluationsByMetric) {
-      sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
+  if (role) {
+    const view = computeRoleView(dashboard, role);
+    if (role === 'executive') {
+      return c.json({ ...view, cqi, sparklines });
     }
-
-    if (role) {
-      const view = computeRoleView(dashboard, role);
-      if (role === 'executive') {
-        return c.json({ ...view, cqi, sparklines });
-      }
-      return c.json({ ...view, sparklines });
-    }
-
-    return c.json({ ...dashboard, cqi, sparklines });
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
+    return c.json({ ...view, sparklines });
   }
+
+  return c.json({ ...dashboard, cqi, sparklines });
 });
 
 dashboardRoutes.get('/health', async (c) => {
-  try {
-    const result = await checkHealth();
-    return c.json(result);
-  } catch (err) {
-    return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
-  }
+  const result = await checkHealth();
+  return c.json(result);
 });
