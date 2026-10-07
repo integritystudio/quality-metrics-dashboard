@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   CliArgError,
+  exitOnCliArgError,
   nonNegativeNumberArg,
   parseCli,
   positiveIntArg,
@@ -93,5 +94,27 @@ describe('number arguments', () => {
 
   it('throws CliArgError, so callers can tell a bad command line from a bug', () => {
     expect(() => positiveIntArg('--limit', 'x')).toThrow(CliArgError);
+  });
+});
+
+describe('exitOnCliArgError', () => {
+  it('returns what the reader returns', () => {
+    expect(exitOnCliArgError('[x]', () => 3)).toBe(3);
+  });
+
+  it('prints the message and exits 1 on a CliArgError', () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    exitOnCliArgError('[x]', () => positiveIntArg('--limit', '0'));
+
+    expect(error).toHaveBeenCalledWith('[x] --limit must be a positive integer, got "0"');
+    expect(exit).toHaveBeenCalledWith(1);
+    exit.mockRestore();
+    error.mockRestore();
+  });
+
+  it('rethrows anything else, so a bug keeps its stack', () => {
+    expect(() => exitOnCliArgError('[x]', () => { throw new TypeError('bug'); })).toThrow(TypeError);
   });
 });

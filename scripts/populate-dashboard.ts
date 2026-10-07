@@ -82,7 +82,7 @@ import {
   runWithRetry,
 } from './pipeline-stages.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
-import { parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 
 const SCRIPTS_DIR = import.meta.dirname;
 const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
@@ -124,14 +124,8 @@ function readArgs(argv: readonly string[]) {
   };
 }
 
-let options: ReturnType<typeof readArgs>;
-try {
-  options = readArgs(process.argv.slice(2));
-} catch (err) {
-  console.error(`[populate] Error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
-}
-const { skipJudge, skipUpload, skipSync, dryRun, seed, batch, perCriterion, limit, deriveScope, judgeScope } = options;
+const { skipJudge, skipUpload, skipSync, dryRun, seed, batch, perCriterion, limit, deriveScope, judgeScope } =
+  exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
 // Fail closed when the judge would run with no key.
 //

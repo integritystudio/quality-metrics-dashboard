@@ -63,7 +63,7 @@ import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEn
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, type TraceSource } from './pipeline-stages.js';
-import { CliArgError, parseCli, positiveIntArg, type CliArgs, type CliSpec } from './cli-args.js';
+import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 import {
   createBatchProvider,
   BATCH_CANCEL_GRACE_MS,
@@ -1667,16 +1667,10 @@ const JUDGE_CLI: CliSpec = {
 
 async function main() {
   const args = process.argv.slice(2);
-  let cli: CliArgs;
-  let requestedLimit: number | undefined;
-  try {
-    cli = parseCli(args, JUDGE_CLI);
-    requestedLimit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
-  } catch (err) {
-    if (!(err instanceof CliArgError)) throw err;
-    console.error(`Error: ${err.message}`);
-    process.exit(1);
-  }
+  const { cli, requestedLimit } = exitOnCliArgError('Error:', () => {
+    const parsed = parseCli(args, JUDGE_CLI);
+    return { cli: parsed, requestedLimit: positiveIntArg(JUDGE_LIMIT_FLAG, parsed.value(JUDGE_LIMIT_FLAG)) };
+  });
   const dryRun = cli.has(DRY_RUN_FLAG);
   const seed = cli.has(JUDGE_SEED_FLAG);
   const backfill = cli.has(BACKFILL_FLAG);

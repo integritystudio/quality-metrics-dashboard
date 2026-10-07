@@ -102,6 +102,20 @@ export function parseCli(argv: readonly string[], spec: CliSpec, { allowUnknown 
   };
 }
 
+/**
+ * `read()`, or, when it throws `CliArgError`, print `<logPrefix> <message>`
+ * and exit 1: the entry-point handling for a command line the user can fix.
+ */
+export function exitOnCliArgError<T>(logPrefix: string, read: () => T): T {
+  try {
+    return read();
+  } catch (err) {
+    if (!(err instanceof CliArgError)) throw err;
+    console.error(`${logPrefix} ${err.message}`);
+    process.exit(1);
+  }
+}
+
 /** `raw` as a positive integer; `undefined` when absent. Throws `CliArgError` when it is not one. */
 export function positiveIntArg(label: string, raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;
