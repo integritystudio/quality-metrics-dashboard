@@ -287,7 +287,6 @@ export function computeBudgetAllocation(
   return { highPriorityBudget, traceBudget };
 }
 
-
 /**
  * In-memory form of the persisted `KvSyncState` record. A Map so that reads are
  * honestly `KvSyncEntry | undefined` (tsconfig.scripts.json lacks
@@ -322,7 +321,6 @@ function hashValue(value: string): string {
 function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   return entries.filter(e => state.get(e.key)?.hash !== hashValue(e.value));
 }
-
 
 function kvBulkPut(entries: KVEntry[]): number {
   if (entries.length === 0) return 0;
@@ -494,7 +492,6 @@ export function prioritizeTraces(
   return result;
 }
 
-
 type SessionSpan = {
   name: string;
   traceId?: string;
@@ -502,7 +499,6 @@ type SessionSpan = {
   status?: { code?: number | string };
   attributes?: Record<string, unknown>;
 };
-
 
 function spanSessionId(span: { attributes?: Record<string, unknown> }): string | undefined {
   return (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
@@ -517,8 +513,6 @@ function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
   if (!group) map.set(key, group = []);
   group.push(value);
 }
-
-
 
 function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[]) {
   const traceIdSet = new Set<string>();
@@ -890,12 +884,6 @@ interface OrgComputation {
   hitCap: boolean;
 }
 
-/**
- * Run the full aggregation for one org's cloud rows. Extracted verbatim from
- * the pre-P4 single-tenant main(); the only org-aware behavior is that the
- * local sidecar state (degradation breaches, calibration) is owner-local and
- * therefore read/written for the home org alone.
- */
 /** Per-trace KV entries; spans/evaluations carry bigint timestamps, hence toKVValue. */
 export function buildTraceEntries(
   traceIds: string[],
@@ -944,6 +932,11 @@ async function computeCodeQuality(backend: CloudBackend, now: Date) {
   return summarizeCodeQuality(checkpointSpans, invocationSpans);
 }
 
+/**
+ * Run the full aggregation for one org's cloud rows. The only org-aware behavior
+ * is that the local sidecar state (degradation breaches, calibration) is
+ * owner-local and therefore read/written for the home org alone.
+ */
 async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
   const entries: KVEntry[] = [];
 
@@ -1240,9 +1233,9 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   const calibrationEntry = isHome ? loadCalibrationEntry() : null;
   if (calibrationEntry) entries.push(calibrationEntry);
 
-  const thirtyDaysAgo = new Date(now.getTime() - MAX_DAYS_MS);
+  const queryWindowStart = new Date(now.getTime() - MAX_DAYS_MS);
   const allEvals = await backend.queryEvaluations({
-    startDate: BigInt(thirtyDaysAgo.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+    startDate: BigInt(queryWindowStart.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     limit: QUERY_LIMIT,
   });
@@ -1254,7 +1247,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   const traceIds = [...evalsByTrace.keys()];
 
   const allSpans = await backend.queryTraces({
-    startDate: BigInt(thirtyDaysAgo.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+    startDate: BigInt(queryWindowStart.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
     limit: SPAN_QUERY_LIMIT,
   });
@@ -1530,14 +1523,6 @@ async function main(): Promise<void> {
     ...metaEntries,
   ];
   const deferred = changed.length - (toWrite.length - metaEntries.length);
-
-  const _referencedInBatch = new Set(
-    toWrite
-      .map(e => extractTraceId(e.key))
-      .filter((id): id is string => id != null && referencedTraceIds.has(id)),
-  ).size;
-
-  if (deferred > 0) { /* deferred entries logged externally */ }
 
   const written = kvBulkPut(toWrite);
 
