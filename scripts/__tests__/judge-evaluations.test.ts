@@ -60,9 +60,7 @@ import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js'
 import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
 import { makeTurn } from './support/fixtures.js';
 
-// ---------------------------------------------------------------------------
 // Test Data Factories
-// ---------------------------------------------------------------------------
 
 function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
   return {
@@ -80,10 +78,6 @@ function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
     ...overrides,
   };
 }
-
-// ---------------------------------------------------------------------------
-// isSystemPrompt
-// ---------------------------------------------------------------------------
 
 describe('isSystemPrompt', () => {
   it('detects system-reminder tags', () => {
@@ -110,10 +104,6 @@ describe('isSystemPrompt', () => {
     expect(isSystemPrompt(42 as unknown as string)).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// isToolResultOnly
-// ---------------------------------------------------------------------------
 
 describe('isToolResultOnly', () => {
   it('returns true for array of tool_result blocks', () => {
@@ -145,10 +135,6 @@ describe('isToolResultOnly', () => {
     expect(isToolResultOnly(null)).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// extractTextFromContent
-// ---------------------------------------------------------------------------
 
 describe('extractTextFromContent', () => {
   it('extracts text from string content', () => {
@@ -183,10 +169,6 @@ describe('extractTextFromContent', () => {
     expect(extractTextFromContent(content)).toBe('');
   });
 });
-
-// ---------------------------------------------------------------------------
-// extractToolResults
-// ---------------------------------------------------------------------------
 
 describe('extractToolResults', () => {
   it('extracts string content from tool_result blocks', () => {
@@ -230,10 +212,6 @@ describe('extractToolResults', () => {
     expect(extractToolResults(content)).toEqual(['valid']);
   });
 });
-
-// ---------------------------------------------------------------------------
-// extractTurns
-// ---------------------------------------------------------------------------
 
 describe('extractTurns', () => {
   let tmpDir: string;
@@ -443,13 +421,11 @@ describe('extractTurns', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // transcriptPathOf — `transcript.path` moved under `integritystudio.` (hooks 2026-09-29)
 //
 // Discovery reads raw logs-*.jsonl, which no alias table rewrites, so both
 // spellings reach it. Reading only the old key would drop every post-rename
 // session to the slower directory scan.
-// ---------------------------------------------------------------------------
 
 describe('transcriptPathOf', () => {
   const NEW_PATH = '/home/u/.claude/projects/slug/new-session.jsonl';
@@ -472,10 +448,6 @@ describe('transcriptPathOf', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// normalizeScore
-// ---------------------------------------------------------------------------
-
 describe('normalizeScore', () => {
   it('rounds to 4 decimal places', () => {
     expect(normalizeScore(0.123456789)).toBe(0.1235);
@@ -490,10 +462,6 @@ describe('normalizeScore', () => {
     expect(normalizeScore(1)).toBe(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// hashToScore
-// ---------------------------------------------------------------------------
 
 describe('hashToScore', () => {
   it('returns deterministic scores for same input', () => {
@@ -522,10 +490,6 @@ describe('hashToScore', () => {
     expect(decimals).toBeLessThanOrEqual(4);
   });
 });
-
-// ---------------------------------------------------------------------------
-// seedEvaluations
-// ---------------------------------------------------------------------------
 
 describe('seedEvaluations', () => {
   it('generates relevance and coherence for all turns', () => {
@@ -667,10 +631,6 @@ describe('seedEvaluations', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// toOTelRecord
-// ---------------------------------------------------------------------------
-
 describe('toOTelRecord', () => {
   it('produces correct OTel flat evaluation format', () => {
     const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
@@ -722,10 +682,6 @@ describe('toOTelRecord', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// processBatch
-// ---------------------------------------------------------------------------
-
 describe('processBatch', () => {
   it('processes all items', async () => {
     const items = [1, 2, 3, 4, 5];
@@ -764,9 +720,7 @@ describe('processBatch', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // evaluateTurn (B14)
-// ---------------------------------------------------------------------------
 
 // G-Eval makes 2 calls: (1) step generation, (2) evaluation scoring (1-5 scale).
 // QAG makes 2 calls: (1) statement extraction (JSON array), (2) verdict per statement.
@@ -1271,9 +1225,7 @@ describe('estimateJudgeRun', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // anthropicProviderFor (structured score output)
-// ---------------------------------------------------------------------------
 
 /** Room for two to three sentences of reasoning plus the score object. */
 const STRUCTURED_OUTPUT_MAX_TOKENS_FLOOR = 512;
@@ -1341,9 +1293,7 @@ describe('anthropicProviderFor', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // evaluateTurn concurrent mode + evaluateTurnsBatched (--batch wiring)
-// ---------------------------------------------------------------------------
 
 /** Long enough for gEval's dynamic import and promise chain to reach the provider. */
 const SETTLE_MS = 20;

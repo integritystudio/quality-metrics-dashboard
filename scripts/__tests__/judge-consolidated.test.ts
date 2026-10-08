@@ -36,9 +36,7 @@ import { RELEVANCE_CRITERIA, COHERENCE_CRITERIA } from '../../../src/lib/judge/l
 import { G_EVAL_MAX_SCORE, G_EVAL_MIN_SCORE } from '../../../src/lib/judge/llm-judge-constants.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 
-// ---------------------------------------------------------------------------
 // Fixtures
-// ---------------------------------------------------------------------------
 
 const USER_TEXT = 'Fix the login bug in auth.ts';
 const ASSISTANT_TEXT = 'I found the null check missing in auth.ts and fixed it.';
@@ -97,10 +95,6 @@ function createFakeProvider(
 function names(selection: { criteria: { name: string }[] }): string[] {
   return selection.criteria.map(c => c.name);
 }
-
-// ---------------------------------------------------------------------------
-// selectCriteria — schema key selection mirrors evaluateTurn
-// ---------------------------------------------------------------------------
 
 describe('selectCriteria', () => {
   it('selects relevance and coherence for a turn without tool results', () => {
@@ -166,10 +160,6 @@ describe('selectCriteria', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// buildConsolidatedSchema
-// ---------------------------------------------------------------------------
-
 describe('buildConsolidatedSchema', () => {
   it('requires exactly the selected criteria and nothing else', () => {
     const schema = buildConsolidatedSchema([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
@@ -187,10 +177,6 @@ describe('buildConsolidatedSchema', () => {
     expect(verdict.properties[SCORE_KEY]).toMatchObject({ type: 'integer', enum: [1, 2, 3, 4, 5] });
   });
 });
-
-// ---------------------------------------------------------------------------
-// buildConsolidatedPrompt
-// ---------------------------------------------------------------------------
 
 describe('buildConsolidatedPrompt', () => {
   const prepared = [
@@ -235,10 +221,6 @@ describe('buildConsolidatedPrompt', () => {
     expect(prompt).toContain('Generate detailed evaluation steps');
   });
 });
-
-// ---------------------------------------------------------------------------
-// parseConsolidatedResponse / validateVerdict
-// ---------------------------------------------------------------------------
 
 describe('parseConsolidatedResponse', () => {
   it('parses one verdict per criterion', () => {
@@ -296,10 +278,6 @@ describe('toNormalizedScore', () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// evaluateTurnConsolidated — records
-// ---------------------------------------------------------------------------
 
 describe('evaluateTurnConsolidated', () => {
   beforeEach(() => {

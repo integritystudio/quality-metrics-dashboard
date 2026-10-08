@@ -270,9 +270,7 @@ describe('createBatchProvider', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The wall clock (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN)
-// ---------------------------------------------------------------------------
 
 /** The provider's own intervals: these tests run on vitest's clock, so none of them waits. */
 const PRODUCTION = { model: MODEL, maxTokens: MAX_TOKENS, temperature: TEMPERATURE };

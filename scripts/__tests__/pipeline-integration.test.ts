@@ -28,9 +28,7 @@ import { type Turn } from '../judge-turns.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, unknown> }): TraceSpan {
   const { attributes: attrOverrides, ...rest } = overrides;
@@ -63,9 +61,7 @@ function parseJsonl(content: string): Record<string, unknown>[] {
     .map(line => JSON.parse(line) as Record<string, unknown>);
 }
 
-// ---------------------------------------------------------------------------
 // Step 1 → Step 2 Contract: derive output → judge input format
-// ---------------------------------------------------------------------------
 
 describe('pipeline contract: derive → judge', () => {
   beforeEach(() => {
@@ -124,9 +120,7 @@ describe('pipeline contract: derive → judge', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Step 2 Contract: judge seed output format
-// ---------------------------------------------------------------------------
 
 describe('pipeline contract: judge seed output', () => {
   it('seedEvaluations produces OTel-compatible records', () => {
@@ -217,9 +211,7 @@ describe('pipeline contract: judge seed output', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Step 2 → Step 3 Contract: judge output → sync-to-kv format
-// ---------------------------------------------------------------------------
 
 describe('pipeline contract: judge → sync-to-kv', () => {
   let tmpDir: string;
@@ -324,9 +316,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Full pipeline integration: derive → write → read → judge → write
-// ---------------------------------------------------------------------------
 
 describe('full pipeline: derive + judge write/read cycle', () => {
   let tmpDir: string;

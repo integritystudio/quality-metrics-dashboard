@@ -71,9 +71,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// ---------------------------------------------------------------------------
 // SPA fallback — non-API routes
-// ---------------------------------------------------------------------------
 
 describe('SPA fallback: non-API routes serve index.html', () => {
   it('GET /agents returns 200 with HTML content', async () => {
@@ -123,9 +121,7 @@ describe('SPA fallback: non-API routes serve index.html', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // API routes remain unaffected
-// ---------------------------------------------------------------------------
 
 describe('API routes: unaffected by SPA fallback', () => {
   it('GET /api/health returns JSON (not HTML)', async () => {

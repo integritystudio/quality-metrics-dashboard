@@ -34,7 +34,6 @@ function parseCalibrationPayload(
   return JSON.parse(entry.value) as CalibrationResponse & Record<string, unknown>;
 }
 
-
 function makeCalibrationState(overrides: Partial<CalibrationState> = {}): CalibrationState {
   return {
     lastCalibrated: '2026-03-15T10:00:00.000Z',
@@ -55,7 +54,6 @@ function makeCalibrationState(overrides: Partial<CalibrationState> = {}): Calibr
     ...overrides,
   };
 }
-
 
 describe('buildCalibrationEntry', () => {
   it('produces a meta:calibration KV entry from valid CalibrationState', () => {
@@ -469,12 +467,6 @@ describe('computeSessionDetail across the integritystudio.* key rename', () => {
     expectSessionRead(computeSessionDetail('s1', sessionSpans(both), []));
   });
 });
-
-// ---------------------------------------------------------------------------
-// loadCalibrationEntry: sync reads the calibration state where derive writes it
-// (CALIBRATION-READ-WRONG-DIR: from 2026-04-19 to 2026-10-05 it read dashboard/scripts/,
-// found nothing, and the dashboard served March's percentiles).
-// ---------------------------------------------------------------------------
 
 describe('loadCalibrationEntry', () => {
   let dir: string | undefined;

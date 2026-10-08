@@ -25,9 +25,7 @@ import {
 import { type EvalRecord } from '../eval-record.js';
 import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 
-// ---------------------------------------------------------------------------
 // Test Data Factories
-// ---------------------------------------------------------------------------
 
 function makeSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, unknown> }): TraceSpan {
   const { attributes: attrOverrides, ...rest } = overrides;
@@ -48,17 +46,11 @@ function makeSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, 
   };
 }
 
-// ---------------------------------------------------------------------------
 // Setup
-// ---------------------------------------------------------------------------
 
 beforeEach(() => {
   sessionTasks.clear();
 });
-
-// ---------------------------------------------------------------------------
-// scoreTask
-// ---------------------------------------------------------------------------
 
 describe('scoreTask', () => {
   it('returns 1.0 for completed tasks', () => {
@@ -82,10 +74,6 @@ describe('scoreTask', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// STATUS_SCORES
-// ---------------------------------------------------------------------------
-
 describe('STATUS_SCORES', () => {
   it('has expected keys and values', () => {
     expect(STATUS_SCORES).toEqual({
@@ -95,10 +83,6 @@ describe('STATUS_SCORES', () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// trackTaskActivity
-// ---------------------------------------------------------------------------
 
 describe('trackTaskActivity', () => {
   it('ignores non-builtin-post-tool spans', () => {
@@ -258,10 +242,6 @@ describe('trackTaskActivity', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveTaskCompletionPerSession
-// ---------------------------------------------------------------------------
-
 describe('deriveTaskCompletionPerSession', () => {
   it('returns empty array for no sessions', () => {
     expect(deriveTaskCompletionPerSession()).toEqual([]);
@@ -373,10 +353,6 @@ describe('deriveTaskCompletionPerSession', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveEvaluationLatency
-// ---------------------------------------------------------------------------
-
 describe('deriveEvaluationLatency', () => {
   it('derives a latency record from a well-formed measurable span', () => {
     const record = deriveEvaluationLatency(makeSpan({
@@ -427,10 +403,6 @@ describe('deriveEvaluationLatency', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// resolveSource
-// ---------------------------------------------------------------------------
-
 describe('resolveSource', () => {
   it('defaults to cloud (cloud-read Phase 6)', () => {
     expect(resolveSource([])).toBe('cloud');
@@ -468,10 +440,6 @@ describe('readScope', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// splitAtRepostFloor (cloud-read migration Phase 6)
-// ---------------------------------------------------------------------------
-
 describe('splitAtRepostFloor', () => {
   const at = (ms: number): EvalRecord =>
     ({ timestamp: new Date(ms).toISOString(), evaluationName: 'tool_correctness', scoreValue: 1 }) as EvalRecord;
@@ -488,10 +456,6 @@ describe('splitAtRepostFloor', () => {
     expect(new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()).toBe('2026-09-28T00:00:00.000Z');
   });
 });
-
-// ---------------------------------------------------------------------------
-// carryForwardDistributions — a sparse metric keeps its last calibration
-// ---------------------------------------------------------------------------
 
 describe('carryForwardDistributions', () => {
   const entry = (p50: number, windowEnd: string) => ({
@@ -561,10 +525,6 @@ describe('resolvePostDays', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveAll
-// ---------------------------------------------------------------------------
-
 describe('deriveAll', () => {
   const taskSpan = makeSpan({ attributes: { 'builtin.task_status': 'completed', 'builtin.task_id': 't1' } });
 
@@ -585,7 +545,6 @@ describe('deriveAll', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // builtin.* key rename (hooks 2026-09-18)
 //
 // Regression: derive read `builtin.*` keys, the hooks started writing
@@ -593,7 +552,6 @@ describe('deriveAll', () => {
 // every builtin tool call scored 0 (3,363 of 3,365 records on 2026-09-26) while
 // task tracking never fired. Both spellings live in the local files, so each
 // behavior is pinned for both.
-// ---------------------------------------------------------------------------
 
 /** A post-rename builtin post-tool span, shaped like the hooks write it today. */
 function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
@@ -678,14 +636,12 @@ describe('deriveAll across the builtin.* rename', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // mcp.* key rename (hooks 2026-09-29)
 //
 // The hooks moved `mcp.*` under `integritystudio.`. The alias table has no rows
 // for these keys, so `attrsOf` leaves each era on its own spelling and derive
 // must read the new key, then the old one. Reading only the old key would score
 // every post-rename MCP call 0, as the builtin.* rename did.
-// ---------------------------------------------------------------------------
 
 /** An MCP post-tool span carrying `attributes`, shaped like the hooks write it. */
 function mcpToolSpan(attributes: Record<string, unknown>): TraceSpan {
@@ -746,7 +702,6 @@ describe('deriveEvaluationLatency across the mcp.* rename', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Agent hook rename (hooks 2026-08-13)
 //
 // Regression: derive matched `hook:agent-pre-tool` / `hook:agent-post-tool`,
@@ -754,7 +709,6 @@ describe('deriveEvaluationLatency across the mcp.* rename', () => {
 // agent completion, handoff_correctness and agent hook latency produced
 // nothing for six weeks. The names below are copied from real spans, not from
 // the constants, so a wrong constant fails here instead of matching itself.
-// ---------------------------------------------------------------------------
 
 const OTEL_STATUS_OK = 1;
 
@@ -827,14 +781,12 @@ describe('deriveAll over the renamed agent hook spans', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // handoff_correctness failure signals (DERIVE-AGENT-SCORE-HOOK-STATUS)
 //
 // Score 0 when the agent's own error flag is set (`integritystudio.agent.has_error`),
 // or when the hook itself throws (span.status.code === ERROR). Before this fix
 // only the hook-crash path was handled, so a failed agent scored as a correct
 // handoff.
-// ---------------------------------------------------------------------------
 
 describe('handoff_correctness scores agent failures correctly', () => {
   const START_SEC = 1_791_000_000;
@@ -921,14 +873,12 @@ describe('handoff_correctness scores agent failures correctly', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // detectInputDrift (HOOK-RENAME-SILENT)
 //
 // Both hooks-side renames so far emptied or zeroed a metric while every stage
 // exited 0. Each check below compares a day's spans with themselves, so each
 // test builds one day of real-shaped input and changes only the name or key a
 // rename would change.
-// ---------------------------------------------------------------------------
 
 describe('detectInputDrift', () => {
   const DAY_START_SEC = 1_790_553_600; // 2026-09-28T00:00:00Z
@@ -1035,10 +985,6 @@ describe('detectInputDrift', () => {
     expect(detectInputDrift(renamed, new Set(['2026-09-27']))).toEqual([]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// deriveAgentHeuristics (AGENT-EVAL-METRICS-UNUSED)
-// ---------------------------------------------------------------------------
 
 describe('deriveAgentHeuristics', () => {
   const SINCE_MS = 1707400000_000;
