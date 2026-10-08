@@ -152,6 +152,17 @@ const AGENT_PREPARE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_PREPARE}`;
 const AGENT_FINALIZE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_FINALIZE}`;
 const BUILTIN_POST_TOOL_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.BUILTIN_POST_TOOL}`;
 const MCP_POST_TOOL_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.MCP_POST_TOOL}`;
+/** `tsc-check` has no `HOOK_NAME` entry. */
+const TSC_CHECK_SPAN = `${HOOK_SPAN_PREFIX}tsc-check`;
+
+/** Hook spans whose duration `deriveEvaluationLatency` records. */
+const LATENCY_MEASURED_SPANS: ReadonlySet<string> = new Set([
+  BUILTIN_POST_TOOL_SPAN,
+  MCP_POST_TOOL_SPAN,
+  AGENT_FINALIZE_SPAN,
+  `${HOOK_SPAN_PREFIX}${HOOK_NAME.SESSION_START}`,
+  TSC_CHECK_SPAN,
+]);
 
 function isToolSpan(span: LocalTraceSpan): boolean {
   return span.name === BUILTIN_POST_TOOL_SPAN || span.name === MCP_POST_TOOL_SPAN;
@@ -200,14 +211,7 @@ export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
 }
 
 export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
-  const measurable = [
-    BUILTIN_POST_TOOL_SPAN,
-    MCP_POST_TOOL_SPAN,
-    AGENT_FINALIZE_SPAN,
-    'hook:session-start',
-    'hook:tsc-check',
-  ];
-  if (!measurable.includes(span.name)) return null;
+  if (!LATENCY_MEASURED_SPANS.has(span.name)) return null;
 
   const durationSec = hrtToSeconds(span.duration);
   if (!Number.isFinite(durationSec)) return null;
