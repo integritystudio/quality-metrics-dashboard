@@ -1372,6 +1372,20 @@ describe('anthropicProviderFor', () => {
     expect(calls[0]).not.toHaveProperty('output_config');
   });
 
+  it('folds usage into the totals and hands each response to onUsage', async () => {
+    const usage = { input_tokens: 120, output_tokens: 30, cache_read_input_tokens: null, cache_creation_input_tokens: 5 };
+    const client: JudgeMessagesClient = {
+      messages: { create: () => Promise.resolve({ content: [], usage }) },
+    };
+    const totals = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    const seen: unknown[] = [];
+
+    await anthropicProviderFor(client, totals, u => seen.push(u)).generate('rate it', { jsonSchema: SCORE_SCHEMA });
+
+    expect(totals).toEqual({ input_tokens: 120, output_tokens: 30, cache_read_input_tokens: 0, cache_creation_input_tokens: 5 });
+    expect(seen).toEqual([{ inputTokens: 120, outputTokens: 30, cacheCreationInputTokens: 5, cacheReadInputTokens: 0 }]);
+  });
+
   it('keeps max_tokens high enough for the reasoning and the score', () => {
     expect(JUDGE_MAX_TOKENS).toBeGreaterThanOrEqual(STRUCTURED_OUTPUT_MAX_TOKENS_FLOOR);
   });

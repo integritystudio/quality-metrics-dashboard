@@ -114,7 +114,16 @@ import {
   turnSourceFields,
   type Turn,
 } from './judge-turns.js';
-import { createUsageTotals, estimateJudgeRun, recordUsage, toProviderUsage, type JudgeUsageTotals, type ProviderUsage } from './judge-usage.js';
+import {
+  createUsageTotals,
+  estimateJudgeRun,
+  recordUsage,
+  toJudgeTokenUsage,
+  toProviderUsage,
+  type JudgeTokenUsage,
+  type JudgeUsageTotals,
+  type ProviderUsage,
+} from './judge-usage.js';
 import { evalFailures, failureClasses, readRunState, resetFailureTracking, summarizeJudgeRun, trackFailure, writeRunState } from './judge-failures.js';
 import { EVALUATIONS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';
 
@@ -197,12 +206,21 @@ function judgeOutputConfig(
   return jsonSchema ? { output_config: { format: { type: JSON_SCHEMA_OUTPUT_FORMAT, schema: jsonSchema } } } : {};
 }
 
-async function createAnthropicProvider(apiKey: string, usage: JudgeUsageTotals): Promise<LLMProvider> {
-  return anthropicProviderFor(await createJudgeAnthropicClient({ apiKey }), usage);
+/** The judge's synchronous provider; `onUsage` also sees each response's usage, which the one-shot evals total. */
+export async function createAnthropicProvider(
+  apiKey: string,
+  usage: JudgeUsageTotals = createUsageTotals(),
+  onUsage?: (usage: JudgeTokenUsage) => void,
+): Promise<LLMProvider> {
+  return anthropicProviderFor(await createJudgeAnthropicClient({ apiKey }), usage, onUsage);
 }
 
 /** The judge's provider over an SDK client, or a fake one in tests. */
-export function anthropicProviderFor(client: JudgeMessagesClient, usage: JudgeUsageTotals = createUsageTotals()): LLMProvider {
+export function anthropicProviderFor(
+  client: JudgeMessagesClient,
+  usage: JudgeUsageTotals = createUsageTotals(),
+  onUsage?: (usage: JudgeTokenUsage) => void,
+): LLMProvider {
   return {
     async generate(
       prompt: string,
@@ -216,7 +234,10 @@ export function anthropicProviderFor(client: JudgeMessagesClient, usage: JudgeUs
         messages: [{ role: 'user', content: prompt }],
         ...judgeOutputConfig(options?.jsonSchema),
       });
-      if (response.usage) recordUsage(usage, response.usage);
+      if (response.usage) {
+        recordUsage(usage, response.usage);
+        onUsage?.(toJudgeTokenUsage(response.usage));
+      }
 
       const text = response.content
         .filter((b: { type: string; text?: string }) => b.type === 'text')

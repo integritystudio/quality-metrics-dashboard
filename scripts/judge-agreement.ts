@@ -37,13 +37,11 @@ import {
   type Turn,
   type TranscriptInfo,
 } from './judge-turns.js';
-import { evaluateTurn, processBatch } from './judge-evaluations.js';
+import { createAnthropicProvider, evaluateTurn, processBatch } from './judge-evaluations.js';
 import { resetFailureTracking } from './judge-failures.js';
 import { PRODUCER, type EvalRecord } from './eval-record.js';
 import {
   HAIKU_MODEL,
-  JUDGE_MAX_TOKENS,
-  JUDGE_DEFAULT_TEMPERATURE,
   FAITHFULNESS_EVAL_NAME,
 } from './judge-criteria.js';
 import {
@@ -52,7 +50,6 @@ import {
   selectCriteria,
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
-import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { parseCli, positiveIntArg } from './cli-args.js';
 import {
@@ -69,7 +66,7 @@ import {
   oneShotArgError,
   padCell,
 } from './one-shot-eval.js';
-import { tokenUsageCostUsd, toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
+import { createUsageTotals as createJudgeUsageTotals, tokenUsageCostUsd, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -383,21 +380,9 @@ export function countMissing(outcomes: readonly TurnOutcome[], side: keyof TurnS
 // Providers
 // ---------------------------------------------------------------------------
 
-/** Mirrors createAnthropicProvider in judge-evaluations.ts, adding the usage hook. */
-export async function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
-  const client = await createJudgeAnthropicClient({ apiKey });
-  return {
-    async generate(prompt: string, options?: { temperature?: number }): Promise<{ text: string }> {
-      const response = await client.messages.create({
-        model: HAIKU_MODEL,
-        max_tokens: JUDGE_MAX_TOKENS,
-        temperature: options?.temperature ?? JUDGE_DEFAULT_TEMPERATURE,
-        messages: [{ role: 'user', content: prompt }],
-      });
-      onUsage(toJudgeTokenUsage(response.usage));
-      return { text: response.content.flatMap(block => (block.type === 'text' ? [block.text] : [])).join('') };
-    },
-  };
+/** The pipeline's own provider (structured score output included), with the usage hook. */
+export function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
+  return createAnthropicProvider(apiKey, createJudgeUsageTotals(), onUsage);
 }
 
 export function scoresByName(records: readonly EvalRecord[]): Record<string, number> {
