@@ -12,6 +12,7 @@ const HOME = process.env.HOME ?? '';
 // Must match the producer: hooks/lib/constants.ts writes telemetry here.
 // `TELEMETRY_DIR` overrides it, as it does for the other scripts that read
 // telemetry, so a run can be pointed at a scratch directory.
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- an empty TELEMETRY_DIR must fall back to the default, not resolve paths against cwd
 export const TELEMETRY_DIR = process.env.TELEMETRY_DIR || join(HOME, '.claude-history', 'telemetry');
 /**
  * Where `.calibration-state.json` lives: derive writes it, and sync-to-kv reads it to build

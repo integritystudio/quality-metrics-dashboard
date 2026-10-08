@@ -340,7 +340,8 @@ describe('createBatchProvider at the wall clock', () => {
     expect(await unmentioned).toBe(overrun);
     expect(overrun).toMatchObject({ batchId: BATCH_ID, abandoned: 2 });
     expect(classifyJudgeFailure(overrun.message)).toBe('wall-clock');
-    expect(flushResult).toMatchObject({ settled: 2, abandoned: 2, overrun: expect.any(BatchWallClockExceededError) });
+    expect(flushResult).toMatchObject({ settled: 2, abandoned: 2 });
+    expect(flushResult.overrun).toBe(overrun);
     expect(client.cancel).toHaveBeenCalledTimes(1);
     // Read once, and only after the poll that saw the batch end.
     expect(client.results).toHaveBeenCalledTimes(1);
