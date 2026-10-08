@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
+import { validator } from 'hono/validator';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
@@ -104,8 +105,40 @@ const ERR_INVALID_ROLE = 'Invalid role. Must be executive, operator, or auditor.
 
 const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 const ERR_INVALID_INPUT_KEY = 'Invalid inputKey. Must be traceId or sessionId.';
+
+type PeriodKey = typeof VALID_PERIOD_KEYS[number];
+const DEFAULT_PERIOD: PeriodKey = '7d';
+const CORRELATIONS_DEFAULT_PERIOD: PeriodKey = '30d';
+const periodField = (fallback: PeriodKey) => z.enum(VALID_PERIOD_KEYS).default(fallback);
+const PeriodQuery = z.object({ period: periodField(DEFAULT_PERIOD) });
+const DashboardQuery = z.object({
+  period: periodField(DEFAULT_PERIOD),
+  // An empty ?role= means "no role", as it did before validation moved here.
+  role: z.enum(VALID_ROLES).or(z.literal('')).optional(),
+});
+const MetricEvaluationsQuery = z.object({
+  period: periodField(DEFAULT_PERIOD),
+  ...PaginationSchema.shape,
+  sortBy: z.enum(VALID_SORT_BY).default('timestamp_desc'),
+  scoreLabel: z.string().optional(),
+});
+const CoverageQuery = z.object({
+  period: periodField(DEFAULT_PERIOD),
+  inputKey: z.enum(VALID_INPUT_KEYS).default('traceId'),
+});
+
+/** The error each query field answers with; a schema reports issues in shape order. */
+const QUERY_FIELD_ERRORS: Record<string, string> = {
+  period: ERR_INVALID_PERIOD,
+  role: ERR_INVALID_ROLE,
+  limit: ERR_INVALID_PAGINATION,
+  offset: ERR_INVALID_PAGINATION,
+  sortBy: ERR_INVALID_SORT_BY,
+  inputKey: ERR_INVALID_INPUT_KEY,
+};
 const ERR_INVALID_USER_ID = 'Invalid userId';
 const ERR_INVALID_ROLE_ID = 'Invalid roleId';
+const ERR_INVALID_QUERY = 'Invalid query parameters';
 const ERR_INTERNAL = 'Internal server error';
 const ERR_NO_ORG = 'No organization membership';
 const ERR_ROUTING_TELEMETRY_MALFORMED = 'Routing telemetry data is malformed';
@@ -541,6 +574,24 @@ function requirePermission(permission: DashboardPermission) {
   });
 }
 
+/**
+ * Query validator answering 400 with the failing field's error string. A repeated key
+ * reads its first value, matching `c.req.query(name)`.
+ */
+function validQuery<T extends z.ZodType>(schema: T) {
+  return validator('query', (value, c) => {
+    const firstValues = Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
+    );
+    const result = schema.safeParse(firstValues);
+    if (!result.success) {
+      const field = String(result.error.issues[0]?.path[0] ?? '');
+      return c.json({ error: QUERY_FIELD_ERRORS[field] ?? ERR_INVALID_QUERY }, Http.BadRequest);
+    }
+    return result.data;
+  });
+}
+
 type AppContext = {
   env: Bindings;
   get: (key: 'session') => AppSession;
@@ -651,17 +702,10 @@ app.post('/api/activity', async (c) => {
   return c.body(null, Http.NoContent);
 });
 
-app.get('/api/dashboard', requirePermission('dashboard.read'), async (c) => {
+app.get('/api/dashboard', requirePermission('dashboard.read'), validQuery(DashboardQuery), async (c) => {
   const session = c.get('session');
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const role = c.req.query('role');
-  if (role && !VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
-    return c.json({ error: ERR_INVALID_ROLE }, Http.BadRequest);
-  }
-  if (role && !session.allowedViews.includes(role as DashboardView)) {
+  const { period, role } = c.req.valid('query');
+  if (role && !session.allowedViews.includes(role)) {
     return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   }
 
@@ -672,21 +716,10 @@ app.get('/api/dashboard', requirePermission('dashboard.read'), async (c) => {
   return c.json(data);
 });
 
-app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), async (c) => {
+app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), validQuery(MetricEvaluationsQuery), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const pagination = PaginationSchema.safeParse({ limit: c.req.query('limit'), offset: c.req.query('offset') });
-  if (!pagination.success) return c.json({ error: ERR_INVALID_PAGINATION }, Http.BadRequest);
-  const { limit, offset } = pagination.data;
-  const sortBy = c.req.query('sortBy') ?? 'timestamp_desc';
-  if (!VALID_SORT_BY.includes(sortBy as typeof VALID_SORT_BY[number])) {
-    return c.json({ error: ERR_INVALID_SORT_BY }, Http.BadRequest);
-  }
-  const scoreLabel = c.req.query('scoreLabel');
+  const { period, limit, offset, sortBy, scoreLabel } = c.req.valid('query');
 
   const data = await getSessionKv<{ rows: Record<string, unknown>[] }>(c, `metric:evaluations:${name}:${period}`);
   if (!data) return c.json({ rows: [], total: 0, limit, offset, hasMore: false });
@@ -721,13 +754,10 @@ app.get('/api/metrics/:name', requirePermission('dashboard.read'), async (c) => 
   return c.json(data);
 });
 
-app.get('/api/trends/:name', requirePermission('dashboard.read'), async (c) => {
+app.get('/api/trends/:name', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
+  const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c,`trend:${name}:${period}`);
   if (!data) return c.json({ metric: name, period, points: [], bucketCount: 0 });
   return c.json(data);
@@ -753,36 +783,23 @@ app.get('/api/traces/:traceId', requirePermission('dashboard.traces.read'), asyn
   return c.json(data);
 });
 
-app.get('/api/correlations', requirePermission('dashboard.read'), async (c) => {
-  const period = c.req.query('period') ?? '30d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
+app.get('/api/correlations', requirePermission('dashboard.read'), validQuery(z.object({ period: periodField(CORRELATIONS_DEFAULT_PERIOD) })), async (c) => {
+  const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c,`correlations:${period}`);
   if (!data) return c.json({ correlations: [], metrics: [] });
   return c.json(data);
 });
 
-app.get('/api/degradation-signals', requirePermission('dashboard.read'), async (c) => {
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
+app.get('/api/degradation-signals', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
+  const { period } = c.req.valid('query');
   // Key matches DEGRADATION_KV_KEY in src/lib/quality/quality-constants.ts + period suffix
   const data = await getSessionKv<unknown>(c,`meta/dashboard/degradation-signals:${period}`);
   if (!data) return c.json({ period, reports: [], computedAt: null });
   return c.json(data);
 });
 
-app.get('/api/coverage', requirePermission('dashboard.read'), async (c) => {
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
-  const inputKey = c.req.query('inputKey') ?? 'traceId';
-  if (!VALID_INPUT_KEYS.includes(inputKey as typeof VALID_INPUT_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_INPUT_KEY }, Http.BadRequest);
-  }
+app.get('/api/coverage', requirePermission('dashboard.read'), validQuery(CoverageQuery), async (c) => {
+  const { period, inputKey } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c,`coverage:${period}:${inputKey}`);
   // Shape-compatible empty matrix: the grid derives status and gaps from
   // `counts`, so an absent key must still present every field it reads.
@@ -790,11 +807,8 @@ app.get('/api/coverage', requirePermission('dashboard.read'), async (c) => {
   return c.json(data);
 });
 
-app.get('/api/pipeline', requirePermission('dashboard.pipeline.read'), async (c) => {
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
+app.get('/api/pipeline', requirePermission('dashboard.pipeline.read'), validQuery(PeriodQuery), async (c) => {
+  const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c,`pipeline:${period}`);
   if (!data) return c.json({ period, stages: [], totalEvaluations: 0 });
   return c.json(data);
@@ -863,12 +877,9 @@ app.get('/api/agents/:sessionId/graph', requirePermission('dashboard.agents.read
   });
 });
 
-app.get('/api/compliance/sla', requirePermission('dashboard.compliance.read'), async (c) => {
+app.get('/api/compliance/sla', requirePermission('dashboard.compliance.read'), validQuery(PeriodQuery), async (c) => {
   const session = c.get('session');
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
+  const { period } = c.req.valid('query');
   const dashboard = await getSessionKv<Record<string, unknown>>(c, `dashboard:${period}`);
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
   logActivity(session.appUserId, 'compliance_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
@@ -880,12 +891,9 @@ app.get('/api/compliance/sla', requirePermission('dashboard.compliance.read'), a
   });
 });
 
-app.get('/api/compliance/verifications', requirePermission('dashboard.compliance.read'), (c) => {
+app.get('/api/compliance/verifications', requirePermission('dashboard.compliance.read'), validQuery(PeriodQuery), (c) => {
   const session = c.get('session');
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
+  const { period } = c.req.valid('query');
   logActivity(session.appUserId, 'compliance_view', c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.json({ period, count: 0, verifications: [] });
 });
@@ -903,11 +911,8 @@ app.get('/api/calibration', requirePermission('dashboard.read'), async (c) => {
   return c.json(result.data);
 });
 
-app.get('/api/routing-telemetry', requirePermission('dashboard.read'), async (c) => {
-  const period = c.req.query('period') ?? '7d';
-  if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
-    return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
-  }
+app.get('/api/routing-telemetry', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
+  const { period } = c.req.valid('query');
   const raw = await getSessionKv<unknown>(c,`routing-telemetry:${period}`);
   const result = routingTelemetryKvSchema.safeParse(raw ?? {});
   if (!result.success) {
