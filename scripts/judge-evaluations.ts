@@ -32,10 +32,11 @@
  * faithfulness and hallucination scores to the local ledger only: no LLM call,
  * no post to ingest, and no other flag applies. Rows are cohort `backfill`
  * (canary draws stay `canary`), and turns the ledger already covers are
- * skipped. Nothing schedules it. Run it by hand, knowing that `backfill` is
- * an evidence cohort (only `seed` and `canary` are excluded), so a row young
- * enough for upload's age guard (36 h by default) reaches the dashboard
- * aggregates as if judged.
+ * skipped. Nothing schedules it. Run it by hand. `backfill` is not an
+ * evidence cohort (`isEvidenceCohort`), so its rows stay out of the
+ * `dashboard:*` aggregates, but a row young enough for upload's age guard
+ * (36 h by default) still reaches sync's `metric:*` keys, which drop only
+ * canaries.
  *
  * Scoring is consolidated by default — one call per turn carrying every
  * criterion (judge-consolidated.ts). `--batch`

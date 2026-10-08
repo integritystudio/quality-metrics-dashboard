@@ -17,6 +17,7 @@ import {
   type OrgReadBackend,
 } from '../sync-to-kv.js';
 import { CANARY_COHORT } from '../evaluation-constants.js';
+import { BACKFILL_COHORT, SEED_COHORT } from '../eval-record.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../../src/lib/core/units.js';
 
@@ -216,6 +217,21 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
     const hashOf = (r: OrgComputation) => r.allEntries.find(e => e.key === 'dashboard:7d')?.hashBasis;
 
     expect(hashOf(changed)).not.toBe(hashOf(second));
+  });
+});
+
+describe('computeOrgEntries synthetic cohorts (BACKFILL-COHORT-COUNTS-AS-EVIDENCE)', () => {
+  const rows = [0.7, 0.8, 0.9].map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
+  const dashboardHashes = (result: OrgComputation) =>
+    new Map(result.allEntries.filter(e => e.key.startsWith('dashboard:')).map(e => [e.key, e.hashBasis]));
+
+  it.each([BACKFILL_COHORT, SEED_COHORT])('leaves every dashboard key unchanged when a %s row is added', async (cohort) => {
+    const synthetic = evaluation(cohort, '2026-10-07T13:00:00.000Z', { scoreValue: 0, cohort });
+    const baseline = await compute(rows);
+    const withSynthetic = await compute([synthetic, ...rows]);
+
+    expect(dashboardHashes(baseline).size).toBeGreaterThan(0);
+    expect(dashboardHashes(withSynthetic)).toEqual(dashboardHashes(baseline));
   });
 });
 
