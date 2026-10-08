@@ -210,11 +210,15 @@ describe('GET /agents/:sessionId/graph', () => {
   });
 
   // The route once scored a step as failed only on status 'ERROR', so a span that
-  // failed by its has_error attribute scored 1 here and 0 in the graph KV serves.
-  it('scores a step that failed by its has_error attribute as 0, as the KV graph does', async () => {
+  // failed by a has_error attribute scored 1 here and 0 in the graph KV serves.
+  // No numeric-status row: CloudBackend turns status code 2 into 'ERROR' before the route reads it.
+  it.each([
+    'integritystudio.agent.has_error',
+    'integritystudio.tool.has_error',
+  ])('scores a step that failed by %s as 0, as the KV graph does', async (errorAttribute) => {
     fixture.setTraces([
       makeAgentSpanWire('trace-001', 'span-001', 'general-purpose'),
-      makeAgentSpanWire('trace-001', 'span-002', 'Explore', { 'integritystudio.agent.has_error': true }),
+      makeAgentSpanWire('trace-001', 'span-002', 'Explore', { [errorAttribute]: true }),
     ]);
 
     const res = await agentRoutes.request('/agents/sess-001/graph');
