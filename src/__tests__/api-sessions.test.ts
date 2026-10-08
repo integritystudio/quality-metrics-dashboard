@@ -231,6 +231,16 @@ describe('GET /sessions/:sessionId', () => {
     expect(body.hookLatency['hook:builtin-post-tool']).toEqual({ count: 3, avg: 2000, p50: 2000, p95: 2900, max: 3000 });
   });
 
+  it('spans the timespan across log timestamps', async () => {
+    fixture.setLogs(['2026-01-01T02:00:00.000Z', '2026-01-01T00:00:00.000Z'].map(timestamp =>
+      logToWire({ timestamp, attributes: { 'session.id': 'sess-abc' } })));
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailBody;
+
+    expect(body.timespan).toEqual({ start: '2026-01-01T00:00:00.000Z', end: '2026-01-01T02:00:00.000Z', durationHours: 2 });
+  });
+
   it('computes dataSources total from all sources', async () => {
     fixture.setTraces([makeSessionSpanWire()]);
     // session.id must be in attributes so the client-side sessionId filter passes.

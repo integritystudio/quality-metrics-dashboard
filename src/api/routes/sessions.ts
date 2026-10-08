@@ -22,6 +22,7 @@ import {
   renamedAttr,
   gitRepositoryLabel,
   jsonSafe,
+  timestampToMs,
 } from '../api-constants.js';
 import { isSpanError, extractGitCommit } from '../session-detail.js';
 import {
@@ -41,15 +42,12 @@ sessionRoutes.onError(handleRouteError);
 const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
 
 /**
- * Parses a timestamp string to milliseconds since epoch.
- * Returns null for empty, missing, NaN, or out-of-range values that would
+ * {@link timestampToMs} plus a range guard: null for empty, missing, NaN, or out-of-range values that would
  * corrupt tsMin/tsMax comparisons or cause Date.toISOString() to throw.
  */
 function parseTimestamp(value: string | bigint | undefined | null): number | null {
-  if (value == null || value === '') return null;
-  const ms = typeof value === 'bigint' ? Number(value / 1_000_000n) : new Date(value).getTime();
-  if (isNaN(ms) || ms < -DATE_ISO_SAFE_MAX_MS || ms > DATE_ISO_SAFE_MAX_MS) return null;
-  return ms;
+  const ms = timestampToMs(value);
+  return Number.isFinite(ms) && Math.abs(ms) <= DATE_ISO_SAFE_MAX_MS ? ms : null;
 }
 
 type LatencyStats = { count: number; avg: number; p50: number; p95: number; max: number };
