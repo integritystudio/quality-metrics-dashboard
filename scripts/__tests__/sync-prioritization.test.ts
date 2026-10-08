@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { prioritizeTraces, computeBudgetAllocation } from '../sync-to-kv.js';
+import { prioritizeTraces, computeBudgetAllocation, type KVEntry } from '../sync-to-kv.js';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-
-type KVEntry = { key: string; value: string };
+import { TIME_MS } from '../../../src/lib/core/units.js';
+import { evaluation } from './support/evaluations.js';
 
 /**
  * Thin wrapper around the exported computeBudgetAllocation + prioritizeTraces
@@ -27,16 +27,8 @@ function allocateBudget(
 }
 
 function makeEval(traceId: string, scoreValue: number, daysAgo = 1): EvaluationResult {
-  const ms = Date.now() - daysAgo * 24 * 60 * 60 * 1000;
-  return {
-    traceId,
-    evaluationName: 'relevance',
-    scoreValue,
-    timestamp: BigInt(ms) * 1_000_000n,
-    sessionId: 'sess-x',
-    evaluatorType: 'llm',
-    id: `${traceId}-${scoreValue}`,
-  } as EvaluationResult;
+  const iso = new Date(Date.now() - daysAgo * TIME_MS.DAY).toISOString();
+  return evaluation(`${traceId}-${scoreValue}`, iso, { traceId, scoreValue });
 }
 
 function makeTraceEntries(traceId: string): KVEntry[] {
@@ -255,5 +247,22 @@ describe('prioritizeTraces: referenced trace prioritization', () => {
         .map(e => e.key.slice('trace:'.length)),
     );
     expect(batchTraceIds.has(referencedId)).toBe(true);
+  });
+});
+
+describe('prioritizeTraces with org-prefixed keys (P4)', () => {
+  const ORG = 'f4286657-da73-4174-9e49-937f1bb6097f';
+
+  it('groups the org-prefixed and bare entries of one trace as a single unit', () => {
+    const entries = [
+      { key: `org:${ORG}:evaluations:trace:t1`, value: '{}' },
+      { key: `org:${ORG}:trace:t1`, value: '{}' },
+      { key: 'evaluations:trace:t1', value: '{}' },
+      { key: 'trace:t1', value: '{}' },
+    ];
+    const result = prioritizeTraces(entries, new Map(), new Set());
+    // All four entries survive, contiguously — one trace, one priority group.
+    expect(result).toHaveLength(4);
+    expect(new Set(result.map(e => e.key))).toEqual(new Set(entries.map(e => e.key)));
   });
 });

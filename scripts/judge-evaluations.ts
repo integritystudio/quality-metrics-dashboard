@@ -126,6 +126,7 @@ import {
 } from './judge-usage.js';
 import { evalFailures, failureClasses, readRunState, resetFailureTracking, summarizeJudgeRun, trackFailure, writeRunState } from './judge-failures.js';
 import { EVALUATIONS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 const CONCURRENCY = 3;
 const BATCH_DELAY_MS = 500;
@@ -749,7 +750,7 @@ async function main() {
     discovery = await discoverTurns(source, dateScope);
   } catch (err) {
     // Nothing is spent before this point, so populate carries on without the judge.
-    console.error(`[judge] discovery failed: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`[judge] discovery failed: ${describeUnknown(err)}`);
     process.exitCode = JUDGE_EXIT_DISCOVERY_FAILED;
     return;
   }

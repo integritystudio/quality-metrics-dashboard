@@ -92,6 +92,7 @@ import {
   type CallUsageTotals,
   type JudgeTokenUsage,
 } from './judge-usage.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -404,7 +405,7 @@ async function scoreTurnWithReference(
       scores[config.name] = normalized;
       if (config.name === FAITHFULNESS_EVAL_NAME) scores[HALLUCINATION_EVAL_NAME] = 1 - normalized;
     } catch (err) {
-      errors.push(`${config.name}: ${err instanceof Error ? err.message : String(err)}`);
+      errors.push(`${config.name}: ${describeUnknown(err)}`);
     }
   }
 

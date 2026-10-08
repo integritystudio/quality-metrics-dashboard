@@ -78,11 +78,13 @@ import {
   LATENCY_P95,
   RATE_DISPLAY_PRECISION,
   KV_SCHEMA_VERSION,
+  timestampToMs,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
 const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
@@ -104,7 +106,7 @@ function resolveCloudflareConfig(): CloudflareConfig {
     try {
       parsed = parseToml(raw);
     } catch (err) {
-      throw new Error(`Failed to parse ${tomlPath}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      throw new Error(`Failed to parse ${tomlPath}: ${describeUnknown(err)}`, { cause: err });
     }
     const accountId = envAccountId ??
       (typeof parsed.account_id === 'string' ? parsed.account_id : undefined);
@@ -224,6 +226,11 @@ export function stripOrgPrefix(key: string): string {
 /** `hashBasis`, when set, is what change detection hashes instead of `value`. */
 export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
 
+/** Writes a `bigint` in its decimal-string wire form; `JSON.stringify` throws on it. */
+function bigintToString(v: unknown): unknown {
+  return typeof v === 'bigint' ? v.toString() : v;
+}
+
 /**
  * Serialize a KV entry value. Backend spans and evaluations carry `bigint`
  * timestamps (`startTimeUnixNano`, `endTimeUnixNano`, `timestamp`) that
@@ -239,7 +246,7 @@ export type KVEntry = { key: string; value: string; expirationTtl?: number; hash
  * (KV-VALUE-NOT-JSON-UNGUARDED).
  */
 export function toKVValue(value: unknown): string {
-  const json: string | undefined = JSON.stringify(value, (_key, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
+  const json: string | undefined = JSON.stringify(value, (_key, v: unknown) => bigintToString(v));
   if (typeof json !== 'string') throw new TypeError(`[sync-to-kv] KV value has no JSON form (${typeof value})`);
   return json;
 }
@@ -394,16 +401,19 @@ function coveragePercent(part: number, whole: number): number {
     : PERCENT_MULTIPLIER;
 }
 
-function hashValue(value: string): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, HASH_PREFIX_CHARS);
-}
-
 function entryHash(entry: KVEntry): string {
-  return hashValue(entry.hashBasis ?? entry.value);
+  return createHash('sha256').update(entry.hashBasis ?? entry.value).digest('hex').slice(0, HASH_PREFIX_CHARS);
 }
 
 function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   return entries.filter(e => state.get(e.key)?.hash !== entryHash(e));
+}
+
+/** Record the hash of each entry `kvBulkPut` reported written, so the next run skips it while unchanged. */
+function recordWritten(state: SyncState, entries: KVEntry[], writtenKeys: Set<string>): void {
+  for (const e of entries) {
+    if (writtenKeys.has(e.key)) state.set(e.key, { hash: entryHash(e) });
+  }
 }
 
 /** The view's own run-time stamp; a nested `timestamp` (`worstExplanation.timestamp`) is event time, i.e. data. */
@@ -422,9 +432,17 @@ export function dashboardEntry(key: string, view: object): KVEntry {
   const hashBasis = JSON.stringify(view, function (this: unknown, field: string, v: unknown) {
     if (field === DASHBOARD_PERIOD_FIELD) return undefined;
     if (field === DASHBOARD_RUN_STAMP_FIELD && this === view) return undefined;
-    return typeof v === 'bigint' ? v.toString() : v;
+    return bigintToString(v);
   });
   return { key, value: toKVValue(view), hashBasis };
+}
+
+/** Failed keys named in a warning; the rest are summarised by an ellipsis. */
+const FAILED_KEY_PREVIEW_COUNT = 5;
+
+function previewKeys(keys: string[]): string {
+  const shown = keys.slice(0, FAILED_KEY_PREVIEW_COUNT).join(', ');
+  return keys.length > FAILED_KEY_PREVIEW_COUNT ? `${shown}…` : shown;
 }
 
 interface EnvelopedKVPair {
@@ -500,8 +518,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
       }
       const failed = new Set(result?.unsuccessful_keys ?? []);
       if (failed.size > 0) {
-        const failedArr = [...failed];
-        console.warn(`[sync-to-kv] ${failed.size} key(s) not written in batch${batchLabel} — will retry on next run: ${failedArr.slice(0, 5).join(', ')}${failed.size > 5 ? '…' : ''}`);
+        console.warn(`[sync-to-kv] ${failed.size} key(s) not written in batch${batchLabel} — will retry on next run: ${previewKeys([...failed])}`);
       }
       for (const e of batch) {
         if (!failed.has(e.key)) writtenKeys.add(e.key);
@@ -521,8 +538,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         );
         continue;
       }
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
+      console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${describeUnknown(err)}`);
       throw new Error(`Cloudflare KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
     }
   }
@@ -561,16 +577,12 @@ export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }):
       const failedDeletes = result?.unsuccessful_keys ?? [];
       if (failedDeletes.length > 0) {
         console.warn(
-          `[sync-to-kv] ${failedDeletes.length} key(s) not deleted — will be retried on next sync: ` +
-          `${failedDeletes.slice(0, 5).join(', ')}${failedDeletes.length > 5 ? '…' : ''}`,
+          `[sync-to-kv] ${failedDeletes.length} key(s) not deleted — will be retried on next sync: ${previewKeys(failedDeletes)}`,
         );
         for (const k of failedDeletes) failedKeys.add(k);
       }
     } catch (err) {
-      console.warn(
-        `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
-        `${err instanceof Error ? err.message : String(err)}`,
-      );
+      console.warn(`[sync-to-kv] bulk delete failed for ${batch.length} key(s): ${describeUnknown(err)}`);
       // Conservatively keep all batch keys in state so the next run retries.
       for (const k of batch) failedKeys.add(k);
     }
@@ -587,12 +599,14 @@ function extractTraceId(key: string): string | null {
   return null;
 }
 
-interface TracePriorityScore {
-  traceId: string;
-  priority: number;
-  worstScore: number;
-  latestTimestamp: number;
-  isReferencedByWorst: boolean;
+/** Weighted sum of how bad, how recent, and whether a metric card links to the trace. */
+function tracePriority(evals: EvaluationResult[], isReferencedByWorst: boolean, now: number): number {
+  const worstScore = min(validScores(evals)) ?? UNEVALUATED_TRACE_SCORE;
+  const latestTimestamp = max(evals.map(e => timestampToMs(e.timestamp)).filter(Number.isFinite)) ?? 0;
+  const recency = latestTimestamp > 0 ? Math.max(0, 1 - (now - latestTimestamp) / PERIOD_MS['30d']) : 0;
+  return (1 - worstScore) * TRACE_PRIORITY_WEIGHTS.worstScore
+    + recency * TRACE_PRIORITY_WEIGHTS.recency
+    + (isReferencedByWorst ? 1 : 0) * TRACE_PRIORITY_WEIGHTS.referencedByWorst;
 }
 
 export function prioritizeTraces(
@@ -601,7 +615,6 @@ export function prioritizeTraces(
   referencedTraceIds: Set<string>,
 ): KVEntry[] {
   const now = Date.now();
-  const thirtyDaysMs = PERIOD_MS['30d'];
 
   // each trace has 2 entries: evaluations:trace:X and trace:X
   const traceGroups = new Map<string, KVEntry[]>();
@@ -618,40 +631,12 @@ export function prioritizeTraces(
     console.warn(`[prioritizeTraces] Skipped ${skippedCount} entries with non-trace key format`);
   }
 
-  const scored: TracePriorityScore[] = [];
-  for (const [traceId] of traceGroups) {
-    const evals = evalsByTrace.get(traceId) ?? [];
-
-    const worstScore = min(evals.map(e => e.scoreValue).filter(isValidScore)) ?? UNEVALUATED_TRACE_SCORE;
-
-    const timestamps = evals.map(e => Number(e.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT)).filter(Number.isFinite);
-    const latestTimestamp = max(timestamps) ?? 0;
-
-    const isReferencedByWorst = referencedTraceIds.has(traceId);
-
-    const scoreComponent = (1 - worstScore) * TRACE_PRIORITY_WEIGHTS.worstScore;
-    const recencyComponent = (latestTimestamp > 0
-      ? Math.max(0, 1 - (now - latestTimestamp) / thirtyDaysMs)
-      : 0) * TRACE_PRIORITY_WEIGHTS.recency;
-    const referencedComponent = (isReferencedByWorst ? 1 : 0) * TRACE_PRIORITY_WEIGHTS.referencedByWorst;
-
-    scored.push({
-      traceId,
-      priority: scoreComponent + recencyComponent + referencedComponent,
-      worstScore,
-      latestTimestamp,
-      isReferencedByWorst,
-    });
-  }
-
+  const scored = Array.from(traceGroups, ([traceId, entries]) => ({
+    entries,
+    priority: tracePriority(evalsByTrace.get(traceId) ?? [], referencedTraceIds.has(traceId), now),
+  }));
   scored.sort((a, b) => b.priority - a.priority);
-
-  const result: KVEntry[] = [];
-  for (const { traceId } of scored) {
-    const traceGroup = traceGroups.get(traceId);
-    if (traceGroup) result.push(...traceGroup);
-  }
-  return result;
+  return scored.flatMap(t => t.entries);
 }
 
 function spanSessionId(span: { attributes?: Record<string, unknown> }): string | undefined {
@@ -660,6 +645,15 @@ function spanSessionId(span: { attributes?: Record<string, unknown> }): string |
 
 function isValidScore(v: number | null | undefined): v is number {
   return v != null && Number.isFinite(v);
+}
+
+function validScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+  return evals.map(e => e.scoreValue).filter(isValidScore);
+}
+
+/** Groups by metric with canaries dropped, the input every aggregate is built from. */
+function groupByMetric(evals: EvaluationResult[]): EvaluationsByName {
+  return group(filterCanary(evals), ev => ev.evaluationName);
 }
 
 /** Narrows to rows with a non-empty `traceId`, so `group` keys them by `string`. */
@@ -719,7 +713,7 @@ async function discoverOrgIds(now: Date): Promise<string[]> {
   } catch (err) {
     console.warn(
       '[sync-to-kv] all-orgs enumeration unavailable — syncing HOME org only. ' +
-      `(${err instanceof Error ? err.message : String(err)})`,
+      `(${describeUnknown(err)})`,
     );
   }
   return [...ids];
@@ -876,7 +870,7 @@ function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates:
   const metricTimeSeries = new Map<string, number[]>();
   const corrMetricNames: string[] = [];
   for (const [name, metricEvals] of grouped) {
-    metricTimeSeries.set(name, metricEvals.map(e => e.scoreValue).filter(isValidScore));
+    metricTimeSeries.set(name, validScores(metricEvals));
     corrMetricNames.push(name);
   }
   const correlations = computeCorrelationMatrix(metricTimeSeries);
@@ -926,11 +920,8 @@ function computeMetricDetailEntries(
   const weekMs = PERIOD_MS['7d'];
   // The current week matches `dashboard:7d`; the previous week is the 7 whole days before
   // it and ends where it starts, so no evaluation counts in both (METRIC-WEEK-OVERLAP).
-  const currentWeek = group(filterCanary(orgEvals.between(nowMs - weekMs)), ev => ev.evaluationName);
-  const previousWeek = group(
-    filterCanary(orgEvals.inWindow(dayStartNs(nowMs - 2 * weekMs), dayStartNs(nowMs - weekMs))),
-    ev => ev.evaluationName,
-  );
+  const currentWeek = groupByMetric(orgEvals.between(nowMs - weekMs));
+  const previousWeek = groupByMetric(orgEvals.inWindow(dayStartNs(nowMs - 2 * weekMs), dayStartNs(nowMs - weekMs)));
   const entries: KVEntry[] = [];
   const referencedTraceIds = new Set<string>();
 
@@ -939,7 +930,7 @@ function computeMetricDetailEntries(
     const evals = currentWeek.get(name);
     if (!config || !evals) continue;
 
-    const prevScores = (previousWeek.get(name) ?? []).map(e => e.scoreValue).filter(isValidScore);
+    const prevScores = validScores(previousWeek.get(name) ?? []);
     const previousValues = prevScores.length > 0
       ? computeAggregations(prevScores, config.aggregations)
       : undefined;
@@ -1022,7 +1013,7 @@ function computeTrendEntries(
         timeBuckets.push({ startTime: bStart.toISOString(), endTime: bEnd.toISOString(), scores: [], evals: [] });
       }
       for (const ev of evaluations) {
-        const ts = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
+        const ts = timestampToMs(ev.timestamp);
         const idx = Math.min(Math.floor((ts - start.getTime()) / bucketMs), TREND_BUCKETS - 1);
         const tb = timeBuckets[idx];
         if (idx >= 0 && tb && isValidScore(ev.scoreValue)) {
@@ -1069,9 +1060,7 @@ function computeTrendEntries(
         };
       });
 
-      const allScores = evaluations
-        .map(e => e.scoreValue)
-        .filter(isValidScore);
+      const allScores = validScores(evaluations);
 
       entries.push({
         key: `trend:${name}:${period}`,
@@ -1189,21 +1178,21 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
     const lastSeen = acc.lastSeenDate;
     const totalSessions = acc.totalSessionCount;
     const sortedSessionDurations = acc.sessionDurations.slice().sort((a, b) => a - b);
+    const perInvocation = (total: number) => (acc.totalInvocations > 0 ? total / acc.totalInvocations : 0);
+    const rate = (count: number) => +perInvocation(count).toFixed(RATE_DISPLAY_PRECISION);
 
     const detail = {
       agentName,
       totalSessions,
       totalInvocations: acc.totalInvocations,
       totalErrors: acc.totalErrors,
-      errorRate: acc.totalInvocations > 0 ? +(acc.totalErrors / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
+      errorRate: rate(acc.totalErrors),
       rateLimitEvents: acc.rateLimitEvents,
-      avgOutputSize: acc.totalInvocations > 0 ? Math.round(acc.totalOutputSize / acc.totalInvocations) : 0,
-      avgDurationMs: acc.totalInvocations > 0
-        ? Math.round(acc.weightedDurationSum / acc.totalInvocations)
-        : 0,
+      avgOutputSize: Math.round(perInvocation(acc.totalOutputSize)),
+      avgDurationMs: Math.round(perInvocation(acc.weightedDurationSum)),
       p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(quantileSorted(sortedSessionDurations, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0) : 0,
-      truncatedRate: acc.totalInvocations > 0 ? +(acc.truncatedCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
-      emptyOutputRate: acc.totalInvocations > 0 ? +(acc.emptyCount / acc.totalInvocations).toFixed(RATE_DISPLAY_PRECISION) : 0,
+      truncatedRate: rate(acc.truncatedCount),
+      emptyOutputRate: rate(acc.emptyCount),
       lastSeen,
       computedAt,
       sessions,
@@ -1292,7 +1281,7 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
     const start = new Date(nowMs - PERIOD_MS[period]);
     const evals = orgEvals.between(start.getTime());
     periodCounts.push(`${period}:${evals.length}`);
-    const grouped = group(filterCanary(evals), ev => ev.evaluationName);
+    const grouped = groupByMetric(evals);
     groupedByPeriod.set(period, grouped);
     entries.push(...computePeriodEntries(period, grouped, { start: start.toISOString(), end: now.toISOString() }));
   }
@@ -1367,6 +1356,7 @@ async function main(): Promise<void> {
   const evalsByTrace = new Map<string, EvaluationResult[]>();
   const referencedTraceIds = new Set<string>();
   let homeComputation: OrgComputation | null = null;
+  let hitCap = false;
   const perOrgSummaries: string[] = [];
 
   for (const orgId of orgIds) {
@@ -1374,6 +1364,7 @@ async function main(): Promise<void> {
     const isHome = orgId === null || orgId === HOME_ORG_ID;
     const res = await computeOrgEntries(backend, now, isHome);
     if (isHome) homeComputation = res;
+    hitCap ||= res.hitCap;
     perOrgSummaries.push(
       `${orgId ?? 'legacy'}: entries=${res.allEntries.length} evals=${res.evalCount} spans=${res.spanCount} periods=[${res.periodCounts}]` +
       (res.hitCap ? ' CAP-HIT' : ''),
@@ -1394,21 +1385,21 @@ async function main(): Promise<void> {
   }
 
   const traceIds = homeComputation?.traceIds ?? [];
-  const hitCap = perOrgSummaries.some(s => s.endsWith('CAP-HIT'));
 
   const prevState = loadSyncState();
   const changed = filterChanged(allEntries, prevState);
 
   // Every-run bookkeeping keys: the legacy bare heartbeat, the org-prefixed
   // per-org heartbeats, and the global system heartbeat for /api/health (P5).
+  const heartbeat = toKVValue(now.toISOString());
   const metaEntries: KVEntry[] = [
-    { key: META_LAST_SYNC_KEY, value: toKVValue(now.toISOString()) },
+    { key: META_LAST_SYNC_KEY, value: heartbeat },
   ];
   if (HOME_ORG_ID) {
     for (const orgId of orgIds) {
-      if (orgId) metaEntries.push({ key: orgPrefixedKey(orgId, META_LAST_SYNC_KEY), value: toKVValue(now.toISOString()) });
+      if (orgId) metaEntries.push({ key: orgPrefixedKey(orgId, META_LAST_SYNC_KEY), value: heartbeat });
     }
-    metaEntries.push({ key: SYSTEM_LAST_SYNC_KEY, value: toKVValue(now.toISOString()) });
+    metaEntries.push({ key: SYSTEM_LAST_SYNC_KEY, value: heartbeat });
   }
 
   if (changed.length === 0) {
@@ -1416,10 +1407,7 @@ async function main(): Promise<void> {
     // Still update the heartbeat keys (legacy, per-org, and global system)
     const staleMeta = filterChanged(metaEntries, prevState);
     if (staleMeta.length > 0) {
-      const writtenMeta = await kvBulkPut(staleMeta);
-      for (const e of staleMeta) {
-        if (writtenMeta.has(e.key)) prevState.set(e.key, { hash: entryHash(e) });
-      }
+      recordWritten(prevState, staleMeta, await kvBulkPut(staleMeta));
       if (!dryRun) saveSyncState(prevState);
     }
     // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
@@ -1432,10 +1420,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const isTraceKey = (e: KVEntry) => {
-    const bare = stripOrgPrefix(e.key);
-    return bare.startsWith(TRACE_KEY_PREFIX) || bare.startsWith(TRACE_EVALS_KEY_PREFIX);
-  };
+  const isTraceKey = (e: KVEntry) => extractTraceId(e.key) !== null;
   const highPriority = changed.filter(e => !isTraceKey(e));
   const traceChanged = changed.filter(isTraceKey);
   const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, WRITE_BUDGET);
@@ -1452,9 +1437,7 @@ async function main(): Promise<void> {
   const writtenKeys = await kvBulkPut(toWrite);
 
   const newState = new Map(prevState);
-  for (const e of toWrite) {
-    if (writtenKeys.has(e.key)) newState.set(e.key, { hash: entryHash(e) });
-  }
+  recordWritten(newState, toWrite, writtenKeys);
   const computedKeys = new Set(allEntries.map(e => e.key));
   for (const e of metaEntries) computedKeys.add(e.key);
   computedKeys.add(META_LAST_SYNC_KEY);
@@ -1506,14 +1489,15 @@ async function main(): Promise<void> {
   // does not burn a KV write every run. `deferred` is intentionally included — a change in the
   // backlog size triggers a write so the latest count is always visible.
   const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
-  const coverageHash = hashValue(JSON.stringify(stableCoverage));
-  const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: toKVValue(coverage) };
-  if (newState.get(META_SYNC_COVERAGE_KEY)?.hash !== coverageHash) {
+  const coverageEntry: KVEntry = {
+    key: META_SYNC_COVERAGE_KEY,
+    value: toKVValue(coverage),
+    hashBasis: JSON.stringify(stableCoverage),
+  };
+  if (filterChanged([coverageEntry], newState).length > 0) {
     const coverageWrittenKeys = await kvBulkPut([coverageEntry]);
-    if (coverageWrittenKeys.has(coverageEntry.key)) {
-      newState.set(META_SYNC_COVERAGE_KEY, { hash: coverageHash });
-      if (!dryRun) saveSyncState(newState);
-    }
+    recordWritten(newState, [coverageEntry], coverageWrittenKeys);
+    if (coverageWrittenKeys.has(coverageEntry.key) && !dryRun) saveSyncState(newState);
   }
   // Persist coverage data so the early-return path can refresh lastChecked without recomputing.
   if (!dryRun) saveLastCoverage(coverage);

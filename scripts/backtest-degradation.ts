@@ -34,6 +34,7 @@ import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { importMetaDirname } from '../src/lib/dashboard-file-utils.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain } from './cli-args.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 const INCIDENTS_FILE = join(import.meta.dirname, '.degradation-incidents.json');
 /** F1 improvement above which best config triggers graduation recommendation */
@@ -91,7 +92,7 @@ function loadIncidents(): LabeledIncident[] {
     }
     return result.data;
   } catch (err) {
-    console.error(`Failed to parse incidents file: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Failed to parse incidents file: ${describeUnknown(err)}`);
     return [];
   }
 }

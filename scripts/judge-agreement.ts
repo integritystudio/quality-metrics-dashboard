@@ -72,6 +72,7 @@ import {
   tokenUsageCostUsd,
   type CallUsageReport,
 } from './judge-usage.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -419,7 +420,7 @@ async function main(): Promise<void> {
       outcome.perCriterion = scoresByName(await evaluateTurn(judge, turn, new Set()));
       outcome.consolidated = scoresByName(await evaluateTurnConsolidated(provider, turn, new Set(), stepsCache));
     } catch (err) {
-      outcome.error = err instanceof Error ? err.message : String(err);
+      outcome.error = describeUnknown(err);
     }
     completed++;
     console.log(`[agreement] ${completed}/${sample.turns.length} turns done`);

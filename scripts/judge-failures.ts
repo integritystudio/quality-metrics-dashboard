@@ -9,6 +9,7 @@ import type { JudgeApiKeySource } from './judge-credentials.js';
 import { EVAL_SCORE_PRECISION } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { judgePricing, usageCostUsd, type JudgeUsageTotals } from './judge-usage.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 /** Track evaluation failures for summary reporting */
 export const evalFailures: Record<string, number> = {};
@@ -71,7 +72,7 @@ export function resetFailureTracking(): void {
 
 export function trackFailure(metric: string, err: unknown): void {
   evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
-  failureClasses[classifyJudgeFailure(err instanceof Error ? err.message : String(err))] += 1;
+  failureClasses[classifyJudgeFailure(describeUnknown(err))] += 1;
 }
 
 /** Failure rate above which a run is flagged as JUDGE_EXIT_HIGH_FAILURE_RATE. */

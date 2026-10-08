@@ -1,7 +1,8 @@
 /**
- * Unit tests for kvBulkPut (dashboard/scripts/sync-to-kv.ts).
+ * Unit tests for kvBulkPut, chunkKvPairs and kvBulkDelete (dashboard/scripts/sync-to-kv.ts),
+ * against one stubbed Cloudflare SDK.
  *
- * Covers:
+ * kvBulkPut:
  *  - empty-entry early return (returns empty Set)
  *  - partial failure via unsuccessful_keys: failed keys excluded from returned Set
  *  - null API result (204 No Content): credits all keys
@@ -11,6 +12,13 @@
  *  - multi-batch partial failure: failed keys from all batches are excluded
  *  - byte-capped chunking (chunkKvPairs) and per-chunk connection failures
  *  - the SDK client is built on the HTTP/1.1 fetch
+ *
+ * kvBulkDelete:
+ *  - empty-key early return
+ *  - dry-run: logs, no SDK call
+ *  - warn-on-failure: does not throw; includes error message in warning
+ *  - KV_BATCH_SIZE batching: correct split and SDK call count
+ *  - passes correct body and credentials to SDK bulkDelete
  */
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
@@ -62,7 +70,7 @@ vi.mock('cloudflare', () => {
 const TEST_NAMESPACE_ID = '902fc8a43e7147b486b6376c485c4506';
 const TEST_ACCOUNT_ID = 'test-account-id';
 
-import { kvBulkPut, chunkKvPairs, KV_BATCH_SIZE, KV_BATCH_MAX_BYTES, type KVEntry } from '../sync-to-kv.js';
+import { kvBulkPut, kvBulkDelete, chunkKvPairs, KV_BATCH_SIZE, KV_BATCH_MAX_BYTES, type KVEntry } from '../sync-to-kv.js';
 
 function entry(key: string): KVEntry {
   return { key, value: JSON.stringify({ metric: key }) };
@@ -83,11 +91,18 @@ async function connectionError(): Promise<Error> {
 beforeEach(() => {
   process.env.KV_NAMESPACE_ID = TEST_NAMESPACE_ID;
   process.env.CLOUDFLARE_ACCOUNT_ID = TEST_ACCOUNT_ID;
+  // Both functions report through the console; tests that assert on it read `vi.mocked(console.*)`.
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 afterEach(() => {
   delete process.env.KV_NAMESPACE_ID;
   delete process.env.CLOUDFLARE_ACCOUNT_ID;
+  vi.restoreAllMocks();
+  // clearAllMocks resets call history but keeps each SDK stub's implementation,
+  // so the cached Cloudflare client stays callable across tests.
   vi.clearAllMocks();
 });
 
@@ -115,20 +130,17 @@ describe('kvBulkPut: successful write', () => {
 
   it('returns all keys when API returns null (204 No Content)', async () => {
     mockBulkUpdate.mockResolvedValueOnce(null);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b')]);
 
     expect(written.size).toBe(2);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no response body'));
-    warnSpy.mockRestore();
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('no response body'));
   });
 });
 
 describe('kvBulkPut: partial failure via unsuccessful_keys', () => {
   it('excludes failed keys from the returned Set', async () => {
     mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: ['metric:b'] });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b'), entry('metric:c')]);
 
@@ -136,17 +148,35 @@ describe('kvBulkPut: partial failure via unsuccessful_keys', () => {
     expect(written.has('metric:b')).toBe(false);
     expect(written.has('metric:c')).toBe(true);
     expect(written.size).toBe(2);
-    warnSpy.mockRestore();
   });
 
   it('emits a warning that names the failed key', async () => {
     mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: ['trace:bad'] });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await kvBulkPut([entry('trace:bad'), entry('trace:good')]);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('trace:bad'));
-    warnSpy.mockRestore();
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('trace:bad'));
+  });
+});
+
+describe('failed-key warnings', () => {
+  const failedKeys = ['k:1', 'k:2', 'k:3', 'k:4', 'k:5', 'k:6'];
+
+  it.each([
+    ['kvBulkPut', async () => {
+      mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: failedKeys });
+      await kvBulkPut(failedKeys.map(entry));
+    }],
+    ['kvBulkDelete', async () => {
+      mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: failedKeys });
+      await kvBulkDelete(failedKeys);
+    }],
+  ])('%s names the first five failed keys and elides the rest', async (_name, run) => {
+    await run();
+
+    const warning = vi.mocked(console.warn).mock.calls.flat().join('\n');
+    expect(warning).toContain('k:1, k:2, k:3, k:4, k:5…');
+    expect(warning).not.toContain('k:6');
   });
 });
 
@@ -165,39 +195,33 @@ describe('kvBulkPut: daily write limit', () => {
         429, [{ code: 10048 }], 'KV daily limit reached',
       ),
     );
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const written = await kvBulkPut(allEntries);
 
     // First batch (KV_BATCH_SIZE entries) written; second batch (1 entry) not.
     expect(written.size).toBe(KV_BATCH_SIZE);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('write limit'));
-    warnSpy.mockRestore();
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('write limit'));
   });
 });
 
 describe('kvBulkPut: SDK call shape', () => {
   it('wraps each value in a version envelope', async () => {
     mockBulkUpdate.mockResolvedValueOnce(null);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await kvBulkPut([{ key: 'metric:x', value: '"raw-value"' }]);
 
     const [, params] = mockBulkUpdate.mock.calls[0] as [string, { body: Array<{ key: string; value: string }> }];
     const firstBody = params.body[0]!;
     expect(firstBody.value).toMatch(/^\{"v":/);
     expect(firstBody.value).toContain('"raw-value"');
-    warnSpy.mockRestore();
   });
 
   it('passes namespace id and account id', async () => {
     mockBulkUpdate.mockResolvedValueOnce(null);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await kvBulkPut([entry('metric:y')]);
 
     const [namespaceId, params] = mockBulkUpdate.mock.calls[0] as [string, { account_id: string }];
     expect(namespaceId).toBe(TEST_NAMESPACE_ID);
     expect(params.account_id).toBe(TEST_ACCOUNT_ID);
-    warnSpy.mockRestore();
   });
 });
 
@@ -227,13 +251,11 @@ describe('kvBulkPut: batching', () => {
 
     mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: [] });
     mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: [failedKey] });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const written = await kvBulkPut(entries);
 
     expect(written.has(failedKey)).toBe(false);
     expect(written.size).toBe(entries.length - 1);
-    warnSpy.mockRestore();
   });
 });
 
@@ -293,21 +315,17 @@ describe('kvBulkPut: connection failures', () => {
     mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: [] });
     mockBulkUpdate.mockRejectedValueOnce(await connectionError());
     mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: [] });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const written = await kvBulkPut(entries);
 
     expect([...written].sort()).toEqual(['trace:a', 'trace:c']);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('could not connect'));
-    warnSpy.mockRestore();
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('could not connect'));
   });
 
   it('throws when every request fails to connect', async () => {
     mockBulkUpdate.mockRejectedValue(await connectionError());
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(kvBulkPut([entry('metric:a')])).rejects.toThrow('could not connect for any');
-    warnSpy.mockRestore();
   });
 
   it('still throws on an API error that is not a connection failure', async () => {
@@ -317,10 +335,8 @@ describe('kvBulkPut: connection failures', () => {
         403, [{ code: 10000 }], 'Authentication error',
       ),
     );
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(kvBulkPut([entry('metric:a')])).rejects.toThrow('bulk put failed');
-    errorSpy.mockRestore();
   });
 });
 
@@ -331,5 +347,132 @@ describe('kvBulkPut: transport', () => {
     await kvBulkPut([entry('metric:a')]);
 
     expect(clientOptions).toEqual([{ fetch: http1FetchSentinel }]);
+  });
+});
+
+describe('kvBulkDelete: empty guard', () => {
+  it('does nothing when given an empty key list and returns an empty set', async () => {
+    const failed = await kvBulkDelete([]);
+    expect(mockBulkDelete).not.toHaveBeenCalled();
+    expect(failed).toBeInstanceOf(Set);
+    expect(failed.size).toBe(0);
+  });
+});
+
+describe('kvBulkDelete: dry-run', () => {
+  it('logs, skips SDK call, and returns an empty Set', async () => {
+
+    const failed = await kvBulkDelete(['trace:abc', 'session:xyz'], { dryRun: true });
+
+    expect(mockBulkDelete).not.toHaveBeenCalled();
+    expect(vi.mocked(console.log)).toHaveBeenCalledWith(expect.stringContaining('dry-run'));
+    expect(failed).toBeInstanceOf(Set);
+    expect(failed.size).toBe(0);
+  });
+
+  it('dry-run log mentions the batch size and returns empty Set', async () => {
+
+    const failed = await kvBulkDelete(['key:a', 'key:b'], { dryRun: true });
+
+    expect(vi.mocked(console.log)).toHaveBeenCalledWith(expect.stringContaining('2'));
+    expect(failed.size).toBe(0);
+  });
+});
+
+describe('kvBulkDelete: warn-on-failure', () => {
+  it('does not throw when SDK call fails, and returns the failed keys', async () => {
+    mockBulkDelete.mockRejectedValueOnce(new Error('network error'));
+
+    const failed = await kvBulkDelete(['trace:abc']);
+    expect(failed).toBeInstanceOf(Set);
+    expect(failed.has('trace:abc')).toBe(true);
+  });
+
+  it('emits a console.warn that includes the error message', async () => {
+    mockBulkDelete.mockRejectedValueOnce(new Error('connection refused'));
+
+    await kvBulkDelete(['trace:abc']);
+
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('bulk delete failed'));
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('connection refused'));
+  });
+});
+
+describe('kvBulkDelete: partial failure via unsuccessful_keys', () => {
+  it('returns only the keys listed in unsuccessful_keys', async () => {
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: ['trace:bad'] });
+
+    const failed = await kvBulkDelete(['trace:good', 'trace:bad']);
+
+    expect(failed.has('trace:bad')).toBe(true);
+    expect(failed.has('trace:good')).toBe(false);
+    expect(failed.size).toBe(1);
+  });
+
+  it('returns an empty set when all keys are deleted', async () => {
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: [] });
+    const failed = await kvBulkDelete(['trace:good']);
+
+    expect(failed.size).toBe(0);
+  });
+});
+
+describe('kvBulkDelete: SDK call shape', () => {
+  it('passes the key array as body to bulkDelete', async () => {
+    mockBulkDelete.mockResolvedValueOnce(null);
+    const keys = ['trace:abc123', 'session:xyz789'];
+    await kvBulkDelete(keys);
+
+    expect(mockBulkDelete).toHaveBeenCalledOnce();
+    const [, params] = mockBulkDelete.mock.calls[0] as [string, { account_id: string; body: string[] }];
+    expect(params.body).toEqual(keys);
+  });
+
+  it('passes namespace id and account id', async () => {
+    mockBulkDelete.mockResolvedValueOnce(null);
+    await kvBulkDelete(['trace:abc']);
+
+    const [namespaceId, params] = mockBulkDelete.mock.calls[0] as [string, { account_id: string; body: string[] }];
+    expect(namespaceId).toBe(TEST_NAMESPACE_ID);
+    expect(params.account_id).toBe(TEST_ACCOUNT_ID);
+  });
+});
+
+describe('kvBulkDelete: batching', () => {
+  it('issues one SDK call per batch when keys exceed KV_BATCH_SIZE', async () => {
+    mockBulkDelete.mockResolvedValue(null);
+    const keys = Array.from({ length: KV_BATCH_SIZE + 1 }, (_, i) => `trace:${i}`);
+    await kvBulkDelete(keys);
+
+    expect(mockBulkDelete).toHaveBeenCalledTimes(2);
+  });
+
+  it('first batch is exactly KV_BATCH_SIZE keys; remainder goes in the second', async () => {
+    mockBulkDelete.mockResolvedValue(null);
+    const remainder = 7;
+    const keys = Array.from({ length: KV_BATCH_SIZE + remainder }, (_, i) => `trace:${i}`);
+    await kvBulkDelete(keys);
+
+    const [, params1] = mockBulkDelete.mock.calls[0] as [string, { body: string[] }];
+    const [, params2] = mockBulkDelete.mock.calls[1] as [string, { body: string[] }];
+    expect(params1.body).toHaveLength(KV_BATCH_SIZE);
+    expect(params2.body).toHaveLength(remainder);
+  });
+
+  it('accumulates failed keys from both batches when each has failures', async () => {
+    const failedInFirst = `trace:${KV_BATCH_SIZE - 1}`;
+    const failedInSecond = 'trace:extra';
+    const keys = [
+      ...Array.from({ length: KV_BATCH_SIZE }, (_, i) => `trace:${i}`),
+      failedInSecond,
+    ];
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: [failedInFirst] });
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: [failedInSecond] });
+
+    const failed = await kvBulkDelete(keys);
+
+    expect(failed.has(failedInFirst)).toBe(true);
+    expect(failed.has(failedInSecond)).toBe(true);
+    expect(failed.size).toBe(2);
   });
 });

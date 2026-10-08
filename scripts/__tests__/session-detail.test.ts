@@ -8,14 +8,10 @@ import { describe, it, expect } from 'vitest';
 import { computeSessionDetail, type SessionSpan } from '../../src/api/session-detail.js';
 import { computeMultiAgentEvaluation } from '../../../src/lib/quality/quality-multi-agent.js';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../../src/lib/core/units.js';
+import { evaluation } from './support/evaluations.js';
 
 function detailOf(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated?: boolean) {
   return computeSessionDetail({ sessionId: 's1', spans, evaluations, evaluationsTruncated }, computeMultiAgentEvaluation);
-}
-
-function evaluation(label: string, iso: string): EvaluationResult {
-  return { evaluationName: 'relevance', scoreValue: 0.5, timestamp: BigInt(Date.parse(iso)) * NANOSECONDS_PER_MILLISECOND_BIGINT, explanation: label };
 }
 
 describe('computeSessionDetail multi-agent attribution', () => {
@@ -174,11 +170,7 @@ describe('computeSessionDetail across the integritystudio.* key rename', () => {
 
 // KV-SESSION-EVALS-TRUNCATION-UNFLAGGED: evaluationsTruncated threads into dataSources
 describe('computeSessionDetail evaluation truncation', () => {
-  const fakeEval = (): EvaluationResult => ({
-    evaluationName: 'test',
-    scoreValue: 1,
-    timestamp: 0n,
-  });
+  const fakeEval = () => evaluation('only', '2026-10-01T00:00:00.000Z');
 
   it('sets dataSources.evaluations.truncated when the global eval read was cut', () => {
     const detail = detailOf([], [fakeEval()], true);

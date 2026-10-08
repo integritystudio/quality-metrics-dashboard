@@ -81,6 +81,7 @@ import { judgedByKey, turnKeyOf } from './judge-dedup.js';
 import { evalFailures, failureClasses, classifyJudgeFailure } from './judge-failures.js';
 import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -440,7 +441,7 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
 
 /** Mirrors the per-criterion path's failure bookkeeping (trackFailure + warn line). */
 function trackFailure(metric: string, sessionPreview: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = describeUnknown(err);
   evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
   failureClasses[classifyJudgeFailure(message)] += 1;
   console.warn(`  [${metric}] Error for ${sessionPreview}: ${message}`);

@@ -2,7 +2,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { buildCalibrationEntry, loadCalibrationEntry, TRACE_KEY_TTL_SECONDS, SESSION_KEY_TTL_SECONDS } from '../sync-to-kv.js';
+import {
+  buildCalibrationEntry,
+  buildTraceEntries,
+  loadCalibrationEntry,
+  orgPrefixedKey,
+  ORG_KEY_PREFIX_RE,
+  SESSION_KEY_TTL_SECONDS,
+  stripOrgPrefix,
+  SYSTEM_LAST_SYNC_KEY,
+  toKVValue,
+  TRACE_KEY_TTL_SECONDS,
+} from '../sync-to-kv.js';
 import { CALIBRATION_STATE_DIR } from '../evaluation-constants.js';
 import { loadCalibrationState, saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
@@ -176,74 +187,44 @@ describe('buildCalibrationEntry: graceful skip on missing or invalid state', () 
 });
 
 describe('KV trace/session TTL constants', () => {
-  it('TRACE_KEY_TTL_SECONDS is a positive integer (required by Cloudflare KV)', () => {
-    expect(Number.isInteger(TRACE_KEY_TTL_SECONDS)).toBe(true);
-    expect(TRACE_KEY_TTL_SECONDS).toBeGreaterThan(0);
+  const TTL_DAYS = 90;
+  // Default --days=30 window; a TTL longer than it keeps entries alive until the next sync rewrites them.
+  const DEFAULT_QUERY_WINDOW_DAYS = 30;
+  const ttls = [
+    ['TRACE_KEY_TTL_SECONDS', TRACE_KEY_TTL_SECONDS],
+    ['SESSION_KEY_TTL_SECONDS', SESSION_KEY_TTL_SECONDS],
+  ] as const;
+
+  it.each(ttls)('%s is a positive integer (required by Cloudflare KV)', (_name, ttl) => {
+    expect(Number.isInteger(ttl)).toBe(true);
+    expect(ttl).toBeGreaterThan(0);
   });
 
-  it('SESSION_KEY_TTL_SECONDS is a positive integer (required by Cloudflare KV)', () => {
-    expect(Number.isInteger(SESSION_KEY_TTL_SECONDS)).toBe(true);
-    expect(SESSION_KEY_TTL_SECONDS).toBeGreaterThan(0);
+  it.each(ttls)('%s exceeds the default 30-day query window', (_name, ttl) => {
+    expect(ttl).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS.DAY);
   });
 
-  it('TRACE_KEY_TTL_SECONDS exceeds the default 30-day query window', () => {
-    // Default --days=30 window; TTL must be longer than the query window so entries
-    // are not expired before the next sync rewrites them.
-    const DEFAULT_QUERY_WINDOW_DAYS = 30;
-    expect(TRACE_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS.DAY);
-  });
-
-  it('SESSION_KEY_TTL_SECONDS exceeds the default 30-day query window', () => {
-    const DEFAULT_QUERY_WINDOW_DAYS = 30;
-    expect(SESSION_KEY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS.DAY);
-  });
-
-  it('TRACE_KEY_TTL_SECONDS is exactly 90 days in seconds', () => {
-    expect(TRACE_KEY_TTL_SECONDS).toBe(90 * SECONDS.DAY);
-  });
-
-  it('SESSION_KEY_TTL_SECONDS is exactly 90 days in seconds', () => {
-    expect(SESSION_KEY_TTL_SECONDS).toBe(90 * SECONDS.DAY);
+  it.each(ttls)('%s is exactly 90 days in seconds', (_name, ttl) => {
+    expect(ttl).toBe(TTL_DAYS * SECONDS.DAY);
   });
 });
 
 describe('org-scoped key helpers (P4)', () => {
   const ORG = 'f4286657-da73-4174-9e49-937f1bb6097f';
 
-  it('orgPrefixedKey builds org:<uuid>:<key>', async () => {
-    const { orgPrefixedKey } = await import('../sync-to-kv.js');
+  it('orgPrefixedKey builds org:<uuid>:<key>', () => {
     expect(orgPrefixedKey(ORG, 'dashboard:7d')).toBe(`org:${ORG}:dashboard:7d`);
   });
 
-  it('stripOrgPrefix removes exactly one org prefix and leaves bare keys alone', async () => {
-    const { orgPrefixedKey, stripOrgPrefix } = await import('../sync-to-kv.js');
+  it('stripOrgPrefix removes exactly one org prefix and leaves bare keys alone', () => {
     expect(stripOrgPrefix(orgPrefixedKey(ORG, 'trend:relevance:7d'))).toBe('trend:relevance:7d');
     expect(stripOrgPrefix('dashboard:7d')).toBe('dashboard:7d');
     // A non-uuid "org:" segment is data, not a scope prefix — must not be stripped.
     expect(stripOrgPrefix('org:not-a-uuid:dashboard:7d')).toBe('org:not-a-uuid:dashboard:7d');
   });
 
-  it('system:lastSync is a bare global key, never org-prefixed', async () => {
-    const { SYSTEM_LAST_SYNC_KEY, ORG_KEY_PREFIX_RE } = await import('../sync-to-kv.js');
+  it('system:lastSync is a bare global key, never org-prefixed', () => {
     expect(ORG_KEY_PREFIX_RE.test(SYSTEM_LAST_SYNC_KEY)).toBe(false);
-  });
-});
-
-describe('prioritizeTraces with org-prefixed keys (P4)', () => {
-  const ORG = 'f4286657-da73-4174-9e49-937f1bb6097f';
-
-  it('groups the org-prefixed and bare entries of one trace as a single unit', async () => {
-    const { prioritizeTraces } = await import('../sync-to-kv.js');
-    const entries = [
-      { key: `org:${ORG}:evaluations:trace:t1`, value: '{}' },
-      { key: `org:${ORG}:trace:t1`, value: '{}' },
-      { key: 'evaluations:trace:t1', value: '{}' },
-      { key: 'trace:t1', value: '{}' },
-    ];
-    const result = prioritizeTraces(entries, new Map(), new Set());
-    // All four entries survive, contiguously — one trace, one priority group.
-    expect(result).toHaveLength(4);
-    expect(new Set(result.map(e => e.key))).toEqual(new Set(entries.map(e => e.key)));
   });
 });
 
@@ -267,8 +248,7 @@ describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
     traceId: TRACE_ID,
   };
 
-  it('serializes spans and evaluations without throwing', async () => {
-    const { buildTraceEntries } = await import('../sync-to-kv.js');
+  it('serializes spans and evaluations without throwing', () => {
     const entries = buildTraceEntries(
       [TRACE_ID],
       new Map([[TRACE_ID, [evaluation]]]),
@@ -293,8 +273,7 @@ describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
     expect(evalsOnly.evaluations[0]!.timestamp).toBe('1755450000500000000');
   });
 
-  it('toKVValue converts nested bigints anywhere in an entry value', async () => {
-    const { toKVValue } = await import('../sync-to-kv.js');
+  it('toKVValue converts nested bigints anywhere in an entry value', () => {
     expect(JSON.parse(toKVValue({ rows: [{ timestamp: 42n }] }))).toEqual({
       rows: [{ timestamp: '42' }],
     });
@@ -304,13 +283,11 @@ describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
     ['undefined', undefined],
     ['a function', () => 1],
     ['a symbol', Symbol('kv')],
-  ])('toKVValue throws on %s, which has no JSON form', async (_label, value) => {
-    const { toKVValue } = await import('../sync-to-kv.js');
+  ])('toKVValue throws on %s, which has no JSON form', (_label, value) => {
     expect(() => toKVValue(value)).toThrow(TypeError);
   });
 
-  it('toKVValue keeps null, which is valid JSON', async () => {
-    const { toKVValue } = await import('../sync-to-kv.js');
+  it('toKVValue keeps null, which is valid JSON', () => {
     expect(toKVValue(null)).toBe('null');
   });
 });

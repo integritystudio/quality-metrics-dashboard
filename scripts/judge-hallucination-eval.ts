@@ -92,6 +92,7 @@ import {
   type CallUsageReport,
   type CallUsageTotals,
 } from './judge-usage.js';
+import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -355,7 +356,7 @@ async function main(): Promise<void> {
           outcome.reference = mergeReference(priorTurn.reference, hallucination);
         }
       } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err));
+        errors.push(describeUnknown(err));
       }
     }
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });

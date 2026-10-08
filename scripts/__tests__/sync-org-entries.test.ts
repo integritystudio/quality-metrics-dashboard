@@ -18,22 +18,13 @@ import {
 import { CANARY_COHORT } from '../evaluation-constants.js';
 import { BACKFILL_COHORT, SEED_COHORT } from '../eval-record.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../../src/lib/core/units.js';
+import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
 
 /** 01:08 UTC, so every window's start is mid-day and the day rounding is visible. */
 const NOW = new Date('2026-10-08T01:08:00.000Z');
-const METRIC = 'relevance';
+const METRIC = FIXTURE_METRIC;
 const TRACE_ID = 'a1b2c3d4e5f60718a1b2c3d4e5f60718';
 const SESSION_ID = 'session-1';
-
-function isoToNs(iso: string): bigint {
-  return BigInt(Date.parse(iso)) * NANOSECONDS_PER_MILLISECOND_BIGINT;
-}
-
-/** `label` goes in `explanation`, which the per-period evaluation rows carry through. */
-function evaluation(label: string, iso: string, overrides: Partial<EvaluationResult> = {}): EvaluationResult {
-  return { evaluationName: METRIC, scoreValue: 0.5, timestamp: isoToNs(iso), explanation: label, ...overrides };
-}
 
 const sessionSpan: TraceSpan = {
   traceId: TRACE_ID,
