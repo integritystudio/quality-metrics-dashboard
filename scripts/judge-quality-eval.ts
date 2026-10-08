@@ -61,7 +61,6 @@ import {
   type CriterionAgreement,
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
-import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { parseCli } from './cli-args.js';
 import {
   DOCS_DIR,
@@ -186,7 +185,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
 const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[quality]', noun: 'eval' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
-const { writeMarker, refuse } = runGuard;
+const { refuse, resolveApiKey, begin } = runGuard;
 
 /** The newest judge-agreement results file, unless one was named. */
 export function resolveAgreementPath(docsDir: string, explicit?: string): string | undefined {
@@ -460,12 +459,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const credential = resolveJudgeApiKey();
-  if (!credential) {
-    refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
-    return;
-  }
-  console.log(`[quality] API key from ${credential.source}`);
+  const credential = resolveApiKey();
+  if (!credential) return;
 
   const reason = refusalReason(DOCS_DIR);
   if (reason) {
@@ -508,14 +503,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const lateReason = refusalReason(DOCS_DIR);
-  if (lateReason) {
-    refuse(lateReason);
-    return;
-  }
-  const startedAt = new Date();
-  writeMarker(DOCS_DIR, { startedAt: startedAt.toISOString(), pid: process.pid, agreementPath, turns: matched.length });
-  console.log(`[quality] marker written: ${join(DOCS_DIR, MARKER_FILENAME)} — API calls start now`);
+  const startedAt = begin(DOCS_DIR, { agreementPath, turns: matched.length });
+  if (!startedAt) return;
 
   const totals: CallUsageTotals = createCallUsageTotals();
   const provider = await createReferenceProvider(credential.apiKey, usage => addCallUsage(totals, usage));

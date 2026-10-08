@@ -22,7 +22,6 @@
  */
 
 import { writeFileSync } from 'fs';
-import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { MODEL_PRICING, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
@@ -44,7 +43,6 @@ import {
   selectCriteria,
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
-import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { parseCli, positiveIntArg } from './cli-args.js';
 import {
   DOCS_DIR,
@@ -176,7 +174,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
 const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[agreement]', noun: 'check' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
-const { writeMarker, refuse } = runGuard;
+const { refuse, resolveApiKey, begin } = runGuard;
 
 
 // ---------------------------------------------------------------------------
@@ -373,12 +371,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const credential = resolveJudgeApiKey();
-  if (!credential) {
-    refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
-    return;
-  }
-  console.log(`[agreement] API key from ${credential.source}`);
+  const credential = resolveApiKey();
+  if (!credential) return;
 
   const reason = refusalReason(DOCS_DIR);
   if (reason) {
@@ -416,15 +410,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Re-check right before committing: discovery took a while.
-  const lateReason = refusalReason(DOCS_DIR);
-  if (lateReason) {
-    refuse(lateReason);
-    return;
-  }
-  const startedAt = new Date();
-  writeMarker(DOCS_DIR, { startedAt: startedAt.toISOString(), pid: process.pid, limit: args.limit, turns: sample.turns.length });
-  console.log(`[agreement] marker written: ${join(DOCS_DIR, MARKER_FILENAME)} — API calls start now`);
+  const startedAt = begin(DOCS_DIR, { limit: args.limit, turns: sample.turns.length });
+  if (!startedAt) return;
 
   const perCriterionTotals = createCallUsageTotals();
   const consolidatedTotals = createCallUsageTotals();

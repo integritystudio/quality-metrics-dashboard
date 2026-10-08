@@ -65,7 +65,6 @@ import {
   type QualityTurn,
   type ReferenceSummary,
 } from './judge-quality-eval.js';
-import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { parseCli } from './cli-args.js';
 import {
   DOCS_DIR,
@@ -158,7 +157,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
 const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[hallucination]', noun: 'eval' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
-const { writeMarker, refuse } = runGuard;
+const { refuse, resolveApiKey, begin } = runGuard;
 
 export function readPriorReference(path: string): QualityTurn[] {
   const parsed = JSON.parse(readFileSync(path, 'utf8')) as { turns?: { reference?: unknown }[] };
@@ -281,9 +280,8 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.error) return refuse(args.error);
 
-  const credential = resolveJudgeApiKey();
-  if (!credential) return refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
-  console.log(`[hallucination] API key from ${credential.source}`);
+  const credential = resolveApiKey();
+  if (!credential) return;
 
   const reason = refusalReason(DOCS_DIR);
   if (reason) return refuse(reason);
@@ -308,11 +306,8 @@ async function main(): Promise<void> {
     return refuse(`estimated spend $${estimate.totalUsd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
   }
 
-  const lateReason = refusalReason(DOCS_DIR);
-  if (lateReason) return refuse(lateReason);
-  const startedAt = new Date();
-  writeMarker(DOCS_DIR, { startedAt: startedAt.toISOString(), pid: process.pid, referencePath: args.referencePath, turns: prior.length });
-  console.log(`[hallucination] marker written: ${join(DOCS_DIR, MARKER_FILENAME)} — API calls start now`);
+  const startedAt = begin(DOCS_DIR, { referencePath: args.referencePath, turns: prior.length });
+  if (!startedAt) return;
 
   const totals: Record<Configuration | 'reference', CallUsageTotals> = {
     perCriterion: createCallUsageTotals(),

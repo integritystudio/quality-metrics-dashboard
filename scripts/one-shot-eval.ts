@@ -11,6 +11,7 @@ import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE } from '../../src/lib/judge/llm-judge-constants.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CliArgError } from './cli-args.js';
+import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
 import type { EvalRecord } from './eval-record.js';
 import { createAnthropicProvider } from './judge-evaluations.js';
 import { createUsageTotals, type JudgeTokenUsage } from './judge-usage.js';
@@ -52,15 +53,24 @@ export interface RunGuardConfig {
   noun: string;
 }
 
+/** A run's own marker fields; begin() writes `startedAt` and `pid`, so a payload cannot carry them. */
+export type MarkerPayload = Record<string, unknown> & { startedAt?: never; pid?: never };
+
 export interface RunGuard {
   listResultsFiles: (docsDir: string) => string[];
   resultsFilePath: (docsDir: string, date: Date) => string;
   /** Why the run must not start, or undefined when it may. */
   refusalReason: (docsDir: string) => string | undefined;
-  /** O_CREAT | O_EXCL: two concurrent starts cannot both win. */
-  writeMarker: (docsDir: string, payload: object) => void;
   /** Log the refusal and set a failing exit code. */
   refuse: (message: string) => void;
+  /** The judge key (logging which variable supplied it), or undefined after refusing. */
+  resolveApiKey: () => JudgeApiKey | undefined;
+  /**
+   * Re-check the refusal — setup took a while — then write the marker
+   * (O_CREAT | O_EXCL: two concurrent starts cannot both win) with `payload`
+   * after the start time and pid. Returns the start time, or undefined after refusing.
+   */
+  begin: (docsDir: string, payload: MarkerPayload) => Date | undefined;
 }
 
 export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun }: RunGuardConfig): RunGuard {
@@ -70,25 +80,45 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
       .filter(f => f.startsWith(resultsPrefix) && f.endsWith(RESULTS_SUFFIX))
       .sort();
   };
+  const refusalReason = (docsDir: string): string | undefined => {
+    const marker = join(docsDir, markerFilename);
+    if (existsSync(marker)) return `marker exists: ${marker} — a run already started; this ${noun} runs once`;
+    const results = listResultsFiles(docsDir);
+    if (results.length > 0) return `results already exist: ${results.join(', ')} — this ${noun} runs once`;
+    return undefined;
+  };
+  const refuse = (message: string): void => {
+    console.error(`${logPrefix} refused: ${message}`);
+    process.exitCode = EXIT_REFUSED;
+  };
   return {
     listResultsFiles,
     resultsFilePath: (docsDir, date) => join(docsDir, `${resultsPrefix}${toDateOnly(date)}${RESULTS_SUFFIX}`),
-    refusalReason: (docsDir) => {
+    refusalReason,
+    refuse,
+    resolveApiKey: () => {
+      const credential = resolveJudgeApiKey();
+      if (!credential) {
+        refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
+        return undefined;
+      }
+      console.log(`${logPrefix} API key from ${credential.source}`);
+      return credential;
+    },
+    begin: (docsDir, payload) => {
+      const reason = refusalReason(docsDir);
+      if (reason) {
+        refuse(reason);
+        return undefined;
+      }
+      const startedAt = new Date();
       const marker = join(docsDir, markerFilename);
-      if (existsSync(marker)) return `marker exists: ${marker} — a run already started; this ${noun} runs once`;
-      const results = listResultsFiles(docsDir);
-      if (results.length > 0) return `results already exist: ${results.join(', ')} — this ${noun} runs once`;
-      return undefined;
-    },
-    writeMarker: (docsDir, payload) => {
       mkdirSync(docsDir, { recursive: true });
-      const fd = openSync(join(docsDir, markerFilename), constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
-      writeFileSync(fd, JSON.stringify(payload, null, JSON_INDENT) + '\n');
+      const fd = openSync(marker, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
+      writeFileSync(fd, JSON.stringify({ startedAt: startedAt.toISOString(), pid: process.pid, ...payload }, null, JSON_INDENT) + '\n');
       closeSync(fd);
-    },
-    refuse: (message) => {
-      console.error(`${logPrefix} refused: ${message}`);
-      process.exitCode = EXIT_REFUSED;
+      console.log(`${logPrefix} marker written: ${marker} — API calls start now`);
+      return startedAt;
     },
   };
 }
