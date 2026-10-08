@@ -133,6 +133,8 @@ export const HOOK_NAME = {
    */
   AGENT_PREPARE: 'agent.operation.prepare',
   AGENT_FINALIZE: 'agent.operation.finalize',
+  /** SubagentStop; carries the subagent's own transcript path. */
+  SUBAGENT_STOP: 'subagent-stop',
   /** PostToolUse on a built-in tool and on an MCP tool. */
   BUILTIN_POST_TOOL: 'builtin-post-tool',
   MCP_POST_TOOL: 'mcp-post-tool',

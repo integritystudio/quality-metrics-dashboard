@@ -70,6 +70,7 @@ export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
 export const EVALUATION_ATTRS = {
   NAME: 'gen_ai.evaluation.name',
   SCORE_VALUE: 'gen_ai.evaluation.score.value',
+  SCORE_LABEL: 'gen_ai.evaluation.score.label',
   SCORE_UNIT: 'integritystudio.evaluation.score.unit',
   EXPLANATION: 'gen_ai.evaluation.explanation',
   EVALUATOR_KIND: 'integritystudio.evaluation.evaluator.kind',
@@ -98,6 +99,8 @@ export interface EvalRecord {
   timestamp: string;
   evaluationName: string;
   scoreValue: number;
+  /** Categorical verdict beside the score (`pass`/`fail`, `relevant`/`off-topic`, …); omitted when the producer assigns none. */
+  scoreLabel?: string;
   /** e.g. 'seconds', 'ratio_0_1'; omitted when the score is unitless. */
   scoreUnit?: string;
   explanation: string;
@@ -145,6 +148,7 @@ export function toOTelRecord(ev: EvalRecord): object {
     ...(ev.judgeModel && { [EVALUATION_ATTRS.JUDGE_MODEL]: ev.judgeModel }),
   };
   if (ev.scoreUnit) attrs[EVALUATION_ATTRS.SCORE_UNIT] = ev.scoreUnit;
+  if (ev.scoreLabel) attrs[EVALUATION_ATTRS.SCORE_LABEL] = ev.scoreLabel;
   if (ev.responseId) attrs[EVALUATION_ATTRS.RESPONSE_ID] = ev.responseId;
   if (ev.sessionId) attrs[EVALUATION_ATTRS.SESSION_ID] = ev.sessionId;
   return {

@@ -110,6 +110,26 @@ describe('mapRecord', () => {
     expect(payload?.scoreUnit).toBe('seconds');
   });
 
+  it('carries a score label from toOTelRecord to the payload, and omits one never set', () => {
+    const base = {
+      timestamp: '2026-09-15T11:00:00.000Z',
+      evaluationName: 'agent_overall',
+      scoreValue: 0.4,
+      explanation: 'x',
+      evaluator: 'rule',
+      evaluatorKind: 'rule' as const,
+      cohort: 'normal' as const,
+      traceId: 'trace-1',
+      sessionId: 'sess-1',
+    };
+
+    const labelled = mapRecord(toOTelRecord({ ...base, scoreLabel: 'fail' }), NOW, MAX_AGE_MS).payload;
+    const unlabelled = mapRecord(toOTelRecord(base), NOW, MAX_AGE_MS).payload;
+
+    expect(labelled?.scoreLabel).toBe('fail');
+    expect(unlabelled).not.toHaveProperty('scoreLabel');
+  });
+
   it('reads a top-level traceId, as toOTelRecord writes it', () => {
     const { payload } = mapRecord(record({}, { traceId: 'top-level-trace' }), NOW, MAX_AGE_MS);
     expect(payload?.traceId).toBe('top-level-trace');

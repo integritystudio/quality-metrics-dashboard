@@ -58,6 +58,9 @@ import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
 import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_SECOND, TIME_MS } from '../../src/lib/core/units.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
+import { computeAgentHeuristicEvaluations } from '../../src/lib/agent-judge/agent-eval-metrics.js';
+import { readMultiTurnInput, readSingleTurnInput } from './agent-heuristic-inputs.js';
+import { resolveTranscriptPath, scanTranscriptDirs } from './judge-turns.js';
 
 // EvalRecord and toOTelRecord live in eval-record.ts. Both scripts write
 // the same wire format, and keeping two copies is how the empty-traceId bug
@@ -450,6 +453,85 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   return evals;
 }
 
+const SUBAGENT_STOP_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.SUBAGENT_STOP}`;
+/** Canonical keys; `attrsOf` maps the pre-rename `agent.*` spellings onto them. */
+const AGENT_TRANSCRIPT_PATH_ATTR = 'integritystudio.agent.transcript_path';
+const AGENT_TYPE_ATTR = 'integritystudio.agent.type';
+
+type AgentHeuristic = ReturnType<typeof computeAgentHeuristicEvaluations>[number];
+
+/** A heuristic result as a rule record on `span`, keeping the label only that scorer assigns. */
+function heuristicRecord(span: LocalTraceSpan, sessionId: string, ev: AgentHeuristic, fallbackExplanation: string): EvalRecord | null {
+  if (ev.scoreValue === undefined) return null;
+  return {
+    ...ruleRecord(span, sessionId, {
+      evaluationName: ev.evaluationName,
+      scoreValue: normalizeScore(ev.scoreValue),
+      scoreUnit: ev.scoreUnit,
+      explanation: ev.explanation ?? fallbackExplanation,
+    }),
+    ...(ev.scoreLabel && { scoreLabel: ev.scoreLabel }),
+  };
+}
+
+function heuristicRecords(span: LocalTraceSpan, sessionId: string, evs: readonly AgentHeuristic[], fallbackExplanation: string): EvalRecord[] {
+  return evs.flatMap(ev => heuristicRecord(span, sessionId, ev, fallbackExplanation) ?? []);
+}
+
+/** Session transcripts on this machine by session id, first transcript directory winning. */
+export function sessionTranscriptIndex(): Map<string, string> {
+  return new Map(scanTranscriptDirs().map(t => [t.sessionId, t.path]));
+}
+
+/**
+ * The agent heuristics only `agent-eval-metrics` computes (AGENT-EVAL-METRICS-UNUSED):
+ * `argument_correctness` and `agent_overall` per subagent run, from the transcript its
+ * `subagent-stop` span names, and `conversation_completeness`, `turn_relevancy` and
+ * `conversation_overall` per session, from `sessionTranscripts`, on the session's last span.
+ *
+ * Spans hold neither replies nor tool arguments, so a run or session whose transcript is
+ * not on this machine is skipped rather than scored on placeholders. Spans that start
+ * before `sinceMs` are not read, so a run opens only the transcripts it can post.
+ */
+export async function deriveAgentHeuristics(
+  spans: readonly LocalTraceSpan[],
+  sinceMs: number,
+  sessionTranscripts: ReadonlyMap<string, string>,
+): Promise<EvalRecord[]> {
+  const evals: EvalRecord[] = [];
+  const lastSpanBySession = new Map<string, LocalTraceSpan>();
+
+  for (const span of spans) {
+    if (hrtToSeconds(span.startTime) * TIME_MS.SECOND < sinceMs) continue;
+    const attrs = attrsOf(span);
+    const sessionId = attrString(attrs['session.id']);
+    if (!sessionId) continue;
+    const last = lastSpanBySession.get(sessionId);
+    if (!last || byStartThenSpanId(last, span) < 0) lastSpanBySession.set(sessionId, span);
+
+    if (span.name !== SUBAGENT_STOP_SPAN) continue;
+    const recordedPath = attrs[AGENT_TRANSCRIPT_PATH_ATTR];
+    const path = typeof recordedPath === 'string' ? resolveTranscriptPath(recordedPath) : null;
+    if (!path) continue;
+    const input = await readSingleTurnInput(path);
+    if (!input) continue;
+    const agentType = attrString(attrs[AGENT_TYPE_ATTR], 'unknown');
+    evals.push(...heuristicRecords(span, sessionId, computeAgentHeuristicEvaluations(input),
+      `${agentType} agent: ${input.toolCalls.length} tool calls`));
+  }
+
+  for (const [sessionId, span] of lastSpanBySession) {
+    const path = sessionTranscripts.get(sessionId);
+    if (!path) continue;
+    const input = await readMultiTurnInput(path);
+    if (!input) continue;
+    evals.push(...heuristicRecords(span, sessionId, computeAgentHeuristicEvaluations(input),
+      `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${input.turns.length} turns`));
+  }
+
+  return evals;
+}
+
 /** `traces-YYYY-MM-DD.jsonl` */
 const TRACE_FILE_PREFIX = 'traces-';
 const DATE_ONLY_LEN = 10; // YYYY-MM-DD
@@ -742,6 +824,11 @@ async function main(): Promise<void> {
     loaded = loadLocalSpans(TELEMETRY_DIR, scope);
   }
   const allEvals = deriveAll(loaded);
+  // The window comes from the caller's scope, not the defaulted read, so an
+  // unscoped run posts the last DERIVE_POST_WINDOW_DAYS of its 7-day read.
+  const floorMs = postFloorMs(dateScope, Date.now(), postDays);
+  allEvals.push(...await deriveAgentHeuristics(
+    loaded.spans, Math.max(floorMs, DERIVE_NO_REPOST_BEFORE_MS), sessionTranscriptIndex()));
   // A span in an in-scope trace file can carry an out-of-scope timestamp;
   // never post a date the run did not read.
   const inScope = scope ? allEvals.filter(ev => scope.has(toDateOnly(ev.timestamp))) : allEvals;
@@ -751,9 +838,6 @@ async function main(): Promise<void> {
   const accounts = source === 'local'
     ? buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now())
     : emptyAccountIndex();
-  // The window comes from the caller's scope, not the defaulted read, so an
-  // unscoped run posts the last DERIVE_POST_WINDOW_DAYS of its 7-day read.
-  const floorMs = postFloorMs(dateScope, Date.now(), postDays);
   const { toPost, heldBack } = splitAtRepostFloor(inScope.filter(ev => Date.parse(ev.timestamp) >= floorMs));
   if (heldBack.length > 0) {
     console.log(`[derive] held back ${heldBack.length} records dated before ${new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()}: D1 holds copies without an evaluationId, so a re-post would duplicate them`);

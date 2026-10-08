@@ -191,6 +191,7 @@ export interface EvaluationPayload {
   evaluator: string;
   evaluatorType: string;
   scoreValue?: number;
+  scoreLabel?: string;
   scoreUnit?: string;
   explanation?: string;
   traceId?: string;
@@ -278,6 +279,7 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   const explanation = asString(attrs[EVALUATION_ATTRS.EXPLANATION]);
   // COMPAT until 2026-10-29: records written before 2026-09-29 carry the unit under the old key.
   const scoreUnit = asString(attrs[EVALUATION_ATTRS.SCORE_UNIT]) ?? asString(attrs[LEGACY_SCORE_UNIT_ATTR]);
+  const scoreLabel = asString(attrs[EVALUATION_ATTRS.SCORE_LABEL]);
   // toOTelRecord puts the trace id top-level; the quality-evaluation hook puts
   // it in attributes. Read both.
   const traceId = asString(r.traceId) ?? asString(attrs['trace.id']);
@@ -294,6 +296,7 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
     serviceName: UPLOAD_SERVICE_NAME,
   };
   if (scoreUnit) payload.scoreUnit = scoreUnit;
+  if (scoreLabel) payload.scoreLabel = truncate(scoreLabel, WEBHOOK_MAX_NAME_LENGTH);
   if (explanation) payload.explanation = truncate(explanation, WEBHOOK_MAX_EXPLANATION_LENGTH);
   if (traceId) payload.traceId = traceId;
   if (spanId) payload.spanId = spanId;

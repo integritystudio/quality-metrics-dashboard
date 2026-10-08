@@ -1,5 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
+  deriveAgentHeuristics,
   trackTaskActivity,
   deriveTaskCompletionPerSession,
   deriveEvaluationLatency,
@@ -1029,5 +1033,85 @@ describe('detectInputDrift', () => {
     const renamed = agentSpans('hook:agent.lifecycle.finalize');
 
     expect(detectInputDrift(renamed, new Set(['2026-09-27']))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveAgentHeuristics (AGENT-EVAL-METRICS-UNUSED)
+// ---------------------------------------------------------------------------
+
+describe('deriveAgentHeuristics', () => {
+  const SINCE_MS = 1707400000_000;
+  let dir: string;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'derive-agent-heuristics-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  function transcript(name: string, entries: object[]): string {
+    const path = join(dir, name);
+    writeFileSync(path, entries.map(e => JSON.stringify(e)).join('\n') + '\n');
+    return path;
+  }
+
+  const prompt = (text: string): object => ({ type: 'user', message: { role: 'user', content: text } });
+  const reply = (content: unknown[]): object => ({ type: 'assistant', message: { role: 'assistant', content } });
+
+  function subagentStop(transcriptPath: string, overrides: Partial<TraceSpan> = {}): TraceSpan {
+    return makeSpan({
+      name: 'hook:subagent-stop',
+      spanId: 'span-stop',
+      ...overrides,
+      attributes: {
+        'integritystudio.agent.transcript_path': transcriptPath,
+        'integritystudio.agent.type': 'code-reviewer',
+      },
+    });
+  }
+
+  it('scores a subagent run from its transcript on its subagent-stop span, with labels', async () => {
+    const path = transcript('agent.jsonl', [
+      prompt('Review the diff'),
+      reply([{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: '' } }]),
+      { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] } },
+      reply([{ type: 'text', text: 'No findings.' }]),
+    ]);
+
+    const records = await deriveAgentHeuristics([subagentStop(path)], SINCE_MS, new Map());
+
+    expect(records.map(r => r.evaluationName)).toEqual(['argument_correctness', 'agent_overall']);
+    const args = records[0]!;
+    // The one argument is empty, so the call scores 0 and fails.
+    expect(args).toMatchObject({ scoreValue: 0, scoreLabel: 'fail', spanId: 'span-stop', sessionId: 'sess-abc' });
+    expect(args.explanation).toBe('code-reviewer agent: 1 tool calls');
+    expect(records[1]!.scoreLabel).toMatch(/^(pass|partial|fail)$/);
+  });
+
+  it('scores a session from its transcript on the session\'s last span', async () => {
+    const path = transcript('session.jsonl', [
+      prompt('Fix the build'),
+      reply([{ type: 'text', text: 'Fixed the build.' }]),
+    ]);
+    const first = makeSpan({ spanId: 'span-early', startTime: [1707400000, 0] });
+    const last = makeSpan({ spanId: 'span-late', startTime: [1707400050, 0] });
+
+    const records = await deriveAgentHeuristics([last, first], SINCE_MS, new Map([['sess-abc', path]]));
+
+    expect(records.map(r => r.evaluationName)).toEqual(['conversation_completeness', 'turn_relevancy', 'conversation_overall']);
+    expect(records.every(r => r.spanId === 'span-late')).toBe(true);
+    expect(records[1]).toMatchObject({ scoreLabel: 'relevant', explanation: 'Session sess-abc: 2 turns' });
+  });
+
+  it('skips a run or session whose transcript is not on this machine', async () => {
+    const records = await deriveAgentHeuristics(
+      [subagentStop(join(dir, 'gone.jsonl'))], SINCE_MS, new Map([['sess-abc', join(dir, 'also-gone.jsonl')]]));
+    expect(records).toEqual([]);
+  });
+
+  it('reads no span that starts before the floor', async () => {
+    const path = transcript('agent.jsonl', [prompt('Review'), reply([{ type: 'text', text: 'Done.' }])]);
+    const early = subagentStop(path, { startTime: [1707399999, 0] });
+
+    const records = await deriveAgentHeuristics([early], SINCE_MS, new Map([['sess-abc', path]]));
+
+    expect(records).toEqual([]);
   });
 });
