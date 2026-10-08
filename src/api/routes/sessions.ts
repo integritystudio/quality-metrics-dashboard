@@ -179,7 +179,8 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
       (hookDurations[s.name] ??= []).push(ms);
     }
 
-    if (isSpanError(s)) {
+    const spanFailed = isSpanError(s);
+    if (spanFailed) {
       const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
       const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
       incrementCount(errorsByCategory, `${tool} -> ${errType}`);
@@ -235,7 +236,7 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
     if (agent) agentMapForEval.set(i, agent);
     stepScores.push({
       step: i,
-      score: spanAttr(s, 'evaluation.score', 'number') ?? (isSpanError(s) ? 0 : 1),
+      score: spanAttr(s, 'evaluation.score', 'number') ?? (spanFailed ? 0 : 1),
       explanation: s.name,
     });
   }
