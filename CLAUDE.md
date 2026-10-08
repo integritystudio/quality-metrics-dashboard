@@ -16,7 +16,7 @@ npm run build        # Production build
 npm run populate -- --seed   # Data pipeline (offline, synthetic judge scores)
 npm run populate             # Data pipeline (real judge; needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY)
 npm run test:e2e             # Playwright, chromium project (Auth0 stubbed; see E2E)
-npm run sync                 # KV sync only (--budget=450 default)
+npm run sync                 # KV sync only (--budget=3000 default)
 npm run deploy:worker        # Deploy Cloudflare Worker
 doppler run --project integrity-studio --config dev -- npm run test:e2e:integration  # Auth0 integration tests
 ```
