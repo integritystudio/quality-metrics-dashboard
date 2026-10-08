@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { createMiddleware } from 'hono/factory';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
@@ -298,7 +299,9 @@ type Variables = {
   session: AppSession;
 };
 
-const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+type AppEnv = { Bindings: Bindings; Variables: Variables };
+
+const app = new Hono<AppEnv>();
 
 // A handler that throws (an upstream fetch rejecting, say) gets the same JSON
 // error shape as every handled failure, not Hono's plain-text default.
@@ -530,6 +533,14 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
   return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
 }
 
+/** Route guard: 403 unless the session holds `permission` (or dashboard.admin). */
+function requirePermission(permission: DashboardPermission) {
+  return createMiddleware<AppEnv>(async (c, next) => {
+    if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+    await next();
+  });
+}
+
 type AppContext = {
   env: Bindings;
   get: (key: 'session') => AppSession;
@@ -640,9 +651,8 @@ app.post('/api/activity', async (c) => {
   return c.body(null, Http.NoContent);
 });
 
-app.get('/api/dashboard', async (c) => {
+app.get('/api/dashboard', requirePermission('dashboard.read'), async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -662,8 +672,7 @@ app.get('/api/dashboard', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/metrics/:name/evaluations', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
@@ -692,8 +701,7 @@ app.get('/api/metrics/:name/evaluations', async (c) => {
   return c.json({ rows: page, total, limit, offset, hasMore: offset + limit < total });
 });
 
-app.get('/api/metrics/:name', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/metrics/:name', requirePermission('dashboard.read'), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const data = await getSessionKv<unknown>(c,`metric:${name}`);
@@ -713,8 +721,7 @@ app.get('/api/metrics/:name', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/trends/:name', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/trends/:name', requirePermission('dashboard.read'), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const period = c.req.query('period') ?? '7d';
@@ -726,9 +733,8 @@ app.get('/api/trends/:name', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/evaluations/trace/:traceId', async (c) => {
+app.get('/api/evaluations/trace/:traceId', requirePermission('dashboard.traces.read'), async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const traceId = c.req.param('traceId');
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
   const data = await getSessionKv<unknown>(c,`evaluations:trace:${traceId}`);
@@ -737,9 +743,8 @@ app.get('/api/evaluations/trace/:traceId', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/traces/:traceId', async (c) => {
+app.get('/api/traces/:traceId', requirePermission('dashboard.traces.read'), async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.traces.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const traceId = c.req.param('traceId');
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
   const data = await getSessionKv<unknown>(c,`trace:${traceId}`);
@@ -748,8 +753,7 @@ app.get('/api/traces/:traceId', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/correlations', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/correlations', requirePermission('dashboard.read'), async (c) => {
   const period = c.req.query('period') ?? '30d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -759,8 +763,7 @@ app.get('/api/correlations', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/degradation-signals', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/degradation-signals', requirePermission('dashboard.read'), async (c) => {
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -771,8 +774,7 @@ app.get('/api/degradation-signals', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/coverage', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/coverage', requirePermission('dashboard.read'), async (c) => {
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -788,8 +790,7 @@ app.get('/api/coverage', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/pipeline', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.pipeline.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/pipeline', requirePermission('dashboard.pipeline.read'), async (c) => {
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -799,9 +800,8 @@ app.get('/api/pipeline', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/sessions/:sessionId', async (c) => {
+app.get('/api/sessions/:sessionId', requirePermission('dashboard.sessions.read'), async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.sessions.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
   const data = await getSessionKv<unknown>(c,`session:${sessionId}`);
@@ -810,8 +810,7 @@ app.get('/api/sessions/:sessionId', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/agents', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/agents', requirePermission('dashboard.agents.read'), async (c) => {
   const data = await getSessionKv<unknown>(c,'meta:agents');
   if (!data) return c.json([]);
   return c.json(data);
@@ -821,15 +820,13 @@ app.get('/api/agents', async (c) => {
 // The Worker cannot import that module, so the key is restated here.
 const CODE_QUALITY_KV_KEY = 'code-quality';
 
-app.get('/api/code-quality', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/code-quality', requirePermission('dashboard.agents.read'), async (c) => {
   const data = await getSessionKv<unknown>(c, CODE_QUALITY_KV_KEY);
   if (!data) return c.json({ survivalByAgentWindow: [], versionRollout: [], hasData: false });
   return c.json(data);
 });
 
-app.get('/api/agents/detail/:agentId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/agents/detail/:agentId', requirePermission('dashboard.agents.read'), async (c) => {
   const agentId = c.req.param('agentId');
   if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, Http.BadRequest);
   const data = await getSessionKv<unknown>(c,`agent:${agentId}`);
@@ -837,8 +834,7 @@ app.get('/api/agents/detail/:agentId', async (c) => {
   return c.json(data);
 });
 
-app.get('/api/agents/:sessionId', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/agents/:sessionId', requirePermission('dashboard.agents.read'), async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
   const session = await getSessionKv<Record<string, unknown>>(c, `session:${sessionId}`);
@@ -855,8 +851,7 @@ app.get('/api/agents/:sessionId', async (c) => {
 });
 
 // The workflow view's payload: the same session key, without its evaluations.
-app.get('/api/agents/:sessionId/graph', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.agents.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/agents/:sessionId/graph', requirePermission('dashboard.agents.read'), async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
   const session = await getSessionKv<Record<string, unknown>>(c, `session:${sessionId}`);
@@ -868,9 +863,8 @@ app.get('/api/agents/:sessionId/graph', async (c) => {
   });
 });
 
-app.get('/api/compliance/sla', async (c) => {
+app.get('/api/compliance/sla', requirePermission('dashboard.compliance.read'), async (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -886,9 +880,8 @@ app.get('/api/compliance/sla', async (c) => {
   });
 });
 
-app.get('/api/compliance/verifications', (c) => {
+app.get('/api/compliance/verifications', requirePermission('dashboard.compliance.read'), (c) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.compliance.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
@@ -897,8 +890,7 @@ app.get('/api/compliance/verifications', (c) => {
   return c.json({ period, count: 0, verifications: [] });
 });
 
-app.get('/api/calibration', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/calibration', requirePermission('dashboard.read'), async (c) => {
   const raw = await getSessionKv<unknown>(c,'meta:calibration');
   if (!raw) return c.json({ error: WORKER_ERR_NO_CALIBRATION_DATA }, Http.NotFound);
   // KV can still hold a payload written by an older sync-to-kv; parse rather
@@ -911,8 +903,7 @@ app.get('/api/calibration', async (c) => {
   return c.json(result.data);
 });
 
-app.get('/api/routing-telemetry', async (c) => {
-  if (!hasPermission(c.get('session'), 'dashboard.read')) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+app.get('/api/routing-telemetry', requirePermission('dashboard.read'), async (c) => {
   const period = c.req.query('period') ?? '7d';
   if (!VALID_PERIOD_KEYS.includes(period as typeof VALID_PERIOD_KEYS[number])) {
     return c.json({ error: ERR_INVALID_PERIOD }, Http.BadRequest);
