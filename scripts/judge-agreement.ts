@@ -95,6 +95,9 @@ const OUTPUT_TOKENS_PER_CALL_ESTIMATE = 200;
 /** Steps prompt + eval prompt per G-Eval criterion. */
 const GEVAL_CALLS_PER_CRITERION = 2;
 const TABLE_CELL_WIDTH = 10;
+const AGREEMENT_HEADER = ['criterion', 'paired', 'exact', 'mean|d|', 'pc-only', 'cons-only'] as const;
+const USAGE_HEADER = ['configuration', 'calls', 'input', 'output', 'usd'] as const;
+const OVERALL_ROW = 'overall';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -112,6 +115,8 @@ export interface TurnScores {
   perCriterion: Record<string, number>;
   consolidated: Record<string, number>;
 }
+
+type Configuration = keyof TurnScores;
 
 export interface CriterionAgreement {
   paired: number;
@@ -310,7 +315,7 @@ export function computeAgreement(turns: readonly TurnScores[]): AgreementSummary
 }
 
 /** Records missing per evaluation name — what each path failed to produce. */
-export function countMissing(outcomes: readonly TurnOutcome[], side: keyof TurnScores): Record<string, number> {
+export function countMissing(outcomes: readonly TurnOutcome[], side: Configuration): Record<string, number> {
   const missing: Record<string, number> = {};
   for (const outcome of outcomes) {
     for (const name of outcome.expected) {
@@ -325,30 +330,32 @@ export function countMissing(outcomes: readonly TurnOutcome[], side: keyof TurnS
 // Output
 // ---------------------------------------------------------------------------
 
-function cell(value: string | number): string {
-  return padCell(value, TABLE_CELL_WIDTH);
+/** A name column, then right-aligned cells. */
+function row(name: string, ...cells: (string | number)[]): string {
+  return name.padEnd(TABLE_NAME_WIDTH) + cells.map(value => padCell(value, TABLE_CELL_WIDTH)).join('');
 }
 
-function printTable(summary: AgreementSummary, configurations: Record<string, CallUsageReport>, turnsEvaluated: number): void {
+/** `numerator / denominator`, or null when the denominator is 0. */
+function ratio(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? numerator / denominator : null;
+}
+
+function printTable(summary: AgreementSummary, configurations: Record<Configuration, CallUsageReport>, turnsEvaluated: number): void {
   console.log(`\n[agreement] ${turnsEvaluated} turns, model ${HAIKU_MODEL}`);
-  console.log(
-    `${'criterion'.padEnd(TABLE_NAME_WIDTH)}${cell('paired')}${cell('exact')}${cell('mean|d|')}${cell('pc-only')}${cell('cons-only')}`,
-  );
-  const rows = [...Object.entries(summary.byCriterion), ['overall', summary.overall] as const];
-  for (const [name, entry] of rows) {
-    console.log(
-      `${name.padEnd(TABLE_NAME_WIDTH)}${cell(entry.paired)}${cell(formatRate(entry.exactMatchRate))}`
-      + `${cell(formatDiff(entry.meanAbsDiff))}${cell(entry.perCriterionOnly)}${cell(entry.consolidatedOnly)}`,
-    );
+  console.log(row(...AGREEMENT_HEADER));
+  for (const [name, entry] of [...Object.entries(summary.byCriterion), [OVERALL_ROW, summary.overall] as const]) {
+    console.log(row(
+      name,
+      entry.paired,
+      formatRate(entry.exactMatchRate),
+      formatDiff(entry.meanAbsDiff),
+      entry.perCriterionOnly,
+      entry.consolidatedOnly,
+    ));
   }
-  console.log(
-    `\n${'configuration'.padEnd(TABLE_NAME_WIDTH)}${cell('calls')}${cell('input')}${cell('output')}${cell('usd')}`,
-  );
+  console.log(`\n${row(...USAGE_HEADER)}`);
   for (const [name, report] of Object.entries(configurations)) {
-    console.log(
-      `${name.padEnd(TABLE_NAME_WIDTH)}${cell(report.calls)}${cell(report.inputTokens)}${cell(report.outputTokens)}`
-      + `${cell(report.usd.toFixed(USD_DECIMALS))}`,
-    );
+    console.log(row(name, report.calls, report.inputTokens, report.outputTokens, report.usd.toFixed(USD_DECIMALS)));
   }
 }
 
@@ -424,7 +431,7 @@ async function main(): Promise<void> {
   });
 
   const summary = computeAgreement(outcomes);
-  const configurations: Record<string, CallUsageReport> = {
+  const configurations: Record<Configuration, CallUsageReport> = {
     perCriterion: { ...perCriterionTotals, usd: tokenUsageCostUsd(perCriterionTotals, pricing) },
     consolidated: { ...consolidatedTotals, usd: tokenUsageCostUsd(consolidatedTotals, pricing) },
   };
@@ -447,12 +454,8 @@ async function main(): Promise<void> {
     agreement: summary,
     configurations,
     savings: {
-      inputTokenRatio: configurations.consolidated!.inputTokens > 0
-        ? configurations.perCriterion!.inputTokens / configurations.consolidated!.inputTokens
-        : null,
-      usdRatio: configurations.consolidated!.usd > 0
-        ? configurations.perCriterion!.usd / configurations.consolidated!.usd
-        : null,
+      inputTokenRatio: ratio(configurations.perCriterion.inputTokens, configurations.consolidated.inputTokens),
+      usdRatio: ratio(configurations.perCriterion.usd, configurations.consolidated.usd),
     },
     failures: {
       perCriterion: countMissing(outcomes, 'perCriterion'),
