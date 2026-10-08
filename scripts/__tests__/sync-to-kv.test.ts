@@ -301,6 +301,20 @@ describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
       rows: [{ timestamp: '42' }],
     });
   });
+
+  it.each([
+    ['undefined', undefined],
+    ['a function', () => 1],
+    ['a symbol', Symbol('kv')],
+  ])('toKVValue throws on %s, which has no JSON form', async (_label, value) => {
+    const { toKVValue } = await import('../sync-to-kv.js');
+    expect(() => toKVValue(value)).toThrow(TypeError);
+  });
+
+  it('toKVValue keeps null, which is valid JSON', async () => {
+    const { toKVValue } = await import('../sync-to-kv.js');
+    expect(toKVValue(null)).toBe('null');
+  });
 });
 
 describe('computeSessionDetail multi-agent attribution', () => {

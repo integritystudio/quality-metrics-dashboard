@@ -43,7 +43,7 @@ the whole of day `now − 7d`, not part of it (METRIC-WEEK-OVERLAP).
 |----|-------|----------|-------|
 | METRIC-WEEK-OVERLAP | Metric detail's current and previous week share a day, so the trend baseline is muted | P3 | ✅ Done 2026-10-07 |
 | SYNC-DASHBOARD-TIMESTAMP-WRITES | A per-run timestamp makes 24 `dashboard:*` keys "changed" on every sync | P3 | ✅ Done 2026-10-07 |
-| KV-VALUE-NOT-JSON-UNGUARDED | Nothing checks that a KV value is JSON before it goes into the envelope | P4 | Source: review of `5174c29`, 2026-10-07 |
+| KV-VALUE-NOT-JSON-UNGUARDED | Nothing checks that a KV value is JSON before it goes into the envelope | P4 | ✅ Done 2026-10-07 |
 
 **METRIC-WEEK-OVERLAP.** The `metric:<name>` detail compares the last week with the one before it (`currentWeek` /
 `previousWeek`, `scripts/sync-to-kv.ts:1051-1052`). The server rounds both bounds of a window to whole UTC days
@@ -99,6 +99,9 @@ passes `undefined`.
 **Fix.** In `toKVValue`, throw when `JSON.stringify` returns a non-string.
 
 Acceptance: `toKVValue(undefined)` throws, and a test covers it.
+
+*Done, 2026-10-07.* `toKVValue` throws a `TypeError` when `JSON.stringify` returns a non-string, which covers
+`undefined`, functions and symbols. `null` still serializes to `"null"`. Tests are in `sync-to-kv.test.ts`.
 
 ### Workflow page
 

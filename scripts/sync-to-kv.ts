@@ -229,9 +229,16 @@ export type KVEntry = { key: string; value: string; expirationTtl?: number; hash
  * entry value must be built through this, never bare `JSON.stringify` — the
  * bigint-bearing types nest at varying depth (SYNC-KV-BIGINT). A replacer
  * rather than `jsonSafe`, which deep-copies the value before it is serialized.
+ *
+ * Throws when the value has no JSON form (`undefined`, a function, a symbol):
+ * `JSON.stringify` returns `undefined` for those, and `kvBulkPut` splices the
+ * value into its envelope as text, so nothing later would catch it
+ * (KV-VALUE-NOT-JSON-UNGUARDED).
  */
 export function toKVValue(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
+  const json: string | undefined = JSON.stringify(value, (_key, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
+  if (typeof json !== 'string') throw new TypeError(`[sync-to-kv] KV value has no JSON form (${typeof value})`);
+  return json;
 }
 
 /**
