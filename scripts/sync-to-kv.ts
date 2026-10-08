@@ -3,8 +3,8 @@
  * Sync pre-computed dashboard data to Cloudflare Workers KV.
  *
  * Reads local JSONL evaluations, runs quality-metrics computations,
- * and uploads results via `wrangler kv bulk put` (works with both
- * local OAuth session and CLOUDFLARE_API_TOKEN in CI).
+ * and uploads results via the Cloudflare SDK's KV bulk endpoints
+ * (requires `CLOUDFLARE_API_TOKEN` in env).
  *
  * Rate-limited to stay under Cloudflare free-tier KV write limits
  * (1,000 writes/day). Uses content-hash delta sync to skip unchanged
@@ -14,11 +14,11 @@
  * Usage: tsx scripts/sync-to-kv.ts [--days=30] [--dry-run] [--budget=450]
  */
 
-import { execFileSync } from 'child_process';
-import { createHash, randomBytes } from 'crypto';
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import Cloudflare, { APIError as CloudflareAPIError } from 'cloudflare';
+import { parse as parseToml } from 'smol-toml';
+import { createHash } from 'crypto';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
 import { CloudBackend, ALL_ORGS_SCOPE, queriedDateWindow } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import {
@@ -92,24 +92,46 @@ import { DRY_RUN_FLAG } from './pipeline-stages.js';
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
 const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
 
-function resolveNamespaceId(): string {
-  if (process.env.KV_NAMESPACE_ID) return process.env.KV_NAMESPACE_ID;
-  // Fall back to wrangler.toml kv_namespaces[0].id
+interface CloudflareConfig {
+  accountId: string;
+  namespaceId: string;
+}
+
+function resolveCloudflareConfig(): CloudflareConfig {
+  const envNamespaceId = process.env.KV_NAMESPACE_ID;
+  const envAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (envNamespaceId && envAccountId) return { namespaceId: envNamespaceId, accountId: envAccountId };
+
   const tomlPath = join(import.meta.dirname, '..', 'wrangler.toml');
   if (existsSync(tomlPath)) {
-    const toml = readFileSync(tomlPath, 'utf8');
-    const match = toml.match(/\[\[kv_namespaces\]\][\s\S]*?^id\s*=\s*"([^"]+)"/m);
-    if (match) {
-      const id = match[1];
-      if (id) return id;
-    }
+    const raw = readFileSync(tomlPath, 'utf8');
+    const parsed = parseToml(raw) as Record<string, unknown>;
+    const accountId = envAccountId ??
+      (typeof parsed.account_id === 'string' ? parsed.account_id : undefined);
+    const kvNamespaces = Array.isArray(parsed.kv_namespaces) ? parsed.kv_namespaces : [];
+    const firstNs = kvNamespaces[0] as Record<string, unknown> | undefined;
+    const namespaceId = envNamespaceId ??
+      (typeof firstNs?.id === 'string' ? firstNs.id : undefined);
+    if (accountId && namespaceId) return { accountId, namespaceId };
   }
-  throw new Error('KV_NAMESPACE_ID env var not set and could not resolve from wrangler.toml');
+
+  const missing: string[] = [];
+  if (!process.env.KV_NAMESPACE_ID) missing.push('KV_NAMESPACE_ID');
+  if (!process.env.CLOUDFLARE_ACCOUNT_ID) missing.push('CLOUDFLARE_ACCOUNT_ID');
+  throw new Error(
+    `Could not resolve Cloudflare config. Set ${missing.join(' and ')} or ensure wrangler.toml has account_id and [[kv_namespaces]] with id.`,
+  );
 }
-let namespaceId: string | undefined;
-/** Resolved on first wrangler call, so importing this module or a dry run needs no namespace. */
-function getNamespaceId(): string {
-  return namespaceId ??= resolveNamespaceId();
+
+let cfConfig: CloudflareConfig | undefined;
+/** Resolved on first KV call, so importing this module or a dry run needs no config. */
+function getCloudflareConfig(): CloudflareConfig {
+  return cfConfig ??= resolveCloudflareConfig();
+}
+
+let cfClient: Cloudflare | undefined;
+function getCloudflareClient(): Cloudflare {
+  return cfClient ??= new Cloudflare();
 }
 
 const DEFAULT_DAYS = 30;
@@ -147,10 +169,8 @@ const TRACE_KEY_PREFIX = 'trace:';
 const TRACE_EVALS_KEY_PREFIX = 'evaluations:trace:';
 /** Hex chars of the sha256 kept as the delta-sync content hash. */
 const HASH_PREFIX_CHARS = 16;
-/** wrangler stderr markers for the KV free-tier daily write limit. */
-const KV_WRITE_LIMIT_MARKERS = ['free usage limit', 'code: 10048'] as const;
-const STDERR_SNIPPET_CHARS = 300;
-const STDERR_DETAIL_CHARS = 500;
+/** Cloudflare API error code for the KV free-tier daily write limit. */
+const KV_DAILY_WRITE_LIMIT_CODE = 10048;
 /** Coverage percentages keep two decimals. */
 const COVERAGE_PERCENT_FACTOR = 100;
 const COVERAGE_ROUND_SCALE = PERCENT_MULTIPLIER * COVERAGE_PERCENT_FACTOR;
@@ -223,13 +243,14 @@ function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
     ev.cohort !== CANARY_COHORT && ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
 }
 
-export const KV_BATCH_SIZE = 5_000; // reduced from 9,500 to avoid 502s on large syncs
+/** Cloudflare KV bulk PUT accepts up to 10,000 pairs; 5,000 keeps requests well inside the 100 MB body limit. */
+export const KV_BATCH_SIZE = 5_000;
 /** Undefined under runners that don't provide import.meta.dirname (e.g. vitest transforms). */
 const SCRIPT_DIR = importMetaDirname(import.meta);
 const STATE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-state.json');
 /** Stores last computed coverage object so early-return path can refresh lastChecked. */
 const COVERAGE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-coverage.json');
-const QUERY_LIMIT = 200_000;
+export const QUERY_LIMIT = 200_000;
 /** Span queries need a higher limit than evaluation queries to capture all sessions. */
 const SPAN_QUERY_LIMIT = 1_000_000;
 
@@ -360,7 +381,7 @@ function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   return entries.filter(e => state.get(e.key)?.hash !== hashValue(e.value));
 }
 
-function kvBulkPut(entries: KVEntry[]): number {
+async function kvBulkPut(entries: KVEntry[]): Promise<number> {
   if (entries.length === 0) return 0;
   let written = 0;
   for (let i = 0; i < entries.length; i += KV_BATCH_SIZE) {
@@ -368,80 +389,65 @@ function kvBulkPut(entries: KVEntry[]): number {
     const batchLabel = entries.length > KV_BATCH_SIZE
       ? ` (batch ${Math.floor(i / KV_BATCH_SIZE) + 1}/${Math.ceil(entries.length / KV_BATCH_SIZE)})`
       : '';
-    const tmpFile = join(tmpdir(), `kv-sync-${Date.now()}-${randomBytes(4).toString('hex')}-${i}.json`);
-    try {
-      const enveloped = batch.map(e => ({
-        key: e.key,
-        // `e.value` is already JSON (toKVValue), so the version envelope is spliced
-        // around it as text; parsing and re-serializing gave the same bytes.
-        value: `{"v":${JSON.stringify(KV_SCHEMA_VERSION)},"data":${e.value}}`,
-        ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
-      }));
-      writeFileSync(tmpFile, JSON.stringify(enveloped));
-      if (dryRun) {
-        written += batch.length;
-        continue;
-      }
-      try {
-        execFileSync('npx', ['wrangler', 'kv', 'bulk', 'put', tmpFile, '--namespace-id', getNamespaceId(), '--remote'], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-      } catch (err) {
-        const stderr = (err as { stderr?: Buffer } | null)?.stderr?.toString() ?? '';
-        const stdout = (err as { stdout?: Buffer } | null)?.stdout?.toString() ?? '';
-        if (KV_WRITE_LIMIT_MARKERS.some(m => stderr.includes(m))) {
-          console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred. stderr: ${stderr.slice(0, STDERR_SNIPPET_CHARS)}`);
-          return written;
-        }
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
-        if (stderr) console.error(`[sync-to-kv] stderr: ${stderr.slice(0, STDERR_DETAIL_CHARS)}`);
-        if (stdout) console.error(`[sync-to-kv] stdout: ${stdout.slice(0, STDERR_DETAIL_CHARS)}`);
-        throw new Error(`Wrangler KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
-      }
+    const enveloped = batch.map(e => ({
+      key: e.key,
+      // `e.value` is already JSON (toKVValue), so the version envelope is spliced
+      // around it as text; parsing and re-serializing gave the same bytes.
+      value: `{"v":${JSON.stringify(KV_SCHEMA_VERSION)},"data":${e.value}}`,
+      ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
+    }));
+    if (dryRun) {
       written += batch.length;
-    } finally {
-      try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
+      continue;
+    }
+    const { namespaceId, accountId } = getCloudflareConfig();
+    try {
+      await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
+        account_id: accountId,
+        body: enveloped,
+      });
+      written += batch.length;
+    } catch (err) {
+      if (err instanceof CloudflareAPIError &&
+          err.errors.some(e => e.code === KV_DAILY_WRITE_LIMIT_CODE)) {
+        console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred.`);
+        return written;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
+      throw new Error(`Cloudflare KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
     }
   }
   return written;
 }
 
 /**
- * Delete a batch of KV keys via `wrangler kv bulk delete`.
+ * Delete a batch of KV keys via the Cloudflare SDK.
  * Warns on failure but does not throw — prune passes are best-effort.
  *
  * @param keys - KV keys to delete
- * @param opts.dryRun - when true, logs instead of calling wrangler; defaults to the module-level dryRun flag
+ * @param opts.dryRun - when true, logs instead of calling the API; defaults to the module-level dryRun flag
  */
-export function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): void {
+export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): Promise<void> {
   const isDryRun = opts?.dryRun ?? dryRun;
   if (keys.length === 0) return;
   for (let i = 0; i < keys.length; i += KV_BATCH_SIZE) {
     const batch = keys.slice(i, i + KV_BATCH_SIZE);
-    const tmpFile = join(tmpdir(), `kv-delete-${Date.now()}-${randomBytes(4).toString('hex')}-${i}.json`);
+    if (isDryRun) {
+      console.log(`[sync-to-kv] dry-run: would delete ${batch.length} stale KV key(s)`);
+      continue;
+    }
+    const { namespaceId, accountId } = getCloudflareConfig();
     try {
-      writeFileSync(tmpFile, JSON.stringify(batch));
-      if (isDryRun) {
-        console.log(`[sync-to-kv] dry-run: would delete ${batch.length} stale KV key(s)`);
-        continue;
-      }
-      try {
-        execFileSync(
-          'npx',
-          ['wrangler', 'kv', 'bulk', 'delete', tmpFile, '--namespace-id', getNamespaceId(), '--remote', '--force'],
-          { stdio: ['ignore', 'pipe', 'pipe'] },
-        );
-      } catch (err) {
-        const stderr = (err as { stderr?: Buffer } | null)?.stderr?.toString() ?? '';
-        console.warn(
-          `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
-          `${err instanceof Error ? err.message : String(err)}` +
-          (stderr ? ` — stderr: ${stderr.slice(0, STDERR_SNIPPET_CHARS)}` : ''),
-        );
-      }
-    } finally {
-      try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
+      await getCloudflareClient().kv.namespaces.bulkDelete(namespaceId, {
+        account_id: accountId,
+        body: batch,
+      });
+    } catch (err) {
+      console.warn(
+        `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }
@@ -891,7 +897,30 @@ async function discoverOrgIds(now: Date): Promise<string[]> {
   return [...ids];
 }
 
-interface OrgComputation {
+/** The two cloud reads one org's aggregation makes; a `CloudBackend` scoped to that org. */
+export type OrgReadBackend = Pick<CloudBackend, 'queryEvaluations' | 'queryTraces'>;
+
+/**
+ * Add one session to an agent's bounded buffer of recent sessions. Once the
+ * buffer holds `max`, a dated entry replaces the oldest dated session (the
+ * first of a tie) if it is newer; when no buffered session has a date, it
+ * replaces the last slot. An undated entry is dropped from a full buffer.
+ */
+export function addRecentSession<T extends { date: string | null }>(sessions: T[], entry: T, max: number): void {
+  if (sessions.length < max) {
+    sessions.push(entry);
+    return;
+  }
+  if (!entry.date) return;
+  const datedIdx = minIndex(sessions, s => s.date);
+  const oldestIdx = datedIdx >= 0 ? datedIdx : sessions.length - 1;
+  const oldestDate = sessions[oldestIdx]?.date;
+  if (!oldestDate || entry.date > oldestDate) {
+    sessions[oldestIdx] = entry;
+  }
+}
+
+export interface OrgComputation {
   /** All computed entries under their BARE (unprefixed) keys. */
   allEntries: KVEntry[];
   evalsByTrace: Map<string, EvaluationResult[]>;
@@ -932,7 +961,7 @@ export function buildTraceEntries(
  * this KV key is the only way `/api/code-quality` reaches production; the dev
  * API route computes the same summary from a live query.
  */
-async function computeCodeQuality(backend: CloudBackend, now: Date) {
+async function computeCodeQuality(backend: OrgReadBackend, now: Date) {
   const startDate = BigInt(now.getTime() - CODE_QUALITY_LOOKBACK_DAYS * TIME_MS.DAY) * NANOSECONDS_PER_MILLISECOND_BIGINT;
   const endDate = BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT;
   const [checkpointSpans, invocationSpans] = await Promise.all([
@@ -956,7 +985,7 @@ async function computeCodeQuality(backend: CloudBackend, now: Date) {
  * is that the local sidecar state (degradation breaches, calibration) is
  * owner-local and therefore read/written for the home org alone.
  */
-async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
+export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
   const entries: KVEntry[] = [];
 
   const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
@@ -1312,18 +1341,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
         date: sessionDate,
         project: detail.sessionInfo?.projectName ?? null,
       };
-      if (acc.sessions.length < MAX_AGENT_SESSIONS) {
-        acc.sessions.push(entry);
-      } else if (sessionDate) {
-        // Evict oldest to keep the most recent sessions in the buffer; when no
-        // buffered session has a date, the last slot is replaced.
-        const datedIdx = minIndex(acc.sessions, s => s.date);
-        const oldestIdx = datedIdx >= 0 ? datedIdx : acc.sessions.length - 1;
-        const oldestDate = acc.sessions[oldestIdx]?.date;
-        if (!oldestDate || sessionDate > oldestDate) {
-          acc.sessions[oldestIdx] = entry;
-        }
-      }
+      addRecentSession(acc.sessions, entry, MAX_AGENT_SESSIONS);
     }
   }
 
@@ -1462,7 +1480,7 @@ async function main(): Promise<void> {
     // Still update the heartbeat keys (legacy, per-org, and global system)
     const staleMeta = filterChanged(metaEntries, prevState);
     if (staleMeta.length > 0) {
-      kvBulkPut(staleMeta);
+      await kvBulkPut(staleMeta);
       for (const e of staleMeta) prevState.set(e.key, { hash: hashValue(e.value) });
       if (!dryRun) saveSyncState(prevState);
     }
@@ -1493,7 +1511,7 @@ async function main(): Promise<void> {
   ];
   const deferred = changed.length - (toWrite.length - metaEntries.length);
 
-  const written = kvBulkPut(toWrite);
+  const written = await kvBulkPut(toWrite);
 
   const newState = new Map(prevState);
   for (const e of toWrite.slice(0, written)) {
@@ -1509,7 +1527,7 @@ async function main(): Promise<void> {
   const staleKeys = [...newState.keys()].filter(k => !computedKeys.has(k));
   if (staleKeys.length > 0) {
     console.log(`[sync-to-kv] Pruning ${staleKeys.length} stale KV key(s) dropped from local state`);
-    kvBulkDelete(staleKeys);
+    await kvBulkDelete(staleKeys);
   }
 
   for (const key of staleKeys) newState.delete(key);
@@ -1549,7 +1567,7 @@ async function main(): Promise<void> {
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
   const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: toKVValue(coverage) };
   if (newState.get(META_SYNC_COVERAGE_KEY)?.hash !== coverageHash) {
-    const coverageWritten = kvBulkPut([coverageEntry]);
+    const coverageWritten = await kvBulkPut([coverageEntry]);
     if (coverageWritten > 0) {
       newState.set(META_SYNC_COVERAGE_KEY, { hash: coverageHash });
       if (!dryRun) saveSyncState(newState);
