@@ -159,10 +159,12 @@ Three Cloudflare Workers serve the dashboard API. The two production ones share 
 - `obs-toolkit-quality-metrics-api` — wrangler.toml default
 - `quality-metrics-api-dev` — dev, from the `[env.dev]` block; own KV namespace and the **dev** Auth0 tenant (`dev-njjmghdzm23uy0p7`)
 
-Deploy all three after worker changes:
+Deploy all three after worker changes. **Each deploy uploads whatever `dist/` holds as the SPA**, and the tenant is baked in at build time, so build under the matching Doppler config first — a production build deployed to `--env dev` serves a SPA that logs in to the production tenant while the dev Worker verifies against the dev one (every browser login then 401s; seen 2026-10-08):
 ```bash
+doppler run --project integrity-studio --config prd -- npm run build
 npx wrangler deploy
 npx wrangler deploy --name quality-metrics-api
+doppler run --project integrity-studio --config dev -- npm run build
 doppler run --project integrity-studio --config dev -- npx wrangler deploy --env dev
 ```
 
