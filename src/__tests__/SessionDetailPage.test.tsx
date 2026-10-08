@@ -2,7 +2,8 @@
  * The session page derives its hallucination indicators, failed-evaluation list
  * and evaluation table from the evaluations the API read. When that read was cut
  * off at its cap the page must say so in text, and must stay quiet otherwise
- * (DASHBOARD-SESSION-EVALS-CAP-SILENT).
+ * (DASHBOARD-SESSION-EVALS-CAP-SILENT). Spans follow the same rule, since
+ * tool usage, latency, errors and agent activity all derive from them.
  *
  * Runs the real `useSessionDetail` → `useApiQuery` → `apiFetch` stack against a
  * stubbed `fetch`, so what the page reads is the wire shape of
@@ -33,6 +34,9 @@ const READ_EVALUATION_COUNT = 2;
  */
 const REPORTED_EVALUATION_COUNT = READ_EVALUATION_COUNT + 1;
 const NOTICE_TITLE = 'Partial evaluation data';
+const SPAN_NOTICE_TITLE = 'Partial span data';
+/** Spans the route read; the span notice quotes it. */
+const READ_SPAN_COUNT = 999;
 /** Rendered only once the session payload has loaded. */
 const LOADED_PAGE_HEADING = 'Session Detail';
 
@@ -40,7 +44,7 @@ const LOADED_PAGE_HEADING = 'Session Detail';
  * A session payload as it arrives over JSON. `truncated` undefined leaves the
  * flag out altogether, which is what a `session:` key served from KV looks like.
  */
-function makeSessionDetail(truncated: boolean | undefined): JsonSafe<SessionDetailResponse> {
+function makeSessionDetail(truncated: boolean | undefined, spansTruncated?: boolean): JsonSafe<SessionDetailResponse> {
   const evaluations = Array.from({ length: READ_EVALUATION_COUNT }, () => ({
     ...makeEvaluation({ sessionId: SESSION_ID }),
     timestamp: String(EVAL_NANOS),
@@ -48,10 +52,10 @@ function makeSessionDetail(truncated: boolean | undefined): JsonSafe<SessionDeta
   return {
     sessionId: SESSION_ID,
     dataSources: {
-      traces: { count: 0, traceIds: 0 },
+      traces: { count: READ_SPAN_COUNT, traceIds: 0, ...(spansTruncated !== undefined && { truncated: spansTruncated }) },
       logs: { count: 0 },
       evaluations: { count: REPORTED_EVALUATION_COUNT, ...(truncated !== undefined && { truncated }) },
-      total: REPORTED_EVALUATION_COUNT,
+      total: READ_SPAN_COUNT + REPORTED_EVALUATION_COUNT,
     },
     timespan: null,
     sessionInfo: null,
@@ -103,5 +107,28 @@ describe('SessionDetailPage partial evaluation notice', () => {
 
     expect(await screen.findByText(LOADED_PAGE_HEADING)).toBeTruthy();
     expect(screen.queryByText(NOTICE_TITLE)).toBeNull();
+  });
+});
+
+describe('SessionDetailPage partial span notice', () => {
+  it('says in text that the spans are a partial read when the API flags them truncated', async () => {
+    stubFetch(makeSessionDetail(undefined, true));
+
+    renderSessionPage();
+
+    expect(await screen.findByText(SPAN_NOTICE_TITLE)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`more spans than the ${READ_SPAN_COUNT} read for this page`))).toBeTruthy();
+  });
+
+  it.each([
+    ['is false', false],
+    ['is absent, as on a payload served from KV', undefined],
+  ])('shows no notice when the flag %s', async (_case, spansTruncated) => {
+    stubFetch(makeSessionDetail(undefined, spansTruncated));
+
+    renderSessionPage();
+
+    expect(await screen.findByText(LOADED_PAGE_HEADING)).toBeTruthy();
+    expect(screen.queryByText(SPAN_NOTICE_TITLE)).toBeNull();
   });
 });

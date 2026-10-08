@@ -10,7 +10,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire, spanToWire, logToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 
-import { sessionRoutes } from '../api/routes/sessions.js';
+import { sessionRoutes, LIMIT_SESSION_SPANS } from '../api/routes/sessions.js';
 import { LIMIT_EVALS_SESSION } from '../api/data-loader.js';
 import type { JsonSafe } from '../api/api-constants.js';
 import type { SessionDetailResponse } from '../hooks/useSessionDetail.js';
@@ -281,6 +281,35 @@ describe('GET /sessions/:sessionId when the evaluation read hits its cap', () =>
     expect(body.evaluations).toHaveLength(LIMIT_EVALS_SESSION);
     // `total` counts what was read, not what the session holds: still the partial count.
     expect(body.dataSources.total).toBe(LIMIT_EVALS_SESSION);
+  });
+});
+
+// Spans had the same silent cap: one row past it is the only evidence that
+// more exist, and the probe must fit under the parent's query limit.
+describe('GET /sessions/:sessionId when the span read hits its cap', () => {
+  function serveSessionSpans(count: number) {
+    fixture.setTraces(Array.from({ length: count }, (_, index) =>
+      ({ ...makeSessionSpanWire(), span_id: `span-${index}` })));
+  }
+
+  it('reports a session within the cap as not truncated', async () => {
+    serveSessionSpans(1);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailBody;
+
+    expect(body.dataSources.traces).toEqual({ count: 1, traceIds: 1, truncated: false });
+  });
+
+  it('reports a session past the cap as truncated and computes from only the cap', async () => {
+    serveSessionSpans(LIMIT_SESSION_SPANS + 1);
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailBody;
+
+    expect(res.status).toBe(200);
+    expect(body.dataSources.traces).toMatchObject({ count: LIMIT_SESSION_SPANS, truncated: true });
+    expect(body.spanBreakdown).toEqual({ 'hook:builtin-post-tool': LIMIT_SESSION_SPANS });
   });
 });
 

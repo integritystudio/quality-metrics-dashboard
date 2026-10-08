@@ -28,7 +28,7 @@ const LIMIT_EVALS_PER_TRACE = 1_000;
  */
 export const LIMIT_EVALS_SESSION = 10_000;
 /** Rows read past a limit: getting one back is the only evidence that more exist. */
-const TRUNCATION_PROBE_ROWS = 1;
+export const TRUNCATION_PROBE_ROWS = 1;
 const LIMIT_TRACES = 500;
 const LIMIT_LOGS = 1_000;
 const LIMIT_HEALTH_PROBE = 1;

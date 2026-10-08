@@ -85,6 +85,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   // The flag is absent on payloads whose producer does not set it (see
   // DataSources); only an explicit `true` marks the read as partial.
   const evaluationsTruncated = dataSources.evaluations.truncated === true;
+  const spansTruncated = dataSources.traces.truncated === true;
   const errorCount = errorDetails.length;
   const hasIssues = alertSummary.totalFired > 0 || errorCount > 0 ||
     hallucinationEvals.length > 0 || failedEvals.length > 0;
@@ -159,6 +160,16 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           </>
         )}
       </div>
+
+      {spansTruncated && (
+        <div className="mt-3">
+          <IssueCallout severity="warning" title="Partial span data">
+            This session has more spans than the {spanCount.toLocaleString()} read for this page.
+            Tool usage, hook latency, errors, agent activity and file access below
+            are computed from that partial read and may undercount.
+          </IssueCallout>
+        </div>
+      )}
 
       {evaluationsTruncated && (
         <div className="mt-3">

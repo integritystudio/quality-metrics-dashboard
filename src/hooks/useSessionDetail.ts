@@ -74,7 +74,12 @@ export interface AlertSummary {
 }
 
 export interface DataSources {
-  traces: { count: number; traceIds: number };
+  traces: {
+    count: number;
+    traceIds: number;
+    /** As `evaluations.truncated`, for spans and every field derived from them. */
+    truncated?: boolean;
+  };
   logs: { count: number };
   evaluations: {
     count: number;
