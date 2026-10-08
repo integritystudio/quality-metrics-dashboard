@@ -6,7 +6,30 @@ Open items from code reviews and deferred work.
 
 ### Testing
 
-No open items.
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| SYNC-ORG-ENTRIES-UNTESTED | sync-to-kv's per-org aggregation has no test; the single-read slicing landed unguarded | P3 | Source: session 2026-10-07 lib audit |
+
+**SYNC-ORG-ENTRIES-UNTESTED.** `computeOrgEntries` (`scripts/sync-to-kv.ts:959`) is not exported, so none of
+`scripts/__tests__/sync-to-kv.test.ts` reaches it. `5174c29` replaced its ~22 reads per org with one read sliced in
+memory by `evalsBetween` (`:983`). The only check was a live dry-run comparison against production: 4,945 of 4,993
+entries byte-identical, with the rest explained by a wall-clock timestamp and spans arriving between runs. That check is
+not repeatable. Untested:
+- `evalsBetween`'s day-aligned bounds (`queriedDateWindow`): a row at the start-day midnight is in, a row at the next
+  midnight after the end day is out. The previous-week slice overlaps the current week by part of a day, as the old
+  separate reads did.
+- Truncation: a read of `QUERY_LIMIT + 1` rows sets `evaluationsTruncated` and `CAP-HIT`, and the 24h/7d slices keep
+  the newest rows.
+- Metric-detail names match exactly (the old server reads matched case-insensitive substrings).
+- `computeTimespan` (`:565`): no assertion on `timespan` anywhere, though `computeSessionDetail` is exported and tested.
+- Agent-session eviction (`:1320`): the oldest dated session goes first, the first one on ties, and the last slot goes
+  when no session has a date.
+
+**Fix.** Export `computeOrgEntries` (or the per-concern pieces from SYNC-ORG-ENTRIES-SPLIT) and drive it with a fake
+`CloudBackend` whose `queryEvaluations`/`queryTraces` return fixed rows. Pull the eviction out into a small exported
+function.
+
+Acceptance: each bullet above has a test that fails if the behaviour changes.
 
 ### Behaviour
 
@@ -37,7 +60,8 @@ No open items.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | ⛔ Won't Do 2026-10-05 — the value is read by a separate repo (tcad-scraper), so it is not this app's to remove |
-| SYNC-REDUNDANT-QUERIES | sync-to-kv re-queries data it already holds | P3 | Source: session 2026-10-06 scripts audit |
+| SYNC-REDUNDANT-QUERIES | sync-to-kv re-queries data it already holds | P3 | ✅ Done 2026-10-07 — `5174c29` |
+| SYNC-KV-REST-API | Write KV through the Cloudflare API instead of spawning `npx wrangler` | P3 | Source: session 2026-10-07 lib audit |
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | Source: session 2026-10-06 scripts audit |
 | SYNC-ORG-ENTRIES-SPLIT | `computeOrgEntries` is ~480 lines with repeated query and wrangler scaffolding | P4 | Source: session 2026-10-06 scripts audit |
 | JUDGE-BACKFILL-FLAG | Decide whether to keep judge-evaluations `--backfill` (review) | P4 | Source: session 2026-10-06 scripts audit |
@@ -64,17 +88,41 @@ mostly overlap:
 - **Fix.** Query once over `MAX_DAYS`, then slice by period and metric in memory (~16 fewer queries per org). Re-check
   the `QUERY_LIMIT` truncation warnings, which would then fire on one read instead of several.
 
+*Done, 2026-10-07 (`5174c29`).* One read per org over the longer of `--days` and two weeks, sliced with the server's
+day-aligned bounds (`queriedDateWindow`). Truncation now applies to the shared read, and metric detail matches names
+exactly. Tests are SYNC-ORG-ENTRIES-UNTESTED.
+
+**SYNC-KV-REST-API.** `kvBulkPut` and `kvBulkDelete` (`scripts/sync-to-kv.ts:363`, `:417`) write each batch to a temp
+file and run `execFileSync('npx', ['wrangler', 'kv', 'bulk', …])`. Each batch pays a `npx wrangler` start (seconds), and
+failures are found by matching stderr text (`KV_WRITE_LIMIT_MARKERS`, `'code: 10048'`). `KV_BATCH_SIZE` was cut from
+9,500 to 5,000 to dodge 502s, because nothing retries.
+- **Adopt `cloudflare`** (the official SDK, devDependency, scripts only, so the Worker bundle is unaffected). It calls
+  the KV bulk write/delete endpoints directly, with typed error codes and built-in retry with backoff on 429/5xx. No
+  temp files. Confirm the SDK's bulk method names on install.
+- **Adopt `smol-toml`** with it, and only with it. The SDK needs `account_id` (`wrangler.toml:4`) as well as the
+  namespace id, and a parser replaces `resolveNamespaceId`'s regex (`:95`) for both fields. On its own it is not worth
+  adding.
+- **Auth.** wrangler already uses `CLOUDFLARE_API_TOKEN` (the KV-scoped token in Doppler `prd`), so no new credential.
+
+Acceptance: `npm run sync` writes and prunes KV without spawning wrangler. A free-tier limit hit is detected by error
+code, not by stderr text. A transient 5xx is retried rather than failing the run.
+
 **PHASE6-LOCAL-RETIREMENT.** The cloud-read roadmap (`../../docs/roadmap/dashboard-cloud-read-migration.md:166`) keeps
 `--source=local` for one release after the 2026-10-04 default flip, then deletes it. That release removes ~900 lines:
 `derive-parity.ts`, `judge-parity.ts`, `trace-coverage.ts` (or keep it as a shipper-health check — decide),
 `account-stamps.ts` (apart from what judge option A needs), derive's `loadLocalSpans`, and the judge's local discovery and
 `_loadExistingKeys`, plus their tests. Do not start before the rollback window closes.
 
-**SYNC-ORG-ENTRIES-SPLIT.** `computeOrgEntries` (`scripts/sync-to-kv.ts:972`) runs ~480 lines. Split into period
+**SYNC-ORG-ENTRIES-SPLIT.** `computeOrgEntries` (`scripts/sync-to-kv.ts:959`) runs ~430 lines. Split into period
 entries, metric detail, trends + degradation, and sessions + agents (with an `accumulateAgent()` for the block in the
-session loop). The nanosecond window `BigInt(x.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT` is built 13 times and
-query-then-warn-on-cap repeated 4 times (`nsRange()` / `queryEvalsWarnCap()`); `kvBulkPut` (`:360`) and `kvBulkDelete`
-(`:414`) repeat the batch/temp-file/`execFileSync`/stderr scaffolding (`runWranglerBulk()`).
+session loop at `:1275`). Updated 2026-10-07 after `5174c29`, which read evaluations once per org:
+- **Gone.** The repeated query-then-warn-on-cap for evaluations (`queryEvalsWarnCap()`): there is one read now.
+- **Partly done.** `msToNs()` (`:254`) exists, but three sites still build the nanosecond window by hand
+  (`BigInt(x.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT`). They are `discoverOrgIds` (`:878`),
+  `computeCodeQuality` (`:936`) and the span read (`:1227`).
+- **Unchanged.** `kvBulkPut` (`:363`) and `kvBulkDelete` (`:417`) repeat the batch/temp-file/`execFileSync`/stderr
+  scaffolding (`runWranglerBulk()`). SYNC-KV-REST-API would remove that scaffolding rather than share it.
+- **Tests.** Split alongside SYNC-ORG-ENTRIES-UNTESTED, since exporting the pieces is how they become testable.
 
 **JUDGE-BACKFILL-FLAG.** `judge-evaluations --backfill` (`runBackfill`, plus `discoverSessionsFromTraces`) writes
 seeded, synthetic `trace-backfill` scores — the kind of output `populate` refuses to produce without an explicit
