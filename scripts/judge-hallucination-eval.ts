@@ -79,7 +79,7 @@ import {
   formatUsd,
   createPerCriterionProvider,
   oneShotArgError,
-  padCell,
+  tableRow,
   scoresByName,
   spendCapReason,
 } from './one-shot-eval.js';
@@ -251,9 +251,6 @@ async function scoreReferenceHallucination(
 // Output
 // ---------------------------------------------------------------------------
 
-function cell(value: string | number): string {
-  return padCell(value, TABLE_CELL_WIDTH);
-}
 
 function printTable(
   summaries: Record<Configuration, ReferenceSummary>,
@@ -261,13 +258,12 @@ function printTable(
   complements: Record<Configuration | 'reference', ComplementCount>,
 ): void {
   console.log(`\n[hallucination] MAE from ${REFERENCE_MODEL} (1–5 scale)`);
-  console.log(`${'criterion'.padEnd(TABLE_NAME_WIDTH)}${CONFIGURATIONS.map(c => cell(c.slice(0, TABLE_CELL_WIDTH - 1))).join('')}${cell('closest')}`);
+  console.log(tableRow(TABLE_CELL_WIDTH, 'criterion', ...CONFIGURATIONS.map(c => c.slice(0, TABLE_CELL_WIDTH - 1)), 'closest'));
   for (const name of Object.keys(closest)) {
-    const maes = CONFIGURATIONS.map(c => cell(formatDiff(summaries[c].byCriterion[name]?.meanAbsDiff)));
-    console.log(`${name.padEnd(TABLE_NAME_WIDTH)}${maes.join('')}${cell(closest[name]!)}`);
+    const maes = CONFIGURATIONS.map(c => formatDiff(summaries[c].byCriterion[name]?.meanAbsDiff));
+    console.log(tableRow(TABLE_CELL_WIDTH, name, ...maes, closest[name]!));
   }
-  const overall = CONFIGURATIONS.map(c => cell(formatDiff(summaries[c].overall.meanAbsDiff)));
-  console.log(`${'overall'.padEnd(TABLE_NAME_WIDTH)}${overall.join('')}`);
+  console.log(tableRow(TABLE_CELL_WIDTH, 'overall', ...CONFIGURATIONS.map(c => formatDiff(summaries[c].overall.meanAbsDiff))));
   console.log('\n[hallucination] faithfulness + hallucination = 1 (acceptance c: the candidate should read 0)');
   for (const [name, count] of Object.entries(complements)) {
     console.log(`  ${name.padEnd(TABLE_NAME_WIDTH)} ${count.sumToOne}/${count.paired}`);

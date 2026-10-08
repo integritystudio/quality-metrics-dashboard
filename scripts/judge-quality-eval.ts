@@ -67,7 +67,6 @@ import {
   EXIT_REFUSED,
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
-  TABLE_NAME_WIDTH,
   YES_FLAG,
   YES_REQUIRED_ERROR,
   createRunGuard,
@@ -76,6 +75,7 @@ import {
   formatRate,
   oneShotArgError,
   padCell,
+  tableRow,
   spendCapReason,
   toFivePointScale,
 } from './one-shot-eval.js';
@@ -121,6 +121,8 @@ const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
 const MAX_TOKENS_STOP_REASON = 'max_tokens';
 const REFUSAL_STOP_REASON = 'refusal';
 const TABLE_CELL_WIDTH = 11;
+/** The verdict column is wider than the rest. */
+const CLOSER_CELL_WIDTH = TABLE_CELL_WIDTH + 2;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -415,9 +417,6 @@ async function scoreTurnWithReference(
 // Output
 // ---------------------------------------------------------------------------
 
-function cell(value: string | number, width = TABLE_CELL_WIDTH): string {
-  return padCell(value, width);
-}
 
 function printTable(
   perCriterion: ReferenceSummary,
@@ -427,8 +426,8 @@ function printTable(
 ): void {
   console.log(`\n[quality] distance from ${REFERENCE_MODEL} (1–5 scale; bias > 0 = more lenient)`);
   console.log(
-    `${'criterion'.padEnd(TABLE_NAME_WIDTH)}${cell('n')}${cell('pc exact')}${cell('pc mae')}${cell('pc bias')}`
-    + `${cell('cons exact')}${cell('cons mae')}${cell('cons bias')}${cell('closer', TABLE_CELL_WIDTH + 2)}`,
+    tableRow(TABLE_CELL_WIDTH, 'criterion', 'n', 'pc exact', 'pc mae', 'pc bias', 'cons exact', 'cons mae', 'cons bias')
+    + padCell('closer', CLOSER_CELL_WIDTH),
   );
   const names = [...Object.keys(verdict), 'overall'];
   for (const name of names) {
@@ -438,10 +437,17 @@ function printTable(
       ? ((a?.meanAbsDiff ?? Infinity) < (b?.meanAbsDiff ?? Infinity) ? 'perCriterion' : 'consolidated')
       : verdict[name]!;
     console.log(
-      `${name.padEnd(TABLE_NAME_WIDTH)}${cell(Math.max(a?.paired ?? 0, b?.paired ?? 0))}`
-      + `${cell(formatRate(a?.exactMatchRate ?? null))}${cell(formatDiff(a?.meanAbsDiff ?? null))}${cell(formatDiff(a?.meanSignedDiff ?? null))}`
-      + `${cell(formatRate(b?.exactMatchRate ?? null))}${cell(formatDiff(b?.meanAbsDiff ?? null))}${cell(formatDiff(b?.meanSignedDiff ?? null))}`
-      + `${cell(closer, TABLE_CELL_WIDTH + 2)}`,
+      tableRow(
+        TABLE_CELL_WIDTH,
+        name,
+        Math.max(a?.paired ?? 0, b?.paired ?? 0),
+        formatRate(a?.exactMatchRate ?? null),
+        formatDiff(a?.meanAbsDiff ?? null),
+        formatDiff(a?.meanSignedDiff ?? null),
+        formatRate(b?.exactMatchRate ?? null),
+        formatDiff(b?.meanAbsDiff ?? null),
+        formatDiff(b?.meanSignedDiff ?? null),
+      ) + padCell(closer, CLOSER_CELL_WIDTH),
     );
   }
   console.log(

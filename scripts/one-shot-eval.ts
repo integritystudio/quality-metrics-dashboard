@@ -140,6 +140,11 @@ export function padCell(value: string | number, width: number): string {
   return String(value).padStart(width);
 }
 
+/** A TABLE_NAME_WIDTH name column, then right-aligned cells `cellWidth` wide. */
+export function tableRow(cellWidth: number, name: string, ...cells: (string | number)[]): string {
+  return name.padEnd(TABLE_NAME_WIDTH) + cells.map(value => padCell(value, cellWidth)).join('');
+}
+
 export function formatRate(rate: number | null): string {
   return rate === null ? '-' : `${(rate * PERCENT).toFixed(RATE_DECIMALS)}%`;
 }

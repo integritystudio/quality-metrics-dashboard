@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createRunGuard, formatUsd, spendCapReason, EXIT_REFUSED } from '../one-shot-eval.js';
+import { createRunGuard, formatUsd, spendCapReason, tableRow, EXIT_REFUSED, TABLE_NAME_WIDTH } from '../one-shot-eval.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV } from '../judge-credentials.js';
 
 const MARKER = '.test.started';
@@ -61,5 +61,12 @@ describe('spendCapReason', () => {
     expect(spendCapReason(8, 8)).toBeUndefined();
     expect(spendCapReason(8.5, 8)).toBe('estimated spend $8.5000 exceeds the $8 cap');
     expect(spendCapReason(8.5, 8, 'lower --limit')).toBe('estimated spend $8.5000 exceeds the $8 cap; lower --limit');
+  });
+});
+
+describe('tableRow', () => {
+  it('pads the name column and right-aligns each cell', () => {
+    const CELL = 6;
+    expect(tableRow(CELL, 'overall', 3, '50.0%')).toBe(`${'overall'.padEnd(TABLE_NAME_WIDTH)}     3 50.0%`);
   });
 });

@@ -49,7 +49,6 @@ import {
   EXIT_REFUSED,
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
-  TABLE_NAME_WIDTH,
   USD_DECIMALS,
   YES_FLAG,
   YES_REQUIRED_ERROR,
@@ -59,9 +58,9 @@ import {
   formatUsd,
   formatRate,
   oneShotArgError,
-  padCell,
   scoresByName,
   spendCapReason,
+  tableRow,
   toFivePointScale,
 } from './one-shot-eval.js';
 import {
@@ -332,11 +331,6 @@ export function countMissing(outcomes: readonly TurnOutcome[], side: Configurati
 // Output
 // ---------------------------------------------------------------------------
 
-/** A name column, then right-aligned cells. */
-function row(name: string, ...cells: (string | number)[]): string {
-  return name.padEnd(TABLE_NAME_WIDTH) + cells.map(value => padCell(value, TABLE_CELL_WIDTH)).join('');
-}
-
 /** `numerator / denominator`, or null when the denominator is 0. */
 function ratio(numerator: number, denominator: number): number | null {
   return denominator > 0 ? numerator / denominator : null;
@@ -344,9 +338,10 @@ function ratio(numerator: number, denominator: number): number | null {
 
 function printTable(summary: AgreementSummary, configurations: Record<Configuration, CallUsageReport>, turnsEvaluated: number): void {
   console.log(`\n[agreement] ${turnsEvaluated} turns, model ${HAIKU_MODEL}`);
-  console.log(row(...AGREEMENT_HEADER));
+  console.log(tableRow(TABLE_CELL_WIDTH, ...AGREEMENT_HEADER));
   for (const [name, entry] of [...Object.entries(summary.byCriterion), [OVERALL_ROW, summary.overall] as const]) {
-    console.log(row(
+    console.log(tableRow(
+      TABLE_CELL_WIDTH,
       name,
       entry.paired,
       formatRate(entry.exactMatchRate),
@@ -355,9 +350,9 @@ function printTable(summary: AgreementSummary, configurations: Record<Configurat
       entry.consolidatedOnly,
     ));
   }
-  console.log(`\n${row(...USAGE_HEADER)}`);
+  console.log(`\n${tableRow(TABLE_CELL_WIDTH, ...USAGE_HEADER)}`);
   for (const [name, report] of Object.entries(configurations)) {
-    console.log(row(name, report.calls, report.inputTokens, report.outputTokens, report.usd.toFixed(USD_DECIMALS)));
+    console.log(tableRow(TABLE_CELL_WIDTH, name, report.calls, report.inputTokens, report.outputTokens, report.usd.toFixed(USD_DECIMALS)));
   }
 }
 
