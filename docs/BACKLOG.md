@@ -8,7 +8,7 @@ Open items from code reviews and deferred work.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| SYNC-ORG-ENTRIES-UNTESTED | sync-to-kv's per-org aggregation has no test; the single-read slicing landed unguarded | P3 | Source: session 2026-10-07 lib audit |
+| SYNC-ORG-ENTRIES-UNTESTED | sync-to-kv's per-org aggregation has no test; the single-read slicing landed unguarded | P3 | ✅ Done 2026-10-07 — `scripts/__tests__/sync-org-entries.test.ts` |
 
 **SYNC-ORG-ENTRIES-UNTESTED.** `computeOrgEntries` (`scripts/sync-to-kv.ts:959`) is not exported, so none of
 `scripts/__tests__/sync-to-kv.test.ts` reaches it. `5174c29` replaced its ~22 reads per org with one read sliced in
@@ -30,6 +30,12 @@ not repeatable. Untested:
 function.
 
 Acceptance: each bullet above has a test that fails if the behaviour changes.
+
+*Done, 2026-10-07.* `computeOrgEntries` is exported and takes an `OrgReadBackend` (the two reads it makes), and the
+eviction is `addRecentSession`. `sync-org-entries.test.ts` covers every bullet with a fake backend that returns rows
+newest first and honours `limit`. Each of 12 seeded defects (bounds, rounding, the probe row, truncation, name
+matching, the week boundaries, eviction, timespan rounding) failed at least one test. The overlap turned out to be
+the whole of day `now − 7d`, not part of it (METRIC-WEEK-OVERLAP).
 
 ### Behaviour
 
@@ -54,7 +60,8 @@ Acceptance: each bullet above has a test that fails if the behaviour changes.
 whether the current week should also drop to 7 whole days. The `metric:*` values will shift, so note the change where
 the trend is read.
 
-Acceptance: no evaluation counts in both windows, and a test pins the boundary day to exactly one of them.
+Acceptance: no evaluation counts in both windows, and a test pins the boundary day to exactly one of them. Flip
+`counts the boundary day in both weeks` in `scripts/__tests__/sync-org-entries.test.ts`, which pins the overlap today.
 
 **SYNC-DASHBOARD-TIMESTAMP-WRITES.** `computeDashboardSummary` stamps `timestamp: new Date().toISOString()`
 (`../../src/lib/quality/quality-metrics.ts:948`, parent repo), and the auditor role view copies it
@@ -105,7 +112,7 @@ No open items.
 |----|-------|----------|-------|
 | VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | ⛔ Won't Do 2026-10-05 — the value is read by a separate repo (tcad-scraper), so it is not this app's to remove |
 | SYNC-REDUNDANT-QUERIES | sync-to-kv re-queries data it already holds | P3 | ✅ Done 2026-10-07 — `5174c29` |
-| SYNC-KV-REST-API | Write KV through the Cloudflare API instead of spawning `npx wrangler` | P3 | Source: session 2026-10-07 lib audit |
+| SYNC-KV-REST-API | Write KV through the Cloudflare API instead of spawning `npx wrangler` | P3 | ✅ Done 2026-10-07 — commit `3873812` |
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | Source: session 2026-10-06 scripts audit |
 | SYNC-ORG-ENTRIES-SPLIT | `computeOrgEntries` is ~480 lines with repeated query and wrangler scaffolding | P4 | Source: session 2026-10-06 scripts audit |
 | JUDGE-BACKFILL-FLAG | Decide whether to keep judge-evaluations `--backfill` (review) | P4 | Source: session 2026-10-06 scripts audit |
@@ -166,7 +173,8 @@ session loop at `:1275`). Updated 2026-10-07 after `5174c29`, which read evaluat
   `computeCodeQuality` (`:936`) and the span read (`:1227`).
 - **Unchanged.** `kvBulkPut` (`:363`) and `kvBulkDelete` (`:417`) repeat the batch/temp-file/`execFileSync`/stderr
   scaffolding (`runWranglerBulk()`). SYNC-KV-REST-API would remove that scaffolding rather than share it.
-- **Tests.** Split alongside SYNC-ORG-ENTRIES-UNTESTED, since exporting the pieces is how they become testable.
+- **Tests.** `sync-org-entries.test.ts` drives the whole function through its KV output, so it should survive the split
+  unchanged.
 
 **JUDGE-BACKFILL-FLAG.** `judge-evaluations --backfill` (`runBackfill`, plus `discoverSessionsFromTraces`) writes
 seeded, synthetic `trace-backfill` scores — the kind of output `populate` refuses to produce without an explicit
