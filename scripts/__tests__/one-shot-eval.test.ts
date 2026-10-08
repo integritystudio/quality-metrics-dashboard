@@ -10,6 +10,8 @@ import {
   EXIT_REFUSED,
   RESULTS_SUFFIX,
   TABLE_NAME_WIDTH,
+  YES_FLAG,
+  YES_REQUIRED_ERROR,
 } from '../one-shot-eval.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV } from '../judge-credentials.js';
 import * as agreement from '../judge-agreement.js';
@@ -80,6 +82,14 @@ describe('createRunGuard', () => {
     vi.stubEnv(DEFAULT_API_KEY_ENV, '');
     expect(guard.resolveApiKey()).toBeUndefined();
     expect(process.exitCode).toBe(EXIT_REFUSED);
+  });
+});
+
+describe.each(SCRIPTS)('$name parseArgs', ({ parseArgs }) => {
+  it('requires --yes and has no --force flag', () => {
+    expect(parseArgs([]).error).toBe(YES_REQUIRED_ERROR);
+    expect(parseArgs([YES_FLAG]).error).toBeUndefined();
+    expect(parseArgs([YES_FLAG, '--force']).error).toMatch(/Unknown argument: --force/);
   });
 });
 

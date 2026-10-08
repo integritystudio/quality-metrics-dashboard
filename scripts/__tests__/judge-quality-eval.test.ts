@@ -56,20 +56,12 @@ function makeQualityTurn(overrides: Partial<QualityTurn>): QualityTurn {
 }
 
 describe('parseArgs', () => {
-  it('requires --yes', () => {
-    expect(parseArgs([]).error).toContain(YES_FLAG);
-  });
-
   it('accepts --yes with an agreement path', () => {
     expect(parseArgs([YES_FLAG, AGREEMENT_FLAG, 'a.json'])).toEqual({ yes: true, agreementPath: 'a.json' });
   });
 
   it('rejects --agreement without a value', () => {
     expect(parseArgs([AGREEMENT_FLAG, YES_FLAG]).error).toContain('needs a value');
-  });
-
-  it('rejects unknown flags, including --force', () => {
-    expect(parseArgs([YES_FLAG, '--force']).error).toContain('Unknown argument: --force');
   });
 });
 

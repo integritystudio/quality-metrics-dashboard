@@ -41,11 +41,6 @@ function makeTurn(overrides: Partial<Turn> = {}): Turn {
 }
 
 describe('parseArgs', () => {
-  it('requires --yes', () => {
-    expect(parseArgs([]).error).toMatch(new RegExp(`${YES_FLAG} is required`));
-    expect(parseArgs([YES_FLAG]).error).toBeUndefined();
-  });
-
   it('defaults the limit and accepts an explicit one', () => {
     expect(parseArgs([YES_FLAG]).limit).toBe(DEFAULT_LIMIT);
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, '5']).limit).toBe(5);
@@ -55,10 +50,6 @@ describe('parseArgs', () => {
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, String(MAX_LIMIT + 1)]).error).toMatch(/hard maximum/);
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, '0']).error).toMatch(/positive integer/);
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, 'ten']).error).toMatch(/positive integer/);
-  });
-
-  it('has no --force flag', () => {
-    expect(parseArgs([YES_FLAG, '--force']).error).toMatch(/Unknown argument: --force/);
   });
 });
 

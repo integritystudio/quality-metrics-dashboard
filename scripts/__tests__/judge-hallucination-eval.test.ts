@@ -48,15 +48,13 @@ function summary(maes: Record<string, number | null>): ReferenceSummary {
 }
 
 describe('parseArgs', () => {
-  it('requires --yes and defaults the reference to the JCP4 results file', () => {
-    expect(parseArgs([]).error).toMatch(YES_FLAG);
+  it('defaults the reference to the JCP4 results file', () => {
     expect(parseArgs([YES_FLAG])).toEqual({ yes: true, referencePath: PRIOR_REFERENCE_PATH });
   });
 
-  it('takes an explicit reference path and refuses a missing or unknown one', () => {
+  it('takes an explicit reference path and refuses a missing one', () => {
     expect(parseArgs([YES_FLAG, REFERENCE_FLAG, 'x.json']).referencePath).toBe('x.json');
     expect(parseArgs([YES_FLAG, REFERENCE_FLAG]).error).toMatch('needs a value');
-    expect(parseArgs([YES_FLAG, '--force']).error).toMatch('Unknown argument');
   });
 });
 
