@@ -87,10 +87,16 @@ function spanAccountField(span: LocalTraceSpan): Pick<EvalRecord, 'identityKeyRe
  * on 2026-09-18, so local trace files hold both spellings; reading the legacy
  * key off a post-rename span found nothing and scored every builtin tool call a
  * failure. Cloud spans arrive canonicalized already, and a bag with no legacy
- * key is returned as-is, so this is free on the cloud path.
+ * key is returned as-is, so this is free on the cloud path. Memoized per
+ * attribute bag: the derivations and the drift check each read every span, so
+ * a legacy-keyed bag was otherwise rebuilt up to five times.
  */
+const canonicalAttrs = new WeakMap<LocalTraceSpan['attributes'], Record<string, unknown>>();
+
 function attrsOf(span: LocalTraceSpan): Record<string, unknown> {
-  return canonicalizeAttributes(span.attributes);
+  let attrs = canonicalAttrs.get(span.attributes);
+  if (!attrs) canonicalAttrs.set(span.attributes, attrs = canonicalizeAttributes(span.attributes));
+  return attrs;
 }
 
 /**
