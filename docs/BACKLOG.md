@@ -84,8 +84,9 @@ carries a timestamp.
 
 *Done, 2026-10-07.* The first fix option would not have worked: the sync's `now` is the run's own clock, and every
 metric's `period` (`{ start, end }` from `now`) changes per run too. `KVEntry` takes an optional `hashBasis` that
-change detection hashes instead of `value`. `dashboardEntry()` sets it to the view with every `timestamp` and `period`
-field dropped, at any depth, because the operator view's `alertingMetrics` carries `period` as well. Stored values keep
+change detection hashes instead of `value`. `dashboardEntry()` sets it to the view without its top-level `timestamp`
+and without `period` at any depth, because the operator view's `alertingMetrics` carries `period` as well. A nested
+`timestamp` (`worstExplanation.timestamp`) is the worst evaluation's event time, so it stays in. Stored values keep
 both fields, so they show the time of the last data change rather than of the last run, as `meta:syncCoverage`'s
 `timestamp` already does. The first sync after this rewrites the `dashboard:*` keys once, because their stored hashes
 were taken over the whole value. Tests are in `sync-org-entries.test.ts`.

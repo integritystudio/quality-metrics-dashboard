@@ -398,18 +398,24 @@ function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   return entries.filter(e => state.get(e.key)?.hash !== entryHash(e));
 }
 
-/** Fields of a dashboard summary or role view that come from the run's clock, at any depth. */
-const DASHBOARD_CLOCK_FIELDS: ReadonlySet<string> = new Set(['timestamp', 'period']);
+/** The view's own run-time stamp; a nested `timestamp` (`worstExplanation.timestamp`) is event time, i.e. data. */
+const DASHBOARD_RUN_STAMP_FIELD = 'timestamp';
+/** Each metric's query window, built from the run's `now`, at any depth. */
+const DASHBOARD_PERIOD_FIELD = 'period';
 
 /**
- * A dashboard summary or role view as a KV entry. The summary's `timestamp` and each
- * metric's `period` (copied into the auditor and operator views) come from the run's
- * clock, so the change hash leaves them out and a sync over unchanged data rewrites no
- * `dashboard:*` key (SYNC-DASHBOARD-TIMESTAMP-WRITES). The stored value keeps them.
+ * A dashboard summary or role view as a KV entry. The view's top-level `timestamp` and
+ * each metric's `period` (copied into the auditor and operator views) come from the
+ * run's clock, so the change hash leaves them out and a sync over unchanged data
+ * rewrites no `dashboard:*` key (SYNC-DASHBOARD-TIMESTAMP-WRITES). The stored value
+ * keeps them, so they show the run that last changed the data, not the latest run.
  */
 export function dashboardEntry(key: string, view: object): KVEntry {
-  const hashBasis = JSON.stringify(view, (field, v: unknown) =>
-    DASHBOARD_CLOCK_FIELDS.has(field) ? undefined : typeof v === 'bigint' ? v.toString() : v);
+  const hashBasis = JSON.stringify(view, function (this: unknown, field: string, v: unknown) {
+    if (field === DASHBOARD_PERIOD_FIELD) return undefined;
+    if (field === DASHBOARD_RUN_STAMP_FIELD && this === view) return undefined;
+    return typeof v === 'bigint' ? v.toString() : v;
+  });
   return { key, value: toKVValue(view), hashBasis };
 }
 

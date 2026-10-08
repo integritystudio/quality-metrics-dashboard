@@ -11,6 +11,7 @@ import {
   addRecentSession,
   computeOrgEntries,
   computeSessionDetail,
+  dashboardEntry,
   QUERY_LIMIT,
   type OrgComputation,
   type OrgReadBackend,
@@ -193,6 +194,7 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
     const after = dashboardEntries(second);
 
     expect(after.length).toBeGreaterThan(0);
+    expect(after.map(e => e.key).sort()).toEqual([...before.keys()].sort());
     for (const e of after) {
       expect(e.hashBasis, e.key).toBeDefined();
       expect(e.hashBasis, e.key).toBe(before.get(e.key));
@@ -214,6 +216,40 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
     const hashOf = (r: OrgComputation) => r.allEntries.find(e => e.key === 'dashboard:7d')?.hashBasis;
 
     expect(hashOf(changed)).not.toBe(hashOf(second));
+  });
+});
+
+describe('dashboardEntry', () => {
+  const view = {
+    timestamp: '2026-10-08T01:08:00.000Z',
+    metrics: [{
+      name: METRIC,
+      period: { start: '2026-10-01T01:08:00.000Z', end: '2026-10-08T01:08:00.000Z' },
+      worstExplanation: { score: 0.1, timestamp: '2026-10-07T12:00:00.000Z' },
+    }],
+  };
+  const hashOf = (v: object) => dashboardEntry('dashboard:7d', v).hashBasis;
+
+  it('ignores the run stamp and every metric period', () => {
+    const laterRun = {
+      timestamp: '2026-10-08T05:08:00.000Z',
+      metrics: [{ ...view.metrics[0]!, period: { start: '2026-10-01T05:08:00.000Z', end: '2026-10-08T05:08:00.000Z' } }],
+    };
+
+    expect(hashOf(laterRun)).toBe(hashOf(view));
+  });
+
+  it('keeps a nested timestamp, which is event time', () => {
+    const otherWorst = {
+      ...view,
+      metrics: [{ ...view.metrics[0]!, worstExplanation: { score: 0.1, timestamp: '2026-10-07T13:00:00.000Z' } }],
+    };
+
+    expect(hashOf(otherWorst)).not.toBe(hashOf(view));
+  });
+
+  it('stores the run stamp and period in the value', () => {
+    expect(JSON.parse(dashboardEntry('dashboard:7d', view).value)).toEqual(view);
   });
 });
 
