@@ -157,8 +157,8 @@ function toolSuccessOf(span: LocalTraceSpan, attrs: Record<string, unknown>): un
 }
 
 export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
-  const attrs = attrsOf(span);
   if (!isToolSpan(span)) return null;
+  const attrs = attrsOf(span);
   const isBuiltin = span.name === BUILTIN_POST_TOOL_SPAN;
   const isMcp = !isBuiltin;
 
