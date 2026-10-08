@@ -68,11 +68,11 @@ import {
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
   TABLE_NAME_WIDTH,
-  USD_DECIMALS,
   YES_FLAG,
   YES_REQUIRED_ERROR,
   createRunGuard,
   formatDiff,
+  formatUsd,
   formatRate,
   oneShotArgError,
   padCell,
@@ -444,7 +444,7 @@ function printTable(
   }
   console.log(
     `\n[quality] reference: ${reference.calls} calls, ${reference.inputTokens} input / ${reference.outputTokens} output tokens, `
-    + `$${reference.usd.toFixed(USD_DECIMALS)}`,
+    + `${formatUsd(reference.usd)}`,
   );
 }
 
@@ -480,11 +480,11 @@ async function main(): Promise<void> {
   const estimate = estimateReferenceSpend(matched.map(t => byKey.get(turnKey(t))!), pricing);
   console.log(
     `[quality] estimate: ~${estimate.calls} reference calls, ~${estimate.inputTokens.toLocaleString()} input / `
-    + `~${estimate.outputTokens.toLocaleString()} output tokens, ~$${estimate.usd.toFixed(USD_DECIMALS)} `
+    + `~${estimate.outputTokens.toLocaleString()} output tokens, ~${formatUsd(estimate.usd)} `
     + `(plus one steps call per criterion)`,
   );
   if (estimate.usd > MAX_ESTIMATED_SPEND_USD) {
-    return refuse(`estimated spend $${estimate.usd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
+    return refuse(`estimated spend ${formatUsd(estimate.usd)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
   }
 
   const startedAt = begin(DOCS_DIR, { agreementPath, turns: matched.length });
@@ -502,7 +502,7 @@ async function main(): Promise<void> {
     const reference = await scoreTurnWithReference(provider, byKey.get(turnKey(turn))!, stepsCache, canSpend, errors);
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });
     completed++;
-    console.log(`[quality] ${completed}/${matched.length} turns done ($${tokenUsageCostUsd(totals, pricing).toFixed(USD_DECIMALS)} so far)`);
+    console.log(`[quality] ${completed}/${matched.length} turns done (${formatUsd(tokenUsageCostUsd(totals, pricing))} so far)`);
     return { ...turn, reference };
   });
 

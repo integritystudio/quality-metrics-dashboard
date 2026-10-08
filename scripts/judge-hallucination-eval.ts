@@ -72,11 +72,11 @@ import {
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
   TABLE_NAME_WIDTH,
-  USD_DECIMALS,
   YES_FLAG,
   YES_REQUIRED_ERROR,
   createRunGuard,
   formatDiff,
+  formatUsd,
   createPerCriterionProvider,
   oneShotArgError,
   padCell,
@@ -299,11 +299,11 @@ async function main(): Promise<void> {
 
   const estimate = estimateRunSpend(prior.map(t => byKey.get(turnKey(t))!), haikuPricing, referencePricing);
   console.log(
-    `[hallucination] estimate: Haiku ~$${estimate.haikuUsd.toFixed(USD_DECIMALS)}, `
-    + `${estimate.referenceCalls} reference calls ~$${estimate.referenceUsd.toFixed(USD_DECIMALS)}`,
+    `[hallucination] estimate: Haiku ~${formatUsd(estimate.haikuUsd)}, `
+    + `${estimate.referenceCalls} reference calls ~${formatUsd(estimate.referenceUsd)}`,
   );
   if (estimate.totalUsd > MAX_ESTIMATED_SPEND_USD) {
-    return refuse(`estimated spend $${estimate.totalUsd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
+    return refuse(`estimated spend ${formatUsd(estimate.totalUsd)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
   }
 
   const startedAt = begin(DOCS_DIR, { referencePath: args.referencePath, turns: prior.length });
@@ -364,7 +364,7 @@ async function main(): Promise<void> {
     }
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });
     completed++;
-    console.log(`[hallucination] ${completed}/${prior.length} turns done ($${spentUsd().toFixed(USD_DECIMALS)} so far)`);
+    console.log(`[hallucination] ${completed}/${prior.length} turns done (${formatUsd(spentUsd())} so far)`);
     return outcome;
   });
 
@@ -404,7 +404,7 @@ async function main(): Promise<void> {
   const outPath = resultsFilePath(DOCS_DIR, startedAt);
   writeFileSync(outPath, JSON.stringify(results, null, JSON_INDENT) + '\n');
   printTable(summaries, closest, complements);
-  console.log(`\n[hallucination] spent $${spentUsd().toFixed(USD_DECIMALS)}; results written: ${outPath}`);
+  console.log(`\n[hallucination] spent ${formatUsd(spentUsd())}; results written: ${outPath}`);
 }
 
 // Only run when executed directly (not imported as a module for testing)

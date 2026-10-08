@@ -123,6 +123,11 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
   };
 }
 
+/** A dollar amount at USD_DECIMALS places, e.g. `$1.8123`. */
+export function formatUsd(usd: number): string {
+  return `$${usd.toFixed(USD_DECIMALS)}`;
+}
+
 /** Right-aligned table cell. */
 export function padCell(value: string | number, width: number): string {
   return String(value).padStart(width);

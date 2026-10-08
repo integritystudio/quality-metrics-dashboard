@@ -56,6 +56,7 @@ import {
   createPerCriterionProvider,
   createRunGuard,
   formatDiff,
+  formatUsd,
   formatRate,
   oneShotArgError,
   padCell,
@@ -388,11 +389,11 @@ async function main(): Promise<void> {
   const estimate = estimateSpend(sample.turns, pricing);
   console.log(
     `[agreement] estimate: per-criterion ~${estimate.perCriterionInputTokens.toLocaleString()} input tokens / ~${estimate.perCriterionCalls} calls `
-    + `($${estimate.perCriterionUsd.toFixed(USD_DECIMALS)}); consolidated ~${estimate.consolidatedInputTokens.toLocaleString()} / ~${estimate.consolidatedCalls} `
-    + `($${estimate.consolidatedUsd.toFixed(USD_DECIMALS)}); total ~$${estimate.totalUsd.toFixed(USD_DECIMALS)}`,
+    + `(${formatUsd(estimate.perCriterionUsd)}); consolidated ~${estimate.consolidatedInputTokens.toLocaleString()} / ~${estimate.consolidatedCalls} `
+    + `(${formatUsd(estimate.consolidatedUsd)}); total ~${formatUsd(estimate.totalUsd)}`,
   );
   if (estimate.totalUsd > MAX_ESTIMATED_SPEND_USD) {
-    return refuse(`estimated spend $${estimate.totalUsd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap; lower ${LIMIT_FLAG}`);
+    return refuse(`estimated spend ${formatUsd(estimate.totalUsd)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap; lower ${LIMIT_FLAG}`);
   }
 
   const startedAt = begin(DOCS_DIR, { limit: args.limit, turns: sample.turns.length });

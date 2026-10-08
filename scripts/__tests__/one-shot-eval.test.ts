@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createRunGuard, EXIT_REFUSED } from '../one-shot-eval.js';
+import { createRunGuard, formatUsd, EXIT_REFUSED } from '../one-shot-eval.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV } from '../judge-credentials.js';
 
 const MARKER = '.test.started';
@@ -46,5 +46,12 @@ describe('createRunGuard', () => {
     vi.stubEnv(DEFAULT_API_KEY_ENV, '');
     expect(guard.resolveApiKey()).toBeUndefined();
     expect(process.exitCode).toBe(EXIT_REFUSED);
+  });
+});
+
+describe('formatUsd', () => {
+  it('prefixes a dollar sign and fixes the decimals', () => {
+    expect(formatUsd(1.81234)).toBe('$1.8123');
+    expect(formatUsd(0)).toBe('$0.0000');
   });
 });
