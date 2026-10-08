@@ -37,7 +37,7 @@ vi.mock('cloudflare', () => {
   return { default: Object.assign(CloudflareMock, { APIError }), APIError };
 });
 
-// Use env vars for config so smol-toml mock resets don't affect resolution.
+// Use env vars for config resolution so no smol-toml or fs mocking is needed.
 const TEST_NAMESPACE_ID = '902fc8a43e7147b486b6376c485c4506';
 const TEST_ACCOUNT_ID = 'test-account-id';
 

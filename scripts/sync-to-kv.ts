@@ -105,7 +105,12 @@ function resolveCloudflareConfig(): CloudflareConfig {
   const tomlPath = join(import.meta.dirname, '..', 'wrangler.toml');
   if (existsSync(tomlPath)) {
     const raw = readFileSync(tomlPath, 'utf8');
-    const parsed = parseToml(raw) as Record<string, unknown>;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = parseToml(raw) as Record<string, unknown>;
+    } catch (err) {
+      throw new Error(`Failed to parse ${tomlPath}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+    }
     const accountId = envAccountId ??
       (typeof parsed.account_id === 'string' ? parsed.account_id : undefined);
     const kvNamespaces = Array.isArray(parsed.kv_namespaces) ? parsed.kv_namespaces : [];
@@ -402,11 +407,20 @@ async function kvBulkPut(entries: KVEntry[]): Promise<number> {
     }
     const { namespaceId, accountId } = getCloudflareConfig();
     try {
-      await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
+      const result = await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
         account_id: accountId,
         body: enveloped,
       });
-      written += batch.length;
+      const failed = result?.unsuccessful_keys ?? [];
+      // Use successful_key_count when present; fall back to batch minus failed count.
+      // A null result (API returned no body) conservatively credits the whole batch.
+      const batchWritten = result != null
+        ? (result.successful_key_count ?? batch.length - failed.length)
+        : batch.length;
+      if (failed.length > 0) {
+        console.warn(`[sync-to-kv] ${failed.length} key(s) not written in batch${batchLabel} — will retry on next run: ${failed.slice(0, 5).join(', ')}${failed.length > 5 ? '…' : ''}`);
+      }
+      written += batchWritten;
     } catch (err) {
       if (err instanceof CloudflareAPIError &&
           err.errors.some(e => e.code === KV_DAILY_WRITE_LIMIT_CODE)) {
@@ -439,10 +453,17 @@ export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }):
     }
     const { namespaceId, accountId } = getCloudflareConfig();
     try {
-      await getCloudflareClient().kv.namespaces.bulkDelete(namespaceId, {
+      const result = await getCloudflareClient().kv.namespaces.bulkDelete(namespaceId, {
         account_id: accountId,
         body: batch,
       });
+      const failedDeletes = result?.unsuccessful_keys ?? [];
+      if (failedDeletes.length > 0) {
+        console.warn(
+          `[sync-to-kv] ${failedDeletes.length} key(s) not deleted — will be retried on next sync: ` +
+          `${failedDeletes.slice(0, 5).join(', ')}${failedDeletes.length > 5 ? '…' : ''}`,
+        );
+      }
     } catch (err) {
       console.warn(
         `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
