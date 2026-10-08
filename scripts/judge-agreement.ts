@@ -255,8 +255,19 @@ export function estimateSpend(turns: readonly Turn[], pricing: ModelPricingEntry
 // Agreement math
 // ---------------------------------------------------------------------------
 
-function emptyAgreement(): CriterionAgreement {
-  return { paired: 0, exactMatches: 0, exactMatchRate: null, meanAbsDiff: null, perCriterionOnly: 0, consolidatedOnly: 0 };
+/** A criterion's running sums; `absDiffSum` becomes `meanAbsDiff` once every turn is in. */
+type AgreementAccumulator = CriterionAgreement & { absDiffSum: number };
+
+function newAccumulator(): AgreementAccumulator {
+  return { paired: 0, exactMatches: 0, exactMatchRate: null, meanAbsDiff: null, perCriterionOnly: 0, consolidatedOnly: 0, absDiffSum: 0 };
+}
+
+function finishAgreement({ absDiffSum, ...rest }: AgreementAccumulator): CriterionAgreement {
+  return {
+    ...rest,
+    exactMatchRate: rest.paired > 0 ? rest.exactMatches / rest.paired : null,
+    meanAbsDiff: rest.paired > 0 ? absDiffSum / rest.paired : null,
+  };
 }
 
 /**
@@ -266,56 +277,36 @@ function emptyAgreement(): CriterionAgreement {
  * statements, not a grid point.
  */
 export function computeAgreement(turns: readonly TurnScores[]): AgreementSummary {
-  const sums = new Map<string, CriterionAgreement & { absDiffSum: number }>();
-  const overall = { ...emptyAgreement(), absDiffSum: 0 };
-
-  const bucket = (name: string): CriterionAgreement & { absDiffSum: number } => {
-    const existing = sums.get(name);
-    if (existing) return existing;
-    const created = { ...emptyAgreement(), absDiffSum: 0 };
-    sums.set(name, created);
-    return created;
-  };
+  const sums = new Map<string, AgreementAccumulator>();
+  const overall = newAccumulator();
 
   for (const turn of turns) {
     const names = new Set([...Object.keys(turn.perCriterion), ...Object.keys(turn.consolidated)]);
     for (const name of names) {
-      const entry = bucket(name);
+      const entry = sums.get(name) ?? newAccumulator();
+      sums.set(name, entry);
+      const targets = [entry, overall];
       const a = turn.perCriterion[name];
       const b = turn.consolidated[name];
-      if (a === undefined) {
-        entry.consolidatedOnly++;
-        overall.consolidatedOnly++;
-        continue;
-      }
-      if (b === undefined) {
-        entry.perCriterionOnly++;
-        overall.perCriterionOnly++;
+      if (a === undefined || b === undefined) {
+        const side = a === undefined ? 'consolidatedOnly' : 'perCriterionOnly';
+        for (const target of targets) target[side]++;
         continue;
       }
       const a5 = toFivePointScale(a);
       const b5 = toFivePointScale(b);
-      const match = Math.round(a5) === Math.round(b5) ? 1 : 0;
-      const diff = Math.abs(a5 - b5);
-      for (const target of [entry, overall]) {
+      for (const target of targets) {
         target.paired++;
-        target.exactMatches += match;
-        target.absDiffSum += diff;
+        target.exactMatches += Math.round(a5) === Math.round(b5) ? 1 : 0;
+        target.absDiffSum += Math.abs(a5 - b5);
       }
     }
   }
 
-  const finish = ({ absDiffSum, ...rest }: CriterionAgreement & { absDiffSum: number }): CriterionAgreement => ({
-    ...rest,
-    exactMatchRate: rest.paired > 0 ? rest.exactMatches / rest.paired : null,
-    meanAbsDiff: rest.paired > 0 ? absDiffSum / rest.paired : null,
-  });
-
-  const byCriterion: Record<string, CriterionAgreement> = {};
-  for (const [name, entry] of [...sums.entries()].sort(([x], [y]) => x.localeCompare(y))) {
-    byCriterion[name] = finish(entry);
-  }
-  return { byCriterion, overall: finish(overall) };
+  const byCriterion = Object.fromEntries(
+    [...sums.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([name, entry]) => [name, finishAgreement(entry)]),
+  );
+  return { byCriterion, overall: finishAgreement(overall) };
 }
 
 /** Records missing per evaluation name — what each path failed to produce. */
