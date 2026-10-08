@@ -300,6 +300,13 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+// A handler that throws (an upstream fetch rejecting, say) gets the same JSON
+// error shape as every handled failure, not Hono's plain-text default.
+app.onError((err, c) => {
+  console.error(`[worker] unhandled error on ${c.req.method} ${c.req.path}:`, err instanceof Error ? err.message : String(err));
+  return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+});
+
 app.use('/*', cors({
   origin: [
     'https://integritystudio.dev',

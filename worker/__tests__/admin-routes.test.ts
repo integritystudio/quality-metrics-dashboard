@@ -199,6 +199,16 @@ describe('GET /api/admin/roles', () => {
     expect(Array.isArray(data)).toBe(true);
     expect(data).toHaveLength(1);
   });
+
+  it('returns a JSON 500 when the Supabase fetch rejects', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    fetchMock.mockImplementation(withAdminAuth(() => Promise.reject(new TypeError('Network connection lost.'))));
+
+    const res = await app.request('/api/admin/roles', { headers: adminHeaders() }, makeEnv());
+    consoleError.mockRestore();
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Internal server error' });
+  });
 });
 
 // ─── POST /api/admin/users/:userId/roles ──────────────────────────────────────
