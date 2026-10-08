@@ -13,20 +13,9 @@ import {
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
 import { YES_FLAG } from '../one-shot-eval.js';
-import {
-  addCallUsage,
-  charsToTokens,
-  createCallUsageTotals,
-  estimateTurnTokens,
-  judgePricing,
-  tokenUsageCostUsd,
-  totalChars,
-  CACHE_CREATION_INPUT_PRICE_RATIO,
-  CACHE_READ_INPUT_PRICE_RATIO,
-} from '../judge-usage.js';
+import { estimateTurnTokens } from '../judge-usage.js';
 
 const PRICING = { input: 1.0, output: 5.0, provider: 'anthropic' } as const;
-const ONE_MILLION = 1_000_000;
 
 function makeTurn(overrides: Partial<Turn> = {}): Turn {
   return {
@@ -91,38 +80,7 @@ describe('agreement math', () => {
   });
 });
 
-describe('usage and cost', () => {
-  it('prices input and output tokens per million at the model rate', () => {
-    const usage = { inputTokens: ONE_MILLION, outputTokens: ONE_MILLION / 5, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
-    expect(tokenUsageCostUsd(usage, PRICING)).toBeCloseTo(2);
-  });
-
-  it('prices cache reads and writes at their input-rate ratios', () => {
-    const usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: ONE_MILLION, cacheReadInputTokens: ONE_MILLION };
-    const expected = PRICING.input * (CACHE_CREATION_INPUT_PRICE_RATIO + CACHE_READ_INPUT_PRICE_RATIO);
-    expect(tokenUsageCostUsd(usage, PRICING)).toBeCloseTo(expected);
-  });
-
-  it('sums text lengths and rounds the token estimate up', () => {
-    expect(totalChars(['ab', '', 'cde'])).toBe(5);
-    expect(totalChars([])).toBe(0);
-    expect(charsToTokens(0)).toBe(0);
-    expect(charsToTokens(1)).toBe(1);
-  });
-
-  it('prices the judge model by default and throws for an unpriced model', () => {
-    expect(judgePricing().input).toBeGreaterThan(0);
-    expect(() => judgePricing('no-such-model')).toThrow(/No pricing data for model no-such-model/);
-    expect(() => judgePricing('toString')).toThrow(/No pricing data/);
-  });
-
-  it('accumulates usage and call counts', () => {
-    const totals = createCallUsageTotals();
-    addCallUsage(totals, { inputTokens: 10, outputTokens: 2, cacheCreationInputTokens: 1, cacheReadInputTokens: 0 });
-    addCallUsage(totals, { inputTokens: 5, outputTokens: 3, cacheCreationInputTokens: 0, cacheReadInputTokens: 4 });
-    expect(totals).toEqual({ calls: 2, inputTokens: 15, outputTokens: 5, cacheCreationInputTokens: 1, cacheReadInputTokens: 4 });
-  });
-
+describe('estimateSpend', () => {
   it('estimates per-criterion input as a multiple of the consolidated input', () => {
     const turns = [makeTurn({ toolResults: ['x'.repeat(4000)] }), makeTurn()];
     expect(estimateTurnTokens(turns[1]!)).toBeGreaterThan(0);

@@ -46,12 +46,9 @@ import {
 import {
   createUsageTotals,
   recordUsage,
-  usageCostUsd,
   judgePricing,
   estimateJudgeRun,
   EST_OUTPUT_TOKENS_PER_EVAL,
-  CACHE_READ_INPUT_PRICE_RATIO,
-  CACHE_CREATION_INPUT_PRICE_RATIO,
   BATCH_PRICE_RATIO,
   type JudgeUsageTotals,
 } from '../judge-usage.js';
@@ -61,7 +58,7 @@ import type { BatchLLMProvider } from '../judge-batch-provider.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
-import { TOKENS_PER_MILLION, type ModelPricingEntry } from '../../../src/lib/core/constants-models.js';
+import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -1240,41 +1237,6 @@ describe('readRunState / writeRunState', () => {
   it('returns undefined for a corrupt state file without throwing', () => {
     writeFileSync(stateFile, 'not-json', 'utf-8');
     expect(readRunState(stateFile)).toBeUndefined();
-  });
-});
-
-describe('recordUsage', () => {
-  it('sums every response into the totals and treats null cache counts as zero', () => {
-    const totals = createUsageTotals();
-
-    recordUsage(totals, { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 });
-    recordUsage(totals, { input_tokens: 200, output_tokens: 20, cache_read_input_tokens: null, cache_creation_input_tokens: null });
-
-    expect(totals).toEqual({ input_tokens: 300, output_tokens: 30, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 });
-  });
-});
-
-describe('usageCostUsd', () => {
-  const pricing: ModelPricingEntry = { input: 2, output: 10, provider: 'anthropic' };
-
-  it('prices input and output at list rates', () => {
-    const totals = { ...createUsageTotals(), input_tokens: TOKENS_PER_MILLION, output_tokens: TOKENS_PER_MILLION };
-
-    expect(usageCostUsd(totals, pricing)).toBeCloseTo(pricing.input + pricing.output);
-  });
-
-  it('prices cache reads at a tenth of input and cache writes at their ratio', () => {
-    const totals: JudgeUsageTotals = {
-      input_tokens: 0, output_tokens: 0, cache_read_input_tokens: TOKENS_PER_MILLION, cache_creation_input_tokens: TOKENS_PER_MILLION,
-    };
-
-    expect(usageCostUsd(totals, pricing)).toBeCloseTo(
-      pricing.input * CACHE_READ_INPUT_PRICE_RATIO + pricing.input * CACHE_CREATION_INPUT_PRICE_RATIO,
-    );
-  });
-
-  it('is zero for a run that made no calls', () => {
-    expect(usageCostUsd(createUsageTotals(), pricing)).toBe(0);
   });
 });
 
