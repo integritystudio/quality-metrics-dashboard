@@ -6,10 +6,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { HTTPException } from 'hono/http-exception';
 import app from '../index.js';
 
 const BAD_REQUEST = 400;
 const OK = 200;
+const PAYLOAD_TOO_LARGE = 413;
 
 const mockKV = {
   get: vi.fn(), put: vi.fn(), delete: vi.fn(), list: vi.fn(), getWithMetadata: vi.fn(),
@@ -105,5 +107,11 @@ describe('unhandled errors', () => {
     consoleError.mockRestore();
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'Internal server error' });
+  });
+
+  it('pass an HTTPException\'s own response through', async () => {
+    mockKV.get.mockRejectedValue(new HTTPException(PAYLOAD_TOO_LARGE));
+    const res = await get('/api/pipeline');
+    expect(res.status).toBe(PAYLOAD_TOO_LARGE);
   });
 });

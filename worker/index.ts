@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
+import { HTTPException } from 'hono/http-exception';
 import { validator } from 'hono/validator';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
@@ -341,6 +342,8 @@ const app = new Hono<AppEnv>();
 // A handler that throws (an upstream fetch rejecting, say) gets the same JSON
 // error shape as every handled failure, not Hono's plain-text default.
 app.onError((err, c) => {
+  // An HTTPException carries the response it means; only a genuine fault is a 500.
+  if (err instanceof HTTPException) return err.getResponse();
   console.error(`[worker] unhandled error on ${c.req.method} ${c.req.path}:`, err instanceof Error ? err.message : String(err));
   return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
 });
