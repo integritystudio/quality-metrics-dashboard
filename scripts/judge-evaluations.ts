@@ -24,6 +24,17 @@
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --batch   # Message Batches API: half price, unattended
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --per-criterion   # one call per criterion (~10x cost)
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run --source=local   # the rollback: local discovery, every log file
+ *   npx tsx dashboard/scripts/judge-evaluations.ts --backfill   # synthetic scores for trace-only sessions; see below
+ *
+ * `--backfill` covers sessions that have traces but no transcript, which the
+ * judge cannot score. It reads every local `traces-*.jsonl`, makes one turn per
+ * session, and writes seeded, deterministic (hashed) relevance, coherence,
+ * faithfulness and hallucination scores to the local ledger only: no LLM call,
+ * no post to ingest, and no other flag applies. Rows are cohort `backfill`
+ * (canary draws stay `canary`), and turns the ledger already covers are
+ * skipped. Nothing schedules it. Run it by hand, knowing that `backfill` is
+ * an evidence cohort (only `seed` and `canary` are excluded), so a row young
+ * enough for upload's age guard reaches the dashboard aggregates as if judged.
  *
  * Scoring is consolidated by default — one call per turn carrying every
  * criterion (judge-consolidated.ts). `--batch`
@@ -546,7 +557,7 @@ export async function processBatch<T, R>(
   return settled.filter(r => r.status === 'fulfilled').map(r => r.value);
 }
 
-/** --backfill: seed evaluations from trace data for sessions with no transcript. */
+/** --backfill: seed evaluations from trace data for sessions with no transcript (see the file header). */
 async function runBackfill(): Promise<void> {
   const traceTurns = await discoverSessionsFromTraces();
   anchorTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));

@@ -133,7 +133,8 @@ No open items.
 | SYNC-KV-REST-API | Write KV through the Cloudflare API instead of spawning `npx wrangler` | P3 | ✅ Done 2026-10-07 — commit `3873812` |
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | Source: session 2026-10-06 scripts audit |
 | SYNC-ORG-ENTRIES-SPLIT | `computeOrgEntries` is ~480 lines with repeated query and wrangler scaffolding | P4 | Source: session 2026-10-06 scripts audit |
-| JUDGE-BACKFILL-FLAG | Decide whether to keep judge-evaluations `--backfill` (review) | P4 | Source: session 2026-10-06 scripts audit |
+| JUDGE-BACKFILL-FLAG | Decide whether to keep judge-evaluations `--backfill` (review) | P4 | ✅ Done 2026-10-07 — kept and documented |
+| BACKFILL-COHORT-COUNTS-AS-EVIDENCE | `--backfill`'s synthetic scores count as evidence downstream | P3 | Source: JUDGE-BACKFILL-FLAG, 2026-10-07 |
 | DEPLOY-SECRETS-DEV-WORKER | `deploy-secrets.sh` skips `quality-metrics-api-dev` (review) | P4 | ✅ Done 2026-10-07 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
@@ -198,6 +199,19 @@ session loop at `:1275`). Updated 2026-10-07 after `5174c29`, which read evaluat
 seeded, synthetic `trace-backfill` scores — the kind of output `populate` refuses to produce without an explicit
 `--seed`. It is documented nowhere and nothing invokes it; its tests do touch it. Keep (and document) or remove: a
 product decision, not a refactor.
+
+*Done, 2026-10-07.* Kept. Documented in the `judge-evaluations.ts` header and `docs/data-pipeline.md` (judge stage). Its
+local dependencies (`_loadExistingKeys`, `account-stamps.ts`) are now a constraint on PHASE6-LOCAL-RETIREMENT.
+
+**BACKFILL-COHORT-COUNTS-AS-EVIDENCE.** `runBackfill` (`scripts/judge-evaluations.ts`) re-cohorts its seeded rows to
+`backfill`, but `isEvidenceCohort` (`../../src/lib/core/shared-schemas.ts:154`) excludes only `seed` and `canary`, and
+`filterCanary` (`scripts/sync-to-kv.ts`) only canary. `upload` ships every ledger record younger than 36 h, so backfilled
+rows for recent sessions reach the dashboard aggregates as if an LLM had judged them. The scores are hashed draws from
+the same ranges as `--seed`, which `populate` refuses to produce without an explicit flag.
+- **Fix options.** Exclude `backfill` in `isEvidenceCohort` (parent repo; check every other `backfill` writer first), or
+  have upload skip `trace-backfill` rows.
+
+Acceptance: a `--backfill` row in the cloud table does not change any `dashboard:*` aggregate, and a test pins it.
 
 **DEPLOY-SECRETS-DEV-WORKER.** `scripts/deploy-secrets.sh` (`npm run deploy:secrets`) sets secrets on the two production
 Workers only. The dev Worker has its own Supabase project and Auth0 tenant, so the omission may be deliberate; confirm and
