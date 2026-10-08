@@ -5,6 +5,8 @@
  * unreachable" must not come back as 401. jose throws a generic JOSEError on a non-200 JWKS
  * response and rethrows the raw fetch error on a network failure; neither is a token problem.
  * The real error classes are used, so a jose rename fails here rather than in production.
+ * The same split holds for the Supabase reads that follow: a failed read is 503, a missing
+ * user row is 401.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { errors } from 'jose';
@@ -78,5 +80,41 @@ describe('upstream failures are 503', () => {
     ['network failure', new TypeError('Network connection lost.')],
   ])('%s', async (_label, err) => {
     expect(await statusWhenVerifyThrows(err)).toBe(SERVICE_UNAVAILABLE);
+  });
+});
+
+describe('Supabase reads during auth', () => {
+  const APP_USER_ID = 'a0000000-0000-4000-8000-000000000051';
+  const orgEnv = { ...env, ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID: 'a0000000-0000-4000-8000-0000000000aa', STAFF_USER_IDS: '[]' };
+
+  function json(body: unknown, status = 200): Promise<Response> {
+    return Promise.resolve(new Response(JSON.stringify(body), { status }));
+  }
+
+  async function status(fetchImpl: (url: string) => Promise<Response>, envOverride = orgEnv): Promise<number> {
+    const jose = vi.mocked(await import('jose'));
+    jose.jwtVerify.mockResolvedValue({ payload: { sub: 'auth0|u' } } as never);
+    vi.stubGlobal('fetch', vi.fn(fetchImpl));
+    const res = await app.request('/api/me', { headers: { Authorization: 'Bearer mock-jwt' } }, envOverride, makeCtx());
+    return res.status;
+  }
+
+  const userRow = [{ id: APP_USER_ID, email: 'u@test.com', default_organization_id: null }];
+
+  it('503 when the user lookup fails', async () => {
+    expect(await status(() => Promise.reject(new TypeError('Network connection lost.')))).toBe(SERVICE_UNAVAILABLE);
+    expect(await status(() => json({ message: 'upstream' }, 500))).toBe(SERVICE_UNAVAILABLE);
+  });
+
+  it('401 when the user has no app record', async () => {
+    expect(await status(() => json([]))).toBe(UNAUTHORIZED);
+  });
+
+  it('503 when the membership read fails, rather than a session with no orgs', async () => {
+    expect(await status((url) => {
+      if (url.includes('/rest/v1/users?')) return json(userRow);
+      if (url.includes('/rest/v1/user_roles?')) return json([]);
+      return Promise.reject(new TypeError('Network connection lost.'));
+    })).toBe(SERVICE_UNAVAILABLE);
   });
 });

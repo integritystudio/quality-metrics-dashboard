@@ -446,8 +446,14 @@ app.use('/api/*', async (c, next) => {
     .eq('auth0_id', auth0Id)
     .limit(1)
     .abortSignal(signal);
+  // A failed read is upstream (503, retried by the client); only a missing row means the
+  // user has no app record (401).
+  if (userRes.error) {
+    console.error('[auth] user lookup failed, status:', userRes.status || 'network error');
+    return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
+  }
   const [rawUser] = safeArray(userRes.data);
-  if (userRes.error || !rawUser) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  if (!rawUser) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
   const userResult = PublicUserSchema.safeParse(rawUser);
   if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
   const appUserId = userResult.data.id;
@@ -486,6 +492,12 @@ app.use('/api/*', async (c, next) => {
   }
 
   if (orgScopingEnabled) {
+    // Fail closed: a failed read must not pass for "no memberships", which answers a
+    // non-retried 403 (or, for staff, the home org).
+    if (membershipsRes?.error) {
+      console.error('[auth] membership fetch failed for user', appUserId, 'status:', membershipsRes.status || 'network error');
+      return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
+    }
     const memberships = parseMemberships(membershipsRes?.data);
     const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
 
