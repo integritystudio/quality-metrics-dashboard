@@ -454,31 +454,19 @@ function printTable(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  if (args.error) {
-    refuse(args.error);
-    return;
-  }
+  if (args.error) return refuse(args.error);
 
   const credential = resolveApiKey();
   if (!credential) return;
 
   const reason = refusalReason(DOCS_DIR);
-  if (reason) {
-    refuse(reason);
-    return;
-  }
+  if (reason) return refuse(reason);
 
   const pricing = MODEL_PRICING[REFERENCE_MODEL];
-  if (!pricing) {
-    refuse(`no pricing data for model ${REFERENCE_MODEL}`);
-    return;
-  }
+  if (!pricing) return refuse(`no pricing data for model ${REFERENCE_MODEL}`);
 
   const agreementPath = resolveAgreementPath(DOCS_DIR, args.agreementPath);
-  if (!agreementPath) {
-    refuse('no judge-agreement results file to evaluate; run judge-agreement.ts first');
-    return;
-  }
+  if (!agreementPath) return refuse('no judge-agreement results file to evaluate; run judge-agreement.ts first');
   const agreementTurns = readAgreementTurns(agreementPath);
   console.log(`[quality] ${agreementTurns.length} scored turns from ${agreementPath}`);
 
@@ -487,10 +475,7 @@ async function main(): Promise<void> {
   const matched = agreementTurns.filter(t => byKey.has(turnKey(t)));
   const unmatched = agreementTurns.length - matched.length;
   console.log(`[quality] ${matched.length} turns matched, ${unmatched} no longer locatable`);
-  if (matched.length === 0) {
-    refuse('none of the agreement run\'s turns could be located');
-    return;
-  }
+  if (matched.length === 0) return refuse('none of the agreement run\'s turns could be located');
 
   const estimate = estimateReferenceSpend(matched.map(t => byKey.get(turnKey(t))!), pricing);
   console.log(
@@ -499,8 +484,7 @@ async function main(): Promise<void> {
     + `(plus one steps call per criterion)`,
   );
   if (estimate.usd > MAX_ESTIMATED_SPEND_USD) {
-    refuse(`estimated spend $${estimate.usd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
-    return;
+    return refuse(`estimated spend $${estimate.usd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
   }
 
   const startedAt = begin(DOCS_DIR, { agreementPath, turns: matched.length });

@@ -23,7 +23,7 @@
 
 import { writeFileSync } from 'fs';
 import { pathToFileURL } from 'url';
-import { MODEL_PRICING, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import {
   _discoverTranscripts,
@@ -66,6 +66,7 @@ import {
   addCallUsage,
   createCallUsageTotals,
   estimateTurnTokens,
+  judgePricing,
   listCostUsd,
   tokenUsageCostUsd,
   type CallUsageReport,
@@ -366,25 +367,15 @@ function printTable(summary: AgreementSummary, configurations: Record<string, Ca
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  if (args.error) {
-    refuse(args.error);
-    return;
-  }
+  if (args.error) return refuse(args.error);
 
   const credential = resolveApiKey();
   if (!credential) return;
 
   const reason = refusalReason(DOCS_DIR);
-  if (reason) {
-    refuse(reason);
-    return;
-  }
+  if (reason) return refuse(reason);
 
-  const pricing = MODEL_PRICING[HAIKU_MODEL];
-  if (!pricing) {
-    refuse(`no pricing data for model ${HAIKU_MODEL}`);
-    return;
-  }
+  const pricing = judgePricing();
 
   console.log('[agreement] discovering transcripts through the pipeline…');
   const transcripts = await _discoverTranscripts();
@@ -394,10 +385,7 @@ async function main(): Promise<void> {
     `[agreement] ${transcripts.length} transcripts discovered, ${sample.transcriptsScanned} scanned, `
     + `${sample.turns.length} turns sampled (${turnsWithTools} with tool results, ${sample.skippedOversize} skipped as oversize)`,
   );
-  if (sample.turns.length === 0) {
-    refuse('no turns to evaluate');
-    return;
-  }
+  if (sample.turns.length === 0) return refuse('no turns to evaluate');
 
   const estimate = estimateSpend(sample.turns, pricing);
   console.log(
@@ -406,8 +394,7 @@ async function main(): Promise<void> {
     + `($${estimate.consolidatedUsd.toFixed(USD_DECIMALS)}); total ~$${estimate.totalUsd.toFixed(USD_DECIMALS)}`,
   );
   if (estimate.totalUsd > MAX_ESTIMATED_SPEND_USD) {
-    refuse(`estimated spend $${estimate.totalUsd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap; lower ${LIMIT_FLAG}`);
-    return;
+    return refuse(`estimated spend $${estimate.totalUsd.toFixed(USD_DECIMALS)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap; lower ${LIMIT_FLAG}`);
   }
 
   const startedAt = begin(DOCS_DIR, { limit: args.limit, turns: sample.turns.length });
