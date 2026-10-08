@@ -82,6 +82,27 @@ function spanAccountField(span: LocalTraceSpan): Pick<EvalRecord, 'identityKeyRe
   return spanAccounts.has(span.spanId) ? { identityKeyRef: spanAccounts.get(span.spanId)! } : {};
 }
 
+const RULE_EVALUATOR: EvaluatorType = 'rule';
+
+/** What each rule metric decides; every other record field comes from `span`. */
+type RuleScore = Pick<EvalRecord, 'evaluationName' | 'scoreValue' | 'explanation' | 'scoreUnit'>;
+
+/** A rule record attached to `span`: its time, ids and account stamp. */
+function ruleRecord(span: LocalTraceSpan, sessionId: string, score: RuleScore): EvalRecord {
+  return {
+    timestamp: hrtToISO(span.startTime),
+    ...score,
+    evaluator: RULE_EVALUATOR,
+    evaluatorType: RULE_EVALUATOR_TYPE,
+    evaluatorKind: RULE_EVALUATOR_KIND,
+    cohort: NORMAL_COHORT,
+    traceId: span.traceId,
+    spanId: span.spanId,
+    ...spanAccountField(span),
+    sessionId,
+  };
+}
+
 /**
  * A span's attributes under their canonical keys. The hooks renamed `builtin.*`
  * on 2026-09-18, so local trace files hold both spellings; reading the legacy
@@ -194,20 +215,11 @@ export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
     explanation = `Tool ${toolLabel} failed${errorType ? `: ${errorType}` : ''}`;
   }
 
-  return {
-    timestamp: hrtToISO(span.startTime),
+  return ruleRecord(span, attrString(attrs['session.id']), {
     evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
     scoreValue: score,
     explanation,
-    evaluator: RULE_EVALUATOR,
-    evaluatorType: RULE_EVALUATOR_TYPE,
-    evaluatorKind: RULE_EVALUATOR_KIND,
-    cohort: NORMAL_COHORT,
-    traceId: span.traceId,
-    spanId: span.spanId,
-    ...spanAccountField(span),
-    sessionId: attrString(attrs['session.id']),
-  };
+  });
 }
 
 export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null {
@@ -229,21 +241,12 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
   else hookType = span.name.replace(HOOK_SPAN_PREFIX, '');
 
-  return {
-    timestamp: hrtToISO(span.startTime),
+  return ruleRecord(span, attrString(attrs['session.id']), {
     evaluationName: 'evaluation_latency',
     scoreValue: durationSec,
     scoreUnit: 'seconds',
     explanation: `Hook ${hookType} executed in ${durationSec.toFixed(EVAL_SCORE_PRECISION)}s`,
-    evaluator: RULE_EVALUATOR,
-    evaluatorType: RULE_EVALUATOR_TYPE,
-    evaluatorKind: RULE_EVALUATOR_KIND,
-    cohort: NORMAL_COHORT,
-    traceId: span.traceId,
-    spanId: span.spanId,
-    ...spanAccountField(span),
-    sessionId: attrString(attrs['session.id']),
-  };
+  });
 }
 
 interface TaskState {
@@ -260,7 +263,6 @@ interface SessionTaskData {
 
 const sessionTasks = new Map<string, SessionTaskData>();
 
-const RULE_EVALUATOR: EvaluatorType = 'rule';
 const TASK_COMPLETION_EVAL_NAME = 'task_completion';
 
 export const STATUS_SCORES: { pending: number; in_progress: number; completed: number } = {
@@ -327,39 +329,21 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
       if (inProgress > 0) parts.push(`${inProgress} in_progress`);
       if (pending > 0) parts.push(`${pending} pending`);
 
-      evals.push({
-        timestamp: hrtToISO(lastSpan.startTime),
+      evals.push(ruleRecord(lastSpan, sessionId, {
         evaluationName: TASK_COMPLETION_EVAL_NAME,
         scoreValue: normalizeScore(avg),
         explanation: `Session ${sessionPreview}: ${data.tasks.size} tasks (${parts.join(', ')})`,
-        evaluator: RULE_EVALUATOR,
-        evaluatorType: RULE_EVALUATOR_TYPE,
-        evaluatorKind: RULE_EVALUATOR_KIND,
-        cohort: NORMAL_COHORT,
-        traceId: lastSpan.traceId,
-        spanId: lastSpan.spanId,
-        ...spanAccountField(lastSpan),
-        sessionId,
-      });
+      }));
     } else {
       // Fallback: old trace data without a task status attribute
       if (data.creates === 0) continue;
       const completionRatio = Math.min(data.updates / (data.creates * 2), 1.0);
 
-      evals.push({
-        timestamp: hrtToISO(lastSpan.startTime),
+      evals.push(ruleRecord(lastSpan, sessionId, {
         evaluationName: TASK_COMPLETION_EVAL_NAME,
         scoreValue: normalizeScore(completionRatio),
         explanation: `Session ${sessionPreview}: ${data.creates} tasks, ${data.updates} updates (ratio fallback)`,
-        evaluator: RULE_EVALUATOR,
-        evaluatorType: RULE_EVALUATOR_TYPE,
-        evaluatorKind: RULE_EVALUATOR_KIND,
-        cohort: NORMAL_COHORT,
-        traceId: lastSpan.traceId,
-        spanId: lastSpan.spanId,
-        ...spanAccountField(lastSpan),
-        sessionId,
-      });
+      }));
     }
   }
 
@@ -407,20 +391,11 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
     if (!lastSpan) continue;
     const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
-    evals.push({
-      timestamp: hrtToISO(lastSpan.startTime),
+    evals.push(ruleRecord(lastSpan, sessionId, {
       evaluationName: TASK_COMPLETION_EVAL_NAME,
       scoreValue: normalizeScore(rate),
       explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionPreview}`,
-      evaluator: RULE_EVALUATOR,
-      evaluatorType: RULE_EVALUATOR_TYPE,
-      evaluatorKind: RULE_EVALUATOR_KIND,
-      cohort: NORMAL_COHORT,
-      traceId: lastSpan.traceId,
-      spanId: lastSpan.spanId,
-      ...spanAccountField(lastSpan),
-      sessionId,
-    });
+    }));
   }
 
   return evals;
@@ -463,21 +438,12 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
     const lastSpan = lastSequenceEntry.span;
     const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
-    evals.push({
-      timestamp: hrtToISO(lastSpan.startTime),
+    evals.push(ruleRecord(lastSpan, sessionId, {
       evaluationName: 'handoff_correctness',
       scoreValue: normalizeScore(avgScore),
       scoreUnit: 'ratio_0_1',
       explanation: `Session ${sessionPreview}: ${count} handoffs across ${distinctAgentCount} agents (${correct}/${count} correct target, ${preserved}/${count} context preserved)`,
-      evaluator: RULE_EVALUATOR,
-      evaluatorType: RULE_EVALUATOR_TYPE,
-      evaluatorKind: RULE_EVALUATOR_KIND,
-      cohort: NORMAL_COHORT,
-      traceId: lastSpan.traceId,
-      spanId: lastSpan.spanId,
-      ...spanAccountField(lastSpan),
-      sessionId,
-    });
+    }));
   }
 
   return evals;
