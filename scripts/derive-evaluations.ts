@@ -374,7 +374,11 @@ function trackAgentActivity(span: LocalTraceSpan): void {
   if (isPost) {
     entry.post++;
     const agentName = attrString(span.attributes['gen_ai.agent.name'], 'unknown');
-    const score = span.status?.code === OTEL_STATUS_ERROR_CODE ? 0 : 1;
+    const attrs = attrsOf(span);
+    // Score on the agent's own error flag (set from Agent tool `is_error`); fall
+    // back to span status so a hook crash is also counted as a failure.
+    const hasError = attrs['integritystudio.agent.has_error'] === true || span.status?.code === OTEL_STATUS_ERROR_CODE;
+    const score = hasError ? 0 : 1;
     entry.agentSequence.push({ agentName, score, span });
   }
   entry.spans.push(span);

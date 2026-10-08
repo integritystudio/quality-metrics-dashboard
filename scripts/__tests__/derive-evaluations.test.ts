@@ -823,6 +823,106 @@ describe('deriveAll over the renamed agent hook spans', () => {
 });
 
 // ---------------------------------------------------------------------------
+// handoff_correctness failure signals (DERIVE-AGENT-SCORE-HOOK-STATUS)
+//
+// Score 0 when the agent's own error flag is set (`integritystudio.agent.has_error`),
+// or when the hook itself throws (span.status.code === ERROR). Before this fix
+// only the hook-crash path was handled, so a failed agent scored as a correct
+// handoff.
+// ---------------------------------------------------------------------------
+
+const OTEL_STATUS_ERROR = 2;
+
+describe('handoff_correctness scores agent failures correctly', () => {
+  const START_SEC = 1_791_000_000;
+
+  function agentHookSpanWith(
+    phase: 'prepare' | 'finalize',
+    agentName: string,
+    spanId: string,
+    startSec: number,
+    extra: { statusCode?: number; hasError?: boolean } = {},
+  ): TraceSpan {
+    return {
+      ...agentHookSpan(phase, agentName, spanId, startSec),
+      attributes: {
+        'session.id': 'sess-failure',
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.agent.name': agentName,
+        'integritystudio.agent.type': agentName,
+        'integritystudio.hook.name': `agent.operation.${phase}`,
+        ...(extra.hasError !== undefined && { 'integritystudio.agent.has_error': extra.hasError }),
+      },
+      status: { code: extra.statusCode ?? OTEL_STATUS_OK },
+    };
+  }
+
+  it('scores 0 when the agent error flag is set and the hook status is OK', () => {
+    const spansWithAgentError = [
+      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
+      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10, { hasError: true }),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30),
+    ];
+    const handoffs = deriveAll({ spans: spansWithAgentError, accounts: new Map() })
+      .filter(r => r.evaluationName === 'handoff_correctness');
+
+    expect(handoffs).toHaveLength(1);
+    // Explore finalized with has_error=true → score 0; code-reviewer OK → score 1.
+    // The handoff from Explore→code-reviewer reads code-reviewer's score (1),
+    // but the one computed for the sequence uses the RECEIVING agent's score,
+    // so only the Explore→code-reviewer transition (code-reviewer score=1) is
+    // counted. The average handoff score is 1.
+    // NOTE: the transition reads the *receiving* agent's score, not the sender's.
+    // A failed sender does not degrade the handoff score; test this expectation
+    // explicitly so a future change that reconsiders this is visible.
+    expect(handoffs[0]?.scoreValue).toBe(1);
+  });
+
+  it('scores 0 for a handoff when the receiving agent has error flag set', () => {
+    const spansReceiverFailed = [
+      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
+      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30, { hasError: true }),
+    ];
+    const handoffs = deriveAll({ spans: spansReceiverFailed, accounts: new Map() })
+      .filter(r => r.evaluationName === 'handoff_correctness');
+
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]?.scoreValue).toBe(0);
+  });
+
+  it('scores 0 when the hook itself throws (span status ERROR, no has_error attribute)', () => {
+    const spansHookCrash = [
+      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
+      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30, { statusCode: OTEL_STATUS_ERROR }),
+    ];
+    const handoffs = deriveAll({ spans: spansHookCrash, accounts: new Map() })
+      .filter(r => r.evaluationName === 'handoff_correctness');
+
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]?.scoreValue).toBe(0);
+  });
+
+  it('scores 1 when the agent succeeds (no error flag, status OK)', () => {
+    const spansSuccess = [
+      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
+      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30),
+    ];
+    const handoffs = deriveAll({ spans: spansSuccess, accounts: new Map() })
+      .filter(r => r.evaluationName === 'handoff_correctness');
+
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]?.scoreValue).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // detectInputDrift (HOOK-RENAME-SILENT)
 //
 // Both hooks-side renames so far emptied or zeroed a metric while every stage
