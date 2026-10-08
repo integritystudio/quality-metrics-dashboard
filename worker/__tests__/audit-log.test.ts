@@ -88,11 +88,42 @@ function findAuditLogCall(calls: unknown[][]) {
   );
 }
 
-describe('audit log: role.assign', () => {
-  it('POSTs to audit_log after successful role assignment', async () => {
+interface RoleMutation {
+  action: string;
+  path: string;
+  init: RequestInit;
+  upstreamOkStatus: number;
+}
+
+const ROLE_ASSIGN: RoleMutation = {
+  action: 'role.assign',
+  path: `/api/admin/users/${VALID_USER_UUID}/roles`,
+  init: {
+    method: 'POST',
+    headers: { Authorization: 'Bearer mock-admin-jwt', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
+  },
+  upstreamOkStatus: 204,
+};
+const ROLE_MUTATIONS: RoleMutation[] = [
+  ROLE_ASSIGN,
+  {
+    action: 'role.revoke',
+    path: `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
+    init: { method: 'DELETE', headers: { Authorization: 'Bearer mock-admin-jwt' } },
+    upstreamOkStatus: 200,
+  },
+];
+
+function requestMutation({ path, init }: RoleMutation) {
+  return app.request(path, init, makeEnv(), mockExecutionCtx as unknown as ExecutionContext);
+}
+
+describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
+  it('POSTs to audit_log after the mutation succeeds', async () => {
     fetchMock.mockImplementation(withAdminAuth((url) => {
       if (url.includes('/rest/v1/user_roles')) {
-        return Promise.resolve(new Response(null, { status: 204 }));
+        return Promise.resolve(new Response(null, { status: mutation.upstreamOkStatus }));
       }
       if (url.includes('/rest/v1/audit_log')) {
         return Promise.resolve(new Response(null, { status: 201 }));
@@ -100,16 +131,7 @@ describe('audit log: role.assign', () => {
       return Promise.resolve(new Response(null, { status: 200 }));
     }));
 
-    const res = await app.request(
-      `/api/admin/users/${VALID_USER_UUID}/roles`,
-      {
-        method: 'POST',
-        headers: { Authorization: 'Bearer mock-admin-jwt', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
-      },
-      makeEnv(),
-      mockExecutionCtx as unknown as ExecutionContext,
-    );
+    const res = await requestMutation(mutation);
     expect(res.status).toBe(204);
 
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -120,7 +142,7 @@ describe('audit log: role.assign', () => {
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.actor_user_id).toBe(MOCK_APP_USER_ID);
-    expect(body.action).toBe('role.assign');
+    expect(body.action).toBe(mutation.action);
     expect(body.target_type).toBe('user');
     expect(body.target_id).toBe(VALID_USER_UUID);
     expect((body.metadata as { role_id: string }).role_id).toBe(VALID_ROLE_UUID);
@@ -129,7 +151,7 @@ describe('audit log: role.assign', () => {
     expect(body.role_id).toBeUndefined();
   });
 
-  it('does not POST to audit_log when role assignment fails', async () => {
+  it('does not POST to audit_log when the mutation fails', async () => {
     fetchMock.mockImplementation(withAdminAuth((url) => {
       if (url.includes('/rest/v1/user_roles')) {
         return Promise.resolve(new Response(null, { status: 500 }));
@@ -137,16 +159,7 @@ describe('audit log: role.assign', () => {
       return Promise.resolve(new Response(null, { status: 200 }));
     }));
 
-    const res = await app.request(
-      `/api/admin/users/${VALID_USER_UUID}/roles`,
-      {
-        method: 'POST',
-        headers: { Authorization: 'Bearer mock-admin-jwt', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
-      },
-      makeEnv(),
-      mockExecutionCtx as unknown as ExecutionContext,
-    );
+    const res = await requestMutation(mutation);
     expect(res.status).toBe(500);
 
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -154,7 +167,9 @@ describe('audit log: role.assign', () => {
     const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
     expect(auditCall).toBeUndefined();
   });
+});
 
+describe('audit log: failure resilience', () => {
   it('returns 204 even when audit_log POST rejects', async () => {
     fetchMock.mockImplementation(withAdminAuth((url) => {
       if (url.includes('/rest/v1/user_roles')) {
@@ -166,81 +181,7 @@ describe('audit log: role.assign', () => {
       return Promise.resolve(new Response(null, { status: 200 }));
     }));
 
-    const res = await app.request(
-      `/api/admin/users/${VALID_USER_UUID}/roles`,
-      {
-        method: 'POST',
-        headers: { Authorization: 'Bearer mock-admin-jwt', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
-      },
-      makeEnv(),
-      mockExecutionCtx as unknown as ExecutionContext,
-    );
+    const res = await requestMutation(ROLE_ASSIGN);
     expect(res.status).toBe(204);
-  });
-});
-
-describe('audit log: role.revoke', () => {
-  it('POSTs to audit_log after successful role revocation', async () => {
-    fetchMock.mockImplementation(withAdminAuth((url) => {
-      if (url.includes('/rest/v1/user_roles')) {
-        return Promise.resolve(new Response(null, { status: 200 }));
-      }
-      if (url.includes('/rest/v1/audit_log')) {
-        return Promise.resolve(new Response(null, { status: 201 }));
-      }
-      return Promise.resolve(new Response(null, { status: 200 }));
-    }));
-
-    const res = await app.request(
-      `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
-      {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer mock-admin-jwt' },
-      },
-      makeEnv(),
-      mockExecutionCtx as unknown as ExecutionContext,
-    );
-    expect(res.status).toBe(204);
-
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
-    expect(auditCall).toBeDefined();
-    const init = auditCall![1] as RequestInit;
-    const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body.actor_user_id).toBe(MOCK_APP_USER_ID);
-    expect(body.action).toBe('role.revoke');
-    expect(body.target_type).toBe('user');
-    expect(body.target_id).toBe(VALID_USER_UUID);
-    expect((body.metadata as { role_id: string }).role_id).toBe(VALID_ROLE_UUID);
-    // Ensure non-column names are absent — PostgREST rejects unknown columns
-    expect(body.target_user_id).toBeUndefined();
-    expect(body.role_id).toBeUndefined();
-  });
-
-  it('does not POST to audit_log when role revocation fails', async () => {
-    fetchMock.mockImplementation(withAdminAuth((url) => {
-      if (url.includes('/rest/v1/user_roles')) {
-        return Promise.resolve(new Response(null, { status: 500 }));
-      }
-      return Promise.resolve(new Response(null, { status: 200 }));
-    }));
-
-    const res = await app.request(
-      `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
-      {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer mock-admin-jwt' },
-      },
-      makeEnv(),
-      mockExecutionCtx as unknown as ExecutionContext,
-    );
-    expect(res.status).toBe(500);
-
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
-    expect(auditCall).toBeUndefined();
   });
 });

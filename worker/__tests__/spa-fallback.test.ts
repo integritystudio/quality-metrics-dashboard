@@ -74,41 +74,15 @@ afterEach(() => {
 // SPA fallback — non-API routes
 
 describe('SPA fallback: non-API routes serve index.html', () => {
-  it('GET /agents returns 200 with HTML content', async () => {
-    const res = await app.request('/agents', {}, makeEnv());
+  it.each([
+    { path: '/agents' },
+    { path: '/agents/sess-123' },
+    { path: '/' },
+  ])('GET $path returns 200 with an HTML body', async ({ path }) => {
+    const res = await app.request(path, {}, makeEnv());
     expect(res.status).toBe(200);
     const contentType = res.headers.get('Content-Type') ?? '';
     expect(contentType).toMatch(/text\/html/);
-  });
-
-  it('GET /agents body contains HTML', async () => {
-    const res = await app.request('/agents', {}, makeEnv());
-    const body = await res.text();
-    expect(body).toMatch(/<!DOCTYPE html>/i);
-  });
-
-  it('GET /agents/sess-123 returns 200 with HTML content (nested SPA route)', async () => {
-    const res = await app.request('/agents/sess-123', {}, makeEnv());
-    expect(res.status).toBe(200);
-    const contentType = res.headers.get('Content-Type') ?? '';
-    expect(contentType).toMatch(/text\/html/);
-  });
-
-  it('GET /agents/sess-123 body contains HTML', async () => {
-    const res = await app.request('/agents/sess-123', {}, makeEnv());
-    const body = await res.text();
-    expect(body).toMatch(/<!DOCTYPE html>/i);
-  });
-
-  it('GET / (root) returns 200 with HTML content', async () => {
-    const res = await app.request('/', {}, makeEnv());
-    expect(res.status).toBe(200);
-    const contentType = res.headers.get('Content-Type') ?? '';
-    expect(contentType).toMatch(/text\/html/);
-  });
-
-  it('GET / body contains HTML', async () => {
-    const res = await app.request('/', {}, makeEnv());
     const body = await res.text();
     expect(body).toMatch(/<!DOCTYPE html>/i);
   });

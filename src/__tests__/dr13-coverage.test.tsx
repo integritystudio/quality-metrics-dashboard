@@ -60,18 +60,13 @@ function makeTrendBucket(overrides: Partial<TrendBucket> = {}): TrendBucket {
 
 
 describe('Sparkline', () => {
-  it('renders null for fewer than 2 valid data points', () => {
-    const { container } = render(<Sparkline data={[0.5]} />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('renders null for empty data', () => {
-    const { container } = render(<Sparkline data={[]} />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('renders null when all values are null', () => {
-    const { container } = render(<Sparkline data={[null, null, null]} />);
+  it.each([
+    { label: 'fewer than 2 valid data points', data: [0.5] },
+    { label: 'empty data', data: [] },
+    { label: 'all values null', data: [null, null, null] },
+    { label: 'only 1 of multiple finite', data: [NaN, Infinity, 0.5] },
+  ])('renders null for $label', ({ data }) => {
+    const { container } = render(<Sparkline data={data} />);
     expect(container.firstChild).toBeNull();
   });
 
@@ -115,12 +110,6 @@ describe('Sparkline', () => {
     const { container } = render(<Sparkline data={[0.5, 0.7]} color="#ff0000" />);
     const polyline = container.querySelector('polyline');
     expect(polyline).toHaveAttribute('stroke', '#ff0000');
-  });
-
-  it('renders null when only 1 of multiple is finite', () => {
-    const { container } = render(<Sparkline data={[NaN, Infinity, 0.5]} />);
-    // Only 1 valid (0.5), renders null
-    expect(container.firstChild).toBeNull();
   });
 });
 
@@ -531,24 +520,16 @@ describe('trends API route validation', () => {
     expect(body.error).toContain('Invalid period');
   });
 
-  it('returns 400 for invalid buckets param (non-integer)', async () => {
+  it.each([
+    { label: 'non-integer', buckets: 'abc' },
+    { label: 'below minimum (< 3)', buckets: '2' },
+    { label: 'above maximum (> 30)', buckets: '31' },
+  ])('returns 400 for buckets $label', async ({ buckets }) => {
     const app = await loadTrendRoutes();
-    const res = await app.request('/trends/relevance?period=7d&buckets=abc');
+    const res = await app.request(`/trends/relevance?period=7d&buckets=${buckets}`);
     expect(res.status).toBe(400);
     const body = await res.json() as ErrorResponse;
     expect(body.error).toContain('Invalid buckets');
-  });
-
-  it('returns 400 for buckets below minimum (< 3)', async () => {
-    const app = await loadTrendRoutes();
-    const res = await app.request('/trends/relevance?period=7d&buckets=2');
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 400 for buckets above maximum (> 30)', async () => {
-    const app = await loadTrendRoutes();
-    const res = await app.request('/trends/relevance?period=7d&buckets=31');
-    expect(res.status).toBe(400);
   });
 
   it('returns 200 for valid known metric and default params', async () => {

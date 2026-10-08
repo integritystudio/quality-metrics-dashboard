@@ -360,64 +360,24 @@ describe('overlay toggle', () => {
 
 
 describe('ignored tags', () => {
-  it('does NOT fire shortcut when keydown originates from INPUT', () => {
+  it.each([
+    { tag: 'INPUT', field: <input data-testid="field" />, fires: false },
+    { tag: 'TEXTAREA', field: <textarea data-testid="field" />, fires: false },
+    { tag: 'SELECT', field: <select data-testid="field"><option value="a">A</option></select>, fires: false },
+    { tag: 'a div', field: <div data-testid="field" tabIndex={0} />, fires: true },
+  ])('fires shortcut from $tag: $fires', ({ field, fires }) => {
     const action = vi.fn();
     function ActionConsumer() {
       useShortcut('k', 'Do something', 'test', action);
-      return <input data-testid="input-field" />;
+      return field;
     }
     render(
       <KeyboardNavProvider>
         <ActionConsumer />
       </KeyboardNavProvider>,
     );
-    act(() => { fireEvent.keyDown(screen.getByTestId('input-field'), { key: 'k' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it('does NOT fire shortcut when keydown originates from TEXTAREA', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return <textarea data-testid="textarea-field" />;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('textarea-field'), { key: 'k' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it('does NOT fire shortcut when keydown originates from SELECT', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return <select data-testid="select-field"><option value="a">A</option></select>;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('select-field'), { key: 'k' }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it('DOES fire shortcut when keydown originates from a div', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return <div data-testid="div-field" tabIndex={0} />;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ActionConsumer />
-      </KeyboardNavProvider>,
-    );
-    act(() => { fireEvent.keyDown(screen.getByTestId('div-field'), { key: 'k' }); });
-    expect(action).toHaveBeenCalledOnce();
+    act(() => { fireEvent.keyDown(screen.getByTestId('field'), { key: 'k' }); });
+    expect(action).toHaveBeenCalledTimes(fires ? 1 : 0);
   });
 
   it('does NOT open overlay via ? when keydown originates from INPUT', () => {
@@ -443,48 +403,20 @@ describe('ignored tags', () => {
 
 
 describe('modifier key bypass', () => {
-  it('does NOT fire shortcut when Ctrl is held', () => {
+  it.each([
+    { held: 'Ctrl', modifiers: { ctrlKey: true }, fires: false },
+    { held: 'Meta', modifiers: { metaKey: true }, fires: false },
+    { held: 'Alt', modifiers: { altKey: true }, fires: false },
+    { held: 'no modifier', modifiers: {}, fires: true },
+  ])('fires shortcut with $held held: $fires', ({ modifiers, fires }) => {
     const action = vi.fn();
     function ActionConsumer() {
       useShortcut('k', 'Do something', 'test', action);
       return null;
     }
     render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k', ctrlKey: true }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it('does NOT fire shortcut when Meta is held', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k', metaKey: true }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it('does NOT fire shortcut when Alt is held', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k', altKey: true }); });
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it('DOES fire shortcut when no modifier keys are held', () => {
-    const action = vi.fn();
-    function ActionConsumer() {
-      useShortcut('k', 'Do something', 'test', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ActionConsumer /></KeyboardNavProvider>);
-    act(() => { fireEvent.keyDown(document, { key: 'k' }); });
-    expect(action).toHaveBeenCalledOnce();
+    act(() => { fireEvent.keyDown(document, { key: 'k', ...modifiers }); });
+    expect(action).toHaveBeenCalledTimes(fires ? 1 : 0);
   });
 
   it('does NOT prime combo pending when first key pressed with Ctrl held', () => {

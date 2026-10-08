@@ -98,17 +98,19 @@ function findActivityCall(calls: unknown[][]) {
   return calls.find(([url]) => typeof url === 'string' && url.includes('/rest/v1/user_activity'));
 }
 
-describe('logActivity: dashboard_view', () => {
-  it('POSTs to user_activity after /api/dashboard returns data', async () => {
-    mockAuthSequence(fetchMock);
-    mockKV.get.mockResolvedValue({ metrics: [] });
+const VIEW_ROUTES = [
+  { activityType: 'dashboard_view', path: '/api/dashboard?period=7d', kvValue: { metrics: [] } },
+  { activityType: 'trace_view', path: '/api/traces/trace-1', kvValue: { traceId: 'trace-1', spans: [] } },
+  { activityType: 'session_view', path: '/api/sessions/sess-1', kvValue: { sessionId: 'sess-1' } },
+  { activityType: 'compliance_view', path: '/api/compliance/sla', kvValue: { slaCompliance: [] } },
+];
 
-    const res = await app.request(
-      '/api/dashboard?period=7d',
-      { headers: authHeaders() },
-      makeEnv(),
-      makeCtx(),
-    );
+describe('logActivity: view routes', () => {
+  it.each(VIEW_ROUTES)('POSTs activity_type=$activityType on $path', async ({ activityType, path, kvValue }) => {
+    mockAuthSequence(fetchMock);
+    mockKV.get.mockResolvedValue(kvValue);
+
+    const res = await app.request(path, { headers: authHeaders() }, makeEnv(), makeCtx());
     expect(res.status).toBe(200);
 
     // Wait for microtasks to allow async activity logging to be queued
@@ -120,7 +122,7 @@ describe('logActivity: dashboard_view', () => {
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.user_id).toBe(MOCK_APP_USER_ID);
-    expect(body.activity_type).toBe('dashboard_view');
+    expect(body.activity_type).toBe(activityType);
   });
 
   it('does not POST to user_activity when KV returns no data (404)', async () => {
@@ -130,84 +132,10 @@ describe('logActivity: dashboard_view', () => {
     const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeEnv(), makeCtx());
     expect(res.status).toBe(404);
 
-    // Wait for microtasks
     await new Promise(resolve => setTimeout(resolve, 10));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeUndefined();
-  });
-});
-
-describe('logActivity: trace_view', () => {
-  it('POSTs activity_type=trace_view on /api/traces/:traceId', async () => {
-    mockAuthSequence(fetchMock);
-    mockKV.get.mockResolvedValue({ traceId: 'trace-1', spans: [] });
-
-    const res = await app.request(
-      '/api/traces/trace-1',
-      { headers: authHeaders() },
-      makeEnv(),
-      makeCtx(),
-    );
-    expect(res.status).toBe(200);
-
-    // Wait for microtasks
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
-    expect(activityCall).toBeDefined();
-    const init = activityCall![1] as RequestInit;
-    expect(init.method).toBe('POST');
-    const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body.activity_type).toBe('trace_view');
-  });
-});
-
-describe('logActivity: session_view', () => {
-  it('POSTs activity_type=session_view on /api/sessions/:sessionId', async () => {
-    mockAuthSequence(fetchMock);
-    mockKV.get.mockResolvedValue({ sessionId: 'sess-1' });
-
-    const res = await app.request(
-      '/api/sessions/sess-1',
-      { headers: authHeaders() },
-      makeEnv(),
-      makeCtx(),
-    );
-    expect(res.status).toBe(200);
-
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
-    expect(activityCall).toBeDefined();
-    const init = activityCall![1] as RequestInit;
-    expect(init.method).toBe('POST');
-    const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body.activity_type).toBe('session_view');
-  });
-});
-
-describe('logActivity: compliance_view', () => {
-  it('POSTs activity_type=compliance_view on /api/compliance/sla', async () => {
-    mockAuthSequence(fetchMock);
-    mockKV.get.mockResolvedValue({ slaCompliance: [] });
-
-    const res = await app.request(
-      '/api/compliance/sla',
-      { headers: authHeaders() },
-      makeEnv(),
-      makeCtx(),
-    );
-    expect(res.status).toBe(200);
-
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
-    expect(activityCall).toBeDefined();
-    const init = activityCall![1] as RequestInit;
-    expect(init.method).toBe('POST');
-    const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(body.activity_type).toBe('compliance_view');
   });
 });
 
