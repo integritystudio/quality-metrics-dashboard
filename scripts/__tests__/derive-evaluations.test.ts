@@ -19,6 +19,7 @@ import {
   type TraceSpan,
 } from '../derive-evaluations.js';
 import { type EvalRecord } from '../eval-record.js';
+import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -831,8 +832,6 @@ describe('deriveAll over the renamed agent hook spans', () => {
 // handoff.
 // ---------------------------------------------------------------------------
 
-const OTEL_STATUS_ERROR = 2;
-
 describe('handoff_correctness scores agent failures correctly', () => {
   const START_SEC = 1_791_000_000;
 
@@ -857,25 +856,21 @@ describe('handoff_correctness scores agent failures correctly', () => {
     };
   }
 
-  it('scores 0 when the agent error flag is set and the hook status is OK', () => {
-    const spansWithAgentError = [
+  // The handoff loop scores on the RECEIVING agent (curr.score), not the sender.
+  // A failed sending agent therefore does not degrade handoff_correctness; the
+  // test below pins this semantics explicitly so any future change to include
+  // the sender score is visible in the test output.
+  it('keeps handoff_correctness at 1 when only the sending agent fails (receiver score drives the transition)', () => {
+    const spansWithSenderError = [
       agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
       agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10, { hasError: true }),
       agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
       agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30),
     ];
-    const handoffs = deriveAll({ spans: spansWithAgentError, accounts: new Map() })
+    const handoffs = deriveAll({ spans: spansWithSenderError, accounts: new Map() })
       .filter(r => r.evaluationName === 'handoff_correctness');
 
     expect(handoffs).toHaveLength(1);
-    // Explore finalized with has_error=true → score 0; code-reviewer OK → score 1.
-    // The handoff from Explore→code-reviewer reads code-reviewer's score (1),
-    // but the one computed for the sequence uses the RECEIVING agent's score,
-    // so only the Explore→code-reviewer transition (code-reviewer score=1) is
-    // counted. The average handoff score is 1.
-    // NOTE: the transition reads the *receiving* agent's score, not the sender's.
-    // A failed sender does not degrade the handoff score; test this expectation
-    // explicitly so a future change that reconsiders this is visible.
     expect(handoffs[0]?.scoreValue).toBe(1);
   });
 
@@ -898,7 +893,7 @@ describe('handoff_correctness scores agent failures correctly', () => {
       agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
       agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10),
       agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
-      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30, { statusCode: OTEL_STATUS_ERROR }),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30, { statusCode: OTEL_STATUS_ERROR_CODE }),
     ];
     const handoffs = deriveAll({ spans: spansHookCrash, accounts: new Map() })
       .filter(r => r.evaluationName === 'handoff_correctness');
