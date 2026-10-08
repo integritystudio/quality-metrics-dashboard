@@ -372,134 +372,129 @@ app.use('/api/*', async (c, next) => {
 
   if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
 
-  // Single AbortController shared across all auth fetches; aborts on timeout
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
+  // One deadline shared across all auth fetches
+  const signal = AbortSignal.timeout(AUTH_TIMEOUT_MS);
 
+  const JWKS = getJwks(c.env.AUTH0_DOMAIN);
+  let jwtPayload: Record<string, unknown>;
   try {
-    const JWKS = getJwks(c.env.AUTH0_DOMAIN);
-    let jwtPayload: Record<string, unknown>;
-    try {
-      const { payload } = await jwtVerify(jwt, JWKS, {
-        issuer: acceptedIssuers(c.env),
-        audience: c.env.AUTH0_AUDIENCE,
-      });
-      jwtPayload = payload;
-    } catch (err) {
-      // A rejected token is 401. Anything else is a transient upstream problem —
-      // 503, which the client retries (it never retries a 401).
-      if (isTokenRejection(err)) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-      console.error('[auth] JWKS fetch failed:', err instanceof Error ? err.message : String(err));
-      return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
-    }
-    const auth0Id = typeof jwtPayload['sub'] === 'string' ? jwtPayload['sub'] : null;
-    if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-
-    const orgScopingEnabled = c.env.ORG_SCOPING_ENABLED === 'true';
-    if (orgScopingEnabled && !c.env.HOME_ORG_ID) {
-      // Fail loudly: an empty HOME_ORG_ID (the dev worker's deliberate value)
-      // must never silently resolve or fall back into a production org.
-      console.error('[auth] ORG_SCOPING_ENABLED=true but HOME_ORG_ID is empty — refusing to serve');
-      return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
-    }
-
-    // Fetch public.users row by auth0_id — required; users with no app record are rejected
-    const userRes = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,default_organization_id&auth0_id=eq.${encodeURIComponent(auth0Id)}&limit=1`,
-      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
-    ).catch(() => null);
-    if (!userRes?.ok) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    const rawUsers: unknown = await userRes.json().catch(() => null);
-    if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    const userResult = PublicUserSchema.safeParse(rawUsers[0]);
-    if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-    const appUserId = userResult.data.id;
-    const email = userResult.data.email;
-    const defaultOrgId = userResult.data.default_organization_id ?? null;
-    const authUserId = auth0Id;
-
-    // Roles and (under org scoping) memberships fetch in PARALLEL — Risk 19:
-    // the added membership round-trip must not serialize into the auth budget.
-    const rolesPromise = fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
-      { headers: serviceRoleHeaders(c.env), signal: controller.signal },
-    ).catch(() => null);
-    const membershipsPromise = orgScopingEnabled
-      ? fetch(
-          `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role,organization_id,organizations(id,slug,name)&user_id=eq.${encodeURIComponent(appUserId)}`,
-          { headers: serviceRoleHeaders(c.env), signal: controller.signal },
-        ).catch(() => null)
-      : Promise.resolve(null);
-    const [rolesRes, membershipsRes] = await Promise.all([rolesPromise, membershipsPromise]);
-
-    if (!rolesRes?.ok) {
-      console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes?.status ?? 'network error');
-      return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, Http.InternalServerError);
-    }
-    const rawRows: unknown = await rolesRes.json().catch(() => []);
-    const rows = safeArray(rawRows);
-    const roles: string[] = [];
-    const permissionSet = new Set<DashboardPermission>();
-    for (const row of rows) {
-      const rowResult = UserRoleRowSchema.safeParse(row);
-      if (!rowResult.success || !rowResult.data.roles) continue;
-      roles.push(rowResult.data.roles.name);
-      for (const perm of rowResult.data.roles.permissions) {
-        if (VALID_PERMISSIONS.has(perm)) permissionSet.add(perm as DashboardPermission);
-      }
-    }
-
-    if (orgScopingEnabled) {
-      const memberships = parseMemberships(membershipsRes ? await membershipsRes.json().catch(() => []) : []);
-      const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
-
-      // Resolve activeOrgId: X-Org-Id (membership-validated, or staff) →
-      // default_organization_id (re-validated — Risk 15) → first membership.
-      const requestedOrg = c.req.header(ORG_ID_HEADER);
-      let activeOrgId: string | undefined;
-      if (requestedOrg) {
-        if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-        if (!isStaff && !memberships.some(m => m.orgId === requestedOrg)) {
-          return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-        }
-        activeOrgId = requestedOrg;
-      }
-      if (!activeOrgId && defaultOrgId && (isStaff || memberships.some(m => m.orgId === defaultOrgId))) {
-        activeOrgId = defaultOrgId;
-      }
-      activeOrgId ??= memberships[0]?.orgId;
-      if (!activeOrgId && isStaff) activeOrgId = c.env.HOME_ORG_ID;
-
-      if (activeOrgId) {
-        const membership = memberships.find(m => m.orgId === activeOrgId);
-        const role = isStaff ? 'owner' : membership?.dashboardRole ?? 'read';
-        const permissions = [...PERMISSIONS_BY_DASHBOARD_ROLE[role]];
-        // No dashboard.admin → all-views shortcut on the org path: an org admin
-        // gets [] views but keeps data-route access via hasPermission (spec).
-        const allowedViews = viewsForPermissions(permissions);
-        c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews, activeOrgId, memberships, role, isStaff });
-        return next();
-      }
-
-      // No active org and not staff: refuse, whatever the user's roles
-      // (AUTH-NO-ORG-LEGACY-SESSION). The on_user_created trigger gives every
-      // new user a role, so the old roles-only fallback (Risk 13) handed every
-      // user without an org a global session reading the home org's bare keys.
-      return c.json({ error: ERR_NO_ORG }, Http.Forbidden);
-    }
-
-    const permissions = [...permissionSet];
-    const allowedViews: DashboardView[] = permissionSet.has('dashboard.admin')
-      ? [...VALID_ROLES]
-      : VIEW_PERMISSION_MAP
-          .filter(([perm]) => permissionSet.has(perm))
-          .map(([, view]: [DashboardPermission, DashboardView]) => view);
-
-    c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
-    return next();
-  } finally {
-    clearTimeout(timeout);
+    const { payload } = await jwtVerify(jwt, JWKS, {
+      issuer: acceptedIssuers(c.env),
+      audience: c.env.AUTH0_AUDIENCE,
+    });
+    jwtPayload = payload;
+  } catch (err) {
+    // A rejected token is 401. Anything else is a transient upstream problem —
+    // 503, which the client retries (it never retries a 401).
+    if (isTokenRejection(err)) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    console.error('[auth] JWKS fetch failed:', err instanceof Error ? err.message : String(err));
+    return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
   }
+  const auth0Id = typeof jwtPayload['sub'] === 'string' ? jwtPayload['sub'] : null;
+  if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+
+  const orgScopingEnabled = c.env.ORG_SCOPING_ENABLED === 'true';
+  if (orgScopingEnabled && !c.env.HOME_ORG_ID) {
+    // Fail loudly: an empty HOME_ORG_ID (the dev worker's deliberate value)
+    // must never silently resolve or fall back into a production org.
+    console.error('[auth] ORG_SCOPING_ENABLED=true but HOME_ORG_ID is empty — refusing to serve');
+    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+  }
+
+  // Fetch public.users row by auth0_id — required; users with no app record are rejected
+  const userRes = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,default_organization_id&auth0_id=eq.${encodeURIComponent(auth0Id)}&limit=1`,
+    { headers: serviceRoleHeaders(c.env), signal },
+  ).catch(() => null);
+  if (!userRes?.ok) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  const rawUsers: unknown = await userRes.json().catch(() => null);
+  if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  const userResult = PublicUserSchema.safeParse(rawUsers[0]);
+  if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  const appUserId = userResult.data.id;
+  const email = userResult.data.email;
+  const defaultOrgId = userResult.data.default_organization_id ?? null;
+  const authUserId = auth0Id;
+
+  // Roles and (under org scoping) memberships fetch in PARALLEL — Risk 19:
+  // the added membership round-trip must not serialize into the auth budget.
+  const rolesPromise = fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
+    { headers: serviceRoleHeaders(c.env), signal },
+  ).catch(() => null);
+  const membershipsPromise = orgScopingEnabled
+    ? fetch(
+        `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role,organization_id,organizations(id,slug,name)&user_id=eq.${encodeURIComponent(appUserId)}`,
+        { headers: serviceRoleHeaders(c.env), signal },
+      ).catch(() => null)
+    : Promise.resolve(null);
+  const [rolesRes, membershipsRes] = await Promise.all([rolesPromise, membershipsPromise]);
+
+  if (!rolesRes?.ok) {
+    console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes?.status ?? 'network error');
+    return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, Http.InternalServerError);
+  }
+  const rawRows: unknown = await rolesRes.json().catch(() => []);
+  const rows = safeArray(rawRows);
+  const roles: string[] = [];
+  const permissionSet = new Set<DashboardPermission>();
+  for (const row of rows) {
+    const rowResult = UserRoleRowSchema.safeParse(row);
+    if (!rowResult.success || !rowResult.data.roles) continue;
+    roles.push(rowResult.data.roles.name);
+    for (const perm of rowResult.data.roles.permissions) {
+      if (VALID_PERMISSIONS.has(perm)) permissionSet.add(perm as DashboardPermission);
+    }
+  }
+
+  if (orgScopingEnabled) {
+    const memberships = parseMemberships(membershipsRes ? await membershipsRes.json().catch(() => []) : []);
+    const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
+
+    // Resolve activeOrgId: X-Org-Id (membership-validated, or staff) →
+    // default_organization_id (re-validated — Risk 15) → first membership.
+    const requestedOrg = c.req.header(ORG_ID_HEADER);
+    let activeOrgId: string | undefined;
+    if (requestedOrg) {
+      if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+      if (!isStaff && !memberships.some(m => m.orgId === requestedOrg)) {
+        return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+      }
+      activeOrgId = requestedOrg;
+    }
+    if (!activeOrgId && defaultOrgId && (isStaff || memberships.some(m => m.orgId === defaultOrgId))) {
+      activeOrgId = defaultOrgId;
+    }
+    activeOrgId ??= memberships[0]?.orgId;
+    if (!activeOrgId && isStaff) activeOrgId = c.env.HOME_ORG_ID;
+
+    if (activeOrgId) {
+      const membership = memberships.find(m => m.orgId === activeOrgId);
+      const role = isStaff ? 'owner' : membership?.dashboardRole ?? 'read';
+      const permissions = [...PERMISSIONS_BY_DASHBOARD_ROLE[role]];
+      // No dashboard.admin → all-views shortcut on the org path: an org admin
+      // gets [] views but keeps data-route access via hasPermission (spec).
+      const allowedViews = viewsForPermissions(permissions);
+      c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews, activeOrgId, memberships, role, isStaff });
+      return next();
+    }
+
+    // No active org and not staff: refuse, whatever the user's roles
+    // (AUTH-NO-ORG-LEGACY-SESSION). The on_user_created trigger gives every
+    // new user a role, so the old roles-only fallback (Risk 13) handed every
+    // user without an org a global session reading the home org's bare keys.
+    return c.json({ error: ERR_NO_ORG }, Http.Forbidden);
+  }
+
+  const permissions = [...permissionSet];
+  const allowedViews: DashboardView[] = permissionSet.has('dashboard.admin')
+    ? [...VALID_ROLES]
+    : VIEW_PERMISSION_MAP
+        .filter(([perm]) => permissionSet.has(perm))
+        .map(([, view]: [DashboardPermission, DashboardView]) => view);
+
+  c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
+  return next();
 });
 
 /** Parse the STAFF_USER_IDS env (JSON array of app user UUIDs) — fail closed on malformed input. */

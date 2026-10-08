@@ -3,6 +3,8 @@
  * Provides consistent header construction for authenticated Supabase REST calls.
  */
 
+const SUPABASE_POST_TIMEOUT_MS = 3000;
+
 /**
  * Performs a fire-and-forget POST to a Supabase REST endpoint using a service role key.
  * Failures are intentionally swallowed — use for non-critical audit writes only.
@@ -13,8 +15,6 @@ export function supabasePost(
   body: unknown,
   key: string,
 ): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
   // Fetch errors are intentionally swallowed. Failures are visible
   // at the network level; this function is fire-and-forget for non-critical writes.
   return fetch(url, {
@@ -26,6 +26,6 @@ export function supabasePost(
       'Prefer': 'return=minimal',
     },
     body: JSON.stringify(body),
-    signal: controller.signal,
-  }).then(() => undefined).catch(() => undefined).finally(() => clearTimeout(timeout));
+    signal: AbortSignal.timeout(SUPABASE_POST_TIMEOUT_MS),
+  }).then(() => undefined).catch(() => undefined);
 }
