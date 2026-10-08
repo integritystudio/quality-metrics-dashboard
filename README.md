@@ -139,7 +139,7 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run test:e2e` | Playwright E2E tests (mocked auth, Chromium) |
 | `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration` | Auth0 integration tests against deployed worker |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
-| `npm run deploy:secrets` | Sync secrets from Doppler to both workers |
+| `npm run deploy:secrets` / `deploy:secrets:dev` | Sync Supabase secrets from Doppler to both production Workers (`--config prd`) or the dev Worker (`--config dev`); refuses a config/target mismatch |
 | `npm run derive` / `judge:parity` / `derive:parity` / `upload` | Run one pipeline stage or a local/cloud parity check |
 | `npm run trace-coverage` | Trace coverage report |
 | `npm run dev:worker` | `wrangler dev` (local Worker) |

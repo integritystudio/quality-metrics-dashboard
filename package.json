@@ -30,7 +30,8 @@
     "backtest": "tsx scripts/backtest-degradation.ts",
     "filetree": "bash scripts/repomix/token-tree.sh docs/repomix/token-count-tree.txt && bash scripts/update-readme-tree.sh",
     "deploy:worker": "wrangler deploy",
-    "deploy:secrets": "bash scripts/deploy-secrets.sh",
+    "deploy:secrets": "bash scripts/deploy-secrets.sh prd",
+    "deploy:secrets:dev": "bash scripts/deploy-secrets.sh dev",
     "dev:worker": "wrangler dev",
     "repomix": "bash scripts/repomix/repomix-regen.sh"
   },

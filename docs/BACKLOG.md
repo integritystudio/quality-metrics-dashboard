@@ -134,7 +134,7 @@ No open items.
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | Source: session 2026-10-06 scripts audit |
 | SYNC-ORG-ENTRIES-SPLIT | `computeOrgEntries` is ~480 lines with repeated query and wrangler scaffolding | P4 | Source: session 2026-10-06 scripts audit |
 | JUDGE-BACKFILL-FLAG | Decide whether to keep judge-evaluations `--backfill` (review) | P4 | Source: session 2026-10-06 scripts audit |
-| DEPLOY-SECRETS-DEV-WORKER | `deploy-secrets.sh` skips `quality-metrics-api-dev` (review) | P4 | Source: session 2026-10-06 scripts audit |
+| DEPLOY-SECRETS-DEV-WORKER | `deploy-secrets.sh` skips `quality-metrics-api-dev` (review) | P4 | ✅ Done 2026-10-07 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
 `VITE_API_URL`. It was removed from the local `.env`, but left in Doppler `integrity-studio`.
@@ -202,6 +202,12 @@ product decision, not a refactor.
 **DEPLOY-SECRETS-DEV-WORKER.** `scripts/deploy-secrets.sh` (`npm run deploy:secrets`) sets secrets on the two production
 Workers only. The dev Worker has its own Supabase project and Auth0 tenant, so the omission may be deliberate; confirm and
 note it in the script, or add a dev invocation under `--config dev`.
+
+*Done, 2026-10-07.* `deploy-secrets.sh` takes a target, `prd` (the default, both production Workers) or `dev`
+(`--env dev`, so `[env.dev]` names `quality-metrics-api-dev`). `npm run deploy:secrets:dev` runs it under
+`doppler run --project integrity-studio --config dev`. The script exits 2 before writing anything unless
+`DOPPLER_CONFIG` matches the target, so prd Supabase values cannot reach the dev Worker, nor dev values production.
+The guard was exercised locally; no secrets were pushed.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.9](changelog/3.0.9/CHANGELOG.md) (2026-10-05).
