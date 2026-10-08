@@ -252,6 +252,20 @@ export function anthropicProviderFor(
   };
 }
 
+/** The pipeline's LLMJudge. The one-shot evals build theirs here too, so their config cannot drift from it. */
+export function createLLMJudge(llm: LLMProvider, batch = false): LLMJudge {
+  return new LLMJudge(llm, {
+    timeoutMs: batch ? BATCH_MODE_JUDGE_TIMEOUT_MS : TIME_MS.MINUTE,
+    maxRetries: batch ? BATCH_MODE_MAX_RETRIES : SYNC_MODE_MAX_RETRIES,
+    evaluator: PRODUCER,
+    evaluatorType: LLM_EVALUATOR_TYPE,
+    logger: {
+      warn: (msg) => console.warn(`  [warn] ${msg}`),
+      error: (msg) => console.error(`  [error] ${msg}`),
+    },
+  });
+}
+
 /** Largest value of the two hash bytes a seeded score is read from. */
 const UINT16_MAX = 0xFFFF;
 /** Share of turns `isCanaryTurn` marks for intentionally low scores. */
@@ -668,16 +682,7 @@ async function judgeTurns(
       })
     : undefined;
   const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
-  const judge = new LLMJudge(llm, {
-    timeoutMs: batchProvider ? BATCH_MODE_JUDGE_TIMEOUT_MS : TIME_MS.MINUTE,
-    maxRetries: batchProvider ? BATCH_MODE_MAX_RETRIES : SYNC_MODE_MAX_RETRIES,
-    evaluator: PRODUCER,
-    evaluatorType: LLM_EVALUATOR_TYPE,
-    logger: {
-      warn: (msg) => console.warn(`  [warn] ${msg}`),
-      error: (msg) => console.error(`  [error] ${msg}`),
-    },
-  });
+  const judge = createLLMJudge(llm, batchProvider !== undefined);
   // Consolidated (the default): one call per turn, judge-consolidated.ts. Its
   // synchronous provider gets the judge key and the run's usage totals, so it
   // bills and reports exactly as the per-criterion path does; under --batch

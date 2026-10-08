@@ -24,12 +24,9 @@
 import { writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { LLMJudge } from '../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import { MODEL_PRICING, TOKENS_PER_CHAR, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE, MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-import { LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
 import {
   _discoverTranscripts,
   extractTurns,
@@ -37,9 +34,9 @@ import {
   type Turn,
   type TranscriptInfo,
 } from './judge-turns.js';
-import { createAnthropicProvider, evaluateTurn, processBatch } from './judge-evaluations.js';
+import { createAnthropicProvider, createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import { resetFailureTracking } from './judge-failures.js';
-import { PRODUCER, type EvalRecord } from './eval-record.js';
+import type { EvalRecord } from './eval-record.js';
 import {
   HAIKU_MODEL,
   FAITHFULNESS_EVAL_NAME,
@@ -86,9 +83,6 @@ export const LIMIT_FLAG = '--limit';
 export const MARKER_FILENAME = '.judge-agreement.started';
 export const RESULTS_PREFIX = 'judge-agreement-';
 export const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
-
-/** Mirrors the pipeline's LLMJudge config. */
-export const JUDGE_MAX_RETRIES = 2;
 /** Estimate only: QAG answers one question per statement, each carrying the context. */
 const QAG_STATEMENTS_ESTIMATE = MAX_STATEMENTS / 2;
 /** Estimate only: same figure the pipeline's --dry-run uses per call. */
@@ -487,16 +481,7 @@ async function main(): Promise<void> {
   const perCriterionTotals = createUsageTotals();
   const consolidatedTotals = createUsageTotals();
   const llm = await createPerCriterionProvider(credential.apiKey, usage => addUsage(perCriterionTotals, usage));
-  const judge = new LLMJudge(llm, {
-    timeoutMs: TIME_MS.MINUTE,
-    maxRetries: JUDGE_MAX_RETRIES,
-    evaluator: PRODUCER,
-    evaluatorType: LLM_EVALUATOR_TYPE,
-    logger: {
-      warn: (msg) => console.warn(`  [warn] ${msg}`),
-      error: (msg) => console.error(`  [error] ${msg}`),
-    },
-  });
+  const judge = createLLMJudge(llm);
   const provider = await createConsolidatedProvider({
     apiKey: credential.apiKey,
     onUsage: usage => addUsage(consolidatedTotals, usage),

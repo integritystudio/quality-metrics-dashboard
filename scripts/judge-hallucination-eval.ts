@@ -32,15 +32,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { LLMJudge, HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
+import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
 import { MODEL_PRICING, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
-import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
-import { evaluateTurn, processBatch } from './judge-evaluations.js';
+import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
+import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import { fitContextForJudge, type Turn } from './judge-turns.js';
 import { resetFailureTracking } from './judge-failures.js';
 import { FAITHFULNESS_EVAL_NAME, HAIKU_MODEL } from './judge-criteria.js';
-import { PRODUCER } from './eval-record.js';
 import {
   buildConsolidatedPrompt,
   buildConsolidatedSchema,
@@ -60,7 +58,6 @@ import {
   estimateSpend,
   scoresByName,
   DOCS_DIR,
-  JUDGE_MAX_RETRIES,
   type UsageReport,
   type UsageTotals,
 } from './judge-agreement.js';
@@ -328,19 +325,7 @@ async function main(): Promise<void> {
     consolidatedDirect: createUsageTotals(),
     reference: createUsageTotals(),
   };
-  const judge = new LLMJudge(
-    await createPerCriterionProvider(credential.apiKey, usage => addUsage(totals.perCriterion, usage)),
-    {
-      timeoutMs: TIME_MS.MINUTE,
-      maxRetries: JUDGE_MAX_RETRIES,
-      evaluator: PRODUCER,
-      evaluatorType: LLM_EVALUATOR_TYPE,
-      logger: {
-        warn: (msg) => console.warn(`  [warn] ${msg}`),
-        error: (msg) => console.error(`  [error] ${msg}`),
-      },
-    },
-  );
+  const judge = createLLMJudge(await createPerCriterionProvider(credential.apiKey, usage => addUsage(totals.perCriterion, usage)));
   const consolidated = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addUsage(totals.consolidated, u) });
   const direct = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addUsage(totals.consolidatedDirect, u) });
   const reference = await createReferenceProvider(credential.apiKey, u => addUsage(totals.reference, u));
