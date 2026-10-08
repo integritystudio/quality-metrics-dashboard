@@ -16,6 +16,9 @@ enabled = true
 
 [vars]
 AUTH0_DOMAIN = "dev-68gg87ow4mg4kzyo.us.auth0.com"
+# The tenant's custom domain (landing CR32, verified 2026-10-08): accepted as a second JWT
+# issuer, same key set (landing CR70). Not repeated in [env.dev.vars] — dev has none.
+AUTH0_CUSTOM_DOMAIN = "auth.integritystudio.ai"
 AUTH0_AUDIENCE = "https://api.integritystudio.dev"
 # Org-scoped multi-tenancy (docs/roadmap in parent repo: org-scoped-multi-tenancy.md).
 # HOME_ORG_ID: org owning all pre-multi-tenancy data. STAFF_USER_IDS: explicit
