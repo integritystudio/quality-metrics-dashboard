@@ -6,21 +6,24 @@
  * and uploads results via the Cloudflare SDK's KV bulk endpoints
  * (requires `CLOUDFLARE_API_TOKEN` in env).
  *
- * Rate-limited to stay under Cloudflare free-tier KV write limits
- * (1,000 writes/day). Uses content-hash delta sync to skip unchanged
- * entries and a per-run budget (default 450) with priority ordering:
+ * Uses content-hash delta sync to skip unchanged entries and a per-run
+ * write budget (default 3,000; the account is on Workers Paid, 1M KV
+ * writes/month) with priority ordering:
  *   meta/dashboard/agent > metrics > trends > traces
  *
- * Usage: tsx scripts/sync-to-kv.ts [--days=30] [--dry-run] [--budget=450]
+ * Usage: tsx scripts/sync-to-kv.ts [--days=30] [--dry-run] [--budget=3000]
  */
 
-import Cloudflare, { APIError as CloudflareAPIError } from 'cloudflare';
+import Cloudflare, {
+  APIError as CloudflareAPIError,
+  APIConnectionError as CloudflareAPIConnectionError,
+} from 'cloudflare';
 import { parse as parseToml } from 'smol-toml';
 import { createHash } from 'crypto';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { CloudBackend, ALL_ORGS_SCOPE, queriedDateWindow } from '../../src/backends/cloud.js';
-import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
+import { http1Fetch, describeFetchError } from '../../src/lib/core/http1-fetch.js';
 import {
   computeDashboardSummary,
   computeAggregations,
@@ -136,12 +139,20 @@ function getCloudflareConfig(): CloudflareConfig {
 
 let cfClient: Cloudflare | undefined;
 function getCloudflareClient(): Cloudflare {
-  return cfClient ??= new Cloudflare();
+  // HTTP/1.1: under Node 26's default HTTP/2 fetch a destroyed session fails the
+  // SDK's own retries too (ERR_HTTP2_INVALID_SESSION; NODE-FETCH-HTTP2-DEAD-SESSION).
+  return cfClient ??= new Cloudflare({ fetch: http1Fetch });
 }
 
 const DEFAULT_DAYS = 30;
-const DEFAULT_WRITE_BUDGET = 450;
-const DEFAULT_MAX_WRITES_PER_RUN = 500;
+/**
+ * Sized to Workers Paid (1M KV writes/month included): about 680 keys change
+ * between the twice-daily runs, so the old free-tier 450 let `deferred` grow.
+ * 3,000 × 60 runs/month stays under a fifth of the included writes.
+ */
+const DEFAULT_WRITE_BUDGET = 3_000;
+const MAX_WRITES_HEADROOM = 50;
+const DEFAULT_MAX_WRITES_PER_RUN = DEFAULT_WRITE_BUDGET + MAX_WRITES_HEADROOM;
 const DAYS_FLAG = '--days';
 const BUDGET_FLAG = '--budget';
 const MAX_WRITES_FLAG = '--max-writes';
@@ -153,8 +164,8 @@ const { dryRun, maxDays, WRITE_BUDGET, MAX_WRITES_PER_RUN } = exitOnCliArgError(
     dryRun: cli.has(DRY_RUN_FLAG),
     maxDays: positiveIntArg(DAYS_FLAG, cli.value(DAYS_FLAG)) ?? DEFAULT_DAYS,
     WRITE_BUDGET: positiveIntArg(BUDGET_FLAG, cli.value(BUDGET_FLAG)) ?? DEFAULT_WRITE_BUDGET,
-    // Per-run write warning threshold: half the ~1000/day free-tier cap, matching
-    // the twice-daily AlephAuto cron (P4 write-budget instrumentation).
+    // Per-run write warning threshold: the budget plus room for meta entries
+    // (P4 write-budget instrumentation).
     MAX_WRITES_PER_RUN: positiveIntArg(MAX_WRITES_FLAG, cli.value(MAX_WRITES_FLAG)) ?? DEFAULT_MAX_WRITES_PER_RUN,
   };
 });
@@ -174,7 +185,7 @@ const TRACE_KEY_PREFIX = 'trace:';
 const TRACE_EVALS_KEY_PREFIX = 'evaluations:trace:';
 /** Hex chars of the sha256 kept as the delta-sync content hash. */
 const HASH_PREFIX_CHARS = 16;
-/** Cloudflare API error code for the KV free-tier daily write limit. */
+/** Cloudflare API error code for the KV daily write limit (free tier only). */
 const KV_DAILY_WRITE_LIMIT_CODE = 10048;
 /** Coverage percentages keep two decimals. */
 const COVERAGE_PERCENT_FACTOR = 100;
@@ -258,6 +269,11 @@ function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
 
 /** Cloudflare KV bulk PUT accepts up to 10,000 pairs; 5,000 keeps requests well inside the 100 MB body limit. */
 export const KV_BATCH_SIZE = 5_000;
+/**
+ * Byte cap per bulk PUT. Requests up to 30 MB succeeded, but one dropped connection
+ * defers its whole request, so smaller requests lose less (KV-SYNC-LAG-AND-APRIL-RECOUNT).
+ */
+export const KV_BATCH_MAX_BYTES = 8 * 1024 * 1024;
 /** Undefined under runners that don't provide import.meta.dirname (e.g. vitest transforms). */
 const SCRIPT_DIR = importMetaDirname(import.meta);
 const STATE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-state.json');
@@ -419,21 +435,61 @@ export function dashboardEntry(key: string, view: object): KVEntry {
   return { key, value: toKVValue(view), hashBasis };
 }
 
+interface EnvelopedKVPair {
+  key: string;
+  value: string;
+  expiration_ttl?: number;
+}
+
+function envelope(e: KVEntry): EnvelopedKVPair {
+  return {
+    key: e.key,
+    // `e.value` is already JSON (toKVValue), so the version envelope is spliced
+    // around it as text; parsing and re-serializing gave the same bytes.
+    value: `{"v":${JSON.stringify(KV_SCHEMA_VERSION)},"data":${e.value}}`,
+    ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
+  };
+}
+
+/**
+ * Split pairs into bulk requests of at most `maxCount` pairs and about `maxBytes`
+ * of key + value. A pair larger than `maxBytes` goes alone in its own request.
+ */
+export function chunkKvPairs<T extends { key: string; value: string }>(
+  pairs: T[],
+  maxCount = KV_BATCH_SIZE,
+  maxBytes = KV_BATCH_MAX_BYTES,
+): T[][] {
+  const chunks: T[][] = [];
+  let current: T[] = [];
+  let currentBytes = 0;
+  for (const pair of pairs) {
+    const bytes = Buffer.byteLength(pair.key) + Buffer.byteLength(pair.value);
+    if (current.length > 0 && (current.length >= maxCount || currentBytes + bytes > maxBytes)) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(pair);
+    currentBytes += bytes;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Write entries in byte-capped bulk requests and return the keys written.
+ * A connection failure defers only its own chunk, so later chunks still land
+ * and the next run retries the rest; it throws only when every request failed.
+ */
 export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
   const writtenKeys = new Set<string>();
   if (entries.length === 0) return writtenKeys;
-  for (let i = 0; i < entries.length; i += KV_BATCH_SIZE) {
-    const batch = entries.slice(i, i + KV_BATCH_SIZE);
-    const batchLabel = entries.length > KV_BATCH_SIZE
-      ? ` (batch ${Math.floor(i / KV_BATCH_SIZE) + 1}/${Math.ceil(entries.length / KV_BATCH_SIZE)})`
-      : '';
-    const enveloped = batch.map(e => ({
-      key: e.key,
-      // `e.value` is already JSON (toKVValue), so the version envelope is spliced
-      // around it as text; parsing and re-serializing gave the same bytes.
-      value: `{"v":${JSON.stringify(KV_SCHEMA_VERSION)},"data":${e.value}}`,
-      ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
-    }));
+  const chunks = chunkKvPairs(entries.map(envelope));
+  let connectionFailures = 0;
+  let lastConnectionError: unknown;
+  for (const [index, batch] of chunks.entries()) {
+    const batchLabel = chunks.length > 1 ? ` (batch ${index + 1}/${chunks.length})` : '';
     if (dryRun) {
       for (const e of batch) writtenKeys.add(e.key);
       continue;
@@ -442,7 +498,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
     try {
       const result = await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
         account_id: accountId,
-        body: enveloped,
+        body: batch,
       });
       // null result = HTTP 204 (no body): the SDK treats this as success and
       // returns null. Credit all batch keys. If the API later gains a body,
@@ -464,10 +520,25 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred.`);
         return writtenKeys;
       }
+      if (err instanceof CloudflareAPIConnectionError) {
+        connectionFailures++;
+        lastConnectionError = err;
+        console.warn(
+          `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ` +
+          describeFetchError(err.cause ?? err),
+        );
+        continue;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
       throw new Error(`Cloudflare KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
     }
+  }
+  if (connectionFailures === chunks.length) {
+    throw new Error(
+      `Cloudflare KV bulk put could not connect for any of ${chunks.length} request(s).`,
+      { cause: lastConnectionError },
+    );
   }
   return writtenKeys;
 }
@@ -1747,8 +1818,8 @@ async function main(): Promise<void> {
   if (!dryRun) saveLastCoverage(coverage);
 
   // KV write-budget instrumentation (P4): total and per-scope counts, so the
-  // free-tier ~1000/day cap can be checked against a concrete number
-  // (this counter × daily cron runs). Warns when a single run exceeds
+  // plan's monthly write allowance can be checked against a concrete number
+  // (this counter × cron runs). Warns when a single run exceeds
   // --max-writes; the cap itself is enforced upstream by --budget.
   const writesByScope = new Map<string, number>();
   for (const key of writtenKeys) {
@@ -1761,8 +1832,7 @@ async function main(): Promise<void> {
   const writeCounter = [...writesByScope.entries()].map(([scope, n]) => `${scope}=${n}`).join(' ');
   if (writtenKeys.size > MAX_WRITES_PER_RUN) {
     console.warn(
-      `[sync-to-kv] WRITE BUDGET WARNING: ${writtenKeys.size} KV writes this run exceeds --max-writes=${MAX_WRITES_PER_RUN} ` +
-      '(free tier is ~1000/day across all runs)',
+      `[sync-to-kv] WRITE BUDGET WARNING: ${writtenKeys.size} KV writes this run exceeds --max-writes=${MAX_WRITES_PER_RUN}`,
     );
   }
 

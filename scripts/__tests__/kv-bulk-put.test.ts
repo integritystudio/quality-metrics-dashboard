@@ -9,11 +9,23 @@
  *  - SDK call shape: body envelope includes version wrapper, credentials, namespace
  *  - batching: correct split, call count, and Set accumulation across KV_BATCH_SIZE
  *  - multi-batch partial failure: failed keys from all batches are excluded
+ *  - byte-capped chunking (chunkKvPairs) and per-chunk connection failures
+ *  - the SDK client is built on the HTTP/1.1 fetch
  */
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const mockBulkUpdate = vi.fn().mockResolvedValue(null);
 const mockBulkDelete = vi.fn().mockResolvedValue(null);
+/** Constructor options of the (lazily built, cached) SDK client; not reset by clearAllMocks. */
+const { clientOptions, http1FetchSentinel } = vi.hoisted(() => ({
+  clientOptions: [] as unknown[],
+  http1FetchSentinel: vi.fn(),
+}));
+
+vi.mock('../../../src/lib/core/http1-fetch.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/lib/core/http1-fetch.js')>()),
+  http1Fetch: http1FetchSentinel,
+}));
 
 vi.mock('cloudflare', () => {
   class APIError extends Error {
@@ -29,20 +41,43 @@ vi.mock('cloudflare', () => {
       this.error = undefined;
     }
   }
-  function CloudflareClass(this: Record<string, unknown>) {
+  class APIConnectionError extends APIError {
+    constructor({ cause }: { cause?: Error } = {}) {
+      super(0, [], 'Connection error.');
+      this.cause = cause;
+    }
+  }
+  function CloudflareClass(this: Record<string, unknown>, options: unknown) {
+    clientOptions.push(options);
     this['kv'] = { namespaces: { bulkUpdate: mockBulkUpdate, bulkDelete: mockBulkDelete } };
   }
   const CloudflareMock = vi.fn().mockImplementation(CloudflareClass);
-  return { default: Object.assign(CloudflareMock, { APIError }), APIError };
+  return {
+    default: Object.assign(CloudflareMock, { APIError, APIConnectionError }),
+    APIError,
+    APIConnectionError,
+  };
 });
 
 const TEST_NAMESPACE_ID = '902fc8a43e7147b486b6376c485c4506';
 const TEST_ACCOUNT_ID = 'test-account-id';
 
-import { kvBulkPut, KV_BATCH_SIZE, type KVEntry } from '../sync-to-kv.js';
+import { kvBulkPut, chunkKvPairs, KV_BATCH_SIZE, KV_BATCH_MAX_BYTES, type KVEntry } from '../sync-to-kv.js';
 
 function entry(key: string): KVEntry {
   return { key, value: JSON.stringify({ metric: key }) };
+}
+
+/** An entry whose stored value is `bytes` long, so byte-capped chunking can be driven. */
+function sizedEntry(key: string, bytes: number): KVEntry {
+  return { key, value: JSON.stringify('x'.repeat(bytes)) };
+}
+
+async function connectionError(): Promise<Error> {
+  const { APIConnectionError } = await import('cloudflare');
+  return new (APIConnectionError as unknown as new (o: { cause?: Error }) => Error)({
+    cause: new TypeError('fetch failed'),
+  });
 }
 
 beforeEach(() => {
@@ -199,5 +234,102 @@ describe('kvBulkPut: batching', () => {
     expect(written.has(failedKey)).toBe(false);
     expect(written.size).toBe(entries.length - 1);
     warnSpy.mockRestore();
+  });
+});
+
+describe('chunkKvPairs', () => {
+  const pair = (key: string, bytes: number) => ({ key, value: 'x'.repeat(bytes) });
+
+  it('starts a new chunk when the next pair would exceed the byte cap', () => {
+    const pairs = [pair('a', 40), pair('b', 40), pair('c', 40)];
+
+    const chunks = chunkKvPairs(pairs, 10, 100);
+
+    expect(chunks.map(c => c.map(p => p.key))).toEqual([['a', 'b'], ['c']]);
+  });
+
+  it('puts a pair larger than the byte cap in a chunk of its own', () => {
+    const pairs = [pair('small', 10), pair('huge', 500), pair('tail', 10)];
+
+    const chunks = chunkKvPairs(pairs, 10, 100);
+
+    expect(chunks.map(c => c.map(p => p.key))).toEqual([['small'], ['huge'], ['tail']]);
+  });
+
+  it('still caps chunks by pair count', () => {
+    const pairs = Array.from({ length: 5 }, (_, i) => pair(`k${i}`, 1));
+
+    const chunks = chunkKvPairs(pairs, 2, 1_000);
+
+    expect(chunks.map(c => c.length)).toEqual([2, 2, 1]);
+  });
+
+  it('counts key bytes toward the cap', () => {
+    const pairs = [pair('k'.repeat(60), 0), pair('j'.repeat(60), 0)];
+
+    const chunks = chunkKvPairs(pairs, 10, 100);
+
+    expect(chunks).toHaveLength(2);
+  });
+});
+
+describe('kvBulkPut: byte-capped requests', () => {
+  it('splits entries whose values together exceed KV_BATCH_MAX_BYTES', async () => {
+    mockBulkUpdate.mockResolvedValue({ unsuccessful_keys: [] });
+    const half = Math.ceil(KV_BATCH_MAX_BYTES / 2);
+    const entries = [sizedEntry('trace:a', half), sizedEntry('trace:b', half), sizedEntry('trace:c', half)];
+
+    const written = await kvBulkPut(entries);
+
+    expect(mockBulkUpdate).toHaveBeenCalledTimes(entries.length);
+    expect(written.size).toBe(entries.length);
+  });
+});
+
+describe('kvBulkPut: connection failures', () => {
+  it('defers only the chunk that could not connect and writes the rest', async () => {
+    const half = Math.ceil(KV_BATCH_MAX_BYTES / 2);
+    const entries = [sizedEntry('trace:a', half), sizedEntry('trace:b', half), sizedEntry('trace:c', half)];
+    mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: [] });
+    mockBulkUpdate.mockRejectedValueOnce(await connectionError());
+    mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: [] });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const written = await kvBulkPut(entries);
+
+    expect([...written].sort()).toEqual(['trace:a', 'trace:c']);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('could not connect'));
+    warnSpy.mockRestore();
+  });
+
+  it('throws when every request fails to connect', async () => {
+    mockBulkUpdate.mockRejectedValue(await connectionError());
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(kvBulkPut([entry('metric:a')])).rejects.toThrow('could not connect for any');
+    warnSpy.mockRestore();
+  });
+
+  it('still throws on an API error that is not a connection failure', async () => {
+    const { APIError } = await import('cloudflare');
+    mockBulkUpdate.mockRejectedValueOnce(
+      new (APIError as unknown as new (status: number, errors: Array<{ code?: number }>, msg: string) => Error)(
+        403, [{ code: 10000 }], 'Authentication error',
+      ),
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(kvBulkPut([entry('metric:a')])).rejects.toThrow('bulk put failed');
+    errorSpy.mockRestore();
+  });
+});
+
+describe('kvBulkPut: transport', () => {
+  it('builds the SDK client on the HTTP/1.1 fetch', async () => {
+    mockBulkUpdate.mockResolvedValueOnce({ unsuccessful_keys: [] });
+
+    await kvBulkPut([entry('metric:a')]);
+
+    expect(clientOptions).toEqual([{ fetch: http1FetchSentinel }]);
   });
 });
