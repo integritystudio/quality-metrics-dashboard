@@ -107,7 +107,7 @@ function resolveCloudflareConfig(): CloudflareConfig {
     const raw = readFileSync(tomlPath, 'utf8');
     let parsed: Record<string, unknown>;
     try {
-      parsed = parseToml(raw) as Record<string, unknown>;
+      parsed = parseToml(raw);
     } catch (err) {
       throw new Error(`Failed to parse ${tomlPath}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
     }
