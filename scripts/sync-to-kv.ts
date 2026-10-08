@@ -944,8 +944,8 @@ async function discoverOrgIds(now: Date): Promise<string[]> {
     const probe = new CloudBackend({ orgId: ALL_ORGS_SCOPE, fetch: http1Fetch });
     const start = new Date(now.getTime() - MAX_DAYS_MS);
     const evals = await probe.queryEvaluations({
-      startDate: BigInt(start.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-      endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
+      startDate: msToNs(start.getTime()),
+      endDate: msToNs(now.getTime()),
       limit: QUERY_LIMIT,
     });
     for (const ev of evals) {
@@ -1025,8 +1025,8 @@ export function buildTraceEntries(
  * API route computes the same summary from a live query.
  */
 async function computeCodeQuality(backend: OrgReadBackend, now: Date) {
-  const startDate = BigInt(now.getTime() - CODE_QUALITY_LOOKBACK_DAYS * TIME_MS.DAY) * NANOSECONDS_PER_MILLISECOND_BIGINT;
-  const endDate = BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT;
+  const startDate = msToNs(now.getTime() - CODE_QUALITY_LOOKBACK_DAYS * TIME_MS.DAY);
+  const endDate = msToNs(now.getTime());
   const [checkpointSpans, invocationSpans] = await Promise.all([
     backend.queryTraces({
       startDate, endDate, limit: CODE_QUALITY_CHECKPOINT_LIMIT,
@@ -1043,115 +1043,126 @@ async function computeCodeQuality(backend: OrgReadBackend, now: Date) {
   return summarizeCodeQuality(checkpointSpans, invocationSpans);
 }
 
+/** One org's evaluation read, and the windows sliced from it in memory. */
+interface OrgEvaluations {
+  /** At most QUERY_LIMIT rows, newest first. */
+  evals: EvaluationResult[];
+  /** The read held more than QUERY_LIMIT rows, so the oldest were dropped. */
+  truncated: boolean;
+  /** Rows with `startNs <= timestamp < endNs`. */
+  inWindow(startNs: bigint, endNs: bigint): EvaluationResult[];
+  /** The rows a separate `[startMs, endMs]` read would return; the server rounds both bounds to whole UTC days. */
+  between(startMs: number, endMs?: number): EvaluationResult[];
+}
+
+type EvaluationsByName = Map<string, EvaluationResult[]>;
+type DegradationBucket = { scores: number[]; startTime: string; endTime: string };
+type SessionDetail = ReturnType<typeof computeSessionDetail>;
+
+/** The UTC midnight a read starting at `ms` begins from. */
+function dayStartNs(ms: number): bigint {
+  return queriedDateWindow({ startDate: msToNs(ms) }).startNs ?? 0n;
+}
+
 /**
- * Run the full aggregation for one org's cloud rows. The only org-aware behavior
- * is that the local sidecar state (degradation breaches, calibration) is
- * owner-local and therefore read/written for the home org alone.
+ * One read serves every window: the periods, both metric-detail weeks and the
+ * session/trace window. Separate reads fetched the same rows up to 22 times per org.
+ * One extra row detects truncation (KV-SESSION-EVALS-TRUNCATION-UNFLAGGED); the server
+ * returns the newest ids first, so a truncated read loses the oldest rows.
  */
-export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
-  const entries: KVEntry[] = [];
-
-  const groupedByPeriod = new Map<string, Map<string, EvaluationResult[]>>();
-  const nowMs = now.getTime();
-  const weekMs = PERIOD_MS['7d'];
-
-  // One read serves every window below: the periods, both metric-detail weeks and the
-  // session/trace window. Separate reads fetched the same rows up to 22 times per org.
-  // One extra row detects truncation (KV-SESSION-EVALS-TRUNCATION-UNFLAGGED); the server
-  // returns the newest ids first, so a truncated read loses the oldest rows.
+async function readOrgEvaluations(backend: OrgReadBackend, nowMs: number): Promise<OrgEvaluations> {
   const fetched = await backend.queryEvaluations({
-    startDate: msToNs(nowMs - Math.max(MAX_DAYS_MS, METRIC_DETAIL_WEEKS * weekMs)),
+    startDate: msToNs(nowMs - Math.max(MAX_DAYS_MS, METRIC_DETAIL_WEEKS * PERIOD_MS['7d'])),
     endDate: msToNs(nowMs),
     limit: QUERY_LIMIT + 1,
   });
-  const evaluationsTruncated = fetched.length > QUERY_LIMIT;
-  const fetchedEvals = evaluationsTruncated ? fetched.slice(0, QUERY_LIMIT) : fetched;
-  if (evaluationsTruncated) {
+  const truncated = fetched.length > QUERY_LIMIT;
+  const evals = truncated ? fetched.slice(0, QUERY_LIMIT) : fetched;
+  if (truncated) {
     console.warn(
       `[sync-to-kv] Evaluation query returned ${QUERY_LIMIT} results — oldest evaluations dropped; all sessions marked partial`,
     );
   }
-  const evalsInWindow = (startNs: bigint, endNs: bigint): EvaluationResult[] =>
-    fetchedEvals.filter(ev => ev.timestamp >= startNs && ev.timestamp < endNs);
-  /** The rows a separate `[startMs, endMs]` read would return; the server rounds both bounds to whole UTC days. */
-  const evalsBetween = (startMs: number, endMs: number = nowMs): EvaluationResult[] => {
+  const inWindow = (startNs: bigint, endNs: bigint): EvaluationResult[] =>
+    evals.filter(ev => ev.timestamp >= startNs && ev.timestamp < endNs);
+  const between = (startMs: number, endMs: number = nowMs): EvaluationResult[] => {
     const { startNs = 0n, endNs = 0n } = queriedDateWindow({ startDate: msToNs(startMs), endDate: msToNs(endMs) });
-    return evalsInWindow(startNs, endNs);
+    return inWindow(startNs, endNs);
   };
-  /** The UTC midnight a read starting at `ms` begins from. */
-  const dayStartNs = (ms: number): bigint => queriedDateWindow({ startDate: msToNs(ms) }).startNs ?? 0n;
+  return { evals, truncated, inWindow, between };
+}
 
-  const activePeriods = PERIODS.filter(p => PERIOD_MS[p] <= MAX_DAYS_MS);
-  const periodQueryResults = activePeriods.map(period => {
-    const start = new Date(nowMs - PERIOD_MS[period]);
-    const dates = { start: start.toISOString(), end: now.toISOString() };
-    return { period, evals: evalsBetween(start.getTime()), dates };
-  });
+/** `dashboard:`, role views, `correlations:`, `coverage:` and `pipeline:` for one period. */
+function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates: { start: string; end: string }): KVEntry[] {
+  const entries: KVEntry[] = [];
+  // `dates` is already `{ start, end }` ISO — a `TimeRange`.
+  const dashboard = computeDashboardSummary(grouped, { period: dates });
+  entries.push(dashboardEntry(`dashboard:${period}`, dashboard));
 
-  for (const { period, evals, dates } of periodQueryResults) {
-    const grouped = group(filterCanary(evals), ev => ev.evaluationName);
-    groupedByPeriod.set(period, grouped);
-
-    // `dates` is already `{ start, end }` ISO — a `TimeRange`.
-    const dashboard = computeDashboardSummary(grouped, { period: dates });
-    entries.push(dashboardEntry(`dashboard:${period}`, dashboard));
-
-    for (const role of ROLES) {
-      const view = computeRoleView(dashboard, role);
-      entries.push(dashboardEntry(`dashboard:${period}:${role}`, view));
-    }
-
-    const metricTimeSeries = new Map<string, number[]>();
-    const corrMetricNames: string[] = [];
-    for (const [name, metricEvals] of grouped) {
-      metricTimeSeries.set(name, metricEvals.map(e => e.scoreValue).filter(isValidScore));
-      corrMetricNames.push(name);
-    }
-    const correlations = computeCorrelationMatrix(metricTimeSeries);
-    entries.push({
-      key: `correlations:${period}`,
-      value: toKVValue({ correlations, metrics: corrMetricNames }),
-    });
-
-    // Columnar, never the dense metric x input cell list: that shape repeats the
-    // metric name and a 32-36 char input id in every cell (and the ids again in
-    // `gaps`), reaching 112 MB at the ~85,000-input cardinality that breached
-    // KV's 25 MiB value limit and disabled this feature in February 2026 (CVG-1).
-    // The columnar matrix measures 4.68 MB for that same case. Sizes and the
-    // rejected compression alternatives: `CoverageMatrix` in quality-visualization.ts.
-    for (const inputKey of COVERAGE_INPUT_KEYS) {
-      const matrix = computeCoverageMatrix(grouped, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
-      const coverageKey = `coverage:${period}:${inputKey}`;
-      const coverageValue = toKVValue({ period, ...matrix });
-      const coverageSizeBytes = Buffer.byteLength(coverageValue, 'utf8');
-      if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
-        console.warn(
-          `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
-          ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV's ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
-          ' — reduce MAX_COVERAGE_COLUMNS',
-        );
-      }
-      entries.push({ key: coverageKey, value: coverageValue });
-    }
-
-    const pipeline = computePipelineView(grouped, dashboard);
-    entries.push({
-      key: `pipeline:${period}`,
-      value: toKVValue({ period, ...pipeline }),
-    });
+  for (const role of ROLES) {
+    const view = computeRoleView(dashboard, role);
+    entries.push(dashboardEntry(`dashboard:${period}:${role}`, view));
   }
 
-  entries.push({ key: CODE_QUALITY_KV_KEY, value: toKVValue(await computeCodeQuality(backend, now)) });
+  const metricTimeSeries = new Map<string, number[]>();
+  const corrMetricNames: string[] = [];
+  for (const [name, metricEvals] of grouped) {
+    metricTimeSeries.set(name, metricEvals.map(e => e.scoreValue).filter(isValidScore));
+    corrMetricNames.push(name);
+  }
+  const correlations = computeCorrelationMatrix(metricTimeSeries);
+  entries.push({
+    key: `correlations:${period}`,
+    value: toKVValue({ correlations, metrics: corrMetricNames }),
+  });
 
-  const metricNames = Object.keys(QUALITY_METRICS);
+  // Columnar, never the dense metric x input cell list: that shape repeats the
+  // metric name and a 32-36 char input id in every cell (and the ids again in
+  // `gaps`), reaching 112 MB at the ~85,000-input cardinality that breached
+  // KV's 25 MiB value limit and disabled this feature in February 2026 (CVG-1).
+  // The columnar matrix measures 4.68 MB for that same case. Sizes and the
+  // rejected compression alternatives: `CoverageMatrix` in quality-visualization.ts.
+  for (const inputKey of COVERAGE_INPUT_KEYS) {
+    const matrix = computeCoverageMatrix(grouped, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
+    const coverageKey = `coverage:${period}:${inputKey}`;
+    const coverageValue = toKVValue({ period, ...matrix });
+    const coverageSizeBytes = Buffer.byteLength(coverageValue, 'utf8');
+    if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
+      console.warn(
+        `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
+        ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV's ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
+        ' — reduce MAX_COVERAGE_COLUMNS',
+      );
+    }
+    entries.push({ key: coverageKey, value: coverageValue });
+  }
+
+  const pipeline = computePipelineView(grouped, dashboard);
+  entries.push({
+    key: `pipeline:${period}`,
+    value: toKVValue({ period, ...pipeline }),
+  });
+  return entries;
+}
+
+/**
+ * `metric:<name>`: the current week against the one before it. Also returns the
+ * trace ids the metric cards link to, which the trace write budget favours.
+ */
+function computeMetricDetailEntries(
+  orgEvals: OrgEvaluations,
+  nowMs: number,
+  metricNames: string[],
+): { entries: KVEntry[]; referencedTraceIds: Set<string> } {
+  const weekMs = PERIOD_MS['7d'];
   // The current week matches `dashboard:7d`; the previous week is the 7 whole days before
   // it and ends where it starts, so no evaluation counts in both (METRIC-WEEK-OVERLAP).
-  const currentWeek = group(filterCanary(evalsBetween(nowMs - weekMs)), ev => ev.evaluationName);
+  const currentWeek = group(filterCanary(orgEvals.between(nowMs - weekMs)), ev => ev.evaluationName);
   const previousWeek = group(
-    filterCanary(evalsInWindow(dayStartNs(nowMs - 2 * weekMs), dayStartNs(nowMs - weekMs))),
+    filterCanary(orgEvals.inWindow(dayStartNs(nowMs - 2 * weekMs), dayStartNs(nowMs - weekMs))),
     ev => ev.evaluationName,
   );
-  /** Trace ids the metric cards link to, which the trace write budget favours. */
+  const entries: KVEntry[] = [];
   const referencedTraceIds = new Set<string>();
 
   for (const name of metricNames) {
@@ -1174,10 +1185,16 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
     }
     entries.push({ key: `metric:${name}`, value: toKVValue(detail) });
   }
+  return { entries, referencedTraceIds };
+}
 
-  for (const period of activePeriods) {
-    const grouped = groupedByPeriod.get(period);
-    if (!grouped) continue;
+/** `metric:evaluations:<name>:<period>`: the newest MAX_EVAL_ROWS rows per metric and period. */
+function computeEvaluationRowEntries(
+  groupedByPeriod: Map<Period, EvaluationsByName>,
+  metricNames: string[],
+): KVEntry[] {
+  const entries: KVEntry[] = [];
+  for (const [period, grouped] of groupedByPeriod) {
     for (const name of metricNames) {
       const evals = grouped.get(name);
       if (!evals || evals.length === 0) continue;
@@ -1205,13 +1222,22 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
       });
     }
   }
+  return entries;
+}
 
-  // Collect time buckets per period×metric for degradation signal computation
-  const degradationBuckets = new Map<Period, Record<string, Array<{ scores: number[]; startTime: string; endTime: string }>>>();
-  for (const period of activePeriods) {
+/**
+ * `trend:<name>:<period>`, plus the time buckets per period × metric that the
+ * degradation signals are computed from.
+ */
+function computeTrendEntries(
+  groupedByPeriod: Map<Period, EvaluationsByName>,
+  metricNames: string[],
+  now: Date,
+): { entries: KVEntry[]; degradationBuckets: Map<Period, Record<string, DegradationBucket[]>> } {
+  const entries: KVEntry[] = [];
+  const degradationBuckets = new Map<Period, Record<string, DegradationBucket[]>>();
+  for (const [period, cached] of groupedByPeriod) {
     const ms = PERIOD_MS[period];
-    const cached = groupedByPeriod.get(period);
-    if (!cached) continue;
     const start = new Date(now.getTime() - ms);
     const bucketMs = ms / TREND_BUCKETS;
 
@@ -1291,12 +1317,21 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
       });
     }
   }
+  return { entries, degradationBuckets };
+}
 
-  // Compute degradation signals for all periods
-  // Degradation state is this script's own sidecar, so it lives beside the script. Calibration
-  // is derive's, read from where derive writes it (loadCalibrationEntry). Both are the owner's
-  // single-tenant history — non-home orgs compute signals statelessly (no cross-run breach
-  // continuity) and skip calibration.
+/**
+ * `degradation:<period>` from the trend buckets. Degradation state is this script's own
+ * sidecar, so it lives beside the script, and it is the owner's single-tenant history:
+ * non-home orgs compute signals statelessly (no cross-run breach continuity).
+ */
+function computeDegradationEntries(
+  degradationBuckets: Map<Period, Record<string, DegradationBucket[]>>,
+  metricNames: string[],
+  now: Date,
+  isHome: boolean,
+): KVEntry[] {
+  const entries: KVEntry[] = [];
   const stateDir = isHome ? (SCRIPT_DIR ?? '') : '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : { lastRun: '', breaches: {} };
   for (const [period, metricBuckets] of degradationBuckets) {
@@ -1315,108 +1350,60 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   }
   degradationState.lastRun = now.toISOString();
   if (stateDir && !dryRun) saveDegradationState(stateDir, degradationState);
+  return entries;
+}
 
-  const calibrationEntry = isHome ? loadCalibrationEntry() : null;
-  if (calibrationEntry) entries.push(calibrationEntry);
-
-  const queryWindowStart = new Date(now.getTime() - MAX_DAYS_MS);
-  const allEvals = evalsBetween(queryWindowStart.getTime());
-  const evalsByTrace: Map<string, EvaluationResult[]> = group(allEvals.filter(hasTraceId), ev => ev.traceId);
-  const traceIds = [...evalsByTrace.keys()];
-
-  const allSpans = await backend.queryTraces({
-    startDate: BigInt(queryWindowStart.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-    endDate: BigInt(now.getTime()) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-    limit: SPAN_QUERY_LIMIT,
-  });
-  if (allSpans.length === SPAN_QUERY_LIMIT) {
-    console.warn(`[sync-to-kv] Span query returned ${SPAN_QUERY_LIMIT} results — data may be truncated`);
+/** Fold one session's activity for one agent into that agent's cross-session totals. */
+function accumulateAgent(
+  agents: Map<string, AgentAccumulator>,
+  ag: SessionDetail['agentActivity'][number],
+  sessionId: string,
+  detail: SessionDetail,
+): void {
+  let acc = agents.get(ag.agentName);
+  if (!acc) {
+    acc = {
+      totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
+      totalOutputSize: 0, weightedDurationSum: 0, sessionDurations: [],
+      truncatedCount: 0, emptyCount: 0,
+      totalSessionCount: 0, lastSeenDate: null, sessions: [],
+    };
+    agents.set(ag.agentName, acc);
   }
-  const spansByTrace: Map<string, TraceSpan[]> = group(allSpans.filter(hasTraceId), span => span.traceId);
-
-  const traceEntries = buildTraceEntries(traceIds, evalsByTrace, spansByTrace);
-
-  type Span = (typeof allSpans)[number];
-  const spansBySession = new Map<string, Span[]>();
-  const traceToSession = new Map<string, string>();
-  for (const span of allSpans) {
-    const sid = spanSessionId(span);
-    if (!sid) continue;
-    pushToGroup(spansBySession, sid, span);
-    if (span.traceId) traceToSession.set(span.traceId, sid);
-  }
-  const evalsBySession = new Map<string, EvaluationResult[]>();
-  for (const ev of allEvals) {
-    if (!ev.traceId) continue;
-    const sid = traceToSession.get(ev.traceId);
-    if (!sid) continue;
-    pushToGroup(evalsBySession, sid, ev);
-  }
-
-  const agentCrossSession = new Map<string, AgentAccumulator>();
-
-  const sessionEntries: KVEntry[] = [];
-  for (const [sessionId, sessionSpans] of spansBySession) {
-    const evaluations = evalsBySession.get(sessionId) ?? [];
-    const detail = computeSessionDetail(sessionId, sessionSpans, evaluations, evaluationsTruncated);
-    sessionEntries.push({
-      key: `session:${sessionId}`,
-      value: toKVValue({
-        ...detail,
-        agentActivity: detail.agentActivity.map(
-          ({ totalOutputSize: _, ...rest }) => rest,
-        ),
-        // The worker has no spans to build this from, so /api/agents/:sessionId
-        // serves the graph precomputed here.
-        workflowGraph: buildWorkflowGraph(detail.multiAgentEvaluation, sessionSpans),
-      }),
-      expirationTtl: SESSION_KEY_TTL_SECONDS,
-    });
-
-    for (const ag of detail.agentActivity) {
-      let acc = agentCrossSession.get(ag.agentName);
-      if (!acc) {
-        acc = {
-          totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
-          totalOutputSize: 0, weightedDurationSum: 0, sessionDurations: [],
-          truncatedCount: 0, emptyCount: 0,
-          totalSessionCount: 0, lastSeenDate: null, sessions: [],
-        };
-        agentCrossSession.set(ag.agentName, acc);
-      }
-      acc.totalInvocations += ag.invocations;
-      acc.totalErrors += ag.errors;
-      acc.rateLimitEvents += ag.rateLimitEvents;
-      acc.totalOutputSize += ag.totalOutputSize;
-      acc.truncatedCount += ag.truncatedCount;
-      acc.emptyCount += ag.emptyCount;
-      // One duration entry per session; capped to bound memory for p95 computation
-      if (ag.avgDurationMs > 0) {
-        acc.weightedDurationSum += ag.avgDurationMs * ag.invocations;
-        if (acc.sessionDurations.length < MAX_SESSION_DURATIONS) {
-          acc.sessionDurations.push(ag.avgDurationMs);
-        }
-      }
-      // sessionDate is always ISO 8601 UTC (from toISOString()), so
-      // lexicographic comparison is equivalent to chronological ordering.
-      const sessionDate = detail.timespan?.start ?? null;
-      acc.totalSessionCount++;
-      if (sessionDate && (!acc.lastSeenDate || sessionDate > acc.lastSeenDate)) {
-        acc.lastSeenDate = sessionDate;
-      }
-      const entry: AgentAccumulator['sessions'][number] = {
-        sessionId,
-        invocations: ag.invocations,
-        errors: ag.errors,
-        hasRateLimit: ag.hasRateLimit,
-        avgDurationMs: ag.avgDurationMs,
-        date: sessionDate,
-        project: detail.sessionInfo?.projectName ?? null,
-      };
-      addRecentSession(acc.sessions, entry, MAX_AGENT_SESSIONS);
+  acc.totalInvocations += ag.invocations;
+  acc.totalErrors += ag.errors;
+  acc.rateLimitEvents += ag.rateLimitEvents;
+  acc.totalOutputSize += ag.totalOutputSize;
+  acc.truncatedCount += ag.truncatedCount;
+  acc.emptyCount += ag.emptyCount;
+  // One duration entry per session; capped to bound memory for p95 computation
+  if (ag.avgDurationMs > 0) {
+    acc.weightedDurationSum += ag.avgDurationMs * ag.invocations;
+    if (acc.sessionDurations.length < MAX_SESSION_DURATIONS) {
+      acc.sessionDurations.push(ag.avgDurationMs);
     }
   }
+  // sessionDate is always ISO 8601 UTC (from toISOString()), so
+  // lexicographic comparison is equivalent to chronological ordering.
+  const sessionDate = detail.timespan?.start ?? null;
+  acc.totalSessionCount++;
+  if (sessionDate && (!acc.lastSeenDate || sessionDate > acc.lastSeenDate)) {
+    acc.lastSeenDate = sessionDate;
+  }
+  const entry: AgentAccumulator['sessions'][number] = {
+    sessionId,
+    invocations: ag.invocations,
+    errors: ag.errors,
+    hasRateLimit: ag.hasRateLimit,
+    avgDurationMs: ag.avgDurationMs,
+    date: sessionDate,
+    project: detail.sessionInfo?.projectName ?? null,
+  };
+  addRecentSession(acc.sessions, entry, MAX_AGENT_SESSIONS);
+}
 
+/** `agent:<name>` per agent, and `meta:agents` ordered by invocations. */
+function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KVEntry[] {
   const agentEntries: KVEntry[] = [];
   const agentSummaryList: Array<{
     agentName: string; totalSessions: number; totalInvocations: number;
@@ -1424,7 +1411,7 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   }> = [];
   const computedAt = now.toISOString();
 
-  for (const [agentName, acc] of agentCrossSession) {
+  for (const [agentName, acc] of agents) {
     // ISO 8601 sorts lexicographically — take most recent sessions first
     const sessions = acc.sessions
       .slice()
@@ -1465,16 +1452,121 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
 
   agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
   agentEntries.push({ key: META_AGENTS_KEY, value: toKVValue(agentSummaryList) });
+  return agentEntries;
+}
+
+/** `session:<id>` per session with spans, then the `agent:` entries accumulated across them. */
+function computeSessionAndAgentEntries(
+  allSpans: TraceSpan[],
+  allEvals: EvaluationResult[],
+  evaluationsTruncated: boolean,
+  now: Date,
+): { sessionEntries: KVEntry[]; agentEntries: KVEntry[] } {
+  const spansBySession = new Map<string, TraceSpan[]>();
+  const traceToSession = new Map<string, string>();
+  for (const span of allSpans) {
+    const sid = spanSessionId(span);
+    if (!sid) continue;
+    pushToGroup(spansBySession, sid, span);
+    if (span.traceId) traceToSession.set(span.traceId, sid);
+  }
+  const evalsBySession = new Map<string, EvaluationResult[]>();
+  for (const ev of allEvals) {
+    if (!ev.traceId) continue;
+    const sid = traceToSession.get(ev.traceId);
+    if (!sid) continue;
+    pushToGroup(evalsBySession, sid, ev);
+  }
+
+  const agentCrossSession = new Map<string, AgentAccumulator>();
+  const sessionEntries: KVEntry[] = [];
+  for (const [sessionId, sessionSpans] of spansBySession) {
+    const evaluations = evalsBySession.get(sessionId) ?? [];
+    const detail = computeSessionDetail(sessionId, sessionSpans, evaluations, evaluationsTruncated);
+    sessionEntries.push({
+      key: `session:${sessionId}`,
+      value: toKVValue({
+        ...detail,
+        agentActivity: detail.agentActivity.map(
+          ({ totalOutputSize: _, ...rest }) => rest,
+        ),
+        // The worker has no spans to build this from, so /api/agents/:sessionId
+        // serves the graph precomputed here.
+        workflowGraph: buildWorkflowGraph(detail.multiAgentEvaluation, sessionSpans),
+      }),
+      expirationTtl: SESSION_KEY_TTL_SECONDS,
+    });
+
+    for (const ag of detail.agentActivity) {
+      accumulateAgent(agentCrossSession, ag, sessionId, detail);
+    }
+  }
+  return { sessionEntries, agentEntries: buildAgentEntries(agentCrossSession, now) };
+}
+
+/**
+ * Run the full aggregation for one org's cloud rows. The only org-aware behavior
+ * is that the local sidecar state (degradation breaches, calibration) is
+ * owner-local and therefore read/written for the home org alone.
+ */
+export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
+  const entries: KVEntry[] = [];
+  const nowMs = now.getTime();
+  const orgEvals = await readOrgEvaluations(backend, nowMs);
+
+  const groupedByPeriod = new Map<Period, EvaluationsByName>();
+  const periodCounts: string[] = [];
+  for (const period of PERIODS.filter(p => PERIOD_MS[p] <= MAX_DAYS_MS)) {
+    const start = new Date(nowMs - PERIOD_MS[period]);
+    const evals = orgEvals.between(start.getTime());
+    periodCounts.push(`${period}:${evals.length}`);
+    const grouped = group(filterCanary(evals), ev => ev.evaluationName);
+    groupedByPeriod.set(period, grouped);
+    entries.push(...computePeriodEntries(period, grouped, { start: start.toISOString(), end: now.toISOString() }));
+  }
+
+  entries.push({ key: CODE_QUALITY_KV_KEY, value: toKVValue(await computeCodeQuality(backend, now)) });
+
+  const metricNames = Object.keys(QUALITY_METRICS);
+  const metricDetail = computeMetricDetailEntries(orgEvals, nowMs, metricNames);
+  entries.push(...metricDetail.entries);
+  entries.push(...computeEvaluationRowEntries(groupedByPeriod, metricNames));
+
+  const trends = computeTrendEntries(groupedByPeriod, metricNames, now);
+  entries.push(...trends.entries);
+  entries.push(...computeDegradationEntries(trends.degradationBuckets, metricNames, now, isHome));
+
+  // Calibration is derive's, read from where derive writes it, and the owner's alone.
+  const calibrationEntry = isHome ? loadCalibrationEntry() : null;
+  if (calibrationEntry) entries.push(calibrationEntry);
+
+  const queryWindowStartMs = nowMs - MAX_DAYS_MS;
+  const allEvals = orgEvals.between(queryWindowStartMs);
+  const evalsByTrace: Map<string, EvaluationResult[]> = group(allEvals.filter(hasTraceId), ev => ev.traceId);
+  const traceIds = [...evalsByTrace.keys()];
+
+  const allSpans = await backend.queryTraces({
+    startDate: msToNs(queryWindowStartMs),
+    endDate: msToNs(nowMs),
+    limit: SPAN_QUERY_LIMIT,
+  });
+  if (allSpans.length === SPAN_QUERY_LIMIT) {
+    console.warn(`[sync-to-kv] Span query returned ${SPAN_QUERY_LIMIT} results — data may be truncated`);
+  }
+  const spansByTrace: Map<string, TraceSpan[]> = group(allSpans.filter(hasTraceId), span => span.traceId);
+  const traceEntries = buildTraceEntries(traceIds, evalsByTrace, spansByTrace);
+
+  const { sessionEntries, agentEntries } = computeSessionAndAgentEntries(allSpans, allEvals, orgEvals.truncated, now);
 
   return {
     allEntries: [...entries, ...sessionEntries, ...traceEntries, ...agentEntries],
     evalsByTrace,
-    referencedTraceIds,
+    referencedTraceIds: metricDetail.referencedTraceIds,
     traceIds,
     evalCount: allEvals.length,
     spanCount: allSpans.length,
-    periodCounts: periodQueryResults.map(r => `${r.period}:${r.evals.length}`).join(' '),
-    hitCap: evaluationsTruncated ||
+    periodCounts: periodCounts.join(' '),
+    hitCap: orgEvals.truncated ||
       allSpans.length >= SPAN_QUERY_LIMIT,
   };
 }
