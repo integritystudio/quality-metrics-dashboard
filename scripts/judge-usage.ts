@@ -55,6 +55,29 @@ export function toProviderUsage(usage: JudgeTokenUsage): ProviderUsage {
   };
 }
 
+/** A one-shot eval's totals for one configuration: camelCase usage plus the number of responses. */
+export interface CallUsageTotals extends JudgeTokenUsage {
+  calls: number;
+}
+
+/** {@link CallUsageTotals} priced at list rates. */
+export interface CallUsageReport extends CallUsageTotals {
+  usd: number;
+}
+
+export function createCallUsageTotals(): CallUsageTotals {
+  return { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+}
+
+/** Fold one response's usage into a configuration's totals. */
+export function addCallUsage(totals: CallUsageTotals, usage: JudgeTokenUsage): void {
+  totals.calls += 1;
+  totals.inputTokens += usage.inputTokens;
+  totals.outputTokens += usage.outputTokens;
+  totals.cacheCreationInputTokens += usage.cacheCreationInputTokens;
+  totals.cacheReadInputTokens += usage.cacheReadInputTokens;
+}
+
 export function createUsageTotals(): JudgeUsageTotals {
   return { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 }

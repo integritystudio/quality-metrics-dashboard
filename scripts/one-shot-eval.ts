@@ -5,9 +5,15 @@
  */
 
 import { closeSync, constants, existsSync, mkdirSync, openSync, readdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
+import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE } from '../../src/lib/judge/llm-judge-constants.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CliArgError } from './cli-args.js';
+import type { EvalRecord } from './eval-record.js';
+import { createAnthropicProvider } from './judge-evaluations.js';
+import { createUsageTotals, type JudgeTokenUsage } from './judge-usage.js';
 
 export const YES_FLAG = '--yes';
 export const RESULTS_SUFFIX = '.json';
@@ -17,6 +23,8 @@ export const NO_BATCH_DELAY_MS = 0;
 export const USD_DECIMALS = 4;
 export const TABLE_NAME_WIDTH = 18;
 export const EXIT_REFUSED = 1;
+/** Where every one-shot eval writes its marker and results. */
+export const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
 const PERCENT = 100;
 const RATE_DECIMALS = 1;
 const DIFF_DECIMALS = 3;
@@ -96,4 +104,18 @@ export function formatRate(rate: number | null): string {
 
 export function formatDiff(diff: number | null | undefined): string {
   return diff === null || diff === undefined ? '-' : diff.toFixed(DIFF_DECIMALS);
+}
+
+/** Back from the record's 0–1 value to the judge's 1–5 scale. */
+export function toFivePointScale(normalized: number): number {
+  return G_EVAL_MIN_SCORE + normalized * G_EVAL_SCORE_RANGE;
+}
+
+export function scoresByName(records: readonly EvalRecord[]): Record<string, number> {
+  return Object.fromEntries(records.map(r => [r.evaluationName, r.scoreValue]));
+}
+
+/** The pipeline's own provider (structured score output included), with the usage hook. */
+export function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
+  return createAnthropicProvider(apiKey, createUsageTotals(), onUsage);
 }

@@ -56,20 +56,15 @@ import {
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
 import {
-  addUsage,
   computeAgreement,
-  createUsageTotals,
   listResultsFiles as listAgreementFiles,
-  toFivePointScale,
-  DOCS_DIR,
   type CriterionAgreement,
-  type UsageReport,
-  type UsageTotals,
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { parseCli } from './cli-args.js';
 import {
+  DOCS_DIR,
   EXIT_REFUSED,
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
@@ -82,8 +77,17 @@ import {
   formatRate,
   oneShotArgError,
   padCell,
+  toFivePointScale,
 } from './one-shot-eval.js';
-import { tokenUsageCostUsd, toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
+import {
+  addCallUsage,
+  createCallUsageTotals,
+  tokenUsageCostUsd,
+  toJudgeTokenUsage,
+  type CallUsageReport,
+  type CallUsageTotals,
+  type JudgeTokenUsage,
+} from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -106,7 +110,6 @@ export const MAX_MEASURED_SPEND_USD = 9.5;
 export const OUTPUT_TOKENS_PER_CALL_ESTIMATE = 1_500;
 /** Estimate only: criterion text, steps and anchoring added to the turn content. */
 export const PROMPT_OVERHEAD_TOKENS_ESTIMATE = 600;
-export { YES_FLAG };
 export const AGREEMENT_FLAG = '--agreement';
 export const MARKER_FILENAME = '.judge-quality.started';
 export const RESULTS_PREFIX = 'judge-quality-';
@@ -421,7 +424,7 @@ function printTable(
   perCriterion: ReferenceSummary,
   consolidated: ReferenceSummary,
   verdict: Record<string, Side | 'tie'>,
-  reference: UsageReport,
+  reference: CallUsageReport,
 ): void {
   console.log(`\n[quality] distance from ${REFERENCE_MODEL} (1–5 scale; bias > 0 = more lenient)`);
   console.log(
@@ -516,8 +519,8 @@ async function main(): Promise<void> {
   writeMarker(DOCS_DIR, { startedAt: startedAt.toISOString(), pid: process.pid, agreementPath, turns: matched.length });
   console.log(`[quality] marker written: ${join(DOCS_DIR, MARKER_FILENAME)} — API calls start now`);
 
-  const totals: UsageTotals = createUsageTotals();
-  const provider = await createReferenceProvider(credential.apiKey, usage => addUsage(totals, usage));
+  const totals: CallUsageTotals = createCallUsageTotals();
+  const provider = await createReferenceProvider(credential.apiKey, usage => addCallUsage(totals, usage));
   const canSpend = (): boolean => tokenUsageCostUsd(totals, pricing) < MAX_MEASURED_SPEND_USD;
   const stepsCache: EvaluationStepsCache = new Map();
   const turnErrors: { sessionId: string; timestamp: string; errors: string[] }[] = [];
@@ -535,7 +538,7 @@ async function main(): Promise<void> {
   const perCriterion = compareToReference(scored, 'perCriterion');
   const consolidated = compareToReference(scored, 'consolidated');
   const verdict = closerConfiguration(perCriterion, consolidated);
-  const referenceUsage: UsageReport = { ...totals, usd: tokenUsageCostUsd(totals, pricing) };
+  const referenceUsage: CallUsageReport = { ...totals, usd: tokenUsageCostUsd(totals, pricing) };
 
   const results = {
     generatedAt: new Date().toISOString(),

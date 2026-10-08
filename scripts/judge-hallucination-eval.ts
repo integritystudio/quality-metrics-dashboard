@@ -51,16 +51,7 @@ import {
   type ConsolidatedProvider,
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
-import {
-  addUsage,
-  createPerCriterionProvider,
-  createUsageTotals,
-  estimateSpend,
-  scoresByName,
-  DOCS_DIR,
-  type UsageReport,
-  type UsageTotals,
-} from './judge-agreement.js';
+import { estimateSpend } from './judge-agreement.js';
 import {
   compareToReference,
   createReferenceProvider,
@@ -77,6 +68,7 @@ import {
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { parseCli } from './cli-args.js';
 import {
+  DOCS_DIR,
   EXIT_REFUSED,
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
@@ -86,10 +78,18 @@ import {
   YES_REQUIRED_ERROR,
   createRunGuard,
   formatDiff,
+  createPerCriterionProvider,
   oneShotArgError,
   padCell,
+  scoresByName,
 } from './one-shot-eval.js';
-import { tokenUsageCostUsd } from './judge-usage.js';
+import {
+  addCallUsage,
+  createCallUsageTotals,
+  tokenUsageCostUsd,
+  type CallUsageReport,
+  type CallUsageTotals,
+} from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,7 +104,6 @@ export const PRIOR_REFERENCE_PATH = join(DOCS_DIR, 'judge-quality-2026-09-22.jso
  */
 export const MAX_ESTIMATED_SPEND_USD = 8;
 export const MAX_MEASURED_SPEND_USD = 8;
-export { YES_FLAG };
 export const REFERENCE_FLAG = '--reference';
 export const MARKER_FILENAME = '.judge-hallucination.started';
 export const RESULTS_PREFIX = 'judge-hallucination-';
@@ -319,16 +318,16 @@ async function main(): Promise<void> {
   writeMarker(DOCS_DIR, { startedAt: startedAt.toISOString(), pid: process.pid, referencePath: args.referencePath, turns: prior.length });
   console.log(`[hallucination] marker written: ${join(DOCS_DIR, MARKER_FILENAME)} — API calls start now`);
 
-  const totals: Record<Configuration | 'reference', UsageTotals> = {
-    perCriterion: createUsageTotals(),
-    consolidated: createUsageTotals(),
-    consolidatedDirect: createUsageTotals(),
-    reference: createUsageTotals(),
+  const totals: Record<Configuration | 'reference', CallUsageTotals> = {
+    perCriterion: createCallUsageTotals(),
+    consolidated: createCallUsageTotals(),
+    consolidatedDirect: createCallUsageTotals(),
+    reference: createCallUsageTotals(),
   };
-  const judge = createLLMJudge(await createPerCriterionProvider(credential.apiKey, usage => addUsage(totals.perCriterion, usage)));
-  const consolidated = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addUsage(totals.consolidated, u) });
-  const direct = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addUsage(totals.consolidatedDirect, u) });
-  const reference = await createReferenceProvider(credential.apiKey, u => addUsage(totals.reference, u));
+  const judge = createLLMJudge(await createPerCriterionProvider(credential.apiKey, usage => addCallUsage(totals.perCriterion, usage)));
+  const consolidated = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addCallUsage(totals.consolidated, u) });
+  const direct = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addCallUsage(totals.consolidatedDirect, u) });
+  const reference = await createReferenceProvider(credential.apiKey, u => addCallUsage(totals.reference, u));
   const caches: Record<'consolidated' | 'consolidatedDirect' | 'reference', EvaluationStepsCache> = {
     consolidated: new Map(),
     consolidatedDirect: new Map(),
@@ -387,7 +386,7 @@ async function main(): Promise<void> {
   ) as Record<Configuration | 'reference', ComplementCount>;
   const usage = Object.fromEntries(Object.entries(totals).map(([name, t]) => [
     name,
-    { ...t, usd: tokenUsageCostUsd(t, name === 'reference' ? referencePricing : haikuPricing) } satisfies UsageReport,
+    { ...t, usd: tokenUsageCostUsd(t, name === 'reference' ? referencePricing : haikuPricing) } satisfies CallUsageReport,
   ]));
 
   const results = {

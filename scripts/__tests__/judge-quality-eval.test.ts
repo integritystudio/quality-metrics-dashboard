@@ -13,7 +13,6 @@ import {
   compareToReference,
   closerConfiguration,
   turnKey,
-  YES_FLAG,
   AGREEMENT_FLAG,
   MARKER_FILENAME,
   RESULTS_PREFIX,
@@ -21,6 +20,7 @@ import {
   OUTPUT_TOKENS_PER_CALL_ESTIMATE,
   type QualityTurn,
 } from '../judge-quality-eval.js';
+import { YES_FLAG } from '../one-shot-eval.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
 import { RELEVANCE_CRITERIA, FAITHFULNESS_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';

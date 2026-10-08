@@ -7,16 +7,12 @@ import {
   refusalReason,
   listResultsFiles,
   resultsFilePath,
-  toFivePointScale,
   computeAgreement,
   countMissing,
-  createUsageTotals,
-  addUsage,
   estimateTurnTokens,
   estimateSpend,
   DEFAULT_LIMIT,
   MAX_LIMIT,
-  YES_FLAG,
   LIMIT_FLAG,
   MARKER_FILENAME,
   RESULTS_PREFIX,
@@ -25,8 +21,14 @@ import {
 } from '../judge-agreement.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
-import { RESULTS_SUFFIX } from '../one-shot-eval.js';
-import { tokenUsageCostUsd, CACHE_CREATION_INPUT_PRICE_RATIO, CACHE_READ_INPUT_PRICE_RATIO } from '../judge-usage.js';
+import { RESULTS_SUFFIX, YES_FLAG, toFivePointScale } from '../one-shot-eval.js';
+import {
+  addCallUsage,
+  createCallUsageTotals,
+  tokenUsageCostUsd,
+  CACHE_CREATION_INPUT_PRICE_RATIO,
+  CACHE_READ_INPUT_PRICE_RATIO,
+} from '../judge-usage.js';
 
 const PRICING = { input: 1.0, output: 5.0, provider: 'anthropic' } as const;
 const ONE_MILLION = 1_000_000;
@@ -142,9 +144,9 @@ describe('usage and cost', () => {
   });
 
   it('accumulates usage and call counts', () => {
-    const totals = createUsageTotals();
-    addUsage(totals, { inputTokens: 10, outputTokens: 2, cacheCreationInputTokens: 1, cacheReadInputTokens: 0 });
-    addUsage(totals, { inputTokens: 5, outputTokens: 3, cacheCreationInputTokens: 0, cacheReadInputTokens: 4 });
+    const totals = createCallUsageTotals();
+    addCallUsage(totals, { inputTokens: 10, outputTokens: 2, cacheCreationInputTokens: 1, cacheReadInputTokens: 0 });
+    addCallUsage(totals, { inputTokens: 5, outputTokens: 3, cacheCreationInputTokens: 0, cacheReadInputTokens: 4 });
     expect(totals).toEqual({ calls: 2, inputTokens: 15, outputTokens: 5, cacheCreationInputTokens: 1, cacheReadInputTokens: 4 });
   });
 

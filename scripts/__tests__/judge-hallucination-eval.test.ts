@@ -10,12 +10,12 @@ import {
   countComplements,
   closestConfiguration,
   estimateRunSpend,
-  YES_FLAG,
   REFERENCE_FLAG,
   PRIOR_REFERENCE_PATH,
   MARKER_FILENAME,
   RESULTS_PREFIX,
 } from '../judge-hallucination-eval.js';
+import { YES_FLAG } from '../one-shot-eval.js';
 import type { ReferenceSummary } from '../judge-quality-eval.js';
 import { RELEVANCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';

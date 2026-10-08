@@ -22,11 +22,10 @@
  */
 
 import { writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
+import { join } from 'path';
+import { pathToFileURL } from 'url';
 import { MODEL_PRICING, TOKENS_PER_CHAR, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
-import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE, MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
+import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import {
   _discoverTranscripts,
   extractTurns,
@@ -34,9 +33,8 @@ import {
   type Turn,
   type TranscriptInfo,
 } from './judge-turns.js';
-import { createAnthropicProvider, createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
+import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import { resetFailureTracking } from './judge-failures.js';
-import type { EvalRecord } from './eval-record.js';
 import {
   HAIKU_MODEL,
   FAITHFULNESS_EVAL_NAME,
@@ -50,6 +48,7 @@ import {
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from './judge-credentials.js';
 import { parseCli, positiveIntArg } from './cli-args.js';
 import {
+  DOCS_DIR,
   EXIT_REFUSED,
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
@@ -57,13 +56,21 @@ import {
   USD_DECIMALS,
   YES_FLAG,
   YES_REQUIRED_ERROR,
+  createPerCriterionProvider,
   createRunGuard,
   formatDiff,
   formatRate,
   oneShotArgError,
   padCell,
+  scoresByName,
+  toFivePointScale,
 } from './one-shot-eval.js';
-import { createUsageTotals as createJudgeUsageTotals, tokenUsageCostUsd, type JudgeTokenUsage } from './judge-usage.js';
+import {
+  addCallUsage,
+  createCallUsageTotals,
+  tokenUsageCostUsd,
+  type CallUsageReport,
+} from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -78,11 +85,9 @@ const TURNS_PER_TRANSCRIPT_CAP = 3;
 const MAX_SAMPLE_TURN_TOKENS = 12_000;
 /** Refuse — before the marker and before any API call — when the up-front estimate exceeds this. */
 export const MAX_ESTIMATED_SPEND_USD = 8;
-export { YES_FLAG };
 export const LIMIT_FLAG = '--limit';
 export const MARKER_FILENAME = '.judge-agreement.started';
 export const RESULTS_PREFIX = 'judge-agreement-';
-export const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
 /** Estimate only: QAG answers one question per statement, each carrying the context. */
 const QAG_STATEMENTS_ESTIMATE = MAX_STATEMENTS / 2;
 /** Estimate only: same figure the pipeline's --dry-run uses per call. */
@@ -100,14 +105,6 @@ export interface ParsedArgs {
   limit: number;
   /** Set when the invocation must be refused; the message says why. */
   error?: string;
-}
-
-export interface UsageTotals extends JudgeTokenUsage {
-  calls: number;
-}
-
-export interface UsageReport extends UsageTotals {
-  usd: number;
 }
 
 /** Normalized (0–1) scores by evaluation name, one entry per configuration. */
@@ -271,29 +268,8 @@ export function estimateSpend(turns: readonly Turn[], pricing: ModelPricingEntry
 }
 
 // ---------------------------------------------------------------------------
-// Usage totals
-// ---------------------------------------------------------------------------
-
-export function createUsageTotals(): UsageTotals {
-  return { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
-}
-
-export function addUsage(totals: UsageTotals, usage: JudgeTokenUsage): void {
-  totals.calls += 1;
-  totals.inputTokens += usage.inputTokens;
-  totals.outputTokens += usage.outputTokens;
-  totals.cacheCreationInputTokens += usage.cacheCreationInputTokens;
-  totals.cacheReadInputTokens += usage.cacheReadInputTokens;
-}
-
-// ---------------------------------------------------------------------------
 // Agreement math
 // ---------------------------------------------------------------------------
-
-/** Back from the record's 0–1 value to the judge's 1–5 scale. */
-export function toFivePointScale(normalized: number): number {
-  return G_EVAL_MIN_SCORE + normalized * G_EVAL_SCORE_RANGE;
-}
 
 function emptyAgreement(): CriterionAgreement {
   return { paired: 0, exactMatches: 0, exactMatchRate: null, meanAbsDiff: null, perCriterionOnly: 0, consolidatedOnly: 0 };
@@ -371,19 +347,6 @@ export function countMissing(outcomes: readonly TurnOutcome[], side: keyof TurnS
 }
 
 // ---------------------------------------------------------------------------
-// Providers
-// ---------------------------------------------------------------------------
-
-/** The pipeline's own provider (structured score output included), with the usage hook. */
-export function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
-  return createAnthropicProvider(apiKey, createJudgeUsageTotals(), onUsage);
-}
-
-export function scoresByName(records: readonly EvalRecord[]): Record<string, number> {
-  return Object.fromEntries(records.map(r => [r.evaluationName, r.scoreValue]));
-}
-
-// ---------------------------------------------------------------------------
 // Output
 // ---------------------------------------------------------------------------
 
@@ -391,7 +354,7 @@ function cell(value: string | number): string {
   return padCell(value, TABLE_CELL_WIDTH);
 }
 
-function printTable(summary: AgreementSummary, configurations: Record<string, UsageReport>, turnsEvaluated: number): void {
+function printTable(summary: AgreementSummary, configurations: Record<string, CallUsageReport>, turnsEvaluated: number): void {
   console.log(`\n[agreement] ${turnsEvaluated} turns, model ${HAIKU_MODEL}`);
   console.log(
     `${'criterion'.padEnd(TABLE_NAME_WIDTH)}${cell('paired')}${cell('exact')}${cell('mean|d|')}${cell('pc-only')}${cell('cons-only')}`,
@@ -478,13 +441,13 @@ async function main(): Promise<void> {
   writeMarker(DOCS_DIR, { startedAt: startedAt.toISOString(), pid: process.pid, limit: args.limit, turns: sample.turns.length });
   console.log(`[agreement] marker written: ${join(DOCS_DIR, MARKER_FILENAME)} — API calls start now`);
 
-  const perCriterionTotals = createUsageTotals();
-  const consolidatedTotals = createUsageTotals();
-  const llm = await createPerCriterionProvider(credential.apiKey, usage => addUsage(perCriterionTotals, usage));
+  const perCriterionTotals = createCallUsageTotals();
+  const consolidatedTotals = createCallUsageTotals();
+  const llm = await createPerCriterionProvider(credential.apiKey, usage => addCallUsage(perCriterionTotals, usage));
   const judge = createLLMJudge(llm);
   const provider = await createConsolidatedProvider({
     apiKey: credential.apiKey,
-    onUsage: usage => addUsage(consolidatedTotals, usage),
+    onUsage: usage => addCallUsage(consolidatedTotals, usage),
   });
   const stepsCache: EvaluationStepsCache = new Map();
   resetFailureTracking();
@@ -511,7 +474,7 @@ async function main(): Promise<void> {
   });
 
   const summary = computeAgreement(outcomes);
-  const configurations: Record<string, UsageReport> = {
+  const configurations: Record<string, CallUsageReport> = {
     perCriterion: { ...perCriterionTotals, usd: tokenUsageCostUsd(perCriterionTotals, pricing) },
     consolidated: { ...consolidatedTotals, usd: tokenUsageCostUsd(consolidatedTotals, pricing) },
   };
