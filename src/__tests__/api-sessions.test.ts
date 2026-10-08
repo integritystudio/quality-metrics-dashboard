@@ -15,6 +15,7 @@ import { LIMIT_EVALS_SESSION } from '../api/data-loader.js';
 import type { JsonSafe } from '../api/api-constants.js';
 import type { SessionDetailResponse } from '../hooks/useSessionDetail.js';
 import { makeEvaluation } from './support/fixtures.js';
+import { ErrorMessage } from '../lib/constants.js';
 
 /** The route's payload as the page's hook reads it: one declaration, shared with the page test. */
 type SessionDetailBody = JsonSafe<SessionDetailResponse>;
@@ -230,6 +231,24 @@ describe('GET /sessions/:sessionId', () => {
     fixture.failPath('/v1/traces');
     const res = await sessionRoutes.request('/sessions/sess-abc');
     expect(res.status).toBe(500);
+  });
+
+  // An unparseable bound used to reach BigInt(NaN) in the loaders and answer 500.
+  it.each([
+    ['startDate', 'garbage'],
+    ['endDate', '2026-13-45'],
+  ])('returns 400 for an invalid %s', async (param, value) => {
+    const res = await sessionRoutes.request(`/sessions/sess-abc?${param}=${value}`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: ErrorMessage.InvalidDateBound });
+  });
+
+  it.each([
+    ['date-only', 'startDate=2026-01-01&endDate=2026-01-31'],
+    ['ISO datetime', 'startDate=2026-01-01T00:00:00.000Z&endDate=2026-01-31T23:59:59.999Z'],
+  ])('accepts %s bounds', async (_form, query) => {
+    const res = await sessionRoutes.request(`/sessions/sess-abc?${query}`);
+    expect(res.status).toBe(200);
   });
 });
 

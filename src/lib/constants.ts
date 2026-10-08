@@ -24,6 +24,7 @@ export const enum ErrorMessage {
   InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
   InvalidSessionIdFormat = 'Invalid sessionId format',
   InvalidTraceId = 'Invalid traceId',
+  InvalidDateBound = 'Invalid startDate/endDate. Must be YYYY-MM-DD or an ISO 8601 datetime.',
 }
 
 /** Zod schema for coverage input key param. Single source for type, values, and default. */

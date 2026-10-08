@@ -169,6 +169,13 @@ export function toIsoWindowBound(value: string, bound: 'start' | 'end'): string 
   return `${value}${bound === 'start' ? DAY_START_SUFFIX : DAY_END_SUFFIX}`;
 }
 
+/**
+ * An optional `startDate`/`endDate` query param: a date-only 'YYYY-MM-DD' (widened
+ * by {@link toIsoWindowBound}) or the ISO datetime the parent's query tools accept.
+ * Anything else used to reach `BigInt(NaN)` in the loaders and answer 500.
+ */
+export const DateBoundParamSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).optional();
+
 export type SpanLike = { attributes?: Record<string, unknown> };
 
 export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {

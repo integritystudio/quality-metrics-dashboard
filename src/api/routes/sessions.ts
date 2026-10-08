@@ -15,6 +15,7 @@ import {
   PARAM_ID_RE,
   isValidParam,
   toIsoWindowBound,
+  DateBoundParamSchema,
   PERCENT_BASE,
   LATENCY_DISPLAY_PRECISION,
   spanAttr,
@@ -29,7 +30,7 @@ import {
   loadTracesByFilter,
 } from '../data-loader.js';
 import type { StepScore } from '../../types.js';
-import { handleRouteError } from '../route-errors.js';
+import { handleRouteError, parseParam } from '../route-errors.js';
 
 export const sessionRoutes = new Hono();
 sessionRoutes.onError(handleRouteError);
@@ -93,8 +94,8 @@ sessionRoutes.get('/sessions/:sessionId', async (c) => {
   if (!isValidParam(sessionId, PARAM_ID_RE)) {
     return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
   }
-  const startDate = c.req.query('startDate');
-  const endDate = c.req.query('endDate');
+  const startDate = parseParam(DateBoundParamSchema, c.req.query('startDate'), ErrorMessage.InvalidDateBound);
+  const endDate = parseParam(DateBoundParamSchema, c.req.query('endDate'), ErrorMessage.InvalidDateBound);
 
   const [spans, logs, { evaluations, truncated: evaluationsTruncated }] = await Promise.all([
     loadSessionSpans(sessionId, startDate, endDate),
