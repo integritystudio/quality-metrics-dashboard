@@ -1,14 +1,18 @@
 export type {
+  TriggeredAlert,
+  AlertSeverity,
+} from '@parent/lib/quality/quality-alert-schemas.js';
+export type {
+  SLAComplianceResult,
+} from '@parent/lib/quality/quality-sla-schemas.js';
+export type {
   QualityDashboardSummary,
   QualityMetricResult,
   QualityMetricConfig,
-  TriggeredAlert,
   ConfidenceIndicator,
   WorstExplanation,
-  SLAComplianceResult,
-  AlertSeverity,
   TrendDirection,
-} from '@parent/lib/quality/quality-metrics.js';
+} from '@parent/lib/quality/quality-result-schemas.js';
 export type { MetricTrend } from '@parent/lib/quality/quality-constants.js';
 export type {
   PipelineResult,
