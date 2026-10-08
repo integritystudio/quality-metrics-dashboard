@@ -26,6 +26,7 @@
  */
 
 import { readdirSync } from 'fs';
+import { mean, rollup } from 'd3-array';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,
@@ -304,7 +305,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
 
     if (data.tasks.size > 0) {
       const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
-      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const avg = mean(scores) ?? STATUS_SCORES.pending;
       const completed = scores.filter(s => s === STATUS_SCORES.completed).length;
       const inProgress = scores.filter(s => s === STATUS_SCORES.in_progress).length;
       const pending = scores.filter(s => s === STATUS_SCORES.pending).length;
@@ -706,11 +707,11 @@ export function carryForwardDistributions(
  * Rewritten only when the distribution drifts (PSI); a dry run says so instead.
  */
 function updateCalibration(allEvals: readonly EvalRecord[], dryRun: boolean): void {
-  const scoresByMetric: Record<string, number[]> = {};
-  for (const ev of allEvals) {
-    const metricScores = scoresByMetric[ev.evaluationName] ??= [];
-    if (Number.isFinite(ev.scoreValue)) metricScores.push(ev.scoreValue);
-  }
+  const scoresByMetric: Record<string, number[]> = Object.fromEntries(rollup(
+    allEvals,
+    evs => evs.map(ev => ev.scoreValue).filter(Number.isFinite),
+    ev => ev.evaluationName,
+  ));
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
   if (Object.keys(newDistributions).length > 0) {
@@ -788,10 +789,7 @@ async function main(): Promise<void> {
 
   updateCalibration(allEvals, dryRun);
 
-  const byName = new Map<string, number>();
-  for (const ev of inScope) {
-    byName.set(ev.evaluationName, (byName.get(ev.evaluationName) ?? 0) + 1);
-  }
+  const byName = rollup(inScope, evs => evs.length, ev => ev.evaluationName);
   const counts = [...byName].sort(([a], [b]) => a.localeCompare(b)).map(([name, n]) => `${name}=${n}`);
   console.log(`[derive] records: ${counts.join(' ') || 'none'}`);
 
