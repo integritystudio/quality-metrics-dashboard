@@ -1,0 +1,949 @@
+{
+  "generatedAt": "2026-10-08T07:42:04.043Z",
+  "startedAt": "2026-10-08T07:36:58.320Z",
+  "model": "claude-haiku-4-5-20251001",
+  "pricingUsdPerMillion": {
+    "input": 1,
+    "output": 5
+  },
+  "limitRequested": 30,
+  "turnsEvaluated": 30,
+  "turnsWithTools": 17,
+  "sampling": {
+    "turnsPerTranscriptCap": 3,
+    "maxTurnTokens": 12000,
+    "transcriptsDiscovered": 4215,
+    "transcriptsScanned": 14,
+    "skippedOversize": 1
+  },
+  "estimate": {
+    "perCriterionInputTokens": 1067930,
+    "perCriterionCalls": 647,
+    "consolidatedInputTokens": 60397,
+    "consolidatedCalls": 37,
+    "perCriterionUsd": 1.7149299999999998,
+    "consolidatedUsd": 0.09739700000000001,
+    "totalUsd": 1.8123269999999998
+  },
+  "agreement": {
+    "byCriterion": {
+      "coherence": {
+        "paired": 30,
+        "exactMatches": 3,
+        "exactMatchRate": 0.1,
+        "meanAbsDiff": 1.8666666666666667,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      },
+      "faithfulness": {
+        "paired": 17,
+        "exactMatches": 1,
+        "exactMatchRate": 0.058823529411764705,
+        "meanAbsDiff": 2.3019529411764705,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      },
+      "hallucination": {
+        "paired": 17,
+        "exactMatches": 4,
+        "exactMatchRate": 0.23529411764705882,
+        "meanAbsDiff": 1.2787294117647061,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      },
+      "relevance": {
+        "paired": 30,
+        "exactMatches": 19,
+        "exactMatchRate": 0.6333333333333333,
+        "meanAbsDiff": 0.43333333333333335,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      },
+      "tool_arguments": {
+        "paired": 17,
+        "exactMatches": 5,
+        "exactMatchRate": 0.29411764705882354,
+        "meanAbsDiff": 2.0588235294117645,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      },
+      "tool_correctness": {
+        "paired": 17,
+        "exactMatches": 5,
+        "exactMatchRate": 0.29411764705882354,
+        "meanAbsDiff": 1.5294117647058822,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      },
+      "tool_integration": {
+        "paired": 17,
+        "exactMatches": 10,
+        "exactMatchRate": 0.5882352941176471,
+        "meanAbsDiff": 0.7647058823529411,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      },
+      "tool_selection": {
+        "paired": 17,
+        "exactMatches": 9,
+        "exactMatchRate": 0.5294117647058824,
+        "meanAbsDiff": 1,
+        "perCriterionOnly": 0,
+        "consolidatedOnly": 0
+      }
+    },
+    "overall": {
+      "paired": 162,
+      "exactMatches": 56,
+      "exactMatchRate": 0.345679012345679,
+      "meanAbsDiff": 1.3634049382716051,
+      "perCriterionOnly": 0,
+      "consolidatedOnly": 0
+    }
+  },
+  "configurations": {
+    "perCriterion": {
+      "calls": 681,
+      "inputTokens": 1481895,
+      "outputTokens": 62207,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "usd": 1.79293
+    },
+    "consolidated": {
+      "calls": 37,
+      "inputTokens": 144973,
+      "outputTokens": 21780,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "usd": 0.253873
+    }
+  },
+  "savings": {
+    "inputTokenRatio": 10.221868899726156,
+    "usdRatio": 7.062310682900504
+  },
+  "failures": {
+    "perCriterion": {},
+    "consolidated": {},
+    "turnErrors": []
+  },
+  "turns": [
+    {
+      "sessionId": "838331dd-37c2-4123-a79b-11040f47e062",
+      "timestamp": "2026-09-08T20:19:43.498Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.8,
+        "hallucination": 0.1,
+        "tool_correctness": 0.5,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.5,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 0.75,
+        "coherence": 0.25,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "838331dd-37c2-4123-a79b-11040f47e062",
+      "timestamp": "2026-09-08T20:53:08.560Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.55,
+        "hallucination": 0.1,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "838331dd-37c2-4123-a79b-11040f47e062",
+      "timestamp": "2026-09-08T21:30:31.419Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0.5
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0
+      }
+    },
+    {
+      "sessionId": "c2f32204-3eb2-4a74-9bfd-93b3fa59890b",
+      "timestamp": "2026-08-31T18:59:44.988Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.5,
+        "coherence": 0.75
+      }
+    },
+    {
+      "sessionId": "c2f32204-3eb2-4a74-9bfd-93b3fa59890b",
+      "timestamp": "2026-08-31T20:22:36.380Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.25,
+        "faithfulness": 0.5,
+        "hallucination": 0.25,
+        "tool_correctness": 0,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "c2f32204-3eb2-4a74-9bfd-93b3fa59890b",
+      "timestamp": "2026-08-31T20:23:44.726Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.5,
+        "faithfulness": 0,
+        "hallucination": 0.2,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.5,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.75
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 0.75,
+        "hallucination": 0.25,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 0.75,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "0220eb3e-ca14-4fd9-a524-ac7c09ad1293",
+      "timestamp": "2026-09-15T01:48:21.338Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.5,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1
+      }
+    },
+    {
+      "sessionId": "0220eb3e-ca14-4fd9-a524-ac7c09ad1293",
+      "timestamp": "2026-09-15T01:48:44.376Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.7,
+        "hallucination": 0.15,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "0220eb3e-ca14-4fd9-a524-ac7c09ad1293",
+      "timestamp": "2026-09-15T01:50:04.401Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.5,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "04547938-3519-4767-9b8c-de01b2482429",
+      "timestamp": "2026-09-26T04:45:07.192Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1
+      }
+    },
+    {
+      "sessionId": "04547938-3519-4767-9b8c-de01b2482429",
+      "timestamp": "2026-09-26T04:45:54.641Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0,
+        "faithfulness": 0,
+        "hallucination": 0,
+        "tool_correctness": 0,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.25,
+        "tool_integration": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.75,
+        "faithfulness": 0.5,
+        "hallucination": 0.5,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.25,
+        "tool_integration": 0.25
+      }
+    },
+    {
+      "sessionId": "04547938-3519-4767-9b8c-de01b2482429",
+      "timestamp": "2026-09-26T04:46:22.060Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0.25,
+        "faithfulness": 0.3333,
+        "hallucination": 0,
+        "tool_correctness": 0,
+        "tool_selection": 0.25,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.25,
+        "faithfulness": 0.25,
+        "hallucination": 0.75,
+        "tool_correctness": 0,
+        "tool_selection": 0.25,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      }
+    },
+    {
+      "sessionId": "05820cb7-361c-49ef-8e18-7a162a7167e1",
+      "timestamp": "2026-09-05T18:53:59.921Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "05820cb7-361c-49ef-8e18-7a162a7167e1",
+      "timestamp": "2026-09-05T18:58:06.829Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.2,
+        "hallucination": 0.3,
+        "tool_correctness": 0,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.75,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.5
+      }
+    },
+    {
+      "sessionId": "05820cb7-361c-49ef-8e18-7a162a7167e1",
+      "timestamp": "2026-09-05T19:06:30.294Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.85,
+        "hallucination": 0.05,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "073ca7de-036e-478b-9950-ed13297b04bd",
+      "timestamp": "2026-09-16T03:07:34.896Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.75
+      }
+    },
+    {
+      "sessionId": "073ca7de-036e-478b-9950-ed13297b04bd",
+      "timestamp": "2026-09-16T03:14:05.930Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.25
+      }
+    },
+    {
+      "sessionId": "073ca7de-036e-478b-9950-ed13297b04bd",
+      "timestamp": "2026-09-16T03:16:05.062Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0,
+        "hallucination": 0.35,
+        "tool_correctness": 0.25,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "0b908b0b-1b77-4fbe-a49e-cc7def7e110d",
+      "timestamp": "2026-09-25T00:42:29.330Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.25
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1
+      }
+    },
+    {
+      "sessionId": "0b908b0b-1b77-4fbe-a49e-cc7def7e110d",
+      "timestamp": "2026-09-25T00:44:28.784Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0,
+        "faithfulness": 0,
+        "hallucination": 1,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.5,
+        "tool_arguments": 0,
+        "tool_integration": 0.25
+      },
+      "consolidated": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 0,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      }
+    },
+    {
+      "sessionId": "0d8c694b-577c-41dc-a784-558677629675",
+      "timestamp": "2026-09-15T00:30:47.540Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1
+      }
+    },
+    {
+      "sessionId": "1003b2f1-f1ae-488e-819e-9581098dcb18",
+      "timestamp": "2026-09-08T19:59:00.708Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "1003b2f1-f1ae-488e-819e-9581098dcb18",
+      "timestamp": "2026-09-08T20:08:11.471Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.45,
+        "hallucination": 0.2,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.25,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "1003b2f1-f1ae-488e-819e-9581098dcb18",
+      "timestamp": "2026-09-08T20:10:37.745Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0.25,
+        "faithfulness": 0,
+        "hallucination": 1,
+        "tool_correctness": 0,
+        "tool_selection": 0,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      },
+      "consolidated": {
+        "relevance": 0.25,
+        "coherence": 0.5,
+        "faithfulness": 0.25,
+        "hallucination": 0.75,
+        "tool_correctness": 0.5,
+        "tool_selection": 0,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.5
+      }
+    },
+    {
+      "sessionId": "11779142-49eb-4361-ab8e-d04fe0cdbbf7",
+      "timestamp": "2026-09-15T00:20:22.149Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.25,
+        "coherence": 0
+      },
+      "consolidated": {
+        "relevance": 0.5,
+        "coherence": 0.5
+      }
+    },
+    {
+      "sessionId": "12ec9228-7df7-4fd9-b5e3-e52cdaec7869",
+      "timestamp": "2026-09-28T03:50:50.954Z",
+      "hasTools": false,
+      "expected": [
+        "relevance",
+        "coherence"
+      ],
+      "perCriterion": {
+        "relevance": 0.5,
+        "coherence": 0.25
+      },
+      "consolidated": {
+        "relevance": 0.5,
+        "coherence": 0.75
+      }
+    },
+    {
+      "sessionId": "12ec9228-7df7-4fd9-b5e3-e52cdaec7869",
+      "timestamp": "2026-09-28T03:52:59.936Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 0.75,
+        "coherence": 0.75,
+        "faithfulness": 0,
+        "hallucination": 0.5,
+        "tool_correctness": 0,
+        "tool_selection": 0.5,
+        "tool_arguments": 0,
+        "tool_integration": 0
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "12ec9228-7df7-4fd9-b5e3-e52cdaec7869",
+      "timestamp": "2026-09-28T04:06:36.382Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 0.5,
+        "tool_arguments": 0.5,
+        "tool_integration": 0.75
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 0.75,
+        "hallucination": 0.25,
+        "tool_correctness": 0.25,
+        "tool_selection": 0.25,
+        "tool_arguments": 0.25,
+        "tool_integration": 0.25
+      }
+    },
+    {
+      "sessionId": "159da9a2-8ea4-4ace-b0ee-1b78901b73ff",
+      "timestamp": "2026-09-22T23:17:55.312Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0.5,
+        "hallucination": 0.25,
+        "tool_correctness": 0.75,
+        "tool_selection": 0.25,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    },
+    {
+      "sessionId": "159da9a2-8ea4-4ace-b0ee-1b78901b73ff",
+      "timestamp": "2026-09-22T23:22:39.209Z",
+      "hasTools": true,
+      "expected": [
+        "relevance",
+        "coherence",
+        "faithfulness",
+        "hallucination",
+        "tool_correctness",
+        "tool_selection",
+        "tool_arguments",
+        "tool_integration"
+      ],
+      "perCriterion": {
+        "relevance": 1,
+        "coherence": 0.75,
+        "faithfulness": 0,
+        "hallucination": 0.3846,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 0,
+        "tool_integration": 1
+      },
+      "consolidated": {
+        "relevance": 1,
+        "coherence": 1,
+        "faithfulness": 1,
+        "hallucination": 0,
+        "tool_correctness": 1,
+        "tool_selection": 1,
+        "tool_arguments": 1,
+        "tool_integration": 1
+      }
+    }
+  ]
+}
