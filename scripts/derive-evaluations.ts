@@ -110,7 +110,8 @@ function ruleRecord(span: LocalTraceSpan, sessionId: string, score: RuleScore): 
  * failure. Cloud spans arrive canonicalized already, and a bag with no legacy
  * key is returned as-is, so this is free on the cloud path. Memoized per
  * attribute bag: the derivations and the drift check each read every span, so
- * a legacy-keyed bag was otherwise rebuilt up to five times.
+ * a legacy-keyed bag was otherwise rebuilt up to five times. Assumes attribute
+ * bags are never mutated after load; mutating one would serve a stale result.
  */
 const canonicalAttrs = new WeakMap<LocalTraceSpan['attributes'], Record<string, unknown>>();
 
