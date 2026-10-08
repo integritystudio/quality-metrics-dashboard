@@ -6,6 +6,7 @@ import {
   buildStepsPrompt,
   parseConsolidatedResponse,
   validateVerdict,
+  toFivePointScale,
   toNormalizedScore,
   evaluateTurnConsolidated,
   cachedEvaluationSteps,
@@ -296,6 +297,12 @@ describe('toNormalizedScore', () => {
     expect(toNormalizedScore(G_EVAL_MIN_SCORE)).toBe(0);
     expect(toNormalizedScore(4)).toBe(0.75);
     expect(toNormalizedScore(G_EVAL_MAX_SCORE)).toBe(1);
+  });
+
+  it('is inverted by toFivePointScale', () => {
+    for (let score = G_EVAL_MIN_SCORE; score <= G_EVAL_MAX_SCORE; score++) {
+      expect(toFivePointScale(toNormalizedScore(score))).toBe(score);
+    }
   });
 });
 

@@ -41,6 +41,7 @@ import {
   createConsolidatedProvider,
   evaluateTurnConsolidated,
   selectCriteria,
+  toFivePointScale,
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
 import { parseCli, positiveIntArg } from './cli-args.js';
@@ -61,7 +62,6 @@ import {
   scoresByName,
   spendCapReason,
   tableRow,
-  toFivePointScale,
 } from './one-shot-eval.js';
 import {
   addCallUsage,

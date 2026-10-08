@@ -8,7 +8,6 @@ import { closeSync, constants, existsSync, mkdirSync, openSync, readdirSync, wri
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
-import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE } from '../../src/lib/judge/llm-judge-constants.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CliArgError } from './cli-args.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
@@ -151,11 +150,6 @@ export function formatRate(rate: number | null): string {
 
 export function formatDiff(diff: number | null | undefined): string {
   return diff === null || diff === undefined ? '-' : diff.toFixed(DIFF_DECIMALS);
-}
-
-/** Back from the record's 0–1 value to the judge's 1–5 scale. */
-export function toFivePointScale(normalized: number): number {
-  return G_EVAL_MIN_SCORE + normalized * G_EVAL_SCORE_RANGE;
 }
 
 export function scoresByName(records: readonly EvalRecord[]): Record<string, number> {

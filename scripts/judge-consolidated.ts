@@ -416,6 +416,11 @@ export function toNormalizedScore(score: number): number {
   return (score - G_EVAL_MIN_SCORE) / G_EVAL_SCORE_RANGE;
 }
 
+/** The inverse of {@link toNormalizedScore}: a record's 0–1 value back on the judge's 1–5 scale. */
+export function toFivePointScale(normalized: number): number {
+  return G_EVAL_MIN_SCORE + normalized * G_EVAL_SCORE_RANGE;
+}
+
 function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, explanation: string): EvalRecord {
   return {
     timestamp: turn.timestamp,

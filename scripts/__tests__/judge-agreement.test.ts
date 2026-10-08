@@ -20,7 +20,7 @@ import {
 } from '../judge-agreement.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
-import { RESULTS_SUFFIX, YES_FLAG, toFivePointScale } from '../one-shot-eval.js';
+import { RESULTS_SUFFIX, YES_FLAG } from '../one-shot-eval.js';
 import {
   addCallUsage,
   charsToTokens,
@@ -91,12 +91,6 @@ describe('refusalReason', () => {
 });
 
 describe('agreement math', () => {
-  it('maps 0-1 back onto the 1-5 scale', () => {
-    expect(toFivePointScale(0)).toBe(1);
-    expect(toFivePointScale(0.75)).toBe(4);
-    expect(toFivePointScale(1)).toBe(5);
-  });
-
   it('computes exact-match rate and mean absolute difference per criterion', () => {
     const turns: TurnScores[] = [
       { perCriterion: { [RELEVANCE_EVAL_NAME]: 0.75, [COHERENCE_EVAL_NAME]: 1 }, consolidated: { [RELEVANCE_EVAL_NAME]: 0.75, [COHERENCE_EVAL_NAME]: 0.5 } },

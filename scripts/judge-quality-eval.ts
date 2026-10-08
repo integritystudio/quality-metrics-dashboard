@@ -49,6 +49,7 @@ import {
   cachedEvaluationSteps,
   parseConsolidatedResponse,
   selectCriteria,
+  toFivePointScale,
   toNormalizedScore,
   type ConsolidatedGenerateOptions,
   type ConsolidatedProvider,
@@ -77,7 +78,6 @@ import {
   padCell,
   tableRow,
   spendCapReason,
-  toFivePointScale,
 } from './one-shot-eval.js';
 import {
   addCallUsage,
