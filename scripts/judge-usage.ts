@@ -119,10 +119,19 @@ export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntr
   return tokenUsageCostUsd(toJudgeTokenUsage(totals), pricing);
 }
 
+/** Estimated tokens for `chars` characters of prompt text (TOKENS_PER_CHAR, rounded up). */
+export function charsToTokens(chars: number): number {
+  return Math.ceil(chars * TOKENS_PER_CHAR);
+}
+
+/** Combined length of `texts`. */
+export function totalChars(texts: readonly string[]): number {
+  return texts.reduce((sum, text) => sum + text.length, 0);
+}
+
 /** Tokens the judge sees for one turn (tool context fitted as the judge fits it), by chars-per-token. */
 export function estimateTurnTokens(turn: Turn): number {
-  const contextChars = fitContextForJudge(turn.toolResults).reduce((sum, item) => sum + item.length, 0);
-  return Math.ceil((turn.userText.length + turn.assistantText.length + contextChars) * TOKENS_PER_CHAR);
+  return charsToTokens(turn.userText.length + turn.assistantText.length + totalChars(fitContextForJudge(turn.toolResults)));
 }
 
 /** List cost of an estimate's tokens, at the batch rate when `batch`. */
@@ -169,11 +178,10 @@ export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolid
   let inputTokens = 0;
   for (const t of turns) {
     const turnEvals = PER_CRITERION_BASE_CALLS + (t.toolResults.length > 0 ? PER_CRITERION_TOOL_CALLS : 0);
-    const contentChars = t.userText.length + t.assistantText.length
-      + t.toolResults.reduce((s, r) => s + r.length, 0);
+    const contentChars = t.userText.length + t.assistantText.length + totalChars(t.toolResults);
     evals += turnEvals;
     // Every per-criterion call resends the turn's content.
-    inputTokens += Math.ceil(contentChars * TOKENS_PER_CHAR) * turnEvals;
+    inputTokens += charsToTokens(contentChars) * turnEvals;
   }
   const outputTokens = evals * EST_OUTPUT_TOKENS_PER_EVAL;
   const costUsd = estimateCostUsd(inputTokens, outputTokens, batch);

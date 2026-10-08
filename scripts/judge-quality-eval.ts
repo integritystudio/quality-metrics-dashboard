@@ -33,7 +33,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
-import { TOKENS_PER_CHAR, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import {
   _discoverTranscripts,
@@ -81,11 +81,13 @@ import {
 } from './one-shot-eval.js';
 import {
   addCallUsage,
+  charsToTokens,
   createCallUsageTotals,
   judgePricing,
   listCostUsd,
   tokenUsageCostUsd,
   toJudgeTokenUsage,
+  totalChars,
   type CallUsageReport,
   type CallUsageTotals,
   type JudgeTokenUsage,
@@ -247,13 +249,10 @@ async function loadOrFreezeTurns(wanted: readonly AgreementTurn[]): Promise<Turn
 /** Tokens one reference call sends for this criterion — only the parts the criterion reads. */
 export function estimateCallInputTokens(turn: Turn, config: GEvalConfig): number {
   const params = new Set(config.evaluationParams);
-  const contextChars = params.has('context')
-    ? fitContextForJudge(turn.toolResults).reduce((sum, item) => sum + item.length, 0)
-    : 0;
   const chars = (params.has('input') ? turn.userText.length : 0)
     + (params.has('output') ? turn.assistantText.length : 0)
-    + contextChars;
-  return Math.ceil(chars * TOKENS_PER_CHAR) + PROMPT_OVERHEAD_TOKENS_ESTIMATE;
+    + (params.has('context') ? totalChars(fitContextForJudge(turn.toolResults)) : 0);
+  return charsToTokens(chars) + PROMPT_OVERHEAD_TOKENS_ESTIMATE;
 }
 
 export function estimateReferenceSpend(

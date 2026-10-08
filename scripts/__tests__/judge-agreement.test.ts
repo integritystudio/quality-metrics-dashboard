@@ -23,10 +23,12 @@ import { type Turn } from '../judge-turns.js';
 import { RESULTS_SUFFIX, YES_FLAG, toFivePointScale } from '../one-shot-eval.js';
 import {
   addCallUsage,
+  charsToTokens,
   createCallUsageTotals,
   estimateTurnTokens,
   judgePricing,
   tokenUsageCostUsd,
+  totalChars,
   CACHE_CREATION_INPUT_PRICE_RATIO,
   CACHE_READ_INPUT_PRICE_RATIO,
 } from '../judge-usage.js';
@@ -142,6 +144,13 @@ describe('usage and cost', () => {
     const usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: ONE_MILLION, cacheReadInputTokens: ONE_MILLION };
     const expected = PRICING.input * (CACHE_CREATION_INPUT_PRICE_RATIO + CACHE_READ_INPUT_PRICE_RATIO);
     expect(tokenUsageCostUsd(usage, PRICING)).toBeCloseTo(expected);
+  });
+
+  it('sums text lengths and rounds the token estimate up', () => {
+    expect(totalChars(['ab', '', 'cde'])).toBe(5);
+    expect(totalChars([])).toBe(0);
+    expect(charsToTokens(0)).toBe(0);
+    expect(charsToTokens(1)).toBe(1);
   });
 
   it('prices the judge model by default and throws for an unpriced model', () => {
