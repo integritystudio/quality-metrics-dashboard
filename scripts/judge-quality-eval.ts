@@ -60,7 +60,7 @@ import {
   listResultsFiles as listAgreementFiles,
   type CriterionAgreement,
 } from './judge-agreement.js';
-import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { parseCli } from './cli-args.js';
 import {
   DOCS_DIR,
@@ -364,7 +364,7 @@ export async function createReferenceProvider(
       if (response.stop_reason === MAX_TOKENS_STOP_REASON) {
         throw new Error(`Reference truncated at ${MAX_TOKENS_STOP_REASON}`);
       }
-      const text = response.content.flatMap(block => (block.type === 'text' ? [block.text] : [])).join('');
+      const text = responseText(response.content);
       return { text, usage };
     },
   };

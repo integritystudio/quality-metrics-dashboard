@@ -79,7 +79,7 @@ import {
 } from './judge-criteria.js';
 import { judgedByKey, turnKeyOf } from './judge-dedup.js';
 import { evalFailures, failureClasses, classifyJudgeFailure } from './judge-failures.js';
-import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
@@ -543,7 +543,7 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
       if (response.stop_reason === MAX_TOKENS_STOP_REASON) {
         throw new Error(`Could not parse consolidated verdict: response truncated at ${MAX_TOKENS_STOP_REASON}`);
       }
-      const text = response.content.flatMap(block => (block.type === 'text' ? [block.text] : [])).join('');
+      const text = responseText(response.content);
       return { text, usage };
     },
   };

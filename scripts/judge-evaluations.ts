@@ -68,7 +68,7 @@ import {
 import { toDateOnly } from '../src/api/api-constants.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, type AccountIndex } from './account-stamps.js';
-import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { sleep } from './sleep.js';
 import { discoverFromCloud } from './judge-cloud-source.js';
 import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched } from './judge-consolidated.js';
@@ -239,10 +239,7 @@ export function anthropicProviderFor(
         onUsage?.(toJudgeTokenUsage(response.usage));
       }
 
-      const text = response.content
-        .filter((b: { type: string; text?: string }) => b.type === 'text')
-        .map((b: { type: string; text?: string }) => b.text)
-        .join('');
+      const text = responseText(response.content);
 
       // Anthropic Messages API doesn't support logprobs, so G-Eval
       // falls back to text-parsed scores. This may cause score clustering

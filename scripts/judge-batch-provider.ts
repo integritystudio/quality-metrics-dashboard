@@ -29,7 +29,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import type { ProviderUsage } from './judge-usage.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
-import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey } from './judge-credentials.js';
 import { sleep } from './sleep.js';
 
@@ -172,13 +172,6 @@ function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
 
-function textOf(message: Anthropic.Messages.Message): string {
-  return message.content
-    .filter((block): block is Anthropic.Messages.TextBlock => block.type === 'text')
-    .map(block => block.text)
-    .join('');
-}
-
 interface Pending {
   resolve: (result: GenerateResult) => void;
   reject: (error: Error) => void;
@@ -308,7 +301,7 @@ class MessageBatchProvider implements BatchLLMProvider {
       if (result.type === 'succeeded') {
         // `usage` is required on a succeeded message; only the callback is optional.
         this.options.onUsage?.(result.message.usage);
-        pending.resolve({ text: textOf(result.message) });
+        pending.resolve({ text: responseText(result.message.content) });
         return;
       }
       const detail = result.type === 'errored' ? `${result.error.error.type}: ${result.error.error.message}` : undefined;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type IncomingHttpHeaders, type Server } from 'http';
 import type { AddressInfo } from 'net';
-import { createJudgeAnthropicClient } from '../judge-anthropic-client.js';
+import { createJudgeAnthropicClient, responseText } from '../judge-anthropic-client.js';
 
 // Placeholder, not a credential: the local server only echoes it back.
 const API_KEY = 'test-key-value';
@@ -56,5 +56,16 @@ describe('createJudgeAnthropicClient', () => {
     const last = received.at(-1)!;
     expect(last.headers['x-api-key']).toBe(API_KEY);
     expect(last.httpVersion).toBe('1.1');
+  });
+});
+
+describe('responseText', () => {
+  it('joins the text blocks and drops the rest', () => {
+    const content = [
+      { type: 'thinking', thinking: 'hmm', signature: 'sig' },
+      { type: 'text', text: 'Score: ', citations: null },
+      { type: 'text', text: '4', citations: null },
+    ] as const;
+    expect(responseText(content)).toBe('Score: 4');
   });
 });

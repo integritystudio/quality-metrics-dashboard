@@ -38,3 +38,8 @@ export async function createJudgeAnthropicClient(options: ClientOptions = {}): P
   const { default: AnthropicClient } = await import('@anthropic-ai/sdk');
   return new AnthropicClient({ ...options, fetch: await getHttp1Fetch() });
 }
+
+/** A Messages API response's text blocks, joined; thinking and tool blocks are dropped. */
+export function responseText(content: readonly Anthropic.Messages.ContentBlock[]): string {
+  return content.flatMap(block => (block.type === 'text' ? [block.text] : [])).join('');
+}
