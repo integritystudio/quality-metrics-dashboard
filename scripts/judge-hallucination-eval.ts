@@ -33,7 +33,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
-import { MODEL_PRICING, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import { fitContextForJudge, type Turn } from './judge-turns.js';
@@ -86,6 +86,7 @@ import {
 import {
   addCallUsage,
   createCallUsageTotals,
+  judgePricing,
   listCostUsd,
   tokenUsageCostUsd,
   type CallUsageReport,
@@ -287,9 +288,8 @@ async function main(): Promise<void> {
   const reason = refusalReason(DOCS_DIR);
   if (reason) return refuse(reason);
 
-  const haikuPricing = MODEL_PRICING[HAIKU_MODEL];
-  const referencePricing = MODEL_PRICING[REFERENCE_MODEL];
-  if (!haikuPricing || !referencePricing) return refuse(`no pricing data for ${HAIKU_MODEL} or ${REFERENCE_MODEL}`);
+  const haikuPricing = judgePricing();
+  const referencePricing = judgePricing(REFERENCE_MODEL);
 
   if (!existsSync(FROZEN_TURNS_PATH)) return refuse(`no frozen turns at ${FROZEN_TURNS_PATH}; judge-quality-eval.ts writes them`);
   const frozen = JSON.parse(readFileSync(FROZEN_TURNS_PATH, 'utf8')) as Turn[];

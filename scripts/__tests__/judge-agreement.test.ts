@@ -25,6 +25,7 @@ import {
   addCallUsage,
   createCallUsageTotals,
   estimateTurnTokens,
+  judgePricing,
   tokenUsageCostUsd,
   CACHE_CREATION_INPUT_PRICE_RATIO,
   CACHE_READ_INPUT_PRICE_RATIO,
@@ -141,6 +142,12 @@ describe('usage and cost', () => {
     const usage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: ONE_MILLION, cacheReadInputTokens: ONE_MILLION };
     const expected = PRICING.input * (CACHE_CREATION_INPUT_PRICE_RATIO + CACHE_READ_INPUT_PRICE_RATIO);
     expect(tokenUsageCostUsd(usage, PRICING)).toBeCloseTo(expected);
+  });
+
+  it('prices the judge model by default and throws for an unpriced model', () => {
+    expect(judgePricing().input).toBeGreaterThan(0);
+    expect(() => judgePricing('no-such-model')).toThrow(/No pricing data for model no-such-model/);
+    expect(() => judgePricing('toString')).toThrow(/No pricing data/);
   });
 
   it('accumulates usage and call counts', () => {

@@ -33,7 +33,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
-import { MODEL_PRICING, TOKENS_PER_CHAR, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import { TOKENS_PER_CHAR, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import {
   _discoverTranscripts,
@@ -82,6 +82,7 @@ import {
 import {
   addCallUsage,
   createCallUsageTotals,
+  judgePricing,
   listCostUsd,
   tokenUsageCostUsd,
   toJudgeTokenUsage,
@@ -463,8 +464,7 @@ async function main(): Promise<void> {
   const reason = refusalReason(DOCS_DIR);
   if (reason) return refuse(reason);
 
-  const pricing = MODEL_PRICING[REFERENCE_MODEL];
-  if (!pricing) return refuse(`no pricing data for model ${REFERENCE_MODEL}`);
+  const pricing = judgePricing(REFERENCE_MODEL);
 
   const agreementPath = resolveAgreementPath(DOCS_DIR, args.agreementPath);
   if (!agreementPath) return refuse('no judge-agreement results file to evaluate; run judge-agreement.ts first');

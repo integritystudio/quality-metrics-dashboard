@@ -90,10 +90,10 @@ export function recordUsage(totals: JudgeUsageTotals, usage: ProviderUsage): voi
   totals.cache_creation_input_tokens += usage.cache_creation_input_tokens ?? 0;
 }
 
-/** List pricing for the judge model; throws rather than pricing a run at $0. */
-export function judgePricing(): ModelPricingEntry {
-  const pricing = MODEL_PRICING[HAIKU_MODEL];
-  if (!pricing) throw new Error(`No pricing data for model ${HAIKU_MODEL}`);
+/** List pricing for `model` (the judge's by default); throws rather than pricing a run at $0. */
+export function judgePricing(model: string = HAIKU_MODEL): ModelPricingEntry {
+  const pricing = Object.hasOwn(MODEL_PRICING, model) ? MODEL_PRICING[model] : undefined;
+  if (!pricing) throw new Error(`No pricing data for model ${model}`);
   return pricing;
 }
 
