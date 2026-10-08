@@ -209,6 +209,20 @@ describe('GET /agents/:sessionId/graph', () => {
     expect(body.graph.nodes.map(n => n.id).sort()).toEqual(['Explore', 'general-purpose']);
   });
 
+  // The route once scored a step as failed only on status 'ERROR', so a span that
+  // failed by its has_error attribute scored 1 here and 0 in the graph KV serves.
+  it('scores a step that failed by its has_error attribute as 0, as the KV graph does', async () => {
+    fixture.setTraces([
+      makeAgentSpanWire('trace-001', 'span-001', 'general-purpose'),
+      makeAgentSpanWire('trace-001', 'span-002', 'Explore', { 'integritystudio.agent.has_error': true }),
+    ]);
+
+    const res = await agentRoutes.request('/agents/sess-001/graph');
+
+    const body = (await res.json()) as AgentGraphResponse;
+    expect(body.evaluation?.turns.map(t => t.relevance)).toEqual([1, 0]);
+  });
+
   it('reads the session traces and never requests evaluations', async () => {
     fixture.setTraces([makeAgentSpanWire()]);
 

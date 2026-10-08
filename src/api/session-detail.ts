@@ -391,20 +391,25 @@ function computeLogSummary(logs: SessionLog[]) {
   };
 }
 
-function computeMultiAgent<M>(spans: SessionSpan[], evaluate: MultiAgentEvaluator<M>): M {
+/** Each span's agent by span index; a span with no `gen_ai.agent.name` is left out. */
+export function sessionAgentMap(spans: SessionSpan[]): Map<number, string> {
   const agentMap = new Map<number, string>();
   spans.forEach((span, i) => {
     // Hooks emit the semconv 'gen_ai.agent.name'. The pre-OBP7b 'agent.name' stopped
-    // on 2026-07-12, older than every window this detail is built from, so it is not read.
+    // on 2026-07-12, older than every window a session is read over, so it is not read.
     const agent = spanAttr(span, 'gen_ai.agent.name', 'string');
     if (agent) agentMap.set(i, agent);
   });
-  const stepScores: StepScore[] = spans.map((span, i) => ({
+  return agentMap;
+}
+
+/** One step per span: its `evaluation.score`, else 0 when the span errored and 1 when it did not. */
+export function sessionStepScores(spans: SessionSpan[]): StepScore[] {
+  return spans.map((span, i) => ({
     step: i,
     score: spanAttr(span, 'evaluation.score', 'number') ?? (isSpanError(span) ? 0 : 1),
     explanation: span.name,
   }));
-  return evaluate(stepScores, agentMap);
 }
 
 export function computeSessionDetail<E extends SessionEvaluation, M>(
@@ -437,7 +442,7 @@ export function computeSessionDetail<E extends SessionEvaluation, M>(
     codeStructure: computeCodeStructure(spans),
     evaluationBreakdown: computeEvalBreakdown(evaluations),
     logSummary: computeLogSummary(logs),
-    multiAgentEvaluation: computeMultiAgent(spans, evaluateMultiAgent),
+    multiAgentEvaluation: evaluateMultiAgent(sessionStepScores(spans), sessionAgentMap(spans)),
     evaluations,
   };
 }

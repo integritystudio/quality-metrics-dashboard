@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds, loadTracesByFilter } from '../data-loader.js';
-import type { StepScore } from '../../types.js';
 import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
 import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs, jsonSafe } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
+import { sessionAgentMap, sessionStepScores } from '../session-detail.js';
 import { mean } from 'd3-array';
 import { handleRouteError } from '../route-errors.js';
 
@@ -161,27 +161,19 @@ type SessionSpans = Awaited<ReturnType<typeof loadTracesBySessionId>>;
 
 /** Maps each span index to its agent name, and collects the session's trace ids. */
 function indexSessionSpans(spans: SessionSpans) {
-  // Hooks emit the semconv 'gen_ai.agent.name'; the pre-OBP7b 'agent.name' stopped
-  // on 2026-07-12, older than any window this route reads, so it is not read.
-  // The agentMap built here is used by computeMultiAgentEvaluation only.
-  const agentMap = new Map<number, string>();
   const traceIds = new Set<string>();
-  spans.forEach((span, i) => {
-    const agent = attrStr(span, 'gen_ai.agent.name', '');
-    if (agent) agentMap.set(i, agent);
+  for (const span of spans) {
     if (span.traceId) traceIds.add(span.traceId);
-  });
-  return { agentMap, traceIds };
+  }
+  return { agentMap: sessionAgentMap(spans), traceIds };
 }
 
-/** The session's multi-agent evaluation, and the workflow graph built from it. */
+/**
+ * The session's multi-agent evaluation, and the workflow graph built from it. Step scores
+ * come from the session detail's rules, so this graph matches the one the KV sync precomputes.
+ */
 function deriveSessionWorkflow(spans: SessionSpans, agentMap: Map<number, string>) {
-  const stepScores: StepScore[] = spans.map((span, i) => ({
-    step: i,
-    score: attrNum(span, 'evaluation.score', span.status?.code === 'ERROR' ? 0 : 1),
-    explanation: span.name,
-  }));
-  const evaluation = computeMultiAgentEvaluation(stepScores, agentMap);
+  const evaluation = computeMultiAgentEvaluation(sessionStepScores(spans), agentMap);
   return { evaluation, graph: buildWorkflowGraph(evaluation, spans) };
 }
 
