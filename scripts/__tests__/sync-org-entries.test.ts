@@ -10,7 +10,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   addRecentSession,
   computeOrgEntries,
-  computeSessionDetail,
   dashboardEntry,
   QUERY_LIMIT,
   type OrgComputation,
@@ -319,45 +318,6 @@ describe('computeOrgEntries evaluation truncation', () => {
       const session = entryValue<SessionValue>(result, `session:${SESSION_ID}`);
 
       expect(session?.dataSources.evaluations).not.toHaveProperty('truncated');
-    });
-  });
-});
-
-describe('computeSessionDetail timespan', () => {
-  it('is null when the session has no evaluations', () => {
-    expect(computeSessionDetail(SESSION_ID, [], []).timespan).toBeNull();
-  });
-
-  it('spans the earliest to the latest evaluation, whatever their order', () => {
-    const detail = computeSessionDetail(SESSION_ID, [], [
-      evaluation('late', '2026-10-01T01:30:00.000Z'),
-      evaluation('early', '2026-10-01T00:00:00.000Z'),
-      evaluation('middle', '2026-10-01T00:45:00.000Z'),
-    ]);
-
-    expect(detail.timespan).toEqual({
-      start: '2026-10-01T00:00:00.000Z',
-      end: '2026-10-01T01:30:00.000Z',
-      durationHours: 1.5,
-    });
-  });
-
-  it('rounds the duration to one decimal hour', () => {
-    const detail = computeSessionDetail(SESSION_ID, [], [
-      evaluation('start', '2026-10-01T00:00:00.000Z'),
-      evaluation('end', '2026-10-01T01:04:00.000Z'),
-    ]);
-
-    expect(detail.timespan?.durationHours).toBe(1.1);
-  });
-
-  it('has zero duration for a single evaluation', () => {
-    const detail = computeSessionDetail(SESSION_ID, [], [evaluation('only', '2026-10-01T00:00:00.000Z')]);
-
-    expect(detail.timespan).toEqual({
-      start: '2026-10-01T00:00:00.000Z',
-      end: '2026-10-01T00:00:00.000Z',
-      durationHours: 0,
     });
   });
 });

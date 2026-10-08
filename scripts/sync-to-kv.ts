@@ -33,7 +33,7 @@ import {
 import { computeRoleView, computeMetricDetail } from '../../src/lib/quality/quality-views.js';
 import { computePipelineView, computeCoverageMatrix } from '../../src/lib/quality/quality-visualization.js';
 import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
-import type { EvaluationResult, StepScore, TraceSpan } from '../../src/backends/index.js';
+import type { EvaluationResult, TraceSpan } from '../../src/backends/index.js';
 import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/qfe-dynamics.js';
 import { computeCorrelationMatrix } from '../../src/lib/quality/qfe-correlation.js';
 import {
@@ -69,26 +69,18 @@ import {
   loadJsonWithValidation,
   importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
-import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, SCORE_DISPLAY_PRECISION, type Period } from '../src/lib/constants.js';
-import { isSpanError, extractGitCommit } from '../src/api/session-detail.js';
+import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, type Period } from '../src/lib/constants.js';
+import { computeSessionDetail, type AgentActivityEntry } from '../src/api/session-detail.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
 import { BYTES, PERCENT_MULTIPLIER, TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, SECONDS } from '../../src/lib/core/units.js';
 import {
-  FILE_ACCESS_TOP_N,
   SCORE_ROUND_FACTOR,
-  LATENCY_P50,
   LATENCY_P95,
-  LATENCY_DISPLAY_PRECISION,
   RATE_DISPLAY_PRECISION,
-  HOOK_NAME,
-  incrementCount,
-  spanAttr,
-  renamedAttr,
-  gitRepositoryLabel,
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
-import { ascending, extent, group, max, mean, min, minIndex, quantileSorted, rollup } from 'd3-array';
+import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 
@@ -662,14 +654,6 @@ export function prioritizeTraces(
   return result;
 }
 
-type SessionSpan = {
-  name: string;
-  traceId?: string;
-  durationMs?: number;
-  status?: { code?: number | string };
-  attributes?: Record<string, unknown>;
-};
-
 function spanSessionId(span: { attributes?: Record<string, unknown> }): string | undefined {
   return (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
 }
@@ -687,143 +671,6 @@ function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
   let group = map.get(key);
   if (!group) map.set(key, group = []);
   group.push(value);
-}
-
-function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated = false) {
-  const traceIdSet = new Set<string>();
-  for (const s of spans) {
-    if (s.traceId) traceIdSet.add(s.traceId);
-  }
-  return {
-    traces: { count: spans.length, traceIds: traceIdSet.size },
-    logs: { count: 0 },
-    evaluations: { count: evaluations.length, ...(evaluationsTruncated && { truncated: true }) },
-    total: spans.length + evaluations.length,
-  };
-}
-
-function computeTimespan(evaluations: EvaluationResult[]) {
-  const [tsMin, tsMax] = extent(evaluations, ev => Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT));
-  return tsMin !== undefined ? {
-    start: new Date(tsMin).toISOString(),
-    end: new Date(tsMax).toISOString(),
-    durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(1),
-  } : null;
-}
-
-function computeSessionInfo(spans: SessionSpan[]) {
-  const sessionStarts = spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.SESSION_START);
-  const first = sessionStarts.at(0);
-  if (!first) return null;
-  const last = sessionStarts.at(-1) ?? first;
-  return {
-    projectName: renamedAttr(first, 'integritystudio.project.name', 'project.name', 'string') ?? 'unknown',
-    workingDirectory: renamedAttr(first, 'process.working_directory', 'working.directory') ?? '',
-    gitRepository: gitRepositoryLabel(first),
-    gitBranch: spanAttr(first, 'vcs.ref.head.name', 'string') ?? '',
-    nodeVersion: renamedAttr(first, 'process.runtime.version', 'node.version') ?? '',
-    resumeCount: sessionStarts.length,
-    initialMessageCount: renamedAttr(first, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
-    initialContextTokens: renamedAttr(first, 'integritystudio.context.estimated_tokens', 'context.estimated_tokens', 'number') ?? 0,
-    finalMessageCount: renamedAttr(last, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
-    taskCount: renamedAttr(first, 'integritystudio.tasks.active', 'tasks.active', 'number') ?? 0,
-    uncommittedAtStart: spanAttr(first, 'integritystudio.git.uncommitted', 'number') ?? 0,
-  };
-}
-
-function computeTokenMetrics(spans: SessionSpan[]) {
-  const tokenProgression = spans
-    .filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.TOKEN_METRICS)
-    .map(s => ({
-      messages: renamedAttr(s, 'integritystudio.tokens.messages', 'tokens.messages', 'number') ?? 0,
-      inputTokens: renamedAttr(s, 'integritystudio.tokens.input', 'tokens.input', 'number') ?? 0,
-      outputTokens: renamedAttr(s, 'integritystudio.tokens.output', 'tokens.output', 'number') ?? 0,
-      cacheRead: renamedAttr(s, 'integritystudio.tokens.cache_read', 'tokens.cache_read', 'number') ?? 0,
-      cacheCreation: renamedAttr(s, 'integritystudio.tokens.cache_creation', 'tokens.cache_creation', 'number') ?? 0,
-      model: renamedAttr(s, 'integritystudio.tokens.model', 'tokens.model', 'string') ?? '',
-    }))
-    .sort((a, b) => a.messages - b.messages);
-
-  const tokenTotals = {
-    input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
-    models: {} as Record<string, number>,
-  };
-  for (const t of tokenProgression) {
-    tokenTotals.input += t.inputTokens;
-    tokenTotals.output += t.outputTokens;
-    tokenTotals.cacheRead += t.cacheRead;
-    tokenTotals.cacheCreation += t.cacheCreation;
-    tokenTotals.messages += t.messages;
-    if (t.model) incrementCount(tokenTotals.models, t.model);
-  }
-  return { tokenProgression, tokenTotals };
-}
-
-function computeUsageCounts(spans: SessionSpan[]) {
-  const toolUsage: Record<string, number> = {};
-  const mcpUsage: Record<string, number> = {};
-  for (const s of spans) {
-    const trigger = spanAttr(s, 'integritystudio.hook.trigger', 'string');
-    if (trigger !== 'PostToolUse') continue;
-    const type = spanAttr(s, 'integritystudio.hook.type', 'string');
-    if (type === 'builtin') {
-      incrementCount(toolUsage, spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown');
-    } else if (type === 'mcp') {
-      incrementCount(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
-    }
-  }
-  return { toolUsage, mcpUsage };
-}
-
-function computeSpanLatency(spans: SessionSpan[]) {
-  const spanBreakdown = Object.fromEntries(rollup(spans, group => group.length, s => s.name));
-  const hookDurations = rollup(
-    spans.filter(s => (s.durationMs ?? 0) > 0),
-    group => group.map(s => s.durationMs ?? 0).sort(ascending),
-    s => s.name,
-  );
-  const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
-  for (const [name, sorted] of hookDurations) {
-    hookLatency[name] = {
-      count: sorted.length,
-      avg: +(mean(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      p50: +(quantileSorted(sorted, LATENCY_P50 / PERCENT_MULTIPLIER) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      p95: +(quantileSorted(sorted, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      max: +(sorted[sorted.length - 1] ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-    };
-  }
-  return { spanBreakdown, hookLatency };
-}
-
-function computeErrorSummary(spans: SessionSpan[]) {
-  const byCategory: Record<string, number> = {};
-  const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
-  for (const s of spans) {
-    if (!isSpanError(s)) continue;
-    const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
-    const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
-    incrementCount(byCategory, `${tool} -> ${errType}`);
-    details.push({
-      spanName: s.name,
-      tool,
-      errorType: errType,
-      filePath: spanAttr(s, 'file.path', 'string'),
-    });
-  }
-  return { byCategory, details };
-}
-
-interface AgentActivityEntry {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  hasRateLimit: boolean;
-  rateLimitEvents: number;
-  totalOutputSize: number;
-  avgOutputSize: number;
-  avgDurationMs: number;
-  truncatedCount: number;
-  emptyCount: number;
 }
 
 /** In-memory cross-session accumulator for a single agent. Never serialized directly. */
@@ -847,159 +694,6 @@ interface AgentAccumulator {
     date: string | null;
     project: string | null;
   }>;
-}
-
-function summarizeAgentSpans(group: SessionSpan[]) {
-  const a = {
-    invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
-    totalOutputSize: 0, durationSum: 0, durationCount: 0,
-    truncatedCount: 0, emptyCount: 0,
-  };
-  for (const s of group) {
-    a.invocations++;
-    if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) a.errors++;
-    if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
-      a.hasRateLimit = true;
-      a.rateLimitEvents++;
-    }
-    a.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
-    const dur = s.durationMs ?? 0;
-    if (dur > 0) { a.durationSum += dur; a.durationCount++; }
-    if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) a.truncatedCount++;
-    if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) a.emptyCount++;
-  }
-  return a;
-}
-
-function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
-  const byAgent = rollup(
-    spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.AGENT_FINALIZE),
-    summarizeAgentSpans,
-    s => spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown',
-  );
-  return Array.from(byAgent, ([agentName, d]) => ({
-    agentName,
-    invocations: d.invocations,
-    errors: d.errors,
-    hasRateLimit: d.hasRateLimit,
-    rateLimitEvents: d.rateLimitEvents,
-    totalOutputSize: d.totalOutputSize,
-    avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-    avgDurationMs: d.durationCount > 0 ? Math.round(d.durationSum / d.durationCount) : 0,
-    truncatedCount: d.truncatedCount,
-    emptyCount: d.emptyCount,
-  }));
-}
-
-function computeEvalBreakdown(evaluations: EvaluationResult[]) {
-  const evalByName = rollup(
-    evaluations,
-    group => ({ count: group.length, scores: group.map(ev => ev.scoreValue).filter(isValidScore) }),
-    ev => ev.evaluationName,
-  );
-  return Array.from(evalByName, ([name, d]) => {
-    const sorted = d.scores.sort((a, b) => a - b);
-    const avg = mean(sorted);
-    return {
-      name,
-      count: d.count,
-      avg: avg != null ? +avg.toFixed(SCORE_DISPLAY_PRECISION) : null,
-      min: sorted.length > 0 ? +(sorted[0] ?? 0).toFixed(SCORE_DISPLAY_PRECISION) : null,
-      max: sorted.length > 0 ? +(sorted[sorted.length - 1] ?? 0).toFixed(SCORE_DISPLAY_PRECISION) : null,
-    };
-  });
-}
-
-export function computeSessionDetail(
-  sessionId: string,
-  spans: SessionSpan[],
-  evaluations: EvaluationResult[],
-  /** When the global evaluation read was cut at QUERY_LIMIT, every session is marked partial. */
-  evaluationsTruncated = false,
-) {
-  const dataSources = computeDataSources(spans, evaluations, evaluationsTruncated);
-  const timespan = computeTimespan(evaluations);
-  const sessionInfo = computeSessionInfo(spans);
-  const { tokenProgression, tokenTotals } = computeTokenMetrics(spans);
-  const { toolUsage, mcpUsage } = computeUsageCounts(spans);
-  const { spanBreakdown, hookLatency } = computeSpanLatency(spans);
-  const errors = computeErrorSummary(spans);
-  const agentActivity = computeAgentActivity(spans);
-  const evaluationBreakdown = computeEvalBreakdown(evaluations);
-
-  const fileCount: Record<string, number> = {};
-  for (const s of spans) {
-    const fp = spanAttr(s, 'file.path', 'string');
-    if (fp) incrementCount(fileCount, fp);
-  }
-  const fileAccess = Object.entries(fileCount)
-    .map(([path, count]) => ({ path, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, FILE_ACCESS_TOP_N);
-
-  const gitCommits = spans
-    .filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.POST_COMMIT_REVIEW)
-    .flatMap(s => {
-      const commit = extractGitCommit(s);
-      return commit ? [commit] : [];
-    });
-
-  const alertSpans = spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.ALERT_EVALUATION);
-  const alertSummary = {
-    totalFired: alertSpans.reduce((sum, s) => sum + (renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number') ?? 0), 0),
-    stopEvents: alertSpans.length,
-  };
-
-  const codeStructure = spans
-    .filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === HOOK_NAME.CODE_STRUCTURE)
-    .map(s => ({
-      file: spanAttr(s, 'integritystudio.code.structure.file', 'string') ?? '',
-      lines: spanAttr(s, 'integritystudio.code.structure.lines', 'number') ?? 0,
-      exports: spanAttr(s, 'integritystudio.code.structure.exports', 'number') ?? 0,
-      functions: spanAttr(s, 'integritystudio.code.structure.functions', 'number') ?? 0,
-      hasTypes: spanAttr(s, 'integritystudio.code.structure.has_types', 'boolean') ?? false,
-      score: spanAttr(s, 'integritystudio.code.structure.score', 'number') ?? 0,
-      tool: spanAttr(s, 'integritystudio.code.structure.tool', 'string') ?? '',
-    }));
-
-  const agentMapForEval = new Map<number, string>();
-  spans.forEach((span, i) => {
-    // Hooks emit the semconv 'gen_ai.agent.name'; 'agent.name' is the pre-OBP7b
-    // spelling. Reading only the latter left every turn unattributed, so every
-    // precomputed workflow graph had zero nodes. Mirrors src/api/routes/agents.ts.
-    const agent = spanAttr(span, 'gen_ai.agent.name', 'string') ?? spanAttr(span, 'agent.name', 'string');
-    if (agent) agentMapForEval.set(i, agent);
-  });
-  const stepScores: StepScore[] = spans.map((span, i) => ({
-    step: i,
-    score: spanAttr(span, 'evaluation.score', 'number')
-      ?? (isSpanError(span) ? 0 : 1),
-    explanation: span.name,
-  }));
-  const multiAgentEvaluation = computeMultiAgentEvaluation(stepScores, agentMapForEval);
-
-  return {
-    sessionId,
-    dataSources,
-    timespan,
-    sessionInfo,
-    tokenTotals,
-    tokenProgression,
-    toolUsage,
-    mcpUsage,
-    spanBreakdown,
-    hookLatency,
-    errors,
-    agentActivity,
-    fileAccess,
-    gitCommits,
-    alertSummary,
-    codeStructure,
-    evaluationBreakdown,
-    logSummary: { bySeverity: {} as Record<string, number>, logs: [] },
-    multiAgentEvaluation,
-    evaluations,
-  };
 }
 
 /**
@@ -1128,7 +822,11 @@ interface OrgEvaluations {
 
 type EvaluationsByName = Map<string, EvaluationResult[]>;
 type DegradationBucket = { scores: number[]; startTime: string; endTime: string };
-type SessionDetail = ReturnType<typeof computeSessionDetail>;
+/** What `accumulateAgent` reads from one session's detail. */
+type AgentSessionContext = {
+  timespan: { start: string } | null;
+  sessionInfo: { projectName: string } | null;
+};
 
 /** The UTC midnight a read starting at `ms` begins from. */
 function dayStartNs(ms: number): bigint {
@@ -1427,9 +1125,9 @@ function computeDegradationEntries(
 /** Fold one session's activity for one agent into that agent's cross-session totals. */
 function accumulateAgent(
   agents: Map<string, AgentAccumulator>,
-  ag: SessionDetail['agentActivity'][number],
+  ag: AgentActivityEntry,
   sessionId: string,
-  detail: SessionDetail,
+  detail: AgentSessionContext,
 ): void {
   let acc = agents.get(ag.agentName);
   if (!acc) {
@@ -1553,7 +1251,10 @@ function computeSessionAndAgentEntries(
   const sessionEntries: KVEntry[] = [];
   for (const [sessionId, sessionSpans] of spansBySession) {
     const evaluations = evalsBySession.get(sessionId) ?? [];
-    const detail = computeSessionDetail(sessionId, sessionSpans, evaluations, evaluationsTruncated);
+    const detail = computeSessionDetail(
+      { sessionId, spans: sessionSpans, evaluations, evaluationsTruncated },
+      computeMultiAgentEvaluation,
+    );
     sessionEntries.push({
       key: `session:${sessionId}`,
       value: toKVValue({

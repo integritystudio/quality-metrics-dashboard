@@ -292,7 +292,8 @@ describe('GET /sessions/:sessionId when the evaluation read hits its cap', () =>
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as SessionDetailBody;
 
-    expect(body.dataSources.evaluations).toEqual({ count: 1, truncated: false });
+    // `truncated` is written only when set; the page reads its absence as a complete read.
+    expect(body.dataSources.evaluations).toEqual({ count: 1 });
     expect(body.evaluations).toHaveLength(1);
   });
 
@@ -323,7 +324,7 @@ describe('GET /sessions/:sessionId when the span read hits its cap', () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as SessionDetailBody;
 
-    expect(body.dataSources.traces).toEqual({ count: 1, traceIds: 1, truncated: false });
+    expect(body.dataSources.traces).toEqual({ count: 1, traceIds: 1 });
   });
 
   it('reports a session past the cap as truncated and computes from only the cap', async () => {
