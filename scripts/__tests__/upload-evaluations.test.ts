@@ -75,6 +75,20 @@ describe('mapRecord', () => {
     expect(payload?.metadata).not.toHaveProperty('cohort');
   });
 
+  it('carries a stamped schema URL to the row as metadata.schemaUrl', () => {
+    const schemaUrl = 'https://integritystudio.ai/schemas/evaluation/1.0.0';
+    const { payload } = mapRecord(record({ 'session.id': 'sess-1' }, { schemaUrl }), NOW, MAX_AGE_MS);
+
+    expect(payload?.metadata).toMatchObject({ schemaUrl });
+    expect(payload).not.toHaveProperty('schemaUrl');
+  });
+
+  it('writes no metadata.schemaUrl for a record written before the stamp existed', () => {
+    const { payload } = mapRecord(record({ 'session.id': 'sess-1' }), NOW, MAX_AGE_MS);
+
+    expect(payload?.metadata).not.toHaveProperty('schemaUrl');
+  });
+
   it('sends the judge model as its own field, not inside metadata', () => {
     const { payload } = mapRecord(record({
       'integritystudio.evaluation.evaluator.kind': 'llm',

@@ -163,6 +163,12 @@ const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 const EVAL_FILE_PATTERN = /^evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 /** Top-level span id a record may carry: derive and judge records (TKR8 Phase 2). */
 const SPAN_ID_FIELD = 'spanId';
+/**
+ * Top-level schema URL a record carries (AA3 § Migration, stamped since
+ * 2026-10-07). Shipped as `metadata.schemaUrl`, the webhook's only slot for
+ * it, so a D1 row records the attribute schema it was written under.
+ */
+const SCHEMA_URL_FIELD = 'schemaUrl';
 
 const WEBHOOK_PATH = '/v1/evaluations';
 const KEYED_PATH = '/v1/ingest/backfill?signal=evaluations';
@@ -316,6 +322,8 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   // in the row's `attributes`. evaluatedAt keeps the ISO string form for auditability.
   const metadata: Record<string, unknown> = {};
   if (timestamp) metadata.evaluatedAt = timestamp;
+  const schemaUrl = asString(r[SCHEMA_URL_FIELD]);
+  if (schemaUrl) metadata.schemaUrl = schemaUrl;
   if (Object.keys(metadata).length > 0) payload.metadata = metadata;
   payload.evaluationId = evaluationId(r);
 

@@ -90,6 +90,15 @@ export const LEGACY_SCORE_UNIT_ATTR = 'gen_ai.evaluation.score.unit';
 
 export const EVALUATION_RESULT_EVENT = 'gen_ai.evaluation.result';
 
+/**
+ * Schema URL stamped on every record `toOTelRecord` writes. Mirrors
+ * `EVALUATION_SCHEMA_URL` in the hooks' `evaluation-attrs.ts` (the canonical
+ * copy); the two must bump together. A record-level field rather than an
+ * attribute, because the evaluations JSONL has no scope envelope. The file it
+ * names is served by the IntegrityLandingPage site.
+ */
+export const EVALUATION_SCHEMA_URL = 'https://integritystudio.ai/schemas/evaluation/1.0.0';
+
 export function normalizeScore(score: number): number {
   return Math.round(score * 10000) / 10000;
 }
@@ -155,6 +164,10 @@ export function toOTelRecord(ev: EvalRecord): object {
     timestamp: ev.timestamp,
     name: EVALUATION_RESULT_EVENT,
     attributes: attrs,
+    // Envelope metadata, as the hooks' appendEvaluation writes it (AA3
+    // § Migration). Safe to add here since derive posts straight to ingest
+    // (cloud-read Phase 6) and never re-fingerprints a file.
+    schemaUrl: EVALUATION_SCHEMA_URL,
     // Omit rather than emit '' — TraceIdSchema is optional but rejects an
     // empty string, so a written '' is silently dropped on read.
     ...(ev.traceId && { traceId: ev.traceId }),

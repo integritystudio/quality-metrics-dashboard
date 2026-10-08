@@ -650,6 +650,13 @@ describe('toOTelRecord', () => {
     expect(attrs['session.id']).toBe('abc12345-session');
   });
 
+  it('stamps the evaluation schema URL as a record field, not an attribute', () => {
+    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
+    expect(record.schemaUrl).toBe('https://integritystudio.ai/schemas/evaluation/1.0.0');
+    const attrs = record.attributes as Record<string, unknown>;
+    expect(attrs.schemaUrl).toBeUndefined();
+  });
+
   it('omits session.id when empty', () => {
     const record = toOTelRecord(makeEvalRecord({ sessionId: '' })) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
