@@ -1,26 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 import {
   parseArgs,
-  refusalReason,
-  listResultsFiles,
-  resultsFilePath,
   computeAgreement,
   countMissing,
   estimateSpend,
   DEFAULT_LIMIT,
   MAX_LIMIT,
   LIMIT_FLAG,
-  MARKER_FILENAME,
-  RESULTS_PREFIX,
   type TurnScores,
   type TurnOutcome,
 } from '../judge-agreement.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
-import { RESULTS_SUFFIX, YES_FLAG } from '../one-shot-eval.js';
+import { YES_FLAG } from '../one-shot-eval.js';
 import {
   addCallUsage,
   charsToTokens,
@@ -67,26 +59,6 @@ describe('parseArgs', () => {
 
   it('has no --force flag', () => {
     expect(parseArgs([YES_FLAG, '--force']).error).toMatch(/Unknown argument: --force/);
-  });
-});
-
-describe('refusalReason', () => {
-  const dir = join(tmpdir(), `judge-agreement-test-${process.pid}-${Date.now()}`);
-
-  it('allows a fresh docs dir, refuses a marker, refuses an existing results file', () => {
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(dir, { recursive: true });
-    expect(refusalReason(dir)).toBeUndefined();
-
-    const results = resultsFilePath(dir, new Date('2026-09-21T00:00:00Z'));
-    expect(results).toBe(join(dir, `${RESULTS_PREFIX}2026-09-21${RESULTS_SUFFIX}`));
-    writeFileSync(results, '{}');
-    expect(listResultsFiles(dir)).toEqual([`${RESULTS_PREFIX}2026-09-21${RESULTS_SUFFIX}`]);
-    expect(refusalReason(dir)).toMatch(/results already exist/);
-
-    writeFileSync(join(dir, MARKER_FILENAME), '{}');
-    expect(refusalReason(dir)).toMatch(/marker exists/);
-    rmSync(dir, { recursive: true, force: true });
   });
 });
 

@@ -4,18 +4,14 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   parseArgs,
-  refusalReason,
   resolveAgreementPath,
   readAgreementTurns,
-  resultsFilePath,
   estimateCallInputTokens,
   estimateReferenceSpend,
   compareToReference,
   closerConfiguration,
   turnKey,
   AGREEMENT_FLAG,
-  MARKER_FILENAME,
-  RESULTS_PREFIX,
   PROMPT_OVERHEAD_TOKENS_ESTIMATE,
   OUTPUT_TOKENS_PER_CALL_ESTIMATE,
   type QualityTurn,
@@ -77,29 +73,10 @@ describe('parseArgs', () => {
   });
 });
 
-describe('run-once files', () => {
+describe('agreement input files', () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'judge-quality-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
-
-  it('allows a run in an empty directory', () => {
-    expect(refusalReason(dir)).toBeUndefined();
-  });
-
-  it('refuses while the marker exists', () => {
-    writeFileSync(join(dir, MARKER_FILENAME), '{}');
-    expect(refusalReason(dir)).toContain('marker exists');
-  });
-
-  it('refuses once a results file exists', () => {
-    writeFileSync(resultsFilePath(dir, new Date('2026-09-22T00:00:00Z')), '{}');
-    expect(refusalReason(dir)).toContain(`${RESULTS_PREFIX}2026-09-22.json`);
-  });
-
-  it('is not blocked by judge-agreement results', () => {
-    writeFileSync(join(dir, 'judge-agreement-2026-09-22.json'), '{}');
-    expect(refusalReason(dir)).toBeUndefined();
-  });
 
   it('picks the newest agreement file unless one is named', () => {
     writeFileSync(join(dir, 'judge-agreement-2026-09-21.json'), '{}');

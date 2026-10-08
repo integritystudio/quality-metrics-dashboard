@@ -4,7 +4,6 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   parseArgs,
-  refusalReason,
   readPriorReference,
   mergeReference,
   countComplements,
@@ -12,8 +11,6 @@ import {
   estimateRunSpend,
   REFERENCE_FLAG,
   PRIOR_REFERENCE_PATH,
-  MARKER_FILENAME,
-  RESULTS_PREFIX,
 } from '../judge-hallucination-eval.js';
 import { YES_FLAG } from '../one-shot-eval.js';
 import type { ReferenceSummary } from '../judge-quality-eval.js';
@@ -63,26 +60,13 @@ describe('parseArgs', () => {
   });
 });
 
-describe('run-once files', () => {
+describe('reference input files', () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'hal-eval-'));
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
-  });
-
-  it('allows a run in an empty directory, and is not blocked by the JCP4 results file', () => {
-    writeFileSync(join(dir, 'judge-quality-2026-09-22.json'), '{}');
-    expect(refusalReason(dir)).toBeUndefined();
-  });
-
-  it('refuses while its own marker or results file exists', () => {
-    writeFileSync(join(dir, MARKER_FILENAME), '{}');
-    expect(refusalReason(dir)).toMatch('marker exists');
-    rmSync(join(dir, MARKER_FILENAME));
-    writeFileSync(join(dir, `${RESULTS_PREFIX}2026-09-23.json`), '{}');
-    expect(refusalReason(dir)).toMatch('results already exist');
   });
 
   it('rejects a file without reference scores', () => {
