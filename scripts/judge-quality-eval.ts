@@ -82,6 +82,7 @@ import {
 import {
   addCallUsage,
   createCallUsageTotals,
+  listCostUsd,
   tokenUsageCostUsd,
   toJudgeTokenUsage,
   type CallUsageReport,
@@ -265,10 +266,7 @@ export function estimateReferenceSpend(
     }
   }
   const outputTokens = calls * OUTPUT_TOKENS_PER_CALL_ESTIMATE;
-  const usd = tokenUsageCostUsd(
-    { inputTokens, outputTokens, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
-    pricing,
-  );
+  const usd = listCostUsd(inputTokens, outputTokens, pricing);
   return { calls, inputTokens, outputTokens, usd };
 }
 

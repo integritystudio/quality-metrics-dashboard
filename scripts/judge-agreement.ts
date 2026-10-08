@@ -68,6 +68,7 @@ import {
 import {
   addCallUsage,
   createCallUsageTotals,
+  listCostUsd,
   tokenUsageCostUsd,
   type CallUsageReport,
 } from './judge-usage.js';
@@ -244,18 +245,8 @@ export function estimateSpend(turns: readonly Turn[], pricing: ModelPricingEntry
     }
   }
 
-  const perCriterionUsd = tokenUsageCostUsd({
-    inputTokens: perCriterionInputTokens,
-    outputTokens: perCriterionCalls * OUTPUT_TOKENS_PER_CALL_ESTIMATE,
-    cacheCreationInputTokens: 0,
-    cacheReadInputTokens: 0,
-  }, pricing);
-  const consolidatedUsd = tokenUsageCostUsd({
-    inputTokens: consolidatedInputTokens,
-    outputTokens: consolidatedCalls * OUTPUT_TOKENS_PER_CALL_ESTIMATE,
-    cacheCreationInputTokens: 0,
-    cacheReadInputTokens: 0,
-  }, pricing);
+  const perCriterionUsd = listCostUsd(perCriterionInputTokens, perCriterionCalls * OUTPUT_TOKENS_PER_CALL_ESTIMATE, pricing);
+  const consolidatedUsd = listCostUsd(consolidatedInputTokens, consolidatedCalls * OUTPUT_TOKENS_PER_CALL_ESTIMATE, pricing);
   return {
     perCriterionInputTokens,
     perCriterionCalls,

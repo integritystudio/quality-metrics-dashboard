@@ -109,6 +109,11 @@ export function tokenUsageCostUsd(usage: JudgeTokenUsage, pricing: ModelPricingE
     + perToken(usage.cacheCreationInputTokens, pricing.input * CACHE_CREATION_INPUT_PRICE_RATIO);
 }
 
+/** List cost of token counts with no cache traffic — how every pre-run estimate is priced. */
+export function listCostUsd(inputTokens: number, outputTokens: number, pricing: ModelPricingEntry): number {
+  return tokenUsageCostUsd({ inputTokens, outputTokens, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }, pricing);
+}
+
 /** {@link tokenUsageCostUsd} for the run totals. */
 export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntry): number {
   return tokenUsageCostUsd(toJudgeTokenUsage(totals), pricing);
@@ -116,7 +121,7 @@ export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntr
 
 /** List cost of an estimate's tokens, at the batch rate when `batch`. */
 function estimateCostUsd(inputTokens: number, outputTokens: number, batch: boolean): number {
-  const listUsd = tokenUsageCostUsd({ inputTokens, outputTokens, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }, judgePricing());
+  const listUsd = listCostUsd(inputTokens, outputTokens, judgePricing());
   return batch ? listUsd * BATCH_PRICE_RATIO : listUsd;
 }
 

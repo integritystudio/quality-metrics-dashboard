@@ -86,6 +86,7 @@ import {
 import {
   addCallUsage,
   createCallUsageTotals,
+  listCostUsd,
   tokenUsageCostUsd,
   type CallUsageReport,
   type CallUsageTotals,
@@ -181,12 +182,7 @@ export function estimateRunSpend(
   const haikuUsd = haiku.perCriterionUsd + 2 * haiku.consolidatedUsd;
   const toolTurns = turns.filter(t => t.toolResults.length > 0);
   const inputTokens = toolTurns.reduce((sum, t) => sum + estimateCallInputTokens(t, HALLUCINATION_CRITERIA), 0);
-  const referenceUsd = tokenUsageCostUsd({
-    inputTokens,
-    outputTokens: toolTurns.length * REFERENCE_OUTPUT_TOKENS_PER_CALL,
-    cacheCreationInputTokens: 0,
-    cacheReadInputTokens: 0,
-  }, referencePricing);
+  const referenceUsd = listCostUsd(inputTokens, toolTurns.length * REFERENCE_OUTPUT_TOKENS_PER_CALL, referencePricing);
   return { haikuUsd, referenceCalls: toolTurns.length, referenceUsd, totalUsd: haikuUsd + referenceUsd };
 }
 
