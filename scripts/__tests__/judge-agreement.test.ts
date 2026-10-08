@@ -11,23 +11,10 @@ import {
   type TurnOutcome,
 } from '../judge-agreement.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
-import { type Turn } from '../judge-turns.js';
 import { YES_FLAG } from '../one-shot-eval.js';
 import { estimateTurnTokens } from '../judge-usage.js';
+import { makeTurn, TEST_PRICING } from './support/fixtures.js';
 
-const PRICING = { input: 1.0, output: 5.0, provider: 'anthropic' } as const;
-
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: '2026-02-09T01:11:15.525Z',
-    userText: 'Fix the login bug',
-    assistantText: 'I found the issue in auth.ts and fixed it.',
-    toolResults: [],
-    ...overrides,
-  };
-}
 
 describe('parseArgs', () => {
   it('defaults the limit and accepts an explicit one', () => {
@@ -84,7 +71,7 @@ describe('estimateSpend', () => {
   it('estimates per-criterion input as a multiple of the consolidated input', () => {
     const turns = [makeTurn({ toolResults: ['x'.repeat(4000)] }), makeTurn()];
     expect(estimateTurnTokens(turns[1]!)).toBeGreaterThan(0);
-    const estimate = estimateSpend(turns, PRICING);
+    const estimate = estimateSpend(turns, TEST_PRICING);
     expect(estimate.consolidatedInputTokens).toBe(estimateTurnTokens(turns[0]!) + estimateTurnTokens(turns[1]!));
     expect(estimate.perCriterionInputTokens).toBeGreaterThan(estimate.consolidatedInputTokens * 2);
     expect(estimate.totalUsd).toBeGreaterThan(0);

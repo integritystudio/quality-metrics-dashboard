@@ -18,6 +18,7 @@ import {
 } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../../src/lib/validation/dashboard-schemas.js';
+import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 
 type MessageBatch = Anthropic.Messages.MessageBatch;
 type ResultLine = Anthropic.Messages.MessageBatchIndividualResponse;
@@ -82,17 +83,7 @@ function fakeClient() {
   return { client, submitted };
 }
 
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: '2026-09-22T01:11:15.525Z',
-    userText: 'What does this function do?',
-    assistantText: 'It parses the config file.',
-    toolResults: [],
-    ...overrides,
-  };
-}
+const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ timestamp: '2026-09-22T01:11:15.525Z', userText: 'What does this function do?', assistantText: 'It parses the config file.', ...overrides });
 
 beforeEach(() => {
   resetFailureTracking();

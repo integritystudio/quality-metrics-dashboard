@@ -18,9 +18,9 @@ import {
 } from '../judge-quality-eval.js';
 import { YES_FLAG } from '../one-shot-eval.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
-import { type Turn } from '../judge-turns.js';
 import { RELEVANCE_CRITERIA, FAITHFULNESS_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { TOKENS_PER_CHAR } from '../../../src/lib/core/constants-models.js';
+import { makeSizedTurn } from './support/fixtures.js';
 
 const PRICING = { input: 5.0, output: 25.0, provider: 'anthropic' } as const;
 const ONE_MILLION = 1_000_000;
@@ -29,18 +29,6 @@ const SCORE_1 = 0;
 const SCORE_3 = 0.5;
 const SCORE_4 = 0.75;
 const SCORE_5 = 1;
-
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: '2026-02-09T01:11:15.525Z',
-    userText: 'u'.repeat(400),
-    assistantText: 'a'.repeat(800),
-    toolResults: [],
-    ...overrides,
-  };
-}
 
 function makeQualityTurn(overrides: Partial<QualityTurn>): QualityTurn {
   return {
@@ -99,17 +87,17 @@ describe('turnKey', () => {
 describe('estimateCallInputTokens', () => {
   it('counts only the parts the criterion reads', () => {
     // faithfulness reads output + context, never the user's input.
-    const short = makeTurn({ userText: 'u', toolResults: ['c'.repeat(2000)] });
-    const long = makeTurn({ userText: 'u'.repeat(4000), toolResults: ['c'.repeat(2000)] });
+    const short = makeSizedTurn({ userText: 'u', toolResults: ['c'.repeat(2000)] });
+    const long = makeSizedTurn({ userText: 'u'.repeat(4000), toolResults: ['c'.repeat(2000)] });
     expect(estimateCallInputTokens(long, FAITHFULNESS_CRITERIA)).toBe(estimateCallInputTokens(short, FAITHFULNESS_CRITERIA));
     expect(estimateCallInputTokens(long, RELEVANCE_CRITERIA)).toBeGreaterThan(estimateCallInputTokens(short, RELEVANCE_CRITERIA));
-    expect(estimateCallInputTokens(makeTurn(), FAITHFULNESS_CRITERIA)).toBeGreaterThanOrEqual(PROMPT_OVERHEAD_TOKENS_ESTIMATE);
+    expect(estimateCallInputTokens(makeSizedTurn(), FAITHFULNESS_CRITERIA)).toBeGreaterThanOrEqual(PROMPT_OVERHEAD_TOKENS_ESTIMATE);
   });
 });
 
 describe('estimateReferenceSpend', () => {
   it('prices one call per selected criterion at the reference rates', () => {
-    const turn = makeTurn();
+    const turn = makeSizedTurn();
     const estimate = estimateReferenceSpend([turn], PRICING);
     // A turn without tool results selects relevance and coherence only.
     expect(estimate.calls).toBe(2);

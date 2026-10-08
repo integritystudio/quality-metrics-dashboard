@@ -15,22 +15,9 @@ import {
 import { YES_FLAG } from '../one-shot-eval.js';
 import type { ReferenceSummary } from '../judge-quality-eval.js';
 import { RELEVANCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
-import { type Turn } from '../judge-turns.js';
+import { makeSizedTurn, TEST_PRICING } from './support/fixtures.js';
 
 const HALLUCINATION = 'hallucination';
-const PRICING = { input: 1.0, output: 5.0, provider: 'anthropic' } as const;
-
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: '2026-02-09T01:11:15.525Z',
-    userText: 'u'.repeat(400),
-    assistantText: 'a'.repeat(800),
-    toolResults: [],
-    ...overrides,
-  };
-}
 
 function summary(maes: Record<string, number | null>): ReferenceSummary {
   const distance = (mae: number | null) => ({
@@ -111,11 +98,11 @@ describe('closestConfiguration', () => {
 
 describe('estimateRunSpend', () => {
   it('prices one reference call per tool turn and none for a turn without tools', () => {
-    const noTools = estimateRunSpend([makeTurn()], PRICING, PRICING);
+    const noTools = estimateRunSpend([makeSizedTurn()], TEST_PRICING, TEST_PRICING);
     expect(noTools.referenceCalls).toBe(0);
     expect(noTools.referenceUsd).toBe(0);
 
-    const withTools = estimateRunSpend([makeTurn(), makeTurn({ toolResults: ['r'.repeat(400)] })], PRICING, PRICING);
+    const withTools = estimateRunSpend([makeSizedTurn(), makeSizedTurn({ toolResults: ['r'.repeat(400)] })], TEST_PRICING, TEST_PRICING);
     expect(withTools.referenceCalls).toBe(1);
     expect(withTools.referenceUsd).toBeGreaterThan(0);
     expect(withTools.totalUsd).toBeCloseTo(withTools.haikuUsd + withTools.referenceUsd);

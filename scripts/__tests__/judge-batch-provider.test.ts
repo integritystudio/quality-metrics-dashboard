@@ -26,6 +26,7 @@ import { evaluateTurnsConsolidatedBatched } from '../judge-consolidated.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import { DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
+import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 
 type MessageBatch = Anthropic.Messages.MessageBatch;
 type ResultLine = Anthropic.Messages.MessageBatchIndividualResponse;
@@ -532,17 +533,7 @@ function requiredCriteria(request: BatchRequests[number]): string[] {
   return format?.schema?.required ?? [];
 }
 
-function makeTurn(overrides: Partial<Turn>): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: '2026-09-29T12:00:00.000Z',
-    userText: 'What does this function do?',
-    assistantText: 'It parses the config file.',
-    toolResults: [],
-    ...overrides,
-  };
-}
+const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ timestamp: '2026-09-29T12:00:00.000Z', userText: 'What does this function do?', assistantText: 'It parses the config file.', ...overrides });
 
 describe('a consolidated --batch run cut short by the wall clock', () => {
   let warn: MockInstance<typeof console.warn>;

@@ -13,7 +13,6 @@ import {
   MAX_TOOL_CONTEXT_ITEMS,
   transcriptPathOf,
   type TranscriptInfo,
-  type Turn,
 } from '../judge-turns.js';
 import {
   hashToScore,
@@ -59,22 +58,11 @@ import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
+import { makeTurn } from './support/fixtures.js';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
 // ---------------------------------------------------------------------------
-
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: '2026-02-09T01:11:15.525Z',
-    userText: 'Fix the login bug',
-    assistantText: 'I found the issue in auth.ts and fixed it.',
-    toolResults: [],
-    ...overrides,
-  };
-}
 
 function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
   return {

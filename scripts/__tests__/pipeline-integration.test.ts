@@ -26,6 +26,7 @@ import { seedEvaluations } from '../judge-evaluations.js';
 import { toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { type Turn } from '../judge-turns.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -52,17 +53,7 @@ function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<str
   };
 }
 
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'pipeline-sess-abc',
-    traceId: 'trace-pipeline-001',
-    timestamp: '2026-02-25T00:00:00.000Z',
-    userText: 'Fix the authentication bug in login.ts',
-    assistantText: 'I found the issue in the JWT validation. Here is the fix.',
-    toolResults: [],
-    ...overrides,
-  };
-}
+const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ sessionId: 'pipeline-sess-abc', traceId: 'trace-pipeline-001', timestamp: '2026-02-25T00:00:00.000Z', userText: 'Fix the authentication bug in login.ts', assistantText: 'I found the issue in the JWT validation. Here is the fix.', ...overrides });
 
 /** Parse a JSONL string into an array of objects */
 function parseJsonl(content: string): Record<string, unknown>[] {

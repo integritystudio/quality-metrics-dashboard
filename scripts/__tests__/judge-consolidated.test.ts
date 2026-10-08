@@ -34,6 +34,7 @@ import { judgedByKey } from '../judge-dedup.js';
 import { type Turn } from '../judge-turns.js';
 import { RELEVANCE_CRITERIA, COHERENCE_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { G_EVAL_MAX_SCORE, G_EVAL_MIN_SCORE } from '../../../src/lib/judge/llm-judge-constants.js';
+import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -60,17 +61,7 @@ const ALL_TOOL_NAMES = [
 const ALL_TOOL_CRITERIA = ALL_TOOL_NAMES.filter(n => n !== 'hallucination');
 const DIRECT = { directHallucination: true } as const;
 
-function makeTurn(overrides: Partial<Turn> = {}): Turn {
-  return {
-    sessionId: 'abc12345-session',
-    traceId: 'trace-001',
-    timestamp: `${TURN_KEY}.525Z`,
-    userText: USER_TEXT,
-    assistantText: ASSISTANT_TEXT,
-    toolResults: [],
-    ...overrides,
-  };
-}
+const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ timestamp: `${TURN_KEY}.525Z`, userText: USER_TEXT, assistantText: ASSISTANT_TEXT, ...overrides });
 
 /** The key a Haiku judgement of `name` leaves in the dedup set. */
 function keyFor(turn: Turn, name: string): string {
