@@ -57,9 +57,11 @@ afterEach(() => {
 });
 
 describe('kvBulkDelete: empty guard', () => {
-  it('does nothing when given an empty key list', async () => {
-    await kvBulkDelete([]);
+  it('does nothing when given an empty key list and returns an empty set', async () => {
+    const failed = await kvBulkDelete([]);
     expect(mockBulkDelete).not.toHaveBeenCalled();
+    expect(failed).toBeInstanceOf(Set);
+    expect(failed.size).toBe(0);
   });
 });
 
@@ -83,11 +85,13 @@ describe('kvBulkDelete: dry-run', () => {
 });
 
 describe('kvBulkDelete: warn-on-failure', () => {
-  it('does not throw when SDK call fails', async () => {
+  it('does not throw when SDK call fails, and returns the failed keys', async () => {
     mockBulkDelete.mockRejectedValueOnce(new Error('network error'));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await expect(kvBulkDelete(['trace:abc'])).resolves.toBeUndefined();
+    const failed = await kvBulkDelete(['trace:abc']);
+    expect(failed).toBeInstanceOf(Set);
+    expect(failed.has('trace:abc')).toBe(true);
     warnSpy.mockRestore();
   });
 
@@ -100,6 +104,27 @@ describe('kvBulkDelete: warn-on-failure', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('bulk delete failed'));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('connection refused'));
     warnSpy.mockRestore();
+  });
+});
+
+describe('kvBulkDelete: partial failure via unsuccessful_keys', () => {
+  it('returns only the keys listed in unsuccessful_keys', async () => {
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: ['trace:bad'] });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const failed = await kvBulkDelete(['trace:good', 'trace:bad']);
+
+    expect(failed.has('trace:bad')).toBe(true);
+    expect(failed.has('trace:good')).toBe(false);
+    expect(failed.size).toBe(1);
+    warnSpy.mockRestore();
+  });
+
+  it('returns an empty set when all keys are deleted', async () => {
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: [] });
+    const failed = await kvBulkDelete(['trace:good']);
+
+    expect(failed.size).toBe(0);
   });
 });
 

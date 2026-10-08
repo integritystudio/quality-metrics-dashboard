@@ -386,9 +386,9 @@ function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   return entries.filter(e => state.get(e.key)?.hash !== hashValue(e.value));
 }
 
-async function kvBulkPut(entries: KVEntry[]): Promise<number> {
-  if (entries.length === 0) return 0;
-  let written = 0;
+async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
+  const writtenKeys = new Set<string>();
+  if (entries.length === 0) return writtenKeys;
   for (let i = 0; i < entries.length; i += KV_BATCH_SIZE) {
     const batch = entries.slice(i, i + KV_BATCH_SIZE);
     const batchLabel = entries.length > KV_BATCH_SIZE
@@ -402,7 +402,7 @@ async function kvBulkPut(entries: KVEntry[]): Promise<number> {
       ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
     }));
     if (dryRun) {
-      written += batch.length;
+      for (const e of batch) writtenKeys.add(e.key);
       continue;
     }
     const { namespaceId, accountId } = getCloudflareConfig();
@@ -411,28 +411,26 @@ async function kvBulkPut(entries: KVEntry[]): Promise<number> {
         account_id: accountId,
         body: enveloped,
       });
-      const failed = result?.unsuccessful_keys ?? [];
-      // Use successful_key_count when present; fall back to batch minus failed count.
-      // A null result (API returned no body) conservatively credits the whole batch.
-      const batchWritten = result != null
-        ? (result.successful_key_count ?? batch.length - failed.length)
-        : batch.length;
-      if (failed.length > 0) {
-        console.warn(`[sync-to-kv] ${failed.length} key(s) not written in batch${batchLabel} — will retry on next run: ${failed.slice(0, 5).join(', ')}${failed.length > 5 ? '…' : ''}`);
+      const failed = new Set(result?.unsuccessful_keys ?? []);
+      if (failed.size > 0) {
+        const failedArr = [...failed];
+        console.warn(`[sync-to-kv] ${failed.size} key(s) not written in batch${batchLabel} — will retry on next run: ${failedArr.slice(0, 5).join(', ')}${failed.size > 5 ? '…' : ''}`);
       }
-      written += batchWritten;
+      for (const e of batch) {
+        if (!failed.has(e.key)) writtenKeys.add(e.key);
+      }
     } catch (err) {
       if (err instanceof CloudflareAPIError &&
           err.errors.some(e => e.code === KV_DAILY_WRITE_LIMIT_CODE)) {
         console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred.`);
-        return written;
+        return writtenKeys;
       }
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${msg}`);
       throw new Error(`Cloudflare KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
     }
   }
-  return written;
+  return writtenKeys;
 }
 
 /**
@@ -442,9 +440,10 @@ async function kvBulkPut(entries: KVEntry[]): Promise<number> {
  * @param keys - KV keys to delete
  * @param opts.dryRun - when true, logs instead of calling the API; defaults to the module-level dryRun flag
  */
-export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): Promise<void> {
+export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }): Promise<Set<string>> {
+  const failedKeys = new Set<string>();
   const isDryRun = opts?.dryRun ?? dryRun;
-  if (keys.length === 0) return;
+  if (keys.length === 0) return failedKeys;
   for (let i = 0; i < keys.length; i += KV_BATCH_SIZE) {
     const batch = keys.slice(i, i + KV_BATCH_SIZE);
     if (isDryRun) {
@@ -463,14 +462,18 @@ export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }):
           `[sync-to-kv] ${failedDeletes.length} key(s) not deleted — will be retried on next sync: ` +
           `${failedDeletes.slice(0, 5).join(', ')}${failedDeletes.length > 5 ? '…' : ''}`,
         );
+        for (const k of failedDeletes) failedKeys.add(k);
       }
     } catch (err) {
       console.warn(
         `[sync-to-kv] bulk delete failed for ${batch.length} key(s): ` +
         `${err instanceof Error ? err.message : String(err)}`,
       );
+      // Conservatively keep all batch keys in state so the next run retries.
+      for (const k of batch) failedKeys.add(k);
     }
   }
+  return failedKeys;
 }
 
 function extractTraceId(key: string): string | null {
@@ -1501,8 +1504,10 @@ async function main(): Promise<void> {
     // Still update the heartbeat keys (legacy, per-org, and global system)
     const staleMeta = filterChanged(metaEntries, prevState);
     if (staleMeta.length > 0) {
-      await kvBulkPut(staleMeta);
-      for (const e of staleMeta) prevState.set(e.key, { hash: hashValue(e.value) });
+      const writtenMeta = await kvBulkPut(staleMeta);
+      for (const e of staleMeta) {
+        if (writtenMeta.has(e.key)) prevState.set(e.key, { hash: hashValue(e.value) });
+      }
       if (!dryRun) saveSyncState(prevState);
     }
     // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
@@ -1532,11 +1537,11 @@ async function main(): Promise<void> {
   ];
   const deferred = changed.length - (toWrite.length - metaEntries.length);
 
-  const written = await kvBulkPut(toWrite);
+  const writtenKeys = await kvBulkPut(toWrite);
 
   const newState = new Map(prevState);
-  for (const e of toWrite.slice(0, written)) {
-    newState.set(e.key, { hash: hashValue(e.value) });
+  for (const e of toWrite) {
+    if (writtenKeys.has(e.key)) newState.set(e.key, { hash: hashValue(e.value) });
   }
   const computedKeys = new Set(allEntries.map(e => e.key));
   for (const e of metaEntries) computedKeys.add(e.key);
@@ -1548,16 +1553,20 @@ async function main(): Promise<void> {
   const staleKeys = [...newState.keys()].filter(k => !computedKeys.has(k));
   if (staleKeys.length > 0) {
     console.log(`[sync-to-kv] Pruning ${staleKeys.length} stale KV key(s) dropped from local state`);
-    await kvBulkDelete(staleKeys);
+    const failedDeletes = await kvBulkDelete(staleKeys);
+    // Remove successfully deleted keys; keep failed ones so the next run retries.
+    for (const key of staleKeys) {
+      if (!failedDeletes.has(key)) newState.delete(key);
+    }
   }
 
-  for (const key of staleKeys) newState.delete(key);
   if (!dryRun) saveSyncState(newState);
 
   // Compute the final deferred count here — before coverage — so it can be
   // surfaced in meta:syncCoverage where the dashboard or an alert can read it
   // (KV-SYNC-DEFERRED-BACKLOG).
-  const limitDeferred = Math.max(0, toWrite.length - metaEntries.length - written);
+  const metaKeySet = new Set(metaEntries.map(e => e.key));
+  const limitDeferred = toWrite.filter(e => !metaKeySet.has(e.key) && !writtenKeys.has(e.key)).length;
   const actualDeferred = deferred + limitDeferred;
 
   // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
@@ -1588,8 +1597,8 @@ async function main(): Promise<void> {
   const coverageHash = hashValue(JSON.stringify(stableCoverage));
   const coverageEntry: KVEntry = { key: META_SYNC_COVERAGE_KEY, value: toKVValue(coverage) };
   if (newState.get(META_SYNC_COVERAGE_KEY)?.hash !== coverageHash) {
-    const coverageWritten = await kvBulkPut([coverageEntry]);
-    if (coverageWritten > 0) {
+    const coverageWrittenKeys = await kvBulkPut([coverageEntry]);
+    if (coverageWrittenKeys.has(coverageEntry.key)) {
       newState.set(META_SYNC_COVERAGE_KEY, { hash: coverageHash });
       if (!dryRun) saveSyncState(newState);
     }
@@ -1602,24 +1611,24 @@ async function main(): Promise<void> {
   // (this counter × daily cron runs). Warns when a single run exceeds
   // --max-writes; the cap itself is enforced upstream by --budget.
   const writesByScope = new Map<string, number>();
-  for (const e of toWrite.slice(0, written)) {
-    const orgMatch = ORG_KEY_PREFIX_RE.exec(e.key);
+  for (const key of writtenKeys) {
+    const orgMatch = ORG_KEY_PREFIX_RE.exec(key);
     const scope = orgMatch
       ? `org:${orgMatch[0].slice('org:'.length, -1)}`
-      : (e.key === SYSTEM_LAST_SYNC_KEY ? 'system' : 'legacy');
+      : (key === SYSTEM_LAST_SYNC_KEY ? 'system' : 'legacy');
     writesByScope.set(scope, (writesByScope.get(scope) ?? 0) + 1);
   }
   const writeCounter = [...writesByScope.entries()].map(([scope, n]) => `${scope}=${n}`).join(' ');
-  if (written > MAX_WRITES_PER_RUN) {
+  if (writtenKeys.size > MAX_WRITES_PER_RUN) {
     console.warn(
-      `[sync-to-kv] WRITE BUDGET WARNING: ${written} KV writes this run exceeds --max-writes=${MAX_WRITES_PER_RUN} ` +
+      `[sync-to-kv] WRITE BUDGET WARNING: ${writtenKeys.size} KV writes this run exceeds --max-writes=${MAX_WRITES_PER_RUN} ` +
       '(free tier is ~1000/day across all runs)',
     );
   }
 
   console.log(
     `[sync-to-kv] Done: computed=${allEntries.length} changed=${changed.length} ` +
-    `unchanged=${allEntries.length - changed.length} written=${written} deferred=${actualDeferred}` +
+    `unchanged=${allEntries.length - changed.length} written=${writtenKeys.size} deferred=${actualDeferred}` +
     (dryRun ? ' (dry-run, no KV writes)' : '') +
     ` | kvWrites[${writeCounter}]` +
     ` | traces=${traceIds.length} | per-org: ${perOrgSummaries.join(' · ')}` +
