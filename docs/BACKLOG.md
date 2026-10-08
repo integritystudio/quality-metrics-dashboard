@@ -134,7 +134,7 @@ No open items.
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | Source: session 2026-10-06 scripts audit |
 | SYNC-ORG-ENTRIES-SPLIT | `computeOrgEntries` is ~480 lines with repeated query and wrangler scaffolding | P4 | Source: session 2026-10-06 scripts audit |
 | JUDGE-BACKFILL-FLAG | Decide whether to keep judge-evaluations `--backfill` (review) | P4 | ✅ Done 2026-10-07 — kept and documented |
-| BACKFILL-COHORT-COUNTS-AS-EVIDENCE | `--backfill`'s synthetic scores count as evidence downstream | P3 | Source: JUDGE-BACKFILL-FLAG, 2026-10-07 |
+| BACKFILL-COHORT-COUNTS-AS-EVIDENCE | `--backfill`'s synthetic scores count as evidence downstream | P3 | ✅ Done 2026-10-07 — `isEvidenceCohort` excludes `backfill` |
 | DEPLOY-SECRETS-DEV-WORKER | `deploy-secrets.sh` skips `quality-metrics-api-dev` (review) | P4 | ✅ Done 2026-10-07 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
@@ -230,6 +230,15 @@ the same ranges as `--seed`, which `populate` refuses to produce without an expl
   have upload skip `trace-backfill` rows.
 
 Acceptance: a `--backfill` row in the cloud table does not change any `dashboard:*` aggregate, and a test pins it.
+
+*Done, 2026-10-07.* `isEvidenceCohort` (parent repo) excludes `backfill` with `seed` and `canary`. The other `backfill`
+writers were checked first: the legacy `trace-backfill` evaluator type maps to the same cohort and comes from the same
+seeded draws, and `inject-evaluations` only accepts the value. `obs_query_evaluations` summaries and aggregations drop
+these rows too. `sync-org-entries.test.ts` pins every `dashboard:*` change hash against an added `backfill` (and `seed`)
+row; it failed against the old build. Not covered: the `metric:*` keys go through `filterCanary`, which drops only
+canaries, so `seed` and `backfill` rows still reach metric detail. `~/.claude`'s
+`skills/session-backlog/scripts/generate-review-dashboard.ts` keeps its own `NON_EVIDENCE_COHORTS` list, which still
+treats `backfill` as evidence.
 
 **DEPLOY-SECRETS-DEV-WORKER.** `scripts/deploy-secrets.sh` (`npm run deploy:secrets`) sets secrets on the two production
 Workers only. The dev Worker has its own Supabase project and Auth0 tenant, so the omission may be deliberate; confirm and
