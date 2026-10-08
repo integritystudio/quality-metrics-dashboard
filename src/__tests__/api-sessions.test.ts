@@ -216,6 +216,21 @@ describe('GET /sessions/:sessionId', () => {
     ]);
   });
 
+  it('computes hook latency stats per span name', async () => {
+    const START_NS = 1737000000_000_000_000n;
+    const NS_PER_MS = 1_000_000n;
+    fixture.setTraces([3000n, 1000n, 2000n].map((ms, index) => ({
+      ...makeSessionSpanWire(),
+      span_id: `span-${index}`,
+      end_time_ns: String(START_NS + ms * NS_PER_MS),
+    })));
+
+    const res = await sessionRoutes.request('/sessions/sess-abc');
+    const body = await res.json() as SessionDetailBody;
+
+    expect(body.hookLatency['hook:builtin-post-tool']).toEqual({ count: 3, avg: 2000, p50: 2000, p95: 2900, max: 3000 });
+  });
+
   it('computes dataSources total from all sources', async () => {
     fixture.setTraces([makeSessionSpanWire()]);
     // session.id must be in attributes so the client-side sessionId filter passes.

@@ -62,7 +62,8 @@ function computeLatencyStats(durations: number[]): LatencyStats {
     avg: +(mean(sorted) as number).toFixed(LATENCY_DISPLAY_PRECISION),
     p50: +(quantileSorted(sorted, LATENCY_P50 / PERCENT_BASE) as number).toFixed(LATENCY_DISPLAY_PRECISION),
     p95: +(quantileSorted(sorted, LATENCY_P95 / PERCENT_BASE) as number).toFixed(LATENCY_DISPLAY_PRECISION),
-    max: +(max(sorted) as number).toFixed(LATENCY_DISPLAY_PRECISION),
+    // Already sorted ascending, so the last element is the max without another scan.
+    max: +(sorted.at(-1) as number).toFixed(LATENCY_DISPLAY_PRECISION),
   };
 }
 
