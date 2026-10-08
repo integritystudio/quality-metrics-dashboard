@@ -182,6 +182,24 @@ code, not by stderr text. A transient 5xx is retried rather than failing the run
 `derive-parity.ts`, `judge-parity.ts`, `trace-coverage.ts` (or keep it as a shipper-health check — decide),
 `account-stamps.ts` (apart from what judge option A needs), derive's `loadLocalSpans`, and the judge's local discovery and
 `_loadExistingKeys`, plus their tests. Do not start before the rollback window closes.
+- **Gate status, 2026-10-07.**
+  - **Rollback release: not yet.** The flip shipped in the parent's v3.1.26 migration (2026-10-04), and the next
+    release, 4.0.0, is still in progress.
+  - **Exit check 2: passed.** Window 2026-09-30 to 10-06, read via `/v1/evaluations?evaluator=` per
+    `OBTOOL_API_KEY*` under Doppler `prd`, compared with non-canary local records by event time:
+
+    | Producer | D1 (`OBTOOL_API_KEY` + `_ALYSHIA_LEDLIE` + `_INVENTORY_AI`) | Local |
+    |---|---|---|
+    | `dashboard:judge-consolidated` | 686 + 3,346 + 174 = 4,206 | 4,206 |
+    | `hook:stop-quality-evaluation` | 79 + 240 + 48 = 367 | 367 |
+    | `hook:stop-session-summary` | 16 + 103 + 10 = 129 | 129 |
+    | `survival-fitness` | 17 + 0 + 0 = 17 | 17 |
+    | derive (`rule`) | 15,405 + 20,854 + 501 | no file since Phase 6 |
+
+  - **Exit check 1: not run.** An end-to-end run from an empty `TELEMETRY_DIR` posts to ingest and writes KV, so it
+    is a production write, not a read.
+  - **Constraint from JUDGE-BACKFILL-FLAG.** `--backfill` was kept, so `_loadExistingKeys` and the parts of
+    `account-stamps.ts` it uses stay, or backfill moves to cloud dedup first.
 
 **SYNC-ORG-ENTRIES-SPLIT.** `computeOrgEntries` (`scripts/sync-to-kv.ts:959`) runs ~430 lines. Split into period
 entries, metric detail, trends + degradation, and sessions + agents (with an `accumulateAgent()` for the block in the
