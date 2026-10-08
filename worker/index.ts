@@ -51,7 +51,32 @@ const Http = {
   Forbidden: 403,
   NotFound: 404,
   InternalServerError: 500,
+  ServiceUnavailable: 503,
 } as const satisfies Record<string, number>;
+
+/**
+ * True when `jwtVerify` rejected the token itself — bad claims, signature, shape or `kid` — as
+ * opposed to failing to reach Auth0. JWKSNoMatchingKey is a rejection: jose raises it after
+ * refetching the key set, so the token's kid is not Auth0's (another tenant, or forged).
+ * Everything else is upstream: JWKSTimeout, JWKSInvalid, the generic JOSEError jose throws on a
+ * non-200 JWKS response, and the raw fetch error it rethrows on a network failure.
+ * Lazy so a test that mocks `jose` without `errors` can still import this module.
+ */
+function isTokenRejection(err: unknown): boolean {
+  return [
+    joseErrors.JWTClaimValidationFailed,
+    // Not a JWTClaimValidationFailed subclass: both extend JOSEError directly.
+    joseErrors.JWTExpired,
+    joseErrors.JWSSignatureVerificationFailed,
+    joseErrors.JWSInvalid,
+    joseErrors.JWTInvalid,
+    joseErrors.JWKSNoMatchingKey,
+    joseErrors.JWKSMultipleMatchingKeys,
+    joseErrors.JOSEAlgNotAllowed,
+    joseErrors.JOSENotSupported,
+  ].some((cls) => err instanceof cls);
+}
+const ERR_AUTH_UNAVAILABLE = 'Authentication service unavailable';
 
 const VALID_PERIOD_KEYS = ['24h', '7d', '30d'] as const;
 const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
@@ -354,18 +379,11 @@ app.use('/api/*', async (c, next) => {
       });
       jwtPayload = payload;
     } catch (err) {
-      // A JWKS fetch failure is a transient upstream problem — return 503 so
-      // the client retries instead of ending the session. JWT validation
-      // failures (wrong signature, wrong issuer, expired) are 401. So is
-      // JWKSNoMatchingKey: jose raises it after refetching the key set, so it
-      // means the token's kid is not Auth0's (another tenant, or forged), not
-      // that Auth0 is unreachable.
-      if (err instanceof joseErrors.JWKSTimeout ||
-          (err instanceof Error && err.message.includes('Failed to fetch'))) {
-        console.error('[auth] JWKS fetch failed:', err instanceof Error ? err.message : String(err));
-        return c.json({ error: 'Authentication service unavailable' }, 503);
-      }
-      return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+      // A rejected token is 401. Anything else is a transient upstream problem —
+      // 503, which the client retries (it never retries a 401).
+      if (isTokenRejection(err)) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+      console.error('[auth] JWKS fetch failed:', err instanceof Error ? err.message : String(err));
+      return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
     }
     const auth0Id = typeof jwtPayload['sub'] === 'string' ? jwtPayload['sub'] : null;
     if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
