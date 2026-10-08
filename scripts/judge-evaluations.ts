@@ -34,7 +34,8 @@
  * (canary draws stay `canary`), and turns the ledger already covers are
  * skipped. Nothing schedules it. Run it by hand, knowing that `backfill` is
  * an evidence cohort (only `seed` and `canary` are excluded), so a row young
- * enough for upload's age guard reaches the dashboard aggregates as if judged.
+ * enough for upload's age guard (36 h by default) reaches the dashboard
+ * aggregates as if judged.
  *
  * Scoring is consolidated by default — one call per turn carrying every
  * criterion (judge-consolidated.ts). `--batch`
