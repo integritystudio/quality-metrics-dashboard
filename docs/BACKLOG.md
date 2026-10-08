@@ -41,7 +41,7 @@ the whole of day `now − 7d`, not part of it (METRIC-WEEK-OVERLAP).
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| METRIC-WEEK-OVERLAP | Metric detail's current and previous week share a day, so the trend baseline is muted | P3 | Source: review of `5174c29`, 2026-10-07 |
+| METRIC-WEEK-OVERLAP | Metric detail's current and previous week share a day, so the trend baseline is muted | P3 | ✅ Done 2026-10-07 |
 | SYNC-DASHBOARD-TIMESTAMP-WRITES | A per-run timestamp makes 24 `dashboard:*` keys "changed" on every sync | P3 | Source: sync dry-run comparison, 2026-10-07 |
 | KV-VALUE-NOT-JSON-UNGUARDED | Nothing checks that a KV value is JSON before it goes into the envelope | P4 | Source: review of `5174c29`, 2026-10-07 |
 
@@ -62,6 +62,12 @@ the trend is read.
 
 Acceptance: no evaluation counts in both windows, and a test pins the boundary day to exactly one of them. Flip
 `counts the boundary day in both weeks` in `scripts/__tests__/sync-org-entries.test.ts`, which pins the overlap today.
+
+*Done, 2026-10-07.* The previous week is now the 7 whole days before the current week's start day and ends where it
+starts. The current week is unchanged, so it still matches `dashboard:7d` (7 days plus the partial current day). The trend
+compares the alert aggregation (avg or a percentile), never `count`, so the unequal lengths do not bias it. `metric:*`
+`trend` values shift on the next sync, because day `now − 7d` no longer feeds the baseline. The boundary-day test now
+asserts the current week alone, and a new test pins the previous week's last millisecond.
 
 **SYNC-DASHBOARD-TIMESTAMP-WRITES.** `computeDashboardSummary` stamps `timestamp: new Date().toISOString()`
 (`../../src/lib/quality/quality-metrics.ts:948`, parent repo), and the auditor role view copies it

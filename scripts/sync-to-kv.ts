@@ -1038,11 +1038,15 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
       `[sync-to-kv] Evaluation query returned ${QUERY_LIMIT} results — oldest evaluations dropped; all sessions marked partial`,
     );
   }
+  const evalsInWindow = (startNs: bigint, endNs: bigint): EvaluationResult[] =>
+    fetchedEvals.filter(ev => ev.timestamp >= startNs && ev.timestamp < endNs);
   /** The rows a separate `[startMs, endMs]` read would return; the server rounds both bounds to whole UTC days. */
   const evalsBetween = (startMs: number, endMs: number = nowMs): EvaluationResult[] => {
     const { startNs = 0n, endNs = 0n } = queriedDateWindow({ startDate: msToNs(startMs), endDate: msToNs(endMs) });
-    return fetchedEvals.filter(ev => ev.timestamp >= startNs && ev.timestamp < endNs);
+    return evalsInWindow(startNs, endNs);
   };
+  /** The UTC midnight a read starting at `ms` begins from. */
+  const dayStartNs = (ms: number): bigint => queriedDateWindow({ startDate: msToNs(ms) }).startNs ?? 0n;
 
   const activePeriods = PERIODS.filter(p => PERIOD_MS[p] <= MAX_DAYS_MS);
   const periodQueryResults = activePeriods.map(period => {
@@ -1107,8 +1111,13 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   entries.push({ key: CODE_QUALITY_KV_KEY, value: toKVValue(await computeCodeQuality(backend, now)) });
 
   const metricNames = Object.keys(QUALITY_METRICS);
+  // The current week matches `dashboard:7d`; the previous week is the 7 whole days before
+  // it and ends where it starts, so no evaluation counts in both (METRIC-WEEK-OVERLAP).
   const currentWeek = group(filterCanary(evalsBetween(nowMs - weekMs)), ev => ev.evaluationName);
-  const previousWeek = group(filterCanary(evalsBetween(nowMs - 2 * weekMs, nowMs - weekMs)), ev => ev.evaluationName);
+  const previousWeek = group(
+    filterCanary(evalsInWindow(dayStartNs(nowMs - 2 * weekMs), dayStartNs(nowMs - weekMs))),
+    ev => ev.evaluationName,
+  );
   /** Trace ids the metric cards link to, which the trace write budget favours. */
   const referencedTraceIds = new Set<string>();
 

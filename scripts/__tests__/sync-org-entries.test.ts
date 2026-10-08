@@ -123,16 +123,24 @@ describe('computeOrgEntries metric detail weeks', () => {
     expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.trend).toBeUndefined();
   });
 
-  // Known defect, pinned so a change is deliberate: both weeks contain the whole of
-  // day now − 7d. METRIC-WEEK-OVERLAP's fix should flip this to exactly one week.
-  it('counts the boundary day in both weeks (METRIC-WEEK-OVERLAP)', async () => {
+  // METRIC-WEEK-OVERLAP: day now − 7d belongs to the current week only.
+  it('counts the boundary day in the current week alone', async () => {
     const result = await compute([
       evaluation('boundary day', '2026-10-01T12:00:00.000Z', { scoreValue: 0.9 }),
     ]);
     const detail = entryValue<MetricDetail>(result, `metric:${METRIC}`);
 
     expect(detail?.sampleCount).toBe(1);
-    expect(detail?.trend?.previousValue).toBe(0.9);
+    expect(detail?.trend).toBeUndefined();
+  });
+
+  it('ends the previous week at the last ms before the current week starts', async () => {
+    const result = await compute([
+      evaluation('current', '2026-10-05T12:00:00.000Z', { scoreValue: 0.5 }),
+      evaluation('last ms of the previous week', '2026-09-30T23:59:59.999Z', { scoreValue: 0.3 }),
+    ]);
+
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.trend?.previousValue).toBe(0.3);
   });
 
   it('writes no detail for evaluations whose name only resembles the metric', async () => {
