@@ -4,6 +4,7 @@
 
 | Version | Date | Summary |
 |---------|------|---------|
+| [v3.0.10](changelog/3.0.10/CHANGELOG.md) | 2026-10-08 | Session detail built once for the API and KV sync; agent step scoring aligned; sync-to-kv and its tests de-duplicated; judge failure classes see a thrown object's JSON |
 | [v3.0.6](changelog/3.0.6/CHANGELOG.md) | 2026-07-13 | Backlog Clearance: Library optimizations, type safety, worker API validation, auth consolidation, workflow filters, degradation signals, admin mutations, test fixtures (28 items) |
 | [v3.0.5](changelog/3.0.5/CHANGELOG.md) | 2026-03-26 | Code Review Follow-ups: Workflow visualization completion, worker API validation hardening, type safety fixes, E2E testing (40+ items) |
 | [v3.0.4](changelog/3.0.4/CHANGELOG.md) | 2026-03-20 | Auth Hardening: Remove PII, consolidate types (AUTH-5, AUTH-10–11, AUTH-14, G5-WG4, G5-WG10, G5-L1–L2) |
