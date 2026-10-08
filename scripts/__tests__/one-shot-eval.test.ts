@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createRunGuard, formatUsd, EXIT_REFUSED } from '../one-shot-eval.js';
+import { createRunGuard, formatUsd, spendCapReason, EXIT_REFUSED } from '../one-shot-eval.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV } from '../judge-credentials.js';
 
 const MARKER = '.test.started';
@@ -53,5 +53,13 @@ describe('formatUsd', () => {
   it('prefixes a dollar sign and fixes the decimals', () => {
     expect(formatUsd(1.81234)).toBe('$1.8123');
     expect(formatUsd(0)).toBe('$0.0000');
+  });
+});
+
+describe('spendCapReason', () => {
+  it('allows an estimate at the cap and refuses one above it, with the remedy', () => {
+    expect(spendCapReason(8, 8)).toBeUndefined();
+    expect(spendCapReason(8.5, 8)).toBe('estimated spend $8.5000 exceeds the $8 cap');
+    expect(spendCapReason(8.5, 8, 'lower --limit')).toBe('estimated spend $8.5000 exceeds the $8 cap; lower --limit');
   });
 });

@@ -76,6 +76,7 @@ import {
   formatRate,
   oneShotArgError,
   padCell,
+  spendCapReason,
   toFivePointScale,
 } from './one-shot-eval.js';
 import {
@@ -483,9 +484,8 @@ async function main(): Promise<void> {
     + `~${estimate.outputTokens.toLocaleString()} output tokens, ~${formatUsd(estimate.usd)} `
     + `(plus one steps call per criterion)`,
   );
-  if (estimate.usd > MAX_ESTIMATED_SPEND_USD) {
-    return refuse(`estimated spend ${formatUsd(estimate.usd)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
-  }
+  const overCap = spendCapReason(estimate.usd, MAX_ESTIMATED_SPEND_USD);
+  if (overCap) return refuse(overCap);
 
   const startedAt = begin(DOCS_DIR, { agreementPath, turns: matched.length });
   if (!startedAt) return;

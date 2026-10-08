@@ -81,6 +81,7 @@ import {
   oneShotArgError,
   padCell,
   scoresByName,
+  spendCapReason,
 } from './one-shot-eval.js';
 import {
   addCallUsage,
@@ -302,9 +303,8 @@ async function main(): Promise<void> {
     `[hallucination] estimate: Haiku ~${formatUsd(estimate.haikuUsd)}, `
     + `${estimate.referenceCalls} reference calls ~${formatUsd(estimate.referenceUsd)}`,
   );
-  if (estimate.totalUsd > MAX_ESTIMATED_SPEND_USD) {
-    return refuse(`estimated spend ${formatUsd(estimate.totalUsd)} exceeds the $${MAX_ESTIMATED_SPEND_USD} cap`);
-  }
+  const overCap = spendCapReason(estimate.totalUsd, MAX_ESTIMATED_SPEND_USD);
+  if (overCap) return refuse(overCap);
 
   const startedAt = begin(DOCS_DIR, { referencePath: args.referencePath, turns: prior.length });
   if (!startedAt) return;

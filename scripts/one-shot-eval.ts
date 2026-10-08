@@ -128,6 +128,13 @@ export function formatUsd(usd: number): string {
   return `$${usd.toFixed(USD_DECIMALS)}`;
 }
 
+/** The refusal for an estimate over `capUsd` (with an optional remedy), or undefined when it fits. */
+export function spendCapReason(estimateUsd: number, capUsd: number, remedy?: string): string | undefined {
+  if (estimateUsd <= capUsd) return undefined;
+  const reason = `estimated spend ${formatUsd(estimateUsd)} exceeds the $${capUsd} cap`;
+  return remedy ? `${reason}; ${remedy}` : reason;
+}
+
 /** Right-aligned table cell. */
 export function padCell(value: string | number, width: number): string {
   return String(value).padStart(width);
