@@ -66,20 +66,25 @@ describe('kvBulkDelete: empty guard', () => {
 });
 
 describe('kvBulkDelete: dry-run', () => {
-  it('logs and skips SDK call', async () => {
+  it('logs, skips SDK call, and returns an empty Set', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await kvBulkDelete(['trace:abc', 'session:xyz'], { dryRun: true });
+
+    const failed = await kvBulkDelete(['trace:abc', 'session:xyz'], { dryRun: true });
 
     expect(mockBulkDelete).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('dry-run'));
+    expect(failed).toBeInstanceOf(Set);
+    expect(failed.size).toBe(0);
     logSpy.mockRestore();
   });
 
-  it('dry-run log mentions the batch size', async () => {
+  it('dry-run log mentions the batch size and returns empty Set', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await kvBulkDelete(['key:a', 'key:b'], { dryRun: true });
+
+    const failed = await kvBulkDelete(['key:a', 'key:b'], { dryRun: true });
 
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('2'));
+    expect(failed.size).toBe(0);
     logSpy.mockRestore();
   });
 });
@@ -168,5 +173,24 @@ describe('kvBulkDelete: batching', () => {
     const [, params2] = mockBulkDelete.mock.calls[1] as [string, { body: string[] }];
     expect(params1.body).toHaveLength(KV_BATCH_SIZE);
     expect(params2.body).toHaveLength(remainder);
+  });
+
+  it('accumulates failed keys from both batches when each has failures', async () => {
+    const failedInFirst = `trace:${KV_BATCH_SIZE - 1}`;
+    const failedInSecond = 'trace:extra';
+    const keys = [
+      ...Array.from({ length: KV_BATCH_SIZE }, (_, i) => `trace:${i}`),
+      failedInSecond,
+    ];
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: [failedInFirst] });
+    mockBulkDelete.mockResolvedValueOnce({ unsuccessful_keys: [failedInSecond] });
+
+    const failed = await kvBulkDelete(keys);
+
+    expect(failed.has(failedInFirst)).toBe(true);
+    expect(failed.has(failedInSecond)).toBe(true);
+    expect(failed.size).toBe(2);
+    warnSpy.mockRestore();
   });
 });

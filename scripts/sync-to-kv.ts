@@ -386,7 +386,7 @@ function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
   return entries.filter(e => state.get(e.key)?.hash !== hashValue(e.value));
 }
 
-async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
+export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
   const writtenKeys = new Set<string>();
   if (entries.length === 0) return writtenKeys;
   for (let i = 0; i < entries.length; i += KV_BATCH_SIZE) {
@@ -411,6 +411,12 @@ async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         account_id: accountId,
         body: enveloped,
       });
+      // null result = HTTP 204 (no body): the SDK treats this as success and
+      // returns null. Credit all batch keys. If the API later gains a body,
+      // unsuccessful_keys will be populated and failures will be excluded below.
+      if (result == null) {
+        console.warn(`[sync-to-kv] bulk put${batchLabel}: API returned no response body — crediting all ${batch.length} keys as written`);
+      }
       const failed = new Set(result?.unsuccessful_keys ?? []);
       if (failed.size > 0) {
         const failedArr = [...failed];
