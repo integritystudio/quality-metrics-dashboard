@@ -23,6 +23,17 @@ export type { DashboardPermission, AppSession };
  * (Audit finding: dashboard Worker fetches Auth0's JWKS on every request.)
  */
 const jwksSets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+/**
+ * `iss` values a browser token may carry: the tenant's, plus the custom domain's when one is
+ * configured. Auth0 stamps whichever hostname the token was obtained through, with a trailing
+ * slash, and signs both with the tenant key set (landing CR70).
+ */
+export function acceptedIssuers(env: Pick<Bindings, 'AUTH0_DOMAIN' | 'AUTH0_CUSTOM_DOMAIN'>): string[] {
+  const issuers = [`https://${env.AUTH0_DOMAIN}/`];
+  if (env.AUTH0_CUSTOM_DOMAIN) issuers.push(`https://${env.AUTH0_CUSTOM_DOMAIN}/`);
+  return issuers;
+}
 function getJwks(domain: string): ReturnType<typeof createRemoteJWKSet> {
   let jwks = jwksSets.get(domain);
   if (!jwks) {
@@ -236,6 +247,11 @@ type Bindings = {
   // Set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
   SUPABASE_SERVICE_ROLE_KEY: string;
   AUTH0_DOMAIN: string;    // e.g. "integritystudio.us.auth0.com"
+  // Custom domain the same tenant also serves logins on, e.g. "auth.integritystudio.ai"
+  // (landing CR70). A token obtained through it carries that host as `iss`, signed by the
+  // same key set, so it is accepted as a second issuer against AUTH0_DOMAIN's JWKS.
+  // Unset on the dev worker: the dev tenant has no custom domain.
+  AUTH0_CUSTOM_DOMAIN?: string;
   AUTH0_AUDIENCE: string;  // e.g. "https://api.integritystudio.dev"
   // Must be explicitly set to 'true' to enable the test-token bypass.
   // Never set this in production wrangler.toml — leave absent.
@@ -333,7 +349,7 @@ app.use('/api/*', async (c, next) => {
     let jwtPayload: Record<string, unknown>;
     try {
       const { payload } = await jwtVerify(jwt, JWKS, {
-        issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+        issuer: acceptedIssuers(c.env),
         audience: c.env.AUTH0_AUDIENCE,
       });
       jwtPayload = payload;
