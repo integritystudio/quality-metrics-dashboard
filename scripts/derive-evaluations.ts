@@ -311,7 +311,9 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
 
     if (data.tasks.size > 0) {
       const scores = [...data.tasks.values()].map(t => scoreTask(t.statuses));
-      const avg = mean(scores) ?? STATUS_SCORES.pending;
+      const avg = mean(scores);
+      // invariant: tasks.size > 0 and scoreTask returns a finite STATUS_SCORES value
+      if (avg === undefined) throw new Error(`invariant: session ${sessionId} has tasks but no finite task scores`);
       const completed = scores.filter(s => s === STATUS_SCORES.completed).length;
       const inProgress = scores.filter(s => s === STATUS_SCORES.in_progress).length;
       const pending = scores.filter(s => s === STATUS_SCORES.pending).length;
