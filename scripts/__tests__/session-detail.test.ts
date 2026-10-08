@@ -32,24 +32,15 @@ describe('computeSessionDetail multi-agent attribution', () => {
     expect(detail.multiAgentEvaluation.turns.map(t => t.agentName)).toEqual(['planner', 'executor']);
   });
 
-  it('still reads the legacy agent.name key', () => {
-    // Two distinct agents: computeMultiAgentEvaluation drops the map below that.
-    const detail = detailOf([
+  // The pre-OBP7b key stopped on 2026-07-12; a span carrying only it counts as unnamed.
+  it('ignores the legacy agent.name key', () => {
+    const legacy = detailOf([
       span('a', { 'agent.name': 'planner' }),
       span('b', { 'agent.name': 'executor' }),
     ], []);
+    const unnamed = detailOf([span('a', {}), span('b', {})], []);
 
-    expect(detail.multiAgentEvaluation.turns.map(t => t.agentName)).toEqual(['planner', 'executor']);
-  });
-
-  // The API route once read `agent.name` first, so the same span named a different agent there than in KV.
-  it('prefers gen_ai.agent.name when a span carries both keys', () => {
-    const detail = detailOf([
-      span('a', { 'gen_ai.agent.name': 'planner', 'agent.name': 'stale-a' }),
-      span('b', { 'gen_ai.agent.name': 'executor', 'agent.name': 'stale-b' }),
-    ], []);
-
-    expect(detail.multiAgentEvaluation.turns.map(t => t.agentName)).toEqual(['planner', 'executor']);
+    expect(legacy.multiAgentEvaluation).toEqual(unnamed.multiAgentEvaluation);
   });
 });
 

@@ -161,15 +161,13 @@ type SessionSpans = Awaited<ReturnType<typeof loadTracesBySessionId>>;
 
 /** Maps each span index to its agent name, and collects the session's trace ids. */
 function indexSessionSpans(spans: SessionSpans) {
-  // Real spans may carry the agent name under either 'agent.name' (hooks
-  // context) or 'gen_ai.agent.name' (OTel GenAI semantic conventions). Both are
-  // checked here so the agentMap is populated regardless of which attribute the
-  // instrumentation emits. workflow-graph.ts uses 'gen_ai.agent.name' for node
-  // scoring; the agentMap built here is used by computeMultiAgentEvaluation only.
+  // Hooks emit the semconv 'gen_ai.agent.name'; the pre-OBP7b 'agent.name' stopped
+  // on 2026-07-12, older than any window this route reads, so it is not read.
+  // The agentMap built here is used by computeMultiAgentEvaluation only.
   const agentMap = new Map<number, string>();
   const traceIds = new Set<string>();
   spans.forEach((span, i) => {
-    const agent = attrStr(span, 'agent.name', '') || attrStr(span, 'gen_ai.agent.name', '') || undefined;
+    const agent = attrStr(span, 'gen_ai.agent.name', '');
     if (agent) agentMap.set(i, agent);
     if (span.traceId) traceIds.add(span.traceId);
   });

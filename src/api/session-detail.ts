@@ -394,10 +394,9 @@ function computeLogSummary(logs: SessionLog[]) {
 function computeMultiAgent<M>(spans: SessionSpan[], evaluate: MultiAgentEvaluator<M>): M {
   const agentMap = new Map<number, string>();
   spans.forEach((span, i) => {
-    // Hooks emit the semconv 'gen_ai.agent.name'; 'agent.name' is the pre-OBP7b
-    // spelling. Reading only the latter left every turn unattributed, so every
-    // precomputed workflow graph had zero nodes. Mirrors src/api/routes/agents.ts.
-    const agent = spanAttr(span, 'gen_ai.agent.name', 'string') ?? spanAttr(span, 'agent.name', 'string');
+    // Hooks emit the semconv 'gen_ai.agent.name'. The pre-OBP7b 'agent.name' stopped
+    // on 2026-07-12, older than every window this detail is built from, so it is not read.
+    const agent = spanAttr(span, 'gen_ai.agent.name', 'string');
     if (agent) agentMap.set(i, agent);
   });
   const stepScores: StepScore[] = spans.map((span, i) => ({
